@@ -16,6 +16,9 @@ import {
   LogOut,
   Menu,
   X,
+  Layers,
+  Tag,
+  Truck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -30,6 +33,9 @@ const navItems: NavItem[] = [
   { label: 'Configuracion', href: '/config', icon: <Settings size={20} />, section: 'SISTEMA' },
   { label: 'Usuarios', href: '/users', icon: <Users size={20} /> },
   { label: 'Productos', href: '/catalog/products', icon: <Package size={20} />, section: 'CATALOGO' },
+  { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={20} /> },
+  { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={20} /> },
+  { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={20} /> },
   { label: 'Inventario', href: '/inventory', icon: <Warehouse size={20} />, section: 'INVENTARIO' },
   { label: 'Compras', href: '/purchases', icon: <ShoppingCart size={20} />, section: 'COMPRAS' },
   { label: 'Ventas', href: '/sales', icon: <Receipt size={20} />, section: 'VENTAS' },

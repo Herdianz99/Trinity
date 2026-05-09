@@ -207,6 +207,12 @@ async function main() {
     { code: 'PROD-008', name: 'Cinta Metrica Truper 5m', costUsd: 4, gananciaPct: 45, gananciaMayorPct: 28, ivaType: IvaType.GENERAL, brandId: brandTruper.id, categoryId: catHerramientas.id, supplierId: supplier1.id },
     { code: 'PROD-009', name: 'Interruptor Sencillo Blanco', costUsd: 1.5, gananciaPct: 60, gananciaMayorPct: 40, ivaType: IvaType.GENERAL, categoryId: catElectricidad.id, supplierId: supplier2.id },
     { code: 'PROD-010', name: 'Llave de Paso 1/2"', costUsd: 6, gananciaPct: 35, gananciaMayorPct: 20, ivaType: IvaType.GENERAL, categoryId: catPlomeria.id, supplierId: supplier1.id },
+    // Session 2 - 5 additional test products
+    { code: 'PROD-011', name: 'Sierra Circular DeWalt 7-1/4"', costUsd: 75, gananciaPct: 28, gananciaMayorPct: 15, ivaType: IvaType.GENERAL, brandId: brandDeWalt.id, categoryId: catHerramientas.id, supplierId: supplier2.id },
+    { code: 'PROD-012', name: 'Brocha Atlas 4 pulgadas', costUsd: 3, gananciaPct: 55, gananciaMayorPct: 35, ivaType: IvaType.EXEMPT, categoryId: catPinturas.id, supplierId: supplier1.id },
+    { code: 'PROD-013', name: 'Tomacorriente Doble Blanco', costUsd: 2.5, gananciaPct: 65, gananciaMayorPct: 45, ivaType: IvaType.REDUCED, categoryId: catElectricidad.id, supplierId: supplier2.id },
+    { code: 'PROD-014', name: 'Llave Ajustable Truper 10"', costUsd: 8, gananciaPct: 40, gananciaMayorPct: 25, ivaType: IvaType.GENERAL, brandId: brandTruper.id, categoryId: catHerramientas.id, supplierId: supplier1.id },
+    { code: 'PROD-015', name: 'Silicona Transparente 280ml', costUsd: 4.5, gananciaPct: 50, gananciaMayorPct: 30, ivaType: IvaType.SPECIAL, categoryId: catFerreteria.id, supplierId: supplier2.id },
   ];
 
   for (const p of productsData) {

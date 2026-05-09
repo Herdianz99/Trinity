@@ -99,7 +99,7 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ### FASE 1 — Fundación
 
-#### Sesión 1 — Setup, Auth y Configuración Base
+#### Sesión 1 — Setup, Auth y Configuración Base ✅
 **Backend:**
 - Scaffold monorepo pnpm + Turborepo
 - Docker Compose (PostgreSQL 15 + Redis 7)
@@ -420,7 +420,7 @@ enum PaymentMethod {
 - 2 proveedores de prueba
 - 10 productos de prueba con precios calculados
 
-#### Sesión 2 — Catálogo de Productos
+#### Sesión 2 — Catálogo de Productos ✅
 **Backend:**
 - CategoriesModule: CRUD con soporte árbol 2 niveles (parent/children)
 - BrandsModule: CRUD simple
