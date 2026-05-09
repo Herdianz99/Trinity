@@ -1,0 +1,92 @@
+● Buena consulta. Voy a darte un análisis técnico honesto.
+                                                                                                                                       
+  ---
+  El stack actual — ¿Aguanta?                                                                                                                                           
+  Sí. Sin discusión.                                                                                                                                                                                                                   
+  Pongamos los números en perspectiva:
+
+  ┌────────────────────────────┬──────────────┬─────────────────────────────────────────────────────────┐
+  │          Métrica           │  Tu cliente  │                  Límite real del stack                  │
+  ├────────────────────────────┼──────────────┼─────────────────────────────────────────────────────────┤
+  │ Facturas/día               │ 300          │ PostgreSQL maneja millones de transacciones/día         │
+  ├────────────────────────────┼──────────────┼─────────────────────────────────────────────────────────┤
+  │ Usuarios simultáneos       │ ~15–20       │ NestJS/Node.js aguanta miles de conexiones concurrentes │
+  ├────────────────────────────┼──────────────┼─────────────────────────────────────────────────────────┤
+  │ Productos en catálogo      │ 5.000–50.000 │ PostgreSQL con índices correctos: sin problema          │
+  ├────────────────────────────┼──────────────┼─────────────────────────────────────────────────────────┤
+  │ Consultas de tienda online │ Baja/media   │ Caché Redis resuelve esto fácil                         │
+  └────────────────────────────┴──────────────┴─────────────────────────────────────────────────────────┘
+
+  300 facturas/día son aproximadamente 37 por hora en promedio. En hora pico quizás 100–150. Eso es completamente trivial para este stack. El stack tendría problemas   reales recién en cientos de miles de operaciones por hora.
+
+  ---
+  Stack recomendado — El mismo, con matices
+
+  Next.js 14 (App Router)     → Panel admin + POS tablet
+  NestJS                       → API REST
+  PostgreSQL 15               → Base de datos principal
+  Prisma                       → ORM
+  Redis                        → Caché catálogo + sesiones
+
+  No cambiaría nada del core. Pero agregaría:
+
+  ┌─────────────────────────────┬───────────────────────────────────────────────┬────────────────────────────────────────────────┐
+  │          Necesidad          │                  Tecnología                   │                    Por qué                     │
+  ├─────────────────────────────┼───────────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ PDF de facturas             │ @react-pdf/renderer o Puppeteer               │ Impresión de facturas es crítica en ferretería │
+  ├─────────────────────────────┼───────────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ Búsqueda de productos       │ PostgreSQL tsvector (full-text search nativo) │ Con 30k+ productos el LIKE %...% es lento      │
+  ├─────────────────────────────┼───────────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ Escáner de código de barras │ @zxing/browser (librería JS)                  │ Lee cámara de la tablet — sin hardware extra   │
+  └─────────────────────────────┴───────────────────────────────────────────────┴────────────────────────────────────────────────┘
+
+  ---
+  La pregunta real: ¿reusar RestaurantOS o proyecto nuevo?
+
+  Aquí está el punto crítico que debes considerar:
+
+  RestaurantOS está diseñado como SaaS multi-tenant. Toda la arquitectura tiene tenantId en cada query, guards de suscripción, módulos activables/desactivables,
+  panel SuperAdmin para gestionar clientes, etc.
+
+  Una ferretería es single-tenant — una empresa, una base de datos, sin esa capa de complejidad.
+
+  Mi recomendación: proyecto nuevo, mismo stack.
+
+  ┌────────────────────────────┬──────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────┐
+  │           Opción           │                 Ventaja                  │                                     Desventaja                                      │
+  ├────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Forkear RestaurantOS       │ Arrancar más rápido                      │ Cargas con toda la arquitectura multi-tenant que no necesitas — confusión           │
+  │                            │                                          │ permanente                                                                          │
+  ├────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Proyecto nuevo, mismo      │ Arquitectura limpia para lo que          │ Rebuild de cosas ya hechas                                                          │
+  │ stack                      │ necesitas                                │                                                                                     │
+  ├────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Stack diferente            │ Ninguna real                             │ Curva de aprendizaje, pierdes velocidad                                             │
+  └────────────────────────────┴──────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────┘
+
+  El proyecto nuevo no parte de cero — reutilizas patrones, componentes UI, lógica de negocio de RestaurantOS, pero con una arquitectura limpia de aplicación
+  empresarial single-tenant.
+
+  ---
+  Consideraciones específicas para ferretería que el restaurante no tiene
+
+  Estas son las complejidades reales que vas a enfrentar, no el volumen:
+
+  1. Múltiples listas de precio — precio al detal, precio al mayor, precio especial por cliente. El modelo de RestaurantOS no tiene esto.
+  2. Unidades de medida y conversión — compras por caja (12 unidades), vendes por pieza. Necesitas purchaseUnit vs saleUnit con factor de conversión.
+  3. Múltiples almacenes — si tienen depósito + piso de ventas, necesitas movimientos entre almacenes.
+  4. Número de referencia / código de barras — cada producto tiene código propio del proveedor + código interno + código de barras. Búsqueda por cualquiera de los
+  tres.
+  5. Despachos y guías de entrega — el flujo ferretería es: factura → orden de despacho → guía de entrega firmada. Eso no existe en el restaurante.
+  6. Retención de IVA — en Venezuela las personas jurídicas son agentes de retención. Necesitas manejar retenciones del 75% del IVA en facturas a proveedores.
+
+  ---
+  Resumen ejecutivo
+
+  - ¿El stack aguanta? Sí, con margen amplísimo.
+  - ¿Usar RestaurantOS como base? No recomendado — arquitecturas diferentes.
+  - ¿Mismo stack pero proyecto nuevo? Sí, esta es la opción correcta.
+  - ¿Cuándo tendría que cambiar el stack? Si llegaran a 10.000+ facturas/día con 200+ usuarios simultáneos, recién ahí habría que pensar en optimizaciones serias
+  (read replicas en Postgres, microservicios, etc.). Para una empresa mediana venezolana esto no aplica en el corto ni mediano plazo.
+
+  El riesgo real no es el volumen — es la complejidad del dominio de negocio (retenciones, múltiples precios, despachos). Eso hay que diseñarlo bien desde el inicio.   El stack lo aguanta sin problema.

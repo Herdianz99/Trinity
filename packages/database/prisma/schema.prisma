@@ -1,0 +1,375 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  CASHIER
+  SELLER
+  WAREHOUSE
+  BUYER
+  ACCOUNTANT
+}
+
+enum IvaType {
+  EXEMPT
+  REDUCED
+  GENERAL
+  SPECIAL
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  TRANSFER_IN
+  TRANSFER_OUT
+  COUNT_ADJUST
+}
+
+enum PurchaseStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum CustomerType {
+  NATURAL
+  JURIDICA
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  PARTIAL
+  CREDIT
+  CANCELLED
+}
+
+enum InvoiceType {
+  SALE
+  DEBIT_NOTE
+  CREDIT_NOTE
+}
+
+enum PaymentMethod {
+  CASH_USD
+  CASH_BS
+  PUNTO_DE_VENTA
+  PAGO_MOVIL
+  ZELLE
+  TRANSFERENCIA
+  CASHEA
+  CREDIAGRO
+}
+
+// ============================================
+// CONFIG
+// ============================================
+
+model CompanyConfig {
+  id                    String    @id @default("singleton")
+  companyName           String    @default("Trinity")
+  rif                   String?
+  address               String?
+  phone                 String?
+  email                 String?
+  exchangeRate          Float     @default(0)
+  exchangeRateUpdatedAt DateTime?
+  bregaGlobalPct        Float     @default(0)
+  defaultWarehouseId    String?
+  invoicePrefix         String    @default("FAC")
+  creditAuthPassword    String?
+  updatedAt             DateTime  @updatedAt
+}
+
+// ============================================
+// AUTH & USUARIOS
+// ============================================
+
+model User {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  password           String
+  role               UserRole
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+// ============================================
+// CATALOGO
+// ============================================
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children  Category[] @relation("SubCategories")
+  products  Product[]
+  createdAt DateTime   @default(now())
+}
+
+model Brand {
+  id        String    @id @default(cuid())
+  name      String
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Supplier {
+  id               String          @id @default(cuid())
+  name             String
+  rif              String?
+  phone            String?
+  email            String?
+  address          String?
+  contactName      String?
+  isRetentionAgent Boolean         @default(false)
+  isActive         Boolean         @default(true)
+  products         Product[]
+  purchaseOrders   PurchaseOrder[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// ============================================
+// PRODUCTOS
+// ============================================
+
+model Product {
+  id               String              @id @default(cuid())
+  code             String              @unique
+  barcode          String?             @unique
+  supplierRef      String?
+  name             String
+  description      String?
+  categoryId       String?
+  category         Category?           @relation(fields: [categoryId], references: [id])
+  brandId          String?
+  brand            Brand?              @relation(fields: [brandId], references: [id])
+  supplierId       String?
+  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
+  purchaseUnit     String              @default("UNIT")
+  saleUnit         String              @default("UNIT")
+  conversionFactor Float               @default(1)
+  costUsd          Float               @default(0)
+  bregaApplies     Boolean             @default(true)
+  gananciaPct      Float               @default(0)
+  gananciaMayorPct Float               @default(0)
+  ivaType          IvaType             @default(GENERAL)
+  priceDetal       Float               @default(0)
+  priceMayor       Float               @default(0)
+  minStock         Float               @default(0)
+  isActive         Boolean             @default(true)
+  stock            Stock[]
+  movements        StockMovement[]
+  purchaseItems    PurchaseOrderItem[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+// ============================================
+// INVENTARIO
+// ============================================
+
+model Warehouse {
+  id        String          @id @default(cuid())
+  name      String
+  location  String?
+  isDefault Boolean         @default(false)
+  isActive  Boolean         @default(true)
+  stock     Stock[]
+  movements StockMovement[]
+  createdAt DateTime        @default(now())
+}
+
+model Stock {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  quantity    Float     @default(0)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, warehouseId])
+}
+
+model StockMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  warehouseId String
+  warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
+  type        MovementType
+  quantity    Float
+  costUsd     Float?
+  reason      String?
+  reference   String?
+  createdById String
+  createdAt   DateTime     @default(now())
+}
+
+// ============================================
+// COMPRAS
+// ============================================
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  number      String              @unique
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  status      PurchaseStatus      @default(DRAFT)
+  totalUsd    Float               @default(0)
+  notes       String?
+  receivedAt  DateTime?
+  items       PurchaseOrderItem[]
+  createdById String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Float
+  costUsd         Float
+  totalUsd        Float
+  receivedQty     Float         @default(0)
+}
+
+// ============================================
+// CLIENTES
+// ============================================
+
+model Customer {
+  id          String       @id @default(cuid())
+  name        String
+  rif         String?
+  phone       String?
+  email       String?
+  address     String?
+  type        CustomerType @default(NATURAL)
+  creditLimit Float        @default(0)
+  creditDays  Int          @default(0)
+  isActive    Boolean      @default(true)
+  invoices    Invoice[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// ============================================
+// CAJAS
+// ============================================
+
+model CashRegister {
+  id                String        @id @default(cuid())
+  code              String        @unique
+  name              String
+  lastInvoiceNumber Int           @default(0)
+  isActive          Boolean       @default(true)
+  currentUserId     String?
+  openedAt          DateTime?
+  invoices          Invoice[]
+  sessions          CashSession[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model CashSession {
+  id             String        @id @default(cuid())
+  cashRegisterId String
+  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  userId         String
+  openingBalance Float         @default(0)
+  closingBalance Float?
+  status         SessionStatus @default(OPEN)
+  notes          String?
+  openedAt       DateTime      @default(now())
+  closedAt       DateTime?
+}
+
+// ============================================
+// FACTURACION
+// ============================================
+
+model Invoice {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  fiscalNumber   String?
+  controlNumber  String?
+  cashRegisterId String
+  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  customerId     String?
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  status         InvoiceStatus @default(DRAFT)
+  type           InvoiceType   @default(SALE)
+  subtotalUsd    Float         @default(0)
+  ivaUsd         Float         @default(0)
+  totalUsd       Float         @default(0)
+  totalBs        Float         @default(0)
+  exchangeRate   Float         @default(0)
+  isCredit       Boolean       @default(false)
+  creditDays     Int           @default(0)
+  dueDate        DateTime?
+  paidAt         DateTime?
+  notes          String?
+  items          InvoiceItem[]
+  payments       Payment[]
+  createdById    String
+  sellerId       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  productId   String
+  productName String
+  quantity    Float
+  unitPrice   Float
+  ivaType     IvaType
+  ivaAmount   Float
+  totalUsd    Float
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  method       PaymentMethod
+  amountUsd    Float
+  amountBs     Float
+  exchangeRate Float
+  reference    String?
+  createdAt    DateTime      @default(now())
+}

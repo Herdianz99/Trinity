@@ -1,0 +1,20 @@
+{
+  "name": "trinity",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @trinity/database generate",
+    "db:migrate": "pnpm --filter @trinity/database migrate",
+    "db:seed": "pnpm --filter @trinity/database seed",
+    "db:studio": "pnpm --filter @trinity/database studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.1.0",
+  "engines": {
+    "node": ">=18"
+  }
+}
