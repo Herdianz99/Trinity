@@ -51,4 +51,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsString()
   invoicePrefix?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  quotationValidityDays?: number;
 }

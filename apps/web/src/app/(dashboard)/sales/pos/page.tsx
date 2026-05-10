@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Clock,
   PanelRightOpen,
+  FileCheck,
 } from 'lucide-react';
 
 const IVA_RATES: Record<string, number> = {
@@ -345,6 +346,42 @@ export default function POSPage() {
       setExistingInvoiceId(null);
       setMessage({ type: 'success', text: `Factura ${data.number} guardada en espera` });
       fetchPending();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  async function handleSaveQuotation() {
+    if (cart.length === 0) return;
+    setProcessing(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/proxy/quotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customerId || undefined,
+          items: cart.map(i => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al guardar cotizacion');
+      }
+      const data = await res.json();
+      setMessage({ type: 'success', text: `Cotizacion ${data.number} guardada` });
+      if (confirm('¿Limpiar carrito para nueva venta?')) {
+        setCart([]);
+        setCustomerId(null);
+        setCustomerName('');
+        setExistingInvoiceId(null);
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -814,6 +851,14 @@ export default function POSPage() {
             </div>
 
             <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSaveQuotation}
+                disabled={cart.length === 0 || processing}
+                className="btn-secondary !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                title="Guardar cotizacion"
+              >
+                <FileCheck size={16} />
+              </button>
               {userRole === 'SELLER' ? (
                 <button
                   onClick={handleSaveInvoice}

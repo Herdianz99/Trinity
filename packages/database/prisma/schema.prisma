@@ -123,6 +123,7 @@ model CompanyConfig {
   defaultWarehouseId     String?
   invoicePrefix          String   @default("FAC")
   creditAuthPassword     String?
+  quotationValidityDays  Int      @default(30)
   updatedAt              DateTime @updatedAt
 }
 
@@ -415,6 +416,7 @@ model Customer {
   creditDays   Int          @default(0)
   isActive     Boolean      @default(true)
   invoices     Invoice[]
+  quotations   Quotation[]
   receivables  Receivable[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -555,6 +557,14 @@ model PriceAdjustmentLog {
 // TRABAJOS DE IMPRESION
 // ============================================
 
+enum QuotationStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
 enum PrintStatus {
   PENDING
   PRINTED
@@ -570,4 +580,40 @@ model PrintJob {
   status      PrintStatus @default(PENDING)
   items       Json
   createdAt   DateTime    @default(now())
+}
+
+// ============================================
+// COTIZACIONES
+// ============================================
+
+model Quotation {
+  id                    String          @id @default(cuid())
+  number                String          @unique
+  customerId            String?
+  customer              Customer?       @relation(fields: [customerId], references: [id])
+  status                QuotationStatus @default(DRAFT)
+  subtotalUsd           Float           @default(0)
+  ivaUsd                Float           @default(0)
+  totalUsd              Float           @default(0)
+  notes                 String?
+  expiresAt             DateTime?
+  convertedToInvoiceId  String?
+  items                 QuotationItem[]
+  createdById           String
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model QuotationItem {
+  id           String    @id @default(cuid())
+  quotationId  String
+  quotation    Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId    String
+  productName  String
+  productCode  String
+  quantity     Float
+  unitPriceUsd Float
+  ivaType      IvaType
+  ivaAmount    Float
+  totalUsd     Float
 }

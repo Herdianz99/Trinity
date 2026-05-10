@@ -14,6 +14,7 @@ interface CompanyConfig {
   defaultGananciaMayorPct: number;
   defaultWarehouseId: string;
   invoicePrefix: string;
+  quotationValidityDays: number;
 }
 
 export default function ConfigPage() {
@@ -28,6 +29,7 @@ export default function ConfigPage() {
     defaultGananciaMayorPct: 0,
     defaultWarehouseId: '',
     invoicePrefix: 'FAC',
+    quotationValidityDays: 30,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,6 +89,7 @@ export default function ConfigPage() {
           defaultGananciaMayorPct: data.defaultGananciaMayorPct || 0,
           defaultWarehouseId: data.defaultWarehouseId || '',
           invoicePrefix: data.invoicePrefix || 'FAC',
+          quotationValidityDays: data.quotationValidityDays || 30,
         });
       }
     } catch {
@@ -131,6 +134,7 @@ export default function ConfigPage() {
           defaultGananciaPct: Number(config.defaultGananciaPct),
           defaultGananciaMayorPct: Number(config.defaultGananciaMayorPct),
           invoicePrefix: config.invoicePrefix,
+          quotationValidityDays: Number(config.quotationValidityDays),
         }),
       });
 
@@ -373,6 +377,18 @@ export default function ConfigPage() {
                   type="text"
                   value={config.invoicePrefix}
                   onChange={(e) => handleChange('invoicePrefix', e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Validez de cotizaciones (dias)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={config.quotationValidityDays}
+                  onChange={(e) => handleChange('quotationValidityDays', e.target.value)}
                   className="input-field"
                 />
               </div>

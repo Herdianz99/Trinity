@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -21,10 +22,12 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { PrintAreasModule } from './modules/print-areas/print-areas.module';
 import { ImportModule } from './modules/import/import.module';
 import { PrintJobsModule } from './modules/print-jobs/print-jobs.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -46,6 +49,7 @@ import { PrintJobsModule } from './modules/print-jobs/print-jobs.module';
     PrintAreasModule,
     ImportModule,
     PrintJobsModule,
+    QuotationsModule,
   ],
 })
 export class AppModule {}
