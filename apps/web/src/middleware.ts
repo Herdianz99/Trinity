@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh'];
 
+// Map route prefixes to permission keys
+const ROUTE_PERMISSION_MAP: Record<string, string> = {
+  '/sales': 'sales',
+  '/quotations': 'quotations',
+  '/catalog': 'catalog',
+  '/inventory': 'inventory',
+  '/purchases': 'purchases',
+  '/cash': 'cash',
+  '/receivables': 'receivables',
+  '/payables': 'payables',
+  '/fiscal': 'fiscal',
+  '/settings': 'settings',
+  '/config': 'settings',
+  '/users': 'settings',
+  '/import': 'settings',
+};
+
+function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = atob(payload);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+function hasPermission(permissions: string[], requiredPermission: string): boolean {
+  if (permissions.includes('*')) return true;
+  return permissions.includes(requiredPermission);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -16,6 +50,33 @@ export function middleware(request: NextRequest) {
       return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
     }
     return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Decode JWT to check permissions and mustChangePassword
+  const payload = decodeJwtPayload(token);
+
+  if (!payload) {
+    return NextResponse.next();
+  }
+
+  // If mustChangePassword and not already on /change-password, redirect
+  if (payload.mustChangePassword && !pathname.startsWith('/change-password') && !pathname.startsWith('/api/')) {
+    return NextResponse.redirect(new URL('/change-password', request.url));
+  }
+
+  // Check route permissions (skip for API routes, dashboard, change-password, and 403)
+  if (!pathname.startsWith('/api/') && !pathname.startsWith('/dashboard') && !pathname.startsWith('/change-password') && pathname !== '/403') {
+    const permissions: string[] = payload.permissions || [];
+
+    // Find the matching route permission
+    for (const [routePrefix, permissionKey] of Object.entries(ROUTE_PERMISSION_MAP)) {
+      if (pathname.startsWith(routePrefix)) {
+        if (!hasPermission(permissions, permissionKey)) {
+          return NextResponse.redirect(new URL('/403', request.url));
+        }
+        break;
+      }
+    }
   }
 
   return NextResponse.next();

@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ROLE_PERMISSIONS } from './role-permissions';
 
 @Injectable()
 export class AuthService {
@@ -15,10 +16,13 @@ export class AuthService {
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
-      include: { permissions: { select: { permissionKey: true } } },
     });
-    if (!user || !user.isActive) {
+    if (!user) {
       throw new UnauthorizedException('Credenciales invalidas');
+    }
+
+    if (!user.isActive) {
+      throw new ForbiddenException('Usuario inactivo');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -31,14 +35,24 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const permissions = ROLE_PERMISSIONS[user.role];
+    const payload = {
+      sub: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      permissions,
+      mustChangePassword: user.mustChangePassword,
+    };
+
     return {
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        permissions: user.permissions.map((p) => p.permissionKey),
+        permissions,
+        mustChangePassword: user.mustChangePassword,
       },
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
@@ -57,7 +71,15 @@ export class AuthService {
       if (!user || !user.isActive) {
         throw new UnauthorizedException();
       }
-      const newPayload = { sub: user.id, email: user.email, role: user.role };
+      const permissions = ROLE_PERMISSIONS[user.role];
+      const newPayload = {
+        sub: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        permissions,
+        mustChangePassword: user.mustChangePassword,
+      };
       return {
         accessToken: this.jwtService.sign(newPayload),
         refreshToken: this.jwtService.sign(newPayload, {
@@ -73,13 +95,35 @@ export class AuthService {
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { permissions: { select: { permissionKey: true } } },
     });
     if (!user) throw new UnauthorizedException();
-    const { password, permissions, ...result } = user;
+    const { password, ...result } = user;
     return {
       ...result,
-      permissions: permissions.map((p) => p.permissionKey),
+      permissions: ROLE_PERMISSIONS[user.role],
     };
+  }
+
+  async changePassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    if (!user.mustChangePassword) {
+      if (!currentPassword) {
+        throw new BadRequestException('Debe proporcionar la contrasena actual');
+      }
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) {
+        throw new BadRequestException('Contrasena actual incorrecta');
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword, mustChangePassword: false },
+    });
+
+    return { message: 'Contrasena actualizada exitosamente' };
   }
 }

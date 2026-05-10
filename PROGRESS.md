@@ -751,3 +751,95 @@
 - Libro de compras: 5 ordenes, retenciones IVA=$22.20, ISLR=$2.70
 - Resumen fiscal: IVA debito=$61.64, credito=$96.78, saldo a recuperar=-$35.14
 - TypeScript compila sin errores en ambos apps (API y Web)
+
+## Sesion 12 — Gestion de Usuarios y Menu Colapsable (Completada)
+### Backend
+- **Role Permissions** (`apps/api/src/modules/auth/role-permissions.ts`):
+  - Mapa fijo ROLE_PERMISSIONS por rol: ADMIN=['*'], SUPERVISOR=[dashboard,sales,quotations,catalog,inventory,purchases,cash,receivables,payables,fiscal], CASHIER=[dashboard,sales,quotations,cash,receivables], SELLER=[dashboard,sales,quotations], WAREHOUSE=[dashboard,inventory,purchases], BUYER=[dashboard,catalog,purchases,payables], ACCOUNTANT=[dashboard,receivables,payables,fiscal]
+  - Permisos incluidos en JWT payload al hacer login y refresh
+- **AuthModule** actualizado:
+  - JWT payload expandido: sub, name, email, role, permissions, mustChangePassword
+  - Login: retorna 403 "Usuario inactivo" si isActive=false (antes retornaba 401 generico)
+  - Login: actualiza lastLoginAt
+  - Login: retorna permissions y mustChangePassword en response body
+  - `PATCH /auth/change-password` — nuevo endpoint:
+    - Si mustChangePassword=true: no requiere contrasena actual
+    - Si mustChangePassword=false: requiere y verifica contrasena actual
+    - Validacion: minimo 8 caracteres, al menos una mayuscula y un numero
+    - Al cambiar: mustChangePassword=false
+  - jwt.strategy.ts: ahora pasa permissions y mustChangePassword al request.user
+  - refreshToken: recalcula permissions y mustChangePassword frescos desde DB
+- **UsersModule** actualizado:
+  - `POST /users` — contrasena opcional, genera temporal si no se especifica (10 chars alfanumericos)
+  - `POST /users` — siempre mustChangePassword=true, retorna temporaryPassword en texto plano
+  - `GET /users` — ahora incluye lastLoginAt, ordenado por createdAt DESC
+  - `PATCH /users/:id` — solo actualiza name, email, role, isActive (no contrasena)
+  - `PATCH /users/:id/reset-password` — genera nueva contrasena temporal, mustChangePassword=true
+  - `PATCH /users/:id/toggle-active` — alterna isActive
+  - `DELETE /users/:id` — verifica que no sea el ultimo ADMIN activo antes de eliminar
+  - Validacion de email unico en create y update
+
+### Frontend
+- **Middleware** (`middleware.ts`) — completamente reescrito:
+  - Decodifica JWT payload sin libreria externa (atob)
+  - Si mustChangePassword=true y ruta no es /change-password → redirige a /change-password
+  - Mapa de permisos por ruta: /sales→sales, /quotations→quotations, /catalog→catalog, /inventory→inventory, /purchases→purchases, /cash→cash, /receivables→receivables, /payables→payables, /fiscal→fiscal, /settings|/config|/users|/import→settings
+  - Si usuario no tiene permiso para la ruta → redirige a /403
+  - Rutas sin restriccion: /dashboard, /change-password, /403, /api/*
+- **Sidebar colapsable** (`components/sidebar.tsx`) — rediseñado completamente:
+  - Estructura de acordeon: secciones colapsables individualmente
+  - Dashboard siempre visible como item principal
+  - 10 secciones: VENTAS, COTIZACIONES, CATALOGO, INVENTARIO, COMPRAS, CAJA, CxC, CxP, FISCAL, CONFIGURACION
+  - CONFIGURACION solo visible para ADMIN (Empresa, Usuarios, Areas de impresion, Importacion masiva)
+  - Estado de secciones guardado en localStorage (trinity-sidebar-sections)
+  - Estado de colapso guardado en localStorage (trinity-sidebar-collapsed)
+  - Animacion suave de expand/collapse con max-height transition
+  - Click en seccion colapsada expande sidebar y abre la seccion
+  - Indicador visual: seccion con item activo se resalta en verde
+  - ChevronDown con rotacion animada para indicar estado abierto/cerrado
+  - Filtrado por permisos del rol (solo muestra secciones con permiso)
+- **Pagina `/settings/users`** — gestion de usuarios:
+  - Solo accesible para ADMIN
+  - Header con titulo + boton "Nuevo usuario"
+  - Barra de busqueda por nombre, email o rol
+  - Tabla: Nombre, Email, Rol (badge con color por rol), Ultimo acceso, Estado, Acciones
+  - Colores de badge: ADMIN=rojo, SUPERVISOR=naranja, CASHIER=azul, SELLER=verde, WAREHOUSE=amarillo, BUYER=morado, ACCOUNTANT=gris
+  - Acciones: Editar, Resetear contrasena, Activar/Desactivar, Eliminar
+  - Modal "Nuevo usuario": nombre, email, rol, contrasena temporal (opcional)
+  - Modal "Editar usuario": nombre, email, rol, estado activo/inactivo
+  - Modal "Resetear contrasena": confirmacion → muestra nueva contrasena
+  - Modal "Contrasena generada": contrasena en mono font con boton copiar
+  - Modal "Eliminar usuario": confirmacion con advertencia
+- **Pagina `/change-password`** — cambio de contrasena:
+  - Fuera del layout del dashboard (accesible sin sidebar)
+  - Si mustChangePassword=true: no muestra campo de contrasena actual, mensaje amarillo
+  - Si mustChangePassword=false: muestra campo de contrasena actual
+  - Validacion en tiempo real: minimo 8 chars (check verde), mayuscula (check verde), numero (check verde)
+  - Campo confirmar contrasena con validacion de match
+  - Toggles de visibilidad (ojo) en cada campo
+  - Al guardar exitosamente → redirige a login para obtener token fresco
+- **Pagina `/403`** — acceso denegado:
+  - Icono ShieldX rojo
+  - Mensaje "No tienes permiso para acceder a esta seccion"
+  - Boton "Volver al inicio" → /dashboard
+- **Login** (`login/page.tsx`) — actualizado:
+  - Si mustChangePassword=true → redirige a /change-password
+  - Si mustChangePassword=false → redirige a /dashboard
+- **Login API route** actualizada: retorna mustChangePassword en response
+- **Dashboard layout** actualizado: pasa permissions al Sidebar
+
+### Verificaciones
+- Login ADMIN: permissions=['*'], mustChangePassword=false — acceso total
+- Login SELLER: permissions=['dashboard','sales','quotations'], mustChangePassword=true — redirige a /change-password
+- Inactive user login: retorna 403 "Usuario inactivo"
+- Change password con mustChangePassword=true: funciona sin contrasena actual
+- Post change: mustChangePassword=false en siguiente login
+- SELLER intenta /inventory: redirigido a /403
+- SELLER intenta /settings/users: redirigido a /403
+- SELLER accede /dashboard: 200 OK
+- SELLER accede /sales/pos: 200 OK
+- GET /users: lista 9 usuarios con lastLoginAt
+- Reset password: genera nueva contrasena temporal
+- Toggle active: alterna isActive correctamente
+- Usuarios creados: Maria (SUPERVISOR), Pedro (CASHIER), Ana (SELLER), Carlos (WAREHOUSE), Luis (BUYER), Rosa (ACCOUNTANT)
+- TypeScript compila sin errores en ambos apps (API y Web)

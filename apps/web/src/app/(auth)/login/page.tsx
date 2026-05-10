@@ -29,7 +29,11 @@ export default function LoginPage() {
         throw new Error(msg || 'Error al iniciar sesion');
       }
 
-      router.push('/dashboard');
+      if (data.mustChangePassword) {
+        router.push('/change-password');
+      } else {
+        router.push('/dashboard');
+      }
       router.refresh();
     } catch (err: any) {
       setError(err.message);

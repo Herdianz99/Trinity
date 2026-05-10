@@ -35,7 +35,10 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar user={user} />
+      <Sidebar
+        user={user ? { name: user.name, email: user.email, role: user.role } : null}
+        permissions={user?.permissions || []}
+      />
       <main className="flex-1 overflow-y-auto">
         <ExchangeRateBanner />
         <div className="p-6 lg:p-8">

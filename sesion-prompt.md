@@ -1,136 +1,187 @@
 Lee el PROJECT.md y el PROGRESS.md antes de escribir cualquier línea de código.
-Vamos a implementar la Sesión 9 de Trinity ERP: Documentos Fiscales Venezolanos.
+Vamos a implementar la Sesión 12 de Trinity ERP: Gestión de Usuarios y menú colapsable.
 Antes de escribir cualquier código consulta las skills disponibles especialmente frontend-design.
-CONTEXTO:
-Los documentos fiscales venezolanos requeridos son: Libro de Ventas, Libro de Compras y manejo de retención ISLR en compras. Las notas de crédito y débito se implementarán en una sesión futura junto con el módulo de devoluciones.
 PARTE 1 — Migración de Prisma
-Agregar a Invoice:
-
-controlNumber String? — número de control manual, se llena cuando tienen máquina fiscal o lo asigna el sistema manualmente
-
-Agregar a PurchaseOrder:
-
-islrRetentionPct Float? — porcentaje de retención ISLR si aplica
-islrRetentionUsd Float? — monto calculado de retención ISLR
-islrRetentionBs Float? — monto en Bs
-supplierControlNumber String? — número de control de la factura del proveedor
-
-Agregar a CompanyConfig:
-
-islrRetentionPct Float @default(0) — porcentaje ISLR por defecto configurable
-
-Corre migración con nombre add_fiscal_documents_fields.
-PARTE 2 — Backend (NestJS)
-Nuevo FiscalModule con endpoints de reportes:
-GET /fiscal/libro-ventas?from&to — Libro de Ventas en formato SENIAT:
-
-Filtrar facturas PAID y CREDIT en el período con setUTCHours
-Agrupar por fecha
-Por cada factura retornar:
-fecha, numeroFactura, numeroControl, rif cliente, nombre cliente,
-baseImponibleExenta, baseImponibleReducida, baseImponibleGeneral, baseImponibleEspecial,
-ivaReducido (8%), ivaGeneral (16%), ivaEspecial (31%),
-totalFactura
-
-Totales al final del período
-Retornar como JSON — el PDF lo genera el frontend
-
-GET /fiscal/libro-compras?from&to — Libro de Compras en formato SENIAT:
-
-Filtrar PurchaseOrders RECEIVED en el período
-Por cada orden retornar:
-fecha, numeroFacturaProveedor, numeroControlProveedor, rif proveedor, nombre proveedor,
-baseImponibleExenta, baseImponibleReducida, baseImponibleGeneral, baseImponibleEspecial,
-ivaReducido, ivaGeneral, ivaEspecial,
-retentionIva, islrRetention,
-totalCompra
-
-Totales al final
-
-GET /fiscal/resumen?from&to — Resumen fiscal del período:
-json{
-  "ventas": {
-    "totalFacturas": 0,
-    "baseImponibleTotal": 0,
-    "ivaTotal": 0,
-    "totalVentas": 0
-  },
-  "compras": {
-    "totalOrdenes": 0,
-    "baseImponibleTotal": 0,
-    "ivaTotal": 0,
-    "retencionesIva": 0,
-    "retencionesIslr": 0,
-    "totalCompras": 0
-  }
+Verificar que el modelo User tiene estos campos y agregar los que falten:
+prismamodel User {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  password           String
+  role               UserRole
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
-PARTE 3 — Actualizar módulos existentes
-Actualizar InvoicesModule:
 
-En GET /invoices/:id incluir controlNumber en la respuesta
-En PATCH /invoices/:id permitir actualizar controlNumber — solo ADMIN
-En el PDF de factura: mostrar número de control si existe, campo vacío si no
+enum UserRole {
+  ADMIN SUPERVISOR CASHIER SELLER WAREHOUSE BUYER ACCOUNTANT
+}
+Si faltan campos correr migración con nombre update_user_management.
+PARTE 2 — Permisos por rol
+Los permisos son fijos por rol — no personalizables por usuario. Implementar un mapa de permisos en el backend:
+typescript// apps/api/src/auth/role-permissions.ts
+export const ROLE_PERMISSIONS = {
+  ADMIN: ['*'], // acceso total
+  SUPERVISOR: ['dashboard', 'sales', 'quotations', 'catalog', 'inventory', 'purchases', 'cash', 'receivables', 'payables', 'fiscal'],
+  CASHIER: ['dashboard', 'sales', 'quotations', 'cash', 'receivables'],
+  SELLER: ['dashboard', 'sales', 'quotations'],
+  WAREHOUSE: ['dashboard', 'inventory', 'purchases'],
+  BUYER: ['dashboard', 'catalog', 'purchases', 'payables'],
+  ACCOUNTANT: ['dashboard', 'receivables', 'payables', 'fiscal'],
+}
+Incluir los permisos del rol en el JWT payload al hacer login para que el frontend los use sin consultar el backend en cada navegación.
+PARTE 3 — Backend (NestJS)
+Actualizar UsersModule:
 
-Actualizar PurchaseOrdersModule:
+GET /users — lista todos los usuarios con: id, name, email, role, isActive, lastLoginAt, createdAt
+GET /users/:id — detalle del usuario
+POST /users — crear usuario (solo ADMIN):
 
-En modal de crear/editar orden agregar campos:
-
-"Número de control proveedor" — el número de control de la factura física del proveedor
-Toggle "Aplica retención ISLR"
-Si activo: campo porcentaje ISLR (pre-llenado con companyConfig.islrRetentionPct pero editable)
-Monto ISLR calculado automáticamente: totalCompra × (islrRetentionPct / 100)
+Generar contraseña temporal si no se especifica
+mustChangePassword = true siempre al crear
+Validar que el email no exista
 
 
-Al recibir orden con ISLR → actualizar el Payable correspondiente descontando también la retención ISLR del neto a pagar
+PATCH /users/:id — editar usuario (solo ADMIN):
+
+Puede cambiar: name, email, role, isActive
+No puede cambiar contraseña desde aquí
+
+
+PATCH /users/:id/reset-password — resetear contraseña (solo ADMIN):
+
+Genera nueva contraseña temporal
+mustChangePassword = true
+Retorna la contraseña en texto plano para que el admin la comunique al usuario
+
+
+PATCH /users/:id/toggle-active — activar/desactivar usuario (solo ADMIN)
+DELETE /users/:id — solo si no es el último ADMIN del sistema
+
+Actualizar AuthModule:
+
+En login(): verificar isActive — si false retornar 403 "Usuario inactivo"
+En login(): actualizar lastLoginAt
+En login(): incluir en JWT: { sub, name, email, role, permissions: ROLE_PERMISSIONS[role], mustChangePassword }
+Nuevo endpoint PATCH /auth/change-password:
+
+Si mustChangePassword = true: no requiere contraseña actual
+Si mustChangePassword = false: requiere contraseña actual para verificar
+Al cambiar: mustChangePassword = false
+
+
 
 PARTE 4 — Frontend (Next.js)
-Nueva sección en sidebar: FISCAL con items:
+Middleware de autenticación:
 
-Libro de Ventas → /fiscal/libro-ventas
-Libro de Compras → /fiscal/libro-compras
-Resumen Fiscal → /fiscal/resumen
+Leer JWT de la cookie al navegar
+Si mustChangePassword = true y ruta actual no es /change-password → redirigir a /change-password
+Verificar permisos del rol contra la ruta actual — si no tiene permiso → redirigir a /403
 
-Página /fiscal/libro-ventas:
-Header: "Libro de Ventas" + selector de período (mes actual por defecto)
+Página /change-password:
 
-Selector: mes y año (dropdown)
-Botón "Generar" → carga los datos
-Botón "Exportar PDF" → genera PDF con formato SENIAT
+Formulario: nueva contraseña + confirmar contraseña
+Si mustChangePassword = true: no mostrar campo de contraseña actual
+Si mustChangePassword = false: mostrar campo de contraseña actual
+Validación: mínimo 8 caracteres, al menos una mayúscula y un número
+Al guardar exitosamente → redirigir al dashboard
 
-Tabla con todas las columnas del libro de ventas SENIAT:
+Página /403:
 
-N°, Fecha, N° Factura, N° Control, RIF Cliente, Cliente, Base Exenta, Base Reducida, Base General, Base Especial, IVA 8%, IVA 16%, IVA 31%, Total
-Fila de totales al final en negrita
-Columnas con valor 0 se muestran como "0,00" en formato venezolano
+Mensaje: "No tienes permiso para acceder a esta sección"
+Botón "Volver al inicio"
 
-PDF del Libro de Ventas (formato A4 horizontal):
+Sidebar colapsable:
+Rediseñar completamente el sidebar con menú colapsable tipo acordeón:
 
-Header: nombre empresa, RIF, "LIBRO DE VENTAS", período (MES/AÑO)
-Tabla completa con todas las columnas
-Fila de totales
-Footer: fecha de generación
+El sidebar tiene un ancho fijo cuando está expandido y se puede colapsar a solo íconos
+Las secciones son colapsables individualmente — click en el nombre de la sección expande/colapsa sus items
+Estado de cada sección guardado en localStorage (qué secciones están abiertas)
+Animación suave de expand/collapse
+Estructura del menú según permisos del rol:
 
-Página /fiscal/libro-compras:
+🏠 Dashboard (siempre visible)
 
-Mismo formato que libro de ventas pero con columnas de compras
-Incluye columnas adicionales: Retención IVA, Retención ISLR
+💰 VENTAS (expandible)
+  → POS
+  → Pre-facturas
+  → Facturas
+  → Clientes
 
-Página /fiscal/resumen:
+📋 COTIZACIONES (expandible)
+  → Cotizaciones
 
-Selector de período
-2 cards grandes: Ventas del período y Compras del período
-Tabla comparativa: IVA débito fiscal (ventas) vs IVA crédito fiscal (compras) = IVA a pagar/recuperar
-Resumen de retenciones del período
+📦 CATÁLOGO (expandible)
+  → Productos
+  → Categorías
+  → Marcas
+  → Proveedores
+  → Ajuste de precios
 
-En /settings:
+🏭 INVENTARIO (expandible)
+  → Stock
+  → Almacenes
+  → Transferencias
+  → Conteo físico
+  → Movimientos
 
-Agregar campo "Retención ISLR por defecto (%)"
+🛒 COMPRAS (expandible)
+  → Órdenes de compra
+  → Sugerencias de reorden
+
+🏦 CAJA (expandible)
+  → Gestión de cajas
+  → Sesiones
+
+📈 CxC (expandible)
+  → Cuentas por cobrar
+  → Por plataforma
+
+📉 CxP (expandible)
+  → Cuentas por pagar
+
+🧾 FISCAL (expandible)
+  → Libro de ventas
+  → Libro de compras
+  → Resumen fiscal
+
+⚙️ CONFIGURACIÓN (expandible, solo ADMIN)
+  → Empresa
+  → Usuarios
+  → Áreas de impresión
+  → Importación masiva
+Solo mostrar las secciones y items que el rol del usuario tiene permitido según ROLE_PERMISSIONS.
+Página /settings/users — Gestión de usuarios:
+
+Accesible solo para ADMIN
+Header: "Usuarios" + botón "+ Nuevo usuario"
+Tabla: Nombre, Email, Rol (badge con color por rol), Último acceso, Estado (Activo/Inactivo), Acciones
+Colores de badge por rol: ADMIN=rojo, SUPERVISOR=naranja, CASHIER=azul, SELLER=verde, WAREHOUSE=amarillo, BUYER=morado, ACCOUNTANT=gris
+Acciones: Editar, Resetear contraseña, Activar/Desactivar
+
+Modal "Nuevo usuario":
+
+Campos: Nombre completo, Email, Rol (selector), Contraseña temporal (opcional — si se deja vacío se genera automáticamente)
+Al crear → mostrar modal con la contraseña generada para que el admin la copie con botón "Copiar contraseña"
+
+Modal "Editar usuario":
+
+Campos editables: Nombre, Email, Rol, Estado (activo/inactivo)
+No incluye contraseña
+
+Modal "Resetear contraseña":
+
+Confirmación: "¿Resetear la contraseña de {nombre}?"
+Al confirmar → mostrar nueva contraseña temporal con botón "Copiar"
 
 Al terminar:
 
-Crear 5 facturas de venta con diferentes tipos de IVA y verificar que el libro de ventas las refleja correctamente con los montos desglosados
-Crear 2 órdenes de compra con retención IVA e ISLR y verificar el libro de compras
-Verificar que el PDF se genera correctamente
-Haz commit con el mensaje feat: Session 9 - fiscal documents, libro ventas, libro compras and ISLR retention
+Crear un usuario de cada rol y verificar que al entrar solo ve las secciones del sidebar que le corresponden
+Verificar flujo de primer login: entrar con usuario nuevo → redirige a /change-password → cambia contraseña → accede al dashboard
+Verificar que ADMIN puede crear, editar, desactivar y resetear contraseña de usuarios
+Haz commit con el mensaje feat: Session 12 - user management, role permissions and collapsible sidebar
 Haz push a GitHub
 Actualiza el PROGRESS.md y el PROJECT.md

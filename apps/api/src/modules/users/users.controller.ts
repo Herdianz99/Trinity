@@ -40,6 +40,18 @@ export class UsersController {
   }
 
   @Roles(UserRole.ADMIN)
+  @Patch(':id/reset-password')
+  resetPassword(@Param('id') id: string) {
+    return this.usersService.resetPassword(id);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/toggle-active')
+  toggleActive(@Param('id') id: string) {
+    return this.usersService.toggleActive(id);
+  }
+
+  @Roles(UserRole.ADMIN)
   @Patch(':id/permissions')
   setPermissions(
     @Param('id') id: string,

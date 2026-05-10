@@ -673,7 +673,7 @@ model QuotationItem {
 #### Sesión 9 — Documentos Fiscales Venezolanos ✅
 #### Sesión 10 — Despachos
 #### Sesión 11 — Dashboard Directivos
-#### Sesión 12 — Dashboard Vendedores
+#### Sesión 12 — Gestión de Usuarios y Menú Colapsable ✅
 
 *(Detalle completo se define antes de cada sesión)*
 

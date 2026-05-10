@@ -21,7 +21,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = NextResponse.json({ user: data.user });
+    const response = NextResponse.json({
+      user: data.user,
+      mustChangePassword: data.user.mustChangePassword,
+    });
 
     response.cookies.set('accessToken', data.accessToken, {
       httpOnly: true,
