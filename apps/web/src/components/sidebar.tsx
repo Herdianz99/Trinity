@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   Activity,
   Building2,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -46,7 +47,8 @@ const navItems: NavItem[] = [
   { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={20} /> },
   { label: 'Conteo Fisico', href: '/inventory/count', icon: <ClipboardCheck size={20} /> },
   { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={20} /> },
-  { label: 'Compras', href: '/purchases', icon: <ShoppingCart size={20} />, section: 'COMPRAS' },
+  { label: 'Ordenes de Compra', href: '/purchases', icon: <ShoppingCart size={20} />, section: 'COMPRAS' },
+  { label: 'Sugerencias Reorden', href: '/purchases/reorder', icon: <AlertTriangle size={20} /> },
   { label: 'Ventas', href: '/sales', icon: <Receipt size={20} />, section: 'VENTAS' },
 ];
 
@@ -87,7 +89,7 @@ export default function Sidebar({ user }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 py-4 overflow-y-auto">
         {navItems.map((item, idx) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && !navItems.some(n => n.href !== item.href && n.href.startsWith(item.href + '/') && pathname.startsWith(n.href)));
           const showSection = item.section && !collapsed;
           const prevItem = navItems[idx - 1];
           const isFirstInSection = item.section && (!prevItem || prevItem.section !== item.section);

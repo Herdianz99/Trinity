@@ -2,169 +2,74 @@ Guarda esto en tu session-prompt.md y dáselo a Claude Code:
 
 
 Lee el PROJECT.md y el PROGRESS.md antes de escribir cualquier línea de código.
-Vamos a implementar la Sesión 3 de Trinity ERP: Inventario y Almacenes.
+Vamos a implementar la Sesión 4 de Trinity ERP: Compras.
 Antes de escribir cualquier código consulta las skills disponibles en /mnt/skills/public/ especialmente frontend-design.
-Implementar exactamente lo descrito en la Sesión 3 del PROJECT.md:
+Implementar exactamente lo descrito en la Sesión 4 del PROJECT.md:
 Backend (NestJS):
-WarehousesModule:
+PurchaseOrdersModule completo:
 
-CRUD completo de almacenes
-Solo puede haber un almacén con isDefault = true — al marcar uno como default desmarcar el anterior
+GET /purchase-orders — lista con filtros ?supplierId&status&from&to&page&limit usando setUTCHours para rangos de fecha
+GET /purchase-orders/:id — detalle con items, proveedor y movimientos generados
+POST /purchase-orders — crear orden con numeración automática PO-0001 correlativa
+PATCH /purchase-orders/:id — editar solo si status es DRAFT
+PATCH /purchase-orders/:id/status — cambiar a SENT o CANCELLED
+PATCH /purchase-orders/:id/receive — recibir orden completa o parcial:
 
-StockModule:
+Body: { warehouseId, items: [{ purchaseOrderItemId, receivedQty, costUsd }] }
+Por cada item recibido:
 
-GET /stock con filtros ?warehouseId&productId&lowStock — retorna stock con info del producto y almacén
-GET /stock/global — stock total por producto sumando todos los almacenes
-GET /stock/low — productos donde stock total <= minStock
-GET /stock/valuation — inventario valorado: stock × costUsd × exchangeRate
-POST /stock/adjust — ajuste manual de stock:
+Actualiza receivedQty en PurchaseOrderItem
+Actualiza stock en tabla Stock para el almacén seleccionado
+Actualiza costUsd del producto con el nuevo costo
+Recalcula priceDetal y priceMayor del producto usando la fórmula del PROJECT.md
+Crea StockMovement tipo PURCHASE
 
-Type ADJUSTMENT_IN o ADJUSTMENT_OUT requiere motivo obligatorio
-ADJUSTMENT_OUT requiere aprobación de SUPERVISOR o ADMIN
-Crea StockMovement automáticamente
+
+Si todos los items están completamente recibidos → status = RECEIVED
+Si solo algunos → status = PARTIAL
 Todo en transacción Prisma
 
 
-
-TransfersModule:
-
-POST /transfers — crear solicitud de transferencia (WAREHOUSE o ADMIN):
-
-Body: { fromWarehouseId, toWarehouseId, items: [{ productId, quantity }], notes }
-Verifica que hay stock suficiente en origen
-Estado inicial: PENDING
-
-
-GET /transfers — lista con filtros ?status&warehouseId
-PATCH /transfers/:id/approve — solo SUPERVISOR o ADMIN:
-
-Mueve el stock: descuenta de origen, suma en destino
-Crea StockMovements TRANSFER_OUT y TRANSFER_IN
-Todo en transacción Prisma
-
-
-PATCH /transfers/:id/cancel — solo si está PENDING
-
-Agregar modelo Transfer al schema:
-prismamodel Transfer {
-  id               String         @id @default(cuid())
-  fromWarehouseId  String
-  fromWarehouse    Warehouse      @relation("TransferFrom", ...)
-  toWarehouseId    String
-  toWarehouse      Warehouse      @relation("TransferTo", ...)
-  status           TransferStatus @default(PENDING)
-  notes            String?
-  items            TransferItem[]
-  createdById      String
-  approvedById     String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-}
-
-model TransferItem {
-  id         String   @id @default(cuid())
-  transferId String
-  transfer   Transfer @relation(...)
-  productId  String
-  product    Product  @relation(...)
-  quantity   Float
-}
-
-enum TransferStatus { PENDING APPROVED CANCELLED }
-InventoryCountModule:
-
-POST /inventory-counts — crear sesión de conteo por almacén
-GET /inventory-counts — lista de sesiones
-GET /inventory-counts/:id — detalle con todos los items y diferencias calculadas
-PATCH /inventory-counts/:id/items — ingresar cantidades contadas
-PATCH /inventory-counts/:id/approve — solo SUPERVISOR o ADMIN:
-
-Por cada item con diferencia → crea StockMovement tipo COUNT_ADJUST
-Actualiza stock al valor contado
-Todo en transacción Prisma
-
-
-
-Agregar modelo InventoryCount al schema:
-prismamodel InventoryCount {
-  id          String             @id @default(cuid())
-  warehouseId String
-  warehouse   Warehouse          @relation(...)
-  status      CountStatus        @default(DRAFT)
-  notes       String?
-  items       InventoryCountItem[]
-  createdById String
-  approvedById String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-}
-
-model InventoryCountItem {
-  id               String         @id @default(cuid())
-  inventoryCountId String
-  inventoryCount   InventoryCount @relation(...)
-  productId        String
-  product          Product        @relation(...)
-  systemQuantity   Float          // cantidad según sistema al crear el conteo
-  countedQuantity  Float?         // cantidad física ingresada
-  difference       Float?         // countedQuantity - systemQuantity
-}
-
-enum CountStatus { DRAFT IN_PROGRESS APPROVED CANCELLED }
-StockMovementsModule:
-
-GET /stock-movements con filtros ?productId&warehouseId&type&from&to&page&limit — usar setUTCHours para rangos de fecha
+GET /purchase-orders/reorder-suggestions — productos donde stock total <= minStock, ordenados por criticidad (stock/minStock ASC), incluye último proveedor y último costo
 
 Frontend (Next.js):
-Sección INVENTARIO en sidebar: Stock, Almacenes, Ajustes, Transferencias, Conteo Físico, Movimientos
-Página /inventory/stock:
+Sección COMPRAS en sidebar: Órdenes de compra, Sugerencias de reorden
+Página /purchases:
 
-Selector de almacén (tabs o dropdown) + opción "Todos los almacenes"
-Tabla: Código, Producto, Categoría, Stock en almacén seleccionado, Stock global, Stock mínimo, Costo USD, Valor USD, Estado (Normal/Bajo/Sin stock)
-Filas con stock bajo → fondo amarillo, stock 0 → fondo rojo
-Banner superior si hay productos bajo mínimo: "⚠️ X productos con stock bajo"
-Botón "Ajustar stock" por fila
-Botón "Ver movimientos" por fila → navega a /inventory/movements?productId=XXX
-Reporte valorizado al final: tabla resumen + total valor USD + total valor Bs
+Header: "Órdenes de Compra" + contador + botón "+ Nueva orden"
+Filtros: proveedor, estado, rango de fechas
+Tabla: Número (PO-0001), Proveedor, Items (resumen), Total USD, Estado, Fecha, Acciones
+Badge de estado: gris DRAFT, azul SENT, amarillo PARTIAL, verde RECEIVED, rojo CANCELLED
+Acciones: Ver detalle, Editar (solo DRAFT), Recibir (solo SENT o PARTIAL), Cancelar (solo DRAFT o SENT)
 
-Página /inventory/warehouses:
+Modal "Nueva orden de compra":
 
-Tabla de almacenes con nombre, ubicación, stock total (conteo de productos), estado
-Modal crear/editar almacén
-Toggle isDefault con confirmación
+Selector de proveedor (obligatorio)
+Lista de items: búsqueda de producto (full-text), cantidad, costo USD por unidad, total parcial calculado
+Botón "+ Agregar producto"
+Total general de la orden
+Notas opcionales
+Botón "Guardar como borrador" y botón "Marcar como enviada"
 
-Modal "Ajustar stock":
+Modal "Recibir orden":
 
-Muestra stock actual en el almacén
-Selector almacén
-Tipo: Entrada / Salida
-Cantidad y motivo (obligatorio)
-Si es Salida → badge amarillo "Requiere aprobación de Supervisor"
-Preview: stock resultante
+Muestra items de la orden con cantidades pedidas
+Selector de almacén destino (obligatorio)
+Por cada item: campo "Cantidad recibida" (pre-llenado con cantidad pedida) y campo "Costo USD" (pre-llenado con costo actual)
+Si el costo cambió → mostrar badge "⚠️ Precio actualizado" y advertencia "Esto recalculará el precio de venta del producto"
+Preview de nuevo precio detal y mayor calculado con el nuevo costo
+Botón "Confirmar recepción"
 
-Página /inventory/transfers:
+Página /purchases/reorder:
 
-Tabla de transferencias con estados, almacenes origen/destino, fecha
-Badge de estado: amarillo PENDING, verde APPROVED, rojo CANCELLED
-Modal crear transferencia: selector origen, destino, lista de productos con cantidades
-Botón aprobar/cancelar según rol
-
-Página /inventory/count:
-
-Lista de sesiones de conteo con estado y almacén
-Botón "+ Nueva sesión de conteo"
-Vista detalle de sesión: tabla con producto, stock sistema, campo para ingresar conteo físico, diferencia calculada en tiempo real (verde si igual, rojo si hay diferencia)
-Botón "Aprobar conteo" solo visible para SUPERVISOR/ADMIN
-
-Página /inventory/movements:
-
-Tabla de movimientos con filtros: producto, almacén, tipo, rango de fechas (usar fecha local no UTC)
-Selector de rango: Hoy / Esta semana / Este mes / Personalizado
-Badge por tipo: verde PURCHASE, rojo SALE, amarillo ADJUSTMENT, azul TRANSFER
+Título "Sugerencias de Reorden"
+Tabla: Producto, Categoría, Proveedor principal, Stock actual, Stock mínimo, Diferencia, Último costo USD
+Filas ordenadas por criticidad: rojo si stock = 0, amarillo si stock < minStock
+Botón "Crear orden" por fila que pre-llena una nueva orden de compra con ese producto y proveedor
 
 Al terminar:
 
-Verifica el flujo completo: ajustar stock → ver movimiento generado → ver stock actualizado
-Haz commit con el mensaje feat: Session 3 - inventory, warehouses, transfers and physical count
+Verifica el flujo completo: crear orden → marcar enviada → recibir con nuevo costo → verificar que el stock subió, el costo del producto se actualizó y el precio de venta se recalculó
+Haz commit con el mensaje feat: Session 4 - purchase orders with auto stock update and price recalculation
 Haz push a GitHub
 Actualiza el PROGRESS.md y el PROJECT.md

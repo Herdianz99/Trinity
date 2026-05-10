@@ -467,7 +467,7 @@ enum PaymentMethod {
 - Página de conteo físico paso a paso
 - Reporte valorizado al pie de la página de stock
 
-#### Sesión 4 — Compras
+#### Sesión 4 — Compras ✅
 **Backend:**
 - PurchaseOrdersModule:
   - CRUD órdenes de compra con numeración PO-0001

@@ -13,6 +13,7 @@ import { StockModule } from './modules/stock/stock.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { InventoryCountsModule } from './modules/inventory-counts/inventory-counts.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { StockMovementsModule } from './modules/stock-movements/stock-movements.
     TransfersModule,
     InventoryCountsModule,
     StockMovementsModule,
+    PurchaseOrdersModule,
   ],
 })
 export class AppModule {}

@@ -86,3 +86,43 @@
 - `POST /stock/adjust` ADJUSTMENT_IN +5 unidades → stock actualizado de 80 a 85
 - `GET /stock-movements` muestra el movimiento generado con tipo, cantidad y razon
 - Flujo completo verificado: ajustar stock → movimiento creado → stock actualizado
+
+## Sesion 4 — Compras (Completada)
+### Backend
+- **PurchaseOrdersModule**:
+  - `POST /purchase-orders` — crear orden con numeracion automatica PO-0001 correlativa
+  - `GET /purchase-orders` — lista con filtros: supplierId, status, from, to, page, limit (usa setUTCHours para rangos de fecha)
+  - `GET /purchase-orders/:id` — detalle con items, proveedor y producto info
+  - `PATCH /purchase-orders/:id` — editar solo si status es DRAFT (elimina y recrea items)
+  - `PATCH /purchase-orders/:id/status` — cambiar a SENT o CANCELLED (valida transiciones)
+  - `PATCH /purchase-orders/:id/receive` — recibir orden en transaccion Prisma:
+    - Actualiza receivedQty en PurchaseOrderItem
+    - Actualiza stock (upsert) en almacen seleccionado
+    - Actualiza costUsd del producto con el nuevo costo
+    - Recalcula priceDetal y priceMayor usando formula (costo × brecha × ganancia × IVA)
+    - Crea StockMovement tipo PURCHASE con referencia al numero de orden
+    - Si todos items recibidos completamente → RECEIVED, sino → PARTIAL
+  - `GET /purchase-orders/reorder-suggestions` — productos donde stock total <= minStock, ordenados por criticidad
+
+### Frontend
+- Seccion COMPRAS en sidebar con 2 items: Ordenes de Compra, Sugerencias de Reorden
+- Pagina `/purchases`:
+  - Tabla con columnas: Numero, Proveedor, Items, Total USD, Estado, Fecha, Acciones
+  - Filtros por proveedor y estado
+  - Badge de estado: gris DRAFT, azul SENT, amarillo PARTIAL, verde RECEIVED, rojo CANCELLED
+  - Acciones: Ver detalle, Editar (solo DRAFT), Enviar (solo DRAFT), Recibir (SENT/PARTIAL), Cancelar (DRAFT/SENT)
+  - Modal crear/editar con busqueda de producto full-text, selector proveedor, items con cantidad y costo
+  - Modal recibir: selector almacen, tabla con cantidades a recibir y costos editables, badge "Precio actualizado" si cambia
+  - Modal detalle: tabla completa con recibido vs pedido
+- Pagina `/purchases/reorder`:
+  - Tabla: Producto, Categoria, Proveedor, Stock actual, Minimo, Diferencia, Costo USD
+  - Filas con fondo rojo si stock = 0
+  - Boton "Crear orden" por fila que crea orden pre-llenada
+
+### Verificaciones
+- Flujo completo verificado: crear PO-0001 → marcar enviada → recibir 10 unidades con costo $15 (antes $5)
+- Stock actualizado: 92 → 102 (+10 unidades)
+- Costo producto actualizado: $5 → $15
+- Precio recalculado: priceDetal $8.12 → $24.36, priceMayor $7.25 → $21.75
+- StockMovement tipo PURCHASE creado con referencia PO-0001
+- Status transiciono correctamente: DRAFT → SENT → RECEIVED
