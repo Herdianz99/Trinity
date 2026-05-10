@@ -13,7 +13,10 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { permissions: { select: { permissionKey: true } } },
+    });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Credenciales invalidas');
     }
@@ -35,6 +38,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: user.permissions.map((p) => p.permissionKey),
       },
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
@@ -67,9 +71,15 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { permissions: { select: { permissionKey: true } } },
+    });
     if (!user) throw new UnauthorizedException();
-    const { password, ...result } = user;
-    return result;
+    const { password, permissions, ...result } = user;
+    return {
+      ...result,
+      permissions: permissions.map((p) => p.permissionKey),
+    };
   }
 }

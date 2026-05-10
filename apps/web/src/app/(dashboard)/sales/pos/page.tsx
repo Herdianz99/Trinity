@@ -16,6 +16,10 @@ import {
   ShoppingCart,
   CreditCard,
   Lock,
+  Pencil,
+  MoreHorizontal,
+  Clock,
+  PanelRightOpen,
 } from 'lucide-react';
 
 const IVA_RATES: Record<string, number> = {
@@ -43,14 +47,18 @@ const PAYMENT_METHODS = [
   { key: 'CREDIAGRO', label: 'Crediagro', currency: 'USD' },
 ];
 
+const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
+
 interface CartItem {
   productId: string;
   code: string;
   name: string;
   unitPrice: number;
+  originalPrice: number;
   quantity: number;
   ivaType: string;
   stock: number;
+  priceOverridden: boolean;
 }
 
 interface PaymentLine {
@@ -83,13 +91,33 @@ export default function POSPage() {
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [userRole, setUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [scannerActive, setScannerActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
   const searchTimeout = useRef<any>(null);
 
-  // Fetch exchange rate on load
+  // Price override state
+  const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState('');
+
+  // Client modal state
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [showEditClient, setShowEditClient] = useState(false);
+  const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
+  const [savingClient, setSavingClient] = useState(false);
+
+  // Pending invoices drawer
+  const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
+  const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
+
+  const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
+
+  // Fetch exchange rate and user info on load
   useEffect(() => {
     fetch('/api/proxy/exchange-rate/today')
       .then(r => r.json())
@@ -100,6 +128,7 @@ export default function POSPage() {
       .then(r => r.json())
       .then(data => {
         if (data?.role) setUserRole(data.role);
+        if (data?.permissions) setUserPermissions(data.permissions || []);
       });
   }, []);
 
@@ -117,9 +146,11 @@ export default function POSPage() {
             code: '',
             name: item.productName,
             unitPrice: item.unitPrice,
+            originalPrice: item.unitPrice,
             quantity: item.quantity,
             ivaType: item.ivaType,
             stock: 999,
+            priceOverridden: false,
           })));
           if (data.customer) {
             setCustomerId(data.customer.id);
@@ -130,6 +161,24 @@ export default function POSPage() {
       })
       .finally(() => setLoadingInvoice(false));
   }, [invoiceId]);
+
+  // Fetch pending invoices count (polling every 30s)
+  const fetchPending = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/invoices/pending?today=true');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setPendingInvoices(data);
+        setPendingCount(data.length);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, [fetchPending]);
 
   // Product search with debounce
   const handleProductSearch = useCallback((query: string) => {
@@ -172,9 +221,11 @@ export default function POSPage() {
         code: product.code,
         name: product.name,
         unitPrice: product.priceDetal,
+        originalPrice: product.priceDetal,
         quantity: 1,
         ivaType: product.ivaType,
         stock: product.stock?.[0]?.quantity || 0,
+        priceOverridden: false,
       }];
     });
     setSearchQuery('');
@@ -189,8 +240,12 @@ export default function POSPage() {
     }));
   }
 
-  function updatePrice(productId: string, price: number) {
-    setCart(prev => prev.map(i => i.productId === productId ? { ...i, unitPrice: price } : i));
+  function confirmPriceOverride(productId: string) {
+    const val = parseFloat(editingPriceValue);
+    if (!isNaN(val) && val >= 0) {
+      setCart(prev => prev.map(i => i.productId === productId ? { ...i, unitPrice: val, priceOverridden: val !== i.originalPrice } : i));
+    }
+    setEditingPriceItemId(null);
   }
 
   function removeItem(productId: string) {
@@ -243,7 +298,7 @@ export default function POSPage() {
     setPayments(prev => prev.filter((_, i) => i !== idx));
   }
 
-  async function handleSavePreInvoice() {
+  async function handleSaveInvoice(clearCart: boolean) {
     if (cart.length === 0) return;
     setProcessing(true);
     setMessage(null);
@@ -265,10 +320,15 @@ export default function POSPage() {
         throw new Error(err.message || 'Error al guardar');
       }
       const data = await res.json();
-      setCart([]);
-      setCustomerId(null);
-      setCustomerName('');
-      setMessage({ type: 'success', text: `Pre-factura ${data.number} guardada` });
+      if (clearCart) {
+        setCart([]);
+        setCustomerId(null);
+        setCustomerName('');
+        setMessage({ type: 'success', text: `Pre-factura ${data.number} guardada` });
+      } else {
+        setMessage({ type: 'success', text: `Factura guardada en espera` });
+      }
+      fetchPending();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -287,7 +347,6 @@ export default function POSPage() {
     try {
       let targetInvoiceId = existingInvoiceId;
 
-      // If no existing invoice, create one first
       if (!targetInvoiceId) {
         const createRes = await fetch('/api/proxy/invoices', {
           method: 'POST',
@@ -309,7 +368,6 @@ export default function POSPage() {
         targetInvoiceId = created.id;
       }
 
-      // Pay the invoice
       const payRes = await fetch(`/api/proxy/invoices/${targetInvoiceId}/pay`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -338,11 +396,98 @@ export default function POSPage() {
       setIsCredit(false);
       setExistingInvoiceId(null);
       setMessage({ type: 'success', text: `Factura ${result.number} cobrada exitosamente` });
+      fetchPending();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setProcessing(false);
     }
+  }
+
+  // Client modal functions
+  async function handleSaveClient(isEdit: boolean) {
+    setSavingClient(true);
+    try {
+      const url = isEdit ? `/api/proxy/customers/${customerId}` : '/api/proxy/customers';
+      const method = isEdit ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientForm),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al guardar cliente');
+      }
+      const data = await res.json();
+      setCustomerId(data.id);
+      setCustomerName(data.name);
+      setShowCreateClient(false);
+      setShowEditClient(false);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
+  function openEditClient() {
+    if (!customerId) return;
+    fetch(`/api/proxy/customers/${customerId}`)
+      .then(r => r.json())
+      .then(data => {
+        setClientForm({
+          documentType: data.documentType || 'V',
+          rif: data.rif || '',
+          name: data.name || '',
+          address: data.address || '',
+          phone: data.phone || '',
+        });
+        setShowEditClient(true);
+      });
+  }
+
+  // Retake pending invoice
+  async function retakeInvoice(inv: any) {
+    setCart(inv.items.map((item: any) => ({
+      productId: item.productId || item.id,
+      code: '',
+      name: item.productName,
+      unitPrice: item.unitPrice,
+      originalPrice: item.unitPrice,
+      quantity: item.quantity,
+      ivaType: item.ivaType || 'GENERAL',
+      stock: 999,
+      priceOverridden: false,
+    })));
+    if (inv.customer) {
+      setCustomerId(inv.customer.id);
+      setCustomerName(inv.customer.name);
+    } else {
+      setCustomerId(null);
+      setCustomerName('');
+    }
+    setExistingInvoiceId(inv.id);
+    setPendingDrawerOpen(false);
+    setConfirmRetake(null);
+  }
+
+  async function cancelPendingInvoice(id: string) {
+    try {
+      await fetch(`/api/proxy/invoices/${id}/cancel`, { method: 'PATCH' });
+      fetchPending();
+      setConfirmCancel(null);
+    } catch {}
+  }
+
+  // Time ago helper
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Ahora';
+    if (mins < 60) return `${mins}min`;
+    const hrs = Math.floor(mins / 60);
+    return `${hrs}h ${mins % 60}min`;
   }
 
   // Barcode scanner with @zxing/browser
@@ -383,7 +528,6 @@ export default function POSPage() {
     }
   }
 
-  // Cleanup scanner on unmount
   useEffect(() => {
     return () => {
       if (scannerControlsRef.current) {
@@ -410,10 +554,21 @@ export default function POSPage() {
           </div>
           <h1 className="text-xl font-bold text-white">Punto de Venta</h1>
           {exchangeRate > 0 && (
-            <span className="ml-auto text-xs px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+            <span className="ml-2 text-xs px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
               Tasa: Bs {exchangeRate.toFixed(2)}
             </span>
           )}
+          {/* Pending invoices button */}
+          <button
+            onClick={() => { fetchPending(); setPendingDrawerOpen(true); }}
+            className="ml-auto flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-600 hover:border-amber-500/40 hover:bg-amber-500/5 text-sm text-slate-300 hover:text-white transition-colors"
+          >
+            <Clock size={16} className="text-amber-400" />
+            En espera
+            {pendingCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-black min-w-[20px] text-center">{pendingCount}</span>
+            )}
+          </button>
         </div>
 
         {message && (
@@ -442,7 +597,6 @@ export default function POSPage() {
             </button>
           </div>
 
-          {/* Scanner video */}
           {scannerActive && (
             <div className="mt-3 rounded-lg overflow-hidden border border-slate-700">
               <video ref={videoRef} className="w-full max-h-48 object-cover" />
@@ -504,39 +658,53 @@ export default function POSPage() {
                     <User size={14} className="text-green-400" />
                     <span className="text-sm text-white">{customerName}</span>
                   </div>
-                  <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-slate-500 hover:text-red-400">
-                    <X size={14} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={openEditClient} className="p-1 rounded hover:bg-slate-600 text-slate-400 hover:text-blue-400" title="Editar cliente">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="p-1 rounded hover:bg-slate-600 text-slate-500 hover:text-red-400">
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Buscar cliente..."
-                    value={customerSearch}
-                    onChange={e => { setCustomerSearch(e.target.value); setShowCustomerSearch(true); }}
-                    onFocus={() => setShowCustomerSearch(true)}
-                    className="input-field !py-2 text-sm"
-                  />
-                  {showCustomerSearch && customerResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto">
-                      {customerResults.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => {
-                            setCustomerId(c.id);
-                            setCustomerName(c.name);
-                            setCustomerSearch('');
-                            setShowCustomerSearch(false);
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-slate-700/40 text-sm text-white border-b border-slate-700/30 last:border-0"
-                        >
-                          {c.name} {c.rif && <span className="text-slate-500 text-xs">({c.rif})</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Buscar cliente..."
+                      value={customerSearch}
+                      onChange={e => { setCustomerSearch(e.target.value); setShowCustomerSearch(true); }}
+                      onFocus={() => setShowCustomerSearch(true)}
+                      className="input-field !py-2 text-sm"
+                    />
+                    {showCustomerSearch && customerResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto">
+                        {customerResults.map(c => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              setCustomerId(c.id);
+                              setCustomerName(c.name);
+                              setCustomerSearch('');
+                              setShowCustomerSearch(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-slate-700/40 text-sm text-white border-b border-slate-700/30 last:border-0"
+                          >
+                            {c.name} {c.rif && <span className="text-slate-500 text-xs">({c.documentType || 'V'}-{c.rif})</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' }); setShowCreateClient(true); }}
+                    className="p-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                    title="Crear cliente"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -550,17 +718,32 @@ export default function POSPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate">{item.name}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    {userRole === 'ADMIN' ? (
+                    {editingPriceItemId === item.productId ? (
                       <input
                         type="number"
-                        value={item.unitPrice}
-                        onChange={e => updatePrice(item.productId, Number(e.target.value))}
-                        className="w-20 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs text-green-400 text-right"
+                        value={editingPriceValue}
+                        onChange={e => setEditingPriceValue(e.target.value)}
+                        onBlur={() => confirmPriceOverride(item.productId)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmPriceOverride(item.productId); if (e.key === 'Escape') setEditingPriceItemId(null); }}
+                        className="w-20 px-1.5 py-0.5 rounded bg-slate-800 border border-green-500/50 text-xs text-green-400 text-right focus:outline-none"
                         step="0.01"
                         min="0"
+                        autoFocus
                       />
                     ) : (
                       <span className="text-xs text-green-400">${item.unitPrice.toFixed(2)}</span>
+                    )}
+                    {canOverridePrice && editingPriceItemId !== item.productId && (
+                      <button
+                        onClick={() => { setEditingPriceItemId(item.productId); setEditingPriceValue(item.unitPrice.toString()); }}
+                        className="text-slate-600 hover:text-slate-400"
+                        title="Modificar precio"
+                      >
+                        <MoreHorizontal size={14} />
+                      </button>
+                    )}
+                    {item.priceOverridden && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Precio modificado</span>
                     )}
                     <span className="text-xs text-slate-600">{IVA_LABELS[item.ivaType]}</span>
                   </div>
@@ -604,18 +787,35 @@ export default function POSPage() {
 
             <div className="flex gap-2 pt-2">
               {userRole === 'SELLER' ? (
-                <button
-                  onClick={handleSavePreInvoice}
-                  disabled={cart.length === 0 || processing}
-                  className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {processing ? <Loader2 className="animate-spin" size={16} /> : <ShoppingCart size={16} />}
-                  Guardar pre-factura
-                </button>
+                <>
+                  <button
+                    onClick={() => handleSaveInvoice(false)}
+                    disabled={cart.length === 0 || processing}
+                    className="btn-secondary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Clock size={16} /> En espera
+                  </button>
+                  <button
+                    onClick={() => handleSaveInvoice(true)}
+                    disabled={cart.length === 0 || processing}
+                    className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {processing ? <Loader2 className="animate-spin" size={16} /> : <ShoppingCart size={16} />}
+                    Pre-factura
+                  </button>
+                </>
               ) : (
                 <>
                   <button
-                    onClick={handleSavePreInvoice}
+                    onClick={() => handleSaveInvoice(false)}
+                    disabled={cart.length === 0 || processing}
+                    className="btn-secondary !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50 px-3"
+                    title="Guardar en espera"
+                  >
+                    <Clock size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleSaveInvoice(true)}
                     disabled={cart.length === 0 || processing}
                     className="btn-secondary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
@@ -626,7 +826,7 @@ export default function POSPage() {
                     disabled={cart.length === 0 || processing}
                     className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <DollarSign size={16} /> Cobrar ${totalUsd.toFixed(2)}
+                    <DollarSign size={16} /> Cobrar
                   </button>
                 </>
               )}
@@ -653,7 +853,6 @@ export default function POSPage() {
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Payment methods */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -669,7 +868,6 @@ export default function POSPage() {
                 </div>
               </div>
 
-              {/* Payment lines */}
               {payments.length > 0 && (
                 <div className="space-y-3">
                   {payments.map((p, idx) => {
@@ -722,7 +920,6 @@ export default function POSPage() {
                 </div>
               )}
 
-              {/* Remaining */}
               <div className="card p-3 flex items-center justify-between">
                 <span className="text-sm text-slate-400">Pendiente por cobrar</span>
                 <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
@@ -730,7 +927,6 @@ export default function POSPage() {
                 </span>
               </div>
 
-              {/* Credit toggle */}
               <div className="card p-3 space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
@@ -771,7 +967,6 @@ export default function POSPage() {
                 )}
               </div>
 
-              {/* Confirm */}
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
@@ -783,6 +978,167 @@ export default function POSPage() {
                   Confirmar cobro
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Client Modal */}
+      {(showCreateClient || showEditClient) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-white">{showEditClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
+              <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <div className="w-20">
+                  <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
+                  <select
+                    value={clientForm.documentType}
+                    onChange={e => setClientForm(f => ({ ...f, documentType: e.target.value }))}
+                    className="input-field !py-2 text-sm"
+                  >
+                    {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-slate-500 mb-1 block">RIF / Documento</label>
+                  <input
+                    type="text"
+                    value={clientForm.rif}
+                    onChange={e => setClientForm(f => ({ ...f, rif: e.target.value }))}
+                    className="input-field !py-2 text-sm"
+                    placeholder="12345678"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Nombre completo</label>
+                <input
+                  type="text"
+                  value={clientForm.name}
+                  onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+                  className="input-field !py-2 text-sm"
+                  placeholder="Nombre del cliente"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Direccion</label>
+                <input
+                  type="text"
+                  value={clientForm.address}
+                  onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
+                  className="input-field !py-2 text-sm"
+                  placeholder="Direccion"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Telefono</label>
+                <input
+                  type="text"
+                  value={clientForm.phone}
+                  onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
+                  className="input-field !py-2 text-sm"
+                  placeholder="0414-1234567"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
+              <button
+                onClick={() => handleSaveClient(showEditClient)}
+                disabled={savingClient || !clientForm.name.trim()}
+                className="btn-primary !py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {savingClient && <Loader2 className="animate-spin" size={14} />}
+                {showEditClient ? 'Guardar cambios' : 'Guardar y seleccionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Invoices Drawer */}
+      {pendingDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/50" onClick={() => setPendingDrawerOpen(false)} />
+          <div className="w-full max-w-md bg-slate-800 border-l border-slate-700 flex flex-col shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PanelRightOpen size={18} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-white">Facturas en espera</h2>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400">{pendingInvoices.length}</span>
+              </div>
+              <button onClick={() => setPendingDrawerOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {pendingInvoices.length === 0 ? (
+                <div className="text-center py-12 text-slate-600 text-sm">No hay facturas en espera</div>
+              ) : pendingInvoices.map(inv => (
+                <div key={inv.id} className="card p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-mono text-green-400">{inv.number || 'Sin numero'}</span>
+                    <span className="text-xs text-slate-500">{timeAgo(inv.createdAt)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User size={12} className="text-slate-500" />
+                    <span className="text-sm text-slate-300">{inv.customer?.name || 'Sin cliente'}</span>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {inv.items?.slice(0, 2).map((it: any, i: number) => (
+                      <span key={i}>{it.productName} x{it.quantity}{i < 1 && inv.items.length > 1 ? ', ' : ''}</span>
+                    ))}
+                    {(inv.totalItems || inv.items?.length || 0) > 2 && (
+                      <span className="text-slate-600"> y {(inv.totalItems || inv.items?.length || 0) - 2} mas</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-700/30">
+                    <span className="text-sm font-bold text-white">${inv.totalUsd?.toFixed(2)}</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (cart.length > 0) { setConfirmRetake(inv.id); } else { retakeInvoice(inv); }
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                      >
+                        Retomar
+                      </button>
+                      <button
+                        onClick={() => setConfirmCancel(inv.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm retake */}
+                  {confirmRetake === inv.id && (
+                    <div className="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-xs text-amber-300 mb-2">Descartar la venta actual y retomar esta factura?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => retakeInvoice(inv)} className="px-3 py-1 rounded text-xs font-medium bg-amber-500 text-black hover:bg-amber-400">Si, retomar</button>
+                        <button onClick={() => setConfirmRetake(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confirm cancel */}
+                  {confirmCancel === inv.id && (
+                    <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <p className="text-xs text-red-300 mb-2">Cancelar esta factura?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => cancelPendingInvoice(inv.id)} className="px-3 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-400">Si, cancelar</button>
+                        <button onClick={() => setConfirmCancel(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

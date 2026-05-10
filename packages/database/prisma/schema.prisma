@@ -59,9 +59,8 @@ enum PurchaseStatus {
   CANCELLED
 }
 
-enum CustomerType {
-  NATURAL
-  JURIDICA
+enum PermissionKey {
+  OVERRIDE_PRICE
 }
 
 enum SessionStatus {
@@ -148,16 +147,27 @@ enum ExchangeRateSource {
 // ============================================
 
 model User {
-  id                 String    @id @default(cuid())
+  id                 String           @id @default(cuid())
   name               String
-  email              String    @unique
+  email              String           @unique
   password           String
   role               UserRole
-  isActive           Boolean   @default(true)
-  mustChangePassword Boolean   @default(true)
+  isActive           Boolean          @default(true)
+  mustChangePassword Boolean          @default(true)
   lastLoginAt        DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  permissions        UserPermission[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model UserPermission {
+  id            String        @id @default(cuid())
+  userId        String
+  permissionKey PermissionKey
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+
+  @@unique([userId, permissionKey])
 }
 
 // ============================================
@@ -392,20 +402,20 @@ model PurchaseOrderItem {
 // ============================================
 
 model Customer {
-  id          String       @id @default(cuid())
-  name        String
-  rif         String?
-  phone       String?
-  email       String?
-  address     String?
-  type        CustomerType @default(NATURAL)
-  creditLimit Float        @default(0)
-  creditDays  Int          @default(0)
-  isActive    Boolean      @default(true)
-  invoices    Invoice[]
-  receivables Receivable[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  name         String
+  documentType String       @default("V")
+  rif          String?
+  phone        String?
+  email        String?
+  address      String?
+  creditLimit  Float        @default(0)
+  creditDays   Int          @default(0)
+  isActive     Boolean      @default(true)
+  invoices     Invoice[]
+  receivables  Receivable[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 // ============================================

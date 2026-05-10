@@ -70,15 +70,41 @@ export class InvoicesService {
     return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 
-  async findPending() {
-    return this.prisma.invoice.findMany({
-      where: { status: 'PENDING' },
+  async findPending(todayOnly = false) {
+    const where: any = { status: 'PENDING' };
+
+    if (todayOnly) {
+      const now = new Date();
+      const startOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
+      where.createdAt = { gte: startOfDay, lte: endOfDay };
+    }
+
+    const invoices = await this.prisma.invoice.findMany({
+      where,
       include: {
-        customer: { select: { id: true, name: true, rif: true } },
-        items: true,
+        customer: { select: { id: true, name: true, documentType: true, rif: true } },
+        items: {
+          take: 3,
+          select: { id: true, productName: true, quantity: true },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // Add item count for summary
+    const invoiceIds = invoices.map((i) => i.id);
+    const itemCounts = await this.prisma.invoiceItem.groupBy({
+      by: ['invoiceId'],
+      where: { invoiceId: { in: invoiceIds } },
+      _count: true,
+    });
+    const countMap = new Map(itemCounts.map((c) => [c.invoiceId, c._count]));
+
+    return invoices.map((inv) => ({
+      ...inv,
+      totalItems: countMap.get(inv.id) || 0,
+    }));
   }
 
   async findOne(id: string) {

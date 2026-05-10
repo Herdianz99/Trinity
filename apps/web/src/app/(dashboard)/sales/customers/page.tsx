@@ -16,11 +16,11 @@ import {
 interface Customer {
   id: string;
   name: string;
+  documentType: string;
   rif: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
-  type: 'NATURAL' | 'JURIDICA';
   creditLimit: number;
   creditDays: number;
   isActive: boolean;
@@ -29,20 +29,20 @@ interface Customer {
 
 const defaultForm: {
   name: string;
+  documentType: string;
   rif: string;
   phone: string;
   email: string;
   address: string;
-  type: 'NATURAL' | 'JURIDICA';
   creditLimit: number;
   creditDays: number;
 } = {
   name: '',
+  documentType: 'V',
   rif: '',
   phone: '',
   email: '',
   address: '',
-  type: 'NATURAL',
   creditLimit: 0,
   creditDays: 0,
 };
@@ -99,7 +99,7 @@ export default function CustomersPage() {
       phone: c.phone || '',
       email: c.email || '',
       address: c.address || '',
-      type: c.type,
+      documentType: c.documentType || 'V',
       creditLimit: c.creditLimit,
       creditDays: c.creditDays,
     });
@@ -231,8 +231,8 @@ export default function CustomersPage() {
                   <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{c.rif || '-'}</td>
                   <td className="px-4 py-3 text-slate-300 hidden md:table-cell">{c.phone || '-'}</td>
                   <td className="px-4 py-3 hidden lg:table-cell">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${c.type === 'JURIDICA' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' : 'text-slate-300 border-slate-600 bg-slate-700/30'}`}>
-                      {c.type}
+                    <span className="text-xs px-2 py-0.5 rounded-full border text-blue-400 border-blue-500/30 bg-blue-500/10">
+                      {c.documentType || 'V'}-{c.rif || ''}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right text-slate-300">${c.creditLimit.toFixed(2)}</td>
@@ -292,10 +292,9 @@ export default function CustomersPage() {
                   <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm" placeholder="J-12345678-9" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Tipo</label>
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as any }))} className="input-field !py-2 text-sm">
-                    <option value="NATURAL">Natural</option>
-                    <option value="JURIDICA">Juridica</option>
+                  <label className="text-xs text-slate-400 mb-1 block">Tipo Doc.</label>
+                  <select value={form.documentType} onChange={e => setForm(f => ({ ...f, documentType: e.target.value }))} className="input-field !py-2 text-sm">
+                    {['V', 'E', 'J', 'G', 'C', 'P'].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -347,7 +346,7 @@ export default function CustomersPage() {
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><span className="text-slate-500">RIF:</span> <span className="text-slate-200 ml-2">{detailCustomer.rif || '-'}</span></div>
-                <div><span className="text-slate-500">Tipo:</span> <span className="text-slate-200 ml-2">{detailCustomer.type}</span></div>
+                <div><span className="text-slate-500">Documento:</span> <span className="text-slate-200 ml-2">{detailCustomer.documentType || 'V'}-{detailCustomer.rif || '-'}</span></div>
                 <div><span className="text-slate-500">Telefono:</span> <span className="text-slate-200 ml-2">{detailCustomer.phone || '-'}</span></div>
                 <div><span className="text-slate-500">Email:</span> <span className="text-slate-200 ml-2">{detailCustomer.email || '-'}</span></div>
                 <div className="col-span-2"><span className="text-slate-500">Direccion:</span> <span className="text-slate-200 ml-2">{detailCustomer.address || '-'}</span></div>

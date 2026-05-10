@@ -43,8 +43,8 @@ export class InvoicesController {
   }
 
   @Get('pending')
-  findPending() {
-    return this.service.findPending();
+  findPending(@Query('today') today?: string) {
+    return this.service.findPending(today === 'true');
   }
 
   @Get(':id')

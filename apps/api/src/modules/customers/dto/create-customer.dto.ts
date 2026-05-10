@@ -1,12 +1,17 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsInt, Min, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsInt, IsIn, Min, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { CustomerType } from '@prisma/client';
 
 export class CreateCustomerDto {
   @ApiProperty()
   @IsString()
   @MinLength(2)
   name: string;
+
+  @ApiProperty({ required: false, enum: ['V', 'E', 'J', 'G', 'C', 'P'], default: 'V' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['V', 'E', 'J', 'G', 'C', 'P'])
+  documentType?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -27,11 +32,6 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   address?: string;
-
-  @ApiProperty({ enum: CustomerType, default: 'NATURAL' })
-  @IsOptional()
-  @IsEnum(CustomerType)
-  type?: CustomerType;
 
   @ApiProperty({ default: 0 })
   @IsOptional()

@@ -6,7 +6,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { UserRole } from '@prisma/client';
+import { UserRole, PermissionKey } from '@prisma/client';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -37,6 +37,15 @@ export class UsersController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/permissions')
+  setPermissions(
+    @Param('id') id: string,
+    @Body() body: { permissions: PermissionKey[] },
+  ) {
+    return this.usersService.setPermissions(id, body.permissions);
   }
 
   @Roles(UserRole.ADMIN)
