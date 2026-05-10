@@ -16,6 +16,7 @@ interface CompanyConfig {
   invoicePrefix: string;
   quotationValidityDays: number;
   overdueWarningDays: number;
+  ivaRetentionPct: number;
 }
 
 export default function ConfigPage() {
@@ -32,6 +33,7 @@ export default function ConfigPage() {
     invoicePrefix: 'FAC',
     quotationValidityDays: 30,
     overdueWarningDays: 3,
+    ivaRetentionPct: 75,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,6 +95,7 @@ export default function ConfigPage() {
           invoicePrefix: data.invoicePrefix || 'FAC',
           quotationValidityDays: data.quotationValidityDays || 30,
           overdueWarningDays: data.overdueWarningDays || 3,
+          ivaRetentionPct: data.ivaRetentionPct ?? 75,
         });
       }
     } catch {
@@ -139,6 +142,7 @@ export default function ConfigPage() {
           invoicePrefix: config.invoicePrefix,
           quotationValidityDays: Number(config.quotationValidityDays),
           overdueWarningDays: Number(config.overdueWarningDays),
+          ivaRetentionPct: Number(config.ivaRetentionPct),
         }),
       });
 
@@ -408,6 +412,21 @@ export default function ConfigPage() {
                   className="input-field"
                 />
                 <p className="text-xs text-slate-500 mt-1">Dias antes del vencimiento para mostrar alerta amarilla</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Retencion IVA (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={config.ivaRetentionPct}
+                  onChange={(e) => handleChange('ivaRetentionPct', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion IVA aplicado a proveedores agentes de retencion (75% por ley venezolana)</p>
               </div>
             </div>
           </div>

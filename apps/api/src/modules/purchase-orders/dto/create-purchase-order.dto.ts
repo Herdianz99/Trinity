@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsBoolean, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePurchaseOrderItemDto {
@@ -21,6 +21,15 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isCredit?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  creditDays?: number;
 
   @IsArray()
   @ValidateNested({ each: true })

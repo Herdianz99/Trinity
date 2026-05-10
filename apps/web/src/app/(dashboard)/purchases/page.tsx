@@ -24,7 +24,7 @@ interface POItem {
   receivedQty: number;
 }
 
-interface Supplier { id: string; name: string; }
+interface Supplier { id: string; name: string; isRetentionAgent?: boolean; }
 interface ProductSearch { id: string; code: string; name: string; priceDetal: number; priceMayor: number; totalStock: number; }
 interface Warehouse { id: string; name: string; }
 
@@ -63,6 +63,8 @@ export default function PurchasesPage() {
   const [formSupplier, setFormSupplier] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formItems, setFormItems] = useState<{ productId: string; productLabel: string; quantity: number; costUsd: number }[]>([]);
+  const [formIsCredit, setFormIsCredit] = useState(false);
+  const [formCreditDays, setFormCreditDays] = useState(0);
   const [productSearch, setProductSearch] = useState('');
   const [productResults, setProductResults] = useState<ProductSearch[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
@@ -142,6 +144,8 @@ export default function PurchasesPage() {
     setEditingOrder(null);
     setFormSupplier(suppliers[0]?.id || '');
     setFormNotes('');
+    setFormIsCredit(false);
+    setFormCreditDays(0);
     setFormItems([]);
     setCreateModal(true);
   }
@@ -150,6 +154,8 @@ export default function PurchasesPage() {
     setEditingOrder(order);
     setFormSupplier(order.supplier.id);
     setFormNotes(order.notes || '');
+    setFormIsCredit((order as any).isCredit || false);
+    setFormCreditDays((order as any).creditDays || 0);
     setFormItems(order.items.map(i => ({
       productId: i.productId,
       productLabel: `${i.product.code} - ${i.product.name}`,
@@ -165,9 +171,11 @@ export default function PurchasesPage() {
     setSaving(true);
     setMessage(null);
     try {
-      const body = {
+      const body: any = {
         supplierId: formSupplier,
         notes: formNotes || undefined,
+        isCredit: formIsCredit,
+        creditDays: formIsCredit ? formCreditDays : 0,
         items: formItems.filter(i => i.productId && i.quantity > 0).map(i => ({
           productId: i.productId,
           quantity: Number(i.quantity),
@@ -416,6 +424,43 @@ export default function PurchasesPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Notas</label>
                 <input type="text" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="input-field !py-2 text-sm" placeholder="Opcional..." />
+              </div>
+
+              {/* Credit toggle */}
+              <div className="bg-slate-900/50 rounded-lg p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formIsCredit}
+                    onChange={(e) => setFormIsCredit(e.target.checked)}
+                    className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                  />
+                  Compra a credito
+                </label>
+                {formIsCredit && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Dias de credito</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formCreditDays}
+                      onChange={(e) => setFormCreditDays(Number(e.target.value))}
+                      className="input-field !py-2 text-sm w-32"
+                    />
+                  </div>
+                )}
+                {formIsCredit && (
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      Se generara CxP al recibir
+                    </span>
+                    {suppliers.find(s => s.id === formSupplier)?.isRetentionAgent && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                        Aplicara retencion IVA
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

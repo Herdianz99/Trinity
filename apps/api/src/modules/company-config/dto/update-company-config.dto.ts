@@ -61,4 +61,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   overdueWarningDays?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  ivaRetentionPct?: number;
 }

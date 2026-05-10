@@ -68,6 +68,7 @@ const navItems: NavItem[] = [
   { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={20} /> },
   { label: 'Cuentas por cobrar', href: '/receivables', icon: <HandCoins size={20} />, section: 'CXC' },
   { label: 'Por plataforma', href: '/receivables/platforms', icon: <CreditCard size={20} /> },
+  { label: 'Cuentas por pagar', href: '/payables', icon: <Receipt size={20} />, section: 'CXP' },
   { label: 'Gestion de cajas', href: '/cash', icon: <Banknote size={20} />, section: 'CAJA' },
   { label: 'Sesiones', href: '/cash/sessions', icon: <History size={20} /> },
   { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={20} />, section: 'COTIZACIONES' },

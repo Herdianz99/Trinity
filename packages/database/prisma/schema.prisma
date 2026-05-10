@@ -106,6 +106,13 @@ enum ReceivableStatus {
   OVERDUE
 }
 
+enum PayableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
 // ============================================
 // CONFIG
 // ============================================
@@ -125,6 +132,7 @@ model CompanyConfig {
   creditAuthPassword     String?
   quotationValidityDays  Int      @default(30)
   overdueWarningDays     Int      @default(3)
+  ivaRetentionPct        Float    @default(75)
   updatedAt              DateTime @updatedAt
 }
 
@@ -228,6 +236,7 @@ model Supplier {
   isActive         Boolean         @default(true)
   products         Product[]
   purchaseOrders   PurchaseOrder[]
+  payables         Payable[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -383,9 +392,12 @@ model PurchaseOrder {
   supplier    Supplier            @relation(fields: [supplierId], references: [id])
   status      PurchaseStatus      @default(DRAFT)
   totalUsd    Float               @default(0)
+  isCredit    Boolean             @default(false)
+  creditDays  Int                 @default(0)
   notes       String?
   receivedAt  DateTime?
   items       PurchaseOrderItem[]
+  payables    Payable[]
   createdById String
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
@@ -558,6 +570,46 @@ model ReceivablePayment {
   notes         String?
   createdById   String
   createdAt     DateTime      @default(now())
+}
+
+// ============================================
+// CUENTAS POR PAGAR
+// ============================================
+
+model Payable {
+  id              String           @id @default(cuid())
+  supplierId      String
+  supplier        Supplier         @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  amountUsd       Float
+  amountBs        Float
+  exchangeRate    Float
+  retentionUsd    Float            @default(0)
+  retentionBs     Float            @default(0)
+  netPayableUsd   Float
+  dueDate         DateTime?
+  status          PayableStatus    @default(PENDING)
+  paidAmountUsd   Float            @default(0)
+  paidAt          DateTime?
+  notes           String?
+  payments        PayablePayment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model PayablePayment {
+  id           String        @id @default(cuid())
+  payableId    String
+  payable      Payable       @relation(fields: [payableId], references: [id])
+  amountUsd    Float
+  amountBs     Float
+  exchangeRate Float
+  method       PaymentMethod
+  reference    String?
+  notes        String?
+  createdById  String
+  createdAt    DateTime      @default(now())
 }
 
 // ============================================

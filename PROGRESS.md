@@ -631,3 +631,64 @@
 - GET /receivables/customer/:id retorna estado de cuenta con deuda y credito
 - Detalle con historial de 2 pagos (TRANSFERENCIA ref=REF-001, PAGO_MOVIL ref=REF-002)
 - TypeScript compila sin errores en ambos apps (API y Web)
+
+## Sesion 8 — Cuentas por Pagar con Retencion IVA (Completada)
+### Migracion Prisma
+- Enum `PayableStatus`: PENDING, PARTIAL, PAID, OVERDUE
+- Modelo `Payable`: id, supplierId, purchaseOrderId, amountUsd, amountBs, exchangeRate, retentionUsd, retentionBs, netPayableUsd, dueDate, status, paidAmountUsd, paidAt, notes, payments[], timestamps
+- Modelo `PayablePayment`: id, payableId, amountUsd, amountBs, exchangeRate, method, reference, notes, createdById, createdAt
+- PurchaseOrder: agregados `isCredit Boolean @default(false)`, `creditDays Int @default(0)`, relacion `payables Payable[]`
+- CompanyConfig: agregado `ivaRetentionPct Float @default(75)`
+- Supplier: agregada relacion `payables Payable[]`
+- Migracion: `20260510210000_add_payables_module`
+
+### Backend
+- **PayablesModule** completo con controller, service, cron:
+  - `GET /payables` — lista con filtros: supplierId, status, from, to, overdue, page, limit. Retorna balanceUsd calculado (netPayableUsd - paidAmountUsd)
+  - `GET /payables/summary` — resumen global: totalPendingUsd, totalOverdueUsd, totalRetentionUsd, supplierCount, bySupplier
+  - `GET /payables/:id` — detalle con historial de pagos, proveedor y orden vinculada
+  - `POST /payables/:id/pay` — registrar pago parcial o total en transaccion:
+    - Calcula amountBs con tasa del dia
+    - Crea PayablePayment
+    - Actualiza paidAmountUsd
+    - Si completado → status PAID + paidAt
+    - Si parcial → status PARTIAL
+  - `GET /payables/supplier/:supplierId` — estado de cuenta: totalDebt, totalOverdue, totalRetention, lista de CxP
+- **PayablesCronService**: cron diario a las 00:02 — marca como OVERDUE payables con dueDate < hoy y status PENDING/PARTIAL
+- **PurchaseOrdersService** actualizado:
+  - CreatePurchaseOrderDto: agregados `isCredit` y `creditDays`
+  - `create()` guarda isCredit y creditDays
+  - `receive()` al recibir orden completa con isCredit=true:
+    - Obtiene tasa del dia
+    - Calcula IVA total de los items recibidos
+    - Si supplier.isRetentionAgent → calcula retencion IVA (ivaRetentionPct% del IVA total)
+    - Crea Payable con amountUsd, retentionUsd, netPayableUsd, dueDate (receivedAt + creditDays)
+- CompanyConfig DTO: agregado campo `ivaRetentionPct`
+
+### Frontend
+- **Sidebar**: nueva seccion CXP con item "Cuentas por pagar" (icono Receipt)
+- **Pagina `/payables`** — Cuentas por pagar:
+  - 4 tarjetas resumen: Total por pagar (rojo), Vencidas (rojo oscuro), Retenciones IVA (naranja), Proveedores con deuda (azul)
+  - Filtros: proveedor, estado, rango de fechas, toggle solo vencidas
+  - Tabla: Proveedor, Orden, Monto USD, Retencion, Neto USD, Pagado, Saldo, Vence, Estado, Acciones
+  - Filas vencidas con fondo rojo, proximas a vencer con fondo amarillo
+  - Modal "Registrar pago": info CxP con retencion desglosada, monto editable, metodo, referencia, tasa del dia
+  - Modal "Ver detalle": info completa, seccion Retencion IVA (si aplica), tabla historial de pagos
+  - Paginacion
+- **Pagina `/purchases`** — actualizada:
+  - Toggle "Compra a credito" en modal crear/editar
+  - Campo "Dias de credito" cuando isCredit=true
+  - Badge "Se generara CxP al recibir" + "Aplicara retencion IVA" si proveedor es agente de retencion
+- **Pagina `/catalog/suppliers`** — Estado de cuenta agregado:
+  - Boton "Estado de cuenta" (icono Receipt) en acciones
+  - Modal con 3 tarjetas: Total adeudado, Vencido, Retenciones
+  - Lista de CxP pendientes con orden, neto, saldo, vencimiento, estado
+- **Pagina `/config`** — nuevo campo:
+  - "Retencion IVA (%)" con default 75 y descripcion de ley venezolana
+
+### Verificaciones
+- Flujo completo: crear PO credito con proveedor agente de retencion → enviar → recibir → CxP generada con retencion calculada (amountUsd=$100, retentionUsd=$6, netPayableUsd=$94) → pago parcial $30 (PARTIAL) → pago total $64 (PAID, balance=$0)
+- GET /payables/summary: totalPendingUsd, totalRetentionUsd, supplierCount correctos
+- GET /payables/supplier/:id: estado de cuenta con deuda $0 despues de pago completo
+- ivaRetentionPct=75 en config (configurable)
+- TypeScript compila sin errores en ambos apps (API y Web)

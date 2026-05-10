@@ -15,6 +15,13 @@ const IVA_MULTIPLIERS: Record<IvaType, number> = {
   SPECIAL: 1.31,
 };
 
+const IVA_RATES: Record<IvaType, number> = {
+  EXEMPT: 0,
+  REDUCED: 0.08,
+  GENERAL: 0.16,
+  SPECIAL: 0.31,
+};
+
 @Injectable()
 export class PurchaseOrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -46,6 +53,8 @@ export class PurchaseOrdersService {
         number,
         supplierId: dto.supplierId,
         notes: dto.notes,
+        isCredit: dto.isCredit || false,
+        creditDays: dto.creditDays || 0,
         totalUsd: Math.round(totalUsd * 100) / 100,
         createdById: userId,
         items: { create: items },
@@ -279,17 +288,77 @@ export class PurchaseOrdersService {
       const allReceived = updatedItems.every((i) => i.receivedQty >= i.quantity);
       const newStatus = allReceived ? 'RECEIVED' : 'PARTIAL';
 
-      return tx.purchaseOrder.update({
+      const updatedOrder = await tx.purchaseOrder.update({
         where: { id },
         data: {
           status: newStatus,
           receivedAt: allReceived ? new Date() : undefined,
         },
         include: {
-          supplier: { select: { id: true, name: true } },
-          items: { include: { product: { select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true } } } },
+          supplier: { select: { id: true, name: true, isRetentionAgent: true } },
+          items: { include: { product: { select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true, ivaType: true } } } },
         },
       });
+
+      // Create Payable if credit order and fully received
+      if (order.isCredit && allReceived) {
+        // Get today's exchange rate
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        const rate = await tx.exchangeRate.findUnique({ where: { date: today } });
+        if (!rate) {
+          throw new BadRequestException('No hay tasa BCV registrada para hoy. Necesaria para crear CxP.');
+        }
+
+        const amountUsd = updatedOrder.totalUsd;
+        const amountBs = Math.round(amountUsd * rate.rate * 100) / 100;
+        const exchangeRate = rate.rate;
+
+        let retentionUsd = 0;
+        let retentionBs = 0;
+
+        // Calculate IVA retention if supplier is retention agent
+        if (updatedOrder.supplier.isRetentionAgent) {
+          const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+          const ivaRetentionPct = config?.ivaRetentionPct || 75;
+
+          // Calculate total IVA from received items
+          let totalIva = 0;
+          for (const item of updatedItems) {
+            const product = updatedOrder.items.find((i) => i.productId === item.productId);
+            if (product) {
+              const ivaRate = IVA_RATES[product.product.ivaType] || 0;
+              totalIva += item.costUsd * item.quantity * ivaRate;
+            }
+          }
+
+          retentionUsd = Math.round(totalIva * (ivaRetentionPct / 100) * 100) / 100;
+          retentionBs = Math.round(retentionUsd * exchangeRate * 100) / 100;
+        }
+
+        const netPayableUsd = Math.round((amountUsd - retentionUsd) * 100) / 100;
+
+        // Calculate due date
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + (order.creditDays || 0));
+
+        await tx.payable.create({
+          data: {
+            supplierId: order.supplierId,
+            purchaseOrderId: order.id,
+            amountUsd,
+            amountBs,
+            exchangeRate,
+            retentionUsd,
+            retentionBs,
+            netPayableUsd,
+            dueDate: order.creditDays > 0 ? dueDate : null,
+            notes: `CxP generada de orden ${order.number}`,
+          },
+        });
+      }
+
+      return updatedOrder;
     });
   }
 
