@@ -674,6 +674,7 @@ model QuotationItem {
 #### Sesión 10 — Despachos
 #### Sesión 11 — Dashboard Directivos
 #### Sesión 12 — Gestión de Usuarios y Menú Colapsable ✅
+#### Sesión 12b — Permisos por Rol Configurables desde UI con Redis Cache ✅
 
 *(Detalle completo se define antes de cada sesión)*
 

@@ -843,3 +843,42 @@
 - Toggle active: alterna isActive correctamente
 - Usuarios creados: Maria (SUPERVISOR), Pedro (CASHIER), Ana (SELLER), Carlos (WAREHOUSE), Luis (BUYER), Rosa (ACCOUNTANT)
 - TypeScript compila sin errores en ambos apps (API y Web)
+
+## Sesion 12b — Permisos por Rol Configurables desde UI con Redis Cache (Completada)
+
+### Base de datos
+- **Modelo RolePermission**: tabla con role (unique) y modules (String[])
+- Migracion `20260510230000_add_role_permissions_table`
+- Seed actualizado: inserta permisos por defecto para los 7 roles via upsert
+
+### Backend
+- **RedisModule** (global): servicio wrapper sobre ioredis con get/set/del y TTL opcional
+- **RolePermissionsModule**:
+  - `GET /role-permissions` — lista todos los permisos por rol (requiere ADMIN)
+  - `PATCH /role-permissions/:role` — actualiza modulos de un rol (requiere ADMIN, bloquea edicion de ADMIN)
+  - Servicio con cache Redis (prefix `role-permissions:`, TTL 5 min)
+  - `getModulesForRole(role)` — lee de Redis cache, fallback a DB
+  - Al actualizar: invalida cache del rol modificado
+  - Validacion de modulos contra whitelist (VALID_MODULES)
+- **AuthService** actualizado:
+  - Login, refreshToken y getProfile ahora leen permisos desde DB (via RolePermissionsService con cache)
+  - Permisos se incluyen en JWT payload y response del login
+  - Eliminada dependencia de mapa estatico ROLE_PERMISSIONS
+
+### Frontend
+- **Pagina `/settings/role-permissions`** — editor de permisos:
+  - Card por cada rol con badge de color
+  - Grid de checkboxes con los 12 modulos disponibles
+  - ADMIN: todos marcados + deshabilitados + badge "Acceso total"
+  - Boton "Guardar cambios" por rol, solo habilitado si hay cambios pendientes
+  - Toast de confirmacion al guardar
+- **Sidebar**: agregado link "Permisos por rol" en seccion CONFIGURACION (con icono Shield)
+- Reorganizacion de sidebar: Cotizaciones movido a submenu VENTAS, Proveedores movido a submenu COMPRAS
+- **Middleware**: ROUTE_PERMISSION_MAP cambiado a array de tuplas para soportar overrides especificos (/catalog/suppliers→purchases, /quotations→sales)
+
+### Verificaciones
+- GET /role-permissions: retorna 7 roles con sus modulos
+- PATCH /role-permissions/CASHIER: actualiza modulos, cache Redis invalidado
+- PATCH /role-permissions/ADMIN: retorna 400 "No se pueden modificar los permisos de ADMIN"
+- Login refleja permisos de DB (no estaticos)
+- TypeScript compila sin errores en web app

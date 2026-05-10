@@ -61,6 +61,26 @@ async function main() {
   });
   console.log('Users created');
 
+  // --- Role Permissions ---
+  const rolePermissionsData = [
+    { role: UserRole.ADMIN, modules: ['*'] },
+    { role: UserRole.SUPERVISOR, modules: ['dashboard', 'sales', 'quotations', 'catalog', 'inventory', 'purchases', 'cash', 'receivables', 'payables', 'fiscal'] },
+    { role: UserRole.CASHIER, modules: ['dashboard', 'sales', 'quotations', 'cash', 'receivables'] },
+    { role: UserRole.SELLER, modules: ['dashboard', 'sales', 'quotations'] },
+    { role: UserRole.WAREHOUSE, modules: ['dashboard', 'inventory', 'purchases'] },
+    { role: UserRole.BUYER, modules: ['dashboard', 'catalog', 'purchases', 'payables'] },
+    { role: UserRole.ACCOUNTANT, modules: ['dashboard', 'receivables', 'payables', 'fiscal'] },
+  ];
+
+  for (const rp of rolePermissionsData) {
+    await prisma.rolePermission.upsert({
+      where: { role: rp.role },
+      update: {},
+      create: { role: rp.role, modules: rp.modules },
+    });
+  }
+  console.log('Role permissions created');
+
   // --- Cash Registers ---
   await prisma.cashRegister.upsert({
     where: { code: '01' },

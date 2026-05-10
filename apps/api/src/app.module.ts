@@ -26,11 +26,14 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
 import { ReceivablesModule } from './modules/receivables/receivables.module';
 import { PayablesModule } from './modules/payables/payables.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
+import { RedisModule } from './redis/redis.module';
+import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    RedisModule,
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -56,6 +59,7 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
     ReceivablesModule,
     PayablesModule,
     FiscalModule,
+    RolePermissionsModule,
   ],
 })
 export class AppModule {}

@@ -40,6 +40,7 @@ import {
   CreditCard,
   BookOpen,
   BarChart3,
+  Shield,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -66,16 +67,8 @@ const menuSections: MenuSection[] = [
       { label: 'POS', href: '/sales/pos', icon: <Monitor size={18} /> },
       { label: 'Pre-facturas', href: '/sales/pending', icon: <Clock size={18} /> },
       { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={18} /> },
-      { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
-    ],
-  },
-  {
-    key: 'quotations',
-    label: 'COTIZACIONES',
-    icon: <FileCheck size={20} />,
-    permission: 'quotations',
-    items: [
       { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={18} /> },
+      { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
     ],
   },
   {
@@ -87,7 +80,6 @@ const menuSections: MenuSection[] = [
       { label: 'Productos', href: '/catalog/products', icon: <Package size={18} /> },
       { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={18} /> },
       { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={18} /> },
-      { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={18} /> },
       { label: 'Ajuste de precios', href: '/catalog/price-adjustment', icon: <SlidersHorizontal size={18} /> },
     ],
   },
@@ -112,6 +104,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Ordenes de compra', href: '/purchases', icon: <ShoppingCart size={18} /> },
       { label: 'Sugerencias reorden', href: '/purchases/reorder', icon: <AlertTriangle size={18} /> },
+      { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={18} /> },
     ],
   },
   {
@@ -162,6 +155,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Empresa', href: '/config', icon: <Settings size={18} /> },
       { label: 'Usuarios', href: '/settings/users', icon: <Users size={18} /> },
+      { label: 'Permisos por rol', href: '/settings/role-permissions', icon: <Shield size={18} /> },
       { label: 'Areas de impresion', href: '/settings/print-areas', icon: <Printer size={18} /> },
       { label: 'Importacion masiva', href: '/import', icon: <Upload size={18} /> },
     ],

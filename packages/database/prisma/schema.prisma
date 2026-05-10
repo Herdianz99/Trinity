@@ -185,6 +185,13 @@ model UserPermission {
   @@unique([userId, permissionKey])
 }
 
+model RolePermission {
+  id        String   @id @default(cuid())
+  role      UserRole @unique
+  modules   String[]
+  updatedAt DateTime @updatedAt
+}
+
 // ============================================
 // AREAS DE IMPRESION
 // ============================================

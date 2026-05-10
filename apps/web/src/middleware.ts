@@ -3,21 +3,23 @@ import { NextRequest, NextResponse } from 'next/server';
 const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh'];
 
 // Map route prefixes to permission keys
-const ROUTE_PERMISSION_MAP: Record<string, string> = {
-  '/sales': 'sales',
-  '/quotations': 'quotations',
-  '/catalog': 'catalog',
-  '/inventory': 'inventory',
-  '/purchases': 'purchases',
-  '/cash': 'cash',
-  '/receivables': 'receivables',
-  '/payables': 'payables',
-  '/fiscal': 'fiscal',
-  '/settings': 'settings',
-  '/config': 'settings',
-  '/users': 'settings',
-  '/import': 'settings',
-};
+// More specific routes must come before less specific ones
+const ROUTE_PERMISSION_MAP: [string, string][] = [
+  ['/catalog/suppliers', 'purchases'],
+  ['/quotations', 'sales'],
+  ['/sales', 'sales'],
+  ['/catalog', 'catalog'],
+  ['/inventory', 'inventory'],
+  ['/purchases', 'purchases'],
+  ['/cash', 'cash'],
+  ['/receivables', 'receivables'],
+  ['/payables', 'payables'],
+  ['/fiscal', 'fiscal'],
+  ['/settings', 'settings'],
+  ['/config', 'settings'],
+  ['/users', 'settings'],
+  ['/import', 'settings'],
+];
 
 function decodeJwtPayload(token: string): any {
   try {
@@ -69,7 +71,7 @@ export function middleware(request: NextRequest) {
     const permissions: string[] = payload.permissions || [];
 
     // Find the matching route permission
-    for (const [routePrefix, permissionKey] of Object.entries(ROUTE_PERMISSION_MAP)) {
+    for (const [routePrefix, permissionKey] of ROUTE_PERMISSION_MAP) {
       if (pathname.startsWith(routePrefix)) {
         if (!hasPermission(permissions, permissionKey)) {
           return NextResponse.redirect(new URL('/403', request.url));

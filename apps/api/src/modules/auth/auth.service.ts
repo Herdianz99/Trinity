@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ROLE_PERMISSIONS } from './role-permissions';
+import { RolePermissionsService } from '../role-permissions/role-permissions.service';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +11,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private rolePermissionsService: RolePermissionsService,
   ) {}
 
   async login(email: string, password: string) {
@@ -35,7 +36,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const permissions = ROLE_PERMISSIONS[user.role];
+    const permissions = await this.rolePermissionsService.getModulesForRole(user.role);
     const payload = {
       sub: user.id,
       name: user.name,
@@ -71,7 +72,7 @@ export class AuthService {
       if (!user || !user.isActive) {
         throw new UnauthorizedException();
       }
-      const permissions = ROLE_PERMISSIONS[user.role];
+      const permissions = await this.rolePermissionsService.getModulesForRole(user.role);
       const newPayload = {
         sub: user.id,
         name: user.name,
@@ -100,7 +101,7 @@ export class AuthService {
     const { password, ...result } = user;
     return {
       ...result,
-      permissions: ROLE_PERMISSIONS[user.role],
+      permissions: await this.rolePermissionsService.getModulesForRole(user.role),
     };
   }
 
