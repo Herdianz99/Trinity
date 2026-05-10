@@ -599,6 +599,70 @@ model PriceAdjustmentLog {
   - Botón "Aplicar cambio" con modal de confirmación: "Se modificarán X productos. ¿Confirmar?"
   - Historial de ajustes masivos anteriores
 
+#### Sesión 6d — Estados de factura en español y eliminación de pendientes
+**Backend:**
+- Cancel solo PENDING/DRAFT; PAID retorna 400 con mensaje de nota de crédito
+- DELETE /invoices/:id para hard-delete de PENDING/DRAFT
+- TODO: facturas PAID se cancelarán via Notas de Crédito
+
+**Frontend:**
+- Labels en español: En Espera, Procesado, Crédito, Cancelado
+- Colores: amarillo, verde, azul, rojo
+- Botón eliminar para pendientes, sin botón cancelar para pagadas
+
+#### Sesión 7 — Cotizaciones ✅
+**Backend:**
+- QuotationsModule: CRUD completo con numeración COT-XXXX
+- Conversión cotización → factura (obtiene tasa del día, crea factura con items)
+- QuotationPdfService: PDF con pdfkit (header, items, IVA, totales)
+- QuotationsCronService: cron diario — expira cotizaciones vencidas, cancela facturas PENDING de días anteriores
+- ScheduleModule (@nestjs/schedule) para cron jobs
+
+**Schema:**
+```prisma
+enum QuotationStatus {
+  DRAFT SENT APPROVED REJECTED EXPIRED
+}
+
+model Quotation {
+  id                  String          @id @default(cuid())
+  number              String          @unique  // COT-0001
+  customerId          String?
+  customer            Customer?       @relation(...)
+  status              QuotationStatus @default(DRAFT)
+  subtotalUsd         Float           @default(0)
+  ivaUsd              Float           @default(0)
+  totalUsd            Float           @default(0)
+  notes               String?
+  expiresAt           DateTime
+  convertedToInvoiceId String?
+  items               QuotationItem[]
+  createdById         String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model QuotationItem {
+  id            String    @id @default(cuid())
+  quotationId   String
+  quotation     Quotation @relation(..., onDelete: Cascade)
+  productId     String
+  productName   String
+  productCode   String
+  quantity      Float
+  unitPriceUsd  Float
+  ivaType       IvaType
+  ivaAmount     Float     @default(0)
+  totalUsd      Float
+}
+```
+
+**Frontend:**
+- Página /quotations: tabla con filtros, modal detalle, acciones por estado, conversión a factura, PDF
+- POS: botón "Guardar cotización" (FileCheck) para todos los roles
+- Config: campo quotationValidityDays (días de validez)
+- Sidebar: sección COTIZACIONES
+
 ---
 
 ### FASE 2 — Operaciones Completas

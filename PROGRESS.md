@@ -346,6 +346,69 @@
 - TypeScript compila sin errores en ambos apps (api y web)
 - API levanta correctamente con todos los endpoints mapeados
 
+## Sesion 6d — Estados de factura en español y eliminacion de pendientes (Completada)
+### Backend
+- **InvoicesService**:
+  - `cancel()` restringido a PENDING/DRAFT solamente — PAID/CREDIT retorna 400 "Las facturas pagadas no pueden cancelarse. Emite una nota de credito."
+  - TODO comment: facturas PAID se cancelaran via Notas de Credito en futuras sesiones
+  - `delete()` nuevo metodo: hard-delete de facturas PENDING/DRAFT (elimina items, payments e invoice en transaccion)
+- **InvoicesController**: nuevo endpoint `DELETE /invoices/:id`
+
+### Frontend
+- Pagina `/sales/invoices`:
+  - STATUS_LABELS en español: DRAFT/PENDING="En Espera", PAID="Procesado", CREDIT="Credito", CANCELLED="Cancelado"
+  - STATUS_COLORS: En Espera (amarillo), Procesado (verde), Credito (azul), Cancelado (rojo)
+  - Boton eliminar (Trash2) para facturas PENDING/DRAFT
+  - Eliminado boton cancelar de facturas PAID/CREDIT
+- Pagina `/sales/customers`: estados en español con colores actualizados (CREDIT ahora azul)
+
+## Sesion 7 — Modulo de Cotizaciones (Completada)
+### Migracion Prisma
+- Enum `QuotationStatus`: DRAFT, SENT, APPROVED, REJECTED, EXPIRED
+- Modelo `Quotation`: id, number (unique), customerId?, status, subtotalUsd, ivaUsd, totalUsd, notes, expiresAt, convertedToInvoiceId?, items[], createdById, timestamps
+- Modelo `QuotationItem`: id, quotationId, productId, productName, productCode, quantity, unitPriceUsd, ivaType, ivaAmount, totalUsd (onDelete: Cascade)
+- CompanyConfig: campo `quotationValidityDays Int @default(30)`
+- Customer: relacion `quotations Quotation[]`
+- Migracion: `20260510180000_add_quotations_module`
+
+### Backend
+- **QuotationsModule** con controller, service, PDF service y cron service
+- **QuotationsService**:
+  - `findAll()` — paginado con filtros: status, customerId, from, to, search
+  - `findOne()` — detalle con items, customer, createdBy
+  - `create()` — numeracion automatica COT-XXXX (correlativo global), calcula IVA extraido de priceDetal, fecha expiracion segun quotationValidityDays
+  - `update()` — solo DRAFT, actualiza items y totales
+  - `changeStatus()` — transiciones validas: DRAFT→SENT, SENT→APPROVED/REJECTED, cualquiera→EXPIRED
+  - `convertToInvoice()` — obtiene tasa del dia, crea factura con SELECT FOR UPDATE para numero, copia items, marca quotation con convertedToInvoiceId
+  - `expireOldQuotations()` — marca expiradas las que pasaron expiresAt
+  - `cancelOldPendingInvoices()` — cancela facturas PENDING de dias anteriores
+- **QuotationPdfService**: PDF con pdfkit — header empresa, datos cotizacion/cliente, tabla items con codigos, desglose IVA, totales USD, nota sobre tasa BCV
+- **QuotationsCronService**: cron diario a medianoche (@Cron EVERY_DAY_AT_MIDNIGHT) — expira cotizaciones y cancela facturas pendientes
+- **QuotationsController**: GET /, GET /:id, POST /, PATCH /:id, PATCH /:id/status, POST /:id/convert, GET /:id/pdf
+- AppModule: agregado ScheduleModule.forRoot() y QuotationsModule
+
+### Frontend
+- Pagina `/quotations`:
+  - Tabla con filtros: status, rango de fechas
+  - Badges de estado con colores: Borrador (gris), Enviada (azul), Aprobada (verde), Rechazada (rojo), Expirada (amarillo)
+  - Modal detalle con items, totales, acciones por estado
+  - Botones contextuales: Marcar Enviada (DRAFT), Aprobar/Rechazar (SENT), Convertir a Factura (APPROVED)
+  - Boton imprimir PDF
+  - Paginacion
+- POS `/sales/pos`:
+  - Boton "Guardar cotizacion" (icono FileCheck) visible para todos los roles
+  - POST /quotations con items del carrito y cliente seleccionado
+  - Dialogo post-guardado: "¿Limpiar carrito para nueva venta?"
+- Sidebar: seccion COTIZACIONES con enlace a /quotations
+- Config `/config`: campo "Validez de cotizaciones (dias)" en seccion parametros financieros
+
+### Verificaciones
+- Cotizacion creada: COT-0001 status=DRAFT total=$10.22
+- Cambio de estado: DRAFT → SENT → APPROVED
+- Conversion a factura: COT-0001 → FAC-02-26-00000007 status=DRAFT total=$10.22 totalBs=Bs5110.00
+- PDF generado: 200 OK, content-type=application/pdf, size=2235 bytes
+- TypeScript compila sin errores en ambos apps
+
 ## Sesion 6 — POS Improvements (Completada)
 ### Migracion Prisma
 - Enum `PermissionKey` con valor `OVERRIDE_PRICE`
