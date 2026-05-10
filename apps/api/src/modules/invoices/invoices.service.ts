@@ -607,6 +607,9 @@ export class InvoicesService {
     return updated;
   }
 
+  // TODO: Las facturas PAID/CREDIT no deben cancelarse directamente.
+  // En el futuro se manejarán con Notas de Crédito que reviertan stock,
+  // movimientos de inventario y receivables asociados.
   async cancel(id: string, user: { id: string; role: UserRole }) {
     if (!['ADMIN', 'SUPERVISOR'].includes(user.role)) {
       throw new ForbiddenException('Solo ADMIN o SUPERVISOR pueden cancelar facturas');
@@ -615,13 +618,37 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
 
+    if (['PAID', 'CREDIT'].includes(invoice.status)) {
+      throw new BadRequestException(
+        'Las facturas pagadas no pueden cancelarse. Emite una nota de credito.',
+      );
+    }
+
     if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
-      throw new BadRequestException('Solo se pueden cancelar facturas en estado PENDING o DRAFT');
+      throw new BadRequestException('Solo se pueden cancelar facturas en espera');
     }
 
     return this.prisma.invoice.update({
       where: { id },
       data: { status: 'CANCELLED', lockedById: null, lockedAt: null },
     });
+  }
+
+  async delete(id: string, user: { id: string; role: UserRole }) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+      throw new BadRequestException('Solo se pueden eliminar facturas en espera');
+    }
+
+    // Hard delete: items, payments, receivables cascade via Prisma schema
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      await tx.payment.deleteMany({ where: { invoiceId: id } });
+      await tx.invoice.delete({ where: { id } });
+    });
+
+    return { deleted: true };
   }
 }

@@ -381,10 +381,15 @@ export default function CustomersPage() {
                           <span className="text-sm text-slate-300">${inv.totalUsd?.toFixed(2)}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${
                             inv.status === 'PAID' ? 'text-green-400 border-green-500/30 bg-green-500/10' :
-                            inv.status === 'CREDIT' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' :
+                            inv.status === 'CREDIT' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
                             inv.status === 'CANCELLED' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
-                            'text-blue-400 border-blue-500/30 bg-blue-500/10'
-                          }`}>{inv.status}</span>
+                            'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                          }`}>{
+                            inv.status === 'PAID' ? 'Procesado' :
+                            inv.status === 'CREDIT' ? 'Credito' :
+                            inv.status === 'CANCELLED' ? 'Cancelado' :
+                            'En Espera'
+                          }</span>
                         </div>
                       </div>
                     ))}

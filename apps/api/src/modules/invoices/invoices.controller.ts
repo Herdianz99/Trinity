@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -92,6 +93,14 @@ export class InvoicesController {
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
     return this.service.cancel(id, user);
+  }
+
+  @Delete(':id')
+  delete(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.delete(id, user);
   }
 
   @Get(':id/pdf')

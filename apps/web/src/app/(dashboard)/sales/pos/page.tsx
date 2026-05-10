@@ -500,9 +500,9 @@ export default function POSPage() {
     }
   }
 
-  async function cancelPendingInvoice(id: string) {
+  async function deletePendingInvoice(id: string) {
     try {
-      await fetch(`/api/proxy/invoices/${id}/cancel`, { method: 'PATCH' });
+      await fetch(`/api/proxy/invoices/${id}`, { method: 'DELETE' });
       fetchPending();
       setConfirmCancel(null);
     } catch {}
@@ -1134,7 +1134,7 @@ export default function POSPage() {
                         disabled={!!lockedByOther}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500/10"
                       >
-                        Cancelar
+                        Eliminar
                       </button>
                     </div>
                   </div>
@@ -1150,12 +1150,12 @@ export default function POSPage() {
                     </div>
                   )}
 
-                  {/* Confirm cancel */}
+                  {/* Confirm delete */}
                   {confirmCancel === inv.id && (
                     <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                      <p className="text-xs text-red-300 mb-2">Cancelar esta factura?</p>
+                      <p className="text-xs text-red-300 mb-2">Eliminar esta factura?</p>
                       <div className="flex gap-2">
-                        <button onClick={() => cancelPendingInvoice(inv.id)} className="px-3 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-400">Si, cancelar</button>
+                        <button onClick={() => deletePendingInvoice(inv.id)} className="px-3 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-400">Si, eliminar</button>
                         <button onClick={() => setConfirmCancel(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
                       </div>
                     </div>

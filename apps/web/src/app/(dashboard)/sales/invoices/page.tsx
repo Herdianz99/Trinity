@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Eye,
   Printer,
-  XCircle,
+  Trash2,
   X,
 } from 'lucide-react';
 
@@ -28,12 +28,19 @@ interface Invoice {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'text-slate-300 border-slate-600 bg-slate-700/30',
+  DRAFT: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
   CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-  PARTIAL: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'En Espera',
+  PENDING: 'En Espera',
+  PAID: 'Procesado',
+  CREDIT: 'Credito',
+  CANCELLED: 'Cancelado',
 };
 
 export default function InvoicesPage() {
@@ -85,17 +92,17 @@ export default function InvoicesPage() {
     }
   }
 
-  async function handleCancel(id: string) {
-    if (!confirm('¿Cancelar esta factura?')) return;
+  async function handleDelete(id: string) {
+    if (!confirm('¿Eliminar esta factura en espera?')) return;
     try {
-      const res = await fetch(`/api/proxy/invoices/${id}/cancel`, { method: 'PATCH' });
+      const res = await fetch(`/api/proxy/invoices/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error');
       }
       fetchInvoices();
       setDetailOpen(false);
-      setMessage({ type: 'success', text: 'Factura cancelada' });
+      setMessage({ type: 'success', text: 'Factura eliminada' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     }
@@ -128,11 +135,10 @@ export default function InvoicesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm">
             <option value="">Todos los estados</option>
-            <option value="DRAFT">Borrador</option>
-            <option value="PENDING">Pendiente</option>
-            <option value="PAID">Pagada</option>
+            <option value="PENDING">En Espera</option>
+            <option value="PAID">Procesado</option>
             <option value="CREDIT">Credito</option>
-            <option value="CANCELLED">Cancelada</option>
+            <option value="CANCELLED">Cancelado</option>
           </select>
           <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Desde" />
           <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Hasta" />
@@ -176,7 +182,7 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3 text-slate-400 hidden md:table-cell text-xs">{inv.cashRegister?.code}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[inv.status] || ''}`}>
-                      {inv.status}
+                      {STATUS_LABELS[inv.status] || inv.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right text-white font-medium">${inv.totalUsd.toFixed(2)}</td>
@@ -193,8 +199,8 @@ export default function InvoicesPage() {
                         </button>
                       )}
                       {['PENDING', 'DRAFT'].includes(inv.status) && (
-                        <button onClick={() => handleCancel(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400" title="Cancelar">
-                          <XCircle size={15} />
+                        <button onClick={() => handleDelete(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400" title="Eliminar">
+                          <Trash2 size={15} />
                         </button>
                       )}
                     </div>
@@ -228,7 +234,7 @@ export default function InvoicesPage() {
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
               <div>
                 <h2 className="text-lg font-bold text-white font-mono">{detail.number}</h2>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[detail.status] || ''}`}>{detail.status}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[detail.status] || ''}`}>{STATUS_LABELS[detail.status] || detail.status}</span>
               </div>
               <button onClick={() => setDetailOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
             </div>
