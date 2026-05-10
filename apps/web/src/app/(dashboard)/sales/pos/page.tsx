@@ -90,6 +90,7 @@ export default function POSPage() {
   const [creditDays, setCreditDays] = useState(30);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [scannerActive, setScannerActive] = useState(false);
@@ -127,6 +128,7 @@ export default function POSPage() {
     fetch('/api/auth/me')
       .then(r => r.json())
       .then(data => {
+        if (data?.id) setUserId(data.id);
         if (data?.role) setUserRole(data.role);
         if (data?.permissions) setUserPermissions(data.permissions || []);
       });
@@ -298,36 +300,47 @@ export default function POSPage() {
     setPayments(prev => prev.filter((_, i) => i !== idx));
   }
 
-  async function handleSaveInvoice(clearCart: boolean) {
+  async function handleSaveInvoice() {
     if (cart.length === 0) return;
     setProcessing(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/proxy/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customerId || undefined,
-          items: cart.map(i => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-          })),
-        }),
-      });
+      const invoiceBody = {
+        customerId: customerId || undefined,
+        items: cart.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+        })),
+      };
+
+      let res: Response;
+      if (existingInvoiceId) {
+        // Update existing invoice items and release lock
+        res = await fetch(`/api/proxy/invoices/${existingInvoiceId}/update-items`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(invoiceBody),
+        });
+      } else {
+        // Create new invoice
+        res = await fetch('/api/proxy/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(invoiceBody),
+        });
+      }
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error al guardar');
       }
       const data = await res.json();
-      if (clearCart) {
-        setCart([]);
-        setCustomerId(null);
-        setCustomerName('');
-        setMessage({ type: 'success', text: `Pre-factura ${data.number} guardada` });
-      } else {
-        setMessage({ type: 'success', text: `Factura guardada en espera` });
-      }
+      setCart([]);
+      setCustomerId(null);
+      setCustomerName('');
+      setExistingInvoiceId(null);
+      setMessage({ type: 'success', text: `Factura ${data.number} guardada en espera` });
       fetchPending();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -447,29 +460,41 @@ export default function POSPage() {
       });
   }
 
-  // Retake pending invoice
+  // Retake pending invoice — lock it first
   async function retakeInvoice(inv: any) {
-    setCart(inv.items.map((item: any) => ({
-      productId: item.productId || item.id,
-      code: '',
-      name: item.productName,
-      unitPrice: item.unitPrice,
-      originalPrice: item.unitPrice,
-      quantity: item.quantity,
-      ivaType: item.ivaType || 'GENERAL',
-      stock: 999,
-      priceOverridden: false,
-    })));
-    if (inv.customer) {
-      setCustomerId(inv.customer.id);
-      setCustomerName(inv.customer.name);
-    } else {
-      setCustomerId(null);
-      setCustomerName('');
+    try {
+      const res = await fetch(`/api/proxy/invoices/${inv.id}/retake`, { method: 'PATCH' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'No se pudo retomar la factura');
+      }
+      const fullInvoice = await res.json();
+      setCart(fullInvoice.items.map((item: any) => ({
+        productId: item.productId,
+        code: '',
+        name: item.productName,
+        unitPrice: item.unitPrice,
+        originalPrice: item.unitPrice,
+        quantity: item.quantity,
+        ivaType: item.ivaType || 'GENERAL',
+        stock: 999,
+        priceOverridden: false,
+      })));
+      if (fullInvoice.customer) {
+        setCustomerId(fullInvoice.customer.id);
+        setCustomerName(fullInvoice.customer.name);
+      } else {
+        setCustomerId(null);
+        setCustomerName('');
+      }
+      setExistingInvoiceId(inv.id);
+      setPendingDrawerOpen(false);
+      setConfirmRetake(null);
+      fetchPending();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+      setConfirmRetake(null);
     }
-    setExistingInvoiceId(inv.id);
-    setPendingDrawerOpen(false);
-    setConfirmRetake(null);
   }
 
   async function cancelPendingInvoice(id: string) {
@@ -787,39 +812,23 @@ export default function POSPage() {
 
             <div className="flex gap-2 pt-2">
               {userRole === 'SELLER' ? (
-                <>
-                  <button
-                    onClick={() => handleSaveInvoice(false)}
-                    disabled={cart.length === 0 || processing}
-                    className="btn-secondary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Clock size={16} /> En espera
-                  </button>
-                  <button
-                    onClick={() => handleSaveInvoice(true)}
-                    disabled={cart.length === 0 || processing}
-                    className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {processing ? <Loader2 className="animate-spin" size={16} /> : <ShoppingCart size={16} />}
-                    Pre-factura
-                  </button>
-                </>
+                <button
+                  onClick={handleSaveInvoice}
+                  disabled={cart.length === 0 || processing}
+                  className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {processing ? <Loader2 className="animate-spin" size={16} /> : <ShoppingCart size={16} />}
+                  Guardar pre-factura
+                </button>
               ) : (
                 <>
                   <button
-                    onClick={() => handleSaveInvoice(false)}
-                    disabled={cart.length === 0 || processing}
-                    className="btn-secondary !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50 px-3"
-                    title="Guardar en espera"
-                  >
-                    <Clock size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleSaveInvoice(true)}
+                    onClick={handleSaveInvoice}
                     disabled={cart.length === 0 || processing}
                     className="btn-secondary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <ShoppingCart size={16} /> Pre-factura
+                    {processing ? <Loader2 className="animate-spin" size={16} /> : <Clock size={16} />}
+                    En espera
                   </button>
                   <button
                     onClick={() => { setPayments([]); setIsCredit(false); setPayModalOpen(true); }}
@@ -1078,12 +1087,21 @@ export default function POSPage() {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {pendingInvoices.length === 0 ? (
                 <div className="text-center py-12 text-slate-600 text-sm">No hay facturas en espera</div>
-              ) : pendingInvoices.map(inv => (
-                <div key={inv.id} className="card p-4 space-y-2">
+              ) : pendingInvoices.map(inv => {
+                const lockedByOther = inv.lockedById && inv.lockedById !== userId;
+                const lockedByMe = inv.lockedById && inv.lockedById === userId;
+                return (
+                <div key={inv.id} className={`card p-4 space-y-2 ${lockedByOther ? 'opacity-60' : ''}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-mono text-green-400">{inv.number || 'Sin numero'}</span>
                     <span className="text-xs text-slate-500">{timeAgo(inv.createdAt)}</span>
                   </div>
+                  {(lockedByOther || lockedByMe) && (
+                    <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${lockedByOther ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                      <Lock size={11} />
+                      {lockedByOther ? `Editando: ${inv.lockedByName || 'otro usuario'}` : 'Editando por ti'}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <User size={12} className="text-slate-500" />
                     <span className="text-sm text-slate-300">{inv.customer?.name || 'Sin cliente'}</span>
@@ -1103,13 +1121,15 @@ export default function POSPage() {
                         onClick={() => {
                           if (cart.length > 0) { setConfirmRetake(inv.id); } else { retakeInvoice(inv); }
                         }}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                        disabled={!!lockedByOther}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-500/10"
                       >
                         Retomar
                       </button>
                       <button
                         onClick={() => setConfirmCancel(inv.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                        disabled={!!lockedByOther}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500/10"
                       >
                         Cancelar
                       </button>
@@ -1138,7 +1158,8 @@ export default function POSPage() {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

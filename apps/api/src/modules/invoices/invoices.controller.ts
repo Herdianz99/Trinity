@@ -69,6 +69,23 @@ export class InvoicesController {
     return this.service.pay(id, dto, user);
   }
 
+  @Patch(':id/retake')
+  retake(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.retake(id, user);
+  }
+
+  @Patch(':id/update-items')
+  updateItems(
+    @Param('id') id: string,
+    @Body() dto: CreateInvoiceDto,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.updateItems(id, dto, user);
+  }
+
   @Patch(':id/cancel')
   cancel(
     @Param('id') id: string,

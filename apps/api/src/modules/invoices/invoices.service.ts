@@ -3,12 +3,15 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { UserRole, PaymentMethod } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
+const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -71,7 +74,7 @@ export class InvoicesService {
   }
 
   async findPending(todayOnly = false) {
-    const where: any = { status: 'PENDING' };
+    const where: any = { status: { in: ['PENDING', 'DRAFT'] } };
 
     if (todayOnly) {
       const now = new Date();
@@ -101,10 +104,27 @@ export class InvoicesService {
     });
     const countMap = new Map(itemCounts.map((c) => [c.invoiceId, c._count]));
 
-    return invoices.map((inv) => ({
-      ...inv,
-      totalItems: countMap.get(inv.id) || 0,
-    }));
+    // Get locker names
+    const lockerIds = invoices.filter((i) => i.lockedById).map((i) => i.lockedById!);
+    const lockers = lockerIds.length > 0
+      ? await this.prisma.user.findMany({ where: { id: { in: lockerIds } }, select: { id: true, name: true } })
+      : [];
+    const lockerMap = new Map(lockers.map((u) => [u.id, u.name]));
+
+    const now = Date.now();
+    return invoices.map((inv) => {
+      // Auto-expire locks older than 10 minutes
+      const lockExpired = inv.lockedAt && (now - inv.lockedAt.getTime() > LOCK_EXPIRY_MS);
+      const isLocked = inv.lockedById && !lockExpired;
+
+      return {
+        ...inv,
+        totalItems: countMap.get(inv.id) || 0,
+        lockedById: isLocked ? inv.lockedById : null,
+        lockedAt: isLocked ? inv.lockedAt : null,
+        lockedByName: isLocked ? lockerMap.get(inv.lockedById!) || null : null,
+      };
+    });
   }
 
   async findOne(id: string) {
@@ -401,7 +421,7 @@ export class InvoicesService {
         });
       }
 
-      // Update invoice status
+      // Update invoice status and release lock
       const newStatus = dto.isCredit ? 'CREDIT' : 'PAID';
       const updatedInvoice = await tx.invoice.update({
         where: { id },
@@ -413,6 +433,8 @@ export class InvoicesService {
             ? new Date(Date.now() + (dto.creditDays || 30) * 86400000)
             : null,
           paidAt: new Date(),
+          lockedById: null,
+          lockedAt: null,
         },
         include: {
           items: true,
@@ -462,6 +484,125 @@ export class InvoicesService {
     return result;
   }
 
+  async retake(id: string, user: { id: string; role: UserRole }) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: { items: true, customer: true },
+    });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+      throw new BadRequestException('Solo se pueden retomar facturas en espera');
+    }
+
+    // Check if locked by someone else (and not expired)
+    if (invoice.lockedById && invoice.lockedById !== user.id) {
+      const lockAge = Date.now() - (invoice.lockedAt?.getTime() || 0);
+      if (lockAge < LOCK_EXPIRY_MS) {
+        const locker = await this.prisma.user.findUnique({
+          where: { id: invoice.lockedById },
+          select: { name: true },
+        });
+        throw new ConflictException(
+          `Esta factura está siendo editada por ${locker?.name || 'otro usuario'}`,
+        );
+      }
+    }
+
+    // Lock it
+    await this.prisma.invoice.update({
+      where: { id },
+      data: { lockedById: user.id, lockedAt: new Date() },
+    });
+
+    return invoice;
+  }
+
+  async updateItems(
+    id: string,
+    dto: CreateInvoiceDto,
+    user: { id: string; role: UserRole },
+  ) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+      throw new BadRequestException('Solo se pueden editar facturas en espera');
+    }
+
+    // Get today's exchange rate
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    if (!rate) {
+      throw new BadRequestException('No hay tasa BCV registrada para hoy');
+    }
+
+    // Fetch products and calculate totals
+    const productIds = dto.items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    let subtotalUsd = 0;
+    const ivaBreakdown: Record<string, number> = {};
+    const itemsData: any[] = [];
+
+    for (const item of dto.items) {
+      const product = productMap.get(item.productId);
+      if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
+
+      const unitPrice = item.unitPrice ?? product.priceDetal;
+      const lineTotal = unitPrice * item.quantity;
+      const ivaRate = IVA_RATES[product.ivaType] || 0;
+      const ivaAmount = lineTotal * ivaRate;
+
+      subtotalUsd += lineTotal;
+      ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
+
+      itemsData.push({
+        productId: product.id,
+        productName: product.name,
+        quantity: item.quantity,
+        unitPrice,
+        ivaType: product.ivaType,
+        ivaAmount,
+        totalUsd: lineTotal + ivaAmount,
+      });
+    }
+
+    const totalIva = Object.values(ivaBreakdown).reduce((s, v) => s + v, 0);
+    const totalUsd = subtotalUsd + totalIva;
+    const totalBs = totalUsd * rate.rate;
+
+    // Update in transaction: delete old items, create new, update totals, release lock
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          customerId: dto.customerId || null,
+          subtotalUsd: Math.round(subtotalUsd * 100) / 100,
+          ivaUsd: Math.round(totalIva * 100) / 100,
+          totalUsd: Math.round(totalUsd * 100) / 100,
+          totalBs: Math.round(totalBs * 100) / 100,
+          exchangeRate: rate.rate,
+          notes: dto.notes,
+          lockedById: null,
+          lockedAt: null,
+          items: { create: itemsData },
+        },
+        include: {
+          items: true,
+          customer: true,
+          cashRegister: { select: { id: true, code: true, name: true } },
+        },
+      });
+    });
+
+    return updated;
+  }
+
   async cancel(id: string, user: { id: string; role: UserRole }) {
     if (!['ADMIN', 'SUPERVISOR'].includes(user.role)) {
       throw new ForbiddenException('Solo ADMIN o SUPERVISOR pueden cancelar facturas');
@@ -476,7 +617,7 @@ export class InvoicesService {
 
     return this.prisma.invoice.update({
       where: { id },
-      data: { status: 'CANCELLED' },
+      data: { status: 'CANCELLED', lockedById: null, lockedAt: null },
     });
   }
 }
