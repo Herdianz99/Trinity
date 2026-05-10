@@ -71,10 +71,15 @@ export class ProductsService {
       if (existingCode) throw new ConflictException('El codigo de producto ya existe');
     }
 
+    // Use company defaults if ganancia not specified
+    const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
+    const gananciaPct = dto.gananciaPct ?? config?.defaultGananciaPct ?? 0;
+    const gananciaMayorPct = dto.gananciaMayorPct ?? config?.defaultGananciaMayorPct ?? 0;
+
     const prices = await this.calculatePrices(
       dto.costUsd || 0,
-      dto.gananciaPct || 0,
-      dto.gananciaMayorPct || 0,
+      gananciaPct,
+      gananciaMayorPct,
       dto.ivaType || IvaType.GENERAL,
       dto.bregaApplies !== false,
     );
@@ -83,6 +88,8 @@ export class ProductsService {
       data: {
         ...dto,
         code,
+        gananciaPct,
+        gananciaMayorPct,
         priceDetal: prices.priceDetal,
         priceMayor: prices.priceMayor,
       },

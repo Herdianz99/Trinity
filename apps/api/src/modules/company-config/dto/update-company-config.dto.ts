@@ -34,6 +34,16 @@ export class UpdateCompanyConfigDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsNumber()
+  defaultGananciaPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  defaultGananciaMayorPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
   defaultWarehouseId?: string;
 

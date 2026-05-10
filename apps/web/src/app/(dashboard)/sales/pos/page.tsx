@@ -254,12 +254,15 @@ export default function POSPage() {
     setCart(prev => prev.filter(i => i.productId !== productId));
   }
 
-  // Calculate totals
-  const subtotalUsd = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  // Calculate totals — priceDetal includes IVA, extract base for proper breakdown
   const ivaByType: Record<string, number> = {};
+  let subtotalUsd = 0;
   cart.forEach(i => {
     const rate = IVA_RATES[i.ivaType] || 0;
-    const iva = i.unitPrice * i.quantity * rate;
+    const basePrice = i.unitPrice / (1 + rate);
+    const lineSubtotal = basePrice * i.quantity;
+    const iva = lineSubtotal * rate;
+    subtotalUsd += lineSubtotal;
     ivaByType[i.ivaType] = (ivaByType[i.ivaType] || 0) + iva;
   });
   const totalIva = Object.values(ivaByType).reduce((s, v) => s + v, 0);

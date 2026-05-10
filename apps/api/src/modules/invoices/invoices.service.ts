@@ -192,22 +192,24 @@ export class InvoicesService {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
 
-      const unitPrice = item.unitPrice ?? product.priceDetal;
-      const lineTotal = unitPrice * item.quantity;
+      // priceDetal already includes IVA — extract base price
+      const priceWithIva = item.unitPrice ?? product.priceDetal;
       const ivaRate = IVA_RATES[product.ivaType] || 0;
-      const ivaAmount = lineTotal * ivaRate;
+      const baseUnitPrice = priceWithIva / (1 + ivaRate);
+      const lineSubtotal = baseUnitPrice * item.quantity;
+      const ivaAmount = lineSubtotal * ivaRate;
 
-      subtotalUsd += lineTotal;
+      subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
 
       itemsData.push({
         productId: product.id,
         productName: product.name,
         quantity: item.quantity,
-        unitPrice,
+        unitPrice: baseUnitPrice,
         ivaType: product.ivaType,
         ivaAmount,
-        totalUsd: lineTotal + ivaAmount,
+        totalUsd: lineSubtotal + ivaAmount,
       });
     }
 
@@ -551,22 +553,24 @@ export class InvoicesService {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
 
-      const unitPrice = item.unitPrice ?? product.priceDetal;
-      const lineTotal = unitPrice * item.quantity;
+      // priceDetal already includes IVA — extract base price
+      const priceWithIva = item.unitPrice ?? product.priceDetal;
       const ivaRate = IVA_RATES[product.ivaType] || 0;
-      const ivaAmount = lineTotal * ivaRate;
+      const baseUnitPrice = priceWithIva / (1 + ivaRate);
+      const lineSubtotal = baseUnitPrice * item.quantity;
+      const ivaAmount = lineSubtotal * ivaRate;
 
-      subtotalUsd += lineTotal;
+      subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
 
       itemsData.push({
         productId: product.id,
         productName: product.name,
         quantity: item.quantity,
-        unitPrice,
+        unitPrice: baseUnitPrice,
         ivaType: product.ivaType,
         ivaAmount,
-        totalUsd: lineTotal + ivaAmount,
+        totalUsd: lineSubtotal + ivaAmount,
       });
     }
 

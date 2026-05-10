@@ -69,6 +69,8 @@ export default function ProductsPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [exchangeRate, setExchangeRate] = useState(0);
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
+  const [defaultGananciaPct, setDefaultGananciaPct] = useState(0);
+  const [defaultGananciaMayorPct, setDefaultGananciaMayorPct] = useState(0);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -122,6 +124,8 @@ export default function ProductsPage() {
     if (configRes.ok) {
       const cfg = await configRes.json();
       setBregaGlobalPct(cfg.bregaGlobalPct || 0);
+      setDefaultGananciaPct(cfg.defaultGananciaPct || 0);
+      setDefaultGananciaMayorPct(cfg.defaultGananciaMayorPct || 0);
     }
     if (rateRes.ok) {
       const rate = await rateRes.json();
@@ -143,7 +147,11 @@ export default function ProductsPage() {
 
   function openCreate() {
     setEditingId(null);
-    setForm(defaultForm);
+    setForm({
+      ...defaultForm,
+      gananciaPct: defaultGananciaPct,
+      gananciaMayorPct: defaultGananciaMayorPct,
+    });
     setModalOpen(true);
   }
 

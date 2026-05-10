@@ -111,17 +111,19 @@ enum ReceivableStatus {
 // ============================================
 
 model CompanyConfig {
-  id                 String   @id @default("singleton")
-  companyName        String   @default("Trinity")
-  rif                String?
-  address            String?
-  phone              String?
-  email              String?
-  bregaGlobalPct     Float    @default(0)
-  defaultWarehouseId String?
-  invoicePrefix      String   @default("FAC")
-  creditAuthPassword String?
-  updatedAt          DateTime @updatedAt
+  id                     String   @id @default("singleton")
+  companyName            String   @default("Trinity")
+  rif                    String?
+  address                String?
+  phone                  String?
+  email                  String?
+  bregaGlobalPct         Float    @default(0)
+  defaultGananciaPct     Float    @default(0)
+  defaultGananciaMayorPct Float   @default(0)
+  defaultWarehouseId     String?
+  invoicePrefix          String   @default("FAC")
+  creditAuthPassword     String?
+  updatedAt              DateTime @updatedAt
 }
 
 // ============================================

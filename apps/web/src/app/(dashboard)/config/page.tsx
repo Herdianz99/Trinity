@@ -10,6 +10,8 @@ interface CompanyConfig {
   phone: string;
   email: string;
   bregaGlobalPct: number;
+  defaultGananciaPct: number;
+  defaultGananciaMayorPct: number;
   defaultWarehouseId: string;
   invoicePrefix: string;
 }
@@ -22,6 +24,8 @@ export default function ConfigPage() {
     phone: '',
     email: '',
     bregaGlobalPct: 0,
+    defaultGananciaPct: 0,
+    defaultGananciaMayorPct: 0,
     defaultWarehouseId: '',
     invoicePrefix: 'FAC',
   });
@@ -79,6 +83,8 @@ export default function ConfigPage() {
           phone: data.phone || '',
           email: data.email || '',
           bregaGlobalPct: data.bregaGlobalPct || 0,
+          defaultGananciaPct: data.defaultGananciaPct || 0,
+          defaultGananciaMayorPct: data.defaultGananciaMayorPct || 0,
           defaultWarehouseId: data.defaultWarehouseId || '',
           invoicePrefix: data.invoicePrefix || 'FAC',
         });
@@ -122,6 +128,8 @@ export default function ConfigPage() {
           phone: config.phone || undefined,
           email: config.email || undefined,
           bregaGlobalPct: Number(config.bregaGlobalPct),
+          defaultGananciaPct: Number(config.defaultGananciaPct),
+          defaultGananciaMayorPct: Number(config.defaultGananciaMayorPct),
           invoicePrefix: config.invoicePrefix,
         }),
       });
@@ -366,6 +374,44 @@ export default function ConfigPage() {
                   value={config.invoicePrefix}
                   onChange={(e) => handleChange('invoicePrefix', e.target.value)}
                   className="input-field"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Default profit margins */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Precios por defecto</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Se aplicara automaticamente a los productos nuevos que no tengan ganancia configurada.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Ganancia detal por defecto (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={config.defaultGananciaPct}
+                  onChange={(e) => handleChange('defaultGananciaPct', e.target.value)}
+                  className="input-field"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Ganancia mayor por defecto (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={config.defaultGananciaMayorPct}
+                  onChange={(e) => handleChange('defaultGananciaMayorPct', e.target.value)}
+                  className="input-field"
+                  placeholder="0"
                 />
               </div>
             </div>

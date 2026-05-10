@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "CompanyConfig" ADD COLUMN "defaultGananciaPct" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN "defaultGananciaMayorPct" DOUBLE PRECISION NOT NULL DEFAULT 0;
