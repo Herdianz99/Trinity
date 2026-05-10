@@ -25,6 +25,7 @@ import { PrintJobsModule } from './modules/print-jobs/print-jobs.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 import { ReceivablesModule } from './modules/receivables/receivables.module';
 import { PayablesModule } from './modules/payables/payables.module';
+import { FiscalModule } from './modules/fiscal/fiscal.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { PayablesModule } from './modules/payables/payables.module';
     QuotationsModule,
     ReceivablesModule,
     PayablesModule,
+    FiscalModule,
   ],
 })
 export class AppModule {}

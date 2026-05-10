@@ -670,7 +670,7 @@ model QuotationItem {
 #### Sesión 6 — Caja y Arqueo ✅
 #### Sesión 7 — CxC (Cuentas por Cobrar) ✅
 #### Sesión 8 — CxP (Cuentas por Pagar) ✅
-#### Sesión 9 — Documentos Fiscales Venezolanos
+#### Sesión 9 — Documentos Fiscales Venezolanos ✅
 #### Sesión 10 — Despachos
 #### Sesión 11 — Dashboard Directivos
 #### Sesión 12 — Dashboard Vendedores

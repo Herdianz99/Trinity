@@ -607,6 +607,23 @@ export class InvoicesService {
     return updated;
   }
 
+  async updateControlNumber(
+    id: string,
+    controlNumber: string,
+    user: { id: string; role: UserRole },
+  ) {
+    if (user.role !== 'ADMIN') {
+      throw new ForbiddenException('Solo ADMIN puede actualizar el numero de control');
+    }
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    return this.prisma.invoice.update({
+      where: { id },
+      data: { controlNumber },
+    });
+  }
+
   // TODO: Las facturas PAID/CREDIT no deben cancelarse directamente.
   // En el futuro se manejarán con Notas de Crédito que reviertan stock,
   // movimientos de inventario y receivables asociados.

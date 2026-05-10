@@ -65,6 +65,9 @@ export default function PurchasesPage() {
   const [formItems, setFormItems] = useState<{ productId: string; productLabel: string; quantity: number; costUsd: number }[]>([]);
   const [formIsCredit, setFormIsCredit] = useState(false);
   const [formCreditDays, setFormCreditDays] = useState(0);
+  const [formSupplierControlNumber, setFormSupplierControlNumber] = useState('');
+  const [formApplyIslr, setFormApplyIslr] = useState(false);
+  const [formIslrPct, setFormIslrPct] = useState(0);
   const [productSearch, setProductSearch] = useState('');
   const [productResults, setProductResults] = useState<ProductSearch[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
@@ -146,7 +149,14 @@ export default function PurchasesPage() {
     setFormNotes('');
     setFormIsCredit(false);
     setFormCreditDays(0);
+    setFormSupplierControlNumber('');
+    setFormApplyIslr(false);
+    setFormIslrPct(0);
     setFormItems([]);
+    // Fetch default ISLR pct
+    fetch('/api/proxy/config').then(r => r.json()).then(cfg => {
+      setFormIslrPct(cfg.islrRetentionPct || 0);
+    }).catch(() => {});
     setCreateModal(true);
   }
 
@@ -156,6 +166,9 @@ export default function PurchasesPage() {
     setFormNotes(order.notes || '');
     setFormIsCredit((order as any).isCredit || false);
     setFormCreditDays((order as any).creditDays || 0);
+    setFormSupplierControlNumber((order as any).supplierControlNumber || '');
+    setFormApplyIslr(!!(order as any).islrRetentionPct);
+    setFormIslrPct((order as any).islrRetentionPct || 0);
     setFormItems(order.items.map(i => ({
       productId: i.productId,
       productLabel: `${i.product.code} - ${i.product.name}`,
@@ -176,6 +189,9 @@ export default function PurchasesPage() {
         notes: formNotes || undefined,
         isCredit: formIsCredit,
         creditDays: formIsCredit ? formCreditDays : 0,
+        supplierControlNumber: formSupplierControlNumber || undefined,
+        applyIslr: formApplyIslr,
+        islrRetentionPct: formApplyIslr ? formIslrPct : 0,
         items: formItems.filter(i => i.productId && i.quantity > 0).map(i => ({
           productId: i.productId,
           quantity: Number(i.quantity),
@@ -422,6 +438,11 @@ export default function PurchasesPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">N&deg; Control del proveedor</label>
+                <input type="text" value={formSupplierControlNumber} onChange={(e) => setFormSupplierControlNumber(e.target.value)} className="input-field !py-2 text-sm" placeholder="Numero de control de la factura del proveedor" />
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Notas</label>
                 <input type="text" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="input-field !py-2 text-sm" placeholder="Opcional..." />
               </div>
@@ -458,6 +479,40 @@ export default function PurchasesPage() {
                       <span className="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
                         Aplicara retencion IVA
                       </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ISLR toggle */}
+              <div className="bg-slate-900/50 rounded-lg p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formApplyIslr}
+                    onChange={(e) => setFormApplyIslr(e.target.checked)}
+                    className="rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-purple-500/40"
+                  />
+                  Aplica retencion ISLR
+                </label>
+                {formApplyIslr && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Porcentaje ISLR (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={formIslrPct}
+                        onChange={(e) => setFormIslrPct(Number(e.target.value))}
+                        className="input-field !py-2 text-sm w-32"
+                      />
+                    </div>
+                    {formTotal > 0 && formIslrPct > 0 && (
+                      <div className="text-xs text-purple-400">
+                        Retencion ISLR: ${(formTotal * formIslrPct / 100).toFixed(2)} ({formIslrPct}% de ${formTotal.toFixed(2)})
+                      </div>
                     )}
                   </div>
                 )}

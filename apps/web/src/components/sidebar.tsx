@@ -37,6 +37,8 @@ import {
   History,
   HandCoins,
   CreditCard,
+  BookOpen,
+  BarChart3,
 } from 'lucide-react';
 
 interface NavItem {
@@ -69,6 +71,9 @@ const navItems: NavItem[] = [
   { label: 'Cuentas por cobrar', href: '/receivables', icon: <HandCoins size={20} />, section: 'CXC' },
   { label: 'Por plataforma', href: '/receivables/platforms', icon: <CreditCard size={20} /> },
   { label: 'Cuentas por pagar', href: '/payables', icon: <Receipt size={20} />, section: 'CXP' },
+  { label: 'Libro de Ventas', href: '/fiscal/libro-ventas', icon: <BookOpen size={20} />, section: 'FISCAL' },
+  { label: 'Libro de Compras', href: '/fiscal/libro-compras', icon: <BookOpen size={20} /> },
+  { label: 'Resumen Fiscal', href: '/fiscal/resumen', icon: <BarChart3 size={20} /> },
   { label: 'Gestion de cajas', href: '/cash', icon: <Banknote size={20} />, section: 'CAJA' },
   { label: 'Sesiones', href: '/cash/sessions', icon: <History size={20} /> },
   { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={20} />, section: 'COTIZACIONES' },

@@ -17,6 +17,7 @@ interface CompanyConfig {
   quotationValidityDays: number;
   overdueWarningDays: number;
   ivaRetentionPct: number;
+  islrRetentionPct: number;
 }
 
 export default function ConfigPage() {
@@ -34,6 +35,7 @@ export default function ConfigPage() {
     quotationValidityDays: 30,
     overdueWarningDays: 3,
     ivaRetentionPct: 75,
+    islrRetentionPct: 0,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,6 +98,7 @@ export default function ConfigPage() {
           quotationValidityDays: data.quotationValidityDays || 30,
           overdueWarningDays: data.overdueWarningDays || 3,
           ivaRetentionPct: data.ivaRetentionPct ?? 75,
+          islrRetentionPct: data.islrRetentionPct ?? 0,
         });
       }
     } catch {
@@ -143,6 +146,7 @@ export default function ConfigPage() {
           quotationValidityDays: Number(config.quotationValidityDays),
           overdueWarningDays: Number(config.overdueWarningDays),
           ivaRetentionPct: Number(config.ivaRetentionPct),
+          islrRetentionPct: Number(config.islrRetentionPct),
         }),
       });
 
@@ -427,6 +431,21 @@ export default function ConfigPage() {
                   className="input-field"
                 />
                 <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion IVA aplicado a proveedores agentes de retencion (75% por ley venezolana)</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Retencion ISLR por defecto (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={config.islrRetentionPct}
+                  onChange={(e) => handleChange('islrRetentionPct', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en ordenes de compra</p>
               </div>
             </div>
           </div>

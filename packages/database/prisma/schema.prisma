@@ -133,6 +133,7 @@ model CompanyConfig {
   quotationValidityDays  Int      @default(30)
   overdueWarningDays     Int      @default(3)
   ivaRetentionPct        Float    @default(75)
+  islrRetentionPct       Float    @default(0)
   updatedAt              DateTime @updatedAt
 }
 
@@ -386,21 +387,25 @@ model InventoryCountItem {
 // ============================================
 
 model PurchaseOrder {
-  id          String              @id @default(cuid())
-  number      String              @unique
-  supplierId  String
-  supplier    Supplier            @relation(fields: [supplierId], references: [id])
-  status      PurchaseStatus      @default(DRAFT)
-  totalUsd    Float               @default(0)
-  isCredit    Boolean             @default(false)
-  creditDays  Int                 @default(0)
-  notes       String?
-  receivedAt  DateTime?
-  items       PurchaseOrderItem[]
-  payables    Payable[]
-  createdById String
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id                    String              @id @default(cuid())
+  number                String              @unique
+  supplierId            String
+  supplier              Supplier            @relation(fields: [supplierId], references: [id])
+  status                PurchaseStatus      @default(DRAFT)
+  totalUsd              Float               @default(0)
+  isCredit              Boolean             @default(false)
+  creditDays            Int                 @default(0)
+  supplierControlNumber String?
+  islrRetentionPct      Float?
+  islrRetentionUsd      Float?
+  islrRetentionBs       Float?
+  notes                 String?
+  receivedAt            DateTime?
+  items                 PurchaseOrderItem[]
+  payables              Payable[]
+  createdById           String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 }
 
 model PurchaseOrderItem {

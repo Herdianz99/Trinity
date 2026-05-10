@@ -66,4 +66,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   ivaRetentionPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  islrRetentionPct?: number;
 }

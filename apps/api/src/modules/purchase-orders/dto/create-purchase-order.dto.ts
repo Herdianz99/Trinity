@@ -31,6 +31,19 @@ export class CreatePurchaseOrderDto {
   @Min(0)
   creditDays?: number;
 
+  @IsOptional()
+  @IsString()
+  supplierControlNumber?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  applyIslr?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  islrRetentionPct?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreatePurchaseOrderItemDto)

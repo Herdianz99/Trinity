@@ -48,6 +48,17 @@ export class PurchaseOrdersService {
 
     const totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
 
+    // Calculate ISLR if applicable
+    let islrRetentionPct: number | null = null;
+    let islrRetentionUsd: number | null = null;
+    let islrRetentionBs: number | null = null;
+
+    if (dto.applyIslr && dto.islrRetentionPct != null && dto.islrRetentionPct > 0) {
+      islrRetentionPct = dto.islrRetentionPct;
+      islrRetentionUsd = Math.round(totalUsd * (islrRetentionPct / 100) * 100) / 100;
+      // Bs will be calculated at receive time with current rate
+    }
+
     return this.prisma.purchaseOrder.create({
       data: {
         number,
@@ -55,6 +66,10 @@ export class PurchaseOrdersService {
         notes: dto.notes,
         isCredit: dto.isCredit || false,
         creditDays: dto.creditDays || 0,
+        supplierControlNumber: dto.supplierControlNumber || null,
+        islrRetentionPct,
+        islrRetentionUsd,
+        islrRetentionBs,
         totalUsd: Math.round(totalUsd * 100) / 100,
         createdById: userId,
         items: { create: items },
@@ -142,6 +157,9 @@ export class PurchaseOrdersService {
     const updateData: any = {};
     if (dto.supplierId) updateData.supplierId = dto.supplierId;
     if (dto.notes !== undefined) updateData.notes = dto.notes;
+    if (dto.supplierControlNumber !== undefined) updateData.supplierControlNumber = dto.supplierControlNumber || null;
+    if (dto.isCredit !== undefined) updateData.isCredit = dto.isCredit;
+    if (dto.creditDays !== undefined) updateData.creditDays = dto.creditDays;
 
     if (dto.items) {
       // Delete existing items and recreate
@@ -160,6 +178,20 @@ export class PurchaseOrdersService {
       await this.prisma.purchaseOrderItem.createMany({ data: items });
 
       updateData.totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
+    }
+
+    // Recalculate ISLR if applicable
+    if (dto.applyIslr !== undefined) {
+      if (dto.applyIslr && dto.islrRetentionPct != null && dto.islrRetentionPct > 0) {
+        const total = updateData.totalUsd ?? order.totalUsd;
+        updateData.islrRetentionPct = dto.islrRetentionPct;
+        updateData.islrRetentionUsd = Math.round(total * (dto.islrRetentionPct / 100) * 100) / 100;
+        updateData.islrRetentionBs = null;
+      } else {
+        updateData.islrRetentionPct = null;
+        updateData.islrRetentionUsd = null;
+        updateData.islrRetentionBs = null;
+      }
     }
 
     return this.prisma.purchaseOrder.update({
@@ -336,7 +368,22 @@ export class PurchaseOrdersService {
           retentionBs = Math.round(retentionUsd * exchangeRate * 100) / 100;
         }
 
-        const netPayableUsd = Math.round((amountUsd - retentionUsd) * 100) / 100;
+        // Also calculate ISLR retention from the order if set
+        let islrRetentionUsd = 0;
+        if (updatedOrder.islrRetentionPct && updatedOrder.islrRetentionPct > 0) {
+          islrRetentionUsd = Math.round(amountUsd * (updatedOrder.islrRetentionPct / 100) * 100) / 100;
+          const islrRetentionBs = Math.round(islrRetentionUsd * exchangeRate * 100) / 100;
+          // Update the order with calculated ISLR amounts
+          await tx.purchaseOrder.update({
+            where: { id },
+            data: {
+              islrRetentionUsd,
+              islrRetentionBs,
+            },
+          });
+        }
+
+        const netPayableUsd = Math.round((amountUsd - retentionUsd - islrRetentionUsd) * 100) / 100;
 
         // Calculate due date
         const dueDate = new Date();

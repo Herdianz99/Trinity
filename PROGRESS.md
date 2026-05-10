@@ -692,3 +692,62 @@
 - GET /payables/supplier/:id: estado de cuenta con deuda $0 despues de pago completo
 - ivaRetentionPct=75 en config (configurable)
 - TypeScript compila sin errores en ambos apps (API y Web)
+
+## Sesion 9 — Documentos Fiscales Venezolanos (Completada)
+### Migracion Prisma
+- PurchaseOrder: agregados `supplierControlNumber String?`, `islrRetentionPct Float?`, `islrRetentionUsd Float?`, `islrRetentionBs Float?`
+- CompanyConfig: agregado `islrRetentionPct Float @default(0)`
+- Invoice: campo `controlNumber` ya existia del schema original
+- Migracion: `20260510220000_add_fiscal_documents_fields`
+
+### Backend
+- **FiscalModule** nuevo con controller y service:
+  - `GET /fiscal/libro-ventas?from&to` — Libro de Ventas formato SENIAT:
+    - Filtra facturas PAID y CREDIT en el periodo con setUTCHours
+    - Por cada factura: fecha, numero, control, RIF/nombre cliente, bases imponibles (exenta, reducida, general, especial), IVA desglosado (8%, 16%, 31%), total
+    - Totales del periodo
+  - `GET /fiscal/libro-compras?from&to` — Libro de Compras formato SENIAT:
+    - Filtra PurchaseOrders RECEIVED en el periodo
+    - Por cada orden: fecha, numero proveedor, control proveedor, RIF/nombre proveedor, bases imponibles, IVA desglosado, retencion IVA, retencion ISLR, total
+    - Totales del periodo
+  - `GET /fiscal/resumen?from&to` — Resumen fiscal:
+    - Ventas: totalFacturas, baseImponibleTotal, ivaTotal, totalVentas
+    - Compras: totalOrdenes, baseImponibleTotal, ivaTotal, retencionesIva, retencionesIslr, totalCompras
+    - Balance IVA: debito fiscal, credito fiscal, IVA por pagar/recuperar
+- **InvoicesModule** actualizado:
+  - `PATCH /invoices/:id/control-number` — actualizar numero de control (solo ADMIN)
+- **PurchaseOrdersModule** actualizado:
+  - CreatePurchaseOrderDto: agregados `supplierControlNumber`, `applyIslr`, `islrRetentionPct`
+  - `create()` calcula ISLR si aplica
+  - `update()` recalcula ISLR y permite editar supplierControlNumber
+  - `receive()` calcula ISLR final sobre monto recibido, descuenta del netPayableUsd en el Payable
+- **CompanyConfigDto**: agregado campo `islrRetentionPct`
+
+### Frontend
+- **Sidebar**: nueva seccion FISCAL con 3 items: Libro de Ventas, Libro de Compras, Resumen Fiscal
+- **Pagina `/fiscal/libro-ventas`**:
+  - Selector periodo (mes/ano), boton Generar y Exportar PDF
+  - Tabla SENIAT: N, Fecha, Factura, Control, RIF, Cliente, Base Exenta/Reducida/General/Especial, IVA 8%/16%/31%, Total
+  - Fila totales en negrita, formato numerico venezolano
+  - Exportar PDF A4 horizontal formato SENIAT
+- **Pagina `/fiscal/libro-compras`**:
+  - Mismo formato con columnas adicionales: Ret. IVA (naranja), Ret. ISLR (purpura)
+  - Exportar PDF horizontal
+- **Pagina `/fiscal/resumen`**:
+  - 2 cards: Ventas (verde) y Compras (azul)
+  - Tabla balance IVA: debito vs credito = IVA por pagar/recuperar
+  - Seccion retenciones del periodo
+- **Pagina `/purchases`** — modal crear/editar:
+  - Campo "N Control del proveedor"
+  - Toggle "Aplica retencion ISLR" con porcentaje pre-llenado desde config
+  - Calculo ISLR en tiempo real
+- **Pagina `/config`**: campo "Retencion ISLR por defecto (%)"
+
+### Verificaciones
+- 5 facturas de venta con diferentes IVA types (EXEMPT, REDUCED, GENERAL, mixtas)
+- Numeros de control asignados: 00-001234, 00-001235, 00-001236
+- Libro de ventas: 12 facturas con desglose correcto por tipo IVA
+- 2 ordenes de compra: PO-0004 con IVA+ISLR (retIVA=$16.20, retISLR=$2.70), PO-0005 sin retenciones
+- Libro de compras: 5 ordenes, retenciones IVA=$22.20, ISLR=$2.70
+- Resumen fiscal: IVA debito=$61.64, credito=$96.78, saldo a recuperar=-$35.14
+- TypeScript compila sin errores en ambos apps (API y Web)

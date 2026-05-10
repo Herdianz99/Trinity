@@ -87,6 +87,15 @@ export class InvoicesController {
     return this.service.updateItems(id, dto, user);
   }
 
+  @Patch(':id/control-number')
+  updateControlNumber(
+    @Param('id') id: string,
+    @Body('controlNumber') controlNumber: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.updateControlNumber(id, controlNumber, user);
+  }
+
   @Patch(':id/cancel')
   cancel(
     @Param('id') id: string,
