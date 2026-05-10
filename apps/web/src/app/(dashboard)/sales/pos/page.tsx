@@ -345,46 +345,52 @@ export default function POSPage() {
     }
   }
 
-  // Barcode scanner
+  // Barcode scanner with @zxing/browser
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+
   async function toggleScanner() {
     if (scannerActive) {
       setScannerActive(false);
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      if (scannerControlsRef.current) {
+        scannerControlsRef.current.stop();
+        scannerControlsRef.current = null;
       }
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      const { BrowserMultiFormatReader } = await import('@zxing/browser');
+      const codeReader = new BrowserMultiFormatReader();
       setScannerActive(true);
 
-      // Use BarcodeDetector API if available
-      if ('BarcodeDetector' in window) {
-        const detector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
-        const scan = async () => {
-          if (!videoRef.current || !scannerActive) return;
-          try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes.length > 0) {
-              const code = barcodes[0].rawValue;
-              handleProductSearch(code);
-              setScannerActive(false);
-              stream.getTracks().forEach(t => t.stop());
-              return;
+      const controls = await codeReader.decodeFromVideoDevice(
+        undefined,
+        videoRef.current!,
+        (result) => {
+          if (result) {
+            const code = result.getText();
+            handleProductSearch(code);
+            setScannerActive(false);
+            if (scannerControlsRef.current) {
+              scannerControlsRef.current.stop();
+              scannerControlsRef.current = null;
             }
-          } catch {}
-          requestAnimationFrame(scan);
-        };
-        scan();
-      }
+          }
+        },
+      );
+      scannerControlsRef.current = controls;
     } catch {
       setMessage({ type: 'error', text: 'No se pudo acceder a la camara' });
     }
   }
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerControlsRef.current) {
+        scannerControlsRef.current.stop();
+      }
+    };
+  }, []);
 
   if (loadingInvoice) {
     return (
