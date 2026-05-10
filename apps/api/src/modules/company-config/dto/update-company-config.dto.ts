@@ -30,11 +30,6 @@ export class UpdateCompanyConfigDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsNumber()
-  exchangeRate?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsNumber()
   bregaGlobalPct?: number;
 
   @ApiProperty({ required: false })

@@ -99,7 +99,7 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ### FASE 1 — Fundación
 
-#### Sesión 1 — Setup, Auth y Configuración Base ✅
+#### Sesión 1 — Setup, Auth y Configuración Base
 **Backend:**
 - Scaffold monorepo pnpm + Turborepo
 - Docker Compose (PostgreSQL 15 + Redis 7)
@@ -119,19 +119,32 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 **Schema Prisma completo Fase 1:**
 ```prisma
 model CompanyConfig {
-  id                    String   @id @default("singleton")
-  companyName           String   @default("Trinity")
-  rif                   String?
-  address               String?
-  phone                 String?
-  email                 String?
-  exchangeRate          Float    @default(0)
-  exchangeRateUpdatedAt DateTime?
-  bregaGlobalPct        Float    @default(0)
-  defaultWarehouseId    String?
-  invoicePrefix         String   @default("0001-")
-  creditAuthPassword    String?
-  updatedAt             DateTime @updatedAt
+  id                 String   @id @default("singleton")
+  companyName        String   @default("Trinity")
+  rif                String?
+  address            String?
+  phone              String?
+  email              String?
+  bregaGlobalPct     Float    @default(0)
+  defaultWarehouseId String?
+  invoicePrefix      String   @default("FAC")
+  creditAuthPassword String?
+  updatedAt          DateTime @updatedAt
+  // exchangeRate NO se guarda aquí — se obtiene de la tabla ExchangeRate del día
+}
+
+model ExchangeRate {
+  id          String             @id @default(cuid())
+  rate        Float
+  date        DateTime           @unique  // una tasa por día (solo fecha, sin hora)
+  source      ExchangeRateSource @default(MANUAL)
+  createdById String?
+  createdAt   DateTime           @default(now())
+}
+
+enum ExchangeRateSource {
+  BCV     // obtenida por scraping de bcv.org.ve
+  MANUAL  // ingresada manualmente por el usuario
 }
 
 model User {
@@ -412,7 +425,7 @@ enum PaymentMethod {
 - Usuario admin@trinity.com / Admin1234! (ADMIN, mustChangePassword: false)
 - Usuario seller@trinity.com / Seller1234! (SELLER, mustChangePassword: false)
 - Usuario cashier@trinity.com / Cashier1234! (CASHIER, mustChangePassword: false)
-- CompanyConfig con exchangeRate: 0 y bregaGlobalPct: 0
+- CompanyConfig con bregaGlobalPct: 0 (sin exchangeRate — viene de tabla ExchangeRate)
 - 2 cajas: Caja 1 (código "01"), Caja 2 (código "02")
 - Almacén por defecto: "Almacén Principal"
 - 5 categorías de prueba con subcategorías
@@ -420,7 +433,7 @@ enum PaymentMethod {
 - 2 proveedores de prueba
 - 10 productos de prueba con precios calculados
 
-#### Sesión 2 — Catálogo de Productos ✅
+#### Sesión 2 — Catálogo de Productos
 **Backend:**
 - CategoriesModule: CRUD con soporte árbol 2 niveles (parent/children)
 - BrandsModule: CRUD simple
@@ -441,7 +454,7 @@ enum PaymentMethod {
 - Página /catalog/categories: árbol de categorías con subcategorías
 - Página /catalog/brands y /catalog/suppliers
 
-#### Sesión 3 — Inventario y Almacenes ✅
+#### Sesión 3 — Inventario y Almacenes
 **Backend:**
 - WarehousesModule: CRUD
 - StockModule:
@@ -467,7 +480,7 @@ enum PaymentMethod {
 - Página de conteo físico paso a paso
 - Reporte valorizado al pie de la página de stock
 
-#### Sesión 4 — Compras ✅
+#### Sesión 4 — Compras
 **Backend:**
 - PurchaseOrdersModule:
   - CRUD órdenes de compra con numeración PO-0001
@@ -549,6 +562,19 @@ enum PaymentMethod {
 ## Decisiones Técnicas Importantes
 
 **Precios:** Siempre en USD en la DB. Se muestran en USD y Bs. Nunca se guarda Bs en la DB.
+
+**Tasa de cambio BCV:**
+- Se guarda en tabla `ExchangeRate` — una entrada por día con su fecha
+- `CompanyConfig` NO tiene campo `exchangeRate` — siempre se consulta la tabla
+- Al abrir el sistema, si no existe tasa para hoy → banner prominente bloqueante: "No hay tasa BCV registrada para hoy. Ingresa la tasa antes de facturar"
+- Solo ADMIN puede registrar o editar tasas
+- Fuente: scraping de bcv.org.ve o ingreso manual
+
+**Reglas de uso de tasa en documentos:**
+- **Facturas de venta:** tasa del día actual al momento de crear. No se puede cambiar fecha ni tasa. Se guarda en el campo `exchangeRate` de la factura y es inmutable
+- **Órdenes de compra:** el usuario puede cambiar la fecha (para registrar facturas de días anteriores). Al cambiar la fecha el sistema busca automáticamente la tasa de ese día en `ExchangeRate`. Si no existe tasa para esa fecha → aviso: "No hay tasa registrada para el día seleccionado. Ingresa la tasa primero"
+- **Reportes históricos:** cada documento usa su propia tasa guardada, nunca recalculan con tasa actual
+- **Vista en tiempo real (precios, stock valorizado):** usa la tasa del día actual
 
 **Búsqueda:** PostgreSQL tsvector con trigger automático. Búsqueda por nombre, código, barcode, referencia proveedor.
 

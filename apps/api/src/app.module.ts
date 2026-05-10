@@ -14,6 +14,7 @@ import { TransfersModule } from './modules/transfers/transfers.module';
 import { InventoryCountsModule } from './modules/inventory-counts/inventory-counts.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
     InventoryCountsModule,
     StockMovementsModule,
     PurchaseOrdersModule,
+    ExchangeRateModule,
   ],
 })
 export class AppModule {}

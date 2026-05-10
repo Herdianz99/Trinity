@@ -94,10 +94,10 @@ export default function StockPage() {
   }, [selectedWarehouse]);
 
   const fetchConfig = useCallback(async () => {
-    const res = await fetch('/api/proxy/config');
+    const res = await fetch('/api/proxy/exchange-rate/today');
     if (res.ok) {
       const data = await res.json();
-      setExchangeRate(data.exchangeRate || 0);
+      if (data) setExchangeRate(data.rate || 0);
     }
   }, []);
 

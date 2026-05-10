@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
+import ExchangeRateBanner from '@/components/exchange-rate-banner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -35,6 +36,7 @@ export default async function DashboardLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar user={user} />
       <main className="flex-1 overflow-y-auto">
+        <ExchangeRateBanner />
         <div className="p-6 lg:p-8">
           {children}
         </div>

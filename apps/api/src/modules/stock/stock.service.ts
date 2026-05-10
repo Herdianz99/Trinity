@@ -81,8 +81,10 @@ export class StockService {
       },
     });
 
-    const companyConfig = await this.prisma.companyConfig.findFirst();
-    const exchangeRate = companyConfig?.exchangeRate ?? 1;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const todayRate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    const exchangeRate = todayRate?.rate ?? 1;
 
     return stocks.map((stock) => {
       const costUsd = stock.product.costUsd ?? 0;

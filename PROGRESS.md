@@ -126,3 +126,33 @@
 - Precio recalculado: priceDetal $8.12 → $24.36, priceMayor $7.25 → $21.75
 - StockMovement tipo PURCHASE creado con referencia PO-0001
 - Status transiciono correctamente: DRAFT → SENT → RECEIVED
+
+## Sesion 4b — Tasa de Cambio (Completada)
+### Migracion
+- Modelo `ExchangeRate` con campos: rate, date (unique, tipo DATE), source (BCV/MANUAL), createdById
+- Enum `ExchangeRateSource` (BCV, MANUAL)
+- Eliminados campos `exchangeRate` y `exchangeRateUpdatedAt` de CompanyConfig
+
+### Backend
+- **ExchangeRateModule**:
+  - `GET /exchange-rate/today` — retorna tasa del dia actual (UTC) o null
+  - `GET /exchange-rate` — historial de tasas (ultimas 60 entradas), filtrable por from/to
+  - `GET /exchange-rate/by-date?date=` — obtener tasa de fecha especifica
+  - `GET /exchange-rate/fetch-bcv` — intento de scraping de bcv.org.ve
+  - `POST /exchange-rate` — registrar/actualizar tasa del dia (solo ADMIN), con source BCV o MANUAL
+  - Usa upsert por date para evitar duplicados
+
+### Frontend
+- Banner amarillo prominente en layout cuando no hay tasa para hoy: "No hay tasa BCV registrada para hoy. Sin tasa no se puede facturar." con boton "Registrar tasa"
+- Modal de registro rapido con campo de monto y boton "Obtener del BCV"
+- Pagina `/config` actualizada: seccion "Tasa de Cambio" con tasa de hoy, formulario de registro, e historial reciente
+- Paginas de productos y stock actualizadas para obtener tasa desde `/exchange-rate/today` en vez de CompanyConfig
+- Eliminado campo exchangeRate del DTO de CompanyConfig
+
+### Verificaciones
+- `GET /exchange-rate/today` retorna null cuando no hay tasa
+- `POST /exchange-rate` con rate=36.50 → registra correctamente con fecha UTC del dia
+- `GET /exchange-rate/today` retorna la tasa registrada
+- `GET /exchange-rate/by-date?date=2026-05-10` retorna la tasa correcta
+- `GET /exchange-rate/fetch-bcv` endpoint funciona (retorna null si BCV no disponible)
+- Historial muestra todas las tasas registradas ordenadas desc

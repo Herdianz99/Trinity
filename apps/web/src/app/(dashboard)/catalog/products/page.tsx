@@ -109,19 +109,23 @@ export default function ProductsPage() {
   }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock]);
 
   const fetchMeta = useCallback(async () => {
-    const [catRes, brandRes, supRes, configRes] = await Promise.all([
+    const [catRes, brandRes, supRes, configRes, rateRes] = await Promise.all([
       fetch('/api/proxy/categories'),
       fetch('/api/proxy/brands'),
       fetch('/api/proxy/suppliers'),
       fetch('/api/proxy/config'),
+      fetch('/api/proxy/exchange-rate/today'),
     ]);
     if (catRes.ok) setCategories(await catRes.json());
     if (brandRes.ok) setBrands(await brandRes.json());
     if (supRes.ok) setSuppliers(await supRes.json());
     if (configRes.ok) {
       const cfg = await configRes.json();
-      setExchangeRate(cfg.exchangeRate || 0);
       setBregaGlobalPct(cfg.bregaGlobalPct || 0);
+    }
+    if (rateRes.ok) {
+      const rate = await rateRes.json();
+      if (rate) setExchangeRate(rate.rate || 0);
     }
   }, []);
 

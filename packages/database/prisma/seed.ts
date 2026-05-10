@@ -13,7 +13,6 @@ async function main() {
     create: {
       id: 'singleton',
       companyName: 'Inversiones El Trebol',
-      exchangeRate: 0,
       bregaGlobalPct: 0,
       invoicePrefix: 'FAC',
     },

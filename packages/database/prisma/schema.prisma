@@ -100,19 +100,35 @@ enum PaymentMethod {
 // ============================================
 
 model CompanyConfig {
-  id                    String    @id @default("singleton")
-  companyName           String    @default("Trinity")
-  rif                   String?
-  address               String?
-  phone                 String?
-  email                 String?
-  exchangeRate          Float     @default(0)
-  exchangeRateUpdatedAt DateTime?
-  bregaGlobalPct        Float     @default(0)
-  defaultWarehouseId    String?
-  invoicePrefix         String    @default("FAC")
-  creditAuthPassword    String?
-  updatedAt             DateTime  @updatedAt
+  id                 String   @id @default("singleton")
+  companyName        String   @default("Trinity")
+  rif                String?
+  address            String?
+  phone              String?
+  email              String?
+  bregaGlobalPct     Float    @default(0)
+  defaultWarehouseId String?
+  invoicePrefix      String   @default("FAC")
+  creditAuthPassword String?
+  updatedAt          DateTime @updatedAt
+}
+
+// ============================================
+// TASA DE CAMBIO
+// ============================================
+
+model ExchangeRate {
+  id          String             @id @default(cuid())
+  rate        Float
+  date        DateTime           @unique @db.Date
+  source      ExchangeRateSource @default(MANUAL)
+  createdById String?
+  createdAt   DateTime           @default(now())
+}
+
+enum ExchangeRateSource {
+  BCV
+  MANUAL
 }
 
 // ============================================
