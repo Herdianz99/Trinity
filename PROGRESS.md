@@ -518,3 +518,62 @@
 - Test ejemplo del prompt: costo $25.99, brecha 50%, ganancia 30%, IVA 16% → priceDetal=$58.79, subtotal=$50.68, IVA=$8.11, total=$58.79
 - Config defaults: defaultGananciaPct=35, defaultGananciaMayorPct=25 se guardan y cargan correctamente
 - TypeScript compila sin errores en ambos apps
+
+## Sesion 8 — Caja y Arqueo (Completada)
+### Migracion Prisma
+- CashRegister: eliminados campos `currentUserId` y `openedAt`, agregado `isFiscal Boolean @default(false)`
+- CashSession: renombrado `userId` a `openedById`, agregado `closedById String?`, relaciones `openedBy` y `closedBy` con User
+- User: agregadas relaciones `sessionsOpened` y `sessionsClosed`
+- Migracion: `20260510190000_update_cash_register_sessions`
+
+### Backend
+- **CashRegistersService** — reescrito completo:
+  - `findAll()` — lista cajas activas con sesiones OPEN y openedBy
+  - `findOpen()` — solo cajas con al menos una sesion activa
+  - `findOne(id)` — detalle con sesiones activas + resumen de ventas del dia
+  - `openSession()` — abre nueva sesion, multiples sesiones por caja permitidas
+  - `closeSession()` — cierra sesion por sessionId, calcula resumen y diferencia
+  - `getSessionSummary()` — resumen detallado: ventas por metodo de pago, totales, balance esperado, diferencia
+  - `findAllSessions()` — lista todas las sesiones con filtros (cashRegisterId, status)
+  - Helper `getSessionSalesData()` — agrupa pagos de facturas PAID/CREDIT del periodo de la sesion
+- **CashRegistersController** — endpoints:
+  - `GET /cash-registers` — todas las cajas
+  - `GET /cash-registers/open` — cajas con sesion activa
+  - `GET /cash-registers/:id` — detalle con todaySummary
+  - `POST /cash-registers/:id/open-session` — abrir sesion
+  - `GET /cash-sessions` — historial de sesiones (filtrable por caja y estado)
+  - `GET /cash-sessions/:id/summary` — arqueo detallado
+  - `POST /cash-sessions/:id/close` — cerrar sesion con closingBalance
+- Fix: `InvoicesService` y `QuotationsService` — cambiado `userId` a `openedById` en queries de CashSession
+
+### Seed
+- 3 cajas: Caja Notas (01, isFiscal:false), Fiscal 1 (02, isFiscal:true), Fiscal 2 (03, isFiscal:true)
+
+### Frontend
+- **POS `/sales/pos`** — modal de seleccion de caja:
+  - Al entrar al POS verifica localStorage `selectedCashRegisterId`
+  - Si no hay caja → modal fullscreen no-dismissable con lista de cajas
+  - Cajas con sesion activa: card con nombre, codigo, fiscal badge, sesiones activas, boton "Usar esta caja"
+  - Cajas cerradas: boton "Abrir caja" con input de fondo inicial
+  - Header del POS muestra caja seleccionada + boton "Cambiar caja"
+  - cashRegisterId incluido en creacion de facturas y cobros
+- **Pagina `/cash`** — gestion de cajas:
+  - Tabla de cajas con nombre, codigo, tipo fiscal, sesiones activas
+  - Boton "Abrir sesion" con modal (monto apertura + notas)
+  - Indicador visual de estado (verde si activa, gris si cerrada)
+- **Pagina `/cash/sessions`** — historial de sesiones:
+  - Filtros por caja y estado (OPEN/CLOSED)
+  - Tabla: caja, abierta por, fechas, montos, estado (badge verde/gris)
+  - Boton "Ver arqueo" → modal detallado
+  - Modal de arqueo: datos sesion, tabla ventas por metodo de pago, totales USD/Bs, balance esperado vs fisico, diferencia
+  - Si sesion abierta: campo monto fisico + boton "Cerrar sesion"
+- **Sidebar**: seccion CAJA con 2 items (Gestion de cajas, Sesiones)
+
+### Verificaciones
+- GET /cash-registers retorna 3 cajas con datos correctos (Caja Notas, Fiscal 1, Fiscal 2)
+- POST /cash-registers/:id/open-session crea sesion con openingBalance=$50
+- GET /cash-registers/open retorna solo cajas con sesiones activas
+- GET /cash-sessions/:id/summary retorna resumen correcto (openingBalance, expectedBalance, difference)
+- POST /cash-sessions/:id/close cierra sesion con closingBalance, calcula diferencia=$0 (cuadra)
+- GET /cash-sessions retorna historial con cashRegister, openedBy, closedBy
+- TypeScript compila sin errores en ambos apps (API y Web)

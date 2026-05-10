@@ -160,7 +160,7 @@ export class InvoicesService {
     let cashRegisterId = dto.cashRegisterId;
     if (!cashRegisterId) {
       const session = await this.prisma.cashSession.findFirst({
-        where: { userId: user.id, status: 'OPEN' },
+        where: { openedById: user.id, status: 'OPEN' },
       });
       if (session) {
         cashRegisterId = session.cashRegisterId;

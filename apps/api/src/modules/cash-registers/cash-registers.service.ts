@@ -13,19 +13,80 @@ export class CashRegistersService {
       include: {
         sessions: {
           where: { status: 'OPEN' },
-          take: 1,
+          include: { openedBy: { select: { id: true, name: true } } },
         },
       },
       orderBy: { code: 'asc' },
     });
   }
 
-  async getActiveSession(userId: string) {
-    const session = await this.prisma.cashSession.findFirst({
-      where: { userId, status: 'OPEN' },
-      include: { cashRegister: true },
+  async findAllSessions(cashRegisterId?: string, status?: string) {
+    const where: any = {};
+    if (cashRegisterId) where.cashRegisterId = cashRegisterId;
+    if (status) where.status = status;
+
+    return this.prisma.cashSession.findMany({
+      where,
+      include: {
+        cashRegister: { select: { id: true, name: true, code: true } },
+        openedBy: { select: { id: true, name: true } },
+        closedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { openedAt: 'desc' },
+      take: 50,
     });
-    return session;
+  }
+
+  async findOpen() {
+    return this.prisma.cashRegister.findMany({
+      where: {
+        isActive: true,
+        sessions: { some: { status: 'OPEN' } },
+      },
+      include: {
+        sessions: {
+          where: { status: 'OPEN' },
+          include: { openedBy: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  async findOne(id: string) {
+    const register = await this.prisma.cashRegister.findUnique({
+      where: { id },
+      include: {
+        sessions: {
+          where: { status: 'OPEN' },
+          include: { openedBy: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+
+    // Get today's sales summary
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        cashRegisterId: id,
+        createdAt: { gte: today, lt: tomorrow },
+        status: { in: ['PAID', 'CREDIT'] },
+      },
+      include: { payments: true },
+    });
+
+    const todaySummary = {
+      invoiceCount: invoices.length,
+      totalUsd: invoices.reduce((s, i) => s + i.totalUsd, 0),
+      totalBs: invoices.reduce((s, i) => s + i.totalBs, 0),
+    };
+
+    return { ...register, todaySummary };
   }
 
   async openSession(cashRegisterId: string, dto: OpenSessionDto, userId: string) {
@@ -35,92 +96,125 @@ export class CashRegistersService {
     if (!register) throw new NotFoundException('Caja no encontrada');
     if (!register.isActive) throw new BadRequestException('Esta caja está desactivada');
 
-    const existingSession = await this.prisma.cashSession.findFirst({
-      where: { cashRegisterId, status: 'OPEN' },
+    const session = await this.prisma.cashSession.create({
+      data: {
+        cashRegisterId,
+        openedById: userId,
+        openingBalance: dto.openingBalance,
+        notes: dto.notes,
+      },
+      include: {
+        cashRegister: true,
+        openedBy: { select: { id: true, name: true } },
+      },
     });
-    if (existingSession) {
-      throw new BadRequestException('Ya hay una sesión activa en esta caja');
-    }
-
-    const userSession = await this.prisma.cashSession.findFirst({
-      where: { userId, status: 'OPEN' },
-    });
-    if (userSession) {
-      throw new BadRequestException('Ya tienes una sesión activa en otra caja');
-    }
-
-    const [session] = await this.prisma.$transaction([
-      this.prisma.cashSession.create({
-        data: {
-          cashRegisterId,
-          userId,
-          openingBalance: dto.openingBalance,
-          notes: dto.notes,
-        },
-        include: { cashRegister: true },
-      }),
-      this.prisma.cashRegister.update({
-        where: { id: cashRegisterId },
-        data: { currentUserId: userId, openedAt: new Date() },
-      }),
-    ]);
 
     return session;
   }
 
-  async closeSession(cashRegisterId: string, dto: CloseSessionDto, userId: string) {
-    const session = await this.prisma.cashSession.findFirst({
-      where: { cashRegisterId, userId, status: 'OPEN' },
+  async closeSession(sessionId: string, dto: CloseSessionDto, userId: string) {
+    const session = await this.prisma.cashSession.findUnique({
+      where: { id: sessionId },
+      include: { cashRegister: true },
     });
-    if (!session) {
-      throw new BadRequestException('No tienes una sesión activa en esta caja');
+    if (!session) throw new NotFoundException('Sesión no encontrada');
+    if (session.status === 'CLOSED') throw new BadRequestException('Esta sesión ya está cerrada');
+
+    // Get sales summary for this session period
+    const summary = await this.getSessionSalesData(session.id, session.cashRegisterId, session.openedAt);
+
+    const updatedSession = await this.prisma.cashSession.update({
+      where: { id: sessionId },
+      data: {
+        closingBalance: dto.closingBalance,
+        status: 'CLOSED',
+        closedAt: new Date(),
+        closedById: userId,
+        notes: dto.notes,
+      },
+      include: {
+        cashRegister: true,
+        openedBy: { select: { id: true, name: true } },
+        closedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    const expectedBalance = session.openingBalance + summary.totalUsd;
+    const difference = dto.closingBalance - expectedBalance;
+
+    return { session: updatedSession, summary: { ...summary, expectedBalance, difference } };
+  }
+
+  async getSessionSummary(sessionId: string) {
+    const session = await this.prisma.cashSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        cashRegister: true,
+        openedBy: { select: { id: true, name: true } },
+        closedBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!session) throw new NotFoundException('Sesión no encontrada');
+
+    const salesData = await this.getSessionSalesData(
+      session.id,
+      session.cashRegisterId,
+      session.openedAt,
+      session.closedAt || undefined,
+    );
+
+    const expectedBalance = session.openingBalance + salesData.totalUsd;
+    const difference = session.closingBalance != null
+      ? session.closingBalance - expectedBalance
+      : null;
+
+    return {
+      session,
+      ...salesData,
+      expectedBalance,
+      difference,
+    };
+  }
+
+  private async getSessionSalesData(
+    sessionId: string,
+    cashRegisterId: string,
+    openedAt: Date,
+    closedAt?: Date,
+  ) {
+    const where: any = {
+      cashRegisterId,
+      createdAt: { gte: openedAt },
+      status: { in: ['PAID', 'CREDIT'] },
+    };
+    if (closedAt) {
+      where.createdAt.lte = closedAt;
     }
 
-    // Get sales summary for this session
     const invoices = await this.prisma.invoice.findMany({
-      where: {
-        cashRegisterId,
-        createdAt: { gte: session.openedAt },
-        status: { in: ['PAID', 'CREDIT'] },
-      },
+      where,
       include: { payments: true },
     });
 
-    const summary = {
-      totalInvoices: invoices.length,
-      totalUsd: invoices.reduce((s, i) => s + i.totalUsd, 0),
-      totalBs: invoices.reduce((s, i) => s + i.totalBs, 0),
-      byMethod: {} as Record<string, { usd: number; bs: number; count: number }>,
-    };
+    const byMethod: Record<string, { method: string; count: number; totalUsd: number; totalBs: number }> = {};
 
     for (const inv of invoices) {
       for (const p of inv.payments) {
-        if (!summary.byMethod[p.method]) {
-          summary.byMethod[p.method] = { usd: 0, bs: 0, count: 0 };
+        if (!byMethod[p.method]) {
+          byMethod[p.method] = { method: p.method, count: 0, totalUsd: 0, totalBs: 0 };
         }
-        summary.byMethod[p.method].usd += p.amountUsd;
-        summary.byMethod[p.method].bs += p.amountBs;
-        summary.byMethod[p.method].count += 1;
+        byMethod[p.method].count += 1;
+        byMethod[p.method].totalUsd += p.amountUsd;
+        byMethod[p.method].totalBs += p.amountBs;
       }
     }
 
-    const [updatedSession] = await this.prisma.$transaction([
-      this.prisma.cashSession.update({
-        where: { id: session.id },
-        data: {
-          closingBalance: dto.closingBalance,
-          status: 'CLOSED',
-          closedAt: new Date(),
-          notes: dto.notes,
-        },
-        include: { cashRegister: true },
-      }),
-      this.prisma.cashRegister.update({
-        where: { id: cashRegisterId },
-        data: { currentUserId: null, openedAt: null },
-      }),
-    ]);
-
-    return { session: updatedSession, summary };
+    return {
+      openingBalance: (await this.prisma.cashSession.findUnique({ where: { id: sessionId } }))?.openingBalance || 0,
+      invoiceCount: invoices.length,
+      totalUsd: invoices.reduce((s, i) => s + i.totalUsd, 0),
+      totalBs: invoices.reduce((s, i) => s + i.totalBs, 0),
+      totalSalesByMethod: Object.values(byMethod),
+    };
   }
 }

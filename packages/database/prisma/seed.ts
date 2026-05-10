@@ -64,13 +64,18 @@ async function main() {
   // --- Cash Registers ---
   await prisma.cashRegister.upsert({
     where: { code: '01' },
-    update: {},
-    create: { code: '01', name: 'Caja 1' },
+    update: { name: 'Caja Notas', isFiscal: false },
+    create: { code: '01', name: 'Caja Notas', isFiscal: false },
   });
   await prisma.cashRegister.upsert({
     where: { code: '02' },
-    update: {},
-    create: { code: '02', name: 'Caja 2' },
+    update: { name: 'Fiscal 1', isFiscal: true },
+    create: { code: '02', name: 'Fiscal 1', isFiscal: true },
+  });
+  await prisma.cashRegister.upsert({
+    where: { code: '03' },
+    update: { name: 'Fiscal 2', isFiscal: true },
+    create: { code: '03', name: 'Fiscal 2', isFiscal: true },
   });
   console.log('Cash registers created');
 

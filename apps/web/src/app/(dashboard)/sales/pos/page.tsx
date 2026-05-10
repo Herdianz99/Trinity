@@ -21,6 +21,7 @@ import {
   Clock,
   PanelRightOpen,
   FileCheck,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 const IVA_RATES: Record<string, number> = {
@@ -110,6 +111,14 @@ export default function POSPage() {
   const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
   const [savingClient, setSavingClient] = useState(false);
 
+  // Cash register selection
+  const [selectedCashRegister, setSelectedCashRegister] = useState<any>(null);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashRegisters, setCashRegisters] = useState<any[]>([]);
+  const [loadingCash, setLoadingCash] = useState(true);
+  const [openingBalance, setOpeningBalance] = useState('');
+  const [openingCashId, setOpeningCashId] = useState<string | null>(null);
+
   // Pending invoices drawer
   const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
@@ -134,6 +143,58 @@ export default function POSPage() {
         if (data?.permissions) setUserPermissions(data.permissions || []);
       });
   }, []);
+
+  // Cash register selection — check localStorage on mount
+  const fetchCashRegisters = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/cash-registers');
+      const data = await res.json();
+      if (Array.isArray(data)) setCashRegisters(data);
+    } catch {}
+    setLoadingCash(false);
+  }, []);
+
+  useEffect(() => {
+    const savedId = localStorage.getItem('selectedCashRegisterId');
+    if (savedId) {
+      fetch(`/api/proxy/cash-registers/${savedId}`)
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(data => { setSelectedCashRegister(data); setLoadingCash(false); })
+        .catch(() => { localStorage.removeItem('selectedCashRegisterId'); setShowCashModal(true); fetchCashRegisters(); });
+    } else {
+      setShowCashModal(true);
+      fetchCashRegisters();
+    }
+  }, [fetchCashRegisters]);
+
+  function selectCashRegister(cr: any) {
+    setSelectedCashRegister(cr);
+    localStorage.setItem('selectedCashRegisterId', cr.id);
+    setShowCashModal(false);
+  }
+
+  async function openCashSession(cashRegisterId: string) {
+    const balance = parseFloat(openingBalance) || 0;
+    try {
+      const res = await fetch(`/api/proxy/cash-registers/${cashRegisterId}/open-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openingBalance: balance }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al abrir sesión');
+      }
+      setOpeningBalance('');
+      setOpeningCashId(null);
+      await fetchCashRegisters();
+      // Re-fetch and select this register
+      const detail = await fetch(`/api/proxy/cash-registers/${cashRegisterId}`).then(r => r.json());
+      selectCashRegister(detail);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  }
 
   // Load pre-invoice if invoiceId is provided
   useEffect(() => {
@@ -311,6 +372,7 @@ export default function POSPage() {
     try {
       const invoiceBody = {
         customerId: customerId || undefined,
+        cashRegisterId: selectedCashRegister?.id || undefined,
         items: cart.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -406,6 +468,7 @@ export default function POSPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customerId: customerId || undefined,
+            cashRegisterId: selectedCashRegister?.id || undefined,
             items: cart.map(i => ({
               productId: i.productId,
               quantity: i.quantity,
@@ -601,10 +664,97 @@ export default function POSPage() {
     };
   }, []);
 
-  if (loadingInvoice) {
+  if (loadingInvoice || loadingCash) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
         <Loader2 className="animate-spin text-green-500" size={32} />
+      </div>
+    );
+  }
+
+  // Cash register selection modal (fullscreen, non-dismissable)
+  if (showCashModal) {
+    const openRegisters = cashRegisters.filter(cr => cr.sessions && cr.sessions.length > 0);
+    const closedRegisters = cashRegisters.filter(cr => !cr.sessions || cr.sessions.length === 0);
+
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900/98 flex items-center justify-center p-6">
+        <div className="w-full max-w-2xl">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 mb-4">
+              <Monitor className="text-green-400" size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-white">Selecciona una caja para comenzar</h2>
+            <p className="text-slate-400 mt-2">Elige la caja donde vas a operar</p>
+          </div>
+
+          {/* Open registers */}
+          {openRegisters.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-green-400 uppercase tracking-wider mb-3">Cajas con sesion activa</h3>
+              <div className="grid gap-3">
+                {openRegisters.map(cr => (
+                  <div key={cr.id} className="card p-4 flex items-center justify-between hover:border-green-500/30 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white">{cr.name}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
+                        {cr.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {cr.sessions.length} sesion(es) activa(s) — {cr.sessions.map((s: any) => s.openedBy?.name).join(', ')}
+                      </p>
+                    </div>
+                    <button onClick={() => selectCashRegister(cr)} className="btn-primary text-sm px-4 py-2">Usar esta caja</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Closed registers */}
+          {closedRegisters.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Cajas cerradas</h3>
+              <div className="grid gap-3">
+                {closedRegisters.map(cr => (
+                  <div key={cr.id} className="card p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{cr.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
+                          {cr.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">Sin sesion activa</p>
+                      </div>
+                      {openingCashId === cr.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={openingBalance}
+                            onChange={e => setOpeningBalance(e.target.value)}
+                            placeholder="Fondo USD"
+                            className="input-field w-28 !py-1.5 text-sm"
+                            autoFocus
+                          />
+                          <button onClick={() => openCashSession(cr.id)} className="btn-primary text-sm px-3 py-1.5">Abrir</button>
+                          <button onClick={() => setOpeningCashId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setOpeningCashId(cr.id)} className="px-4 py-2 text-sm rounded-lg border border-slate-600 text-slate-300 hover:border-green-500/40 hover:text-white transition-colors">Abrir caja</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {cashRegisters.length === 0 && (
+            <div className="text-center text-slate-400 py-8">No hay cajas registradas en el sistema</div>
+          )}
+        </div>
       </div>
     );
   }
@@ -618,8 +768,18 @@ export default function POSPage() {
             <Monitor className="text-green-400" size={20} />
           </div>
           <h1 className="text-xl font-bold text-white">Punto de Venta</h1>
+          {selectedCashRegister && (
+            <button
+              onClick={() => { fetchCashRegisters(); setShowCashModal(true); }}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-slate-700/60 border border-slate-600 text-slate-300 hover:border-green-500/30 hover:text-white transition-colors"
+              title="Cambiar caja"
+            >
+              <ArrowRightLeft size={12} />
+              {selectedCashRegister.name}
+            </button>
+          )}
           {exchangeRate > 0 && (
-            <span className="ml-2 text-xs px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+            <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
               Tasa: Bs {exchangeRate.toFixed(2)}
             </span>
           )}

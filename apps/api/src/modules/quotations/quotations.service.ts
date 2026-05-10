@@ -271,7 +271,7 @@ export class QuotationsService {
     // Determine cash register
     let cashRegisterId: string;
     const session = await this.prisma.cashSession.findFirst({
-      where: { userId: user.id, status: 'OPEN' },
+      where: { openedById: user.id, status: 'OPEN' },
     });
     if (session) {
       cashRegisterId = session.cashRegisterId;

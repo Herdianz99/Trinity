@@ -667,7 +667,7 @@ model QuotationItem {
 
 ### FASE 2 — Operaciones Completas
 
-#### Sesión 6 — Caja y Arqueo
+#### Sesión 6 — Caja y Arqueo ✅
 #### Sesión 7 — CxC (Cuentas por Cobrar)
 #### Sesión 8 — CxP (Cuentas por Pagar)
 #### Sesión 9 — Documentos Fiscales Venezolanos

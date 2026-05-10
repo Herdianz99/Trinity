@@ -33,6 +33,8 @@ import {
   UserCheck,
   SlidersHorizontal,
   FileCheck,
+  Banknote,
+  History,
 } from 'lucide-react';
 
 interface NavItem {
@@ -62,6 +64,8 @@ const navItems: NavItem[] = [
   { label: 'Pre-facturas', href: '/sales/pending', icon: <Clock size={20} /> },
   { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={20} /> },
   { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={20} /> },
+  { label: 'Gestion de cajas', href: '/cash', icon: <Banknote size={20} />, section: 'CAJA' },
+  { label: 'Sesiones', href: '/cash/sessions', icon: <History size={20} /> },
   { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={20} />, section: 'COTIZACIONES' },
   { label: 'Areas de Impresion', href: '/settings/print-areas', icon: <Printer size={20} />, section: 'CONFIGURACION' },
   { label: 'Importacion Masiva', href: '/import', icon: <Upload size={20} /> },

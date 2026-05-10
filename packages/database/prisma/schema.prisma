@@ -159,6 +159,8 @@ model User {
   mustChangePassword Boolean          @default(true)
   lastLoginAt        DateTime?
   permissions        UserPermission[]
+  sessionsOpened     CashSession[]    @relation("SessionOpenedBy")
+  sessionsClosed     CashSession[]    @relation("SessionClosedBy")
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 }
@@ -432,8 +434,7 @@ model CashRegister {
   name              String
   lastInvoiceNumber Int           @default(0)
   isActive          Boolean       @default(true)
-  currentUserId     String?
-  openedAt          DateTime?
+  isFiscal          Boolean       @default(false)
   invoices          Invoice[]
   sessions          CashSession[]
   createdAt         DateTime      @default(now())
@@ -444,7 +445,10 @@ model CashSession {
   id             String        @id @default(cuid())
   cashRegisterId String
   cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
-  userId         String
+  openedById     String
+  openedBy       User          @relation("SessionOpenedBy", fields: [openedById], references: [id])
+  closedById     String?
+  closedBy       User?         @relation("SessionClosedBy", fields: [closedById], references: [id])
   openingBalance Float         @default(0)
   closingBalance Float?
   status         SessionStatus @default(OPEN)
