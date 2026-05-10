@@ -31,6 +31,7 @@ import {
   Clock,
   FileText,
   UserCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface NavItem {
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
   { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={20} /> },
   { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={20} /> },
   { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={20} /> },
+  { label: 'Ajuste de precios', href: '/catalog/price-adjustment', icon: <SlidersHorizontal size={20} /> },
   { label: 'Stock', href: '/inventory/stock', icon: <BoxesIcon size={20} />, section: 'INVENTARIO' },
   { label: 'Almacenes', href: '/inventory/warehouses', icon: <Building2 size={20} /> },
   { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={20} /> },

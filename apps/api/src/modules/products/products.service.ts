@@ -3,6 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
+import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
+import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { IvaType, Prisma } from '@prisma/client';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
@@ -292,5 +294,141 @@ export class ProductsService {
     }
 
     return results;
+  }
+
+  private buildPriceAdjustmentWhere(query: PriceAdjustmentQueryDto): Prisma.ProductWhereInput {
+    const where: Prisma.ProductWhereInput = { isActive: true };
+
+    if (query.categoryId) {
+      where.OR = [
+        { categoryId: query.categoryId },
+        { category: { parentId: query.categoryId } },
+      ];
+    }
+    if (query.subcategoryId) {
+      where.categoryId = query.subcategoryId;
+      delete where.OR;
+    }
+    if (query.brandId) where.brandId = query.brandId;
+    if (query.supplierId) where.supplierId = query.supplierId;
+    if (query.costMin !== undefined || query.costMax !== undefined) {
+      where.costUsd = {};
+      if (query.costMin !== undefined) (where.costUsd as any).gte = query.costMin;
+      if (query.costMax !== undefined) (where.costUsd as any).lte = query.costMax;
+    }
+
+    return where;
+  }
+
+  async findForPriceAdjustment(query: PriceAdjustmentQueryDto) {
+    const where = this.buildPriceAdjustmentWhere(query);
+
+    const products = await this.prisma.product.findMany({
+      where,
+      take: 500,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        costUsd: true,
+        gananciaPct: true,
+        gananciaMayorPct: true,
+        priceDetal: true,
+        priceMayor: true,
+        ivaType: true,
+        bregaApplies: true,
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+    });
+
+    return products;
+  }
+
+  async applyPriceAdjustment(dto: ApplyPriceAdjustmentDto, userId: string) {
+    const where = this.buildPriceAdjustmentWhere(dto.filters);
+
+    return this.prisma.$transaction(async (tx) => {
+      const products = await tx.product.findMany({ where });
+
+      if (products.length === 0) {
+        throw new BadRequestException('No hay productos que coincidan con los filtros');
+      }
+
+      const config = await tx.companyConfig.findUnique({
+        where: { id: 'singleton' },
+      });
+
+      for (const product of products) {
+        let newGananciaPct = product.gananciaPct;
+        let newGananciaMayorPct = product.gananciaMayorPct;
+
+        if (dto.gananciaPct !== undefined) {
+          newGananciaPct = dto.adjustmentType === 'REPLACE'
+            ? dto.gananciaPct
+            : product.gananciaPct + dto.gananciaPct;
+        }
+        if (dto.gananciaMayorPct !== undefined) {
+          newGananciaMayorPct = dto.adjustmentType === 'REPLACE'
+            ? dto.gananciaMayorPct
+            : product.gananciaMayorPct + dto.gananciaMayorPct;
+        }
+
+        // Ensure percentages don't go below 0
+        if (newGananciaPct < 0) newGananciaPct = 0;
+        if (newGananciaMayorPct < 0) newGananciaMayorPct = 0;
+
+        const bregaPct = product.bregaApplies ? (config?.bregaGlobalPct || 0) : 0;
+        const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
+
+        const priceDetal = product.costUsd * (1 + bregaPct / 100) * (1 + newGananciaPct / 100) * ivaMultiplier;
+        const priceMayor = product.costUsd * (1 + bregaPct / 100) * (1 + newGananciaMayorPct / 100) * ivaMultiplier;
+
+        await tx.product.update({
+          where: { id: product.id },
+          data: {
+            gananciaPct: newGananciaPct,
+            gananciaMayorPct: newGananciaMayorPct,
+            priceDetal: Math.round(priceDetal * 100) / 100,
+            priceMayor: Math.round(priceMayor * 100) / 100,
+          },
+        });
+      }
+
+      const log = await tx.priceAdjustmentLog.create({
+        data: {
+          filters: dto.filters as any,
+          adjustmentType: dto.adjustmentType,
+          gananciaPct: dto.gananciaPct,
+          gananciaMayorPct: dto.gananciaMayorPct,
+          productsAffected: products.length,
+          createdById: userId,
+        },
+      });
+
+      return { productsAffected: products.length, log };
+    }, { timeout: 60000 });
+  }
+
+  async getPriceAdjustmentHistory() {
+    const logs = await this.prisma.priceAdjustmentLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    // Enrich with user names
+    const userIds = [...new Set(logs.map((l) => l.createdById))];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u.name]));
+
+    return logs.map((log) => ({
+      ...log,
+      createdByName: userMap.get(log.createdById) || 'Desconocido',
+    }));
   }
 }

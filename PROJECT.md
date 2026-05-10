@@ -553,7 +553,7 @@ enum PaymentMethod {
 - Página /import — importación masiva con zona drag&drop, textarea para pegar JSON, botón Validar y botón Importar
 - Reporte de resultado: creados, saltados (ya existían), errores con detalle
 
-#### Sesión 5c — Ajuste masivo de precios
+#### Sesión 5c — Ajuste masivo de precios ✅
 **Backend:**
 - GET /products/price-adjustment?categoryId&subcategoryId&brandId&supplierId&costMin&costMax — lista productos con filtros combinables, retorna id, code, name, costUsd, gananciaPct, gananciaMayorPct, priceDetal, priceMayor
 - POST /products/price-adjustment — aplicar cambio masivo:

@@ -314,3 +314,34 @@
 - Endpoint /print-jobs/pending funcional
 - Print areas CRUD funcional
 - API compila sin errores
+
+## Sesion 5c — Ajuste masivo de precios (Completada)
+### Backend
+- **ProductsModule** — 3 nuevos endpoints:
+  - `GET /products/price-adjustment` — lista productos con filtros combinables (categoryId, subcategoryId, brandId, supplierId, costMin, costMax), maximo 500 resultados, incluye category/brand/supplier
+  - `POST /products/price-adjustment` — aplica ajuste masivo en transaccion Prisma:
+    - adjustmentType: REPLACE (reemplaza ganancia) o ADD (suma/resta al existente)
+    - Recalcula priceDetal y priceMayor con formula completa (costo × brega × ganancia × IVA)
+    - Crea PriceAdjustmentLog con filtros, tipo, valores y productos afectados
+    - Solo ADMIN (RolesGuard)
+    - Timeout transaccion 60s
+  - `GET /products/price-adjustment/history` — historial de ajustes con nombre de usuario enriquecido, ultimos 50 ordenados por fecha DESC
+- DTOs: `PriceAdjustmentQueryDto` (con Transform para parseo de query params), `ApplyPriceAdjustmentDto` (con ValidateNested para filtros)
+
+### Frontend
+- Pagina `/catalog/price-adjustment` — layout 3 paneles:
+  - Panel izquierdo — Filtros: selectores categoria (con subcategoria dinamica), marca, proveedor, rango costo USD, boton "Ver productos afectados"
+  - Panel central — Preview: tabla con codigo, nombre, categoria, marca, costo, ganancia%, precios; muestra nuevos valores en tiempo real (flechas con color verde/rojo); contador "X productos seran afectados"
+  - Panel derecho — Configuracion: toggle REPLACE/ADD, inputs ganancia detal% y mayor% con preview del primer producto, boton "Aplicar cambio"
+  - Modal de confirmacion: resumen de productos afectados, tipo de ajuste, valores, advertencia "no se puede deshacer", botones cancelar/confirmar
+  - Banner de exito con link a historial
+  - Seccion historial al final: tabla con fecha, filtros (texto legible), tipo (badge color), ganancia%, productos afectados, usuario
+- Sidebar actualizado: "Ajuste de precios" con icono SlidersHorizontal bajo seccion CATALOGO
+
+### Verificaciones
+- GET /products/price-adjustment?categoryId=HER retorna 7 productos con todos los campos requeridos
+- POST /products/price-adjustment REPLACE gananciaPct=45 → 7 productos actualizados, precios recalculados correctamente
+- Verificacion post-ajuste: gananciaPct cambio de 40% a 45%, priceDetal de Martillo cambio de $19.49 a $20.18
+- GET /products/price-adjustment/history retorna logs con createdByName "Administrador"
+- TypeScript compila sin errores en ambos apps (api y web)
+- API levanta correctamente con todos los endpoints mapeados

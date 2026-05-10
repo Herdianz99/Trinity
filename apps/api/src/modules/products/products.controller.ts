@@ -1,10 +1,16 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { UserRole } from '@prisma/client';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
+import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
+import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -26,6 +32,26 @@ export class ProductsController {
   @Get('search')
   search(@Query('q') q: string) {
     return this.productsService.search(q);
+  }
+
+  @Get('price-adjustment')
+  findForPriceAdjustment(@Query() query: PriceAdjustmentQueryDto) {
+    return this.productsService.findForPriceAdjustment(query);
+  }
+
+  @Post('price-adjustment')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  applyPriceAdjustment(
+    @Body() dto: ApplyPriceAdjustmentDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.productsService.applyPriceAdjustment(dto, userId);
+  }
+
+  @Get('price-adjustment/history')
+  getPriceAdjustmentHistory() {
+    return this.productsService.getPriceAdjustmentHistory();
   }
 
   @Get(':id')
