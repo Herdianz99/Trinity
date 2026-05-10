@@ -15,6 +15,9 @@ import { InventoryCountsModule } from './modules/inventory-counts/inventory-coun
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module
     StockMovementsModule,
     PurchaseOrdersModule,
     ExchangeRateModule,
+    CustomersModule,
+    CashRegistersModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {}

@@ -25,6 +25,10 @@ import {
   Activity,
   Building2,
   AlertTriangle,
+  Monitor,
+  Clock,
+  FileText,
+  UserCheck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -49,7 +53,10 @@ const navItems: NavItem[] = [
   { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={20} /> },
   { label: 'Ordenes de Compra', href: '/purchases', icon: <ShoppingCart size={20} />, section: 'COMPRAS' },
   { label: 'Sugerencias Reorden', href: '/purchases/reorder', icon: <AlertTriangle size={20} /> },
-  { label: 'Ventas', href: '/sales', icon: <Receipt size={20} />, section: 'VENTAS' },
+  { label: 'POS', href: '/sales/pos', icon: <Monitor size={20} />, section: 'VENTAS' },
+  { label: 'Pre-facturas', href: '/sales/pending', icon: <Clock size={20} /> },
+  { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={20} /> },
+  { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={20} /> },
 ];
 
 interface SidebarProps {

@@ -156,3 +156,90 @@
 - `GET /exchange-rate/by-date?date=2026-05-10` retorna la tasa correcta
 - `GET /exchange-rate/fetch-bcv` endpoint funciona (retorna null si BCV no disponible)
 - Historial muestra todas las tasas registradas ordenadas desc
+
+## Sesion 5 — Ventas y POS (Completada)
+### Schema Prisma
+- Enums: `CustomerType`, `SessionStatus`, `InvoiceStatus`, `InvoiceType`, `PaymentMethod`, `ReceivableType`, `ReceivableStatus`
+- Modelos: `Customer`, `CashRegister`, `CashSession`, `Invoice`, `InvoiceItem`, `Payment`, `Receivable`
+- Migracion: `20260510020000_add_receivable`
+
+### Backend
+- **CustomersModule**:
+  - `GET /customers` — lista con filtros: search, isActive, page, limit
+  - `GET /customers/:id` — detalle con ultimas 10 facturas, receivables pendientes, deuda y credito disponible calculados
+  - `POST /customers` — crear con name, rif, phone, email, address, type, creditLimit, creditDays
+  - `PATCH /customers/:id` — editar cualquier campo
+  - `DELETE /customers/:id` — soft delete (solo si no tiene facturas activas)
+
+- **CashRegistersModule**:
+  - `GET /cash-registers` — lista de cajas con sesion activa
+  - `GET /cash-registers/active-session` — sesion activa del usuario actual
+  - `POST /cash-registers/:id/open` — abrir turno con openingBalance, valida que no haya sesion activa
+  - `POST /cash-registers/:id/close` — cerrar turno con resumen de ventas del turno desglosado por metodo de pago
+
+- **InvoicesModule**:
+  - `GET /invoices` — lista con filtros: status, customerId, cashRegisterId, from, to, page, limit (usa setUTCHours)
+  - `GET /invoices/pending` — pre-facturas con status PENDING
+  - `GET /invoices/:id` — detalle completo con items, pagos, cliente y receivables
+  - `POST /invoices` — crear factura:
+    - Obtiene tasa del dia de ExchangeRate (error 400 si no existe)
+    - Calcula subtotalUsd, IVA desglosado por tipo, totalUsd, totalBs
+    - Genera numero con SELECT FOR UPDATE: FAC-{code}-{year}-{correlativo8}
+    - SELLER crea → status PENDING; CASHIER/ADMIN → status DRAFT
+  - `PATCH /invoices/:id/pay` — cobro completo en transaccion:
+    - Valida suma de pagos >= totalUsd (tolerancia 0.01)
+    - Si isCredit → valida creditAuthPassword contra hash bcrypt, verifica cupo
+    - Cashea/Crediagro → crea Receivable tipo FINANCING_PLATFORM
+    - isCredit → crea Receivable tipo CUSTOMER_CREDIT con dueDate
+    - Descuenta stock por cada item del almacen por defecto
+    - Crea StockMovements tipo SALE
+    - Status final: PAID o CREDIT
+  - `PATCH /invoices/:id/cancel` — solo ADMIN/SUPERVISOR, solo PENDING/DRAFT
+  - `GET /invoices/:id/pdf` — genera PDF con pdfkit
+
+- **InvoicePdfService**: genera PDF A4 con:
+  - Header: nombre empresa, RIF, direccion, telefono
+  - Numero de factura, numero de control, fecha, tasa del dia
+  - Datos del cliente
+  - Tabla de items: producto, cantidad, precio unitario, tipo IVA, total
+  - Desglose IVA por tipo, subtotal, total USD, total Bs
+  - Metodos de pago utilizados
+  - Footer con datos empresa
+
+### Frontend
+- Seccion VENTAS en sidebar con 4 items: POS, Pre-facturas, Facturas, Clientes
+
+- Pagina `/sales/pos` — POS principal:
+  - Layout dos paneles: izquierdo catalogo/busqueda, derecho carrito
+  - Busqueda full-text de productos con debounce 300ms
+  - Boton escaner codigo de barras con BarcodeDetector API
+  - Resultados: codigo, nombre, precio USD/Bs, stock
+  - Click agrega al carrito con cantidades editables
+  - Selector de cliente con busqueda
+  - Solo ADMIN puede modificar precio unitario
+  - Desglose IVA por tipo en tiempo real
+  - Boton "Guardar pre-factura" (SELLER) o "Cobrar" (CASHIER/ADMIN)
+  - Carga pre-factura existente via query param ?invoiceId=
+
+- Modal de cobro:
+  - Total USD y Bs con tasa del dia
+  - 8 metodos de pago: Efectivo USD/Bs, Punto de Venta, Pago Movil, Zelle, Transferencia, Cashea, Crediagro
+  - Mezcla multiples metodos
+  - Conversion automatica USD<->Bs segun metodo
+  - Pendiente por cobrar en tiempo real
+  - Toggle "Factura a credito" con clave de autorizacion y dias de credito
+
+- Pagina `/sales/pending` — Pre-facturas pendientes:
+  - Cards con numero, cliente, items resumidos, total, tiempo transcurrido
+  - Boton "Cobrar" redirige al POS con la pre-factura cargada
+  - Auto-refresh cada 30 segundos
+
+- Pagina `/sales/invoices` — Historial de facturas:
+  - Tabla con filtros: estado, rango de fechas
+  - Acciones: ver detalle, imprimir PDF, cancelar
+  - Modal detalle con items, totales y pagos
+
+- Pagina `/sales/customers` — Clientes:
+  - Tabla con busqueda, tipo, credito
+  - Modal crear/editar con todos los campos
+  - Vista detalle: datos, limite credito, deuda pendiente, credito disponible, ultimas facturas

@@ -95,6 +95,18 @@ enum PaymentMethod {
   CREDIAGRO
 }
 
+enum ReceivableType {
+  CUSTOMER_CREDIT
+  FINANCING_PLATFORM
+}
+
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
 // ============================================
 // CONFIG
 // ============================================
@@ -371,6 +383,7 @@ model Customer {
   creditDays  Int          @default(0)
   isActive    Boolean      @default(true)
   invoices    Invoice[]
+  receivables Receivable[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -433,6 +446,7 @@ model Invoice {
   notes          String?
   items          InvoiceItem[]
   payments       Payment[]
+  receivables    Receivable[]
   createdById    String
   sellerId       String?
   createdAt      DateTime      @default(now())
@@ -462,4 +476,27 @@ model Payment {
   exchangeRate Float
   reference    String?
   createdAt    DateTime      @default(now())
+}
+
+// ============================================
+// CUENTAS POR COBRAR
+// ============================================
+
+model Receivable {
+  id           String           @id @default(cuid())
+  type         ReceivableType
+  customerId   String?
+  customer     Customer?        @relation(fields: [customerId], references: [id])
+  platformName String?
+  invoiceId    String
+  invoice      Invoice          @relation(fields: [invoiceId], references: [id])
+  amountUsd    Float
+  amountBs     Float
+  exchangeRate Float
+  dueDate      DateTime?
+  status       ReceivableStatus @default(PENDING)
+  paidAt       DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }

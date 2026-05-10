@@ -17,7 +17,7 @@ Trinity es un ERP empresarial single-tenant para ferreterías venezolanas. Gesti
 | Base de datos | PostgreSQL 15 (Docker) | 5432 |
 | ORM | Prisma | — |
 | Caché | Redis 7 (Docker) | 6379 |
-| PDF facturas | @react-pdf/renderer | — |
+| PDF facturas | pdfkit (server-side) | — |
 | Búsqueda productos | PostgreSQL tsvector (full-text) | — |
 | Escáner código barras | @zxing/browser | — |
 | IA facturas compra | Anthropic Claude API (vision) | — |
@@ -597,7 +597,7 @@ enum PaymentMethod {
 - Cada caja tiene su secuencia independiente
 - Campo `fiscalNumber` separado en Invoice para el número de impresora fiscal
 
-**PDF:** @react-pdf/renderer para facturas A4 y formato 80mm.
+**PDF:** pdfkit (server-side) para facturas A4. Se genera desde el backend con GET /invoices/:id/pdf.
 
 ---
 
