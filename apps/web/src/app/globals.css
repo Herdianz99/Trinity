@@ -4,21 +4,34 @@
 
 @layer base {
   :root {
-    --bg-primary: #0a0f1a;
-    --bg-secondary: #111827;
-    --bg-card: #1a2332;
-    --bg-hover: #243044;
-    --border-color: #1e3a5f;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --accent: #22c55e;
-    --accent-hover: #16a34a;
-    --danger: #ef4444;
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 40% 10%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 90%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 142 71% 45%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
   }
 
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    @apply bg-background text-foreground;
   }
 }
 
