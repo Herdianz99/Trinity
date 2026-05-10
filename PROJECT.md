@@ -69,7 +69,7 @@ Precio Mayor Bs   = Precio Mayor USD × Tasa BCV
 - **GananciaPct%**: porcentaje por producto para precio detal
 - **GananciaMayorPct%**: porcentaje por producto para precio mayor
 - **IVA**: por producto — Exento (0%), Reducido (8%), General (16%), Especial (31%)
-- Solo ADMIN puede sobreescribir el precio final calculado
+- ADMIN o usuarios con permiso OVERRIDE_PRICE pueden sobreescribir el precio final en POS
 - Precios se recalculan automáticamente al cambiar costo (nueva compra) o brecha global
 
 ---
@@ -156,12 +156,26 @@ model User {
   isActive       Boolean   @default(true)
   mustChangePassword Boolean @default(true)
   lastLoginAt    DateTime?
+  permissions    UserPermission[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
 
 enum UserRole {
   ADMIN SUPERVISOR CASHIER SELLER WAREHOUSE BUYER ACCOUNTANT
+}
+
+model UserPermission {
+  id            String        @id @default(cuid())
+  userId        String
+  permissionKey PermissionKey
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  @@unique([userId, permissionKey])
+}
+
+enum PermissionKey {
+  OVERRIDE_PRICE
 }
 
 model PrintArea {
@@ -327,11 +341,11 @@ model PurchaseOrderItem {
 model Customer {
   id           String    @id @default(cuid())
   name         String
+  documentType String    @default("V")  // V, E, J, G, C, P
   rif          String?
   phone        String?
   email        String?
   address      String?
-  type         CustomerType @default(NATURAL)
   creditLimit  Float     @default(0)   // cupo en USD
   creditDays   Int       @default(0)
   isActive     Boolean   @default(true)
@@ -339,8 +353,6 @@ model Customer {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
-
-enum CustomerType { NATURAL JURIDICA }
 
 model CashRegister {
   id              String    @id @default(cuid())

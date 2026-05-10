@@ -345,3 +345,44 @@
 - GET /products/price-adjustment/history retorna logs con createdByName "Administrador"
 - TypeScript compila sin errores en ambos apps (api y web)
 - API levanta correctamente con todos los endpoints mapeados
+
+## Sesion 6 — POS Improvements (Completada)
+### Migracion Prisma
+- Enum `PermissionKey` con valor `OVERRIDE_PRICE`
+- Modelo `UserPermission`: id, userId, permissionKey, createdAt, @@unique([userId, permissionKey])
+- Customer: eliminado enum `CustomerType`, campo `type` reemplazado por `documentType String @default("V")` (V, E, J, G, C, P)
+- Migracion: `20260510140000_add_override_price_permission`
+
+### Backend
+- **AuthModule**:
+  - `GET /auth/me` ahora retorna `permissions: string[]` del usuario
+  - Fix: `@CurrentUser('id')` en vez de `@CurrentUser('sub')` (JWT strategy retorna `{id, email, role}`)
+- **UsersModule**:
+  - `PATCH /users/:id/permissions` — asignar permisos granulares (ADMIN-only)
+  - `findAll()` y `findOne()` incluyen permissions en response
+- **CustomersModule**:
+  - DTO actualizado: `documentType` con `@IsIn(['V', 'E', 'J', 'G', 'C', 'P'])` reemplaza `type`
+- **InvoicesModule**:
+  - `GET /invoices/pending?today=true` — filtra por fecha UTC del dia actual
+  - Response incluye `customer.documentType`, primeros 3 items, y `totalItems` count
+
+### Frontend
+- Pagina `/sales/pos` — mejoras completas:
+  - **Modal cliente inline**: crear/editar cliente directamente desde POS con selector documentType (V/E/J/G/C/P)
+  - **Override de precio**: boton ⋯ en items del carrito, edicion inline con badge "Precio modificado", solo visible si `canOverridePrice` (ADMIN o permiso OVERRIDE_PRICE)
+  - **Dos botones de guardado**: "En espera" (guarda sin limpiar carrito, status DRAFT) y "Pre-factura" (guarda y limpia, status depende de rol)
+  - **Drawer de facturas pendientes**: panel derecho con polling 30s, muestra facturas PENDING de hoy, acciones Retomar (carga en POS) y Cancelar (con confirmacion)
+  - **Badge contador**: boton "En espera" en header muestra count de pendientes
+  - Fetch de permisos del usuario via `/auth/me` al cargar
+- Pagina `/sales/customers` — actualizada:
+  - Selector documentType (V/E/J/G/C/P) reemplaza selector tipo NATURAL/JURIDICA
+  - Display en tabla con formato "{documentType}-{rif}"
+
+### Verificaciones
+- Login retorna permissions correctamente
+- `PATCH /users/:id/permissions` asigna OVERRIDE_PRICE
+- `GET /auth/me` retorna profile con permissions array
+- Customers CRUD con documentType funciona (crear J, actualizar a V)
+- `GET /invoices/pending?today=true` filtra correctamente
+- Invoices se crean con customer asociado y numero correlativo
+- TypeScript compila sin errores
