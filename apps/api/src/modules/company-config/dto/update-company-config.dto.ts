@@ -56,4 +56,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   quotationValidityDays?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  overdueWarningDays?: number;
 }

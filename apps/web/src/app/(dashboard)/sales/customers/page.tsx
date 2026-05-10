@@ -11,6 +11,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
+  HandCoins,
 } from 'lucide-react';
 
 interface Customer {
@@ -61,6 +63,12 @@ export default function CustomersPage() {
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [detailCustomer, setDetailCustomer] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [customerReceivables, setCustomerReceivables] = useState<any>(null);
+  const [payingReceivableId, setPayingReceivableId] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
+  const [payReference, setPayReference] = useState('');
+  const [processingPay, setProcessingPay] = useState(false);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -108,12 +116,45 @@ export default function CustomersPage() {
 
   async function openDetail(id: string) {
     try {
-      const res = await fetch(`/api/proxy/customers/${id}`);
-      const data = await res.json();
+      const [custRes, cxcRes] = await Promise.all([
+        fetch(`/api/proxy/customers/${id}`),
+        fetch(`/api/proxy/receivables/customer/${id}`),
+      ]);
+      const data = await custRes.json();
+      const cxcData = await cxcRes.json();
       setDetailCustomer(data);
+      setCustomerReceivables(cxcData);
       setDetailOpen(true);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar detalle' });
+    }
+  }
+
+  async function handlePayReceivable() {
+    if (!payingReceivableId) return;
+    setProcessingPay(true);
+    try {
+      const res = await fetch(`/api/proxy/receivables/${payingReceivableId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amountUsd: parseFloat(payAmount),
+          method: payMethod,
+          reference: payReference || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error');
+      }
+      setPayingReceivableId(null);
+      setMessage({ type: 'success', text: 'Cobro registrado' });
+      // Refresh detail
+      if (detailCustomer?.id) openDetail(detailCustomer.id);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setProcessingPay(false);
     }
   }
 
@@ -366,6 +407,75 @@ export default function CustomersPage() {
                   <p className={`text-lg font-bold ${detailCustomer.availableCredit > 0 ? 'text-green-400' : 'text-red-400'}`}>${detailCustomer.availableCredit?.toFixed(2)}</p>
                 </div>
               </div>
+
+              {/* Estado de cuenta CxC */}
+              {customerReceivables && (
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <HandCoins size={16} /> Estado de Cuenta
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="card p-3 text-center">
+                      <p className="text-xs text-slate-500">Deuda Total</p>
+                      <p className="text-lg font-bold text-amber-400">${customerReceivables.totalDebt?.toFixed(2)}</p>
+                    </div>
+                    <div className="card p-3 text-center">
+                      <p className="text-xs text-slate-500">Vencido</p>
+                      <p className="text-lg font-bold text-red-400">${customerReceivables.totalOverdue?.toFixed(2)}</p>
+                    </div>
+                    <div className="card p-3 text-center">
+                      <p className="text-xs text-slate-500">Credito Disponible</p>
+                      <p className={`text-lg font-bold ${customerReceivables.availableCredit > 0 ? 'text-green-400' : 'text-red-400'}`}>${customerReceivables.availableCredit?.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  {customerReceivables.receivables?.filter((r: any) => r.status !== 'PAID').length > 0 && (
+                    <div className="space-y-2">
+                      {customerReceivables.receivables.filter((r: any) => r.status !== 'PAID').map((r: any) => (
+                        <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${r.status === 'OVERDUE' ? 'bg-red-500/10 border border-red-500/20' : 'bg-slate-700/30'}`}>
+                          <div>
+                            <span className="text-sm text-white font-mono">{r.invoice.number}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ml-2 border ${
+                              r.status === 'OVERDUE' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
+                              r.status === 'PARTIAL' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
+                              'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                            }`}>{r.status === 'OVERDUE' ? 'Vencido' : r.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}</span>
+                            {r.dueDate && <span className="text-xs text-slate-500 ml-2">Vence: {new Date(r.dueDate).toLocaleDateString()}</span>}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-slate-300">Saldo: ${r.balanceUsd?.toFixed(2)}</span>
+                            {payingReceivableId === r.id ? (
+                              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                <input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                                  className="w-24 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200" placeholder="Monto" />
+                                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+                                  className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200">
+                                  <option value="TRANSFERENCIA">Transf.</option>
+                                  <option value="CASH_USD">Efect. USD</option>
+                                  <option value="CASH_BS">Efect. Bs</option>
+                                  <option value="PAGO_MOVIL">Pago movil</option>
+                                  <option value="ZELLE">Zelle</option>
+                                </select>
+                                <button onClick={handlePayReceivable} disabled={processingPay}
+                                  className="px-2 py-1 rounded bg-green-600 text-white text-xs hover:bg-green-700 disabled:opacity-50">
+                                  {processingPay ? '...' : 'OK'}
+                                </button>
+                                <button onClick={() => setPayingReceivableId(null)} className="text-slate-400 hover:text-slate-200">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={e => { e.stopPropagation(); setPayingReceivableId(r.id); setPayAmount(r.balanceUsd?.toFixed(2)); setPayMethod('TRANSFERENCIA'); setPayReference(''); }}
+                                className="p-1 rounded text-green-400 hover:bg-green-500/10" title="Cobrar">
+                                <DollarSign size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {detailCustomer.invoices?.length > 0 && (
                 <div>

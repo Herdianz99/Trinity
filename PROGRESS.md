@@ -577,3 +577,57 @@
 - POST /cash-sessions/:id/close cierra sesion con closingBalance, calcula diferencia=$0 (cuadra)
 - GET /cash-sessions retorna historial con cashRegister, openedBy, closedBy
 - TypeScript compila sin errores en ambos apps (API y Web)
+
+## Sesion 7 — Cuentas por Cobrar (Completada)
+### Migracion Prisma
+- Receivable: agregado campo `paidAmountUsd Float @default(0)`
+- Modelo `ReceivablePayment`: id, receivableId, amountUsd, amountBs, exchangeRate, method, reference, cashSessionId, notes, createdById, createdAt
+- CompanyConfig: agregado `overdueWarningDays Int @default(3)`
+- Migracion: `20260510200000_update_receivables_module`
+
+### Backend
+- **ReceivablesModule** completo con controller, service, cron:
+  - `GET /receivables` — lista con filtros: type, status, customerId, platformName, from, to, overdue, page, limit. Retorna balanceUsd calculado
+  - `GET /receivables/summary` — resumen global: totalPendingUsd, totalOverdueUsd, byPlatform (Cashea/Crediagro), byStatus
+  - `GET /receivables/:id` — detalle con historial de pagos completo
+  - `POST /receivables/:id/pay` — registrar cobro parcial o total en transaccion:
+    - Calcula amountBs con tasa del dia
+    - Crea ReceivablePayment
+    - Actualiza paidAmountUsd
+    - Si completado → status PAID + paidAt
+    - Si parcial → status PARTIAL
+    - Valida que monto no exceda saldo
+  - `GET /receivables/customer/:customerId` — estado de cuenta: deuda total, vencida, credito disponible, lista de CxC
+- **ReceivablesCronService**: cron diario a las 00:01 — marca como OVERDUE receivables con dueDate < hoy y status PENDING/PARTIAL
+- CompanyConfig DTO: agregado campo `overdueWarningDays`
+
+### Frontend
+- **Sidebar**: nueva seccion CXC con 2 items (Cuentas por cobrar, Por plataforma)
+- **Pagina `/receivables`** — Cuentas por cobrar:
+  - 4 tarjetas resumen: Total por cobrar (azul), Vencidas (rojo), Cashea pendiente (verde), Crediagro pendiente (verde)
+  - Filtros: tipo, estado, desde, hasta, toggle solo vencidas
+  - Tabla con columnas: Tipo (badge), Cliente/Plataforma, Factura, Monto USD, Cobrado USD, Saldo USD, Vence, Estado, Acciones
+  - Badges de estado: Pendiente (amarillo), Parcial (azul), Pagado (verde), Vencido (rojo)
+  - Filas vencidas con fondo rojo, proximas a vencer con fondo amarillo (segun overdueWarningDays)
+  - Modal "Registrar cobro": info CxC, monto editable, metodo pago, referencia, tasa del dia, monto Bs
+  - Modal "Ver detalle": info completa + tabla historial de pagos (fecha, USD, Bs, metodo, ref)
+  - Paginacion
+- **Pagina `/receivables/platforms`** — Por plataforma:
+  - Tabs: Cashea | Crediagro
+  - Tarjetas resumen por plataforma (pendiente, cobros completados)
+  - Tabla filtrada por plataforma con acciones cobrar/detalle
+  - Modales de cobro y detalle
+- **Pagina `/sales/customers`** — Estado de cuenta agregado:
+  - Seccion "Estado de Cuenta" en modal detalle del cliente
+  - 3 tarjetas: Deuda Total, Vencido, Credito Disponible
+  - Lista de CxC pendientes con boton "Cobrar" inline (expansion con input monto, metodo, boton confirmar)
+- **Pagina `/config`** — nuevo campo:
+  - "Alerta de vencimiento CxC (dias antes)" con descripcion
+
+### Verificaciones
+- Flujo credito completo: crear factura credito → CxC generada (PENDING, $13.95) → cobro parcial ($6.97, PARTIAL) → cobro total ($6.98, PAID, balance=$0) → credito disponible restaurado ($500)
+- Flujo Cashea completo: factura pagada con Cashea → CxC a plataforma generada ($4.65) → cobro registrado → status PAID
+- GET /receivables/summary retorna totalPendingUsd y byPlatform correctos
+- GET /receivables/customer/:id retorna estado de cuenta con deuda y credito
+- Detalle con historial de 2 pagos (TRANSFERENCIA ref=REF-001, PAGO_MOVIL ref=REF-002)
+- TypeScript compila sin errores en ambos apps (API y Web)

@@ -35,6 +35,8 @@ import {
   FileCheck,
   Banknote,
   History,
+  HandCoins,
+  CreditCard,
 } from 'lucide-react';
 
 interface NavItem {
@@ -64,6 +66,8 @@ const navItems: NavItem[] = [
   { label: 'Pre-facturas', href: '/sales/pending', icon: <Clock size={20} /> },
   { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={20} /> },
   { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={20} /> },
+  { label: 'Cuentas por cobrar', href: '/receivables', icon: <HandCoins size={20} />, section: 'CXC' },
+  { label: 'Por plataforma', href: '/receivables/platforms', icon: <CreditCard size={20} /> },
   { label: 'Gestion de cajas', href: '/cash', icon: <Banknote size={20} />, section: 'CAJA' },
   { label: 'Sesiones', href: '/cash/sessions', icon: <History size={20} /> },
   { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={20} />, section: 'COTIZACIONES' },

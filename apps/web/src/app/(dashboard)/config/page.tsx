@@ -15,6 +15,7 @@ interface CompanyConfig {
   defaultWarehouseId: string;
   invoicePrefix: string;
   quotationValidityDays: number;
+  overdueWarningDays: number;
 }
 
 export default function ConfigPage() {
@@ -30,6 +31,7 @@ export default function ConfigPage() {
     defaultWarehouseId: '',
     invoicePrefix: 'FAC',
     quotationValidityDays: 30,
+    overdueWarningDays: 3,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,6 +92,7 @@ export default function ConfigPage() {
           defaultWarehouseId: data.defaultWarehouseId || '',
           invoicePrefix: data.invoicePrefix || 'FAC',
           quotationValidityDays: data.quotationValidityDays || 30,
+          overdueWarningDays: data.overdueWarningDays || 3,
         });
       }
     } catch {
@@ -135,6 +138,7 @@ export default function ConfigPage() {
           defaultGananciaMayorPct: Number(config.defaultGananciaMayorPct),
           invoicePrefix: config.invoicePrefix,
           quotationValidityDays: Number(config.quotationValidityDays),
+          overdueWarningDays: Number(config.overdueWarningDays),
         }),
       });
 
@@ -391,6 +395,19 @@ export default function ConfigPage() {
                   onChange={(e) => handleChange('quotationValidityDays', e.target.value)}
                   className="input-field"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Alerta de vencimiento CxC (dias antes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={config.overdueWarningDays}
+                  onChange={(e) => handleChange('overdueWarningDays', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">Dias antes del vencimiento para mostrar alerta amarilla</p>
               </div>
             </div>
           </div>

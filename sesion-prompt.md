@@ -1,133 +1,166 @@
-Guarda esto en tu session-prompt.md y dáselo a Claude Code:
-
-
 Lee el PROJECT.md y el PROGRESS.md antes de escribir cualquier línea de código.
-Vamos a implementar la Sesión 6 de Trinity ERP: Caja y Arqueo.
+Vamos a implementar la Sesión 7 de Trinity ERP: Cuentas por Cobrar (CxC).
 Antes de escribir cualquier código consulta las skills disponibles especialmente frontend-design.
-CONTEXTO IMPORTANTE — Cómo trabajan con las cajas:
+CONTEXTO:
+El modelo Receivable ya existe en el schema desde la Sesión 5. Las CxC se generan automáticamente desde:
 
-Cualquier usuario puede abrir, usar y cerrar cualquier caja sin restricción de rol por ahora
-Las cajas no tienen dueño — son compartidas, varios usuarios pueden usar la misma caja simultáneamente
-Al entrar al POS, si el usuario tiene acceso a ese módulo, siempre se le pregunta qué caja va a usar mediante un modal
-El usuario puede cambiar de caja en cualquier momento desde el POS sin cerrar turno
-Las pre-facturas y cotizaciones creadas por vendedores no necesitan caja hasta que el cajero las cobra
-Las 3 cajas del negocio son: "Caja Notas" (código "01"), "Fiscal 1" (código "02"), "Fiscal 2" (código "03")
+Facturas a crédito al cliente → type = CUSTOMER_CREDIT
+Pagos con Cashea o Crediagro → type = FINANCING_PLATFORM, platformName = "Cashea" o "Crediagro"
 
-PARTE 1 — Migración de Prisma
-El modelo CashRegister ya existe. Verificar que tiene estos campos y agregar los que falten:
-prismamodel CashRegister {
-  id                String        @id @default(cuid())
-  code              String        @unique  // "01", "02", "03"
-  name              String        // "Caja Notas", "Fiscal 1", "Fiscal 2"
-  lastInvoiceNumber Int           @default(0)
-  isActive          Boolean       @default(true)
-  isFiscal          Boolean       @default(false)  // si tiene máquina fiscal
-  sessions          CashSession[]
-  invoices          Invoice[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+PARTE 1 — Verificar y completar el modelo Receivable
+Verificar que el modelo Receivable tiene todos estos campos y agregar los que falten:
+prismamodel Receivable {
+  id            String           @id @default(cuid())
+  type          ReceivableType
+  customerId    String?
+  customer      Customer?        @relation(...)
+  platformName  String?
+  invoiceId     String
+  invoice       Invoice          @relation(...)
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  dueDate       DateTime?
+  status        ReceivableStatus @default(PENDING)
+  paidAmountUsd Float            @default(0)
+  paidAt        DateTime?
+  notes         String?
+  payments      ReceivablePayment[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 }
 
-model CashSession {
-  id               String        @id @default(cuid())
-  cashRegisterId   String
-  cashRegister     CashRegister  @relation(...)
-  openedById       String
-  openedBy         User          @relation("SessionOpenedBy", ...)
-  closedById       String?
-  closedBy         User?         @relation("SessionClosedBy", ...)
-  openingBalance   Float         @default(0)
-  closingBalance   Float?
-  status           SessionStatus @default(OPEN)
-  notes            String?
-  openedAt         DateTime      @default(now())
-  closedAt         DateTime?
+model ReceivablePayment {
+  id            String     @id @default(cuid())
+  receivableId  String
+  receivable    Receivable @relation(...)
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  method        PaymentMethod
+  reference     String?
+  cashSessionId String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime   @default(now())
 }
 
-enum SessionStatus { OPEN CLOSED }
-Si ya existen estos modelos verificar que tengan todos los campos. Agregar solo lo que falte.
-Corre migración con nombre update_cash_register_sessions.
-Actualizar seed con las 3 cajas:
+enum ReceivableType    { CUSTOMER_CREDIT FINANCING_PLATFORM }
+enum ReceivableStatus  { PENDING PARTIAL PAID OVERDUE }
+Corre migración con nombre update_receivables_module.
+Agregar a CompanyConfig:
 
-{ code: "01", name: "Caja Notas", isFiscal: false }
-{ code: "02", name: "Fiscal 1", isFiscal: true }
-{ code: "03", name: "Fiscal 2", isFiscal: true }
+overdueWarningDays Int @default(3) — días antes del vencimiento para mostrar alerta
 
 PARTE 2 — Backend (NestJS)
-Actualizar CashRegistersModule:
+Nuevo ReceivablesModule completo:
 
-GET /cash-registers — lista todas las cajas con su sesión activa si tiene una
-GET /cash-registers/open — solo cajas que tienen al menos una sesión OPEN
-GET /cash-registers/:id — detalle con sesión activa y resumen de ventas del día
-POST /cash-registers/:id/open-session — abrir nueva sesión:
+GET /receivables — lista con filtros:
 
-Body: { openingBalance, notes? }
-Cualquier usuario puede abrir sesión en cualquier caja
-Una caja puede tener múltiples sesiones abiertas simultáneamente
-Retorna la sesión creada
-
-
-POST /cash-sessions/:id/close — cerrar sesión específica:
-
-Body: { closingBalance, notes? }
-Calcula el resumen de la sesión: ventas por método de pago, total esperado vs físico
-Marca la sesión como CLOSED
+?type — CUSTOMER_CREDIT o FINANCING_PLATFORM
+?status — PENDING, PARTIAL, PAID, OVERDUE
+?customerId
+?platformName — "Cashea", "Crediagro"
+?from&to — por fecha de creación, usar setUTCHours
+?overdue=true — solo vencidas (dueDate < hoy y status != PAID)
+?page&limit
+Retorna junto con cada receivable: saldo pendiente = amountUsd - paidAmountUsd
 
 
-GET /cash-sessions/:id/summary — resumen detallado de una sesión:
+GET /receivables/summary — resumen global:
+json{
+  "totalPendingUsd": 0,
+  "totalOverdueUsd": 0,
+  "byPlatform": [{ "platformName": "Cashea", "totalUsd": 0, "count": 0 }],
+  "byStatus": [{ "status": "PENDING", "count": 0, "totalUsd": 0 }]
+}
 
-Retorna: { openingBalance, totalSalesByMethod: [{ method, count, totalUsd, totalBs }], totalUsd, totalBs, invoiceCount, closingBalance?, difference? }
-Agrupa todos los pagos de facturas PAID vinculadas a esta caja durante el período de la sesión
+GET /receivables/:id — detalle con historial de pagos y datos del cliente/plataforma
+POST /receivables/:id/pay — registrar cobro parcial o total:
+
+Body: { amountUsd, method, reference?, cashSessionId?, notes? }
+Calcular amountBs = amountUsd × tasa del día
+Crear ReceivablePayment
+Actualizar paidAmountUsd += amountUsd
+Si paidAmountUsd >= amountUsd → status = PAID, paidAt = now()
+Si paidAmountUsd > 0 && < amountUsd → status = PARTIAL
+Actualizar el cupo de crédito del cliente si type = CUSTOMER_CREDIT
+Todo en transacción Prisma
 
 
+GET /receivables/customer/:customerId — estado de cuenta del cliente:
+
+Lista de todas sus CxC con saldo pendiente
+Total adeudado, total vencido, crédito disponible
+
+
+
+Cron job diario a las 00:01:
+
+Marcar como OVERDUE todas las Receivables donde dueDate < hoy y status = PENDING o PARTIAL
 
 PARTE 3 — Frontend (Next.js)
-Modal de selección de caja en el POS:
+Nueva sección en sidebar: CxC con items:
 
-Al navegar a /sales/pos, antes de mostrar el POS verificar si hay una caja seleccionada en localStorage (selectedCashRegisterId)
-Si no hay caja seleccionada → mostrar modal fullscreen (no se puede cerrar con Escape ni click fuera):
+Cuentas por cobrar → /receivables
+Por plataforma → /receivables/platforms
 
-Título: "Selecciona una caja para comenzar"
-Lista de cajas ABIERTAS (con sesión activa) — card por caja con: nombre, código, si es fiscal, cuántas sesiones activas tiene, botón "Usar esta caja"
-Sección separada "Cajas cerradas" — cajas sin sesión activa con botón "Abrir caja" que abre un mini modal para ingresar el fondo inicial
-Al seleccionar caja → guardar en localStorage y mostrar el POS
+Página /receivables — Cuentas por cobrar:
+Header con 4 tarjetas resumen:
 
+Total por cobrar (USD) — azul
+Vencidas (USD) — rojo con ícono de alerta
+Cashea pendiente — verde
+Crediagro pendiente — verde
 
-En el header del POS mostrar: nombre de la caja activa + botón "Cambiar caja" que abre el mismo modal
+Filtros: tipo, estado, cliente/plataforma, rango de fechas, toggle "Solo vencidas"
+Tabla con columnas: Tipo (badge CRÉDITO/CASHEA/CREDIAGRO), Cliente o Plataforma, Factura vinculada, Monto USD, Cobrado USD, Saldo USD, Vence, Estado, Acciones
+Badge de estado:
 
-Nueva sección CAJA en sidebar con items:
+Amarillo PENDING
+Azul PARTIAL
+Verde PAID
+Rojo OVERDUE
 
-Gestión de cajas → /cash
-Sesiones → /cash/sessions
+Fila vencida → fondo rojo suave
+Fila próxima a vencer (dentro de overdueWarningDays) → fondo amarillo suave
+Acciones por fila:
 
-Página /cash — Gestión de cajas:
+"Registrar cobro" (si no está PAID) → abre modal de cobro
+"Ver detalle" → abre modal con historial de pagos
 
-Tabla de cajas: nombre, código, tipo (Fiscal/Notas), sesiones activas, estado
-Por cada caja: botón "Abrir sesión" (si no tiene sesión o quiere abrir otra) y botón "Ver sesiones"
-Modal abrir sesión: campo monto de apertura en USD y notas opcionales
+Modal "Registrar cobro":
 
-Página /cash/sessions — Historial de sesiones:
+Muestra: cliente/plataforma, factura, monto total, ya cobrado, saldo pendiente
+Campo monto a cobrar (pre-llenado con saldo pendiente, editable para cobros parciales)
+Selector método de pago
+Campo referencia opcional
+Tasa del día (solo lectura)
+Monto en Bs calculado automáticamente
+Botón "Confirmar cobro"
 
-Filtros: caja, estado (OPEN/CLOSED), rango de fechas
-Tabla: caja, abierta por, fecha apertura, fecha cierre, monto apertura, monto cierre, diferencia, estado
-Badge verde OPEN, gris CLOSED
-Botón "Ver arqueo" por sesión → abre modal de detalle
+Modal "Ver detalle":
 
-Modal de arqueo (detalle de sesión):
+Info del receivable (cliente, factura, fechas, montos)
+Tabla de pagos recibidos: fecha, monto USD, monto Bs, método, referencia
+Total cobrado y saldo restante
 
-Header: nombre caja, período (desde → hasta o "Abierta actualmente")
-Monto de apertura
-Tabla de ventas por método de pago: Método, Transacciones, Total USD, Total Bs
-Total general USD y Bs
-Si sesión cerrada: monto físico ingresado, diferencia (verde si cuadra, rojo si hay diferencia)
-Si sesión abierta: campo para ingresar monto físico + botón "Cerrar sesión"
-Últimas 10 facturas de la sesión
+Página /receivables/platforms — Por plataforma:
+
+Tabs: Cashea | Crediagro
+Por cada plataforma: total pendiente, total cobrado, tabla de CxC filtrada
+Útil para cuando la plataforma hace el pago mensual — registrar un solo cobro que cubra múltiples facturas
+
+Estado de cuenta en /sales/customers/:id:
+
+Agregar sección "Estado de cuenta" en la vista detalle del cliente
+Muestra: crédito total, crédito usado, crédito disponible
+Lista de CxC pendientes con botón "Cobrar"
 
 Al terminar:
 
-Actualizar seed para crear las 3 cajas con sus datos correctos
-Verificar flujo completo: entrar al POS → modal de selección → abrir sesión nueva → facturar → ver arqueo → cerrar sesión
-Verificar que el número de factura usa el código de la caja seleccionada
-Haz commit con el mensaje feat: Session 6 - cash register selection in POS, sessions and arqueo
+Verifica el flujo completo: crear factura a crédito → ver CxC generada → registrar cobro parcial → registrar cobro total → verificar que el cupo del cliente se actualiza
+Verifica el flujo Cashea: factura con pago Cashea → ver CxC a plataforma → registrar cobro
+Haz commit con el mensaje feat: Session 7 - accounts receivable with partial payments and platform tracking
 Haz push a GitHub
 Actualiza el PROGRESS.md y el PROJECT.md

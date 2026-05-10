@@ -124,6 +124,7 @@ model CompanyConfig {
   invoicePrefix          String   @default("FAC")
   creditAuthPassword     String?
   quotationValidityDays  Int      @default(30)
+  overdueWarningDays     Int      @default(3)
   updatedAt              DateTime @updatedAt
 }
 
@@ -524,22 +525,39 @@ model Payment {
 // ============================================
 
 model Receivable {
-  id           String           @id @default(cuid())
-  type         ReceivableType
-  customerId   String?
-  customer     Customer?        @relation(fields: [customerId], references: [id])
-  platformName String?
-  invoiceId    String
-  invoice      Invoice          @relation(fields: [invoiceId], references: [id])
-  amountUsd    Float
-  amountBs     Float
-  exchangeRate Float
-  dueDate      DateTime?
-  status       ReceivableStatus @default(PENDING)
-  paidAt       DateTime?
-  notes        String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id            String              @id @default(cuid())
+  type          ReceivableType
+  customerId    String?
+  customer      Customer?           @relation(fields: [customerId], references: [id])
+  platformName  String?
+  invoiceId     String
+  invoice       Invoice             @relation(fields: [invoiceId], references: [id])
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  dueDate       DateTime?
+  status        ReceivableStatus    @default(PENDING)
+  paidAmountUsd Float               @default(0)
+  paidAt        DateTime?
+  notes         String?
+  payments      ReceivablePayment[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+model ReceivablePayment {
+  id            String        @id @default(cuid())
+  receivableId  String
+  receivable    Receivable    @relation(fields: [receivableId], references: [id])
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  method        PaymentMethod
+  reference     String?
+  cashSessionId String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime      @default(now())
 }
 
 // ============================================
