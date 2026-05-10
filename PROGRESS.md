@@ -386,3 +386,37 @@
 - `GET /invoices/pending?today=true` filtra correctamente
 - Invoices se crean con customer asociado y numero correlativo
 - TypeScript compila sin errores
+
+## Sesion 6b — POS Buttons Simplification & Invoice Lock System (Completada)
+### Migracion Prisma
+- Invoice: campos `lockedById String?` y `lockedAt DateTime?`
+- Migracion: `20260510160000_add_invoice_lock`
+
+### Backend
+- **InvoicesModule**:
+  - `PATCH /invoices/:id/retake` — bloquea factura para el usuario actual. Si ya esta bloqueada por otro (y no expirada), retorna 409 Conflict con nombre del usuario que la tiene
+  - `PATCH /invoices/:id/update-items` — actualiza items de factura existente (recalcula totales), libera bloqueo
+  - `findPending()` ahora incluye facturas DRAFT y PENDING, muestra `lockedById`, `lockedAt`, `lockedByName`
+  - Auto-expiracion de bloqueos > 10 minutos (verificado al consultar, no con cron)
+  - `pay()` y `cancel()` liberan bloqueo automaticamente
+
+### Frontend
+- Pagina `/sales/pos` — botones simplificados:
+  - **SELLER**: un solo boton "Guardar pre-factura" (guarda + limpia carrito)
+  - **CASHIER/ADMIN**: "En espera" (guarda + limpia) + "Cobrar" (pago directo)
+  - Eliminado boton duplicado "Pre-factura" de la vista CASHIER/ADMIN
+  - Al guardar factura retomada: llama `PATCH /update-items` en vez de crear nueva (actualiza + libera bloqueo)
+  - Al retomar: llama `PATCH /retake` para bloquear antes de cargar
+- Drawer de pendientes — sistema de bloqueo visual:
+  - Factura bloqueada por otro: opacidad reducida, badge rojo "Editando: {nombre}", botones deshabilitados
+  - Factura bloqueada por mi: badge azul "Editando por ti", permitido retomar
+  - Error 409 mostrado como mensaje si alguien mas la tomo primero
+
+### Verificaciones
+- Retake bloquea correctamente (lockedById se setea)
+- Update-items actualiza totales y libera bloqueo
+- Mismo usuario puede retomar su propio bloqueo
+- Cancel libera bloqueo
+- findPending incluye DRAFT y PENDING con info de bloqueo
+- Auto-expiracion: bloqueos > 10min se ignoran en la respuesta
+- TypeScript compila sin errores en ambos apps
