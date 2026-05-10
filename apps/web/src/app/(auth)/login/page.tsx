@@ -25,7 +25,8 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || 'Error al iniciar sesion');
+        const msg = Array.isArray(data.message) ? data.message[0] : data.message;
+        throw new Error(msg || 'Error al iniciar sesion');
       }
 
       router.push('/dashboard');

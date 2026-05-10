@@ -18,6 +18,9 @@ import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module
 import { CustomersModule } from './modules/customers/customers.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { PrintAreasModule } from './modules/print-areas/print-areas.module';
+import { ImportModule } from './modules/import/import.module';
+import { PrintJobsModule } from './modules/print-jobs/print-jobs.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
     CustomersModule,
     CashRegistersModule,
     InvoicesModule,
+    PrintAreasModule,
+    ImportModule,
+    PrintJobsModule,
   ],
 })
 export class AppModule {}

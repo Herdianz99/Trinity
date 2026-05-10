@@ -243,3 +243,74 @@
   - Tabla con busqueda, tipo, credito
   - Modal crear/editar con todos los campos
   - Vista detalle: datos, limite credito, deuda pendiente, credito disponible, ultimas facturas
+
+## Sesion 5b — Importacion masiva, codigos de categoria y areas de impresion (Completada)
+### Migracion Prisma
+- Modelo `PrintArea`: id, name, description, isActive, categories[], printJobs[]
+- Modelo `PrintJob`: id, invoiceId, printAreaId, status (PENDING/PRINTED/FAILED), items (Json)
+- Modelo `PriceAdjustmentLog`: id, filters (Json), adjustmentType, gananciaPct, gananciaMayorPct, productsAffected, createdById
+- Enum `PrintStatus`: PENDING, PRINTED, FAILED
+- Category actualizada: `code String? @unique`, `lastProductNumber Int @default(0)`, `printAreaId String?`, `printArea PrintArea?`
+- Invoice actualizada: `printJobs PrintJob[]`
+
+### Migracion de datos
+- Asignacion de codigos 3 letras a categorias raiz: HER (Herramientas), PIN (Pinturas), ELE (Electricidad), PLO (Plomeria), FER (Ferreteria General)
+- Reasignacion de codigos de productos de PROD-XXX a nuevo formato: HER00001, PIN00001, ELE00001, etc.
+- Actualizacion de lastProductNumber por categoria
+- Limpieza de categorias duplicadas del seed multiple
+- Regeneracion de searchVector para todos los productos
+
+### Backend
+- **PrintAreasModule**: CRUD completo (GET/POST/PATCH/DELETE /print-areas) con conteo de categorias, validacion de borrado
+- **ImportModule**:
+  - `POST /import/validate` — validacion sin insertar, retorna preview de creados/saltados/errores
+  - `POST /import` — importacion real en transaccion con timeout 60s
+  - Orden de importacion: categorias -> marcas -> proveedores -> productos
+  - Soporta creacion de categorias con subcategorias, marcas y proveedores si no existen
+  - DTO con ImportCategoryDto, ImportBrandDto, ImportSupplierDto, ImportProductDto
+- **PrintJobsModule**:
+  - `GET /print-jobs/pending?printAreaId=` — trabajos pendientes por area
+  - `PATCH /print-jobs/:id/printed` — marcar como impreso
+- **CategoriesService** actualizado:
+  - Validacion de codigo: 3 letras, uppercase, unico
+  - Soporte printAreaId en create/update
+  - Subcategorias no requieren codigo
+- **ProductsService** actualizado:
+  - `generateCodeFromCategory()` con UPDATE...RETURNING atomico para incremento seguro del correlativo
+  - Si no se proporciona code, se genera automaticamente desde la categoria
+  - Si se proporciona code, se valida unicidad
+  - Include de printArea en relacion category en todas las queries
+- **InvoicesService.pay()** actualizado:
+  - Al cobrar, agrupa items por area de impresion de su categoria
+  - Crea PrintJob por cada area con items JSON: [{code, supplierRef, name, quantity}]
+
+### Frontend
+- Pagina `/catalog/categories` actualizada:
+  - Campo codigo (3 letras, uppercase) para categorias raiz
+  - Selector de area de impresion
+  - Display formato "HER — Herramientas" con badge area de impresion
+- Pagina `/settings/print-areas` (nueva):
+  - CRUD de areas de impresion con tabla, modal crear/editar, toggle activo, eliminar
+- Pagina `/import` (nueva):
+  - Zona drag&drop para archivos JSON
+  - Textarea para pegar JSON manualmente
+  - Boton Validar (preview) y boton Importar
+  - Reporte de resultados: creados, saltados, errores
+- Componente `PrintMonitor` (nuevo):
+  - Polling /print-jobs/pending cada 5 segundos
+  - Usa localStorage 'printAreaId' para filtrar por area
+  - Abre window.print() con formato ticket 80mm (codigo, ref proveedor, nombre, cantidad)
+  - Marca automaticamente como PRINTED despues de imprimir
+- Pagina `/catalog/products` actualizada:
+  - Columna "Area de impresion" (readonly, desde category.printArea.name)
+  - Placeholder de codigo: "Auto (segun categoria)"
+- Sidebar: 2 nuevos items — "Areas de Impresion" y "Importacion Masiva"
+- Layout: PrintMonitor agregado como componente global
+- Pagina `/config` actualizada: seccion "Area de Impresion de esta PC" con dropdown guardado en localStorage
+
+### Verificaciones
+- Codigo de producto HER00007 generado correctamente al crear producto en categoria "Herramientas"
+- Importacion JSON valida y ejecuta correctamente (validate retorna preview, import crea productos)
+- Endpoint /print-jobs/pending funcional
+- Print areas CRUD funcional
+- API compila sin errores

@@ -22,7 +22,8 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
   }
 
   try {
-    const res = await fetch(`${API_URL}/${path}`, {
+    const queryString = request.nextUrl.search;
+    const res = await fetch(`${API_URL}/${path}${queryString}`, {
       method: request.method,
       headers,
       body,

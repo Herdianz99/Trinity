@@ -28,7 +28,7 @@ interface Product {
   priceMayor: number;
   minStock: number;
   isActive: boolean;
-  category: { id: string; name: string } | null;
+  category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
   stock: { quantity: number; warehouse: { id: string; name: string } }[];
@@ -329,6 +329,7 @@ export default function ProductsPage() {
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Categoria</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Marca</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden xl:table-cell">Proveedor</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium hidden xl:table-cell">Area de impresion</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Precio USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Precio Bs</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Stock</th>
@@ -338,11 +339,11 @@ export default function ProductsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="text-center py-12">
+                <tr><td colSpan={11} className="text-center py-12">
                   <Loader2 className="animate-spin text-green-500 mx-auto" size={28} />
                 </td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-slate-500">
+                <tr><td colSpan={11} className="text-center py-12 text-slate-500">
                   No se encontraron productos
                 </td></tr>
               ) : products.map(product => {
@@ -359,6 +360,7 @@ export default function ProductsPage() {
                     <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{product.category?.name || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{product.brand?.name || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 hidden xl:table-cell">{product.supplier?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-400 hidden xl:table-cell">{product.category?.printArea?.name || '—'}</td>
                     <td className="px-4 py-3 text-right text-white font-mono">
                       ${product.priceDetal.toFixed(2)}
                     </td>
@@ -455,7 +457,7 @@ export default function ProductsPage() {
                       value={form.code}
                       onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))}
                       className="input-field !py-2 text-sm"
-                      placeholder="Auto-generado"
+                      placeholder="Auto (segun categoria)"
                       disabled={!!editingId}
                     />
                   </div>

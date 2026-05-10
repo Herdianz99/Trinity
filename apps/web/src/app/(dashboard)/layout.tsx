@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import ExchangeRateBanner from '@/components/exchange-rate-banner';
+import PrintMonitor from '@/components/print-monitor';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -41,6 +42,7 @@ export default async function DashboardLayout({
           {children}
         </div>
       </main>
+      <PrintMonitor />
     </div>
   );
 }

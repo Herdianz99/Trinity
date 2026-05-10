@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2 } from 'lucide-react';
+import { Settings, Save, Loader2, Printer } from 'lucide-react';
 
 interface CompanyConfig {
   companyName: string;
@@ -36,10 +36,36 @@ export default function ConfigPage() {
   const [fetchingBcv, setFetchingBcv] = useState(false);
   const [savingRate, setSavingRate] = useState(false);
 
+  // Print area state
+  const [printAreas, setPrintAreas] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPrintAreaId, setSelectedPrintAreaId] = useState('');
+
   useEffect(() => {
     fetchConfig();
     fetchExchangeRate();
+    fetchPrintAreas();
+    setSelectedPrintAreaId(localStorage.getItem('printAreaId') || '');
   }, []);
+
+  async function fetchPrintAreas() {
+    try {
+      const res = await fetch('/api/proxy/print-areas');
+      if (res.ok) {
+        const data = await res.json();
+        setPrintAreas(data.filter((a: any) => a.isActive));
+      }
+    } catch { /* ignore */ }
+  }
+
+  function handlePrintAreaChange(id: string) {
+    setSelectedPrintAreaId(id);
+    if (id) {
+      localStorage.setItem('printAreaId', id);
+    } else {
+      localStorage.removeItem('printAreaId');
+    }
+    setMessage({ type: 'success', text: 'Area de impresion configurada para esta PC' });
+  }
 
   async function fetchConfig() {
     try {
@@ -356,6 +382,28 @@ export default function ConfigPage() {
             </button>
           </div>
         </form>
+
+        {/* Print area for this PC */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Printer size={20} className="text-green-400" />
+            <h2 className="text-lg font-semibold text-white">Area de Impresion de esta PC</h2>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            Selecciona el area de impresion que esta PC monitoreara. Al cobrar una factura,
+            se imprimiran automaticamente los tickets de los productos asignados a esta area.
+          </p>
+          <select
+            value={selectedPrintAreaId}
+            onChange={(e) => handlePrintAreaChange(e.target.value)}
+            className="input-field w-full md:w-80"
+          >
+            <option value="">Ninguna (no imprimir)</option>
+            {printAreas.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

@@ -161,17 +161,36 @@ model User {
 }
 
 // ============================================
+// AREAS DE IMPRESION
+// ============================================
+
+model PrintArea {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean    @default(true)
+  categories  Category[]
+  printJobs   PrintJob[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ============================================
 // CATALOGO
 // ============================================
 
 model Category {
-  id        String     @id @default(cuid())
-  name      String
-  parentId  String?
-  parent    Category?  @relation("SubCategories", fields: [parentId], references: [id])
-  children  Category[] @relation("SubCategories")
-  products  Product[]
-  createdAt DateTime   @default(now())
+  id                String     @id @default(cuid())
+  name              String
+  code              String?    @unique
+  lastProductNumber Int        @default(0)
+  printAreaId       String?
+  printArea         PrintArea? @relation(fields: [printAreaId], references: [id])
+  parentId          String?
+  parent            Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children          Category[] @relation("SubCategories")
+  products          Product[]
+  createdAt         DateTime   @default(now())
 }
 
 model Brand {
@@ -226,6 +245,7 @@ model Product {
   priceMayor       Float               @default(0)
   minStock         Float               @default(0)
   isActive         Boolean             @default(true)
+  searchVector     Unsupported("tsvector")?
   stock            Stock[]
   movements        StockMovement[]
   purchaseItems    PurchaseOrderItem[]
@@ -447,6 +467,7 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   receivables    Receivable[]
+  printJobs      PrintJob[]
   createdById    String
   sellerId       String?
   createdAt      DateTime      @default(now())
@@ -499,4 +520,40 @@ model Receivable {
   notes        String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+}
+
+// ============================================
+// AJUSTE MASIVO DE PRECIOS
+// ============================================
+
+model PriceAdjustmentLog {
+  id               String   @id @default(cuid())
+  filters          Json
+  adjustmentType   String
+  gananciaPct      Float?
+  gananciaMayorPct Float?
+  productsAffected Int
+  createdById      String
+  createdAt        DateTime @default(now())
+}
+
+// ============================================
+// TRABAJOS DE IMPRESION
+// ============================================
+
+enum PrintStatus {
+  PENDING
+  PRINTED
+  FAILED
+}
+
+model PrintJob {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
+  printAreaId String
+  printArea   PrintArea   @relation(fields: [printAreaId], references: [id])
+  status      PrintStatus @default(PENDING)
+  items       Json
+  createdAt   DateTime    @default(now())
 }

@@ -13,9 +13,26 @@ export class CategoriesService {
       if (!parent) throw new NotFoundException('Categoria padre no encontrada');
       if (parent.parentId) throw new BadRequestException('Solo se permiten 2 niveles de categorias');
     }
+
+    // Root categories require code
+    if (!dto.parentId) {
+      if (!dto.code) {
+        throw new BadRequestException('El codigo de categoria es obligatorio');
+      }
+      const code = dto.code.toUpperCase();
+      const existing = await this.prisma.category.findUnique({ where: { code } });
+      if (existing) {
+        throw new BadRequestException(`El codigo "${code}" ya esta en uso`);
+      }
+      dto.code = code;
+    } else {
+      // Subcategories don't have codes
+      delete dto.code;
+    }
+
     return this.prisma.category.create({
       data: dto,
-      include: { parent: true, children: true },
+      include: { parent: true, children: true, printArea: true },
     });
   }
 
@@ -26,6 +43,7 @@ export class CategoriesService {
         children: {
           orderBy: { name: 'asc' },
         },
+        printArea: { select: { id: true, name: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -34,24 +52,35 @@ export class CategoriesService {
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { id },
-      include: { parent: true, children: true, products: { select: { id: true } } },
+      include: { parent: true, children: true, products: { select: { id: true } }, printArea: true },
     });
     if (!category) throw new NotFoundException('Categoria no encontrada');
     return category;
   }
 
   async update(id: string, dto: UpdateCategoryDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     if (dto.parentId) {
       const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
       if (!parent) throw new NotFoundException('Categoria padre no encontrada');
       if (parent.parentId) throw new BadRequestException('Solo se permiten 2 niveles de categorias');
       if (dto.parentId === id) throw new BadRequestException('Una categoria no puede ser su propio padre');
     }
+
+    // Validate code uniqueness if changing
+    if (dto.code) {
+      const code = dto.code.toUpperCase();
+      const dup = await this.prisma.category.findUnique({ where: { code } });
+      if (dup && dup.id !== id) {
+        throw new BadRequestException(`El codigo "${code}" ya esta en uso`);
+      }
+      dto.code = code;
+    }
+
     return this.prisma.category.update({
       where: { id },
       data: dto,
-      include: { parent: true, children: true },
+      include: { parent: true, children: true, printArea: true },
     });
   }
 

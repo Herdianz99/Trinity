@@ -377,7 +377,7 @@ export class InvoicesService {
 
       // Update invoice status
       const newStatus = dto.isCredit ? 'CREDIT' : 'PAID';
-      return tx.invoice.update({
+      const updatedInvoice = await tx.invoice.update({
         where: { id },
         data: {
           status: newStatus,
@@ -395,6 +395,42 @@ export class InvoicesService {
           receivables: true,
         },
       });
+
+      // Create PrintJobs grouped by print area
+      const productsWithCategory = await tx.product.findMany({
+        where: { id: { in: invoice.items.map(i => i.productId) } },
+        include: { category: { include: { printArea: true } } },
+      });
+      const productMap = new Map(productsWithCategory.map(p => [p.id, p]));
+
+      const printAreaGroups: Record<string, { printAreaId: string; items: any[] }> = {};
+      for (const item of invoice.items) {
+        const product = productMap.get(item.productId);
+        const printAreaId = product?.category?.printAreaId;
+        if (!printAreaId) continue;
+
+        if (!printAreaGroups[printAreaId]) {
+          printAreaGroups[printAreaId] = { printAreaId, items: [] };
+        }
+        printAreaGroups[printAreaId].items.push({
+          code: product!.code,
+          supplierRef: product!.supplierRef || '',
+          name: item.productName,
+          quantity: item.quantity,
+        });
+      }
+
+      for (const group of Object.values(printAreaGroups)) {
+        await tx.printJob.create({
+          data: {
+            invoiceId: id,
+            printAreaId: group.printAreaId,
+            items: group.items,
+          },
+        });
+      }
+
+      return updatedInvoice;
     });
 
     return result;

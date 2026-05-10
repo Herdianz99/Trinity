@@ -17,7 +17,7 @@ Trinity es un ERP empresarial single-tenant para ferreterías venezolanas. Gesti
 | Base de datos | PostgreSQL 15 (Docker) | 5432 |
 | ORM | Prisma | — |
 | Caché | Redis 7 (Docker) | 6379 |
-| PDF facturas | pdfkit (server-side) | — |
+| PDF facturas | @react-pdf/renderer | — |
 | Búsqueda productos | PostgreSQL tsvector (full-text) | — |
 | Escáner código barras | @zxing/browser | — |
 | IA facturas compra | Anthropic Claude API (vision) | — |
@@ -164,14 +164,29 @@ enum UserRole {
   ADMIN SUPERVISOR CASHIER SELLER WAREHOUSE BUYER ACCOUNTANT
 }
 
-model Category {
+model PrintArea {
   id          String     @id @default(cuid())
-  name        String
-  parentId    String?
-  parent      Category?  @relation("SubCategories", fields: [parentId], references: [id])
-  children    Category[] @relation("SubCategories")
-  products    Product[]
+  name        String     // "Despacho Interno", "Despacho Externo", etc.
+  description String?
+  isActive    Boolean    @default(true)
+  categories  Category[]
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Category {
+  id                  String     @id @default(cuid())
+  name                String
+  code                String     @unique  // "HER", "PLO", "ELE" — 3 letras, configurable
+  lastProductNumber   Int        @default(0)  // correlativo por categoría, SELECT FOR UPDATE al crear producto
+  printAreaId         String?    // área de impresión asignada
+  printArea           PrintArea? @relation(...)
+  parentId            String?
+  parent              Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children            Category[] @relation("SubCategories")
+  products            Product[]
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 }
 
 model Brand {
@@ -199,7 +214,7 @@ model Supplier {
 
 model Product {
   id               String    @id @default(cuid())
-  code             String    @unique  // auto-generado
+  code             String    @unique  // auto-generado: {categoryCode}{correlativo5digits} ej: HER00001
   barcode          String?   @unique
   supplierRef      String?   // código del proveedor
   name             String
@@ -520,6 +535,58 @@ enum PaymentMethod {
 - Modal de crédito con campo de clave de autorización
 - Generación e impresión de PDF
 
+#### Sesión 5b — Importación masiva de productos y corrección de códigos
+**Backend:**
+- Migración: agregar modelo PrintArea, agregar campos code, lastProductNumber, printAreaId a Category
+- CRUD de PrintArea: GET/POST/PATCH/DELETE /print-areas
+- Actualizar ProductsModule para generar código con formato categoryCode+correlativo5digits usando SELECT FOR UPDATE
+- Migrar productos existentes: reasignar códigos PROD-001 al nuevo formato según su categoría
+- POST /products/import — importación masiva desde JSON con campos completos:
+  code (opcional, si no viene se auto-genera), barcode, supplierRef, name, description,
+  category (busca por nombre o crea), subcategory, brand, supplier, purchaseUnit, saleUnit,
+  conversionFactor, costUsd, gananciaPct, gananciaMayorPct, ivaType, minStock, bregaApplies
+- Endpoint POST /products/import/validate — valida sin insertar, retorna preview de creados/saltados/errores
+
+**Frontend:**
+- Página /settings/print-areas — CRUD de áreas de impresión con nombre y descripción
+- En modal de categorías: agregar campos código (3 letras, validación única) y selector de área de impresión
+- Página /import — importación masiva con zona drag&drop, textarea para pegar JSON, botón Validar y botón Importar
+- Reporte de resultado: creados, saltados (ya existían), errores con detalle
+
+#### Sesión 5c — Ajuste masivo de precios
+**Backend:**
+- GET /products/price-adjustment?categoryId&subcategoryId&brandId&supplierId&costMin&costMax — lista productos con filtros combinables, retorna id, code, name, costUsd, gananciaPct, gananciaMayorPct, priceDetal, priceMayor
+- POST /products/price-adjustment — aplicar cambio masivo:
+  - Body: filters (mismos que GET) + adjustmentType (REPLACE o ADD_SUBTRACT) + gananciaPct? + gananciaMayorPct?
+  - REPLACE: reemplaza el porcentaje con el valor nuevo
+  - ADD_SUBTRACT: suma o resta al porcentaje existente (puede ser negativo)
+  - Recalcula priceDetal y priceMayor de todos los productos afectados
+  - Crea registro en PriceAdjustmentLog para auditoría
+  - Todo en transacción Prisma
+
+Agregar modelo al schema:
+```prisma
+model PriceAdjustmentLog {
+  id                String   @id @default(cuid())
+  filters           Json     // los filtros aplicados
+  adjustmentType    String   // REPLACE o ADD_SUBTRACT
+  gananciaPct       Float?
+  gananciaMayorPct  Float?
+  productsAffected  Int
+  createdById       String
+  createdAt         DateTime @default(now())
+}
+```
+
+**Frontend:**
+- Página /catalog/price-adjustment — herramienta de ajuste masivo:
+  - Panel de filtros: categoría, subcategoría, marca, proveedor, rango de costo
+  - Botón "Ver productos afectados" → tabla preview con productos que serán modificados
+  - Panel de ajuste: toggle REPLACE o SUMAR/RESTAR, campos ganancia detal% y mayor%
+  - Preview en tiempo real del nuevo precio calculado en la tabla
+  - Botón "Aplicar cambio" con modal de confirmación: "Se modificarán X productos. ¿Confirmar?"
+  - Historial de ajustes masivos anteriores
+
 ---
 
 ### FASE 2 — Operaciones Completas
@@ -554,8 +621,12 @@ enum PaymentMethod {
 ### FASE 5 — Expansión
 - Tienda online
 - Chatbot WhatsApp
-- POS offline (PWA)
 - CRM
+
+### FASE 6 — Integraciones de Hardware y POS Avanzado
+- **POS Electron + Máquina Fiscal:** Migrar el POS a Electron para acceso nativo a puertos COM. El agente Electron se comunica con la máquina fiscal por puerto COM, recibe el número fiscal y lo guarda en Invoice.fiscalNumber. También habilita modo offline con sincronización posterior
+- **Agente local COM (fase previa a Electron):** Pequeño programa instalado en cada PC de caja que actúa como puente WebSocket entre el navegador y el puerto COM de la máquina fiscal
+- Las devoluciones siempre deben procesarse en la misma caja/máquina fiscal que emitió la factura original
 
 ---
 
@@ -597,7 +668,52 @@ enum PaymentMethod {
 - Cada caja tiene su secuencia independiente
 - Campo `fiscalNumber` separado en Invoice para el número de impresora fiscal
 
-**PDF:** pdfkit (server-side) para facturas A4. Se genera desde el backend con GET /invoices/:id/pdf.
+**PDF:** @react-pdf/renderer para facturas A4 y formato 80mm.
+
+**Reglas de cajas (CashRegister):**
+- Un cajero puede abrir turno en cualquier caja que esté disponible (sin turno activo)
+- Dos cajeros pueden trabajar en la misma caja simultáneamente (cajas compartidas)
+- Una caja puede tener múltiples sesiones activas al mismo tiempo
+- Un cajero en el POS y en el historial solo ve las facturas de la caja donde tiene turno activo
+- ADMIN y SUPERVISOR pueden ver facturas de todas las cajas
+- Las devoluciones deben hacerse en la misma caja que emitió la factura original (preparación para máquina fiscal)
+- En el futuro cada cajero tendrá su caja individual exclusiva — el modelo ya lo soporta
+
+**Códigos de productos por categoría:**
+- Formato:  — ejemplo HER00001, HER00002, PLO00001
+- El código de categoría son 3 letras configurables por el usuario al crear la categoría
+- El correlativo es independiente por categoría — cada una empieza en 00001
+- Se incrementa con  en transacción Prisma para evitar duplicados
+- Al migrar los códigos PROD-001 existentes → reasignar según categoría del producto en Sesión 5b
+
+**Áreas de impresión (PrintArea):**
+- Modelo  configurable — el cliente puede crear las que necesite (actualmente 2: Despacho Interno y Despacho Externo)
+- Cada categoría tiene asignada UNA sola área de impresión
+- Al cobrar una factura → el sistema agrupa los items por área de impresión de su categoría → imprime automáticamente una orden por área
+- Formato de la orden (ticket 80mm): código del producto, código del proveedor (supplierRef), descripción, cantidad
+- Si una categoría no tiene área asignada → no imprime nada para esos items
+- La impresión es automática al procesar el pago de la factura
+
+**Códigos de productos por categoría:**
+- Formato: categoryCode + correlativo de 5 dígitos — ejemplo HER00001, HER00002, PLO00001
+- El código de categoría son 3 letras configurables por el usuario al crear la categoría
+- El correlativo es independiente por categoría — cada una empieza en 00001
+- Se incrementa con SELECT FOR UPDATE en transacción Prisma para evitar duplicados
+- Al migrar los códigos PROD-001 existentes: reasignar según categoría del producto en Sesión 5b
+
+**Áreas de impresión (PrintArea):**
+- Modelo PrintArea configurable — el cliente puede crear las que necesite (actualmente 2: Despacho Interno y Despacho Externo)
+- Cada categoría tiene asignada UNA sola área de impresión
+- Al cobrar una factura: el sistema agrupa los items por área de impresión de su categoría e imprime automáticamente una orden por área
+- Formato de la orden (ticket 80mm): código del producto, código del proveedor (supplierRef), descripción, cantidad
+- Si una categoría no tiene área asignada: no imprime nada para esos items
+- La impresión es automática al procesar el pago de la factura
+
+**Máquinas fiscales y puertos COM:**
+- El navegador web no puede acceder a puertos COM directamente
+- Solución fase 1: agente local instalado en la PC de caja, actúa como puente WebSocket entre el navegador y el puerto COM
+- Solución fase 2 (FASE 6): migrar POS a Electron para acceso nativo a COM y modo offline
+- Campo fiscalNumber en Invoice reservado para el número que devuelva la máquina fiscal
 
 ---
 

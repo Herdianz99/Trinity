@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -38,14 +38,18 @@ export class ProductsService {
     };
   }
 
-  private async generateCode(): Promise<string> {
-    const last = await this.prisma.product.findFirst({
-      where: { code: { startsWith: 'PROD-' } },
-      orderBy: { code: 'desc' },
-    });
-    if (!last) return 'PROD-001';
-    const num = parseInt(last.code.replace('PROD-', ''), 10) + 1;
-    return `PROD-${num.toString().padStart(3, '0')}`;
+  private async generateCodeFromCategory(categoryId: string): Promise<string> {
+    // Use SELECT FOR UPDATE to safely increment correlative
+    const result = await this.prisma.$queryRaw<any[]>`
+      UPDATE "Category"
+      SET "lastProductNumber" = "lastProductNumber" + 1
+      WHERE id = ${categoryId}
+      RETURNING code, "lastProductNumber"
+    `;
+    if (!result[0]?.code) {
+      throw new ConflictException('La categoria no tiene codigo asignado');
+    }
+    return `${result[0].code}${String(result[0].lastProductNumber).padStart(5, '0')}`;
   }
 
   async create(dto: CreateProductDto) {
@@ -54,9 +58,16 @@ export class ProductsService {
       if (existing) throw new ConflictException('El codigo de barras ya existe');
     }
 
-    const code = dto.code || (await this.generateCode());
-    const existingCode = await this.prisma.product.findUnique({ where: { code } });
-    if (existingCode) throw new ConflictException('El codigo de producto ya existe');
+    let code = dto.code;
+    if (!code) {
+      if (!dto.categoryId) {
+        throw new BadRequestException('Se requiere categoria para generar el codigo automaticamente');
+      }
+      code = await this.generateCodeFromCategory(dto.categoryId);
+    } else {
+      const existingCode = await this.prisma.product.findUnique({ where: { code } });
+      if (existingCode) throw new ConflictException('El codigo de producto ya existe');
+    }
 
     const prices = await this.calculatePrices(
       dto.costUsd || 0,
@@ -158,7 +169,7 @@ export class ProductsService {
         take: limit,
         orderBy: { name: 'asc' },
         include: {
-          category: true,
+          category: { include: { printArea: { select: { id: true, name: true } } } },
           brand: true,
           supplier: { select: { id: true, name: true } },
           stock: { include: { warehouse: { select: { id: true, name: true } } } },
