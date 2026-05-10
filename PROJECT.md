@@ -441,7 +441,7 @@ enum PaymentMethod {
 - Página /catalog/categories: árbol de categorías con subcategorías
 - Página /catalog/brands y /catalog/suppliers
 
-#### Sesión 3 — Inventario y Almacenes
+#### Sesión 3 — Inventario y Almacenes ✅
 **Backend:**
 - WarehousesModule: CRUD
 - StockModule:

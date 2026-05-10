@@ -19,6 +19,11 @@ import {
   Layers,
   Tag,
   Truck,
+  BoxesIcon,
+  ArrowLeftRight,
+  ClipboardCheck,
+  Activity,
+  Building2,
 } from 'lucide-react';
 
 interface NavItem {
@@ -36,7 +41,11 @@ const navItems: NavItem[] = [
   { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={20} /> },
   { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={20} /> },
   { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={20} /> },
-  { label: 'Inventario', href: '/inventory', icon: <Warehouse size={20} />, section: 'INVENTARIO' },
+  { label: 'Stock', href: '/inventory/stock', icon: <BoxesIcon size={20} />, section: 'INVENTARIO' },
+  { label: 'Almacenes', href: '/inventory/warehouses', icon: <Building2 size={20} /> },
+  { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={20} /> },
+  { label: 'Conteo Fisico', href: '/inventory/count', icon: <ClipboardCheck size={20} /> },
+  { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={20} /> },
   { label: 'Compras', href: '/purchases', icon: <ShoppingCart size={20} />, section: 'COMPRAS' },
   { label: 'Ventas', href: '/sales', icon: <Receipt size={20} />, section: 'VENTAS' },
 ];
@@ -78,7 +87,7 @@ export default function Sidebar({ user }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 py-4 overflow-y-auto">
         {navItems.map((item, idx) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const showSection = item.section && !collapsed;
           const prevItem = navItems[idx - 1];
           const isFirstInSection = item.section && (!prevItem || prevItem.section !== item.section);

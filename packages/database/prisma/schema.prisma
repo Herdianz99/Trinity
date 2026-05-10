@@ -38,6 +38,19 @@ enum MovementType {
   COUNT_ADJUST
 }
 
+enum TransferStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+}
+
+enum CountStatus {
+  DRAFT
+  IN_PROGRESS
+  APPROVED
+  CANCELLED
+}
+
 enum PurchaseStatus {
   DRAFT
   SENT
@@ -188,6 +201,8 @@ model Product {
   stock            Stock[]
   movements        StockMovement[]
   purchaseItems    PurchaseOrderItem[]
+  transferItems    TransferItem[]
+  countItems       InventoryCountItem[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
@@ -197,14 +212,17 @@ model Product {
 // ============================================
 
 model Warehouse {
-  id        String          @id @default(cuid())
-  name      String
-  location  String?
-  isDefault Boolean         @default(false)
-  isActive  Boolean         @default(true)
-  stock     Stock[]
-  movements StockMovement[]
-  createdAt DateTime        @default(now())
+  id              String           @id @default(cuid())
+  name            String
+  location        String?
+  isDefault       Boolean          @default(false)
+  isActive        Boolean          @default(true)
+  stock           Stock[]
+  movements       StockMovement[]
+  transfersFrom   Transfer[]       @relation("TransferFrom")
+  transfersTo     Transfer[]       @relation("TransferTo")
+  inventoryCounts InventoryCount[]
+  createdAt       DateTime         @default(now())
 }
 
 model Stock {
@@ -232,6 +250,62 @@ model StockMovement {
   reference   String?
   createdById String
   createdAt   DateTime     @default(now())
+}
+
+// ============================================
+// TRANSFERENCIAS
+// ============================================
+
+model Transfer {
+  id              String         @id @default(cuid())
+  fromWarehouseId String
+  fromWarehouse   Warehouse      @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouseId   String
+  toWarehouse     Warehouse      @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  status          TransferStatus @default(PENDING)
+  notes           String?
+  items           TransferItem[]
+  createdById     String
+  approvedById    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model TransferItem {
+  id         String   @id @default(cuid())
+  transferId String
+  transfer   Transfer @relation(fields: [transferId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Float
+}
+
+// ============================================
+// CONTEO FISICO
+// ============================================
+
+model InventoryCount {
+  id           String              @id @default(cuid())
+  warehouseId  String
+  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id])
+  status       CountStatus         @default(DRAFT)
+  notes        String?
+  items        InventoryCountItem[]
+  createdById  String
+  approvedById String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model InventoryCountItem {
+  id               String         @id @default(cuid())
+  inventoryCountId String
+  inventoryCount   InventoryCount @relation(fields: [inventoryCountId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  systemQuantity   Float
+  countedQuantity  Float?
+  difference       Float?
 }
 
 // ============================================

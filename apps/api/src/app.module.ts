@@ -8,6 +8,11 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { BrandsModule } from './modules/brands/brands.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { ProductsModule } from './modules/products/products.module';
+import { WarehousesModule } from './modules/warehouses/warehouses.module';
+import { StockModule } from './modules/stock/stock.module';
+import { TransfersModule } from './modules/transfers/transfers.module';
+import { InventoryCountsModule } from './modules/inventory-counts/inventory-counts.module';
+import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 
 @Module({
   imports: [
@@ -20,6 +25,11 @@ import { ProductsModule } from './modules/products/products.module';
     BrandsModule,
     SuppliersModule,
     ProductsModule,
+    WarehousesModule,
+    StockModule,
+    TransfersModule,
+    InventoryCountsModule,
+    StockMovementsModule,
   ],
 })
 export class AppModule {}
