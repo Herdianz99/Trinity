@@ -420,3 +420,38 @@
 - findPending incluye DRAFT y PENDING con info de bloqueo
 - Auto-expiracion: bloqueos > 10min se ignoran en la respuesta
 - TypeScript compila sin errores en ambos apps
+
+## Sesion 6c — Fix IVA Double Calculation & Default Profit Margins (Completada)
+### Migracion Prisma
+- CompanyConfig: campos `defaultGananciaPct Float @default(0)` y `defaultGananciaMayorPct Float @default(0)`
+- Migracion: `20260510170000_add_default_ganancia_to_config`
+
+### Backend
+- **InvoicesService** — fix calculo IVA:
+  - Bug: `priceDetal` ya incluye IVA (formula: costo × brecha × ganancia × IVA), pero al facturar se aplicaba IVA otra vez sobre ese precio
+  - Fix: extraer precio base con `baseUnitPrice = priceWithIva / (1 + ivaRate)` antes de calcular IVA
+  - Aplicado en `create()` y `updateItems()`
+  - IVA rates mapeados: EXEMPT=0, REDUCED=0.08, GENERAL=0.16, SPECIAL=0.31
+- **ProductsService** — defaults de ganancia:
+  - `create()` ahora consulta CompanyConfig para obtener defaults
+  - Si `gananciaPct` o `gananciaMayorPct` no se proveen en el DTO, usa los valores de config
+  - Almacena los valores resueltos en el producto creado
+- **CompanyConfigDto** — nuevos campos opcionales: `defaultGananciaPct`, `defaultGananciaMayorPct`
+
+### Frontend
+- Pagina `/sales/pos` — fix calculo IVA frontend:
+  - Misma logica: extrae base price antes de calcular desglose IVA en tiempo real
+  - Subtotal + IVA = total correcto sin doble aplicacion
+- Pagina `/config` — seccion "Precios por defecto":
+  - Inputs para ganancia detal y mayor por defecto (%)
+  - Descripcion: "Se aplicara automaticamente a los productos nuevos que no tengan ganancia configurada"
+  - Se guarda con el resto de la configuracion
+- Pagina `/catalog/products` — pre-llenado:
+  - Al abrir modal de crear producto, se pre-llenan gananciaPct y gananciaMayorPct con los defaults de config
+  - El usuario puede sobreescribirlos manualmente
+
+### Verificaciones
+- Test con producto existente: priceDetal=$1.22 → subtotal=$1.05, IVA=$0.17, total=$1.22 (correcto, sin doble IVA)
+- Test ejemplo del prompt: costo $25.99, brecha 50%, ganancia 30%, IVA 16% → priceDetal=$58.79, subtotal=$50.68, IVA=$8.11, total=$58.79
+- Config defaults: defaultGananciaPct=35, defaultGananciaMayorPct=25 se guardan y cargan correctamente
+- TypeScript compila sin errores en ambos apps
