@@ -1,0 +1,341 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import {
+  ArrowLeft, UserCheck, Save, Loader2, ChevronLeft, ChevronRight,
+  ExternalLink, DollarSign, X,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+
+interface Customer {
+  id: string; name: string; documentType: string; rif: string | null;
+  phone: string | null; email: string | null; address: string | null;
+  creditLimit: number; creditDays: number; isActive: boolean;
+  pendingDebt: number; availableCredit: number;
+  invoices: { id: string; number: string; status: string; totalUsd: number; totalBs: number; createdAt: string }[];
+}
+interface Receivable {
+  id: string; amountUsd: number; balanceUsd: number; dueDate: string | null;
+  status: string; invoice: { id: string; number: string };
+}
+interface CxCData {
+  totalDebt: number; totalOverdue: number; availableCredit: number;
+  receivables: Receivable[];
+}
+
+const INV_BADGES: Record<string, string> = {
+  PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
+  CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+  CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+};
+
+export default function CustomerDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [cxc, setCxc] = useState<CxCData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Form
+  const [form, setForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Invoices pagination
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invPage, setInvPage] = useState(1);
+  const invPerPage = 10;
+
+  // Pay receivable
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
+  const [payRef, setPayRef] = useState('');
+  const [processingPay, setProcessingPay] = useState(false);
+
+  const fetchCustomer = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [custRes, cxcRes] = await Promise.all([
+        fetch(`/api/proxy/customers/${id}`),
+        fetch(`/api/proxy/receivables/customer/${id}`),
+      ]);
+      if (!custRes.ok) throw new Error('Cliente no encontrado');
+      const data = await custRes.json();
+      setCustomer(data);
+      setInvoices(data.invoices || []);
+      setForm({
+        name: data.name, documentType: data.documentType || 'V',
+        rif: data.rif || '', phone: data.phone || '', email: data.email || '',
+        address: data.address || '', creditLimit: data.creditLimit, creditDays: data.creditDays,
+      });
+      if (cxcRes.ok) setCxc(await cxcRes.json());
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  }, [id]);
+
+  useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true); setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/proxy/customers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, creditLimit: Number(form.creditLimit), creditDays: Number(form.creditDays) }),
+      });
+      if (res.ok) {
+        setSaveMsg({ type: 'success', text: 'Cliente actualizado' });
+        fetchCustomer();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error');
+      }
+    } catch (err: any) { setSaveMsg({ type: 'error', text: err.message }); } finally { setSaving(false); }
+  }
+
+  async function handlePay() {
+    if (!payingId) return;
+    setProcessingPay(true);
+    try {
+      const res = await fetch(`/api/proxy/receivables/${payingId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountUsd: parseFloat(payAmount), method: payMethod, reference: payRef || undefined }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Error'); }
+      setPayingId(null);
+      setSaveMsg({ type: 'success', text: 'Cobro registrado' });
+      fetchCustomer();
+    } catch (err: any) { setSaveMsg({ type: 'error', text: err.message }); } finally { setProcessingPay(false); }
+  }
+
+  function fmtDate(iso: string) {
+    const d = new Date(iso);
+    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  }
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-green-500" size={32} /></div>;
+  if (error || !customer) return (
+    <div className="text-center py-20">
+      <p className="text-red-400 mb-4">{error || 'Cliente no encontrado'}</p>
+      <button onClick={() => router.push('/sales/customers')} className="btn-secondary">Volver a clientes</button>
+    </div>
+  );
+
+  const pagedInvoices = invoices.slice((invPage - 1) * invPerPage, invPage * invPerPage);
+  const invTotalPages = Math.ceil(invoices.length / invPerPage);
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button onClick={() => router.push('/sales/customers')} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={20} />
+        </button>
+        <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
+          <UserCheck className="text-green-400" size={22} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-white">{customer.name}</h1>
+          <p className="text-slate-400 text-sm">{customer.documentType}-{customer.rif || '—'}</p>
+        </div>
+      </div>
+
+      {saveMsg && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${saveMsg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+          {saveMsg.text}
+        </div>
+      )}
+
+      <Tabs defaultValue="info">
+        <TabsList>
+          <TabsTrigger value="info">Informacion General</TabsTrigger>
+          <TabsTrigger value="sales">Ventas</TabsTrigger>
+          <TabsTrigger value="cxc">Cuentas por cobrar</TabsTrigger>
+        </TabsList>
+
+        {/* ═══ TAB: Info ═══ */}
+        <TabsContent value="info">
+          <form onSubmit={handleSave} className="card p-6 space-y-4">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Nombre *</label>
+              <input type="text" value={form.name || ''} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">RIF / Documento</label>
+                <input type="text" value={form.rif || ''} onChange={e => setForm((f: any) => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm" placeholder="J-12345678-9" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Tipo Doc.</label>
+                <select value={form.documentType || 'V'} onChange={e => setForm((f: any) => ({ ...f, documentType: e.target.value }))} className="input-field !py-2 text-sm">
+                  {['V', 'E', 'J', 'G', 'C', 'P'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Telefono</label>
+                <input type="text" value={form.phone || ''} onChange={e => setForm((f: any) => ({ ...f, phone: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Email</label>
+                <input type="email" value={form.email || ''} onChange={e => setForm((f: any) => ({ ...f, email: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Direccion</label>
+              <input type="text" value={form.address || ''} onChange={e => setForm((f: any) => ({ ...f, address: e.target.value }))} className="input-field !py-2 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Limite de Credito USD</label>
+                <input type="number" value={form.creditLimit ?? 0} onChange={e => setForm((f: any) => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Dias de Credito</label>
+                <input type="number" value={form.creditDays ?? 0} onChange={e => setForm((f: any) => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
+              <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                Guardar cambios
+              </button>
+            </div>
+          </form>
+        </TabsContent>
+
+        {/* ═══ TAB: Ventas ═══ */}
+        <TabsContent value="sales">
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700/50">
+                  <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
+                  <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                  <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+                  <th className="text-right px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Total Bs</th>
+                  <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
+                  <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedInvoices.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin facturas registradas</td></tr>
+                ) : pagedInvoices.map((inv: any) => (
+                  <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-3 font-mono text-green-400">{inv.number}</td>
+                    <td className="px-4 py-3 text-slate-300">{fmtDate(inv.createdAt)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-white">${inv.totalUsd?.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-300 hidden md:table-cell">{inv.totalBs ? `Bs ${inv.totalBs.toFixed(2)}` : '—'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${INV_BADGES[inv.status] || INV_BADGES.PENDING}`}>
+                        {inv.status === 'PAID' ? 'Pagada' : inv.status === 'CREDIT' ? 'Credito' : inv.status === 'CANCELLED' ? 'Cancelada' : 'Pendiente'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => router.push('/sales/invoices')} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                        Ver factura <ExternalLink size={10} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {invTotalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                <span className="text-sm text-slate-400">Pagina {invPage} de {invTotalPages}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={16} /></button>
+                  <button onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage >= invTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={16} /></button>
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ═══ TAB: CxC ═══ */}
+        <TabsContent value="cxc">
+          {cxc && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="card p-4 text-center">
+                  <p className="text-xs text-slate-500">Deuda Total</p>
+                  <p className="text-lg font-bold text-amber-400 font-mono">${cxc.totalDebt?.toFixed(2)}</p>
+                </div>
+                <div className="card p-4 text-center">
+                  <p className="text-xs text-slate-500">Total Vencido</p>
+                  <p className="text-lg font-bold text-red-400 font-mono">${cxc.totalOverdue?.toFixed(2)}</p>
+                </div>
+                <div className="card p-4 text-center">
+                  <p className="text-xs text-slate-500">Credito Disponible</p>
+                  <p className={`text-lg font-bold font-mono ${cxc.availableCredit > 0 ? 'text-green-400' : 'text-red-400'}`}>${cxc.availableCredit?.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700/50">
+                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Factura</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo</th>
+                      <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Vencimiento</th>
+                      <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
+                      <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cxc.receivables?.filter(r => r.status !== 'PAID').length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin cuentas pendientes</td></tr>
+                    ) : cxc.receivables?.filter(r => r.status !== 'PAID').map(r => (
+                      <tr key={r.id} className="border-b border-slate-700/30">
+                        <td className="px-4 py-3 font-mono text-green-400 text-xs">{r.invoice.number}</td>
+                        <td className="px-4 py-3 text-right font-mono text-white">${r.amountUsd.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-amber-400">${r.balanceUsd.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-slate-300 hidden md:table-cell">{r.dueDate ? fmtDate(r.dueDate) : '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            r.status === 'OVERDUE' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
+                            r.status === 'PARTIAL' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
+                            'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                          }`}>{r.status === 'OVERDUE' ? 'Vencido' : r.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {payingId === r.id ? (
+                            <div className="flex items-center gap-1">
+                              <input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200" />
+                              <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className="bg-slate-900 border border-slate-600 rounded px-1 py-1 text-xs text-slate-200">
+                                <option value="TRANSFERENCIA">Transf.</option>
+                                <option value="CASH_USD">USD</option>
+                                <option value="CASH_BS">Bs</option>
+                                <option value="PAGO_MOVIL">PM</option>
+                                <option value="ZELLE">Zelle</option>
+                              </select>
+                              <button onClick={handlePay} disabled={processingPay} className="px-2 py-1 rounded bg-green-600 text-white text-xs">{processingPay ? '...' : 'OK'}</button>
+                              <button onClick={() => setPayingId(null)} className="text-slate-400"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setPayingId(r.id); setPayAmount(r.balanceUsd.toFixed(2)); setPayMethod('TRANSFERENCIA'); setPayRef(''); }} className="p-1 rounded text-green-400 hover:bg-green-500/10" title="Cobrar">
+                              <DollarSign size={14} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

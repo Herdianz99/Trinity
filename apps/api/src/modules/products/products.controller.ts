@@ -54,9 +54,19 @@ export class ProductsController {
     return this.productsService.getPriceAdjustmentHistory();
   }
 
+  @Get('by-code/:code')
+  findByCode(@Param('code') code: string) {
+    return this.productsService.findByCode(code);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
+  }
+
+  @Get(':id/purchases')
+  findPurchaseHistory(@Param('id') id: string) {
+    return this.productsService.findPurchaseHistory(id);
   }
 
   @Patch(':id')

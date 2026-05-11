@@ -2,52 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  UserCheck,
-  Plus,
-  Search,
-  Loader2,
-  X,
-  Edit2,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign,
-  HandCoins,
+  UserCheck, Plus, Search, Loader2, Edit2, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface Customer {
-  id: string;
-  name: string;
-  documentType: string;
-  rif: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  creditLimit: number;
-  creditDays: number;
-  isActive: boolean;
-  createdAt: string;
+  id: string; name: string; documentType: string; rif: string | null;
+  phone: string | null; email: string | null; creditLimit: number;
+  creditDays: number; isActive: boolean;
 }
-
-const defaultForm: {
-  name: string;
-  documentType: string;
-  rif: string;
-  phone: string;
-  email: string;
-  address: string;
-  creditLimit: number;
-  creditDays: number;
-} = {
-  name: '',
-  documentType: 'V',
-  rif: '',
-  phone: '',
-  email: '',
-  address: '',
-  creditLimit: 0,
-  creditDays: 0,
-};
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -56,19 +19,7 @@ export default function CustomersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(defaultForm);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
-  const [detailCustomer, setDetailCustomer] = useState<any>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [customerReceivables, setCustomerReceivables] = useState<any>(null);
-  const [payingReceivableId, setPayingReceivableId] = useState<string | null>(null);
-  const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
-  const [payReference, setPayReference] = useState('');
-  const [processingPay, setProcessingPay] = useState(false);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -82,131 +33,21 @@ export default function CustomersPage() {
       setCustomers(data.data || []);
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
-    } catch {
-      setMessage({ type: 'error', text: 'Error al cargar clientes' });
-    } finally {
-      setLoading(false);
-    }
+    } catch { setMessage({ type: 'error', text: 'Error al cargar clientes' }); } finally { setLoading(false); }
   }, [page, search]);
 
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
-
-  function openCreate() {
-    setEditingId(null);
-    setForm(defaultForm);
-    setModalOpen(true);
-  }
-
-  function openEdit(c: Customer) {
-    setEditingId(c.id);
-    setForm({
-      name: c.name,
-      rif: c.rif || '',
-      phone: c.phone || '',
-      email: c.email || '',
-      address: c.address || '',
-      documentType: c.documentType || 'V',
-      creditLimit: c.creditLimit,
-      creditDays: c.creditDays,
-    });
-    setModalOpen(true);
-  }
-
-  async function openDetail(id: string) {
-    try {
-      const [custRes, cxcRes] = await Promise.all([
-        fetch(`/api/proxy/customers/${id}`),
-        fetch(`/api/proxy/receivables/customer/${id}`),
-      ]);
-      const data = await custRes.json();
-      const cxcData = await cxcRes.json();
-      setDetailCustomer(data);
-      setCustomerReceivables(cxcData);
-      setDetailOpen(true);
-    } catch {
-      setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
-  }
-
-  async function handlePayReceivable() {
-    if (!payingReceivableId) return;
-    setProcessingPay(true);
-    try {
-      const res = await fetch(`/api/proxy/receivables/${payingReceivableId}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amountUsd: parseFloat(payAmount),
-          method: payMethod,
-          reference: payReference || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error');
-      }
-      setPayingReceivableId(null);
-      setMessage({ type: 'success', text: 'Cobro registrado' });
-      // Refresh detail
-      if (detailCustomer?.id) openDetail(detailCustomer.id);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setProcessingPay(false);
-    }
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setMessage(null);
-    try {
-      const url = editingId
-        ? `/api/proxy/customers/${editingId}`
-        : '/api/proxy/customers';
-      const res = await fetch(url, {
-        method: editingId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          creditLimit: Number(form.creditLimit),
-          creditDays: Number(form.creditDays),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al guardar');
-      }
-      setModalOpen(false);
-      fetchCustomers();
-      setMessage({ type: 'success', text: editingId ? 'Cliente actualizado' : 'Cliente creado' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setSaving(false);
-    }
-  }
+  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Desactivar este cliente?')) return;
+    if (!confirm('Desactivar este cliente?')) return;
     try {
       const res = await fetch(`/api/proxy/customers/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error');
-      }
-      fetchCustomers();
-      setMessage({ type: 'success', text: 'Cliente desactivado' });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    }
+      if (res.ok) { fetchCustomers(); setMessage({ type: 'success', text: 'Cliente desactivado' }); }
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-7xl mx-auto">
-      {/* Header */}
+    <div>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
@@ -217,9 +58,9 @@ export default function CustomersPage() {
             <p className="text-slate-400 text-sm">{total} clientes registrados</p>
           </div>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+        <Link href="/sales/customers/new" className="btn-primary flex items-center gap-2">
           <Plus size={18} /> Nuevo cliente
-        </button>
+        </Link>
       </div>
 
       {message && (
@@ -228,21 +69,14 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Search */}
       <div className="card p-4 mb-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, RIF, telefono..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="input-field pl-9 !py-2.5 text-sm"
-          />
+          <input type="text" placeholder="Buscar por nombre, RIF, telefono..." value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }} className="input-field pl-9 !py-2.5 text-sm" />
         </div>
       </div>
 
-      {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -259,34 +93,34 @@ export default function CustomersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12">
-                  <Loader2 className="animate-spin text-green-500 mx-auto" size={28} />
-                </td></tr>
+                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
               ) : customers.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-500">
-                  No se encontraron clientes
-                </td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-slate-500">No se encontraron clientes</td></tr>
               ) : customers.map(c => (
-                <tr key={c.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 cursor-pointer" onClick={() => openDetail(c.id)}>
-                  <td className="px-4 py-3 text-white font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{c.rif || '-'}</td>
-                  <td className="px-4 py-3 text-slate-300 hidden md:table-cell">{c.phone || '-'}</td>
+                <tr key={c.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                  <td className="px-4 py-3">
+                    <Link href={`/sales/customers/${c.id}`} className="text-white font-medium hover:text-green-400 transition-colors">
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{c.rif || '—'}</td>
+                  <td className="px-4 py-3 text-slate-300 hidden md:table-cell">{c.phone || '—'}</td>
                   <td className="px-4 py-3 hidden lg:table-cell">
                     <span className="text-xs px-2 py-0.5 rounded-full border text-blue-400 border-blue-500/30 bg-blue-500/10">
                       {c.documentType || 'V'}-{c.rif || ''}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-300">${c.creditLimit.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-slate-300 font-mono">${c.creditLimit.toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${c.isActive ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'}`}>
                       {c.isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Editar">
+                      <Link href={`/sales/customers/${c.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Editar">
                         <Edit2 size={15} />
-                      </button>
+                      </Link>
                       <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400" title="Desactivar">
                         <Trash2 size={15} />
                       </button>
@@ -297,219 +131,16 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
-
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
             <span className="text-sm text-slate-400">Pag. {page} de {totalPages}</span>
             <div className="flex gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30">
-                <ChevronLeft size={18} />
-              </button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30">
-                <ChevronRight size={18} />
-              </button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={18} /></button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={18} /></button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Create/Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 px-4">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-              <h2 className="text-lg font-bold text-white">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-              <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Nombre *</label>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">RIF</label>
-                  <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm" placeholder="J-12345678-9" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Tipo Doc.</label>
-                  <select value={form.documentType} onChange={e => setForm(f => ({ ...f, documentType: e.target.value }))} className="input-field !py-2 text-sm">
-                    {['V', 'E', 'J', 'G', 'C', 'P'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Telefono</label>
-                  <input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="input-field !py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Email</label>
-                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="input-field !py-2 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Direccion</label>
-                <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="input-field !py-2 text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Limite de Credito USD</label>
-                  <input type="number" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Dias de Credito</label>
-                  <input type="number" value={form.creditDays} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
-                <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
-                  {saving && <Loader2 className="animate-spin" size={16} />}
-                  {editingId ? 'Guardar' : 'Crear'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Detail Modal */}
-      {detailOpen && detailCustomer && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 px-4">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailOpen(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-              <h2 className="text-lg font-bold text-white">{detailCustomer.name}</h2>
-              <button onClick={() => setDetailOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-            </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-slate-500">RIF:</span> <span className="text-slate-200 ml-2">{detailCustomer.rif || '-'}</span></div>
-                <div><span className="text-slate-500">Documento:</span> <span className="text-slate-200 ml-2">{detailCustomer.documentType || 'V'}-{detailCustomer.rif || '-'}</span></div>
-                <div><span className="text-slate-500">Telefono:</span> <span className="text-slate-200 ml-2">{detailCustomer.phone || '-'}</span></div>
-                <div><span className="text-slate-500">Email:</span> <span className="text-slate-200 ml-2">{detailCustomer.email || '-'}</span></div>
-                <div className="col-span-2"><span className="text-slate-500">Direccion:</span> <span className="text-slate-200 ml-2">{detailCustomer.address || '-'}</span></div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="card p-3 text-center">
-                  <p className="text-xs text-slate-500">Limite Credito</p>
-                  <p className="text-lg font-bold text-white">${detailCustomer.creditLimit?.toFixed(2)}</p>
-                </div>
-                <div className="card p-3 text-center">
-                  <p className="text-xs text-slate-500">Deuda Pendiente</p>
-                  <p className="text-lg font-bold text-amber-400">${detailCustomer.pendingDebt?.toFixed(2)}</p>
-                </div>
-                <div className="card p-3 text-center">
-                  <p className="text-xs text-slate-500">Credito Disponible</p>
-                  <p className={`text-lg font-bold ${detailCustomer.availableCredit > 0 ? 'text-green-400' : 'text-red-400'}`}>${detailCustomer.availableCredit?.toFixed(2)}</p>
-                </div>
-              </div>
-
-              {/* Estado de cuenta CxC */}
-              {customerReceivables && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <HandCoins size={16} /> Estado de Cuenta
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3 mb-3">
-                    <div className="card p-3 text-center">
-                      <p className="text-xs text-slate-500">Deuda Total</p>
-                      <p className="text-lg font-bold text-amber-400">${customerReceivables.totalDebt?.toFixed(2)}</p>
-                    </div>
-                    <div className="card p-3 text-center">
-                      <p className="text-xs text-slate-500">Vencido</p>
-                      <p className="text-lg font-bold text-red-400">${customerReceivables.totalOverdue?.toFixed(2)}</p>
-                    </div>
-                    <div className="card p-3 text-center">
-                      <p className="text-xs text-slate-500">Credito Disponible</p>
-                      <p className={`text-lg font-bold ${customerReceivables.availableCredit > 0 ? 'text-green-400' : 'text-red-400'}`}>${customerReceivables.availableCredit?.toFixed(2)}</p>
-                    </div>
-                  </div>
-                  {customerReceivables.receivables?.filter((r: any) => r.status !== 'PAID').length > 0 && (
-                    <div className="space-y-2">
-                      {customerReceivables.receivables.filter((r: any) => r.status !== 'PAID').map((r: any) => (
-                        <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${r.status === 'OVERDUE' ? 'bg-red-500/10 border border-red-500/20' : 'bg-slate-700/30'}`}>
-                          <div>
-                            <span className="text-sm text-white font-mono">{r.invoice.number}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ml-2 border ${
-                              r.status === 'OVERDUE' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
-                              r.status === 'PARTIAL' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
-                              'text-amber-400 border-amber-500/30 bg-amber-500/10'
-                            }`}>{r.status === 'OVERDUE' ? 'Vencido' : r.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}</span>
-                            {r.dueDate && <span className="text-xs text-slate-500 ml-2">Vence: {new Date(r.dueDate).toLocaleDateString()}</span>}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-300">Saldo: ${r.balanceUsd?.toFixed(2)}</span>
-                            {payingReceivableId === r.id ? (
-                              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                <input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                                  className="w-24 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200" placeholder="Monto" />
-                                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                                  className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200">
-                                  <option value="TRANSFERENCIA">Transf.</option>
-                                  <option value="CASH_USD">Efect. USD</option>
-                                  <option value="CASH_BS">Efect. Bs</option>
-                                  <option value="PAGO_MOVIL">Pago movil</option>
-                                  <option value="ZELLE">Zelle</option>
-                                </select>
-                                <button onClick={handlePayReceivable} disabled={processingPay}
-                                  className="px-2 py-1 rounded bg-green-600 text-white text-xs hover:bg-green-700 disabled:opacity-50">
-                                  {processingPay ? '...' : 'OK'}
-                                </button>
-                                <button onClick={() => setPayingReceivableId(null)} className="text-slate-400 hover:text-slate-200">
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button onClick={e => { e.stopPropagation(); setPayingReceivableId(r.id); setPayAmount(r.balanceUsd?.toFixed(2)); setPayMethod('TRANSFERENCIA'); setPayReference(''); }}
-                                className="p-1 rounded text-green-400 hover:bg-green-500/10" title="Cobrar">
-                                <DollarSign size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {detailCustomer.invoices?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Ultimas Facturas</h3>
-                  <div className="space-y-2">
-                    {detailCustomer.invoices.map((inv: any) => (
-                      <div key={inv.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-700/30">
-                        <div>
-                          <span className="text-sm text-white font-medium">{inv.number}</span>
-                          <span className="text-xs text-slate-500 ml-2">{new Date(inv.createdAt).toLocaleDateString('es-VE')}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-slate-300">${inv.totalUsd?.toFixed(2)}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                            inv.status === 'PAID' ? 'text-green-400 border-green-500/30 bg-green-500/10' :
-                            inv.status === 'CREDIT' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
-                            inv.status === 'CANCELLED' ? 'text-red-400 border-red-500/30 bg-red-500/10' :
-                            'text-amber-400 border-amber-500/30 bg-amber-500/10'
-                          }`}>{
-                            inv.status === 'PAID' ? 'Procesado' :
-                            inv.status === 'CREDIT' ? 'Credito' :
-                            inv.status === 'CANCELLED' ? 'Cancelado' :
-                            'En Espera'
-                          }</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -244,6 +244,49 @@ export class ProductsService {
     return product;
   }
 
+  async findByCode(code: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { code },
+      include: {
+        category: true,
+        brand: true,
+        supplier: true,
+        stock: { include: { warehouse: true } },
+      },
+    });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+    return product;
+  }
+
+  async findPurchaseHistory(productId: string) {
+    const items = await this.prisma.purchaseOrderItem.findMany({
+      where: { productId },
+      include: {
+        purchaseOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            date: true,
+            status: true,
+            supplier: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { purchaseOrder: { date: 'desc' } },
+    });
+    return items.map((item) => ({
+      id: item.id,
+      date: item.purchaseOrder.date,
+      orderNumber: item.purchaseOrder.orderNumber,
+      orderId: item.purchaseOrder.id,
+      status: item.purchaseOrder.status,
+      supplier: item.purchaseOrder.supplier.name,
+      quantity: item.receivedQty,
+      costUsd: item.costUsd,
+      totalUsd: item.totalUsd,
+    }));
+  }
+
   async update(id: string, dto: UpdateProductDto) {
     const existing = await this.findOne(id);
 
