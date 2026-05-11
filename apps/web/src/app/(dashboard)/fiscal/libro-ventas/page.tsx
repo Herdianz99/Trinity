@@ -17,6 +17,7 @@ interface VentaRow {
   ivaReducido: number;
   ivaGeneral: number;
   ivaEspecial: number;
+  igtf: number;
   totalFactura: number;
 }
 
@@ -29,6 +30,7 @@ interface Totales {
   ivaReducido: number;
   ivaGeneral: number;
   ivaEspecial: number;
+  igtf: number;
   totalVentas: number;
 }
 
@@ -105,6 +107,7 @@ export default function LibroVentasPage() {
         <td class="num">${formatVe(r.ivaReducido)}</td>
         <td class="num">${formatVe(r.ivaGeneral)}</td>
         <td class="num">${formatVe(r.ivaEspecial)}</td>
+        <td class="num">${formatVe(r.igtf)}</td>
         <td class="num total">${formatVe(r.totalFactura)}</td>
       </tr>
     `).join('');
@@ -119,6 +122,7 @@ export default function LibroVentasPage() {
         <td class="num"><strong>${formatVe(totales.ivaReducido)}</strong></td>
         <td class="num"><strong>${formatVe(totales.ivaGeneral)}</strong></td>
         <td class="num"><strong>${formatVe(totales.ivaEspecial)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.igtf)}</strong></td>
         <td class="num total"><strong>${formatVe(totales.totalVentas)}</strong></td>
       </tr>
     ` : '';
@@ -156,7 +160,7 @@ export default function LibroVentasPage() {
             <th>N&deg;</th><th>Fecha</th><th>N&deg; Factura</th><th>N&deg; Control</th>
             <th>RIF Cliente</th><th>Cliente</th>
             <th>Base Exenta</th><th>Base Reducida</th><th>Base General</th><th>Base Especial</th>
-            <th>IVA 8%</th><th>IVA 16%</th><th>IVA 31%</th><th>Total</th>
+            <th>IVA 8%</th><th>IVA 16%</th><th>IVA 31%</th><th>IGTF</th><th>Total</th>
           </tr>
         </thead>
         <tbody>
@@ -244,12 +248,13 @@ export default function LibroVentasPage() {
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 8%</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 16%</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 31%</th>
+                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IGTF</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={14} className="text-center py-8 text-slate-500">No hay facturas en este periodo</td></tr>
+                  <tr><td colSpan={15} className="text-center py-8 text-slate-500">No hay facturas en este periodo</td></tr>
                 ) : (
                   <>
                     {rows.map(r => (
@@ -267,6 +272,7 @@ export default function LibroVentasPage() {
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaReducido)}</td>
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaGeneral)}</td>
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaEspecial)}</td>
+                        <td className="px-3 py-2 text-right text-amber-400/80 tabular-nums">{formatVe(r.igtf)}</td>
                         <td className="px-3 py-2 text-right text-slate-100 font-semibold tabular-nums">{formatVe(r.totalFactura)}</td>
                       </tr>
                     ))}
@@ -281,6 +287,7 @@ export default function LibroVentasPage() {
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaReducido)}</td>
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaGeneral)}</td>
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaEspecial)}</td>
+                        <td className="px-3 py-2.5 text-right text-amber-400 font-bold tabular-nums">{formatVe(totales.igtf)}</td>
                         <td className="px-3 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.totalVentas)}</td>
                       </tr>
                     )}

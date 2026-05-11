@@ -20,6 +20,8 @@ const IVA_RATES: Record<string, number> = {
   SPECIAL: 0.31,
 };
 
+const IGTF_METHODS: string[] = ['CASH_USD', 'ZELLE'];
+
 @Injectable()
 export class InvoicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -210,6 +212,9 @@ export class InvoicesService {
         ivaType: product.ivaType,
         ivaAmount,
         totalUsd: lineSubtotal + ivaAmount,
+        unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
+        ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
+        totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
       });
     }
 
@@ -252,6 +257,8 @@ export class InvoicesService {
           ivaUsd: Math.round(totalIva * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
           totalBs: Math.round(totalBs * 100) / 100,
+          subtotalBs: Math.round(subtotalUsd * rate.rate * 100) / 100,
+          ivaBs: Math.round(totalIva * rate.rate * 100) / 100,
           exchangeRate: rate.rate,
           notes: dto.notes,
           createdById: user.id,
@@ -326,7 +333,7 @@ export class InvoicesService {
       }
     }
 
-    // Get default warehouse
+    // Get default warehouse and IGTF config
     const config = await this.prisma.companyConfig.findFirst();
     let warehouseId = config?.defaultWarehouseId;
     if (!warehouseId) {
@@ -342,10 +349,42 @@ export class InvoicesService {
       }
     }
 
+    // IGTF calculation
+    const isIGTFContributor = config?.isIGTFContributor || false;
+    const igtfPct = config?.igtfPct || 3;
+    let invoiceIgtfUsd = 0;
+    let invoiceIgtfBs = 0;
+
+    if (isIGTFContributor && invoice.igtfUsd === 0) {
+      const foreignTotal = dto.payments
+        .filter(p => IGTF_METHODS.includes(p.method))
+        .reduce((sum, p) => sum + p.amountUsd, 0);
+
+      if (foreignTotal > 0) {
+        invoiceIgtfUsd = Math.round(foreignTotal * (igtfPct / 100) * 100) / 100;
+        invoiceIgtfBs = Math.round(invoiceIgtfUsd * invoice.exchangeRate * 100) / 100;
+      }
+    }
+
+    const newTotalUsd = invoiceIgtfUsd > 0
+      ? Math.round((invoice.totalUsd + invoiceIgtfUsd) * 100) / 100
+      : invoice.totalUsd;
+    const newTotalBs = invoiceIgtfUsd > 0
+      ? Math.round((invoice.totalBs + invoiceIgtfBs) * 100) / 100
+      : invoice.totalBs;
+
     // Execute everything in transaction
     const result = await this.prisma.$transaction(async (tx) => {
       // Create payments
       for (const payment of dto.payments) {
+        let paymentIgtfUsd = 0;
+        let paymentIgtfBs = 0;
+
+        if (isIGTFContributor && invoice.igtfUsd === 0 && IGTF_METHODS.includes(payment.method)) {
+          paymentIgtfUsd = Math.round(payment.amountUsd * (igtfPct / 100) * 100) / 100;
+          paymentIgtfBs = Math.round(paymentIgtfUsd * invoice.exchangeRate * 100) / 100;
+        }
+
         await tx.payment.create({
           data: {
             invoiceId: id,
@@ -354,6 +393,8 @@ export class InvoicesService {
             amountBs: payment.amountBs,
             exchangeRate: invoice.exchangeRate,
             reference: payment.reference,
+            igtfUsd: paymentIgtfUsd,
+            igtfBs: paymentIgtfBs,
           },
         });
 
@@ -372,7 +413,7 @@ export class InvoicesService {
         }
       }
 
-      // Create credit receivable
+      // Create credit receivable (uses totals with IGTF included)
       if (dto.isCredit && invoice.customerId) {
         const creditDays = dto.creditDays || invoice.customer?.creditDays || 30;
         const dueDate = new Date();
@@ -383,8 +424,8 @@ export class InvoicesService {
             type: 'CUSTOMER_CREDIT',
             customerId: invoice.customerId,
             invoiceId: id,
-            amountUsd: invoice.totalUsd,
-            amountBs: invoice.totalBs,
+            amountUsd: newTotalUsd,
+            amountBs: newTotalBs,
             exchangeRate: invoice.exchangeRate,
             dueDate,
           },
@@ -423,7 +464,7 @@ export class InvoicesService {
         });
       }
 
-      // Update invoice status and release lock
+      // Update invoice status, IGTF, and release lock
       const newStatus = dto.isCredit ? 'CREDIT' : 'PAID';
       const updatedInvoice = await tx.invoice.update({
         where: { id },
@@ -437,6 +478,10 @@ export class InvoicesService {
           paidAt: new Date(),
           lockedById: null,
           lockedAt: null,
+          igtfUsd: invoiceIgtfUsd,
+          igtfBs: invoiceIgtfBs,
+          totalUsd: newTotalUsd,
+          totalBs: newTotalBs,
         },
         include: {
           items: true,
@@ -571,6 +616,9 @@ export class InvoicesService {
         ivaType: product.ivaType,
         ivaAmount,
         totalUsd: lineSubtotal + ivaAmount,
+        unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
+        ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
+        totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
       });
     }
 
@@ -590,6 +638,8 @@ export class InvoicesService {
           ivaUsd: Math.round(totalIva * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
           totalBs: Math.round(totalBs * 100) / 100,
+          subtotalBs: Math.round(subtotalUsd * rate.rate * 100) / 100,
+          ivaBs: Math.round(totalIva * rate.rate * 100) / 100,
           exchangeRate: rate.rate,
           notes: dto.notes,
           lockedById: null,

@@ -18,6 +18,8 @@ interface CompanyConfig {
   overdueWarningDays: number;
   ivaRetentionPct: number;
   islrRetentionPct: number;
+  isIGTFContributor: boolean;
+  igtfPct: number;
 }
 
 export default function ConfigPage() {
@@ -36,6 +38,8 @@ export default function ConfigPage() {
     overdueWarningDays: 3,
     ivaRetentionPct: 75,
     islrRetentionPct: 0,
+    isIGTFContributor: false,
+    igtfPct: 3,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,6 +103,8 @@ export default function ConfigPage() {
           overdueWarningDays: data.overdueWarningDays || 3,
           ivaRetentionPct: data.ivaRetentionPct ?? 75,
           islrRetentionPct: data.islrRetentionPct ?? 0,
+          isIGTFContributor: data.isIGTFContributor || false,
+          igtfPct: data.igtfPct ?? 3,
         });
       }
     } catch {
@@ -147,6 +153,8 @@ export default function ConfigPage() {
           overdueWarningDays: Number(config.overdueWarningDays),
           ivaRetentionPct: Number(config.ivaRetentionPct),
           islrRetentionPct: Number(config.islrRetentionPct),
+          isIGTFContributor: config.isIGTFContributor,
+          igtfPct: Number(config.igtfPct),
         }),
       });
 
@@ -205,7 +213,7 @@ export default function ConfigPage() {
     }
   }
 
-  function handleChange(field: keyof CompanyConfig, value: string | number) {
+  function handleChange(field: keyof CompanyConfig, value: string | number | boolean) {
     setConfig((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -447,6 +455,45 @@ export default function ConfigPage() {
                 />
                 <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en ordenes de compra</p>
               </div>
+            </div>
+          </div>
+
+          {/* IGTF Tax Configuration */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Impuestos - IGTF</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Impuesto a las Grandes Transacciones Financieras. Aplica a pagos en divisas (Efectivo USD, Zelle).
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.isIGTFContributor}
+                  onChange={(e) => handleChange('isIGTFContributor', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Contribuyente IGTF</span>
+                  <p className="text-xs text-slate-500">Aplica IGTF a pagos en divisas (Efectivo USD y Zelle)</p>
+                </div>
+              </label>
+              {config.isIGTFContributor && (
+                <div className="w-48">
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    Porcentaje IGTF (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={config.igtfPct}
+                    onChange={(e) => handleChange('igtfPct', e.target.value)}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Actualmente 3% por ley venezolana</p>
+                </div>
+              )}
             </div>
           </div>
 

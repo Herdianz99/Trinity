@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEmail } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEmail, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateCompanyConfigDto {
@@ -71,4 +71,14 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   islrRetentionPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  isIGTFContributor?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  igtfPct?: number;
 }

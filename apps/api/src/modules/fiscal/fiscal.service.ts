@@ -38,6 +38,7 @@ export class FiscalService {
     let totalIvaReducido = 0;
     let totalIvaGeneral = 0;
     let totalIvaEspecial = 0;
+    let totalIgtf = 0;
     let totalFacturas = 0;
 
     const rows = invoices.map((inv, index) => {
@@ -79,6 +80,7 @@ export class FiscalService {
       totalIvaReducido += ivaReducido;
       totalIvaGeneral += ivaGeneral;
       totalIvaEspecial += ivaEspecial;
+      totalIgtf += inv.igtfUsd;
       totalFacturas += inv.totalUsd;
 
       return {
@@ -97,6 +99,7 @@ export class FiscalService {
         ivaReducido: round2(ivaReducido),
         ivaGeneral: round2(ivaGeneral),
         ivaEspecial: round2(ivaEspecial),
+        igtf: inv.igtfUsd,
         totalFactura: inv.totalUsd,
       };
     });
@@ -113,6 +116,7 @@ export class FiscalService {
         ivaReducido: round2(totalIvaReducido),
         ivaGeneral: round2(totalIvaGeneral),
         ivaEspecial: round2(totalIvaEspecial),
+        igtf: round2(totalIgtf),
         totalVentas: round2(totalFacturas),
       },
     };

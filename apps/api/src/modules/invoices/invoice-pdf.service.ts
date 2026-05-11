@@ -141,6 +141,11 @@ export class InvoicePdfService {
         }
       }
 
+      // IGTF line (if applicable)
+      if (invoice.igtfUsd > 0) {
+        doc.text(`IGTF (3%):`, totalsX, y); doc.text(`$${invoice.igtfUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 14;
+      }
+
       y += 2;
       doc.moveTo(totalsX, y).lineTo(40 + pageWidth, y).stroke('#333333');
       y += 5;

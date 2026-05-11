@@ -95,6 +95,7 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number } | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
@@ -141,6 +142,14 @@ export default function POSPage() {
         if (data?.id) setUserId(data.id);
         if (data?.role) setUserRole(data.role);
         if (data?.permissions) setUserPermissions(data.permissions || []);
+      });
+    fetch('/api/proxy/config')
+      .then(r => r.json())
+      .then(data => {
+        if (data) setCompanyConfig({
+          isIGTFContributor: data.isIGTFContributor || false,
+          igtfPct: data.igtfPct ?? 3,
+        });
       });
   }, []);
 
@@ -331,9 +340,22 @@ export default function POSPage() {
   const totalUsd = subtotalUsd + totalIva;
   const totalBs = totalUsd * exchangeRate;
 
+  // IGTF calculation
+  const igtfApplicableMethods = ['CASH_USD', 'ZELLE'];
+  const foreignPaymentsTotal = payments
+    .filter(p => igtfApplicableMethods.includes(p.method))
+    .reduce((sum, p) => sum + p.amountUsd, 0);
+  const isIGTFApplicable = companyConfig?.isIGTFContributor && foreignPaymentsTotal > 0;
+  const igtfUsd = isIGTFApplicable
+    ? Math.round(foreignPaymentsTotal * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
+    : 0;
+  const igtfBs = Math.round(igtfUsd * exchangeRate * 100) / 100;
+  const grandTotalUsd = totalUsd + igtfUsd;
+  const grandTotalBs = totalBs + igtfBs;
+
   // Payment calculations
   const totalPaidUsd = payments.reduce((s, p) => s + p.amountUsd, 0);
-  const remaining = totalUsd - totalPaidUsd;
+  const remaining = grandTotalUsd - totalPaidUsd;
 
   function addPayment(methodKey: string) {
     const method = PAYMENT_METHODS.find(m => m.key === methodKey);
@@ -630,6 +652,18 @@ export default function POSPage() {
       }
       return;
     }
+
+    // getUserMedia requires HTTPS (secure context) on mobile browsers
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setMessage({ type: 'error', text: 'La camara requiere conexion HTTPS. No funciona en HTTP.' });
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMessage({ type: 'error', text: 'Este navegador no soporta acceso a la camara' });
+      return;
+    }
+
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser');
       const codeReader = new BrowserMultiFormatReader();
@@ -651,8 +685,15 @@ export default function POSPage() {
         },
       );
       scannerControlsRef.current = controls;
-    } catch {
-      setMessage({ type: 'error', text: 'No se pudo acceder a la camara' });
+    } catch (err) {
+      console.error('Scanner error:', err);
+      const errorMsg = err instanceof DOMException && err.name === 'NotAllowedError'
+        ? 'Permiso de camara denegado. Verifica los permisos del navegador.'
+        : err instanceof DOMException && err.name === 'NotFoundError'
+        ? 'No se encontro ninguna camara en este dispositivo.'
+        : 'No se pudo acceder a la camara';
+      setMessage({ type: 'error', text: errorMsg });
+      setScannerActive(false);
     }
   }
 
@@ -1061,8 +1102,8 @@ export default function POSPage() {
               <div>
                 <h2 className="text-lg font-bold text-white">Cobrar Factura</h2>
                 <div className="flex gap-4 mt-1">
-                  <span className="text-sm text-green-400 font-medium">${totalUsd.toFixed(2)} USD</span>
-                  <span className="text-sm text-slate-400">Bs {totalBs.toFixed(2)}</span>
+                  <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
+                  <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
                   <span className="text-xs text-slate-500">Tasa: {exchangeRate.toFixed(2)}</span>
                 </div>
               </div>
@@ -1136,6 +1177,40 @@ export default function POSPage() {
                   })}
                 </div>
               )}
+
+              {/* Invoice Summary */}
+              <div className="card p-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Subtotal</span>
+                  <div className="text-right">
+                    <span className="text-white">${subtotalUsd.toFixed(2)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {(subtotalUsd * exchangeRate).toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">IVA</span>
+                  <div className="text-right">
+                    <span className="text-white">${totalIva.toFixed(2)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {(totalIva * exchangeRate).toFixed(2)}</span>
+                  </div>
+                </div>
+                {igtfUsd > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-400">IGTF ({companyConfig?.igtfPct || 3}%)</span>
+                    <div className="text-right">
+                      <span className="text-amber-400">${igtfUsd.toFixed(2)}</span>
+                      <span className="text-amber-400/60 text-xs ml-2">Bs {igtfBs.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold border-t border-slate-700/50 pt-1">
+                  <span className="text-slate-300">Total</span>
+                  <div className="text-right">
+                    <span className="text-green-400">${grandTotalUsd.toFixed(2)}</span>
+                    <span className="text-slate-400 text-xs ml-2">Bs {grandTotalBs.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
 
               <div className="card p-3 flex items-center justify-between">
                 <span className="text-sm text-slate-400">Pendiente por cobrar</span>

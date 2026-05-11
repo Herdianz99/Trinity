@@ -277,6 +277,12 @@ export default function InvoicesPage() {
               <div className="card p-4">
                 <div className="flex justify-between text-sm mb-1"><span className="text-slate-400">Subtotal</span><span className="text-white">${detail.subtotalUsd?.toFixed(2)}</span></div>
                 <div className="flex justify-between text-sm mb-1"><span className="text-slate-400">IVA</span><span className="text-white">${detail.ivaUsd?.toFixed(2)}</span></div>
+                {detail.igtfUsd > 0 && (
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-amber-400">IGTF (3%)</span>
+                    <span className="text-amber-400">${detail.igtfUsd?.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-base font-bold border-t border-slate-700/50 pt-2 mt-2">
                   <span className="text-slate-300">Total USD</span><span className="text-green-400">${detail.totalUsd?.toFixed(2)}</span>
                 </div>

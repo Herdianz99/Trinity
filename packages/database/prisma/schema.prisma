@@ -134,6 +134,8 @@ model CompanyConfig {
   overdueWarningDays     Int      @default(3)
   ivaRetentionPct        Float    @default(75)
   islrRetentionPct       Float    @default(0)
+  isIGTFContributor      Boolean  @default(false)
+  igtfPct                Float    @default(3)
   updatedAt              DateTime @updatedAt
 }
 
@@ -502,6 +504,10 @@ model Invoice {
   totalUsd       Float         @default(0)
   totalBs        Float         @default(0)
   exchangeRate   Float         @default(0)
+  igtfUsd        Float         @default(0)
+  igtfBs         Float         @default(0)
+  subtotalBs     Float         @default(0)
+  ivaBs          Float         @default(0)
   isCredit       Boolean       @default(false)
   creditDays     Int           @default(0)
   dueDate        DateTime?
@@ -528,8 +534,11 @@ model InvoiceItem {
   quantity    Float
   unitPrice   Float
   ivaType     IvaType
-  ivaAmount   Float
-  totalUsd    Float
+  ivaAmount    Float
+  totalUsd     Float
+  unitPriceBs  Float   @default(0)
+  ivaAmountBs  Float   @default(0)
+  totalBs      Float   @default(0)
 }
 
 model Payment {
@@ -541,6 +550,8 @@ model Payment {
   amountBs     Float
   exchangeRate Float
   reference    String?
+  igtfUsd      Float         @default(0)
+  igtfBs       Float         @default(0)
   createdAt    DateTime      @default(now())
 }
 
