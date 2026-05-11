@@ -682,8 +682,8 @@ model QuotationItem {
 
 ### FASE 3 — Inteligencia de Negocio
 
-#### Sesión 13 — Análisis de Rotación ABC
-#### Sesión 14 — Reportes Avanzados y Exportación
+#### Sesión 13 — Despliegue en DigitalOcean ✅
+#### Sesión 14 — IGTF y Estandarización de Montos en Bs ✅
 #### Sesiones 15-18 — Por definir
 
 ---
@@ -709,7 +709,7 @@ model QuotationItem {
 
 ## Decisiones Técnicas Importantes
 
-**Precios:** Siempre en USD en la DB. Se muestran en USD y Bs. Nunca se guarda Bs en la DB.
+**Precios:** Siempre en USD en la DB. Se muestran en USD y Bs. A partir de Sesion 14 se guardan montos en Bs en Invoice, InvoiceItem y Payment para precision historica (tasa del dia de la factura).
 
 **Tasa de cambio BCV:**
 - Se guarda en tabla `ExchangeRate` — una entrada por día con su fecha

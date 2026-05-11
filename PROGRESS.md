@@ -1,5 +1,37 @@
 # Trinity ERP — Progreso
 
+## Sesion 14 — IGTF y Estandarizacion de Montos en Bs (Completada)
+
+### Migracion de Base de Datos
+- Campos IGTF en CompanyConfig: `isIGTFContributor`, `igtfPct`
+- Campos IGTF en Invoice: `igtfUsd`, `igtfBs`, `subtotalBs`, `ivaBs`
+- Campos Bs en InvoiceItem: `unitPriceBs`, `ivaAmountBs`, `totalBs`
+- Campos IGTF en Payment: `igtfUsd`, `igtfBs`
+- Migracion: `add_igtf_and_bs_amounts`
+
+### Backend (NestJS)
+- DTO de CompanyConfig actualizado con campos IGTF (`isIGTFContributor`, `igtfPct`)
+- Servicio de facturas guarda montos en Bs al crear y actualizar (InvoiceItem y Invoice)
+- Calculo automatico de IGTF al procesar pago:
+  - Solo aplica si `isIGTFContributor = true`
+  - Solo en metodos de pago en divisas: `CASH_USD`, `ZELLE`
+  - Se calcula una sola vez por factura
+  - IGTF se registra por payment y en el total de la factura
+- PDF de factura muestra linea de IGTF entre IVA y Total
+- Libro de ventas fiscal incluye columna IGTF
+
+### Frontend (Next.js)
+- Pagina de configuracion: toggle "Contribuyente IGTF" con porcentaje configurable
+- Modal de cobro POS:
+  - Calculo en tiempo real del IGTF segun metodos de pago seleccionados
+  - Resumen de factura con Subtotal, IVA, IGTF y Total en USD y Bs
+  - Total y pendiente se actualizan automaticamente con IGTF
+- Detalle de factura: muestra IGTF si aplica
+- Libro de ventas: columna IGTF en tabla y exportacion PDF
+
+### Mejora adicional
+- Escaner de camara del POS: mensajes de error mejorados (detecta contexto inseguro HTTP, permisos denegados, camara no encontrada)
+
 ## Sesion 1 — Setup, Auth y Configuracion Base (Completada)
 - Scaffold monorepo pnpm + Turborepo
 - Docker Compose (PostgreSQL 15 + Redis 7)
