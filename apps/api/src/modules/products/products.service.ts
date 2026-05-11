@@ -263,21 +263,17 @@ export class ProductsService {
       where: { productId },
       include: {
         purchaseOrder: {
-          select: {
-            id: true,
-            orderNumber: true,
-            date: true,
-            status: true,
+          include: {
             supplier: { select: { id: true, name: true } },
           },
         },
       },
-      orderBy: { purchaseOrder: { date: 'desc' } },
+      orderBy: { purchaseOrder: { createdAt: 'desc' } },
     });
     return items.map((item) => ({
       id: item.id,
-      date: item.purchaseOrder.date,
-      orderNumber: item.purchaseOrder.orderNumber,
+      date: item.purchaseOrder.createdAt,
+      orderNumber: item.purchaseOrder.number,
       orderId: item.purchaseOrder.id,
       status: item.purchaseOrder.status,
       supplier: item.purchaseOrder.supplier.name,
