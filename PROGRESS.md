@@ -1,5 +1,43 @@
 # Trinity ERP — Progreso
 
+## Sesion 15 — UX Correctiva: Paginas dedicadas con tabs (Completada)
+
+### Concepto
+Conversion de CRUD basado en modales a paginas dedicadas con URLs navegables y componente Tabs (Radix UI). Los modales solo se usan para confirmaciones rapidas. Cada entidad tiene pagina de listado, detalle con tabs, y formulario de creacion.
+
+### Componente Tabs
+- `apps/web/src/components/ui/tabs.tsx` — componente shadcn/ui con estilos dark theme
+- Basado en `@radix-ui/react-tabs`
+
+### Backend (NestJS)
+- `GET /products/by-code/:code` — buscar producto por codigo (para URL `/catalog/products/[code]`)
+- `GET /products/:id/purchases` — historial de compras de un producto (PurchaseOrderItems con PO y proveedor)
+
+### Modulo 1: Productos
+- `/catalog/products` — listado sin modales, nombres son Links al detalle
+- `/catalog/products/new` — formulario de creacion, redirige al detalle al crear
+- `/catalog/products/[code]` — detalle con 5 tabs:
+  - Info General (formulario editable), Existencias (stock por almacen), Movimientos (paginado con badges por tipo), Historial de compras, Precios (formula paso a paso)
+
+### Modulo 2: Ordenes de Compra
+- `/purchases` — listado sin modales, numeros de orden son Links
+- `/purchases/new` — formulario con busqueda de productos, proveedor, items
+- `/purchases/[id]` — detalle con 3 tabs + modal de recepcion:
+  - Info General (resumen + items), Recepciones (movimientos filtrados), CxP (si es credito)
+- `/purchases/[id]/edit` — edicion de orden en borrador/enviada
+
+### Modulo 3: Clientes
+- `/sales/customers` — listado con busqueda y paginacion, sin modales
+- `/sales/customers/new` — formulario de creacion
+- `/sales/customers/[id]` — detalle con 3 tabs:
+  - Info General (formulario editable), Ventas (facturas paginadas), CxC (resumen de deuda + cobro inline)
+
+### Modulo 4: Proveedores
+- `/catalog/suppliers` — listado sin modales
+- `/catalog/suppliers/new` — formulario de creacion
+- `/catalog/suppliers/[id]` — detalle con 3 tabs:
+  - Info General (formulario editable), Compras (ordenes paginadas), CxP (resumen + tabla de pagares)
+
 ## Sesion 14 — IGTF y Estandarizacion de Montos en Bs (Completada)
 
 ### Migracion de Base de Datos

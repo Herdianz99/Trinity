@@ -684,7 +684,8 @@ model QuotationItem {
 
 #### Sesión 13 — Despliegue en DigitalOcean ✅
 #### Sesión 14 — IGTF y Estandarización de Montos en Bs ✅
-#### Sesiones 15-18 — Por definir
+#### Sesión 15 — UX Correctiva: Paginas dedicadas con Tabs ✅
+#### Sesiones 16-18 — Por definir
 
 ---
 
