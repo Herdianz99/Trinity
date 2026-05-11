@@ -882,3 +882,64 @@
 - PATCH /role-permissions/ADMIN: retorna 400 "No se pueden modificar los permisos de ADMIN"
 - Login refleja permisos de DB (no estaticos)
 - TypeScript compila sin errores en web app
+
+## Sesion 13 — Deployment en DigitalOcean (Completada)
+
+### Servidor
+- **Droplet**: Ubuntu 24.04, 1 vCPU, 2GB RAM, NYC1
+- **IP**: 134.209.220.233
+- **Acceso**: `ssh root@134.209.220.233` (llave SSH ed25519)
+
+### Infraestructura instalada
+- Docker + Docker Compose (PostgreSQL 15 + Redis 7 en contenedores)
+- Node.js 20.x (via nodesource)
+- pnpm (gestor de paquetes)
+- PM2 (process manager con auto-restart al reboot)
+- Nginx (reverse proxy puerto 80 → Next.js:3000)
+
+### Servicios corriendo
+| Servicio | Puerto | PM2 Name | Descripcion |
+|----------|--------|----------|-------------|
+| PostgreSQL | 5432 | Docker | Base de datos |
+| Redis | 6379 | Docker | Cache de permisos |
+| NestJS API | 4000 | trinity-api | Backend REST |
+| Next.js Web | 3000 | trinity-web | Frontend SSR |
+| Nginx | 80 | systemd | Reverse proxy |
+
+### Archivos de configuracion en servidor
+- `/opt/Trinity/packages/database/.env` — DATABASE_URL
+- `/opt/Trinity/apps/api/.env` — DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_REFRESH_SECRET, API_PORT
+- `/opt/Trinity/apps/web/.env` — NEXT_PUBLIC_API_URL=http://localhost:4000, COOKIE_SECURE=false
+- `/etc/nginx/sites-available/trinity` — config Nginx
+
+### Fix aplicado
+- Cookies `secure` flag controlado por env `COOKIE_SECURE=false` (necesario porque no hay HTTPS aun)
+- Archivos modificados: `apps/web/src/app/api/auth/login/route.ts`, `apps/web/src/app/api/auth/refresh/route.ts`
+
+### Migracion adicional creada en servidor
+- `20260511010038_add_category_last_product_number` — campo `lastProductNumber` + unique constraint en `code` para Category
+
+### Pendiente para futuro
+- Comprar dominio y apuntar DNS a 134.209.220.233
+- Configurar HTTPS con certbot (y cambiar COOKIE_SECURE=true)
+- Configurar firewall (ufw): solo puertos 22, 80, 443
+
+### Comandos utiles para mantenimiento
+```bash
+# Conectar al servidor
+ssh root@134.209.220.233
+
+# Ver estado de servicios
+pm2 status
+pm2 logs trinity-api --lines 20
+pm2 logs trinity-web --lines 20
+
+# Actualizar codigo (despues de push a GitHub)
+cd /opt/Trinity && git pull && cd apps/api && npm run build && pm2 restart trinity-api && cd ../web && npm run build && pm2 restart trinity-web
+
+# Reiniciar todo
+pm2 restart all
+
+# Ver contenedores Docker (DB + Redis)
+docker ps
+```
