@@ -56,8 +56,8 @@ export default function NewProductPage() {
       }));
     }
     if (rateRes.ok) {
-      const rate = await rateRes.json();
-      if (rate) setExchangeRate(rate.rate || 0);
+      const text = await rateRes.text();
+      if (text) { try { const rate = JSON.parse(text); setExchangeRate(rate.rate || 0); } catch {} }
     }
   }, []);
 
