@@ -349,19 +349,16 @@ export class InvoicesService {
       }
     }
 
-    // IGTF calculation
+    // IGTF: se calcula UNA sola vez por factura, sobre el primer pago en divisas
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;
     let invoiceIgtfUsd = 0;
     let invoiceIgtfBs = 0;
 
     if (isIGTFContributor && invoice.igtfUsd === 0) {
-      const foreignTotal = dto.payments
-        .filter(p => IGTF_METHODS.includes(p.method))
-        .reduce((sum, p) => sum + p.amountUsd, 0);
-
-      if (foreignTotal > 0) {
-        invoiceIgtfUsd = Math.round(foreignTotal * (igtfPct / 100) * 100) / 100;
+      const firstForeignPayment = dto.payments.find(p => IGTF_METHODS.includes(p.method));
+      if (firstForeignPayment) {
+        invoiceIgtfUsd = Math.round(firstForeignPayment.amountUsd * (igtfPct / 100) * 100) / 100;
         invoiceIgtfBs = Math.round(invoiceIgtfUsd * invoice.exchangeRate * 100) / 100;
       }
     }
@@ -374,12 +371,10 @@ export class InvoicesService {
       : invoice.totalBs;
 
     // Execute everything in transaction
-    let igtfAssigned = false;
-
     const result = await this.prisma.$transaction(async (tx) => {
       // Create payments
+      let igtfAssigned = false;
       for (const payment of dto.payments) {
-        // Asignar el IGTF total al primer payment en divisas (solo una vez)
         let paymentIgtfUsd = 0;
         let paymentIgtfBs = 0;
 

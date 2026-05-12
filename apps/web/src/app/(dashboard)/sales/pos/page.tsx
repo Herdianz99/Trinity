@@ -340,14 +340,12 @@ export default function POSPage() {
   const totalUsd = subtotalUsd + totalIva;
   const totalBs = totalUsd * exchangeRate;
 
-  // IGTF calculation
+  // IGTF: se calcula una sola vez sobre el primer pago en divisas
   const igtfApplicableMethods = ['CASH_USD', 'ZELLE'];
-  const foreignPaymentsTotal = payments
-    .filter(p => igtfApplicableMethods.includes(p.method))
-    .reduce((sum, p) => sum + p.amountUsd, 0);
-  const isIGTFApplicable = companyConfig?.isIGTFContributor && foreignPaymentsTotal > 0;
+  const firstForeignPayment = payments.find(p => igtfApplicableMethods.includes(p.method));
+  const isIGTFApplicable = companyConfig?.isIGTFContributor && firstForeignPayment && firstForeignPayment.amountUsd > 0;
   const igtfUsd = isIGTFApplicable
-    ? Math.round(foreignPaymentsTotal * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
+    ? Math.round(firstForeignPayment.amountUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
     : 0;
   const igtfBs = Math.round(igtfUsd * exchangeRate * 100) / 100;
   const grandTotalUsd = totalUsd + igtfUsd;
