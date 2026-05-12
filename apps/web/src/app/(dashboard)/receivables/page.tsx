@@ -145,8 +145,8 @@ export default function ReceivablesPage() {
   const fetchRate = useCallback(async () => {
     try {
       const res = await fetch('/api/proxy/exchange-rate/today');
-      const data = await res.json();
-      setTodayRate(data?.rate || 0);
+      const text = await res.text();
+      if (text) { try { setTodayRate(JSON.parse(text)?.rate || 0); } catch {} }
     } catch {}
   }, []);
 

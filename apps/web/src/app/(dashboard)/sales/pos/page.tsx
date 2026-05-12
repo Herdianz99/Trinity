@@ -132,9 +132,9 @@ export default function POSPage() {
   // Fetch exchange rate and user info on load
   useEffect(() => {
     fetch('/api/proxy/exchange-rate/today')
-      .then(r => r.json())
-      .then(data => {
-        if (data?.rate) setExchangeRate(data.rate);
+      .then(r => r.text())
+      .then(text => {
+        if (text) { try { const data = JSON.parse(text); if (data?.rate) setExchangeRate(data.rate); } catch {} }
       });
     fetch('/api/auth/me')
       .then(r => r.json())

@@ -121,8 +121,8 @@ export default function ConfigPage() {
         fetch('/api/proxy/exchange-rate'),
       ]);
       if (todayRes.ok) {
-        const data = await todayRes.json();
-        if (data) setTodayRate(data);
+        const text = await todayRes.text();
+        if (text) { try { const data = JSON.parse(text); if (data) setTodayRate(data); } catch {} }
       }
       if (historyRes.ok) {
         setRateHistory(await historyRes.json());

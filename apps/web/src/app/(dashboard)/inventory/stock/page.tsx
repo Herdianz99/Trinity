@@ -96,8 +96,8 @@ export default function StockPage() {
   const fetchConfig = useCallback(async () => {
     const res = await fetch('/api/proxy/exchange-rate/today');
     if (res.ok) {
-      const data = await res.json();
-      if (data) setExchangeRate(data.rate || 0);
+      const text = await res.text();
+      if (text) { try { const data = JSON.parse(text); setExchangeRate(data.rate || 0); } catch {} }
     }
   }, []);
 

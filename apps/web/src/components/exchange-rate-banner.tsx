@@ -19,8 +19,8 @@ export default function ExchangeRateBanner() {
     try {
       const res = await fetch('/api/proxy/exchange-rate/today');
       if (res.ok) {
-        const data = await res.json();
-        setHasRate(!!data);
+        const text = await res.text();
+        setHasRate(!!text && text !== 'null');
       } else {
         setHasRate(false);
       }
