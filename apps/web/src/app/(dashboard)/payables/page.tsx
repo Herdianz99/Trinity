@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Receipt,
   Loader2,
@@ -352,7 +353,11 @@ export default function PayablesPage() {
                 const rowNearDue = !rowOverdue && isNearDue(p.dueDate, p.status);
                 return (
                   <tr key={p.id} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors ${rowOverdue ? 'bg-red-500/5' : rowNearDue ? 'bg-amber-500/5' : ''}`}>
-                    <td className="px-4 py-3 text-slate-200">{p.supplier.name}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/payables/${p.id}`} className="text-slate-200 hover:text-green-400 hover:underline">
+                        {p.supplier.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.purchaseOrder?.number || '-'}</td>
                     <td className="px-4 py-3 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-orange-400">

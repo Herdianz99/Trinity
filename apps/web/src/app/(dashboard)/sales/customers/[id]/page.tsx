@@ -240,7 +240,7 @@ export default function CustomerDetailPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => router.push('/sales/invoices')} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                      <button onClick={() => router.push(`/sales/invoices/${inv.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
                         Ver factura <ExternalLink size={10} />
                       </button>
                     </td>

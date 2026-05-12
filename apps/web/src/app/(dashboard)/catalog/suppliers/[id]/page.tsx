@@ -326,7 +326,7 @@ export default function SupplierDetailPage() {
                           }`}>{p.status === 'PENDING' ? 'Pendiente' : p.status === 'PARTIAL' ? 'Parcial' : p.status === 'PAID' ? 'Pagado' : 'Vencido'}</span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button onClick={() => router.push('/payables')} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto">
+                          <button onClick={() => router.push(`/payables/${p.id}`)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto">
                             Ver CxP <ExternalLink size={10} />
                           </button>
                         </td>

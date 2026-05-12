@@ -419,7 +419,7 @@ export default function PurchaseDetailPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => router.push(`/payables`)}
+                        onClick={() => router.push(`/payables/${p.id}`)}
                         className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
                       >
                         Ver CxP <ExternalLink size={12} />

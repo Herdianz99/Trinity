@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   FileText,
   Search,
@@ -177,7 +178,11 @@ export default function InvoicesPage() {
                 </td></tr>
               ) : invoices.map(inv => (
                 <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40">
-                  <td className="px-4 py-3 font-mono text-green-400 text-xs">{inv.number}</td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    <Link href={`/sales/invoices/${inv.id}`} className="text-green-400 hover:text-green-300 hover:underline">
+                      {inv.number}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{inv.customer?.name || 'Sin cliente'}</td>
                   <td className="px-4 py-3 text-slate-400 hidden md:table-cell text-xs">{inv.cashRegister?.code}</td>
                   <td className="px-4 py-3 text-center">

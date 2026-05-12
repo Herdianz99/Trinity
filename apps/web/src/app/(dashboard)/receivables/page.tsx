@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   HandCoins,
   Search,
@@ -366,7 +367,11 @@ export default function ReceivablesPage() {
                     <td className="px-4 py-3 text-slate-200">
                       {r.customer ? r.customer.name : r.platformName || '-'}
                     </td>
-                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{r.invoice.number}</td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <Link href={`/receivables/${r.id}`} className="text-green-400 hover:text-green-300 hover:underline">
+                        {r.invoice.number}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-right text-slate-200">${r.amountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-slate-300">${r.paidAmountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-100">${r.balanceUsd.toFixed(2)}</td>
