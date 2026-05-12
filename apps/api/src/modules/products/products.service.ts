@@ -258,29 +258,39 @@ export class ProductsService {
     return product;
   }
 
-  async findPurchaseHistory(productId: string) {
-    const items = await this.prisma.purchaseOrderItem.findMany({
-      where: { productId },
-      include: {
-        purchaseOrder: {
-          include: {
-            supplier: { select: { id: true, name: true } },
+  async findPurchaseHistory(productId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where = { productId };
+    const [items, total] = await Promise.all([
+      this.prisma.purchaseOrderItem.findMany({
+        where,
+        include: {
+          purchaseOrder: {
+            include: {
+              supplier: { select: { id: true, name: true } },
+            },
           },
         },
-      },
-      orderBy: { purchaseOrder: { createdAt: 'desc' } },
-    });
-    return items.map((item) => ({
-      id: item.id,
-      date: item.purchaseOrder.createdAt,
-      orderNumber: item.purchaseOrder.number,
-      orderId: item.purchaseOrder.id,
-      status: item.purchaseOrder.status,
-      supplier: item.purchaseOrder.supplier.name,
-      quantity: item.receivedQty,
-      costUsd: item.costUsd,
-      totalUsd: item.totalUsd,
-    }));
+        orderBy: { purchaseOrder: { createdAt: 'desc' } },
+        skip,
+        take: limit,
+      }),
+      this.prisma.purchaseOrderItem.count({ where }),
+    ]);
+    return {
+      data: items.map((item) => ({
+        id: item.id,
+        date: item.purchaseOrder.createdAt,
+        orderNumber: item.purchaseOrder.number,
+        orderId: item.purchaseOrder.id,
+        status: item.purchaseOrder.status,
+        supplier: item.purchaseOrder.supplier.name,
+        quantity: item.receivedQty,
+        costUsd: item.costUsd,
+        totalUsd: item.totalUsd,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async update(id: string, dto: UpdateProductDto) {

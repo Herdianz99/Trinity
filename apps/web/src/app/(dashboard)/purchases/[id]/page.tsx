@@ -79,6 +79,9 @@ export default function PurchaseDetailPage() {
   const [receiveItems, setReceiveItems] = useState<{ purchaseOrderItemId: string; receivedQty: number; costUsd: number; originalCost: number; productName: string; maxQty: number }[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Active tab + lazy loading
+  const [activeTab, setActiveTab] = useState('info');
+
   // Movements (recepciones)
   const [movements, setMovements] = useState<Movement[]>([]);
   const [movLoading, setMovLoading] = useState(false);
@@ -136,8 +139,16 @@ export default function PurchaseDetailPage() {
   }, [order]);
 
   useEffect(() => { fetchOrder(); fetchMeta(); }, [fetchOrder, fetchMeta]);
-  useEffect(() => { fetchMovements(); }, [fetchMovements]);
-  useEffect(() => { fetchPayables(); }, [fetchPayables]);
+
+  // Lazy load: movements when recepciones tab is active
+  useEffect(() => {
+    if (activeTab === 'recepciones' && order) fetchMovements();
+  }, [activeTab, order, fetchMovements]);
+
+  // Lazy load: payables when cxp tab is active
+  useEffect(() => {
+    if (activeTab === 'cxp' && order) fetchPayables();
+  }, [activeTab, order, fetchPayables]);
 
   async function handleChangeStatus(status: 'SENT' | 'CANCELLED') {
     const msg = status === 'SENT' ? 'Marcar como enviada?' : 'Cancelar esta orden?';
@@ -265,7 +276,7 @@ export default function PurchaseDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="info">
+      <Tabs defaultValue="info" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="recepciones">Recepciones</TabsTrigger>

@@ -41,15 +41,23 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Active tab + lazy loading
+  const [activeTab, setActiveTab] = useState('info');
+
   // Form
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Invoices pagination
+  // Invoices pagination (server-side)
   const [invoices, setInvoices] = useState<any[]>([]);
   const [invPage, setInvPage] = useState(1);
-  const invPerPage = 10;
+  const [invTotalPages, setInvTotalPages] = useState(0);
+  const [invLoading, setInvLoading] = useState(false);
+
+  // CxC pagination (client-side)
+  const [cxcPage, setCxcPage] = useState(1);
+  const [cxcLoading, setCxcLoading] = useState(false);
 
   // Pay receivable
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -61,24 +69,49 @@ export default function CustomerDetailPage() {
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
     try {
-      const [custRes, cxcRes] = await Promise.all([
-        fetch(`/api/proxy/customers/${id}`),
-        fetch(`/api/proxy/receivables/customer/${id}`),
-      ]);
-      if (!custRes.ok) throw new Error('Cliente no encontrado');
-      const data = await custRes.json();
+      const res = await fetch(`/api/proxy/customers/${id}`);
+      if (!res.ok) throw new Error('Cliente no encontrado');
+      const data = await res.json();
       setCustomer(data);
-      setInvoices(data.invoices || []);
       setForm({
         name: data.name, documentType: data.documentType || 'V',
         rif: data.rif || '', phone: data.phone || '', email: data.email || '',
         address: data.address || '', creditLimit: data.creditLimit, creditDays: data.creditDays,
       });
-      if (cxcRes.ok) setCxc(await cxcRes.json());
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
 
+  const fetchInvoices = useCallback(async () => {
+    setInvLoading(true);
+    try {
+      const res = await fetch(`/api/proxy/invoices?customerId=${id}&page=${invPage}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.data || []);
+        setInvTotalPages(data.totalPages || Math.ceil((data.total || 0) / 20));
+      }
+    } catch { /* ignore */ } finally { setInvLoading(false); }
+  }, [id, invPage]);
+
+  const fetchCxc = useCallback(async () => {
+    setCxcLoading(true);
+    try {
+      const res = await fetch(`/api/proxy/receivables/customer/${id}`);
+      if (res.ok) setCxc(await res.json());
+    } catch { /* ignore */ } finally { setCxcLoading(false); }
+  }, [id]);
+
   useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
+
+  // Lazy load: invoices when sales tab is active
+  useEffect(() => {
+    if (activeTab === 'sales') fetchInvoices();
+  }, [activeTab, invPage, fetchInvoices]);
+
+  // Lazy load: CxC when cxc tab is active
+  useEffect(() => {
+    if (activeTab === 'cxc') fetchCxc();
+  }, [activeTab, fetchCxc]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -111,7 +144,7 @@ export default function CustomerDetailPage() {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Error'); }
       setPayingId(null);
       setSaveMsg({ type: 'success', text: 'Cobro registrado' });
-      fetchCustomer();
+      fetchCxc();
     } catch (err: any) { setSaveMsg({ type: 'error', text: err.message }); } finally { setProcessingPay(false); }
   }
 
@@ -128,8 +161,11 @@ export default function CustomerDetailPage() {
     </div>
   );
 
-  const pagedInvoices = invoices.slice((invPage - 1) * invPerPage, invPage * invPerPage);
-  const invTotalPages = Math.ceil(invoices.length / invPerPage);
+  // CxC client-side pagination
+  const cxcPerPage = 20;
+  const cxcFiltered = cxc?.receivables?.filter(r => r.status !== 'PAID') || [];
+  const cxcTotalPages = Math.ceil(cxcFiltered.length / cxcPerPage);
+  const pagedCxc = cxcFiltered.slice((cxcPage - 1) * cxcPerPage, cxcPage * cxcPerPage);
 
   return (
     <div>
@@ -152,7 +188,7 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="info">
+      <Tabs defaultValue="info" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="sales">Ventas</TabsTrigger>
@@ -214,55 +250,63 @@ export default function CustomerDetailPage() {
         {/* ═══ TAB: Ventas ═══ */}
         <TabsContent value="sales">
           <div className="card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700/50">
-                  <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
-                  <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
-                  <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
-                  <th className="text-right px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Total Bs</th>
-                  <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
-                  <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedInvoices.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin facturas registradas</td></tr>
-                ) : pagedInvoices.map((inv: any) => (
-                  <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-3 font-mono text-green-400">{inv.number}</td>
-                    <td className="px-4 py-3 text-slate-300">{fmtDate(inv.createdAt)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-white">${inv.totalUsd?.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-300 hidden md:table-cell">{inv.totalBs ? `Bs ${inv.totalBs.toFixed(2)}` : '—'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${INV_BADGES[inv.status] || INV_BADGES.PENDING}`}>
-                        {inv.status === 'PAID' ? 'Pagada' : inv.status === 'CREDIT' ? 'Credito' : inv.status === 'CANCELLED' ? 'Cancelada' : 'Pendiente'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button onClick={() => router.push(`/sales/invoices/${inv.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
-                        Ver factura <ExternalLink size={10} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {invTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
-                <span className="text-sm text-slate-400">Pagina {invPage} de {invTotalPages}</span>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={16} /></button>
-                  <button onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage >= invTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={16} /></button>
-                </div>
-              </div>
+            {invLoading ? (
+              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-green-500" size={24} /></div>
+            ) : (
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700/50">
+                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
+                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Total Bs</th>
+                      <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
+                      <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin facturas registradas</td></tr>
+                    ) : invoices.map((inv: any) => (
+                      <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                        <td className="px-4 py-3 font-mono text-green-400">{inv.number}</td>
+                        <td className="px-4 py-3 text-slate-300">{fmtDate(inv.createdAt)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-white">${inv.totalUsd?.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-300 hidden md:table-cell">{inv.totalBs ? `Bs ${inv.totalBs.toFixed(2)}` : '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${INV_BADGES[inv.status] || INV_BADGES.PENDING}`}>
+                            {inv.status === 'PAID' ? 'Pagada' : inv.status === 'CREDIT' ? 'Credito' : inv.status === 'CANCELLED' ? 'Cancelada' : 'Pendiente'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => router.push(`/sales/invoices/${inv.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                            Ver factura <ExternalLink size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {invTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                    <span className="text-sm text-slate-400">Pagina {invPage} de {invTotalPages}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={16} /></button>
+                      <button onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage >= invTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </TabsContent>
 
         {/* ═══ TAB: CxC ═══ */}
         <TabsContent value="cxc">
-          {cxc && (
+          {cxcLoading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-green-500" size={24} /></div>
+          ) : cxc ? (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="card p-4 text-center">
@@ -292,9 +336,9 @@ export default function CustomerDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {cxc.receivables?.filter(r => r.status !== 'PAID').length === 0 ? (
+                    {pagedCxc.length === 0 ? (
                       <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin cuentas pendientes</td></tr>
-                    ) : cxc.receivables?.filter(r => r.status !== 'PAID').map(r => (
+                    ) : pagedCxc.map(r => (
                       <tr key={r.id} className="border-b border-slate-700/30">
                         <td className="px-4 py-3 font-mono text-green-400 text-xs">{r.invoice.number}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${r.amountUsd.toFixed(2)}</td>
@@ -331,9 +375,18 @@ export default function CustomerDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                {cxcTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                    <span className="text-sm text-slate-400">Pagina {cxcPage} de {cxcTotalPages}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setCxcPage(p => Math.max(1, p - 1))} disabled={cxcPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={16} /></button>
+                      <button onClick={() => setCxcPage(p => Math.min(cxcTotalPages, p + 1))} disabled={cxcPage >= cxcTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>

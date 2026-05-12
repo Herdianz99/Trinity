@@ -1,5 +1,42 @@
 # Trinity ERP — Progreso
 
+## Sesion 16 — Lazy Loading Tabs + Montos Bs estandarizados (Completada)
+
+### Lazy Loading en Tabs
+- Todas las paginas de detalle ahora cargan datos de cada tab solo cuando el usuario hace clic (lazy loading)
+- Paginas corregidas: Producto, Cliente, Proveedor, Orden de Compra
+- Implementado via `onValueChange` de Radix Tabs + useEffect condicional por tab activa
+
+### Paginacion estandarizada (20 por pagina)
+- Movimientos de producto: 10 → 20 por pagina
+- Historial compras producto: sin paginacion → 20 por pagina (backend + frontend)
+- Facturas de cliente: 10 client-side → 20 server-side via `/invoices?customerId=`
+- CxC de cliente: sin paginacion → 20 por pagina (client-side)
+- Compras de proveedor: 10 → 20 por pagina
+- CxP de proveedor: sin paginacion → 20 por pagina (client-side)
+
+### Ordenamiento
+- Todas las listas en tabs ya estaban ordenadas por `createdAt DESC` — verificado sin cambios
+
+### Montos Bs estandarizados en todos los modelos monetarios
+- Migracion `add_bs_amounts_to_all_models` agrega campos Bs faltantes
+- Modelos actualizados:
+  - `PurchaseOrder`: +totalBs, +exchangeRate
+  - `PurchaseOrderItem`: +costBs, +totalBs
+  - `Payable`: +netPayableBs, +paidAmountBs
+  - `Receivable`: +paidAmountBs
+  - `Quotation`: +subtotalBs, +ivaBs, +totalBs, +exchangeRate
+  - `QuotationItem`: +unitPriceBs, +ivaAmountBs, +totalBs
+  - `PayablePayment` y `ReceivablePayment`: ya tenian amountBs — sin cambios
+- Servicios actualizados para calcular y guardar Bs al crear/actualizar:
+  - `purchase-orders.service.ts` (create, update, receive)
+  - `payables.service.ts` (pay → paidAmountBs)
+  - `receivables.service.ts` (pay → paidAmountBs)
+  - `quotations.service.ts` (create, update)
+
+### Regla agregada a CLAUDE.md
+- "Todo campo monetario en USD debe tener su campo equivalente en Bs. Los montos en Bs se calculan y guardan al momento de crear/actualizar usando la tasa del dia. Nunca calcular Bs en tiempo de ejecucion."
+
 ## Sesion 15 — UX Correctiva: Paginas dedicadas con tabs (Completada)
 
 ### Concepto

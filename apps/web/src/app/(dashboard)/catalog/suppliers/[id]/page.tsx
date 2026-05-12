@@ -50,6 +50,9 @@ export default function SupplierDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Active tab + lazy loading
+  const [activeTab, setActiveTab] = useState('info');
+
   // Purchases
   const [purchases, setPurchases] = useState<PO[]>([]);
   const [poLoading, setPoLoading] = useState(false);
@@ -59,6 +62,7 @@ export default function SupplierDetailPage() {
   // Account / CxP
   const [account, setAccount] = useState<AccountData | null>(null);
   const [accLoading, setAccLoading] = useState(false);
+  const [cxpPage, setCxpPage] = useState(1);
 
   const fetchSupplier = useCallback(async () => {
     setLoading(true);
@@ -79,7 +83,7 @@ export default function SupplierDetailPage() {
   const fetchPurchases = useCallback(async () => {
     setPoLoading(true);
     try {
-      const res = await fetch(`/api/proxy/purchase-orders?supplierId=${id}&page=${poPage}&limit=10`);
+      const res = await fetch(`/api/proxy/purchase-orders?supplierId=${id}&page=${poPage}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         setPurchases(data.data.map((o: any) => ({
@@ -99,8 +103,16 @@ export default function SupplierDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchSupplier(); }, [fetchSupplier]);
-  useEffect(() => { fetchPurchases(); }, [fetchPurchases]);
-  useEffect(() => { fetchAccount(); }, [fetchAccount]);
+
+  // Lazy load: purchases when compras tab is active
+  useEffect(() => {
+    if (activeTab === 'compras') fetchPurchases();
+  }, [activeTab, poPage, fetchPurchases]);
+
+  // Lazy load: CxP when cxp tab is active
+  useEffect(() => {
+    if (activeTab === 'cxp') fetchAccount();
+  }, [activeTab, fetchAccount]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -137,6 +149,12 @@ export default function SupplierDetailPage() {
 
   const totalPurchased = purchases.reduce((s, p) => s + p.totalUsd, 0);
 
+  // CxP client-side pagination
+  const cxpPerPage = 20;
+  const cxpAll = account?.payables || [];
+  const cxpTotalPages = Math.ceil(cxpAll.length / cxpPerPage);
+  const pagedCxp = cxpAll.slice((cxpPage - 1) * cxpPerPage, cxpPage * cxpPerPage);
+
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
@@ -158,7 +176,7 @@ export default function SupplierDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="info">
+      <Tabs defaultValue="info" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="compras">Compras</TabsTrigger>
@@ -309,9 +327,9 @@ export default function SupplierDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(!account.payables || account.payables.length === 0) ? (
+                    {pagedCxp.length === 0 ? (
                       <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin cuentas por pagar</td></tr>
-                    ) : account.payables.map(p => (
+                    ) : pagedCxp.map(p => (
                       <tr key={p.id} className="border-b border-slate-700/30">
                         <td className="px-4 py-3 font-mono text-xs text-slate-300">{p.purchaseOrder?.number || '—'}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${p.netPayableUsd.toFixed(2)}</td>
@@ -334,6 +352,15 @@ export default function SupplierDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                {cxpTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                    <span className="text-sm text-slate-400">Pagina {cxpPage} de {cxpTotalPages}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setCxpPage(p => Math.max(1, p - 1))} disabled={cxpPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={16} /></button>
+                      <button onClick={() => setCxpPage(p => Math.min(cxpTotalPages, p + 1))} disabled={cxpPage >= cxpTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

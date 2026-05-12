@@ -36,3 +36,4 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 ## Base de datos
 - Siempre usar transacciones Prisma para operaciones que afecten múltiples tablas
 - Usar SELECT FOR UPDATE para correlativos (facturas, códigos de productos)
+- Todo campo monetario en USD debe tener su campo equivalente en Bs en el mismo modelo. Los montos en Bs se calculan y guardan al momento de crear/actualizar el registro usando la tasa del día. Nunca calcular Bs en tiempo de ejecución.

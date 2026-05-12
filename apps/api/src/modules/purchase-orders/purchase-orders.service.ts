@@ -36,17 +36,31 @@ export class PurchaseOrdersService {
     return `PO-${num.toString().padStart(4, '0')}`;
   }
 
+  private async getTodayRate() {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    return rate?.rate || 0;
+  }
+
   async create(dto: CreatePurchaseOrderDto, userId: string) {
     const number = await this.generateNumber();
+    const exchangeRate = await this.getTodayRate();
 
-    const items = dto.items.map((item) => ({
-      productId: item.productId,
-      quantity: item.quantity,
-      costUsd: item.costUsd,
-      totalUsd: Math.round(item.quantity * item.costUsd * 100) / 100,
-    }));
+    const items = dto.items.map((item) => {
+      const totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+      return {
+        productId: item.productId,
+        quantity: item.quantity,
+        costUsd: item.costUsd,
+        costBs: Math.round(item.costUsd * exchangeRate * 100) / 100,
+        totalUsd,
+        totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+      };
+    });
 
     const totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
+    const totalBs = Math.round(totalUsd * exchangeRate * 100) / 100;
 
     // Calculate ISLR if applicable
     let islrRetentionPct: number | null = null;
@@ -71,6 +85,8 @@ export class PurchaseOrdersService {
         islrRetentionUsd,
         islrRetentionBs,
         totalUsd: Math.round(totalUsd * 100) / 100,
+        totalBs,
+        exchangeRate,
         createdById: userId,
         items: { create: items },
       },
@@ -162,22 +178,31 @@ export class PurchaseOrdersService {
     if (dto.creditDays !== undefined) updateData.creditDays = dto.creditDays;
 
     if (dto.items) {
+      const exchangeRate = await this.getTodayRate();
+
       // Delete existing items and recreate
       await this.prisma.purchaseOrderItem.deleteMany({
         where: { purchaseOrderId: id },
       });
 
-      const items = dto.items.map((item) => ({
-        purchaseOrderId: id,
-        productId: item.productId,
-        quantity: item.quantity,
-        costUsd: item.costUsd,
-        totalUsd: Math.round(item.quantity * item.costUsd * 100) / 100,
-      }));
+      const items = dto.items.map((item) => {
+        const totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+        return {
+          purchaseOrderId: id,
+          productId: item.productId,
+          quantity: item.quantity,
+          costUsd: item.costUsd,
+          costBs: Math.round(item.costUsd * exchangeRate * 100) / 100,
+          totalUsd,
+          totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+        };
+      });
 
       await this.prisma.purchaseOrderItem.createMany({ data: items });
 
       updateData.totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
+      updateData.totalBs = Math.round(updateData.totalUsd * exchangeRate * 100) / 100;
+      updateData.exchangeRate = exchangeRate;
     }
 
     // Recalculate ISLR if applicable
@@ -320,11 +345,20 @@ export class PurchaseOrdersService {
       const allReceived = updatedItems.every((i) => i.receivedQty >= i.quantity);
       const newStatus = allReceived ? 'RECEIVED' : 'PARTIAL';
 
+      // Get today's exchange rate for Bs calculations
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const todayRate = await tx.exchangeRate.findUnique({ where: { date: today } });
+      const receiveRate = todayRate?.rate || 0;
+      const updatedTotalBs = Math.round(order.totalUsd * receiveRate * 100) / 100;
+
       const updatedOrder = await tx.purchaseOrder.update({
         where: { id },
         data: {
           status: newStatus,
           receivedAt: allReceived ? new Date() : undefined,
+          totalBs: updatedTotalBs,
+          exchangeRate: receiveRate,
         },
         include: {
           supplier: { select: { id: true, name: true, isRetentionAgent: true } },
@@ -334,17 +368,13 @@ export class PurchaseOrdersService {
 
       // Create Payable if credit order and fully received
       if (order.isCredit && allReceived) {
-        // Get today's exchange rate
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
-        const rate = await tx.exchangeRate.findUnique({ where: { date: today } });
-        if (!rate) {
+        if (!todayRate) {
           throw new BadRequestException('No hay tasa BCV registrada para hoy. Necesaria para crear CxP.');
         }
 
         const amountUsd = updatedOrder.totalUsd;
-        const amountBs = Math.round(amountUsd * rate.rate * 100) / 100;
-        const exchangeRate = rate.rate;
+        const amountBs = Math.round(amountUsd * receiveRate * 100) / 100;
+        const exchangeRate = receiveRate;
 
         let retentionUsd = 0;
         let retentionBs = 0;
@@ -384,6 +414,7 @@ export class PurchaseOrdersService {
         }
 
         const netPayableUsd = Math.round((amountUsd - retentionUsd - islrRetentionUsd) * 100) / 100;
+        const netPayableBs = Math.round(netPayableUsd * exchangeRate * 100) / 100;
 
         // Calculate due date
         const dueDate = new Date();
@@ -399,6 +430,7 @@ export class PurchaseOrdersService {
             retentionUsd,
             retentionBs,
             netPayableUsd,
+            netPayableBs,
             dueDate: order.creditDays > 0 ? dueDate : null,
             notes: `CxP generada de orden ${order.number}`,
           },

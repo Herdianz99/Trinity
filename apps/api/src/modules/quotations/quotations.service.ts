@@ -76,9 +76,17 @@ export class QuotationsService {
     return quotation;
   }
 
+  private async getTodayRate() {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    return rate?.rate || 0;
+  }
+
   async create(dto: CreateQuotationDto, user: { id: string; role: UserRole }) {
     const config = await this.prisma.companyConfig.findFirst();
     const validityDays = config?.quotationValidityDays || 30;
+    const exchangeRate = await this.getTodayRate();
 
     // Fetch products
     const productIds = dto.items.map((i) => i.productId);
@@ -101,6 +109,7 @@ export class QuotationsService {
       const baseUnitPrice = priceWithIva / (1 + ivaRate);
       const lineSubtotal = baseUnitPrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
+      const lineTotalUsd = lineSubtotal + ivaAmount;
 
       subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
@@ -111,9 +120,12 @@ export class QuotationsService {
         productCode: product.code,
         quantity: item.quantity,
         unitPriceUsd: baseUnitPrice,
+        unitPriceBs: Math.round(baseUnitPrice * exchangeRate * 100) / 100,
         ivaType: product.ivaType,
         ivaAmount,
-        totalUsd: lineSubtotal + ivaAmount,
+        ivaAmountBs: Math.round(ivaAmount * exchangeRate * 100) / 100,
+        totalUsd: lineTotalUsd,
+        totalBs: Math.round(lineTotalUsd * exchangeRate * 100) / 100,
       });
     }
 
@@ -138,8 +150,12 @@ export class QuotationsService {
           customerId: dto.customerId || null,
           status: 'DRAFT',
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
+          subtotalBs: Math.round(subtotalUsd * exchangeRate * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
+          ivaBs: Math.round(totalIva * exchangeRate * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
+          totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+          exchangeRate,
           notes: dto.notes,
           expiresAt,
           createdById: user.id,
@@ -162,6 +178,8 @@ export class QuotationsService {
       throw new BadRequestException('Solo se pueden editar cotizaciones en borrador');
     }
 
+    const exchangeRate = await this.getTodayRate();
+
     // Fetch products
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
@@ -182,6 +200,7 @@ export class QuotationsService {
       const baseUnitPrice = priceWithIva / (1 + ivaRate);
       const lineSubtotal = baseUnitPrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
+      const lineTotalUsd = lineSubtotal + ivaAmount;
 
       subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
@@ -192,9 +211,12 @@ export class QuotationsService {
         productCode: product.code,
         quantity: item.quantity,
         unitPriceUsd: baseUnitPrice,
+        unitPriceBs: Math.round(baseUnitPrice * exchangeRate * 100) / 100,
         ivaType: product.ivaType,
         ivaAmount,
-        totalUsd: lineSubtotal + ivaAmount,
+        ivaAmountBs: Math.round(ivaAmount * exchangeRate * 100) / 100,
+        totalUsd: lineTotalUsd,
+        totalBs: Math.round(lineTotalUsd * exchangeRate * 100) / 100,
       });
     }
 
@@ -208,8 +230,12 @@ export class QuotationsService {
         data: {
           customerId: dto.customerId || null,
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
+          subtotalBs: Math.round(subtotalUsd * exchangeRate * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
+          ivaBs: Math.round(totalIva * exchangeRate * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
+          totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+          exchangeRate,
           notes: dto.notes,
           items: { create: itemsData },
         },

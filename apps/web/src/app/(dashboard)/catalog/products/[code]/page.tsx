@@ -90,6 +90,9 @@ export default function ProductDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // ── Active tab (lazy loading) ──
+  const [activeTab, setActiveTab] = useState('info');
+
   // ── Movements ──
   const [movements, setMovements] = useState<Movement[]>([]);
   const [movPage, setMovPage] = useState(1);
@@ -99,13 +102,18 @@ export default function ProductDetailPage() {
   // ── Purchase history ──
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
+  const [purchPage, setPurchPage] = useState(1);
+  const [purchTotalPages, setPurchTotalPages] = useState(0);
 
   // ── Fetch product ──
   const fetchProduct = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/proxy/products/by-code/${encodeURIComponent(code)}`);
-      if (!res.ok) throw new Error('Producto no encontrado');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Error ${res.status}: Producto no encontrado`);
+      }
       const data = await res.json();
       setProduct(data);
       setForm({
@@ -159,7 +167,7 @@ export default function ProductDetailPage() {
     if (!product) return;
     setMovLoading(true);
     try {
-      const res = await fetch(`/api/proxy/stock-movements?productId=${product.id}&page=${movPage}&limit=10`);
+      const res = await fetch(`/api/proxy/stock-movements?productId=${product.id}&page=${movPage}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         setMovements(data.data);
@@ -167,6 +175,7 @@ export default function ProductDetailPage() {
       }
     } catch { /* ignore */ } finally {
       setMovLoading(false);
+
     }
   }, [product, movPage]);
 
@@ -174,16 +183,29 @@ export default function ProductDetailPage() {
     if (!product) return;
     setPurchasesLoading(true);
     try {
-      const res = await fetch(`/api/proxy/products/${product.id}/purchases`);
-      if (res.ok) setPurchases(await res.json());
+      const res = await fetch(`/api/proxy/products/${product.id}/purchases?page=${purchPage}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        setPurchases(data.data);
+        setPurchTotalPages(data.meta.totalPages);
+      }
     } catch { /* ignore */ } finally {
       setPurchasesLoading(false);
+
     }
-  }, [product]);
+  }, [product, purchPage]);
 
   useEffect(() => { fetchProduct(); fetchMeta(); }, [fetchProduct, fetchMeta]);
-  useEffect(() => { fetchMovements(); }, [fetchMovements]);
-  useEffect(() => { fetchPurchases(); }, [fetchPurchases]);
+
+  // Lazy load: fetch movements only when tab is active
+  useEffect(() => {
+    if (activeTab === 'movements' && product) fetchMovements();
+  }, [activeTab, product, movPage, fetchMovements]);
+
+  // Lazy load: fetch purchases only when tab is active
+  useEffect(() => {
+    if (activeTab === 'purchases' && product) fetchPurchases();
+  }, [activeTab, product, purchPage, fetchPurchases]);
 
   // ── Save handler ──
   async function handleSave(e: React.FormEvent) {
@@ -318,7 +340,7 @@ export default function ProductDetailPage() {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="info">
+      <Tabs defaultValue="info" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="stock">Existencias</TabsTrigger>
@@ -595,45 +617,60 @@ export default function ProductDetailPage() {
                 <Loader2 className="animate-spin text-green-500" size={24} />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700/50">
-                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
-                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Orden de compra</th>
-                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Proveedor</th>
-                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. recibida</th>
-                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Costo USD</th>
-                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
-                      <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {purchases.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-8 text-slate-500">Sin historial de compras</td></tr>
-                    ) : purchases.map(p => (
-                      <tr key={p.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
-                        <td className="px-4 py-3 text-slate-300">{fmtDate(p.date)}</td>
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{p.orderNumber}</span>
-                        </td>
-                        <td className="px-4 py-3 text-white">{p.supplier}</td>
-                        <td className="px-4 py-3 text-right font-mono text-white">{p.quantity}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-300">${p.costUsd.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-white">${p.totalUsd.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => router.push(`/purchases/${p.orderId}`)}
-                            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto"
-                          >
-                            Ver orden <ExternalLink size={10} />
-                          </button>
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Orden de compra</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Proveedor</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. recibida</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">Costo USD</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+                        <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {purchases.length === 0 ? (
+                        <tr><td colSpan={7} className="text-center py-8 text-slate-500">Sin historial de compras</td></tr>
+                      ) : purchases.map(p => (
+                        <tr key={p.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                          <td className="px-4 py-3 text-slate-300">{fmtDate(p.date)}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">{p.orderNumber}</span>
+                          </td>
+                          <td className="px-4 py-3 text-white">{p.supplier}</td>
+                          <td className="px-4 py-3 text-right font-mono text-white">{p.quantity}</td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-300">${p.costUsd.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-white">${p.totalUsd.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => router.push(`/purchases/${p.orderId}`)}
+                              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto"
+                            >
+                              Ver orden <ExternalLink size={10} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {purchTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                    <span className="text-sm text-slate-400">Pagina {purchPage} de {purchTotalPages}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setPurchPage(p => Math.max(1, p - 1))} disabled={purchPage <= 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30 transition-colors">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button onClick={() => setPurchPage(p => Math.min(purchTotalPages, p + 1))} disabled={purchPage >= purchTotalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30 transition-colors">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </TabsContent>

@@ -65,8 +65,12 @@ export class ProductsController {
   }
 
   @Get(':id/purchases')
-  findPurchaseHistory(@Param('id') id: string) {
-    return this.productsService.findPurchaseHistory(id);
+  findPurchaseHistory(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.productsService.findPurchaseHistory(id, Number(page) || 1, Number(limit) || 20);
   }
 
   @Patch(':id')

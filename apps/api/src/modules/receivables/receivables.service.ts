@@ -180,9 +180,10 @@ export class ReceivablesService {
       throw new BadRequestException('No hay tasa BCV registrada para hoy');
     }
 
-    const amountBs = dto.amountUsd * rate.rate;
-    const newPaidAmount = receivable.paidAmountUsd + dto.amountUsd;
-    const isPaidInFull = newPaidAmount >= receivable.amountUsd - 0.01;
+    const amountBs = Math.round(dto.amountUsd * rate.rate * 100) / 100;
+    const newPaidAmountUsd = Math.round((receivable.paidAmountUsd + dto.amountUsd) * 100) / 100;
+    const newPaidAmountBs = Math.round((receivable.paidAmountBs + amountBs) * 100) / 100;
+    const isPaidInFull = newPaidAmountUsd >= receivable.amountUsd - 0.01;
 
     return this.prisma.$transaction(async (tx) => {
       // Create payment record
@@ -190,7 +191,7 @@ export class ReceivablesService {
         data: {
           receivableId: id,
           amountUsd: dto.amountUsd,
-          amountBs: Math.round(amountBs * 100) / 100,
+          amountBs,
           exchangeRate: rate.rate,
           method: dto.method as any,
           reference: dto.reference,
@@ -204,7 +205,8 @@ export class ReceivablesService {
       const updated = await tx.receivable.update({
         where: { id },
         data: {
-          paidAmountUsd: Math.round(newPaidAmount * 100) / 100,
+          paidAmountUsd: newPaidAmountUsd,
+          paidAmountBs: newPaidAmountBs,
           status: isPaidInFull ? 'PAID' : 'PARTIAL',
           paidAt: isPaidInFull ? new Date() : null,
         },
