@@ -374,18 +374,19 @@ export class InvoicesService {
       : invoice.totalBs;
 
     // Execute everything in transaction
-    let igtfAlreadyCalculated = invoice.igtfUsd > 0;
+    let igtfAssigned = false;
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Create payments
       for (const payment of dto.payments) {
+        // Asignar el IGTF total al primer payment en divisas (solo una vez)
         let paymentIgtfUsd = 0;
         let paymentIgtfBs = 0;
 
-        if (!igtfAlreadyCalculated && isIGTFContributor && IGTF_METHODS.includes(payment.method)) {
-          paymentIgtfUsd = Math.round(payment.amountUsd * (igtfPct / 100) * 100) / 100;
-          paymentIgtfBs = Math.round(paymentIgtfUsd * invoice.exchangeRate * 100) / 100;
-          igtfAlreadyCalculated = true;
+        if (!igtfAssigned && invoiceIgtfUsd > 0 && IGTF_METHODS.includes(payment.method)) {
+          paymentIgtfUsd = invoiceIgtfUsd;
+          paymentIgtfBs = invoiceIgtfBs;
+          igtfAssigned = true;
         }
 
         await tx.payment.create({
