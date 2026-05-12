@@ -374,15 +374,18 @@ export class InvoicesService {
       : invoice.totalBs;
 
     // Execute everything in transaction
+    let igtfAlreadyCalculated = invoice.igtfUsd > 0;
+
     const result = await this.prisma.$transaction(async (tx) => {
       // Create payments
       for (const payment of dto.payments) {
         let paymentIgtfUsd = 0;
         let paymentIgtfBs = 0;
 
-        if (isIGTFContributor && invoice.igtfUsd === 0 && IGTF_METHODS.includes(payment.method)) {
+        if (!igtfAlreadyCalculated && isIGTFContributor && IGTF_METHODS.includes(payment.method)) {
           paymentIgtfUsd = Math.round(payment.amountUsd * (igtfPct / 100) * 100) / 100;
           paymentIgtfBs = Math.round(paymentIgtfUsd * invoice.exchangeRate * 100) / 100;
+          igtfAlreadyCalculated = true;
         }
 
         await tx.payment.create({

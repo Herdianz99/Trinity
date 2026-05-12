@@ -623,7 +623,7 @@ export default function ProductDetailPage() {
                         <td className="px-4 py-3 text-right font-mono text-white">${p.totalUsd.toFixed(2)}</td>
                         <td className="px-4 py-3 text-center">
                           <button
-                            onClick={() => router.push(`/purchases`)}
+                            onClick={() => router.push(`/purchases/${p.orderId}`)}
                             className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto"
                           >
                             Ver orden <ExternalLink size={10} />
