@@ -335,6 +335,18 @@ export class QuotationsService {
 
       const isSeller = user.role === 'SELLER';
 
+      // Get seller linked to current user
+      const userSeller = await tx.seller.findUnique({ where: { userId: user.id } });
+      const sellerId = userSeller?.id || null;
+
+      // Use existing config for brega
+      const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
+      // Fetch products for cost calculation
+      const productIds = quotation.items.map((i) => i.productId);
+      const products = await tx.product.findMany({ where: { id: { in: productIds } } });
+      const productMap = new Map(products.map((p) => [p.id, p]));
+
       const created = await tx.invoice.create({
         data: {
           number: invoiceNumber,
@@ -342,28 +354,47 @@ export class QuotationsService {
           customerId: quotation.customerId,
           status: isSeller ? 'PENDING' : 'DRAFT',
           subtotalUsd: quotation.subtotalUsd,
+          subtotalBs: Math.round(quotation.subtotalUsd * rate.rate * 100) / 100,
           ivaUsd: quotation.ivaUsd,
+          ivaBs: Math.round(quotation.ivaUsd * rate.rate * 100) / 100,
           totalUsd: quotation.totalUsd,
           totalBs: Math.round(totalBs * 100) / 100,
           exchangeRate: rate.rate,
           notes: quotation.notes,
           createdById: user.id,
-          sellerId: isSeller ? user.id : null,
+          sellerId,
           items: {
-            create: quotation.items.map((item) => ({
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              unitPrice: item.unitPriceUsd,
-              ivaType: item.ivaType,
-              ivaAmount: item.ivaAmount,
-              totalUsd: item.totalUsd,
-            })),
+            create: quotation.items.map((item) => {
+              const product = productMap.get(item.productId);
+              const ivaRate = IVA_RATES[item.ivaType] || 0;
+              const ivaMultiplier = 1 + ivaRate;
+              const unitPriceWithoutIva = item.unitPriceUsd;
+              const costUsd = product
+                ? (product.bregaApplies ? product.costUsd * (1 + bregaGlobalPct / 100) : product.costUsd)
+                : 0;
+              return {
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPriceUsd,
+                ivaType: item.ivaType,
+                ivaAmount: item.ivaAmount,
+                totalUsd: item.totalUsd,
+                unitPriceBs: Math.round(item.unitPriceUsd * rate.rate * 100) / 100,
+                ivaAmountBs: Math.round(item.ivaAmount * rate.rate * 100) / 100,
+                totalBs: Math.round(item.totalUsd * rate.rate * 100) / 100,
+                unitPriceWithoutIva,
+                unitPriceWithoutIvaBs: Math.round(unitPriceWithoutIva * rate.rate * 100) / 100,
+                costUsd,
+                costBs: Math.round(costUsd * rate.rate * 100) / 100,
+              };
+            }),
           },
         },
         include: {
           items: true,
           customer: true,
+          seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
         },
       });

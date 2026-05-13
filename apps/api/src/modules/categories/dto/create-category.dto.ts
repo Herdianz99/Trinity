@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, MinLength, MaxLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCategoryDto {
@@ -14,6 +14,12 @@ export class CreateCategoryDto {
   @MaxLength(3, { message: 'El codigo debe tener exactamente 3 letras' })
   @Matches(/^[A-Za-z]{3}$/, { message: 'El codigo debe contener solo letras (3)' })
   code?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  commissionPct?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

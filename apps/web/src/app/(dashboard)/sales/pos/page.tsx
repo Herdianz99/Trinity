@@ -127,7 +127,13 @@ export default function POSPage() {
   const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
+  // Seller state
+  const [sellers, setSellers] = useState<any[]>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
+  const [userSellerName, setUserSellerName] = useState<string | null>(null);
+
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
+  const canSelectSeller = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
 
   // Fetch exchange rate and user info on load
   useEffect(() => {
@@ -142,6 +148,20 @@ export default function POSPage() {
         if (data?.id) setUserId(data.id);
         if (data?.role) setUserRole(data.role);
         if (data?.permissions) setUserPermissions(data.permissions || []);
+        // Fetch user's linked seller
+        if (data?.seller) {
+          setSelectedSellerId(data.seller.id);
+          setUserSellerName(data.seller.name);
+        }
+        // Fetch all sellers for ADMIN/SUPERVISOR dropdown
+        if (data?.role === 'ADMIN' || data?.role === 'SUPERVISOR') {
+          fetch('/api/proxy/sellers?isActive=true')
+            .then(r2 => r2.json())
+            .then(sellersData => {
+              if (Array.isArray(sellersData)) setSellers(sellersData);
+            })
+            .catch(() => {});
+        }
       });
     fetch('/api/proxy/config')
       .then(r => r.json())
@@ -393,6 +413,7 @@ export default function POSPage() {
       const invoiceBody = {
         customerId: customerId || undefined,
         cashRegisterId: selectedCashRegister?.id || undefined,
+        sellerId: selectedSellerId || undefined,
         items: cart.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -489,6 +510,7 @@ export default function POSPage() {
           body: JSON.stringify({
             customerId: customerId || undefined,
             cashRegisterId: selectedCashRegister?.id || undefined,
+            sellerId: selectedSellerId || undefined,
             items: cart.map(i => ({
               productId: i.productId,
               quantity: i.quantity,
@@ -1030,6 +1052,29 @@ export default function POSPage() {
               </div>
             ))}
           </div>
+
+          {/* Seller section */}
+          {(userSellerName || canSelectSeller) && (
+            <div className="px-3 py-2 border-t border-slate-700/50">
+              <div className="flex items-center gap-2">
+                <User size={14} className="text-slate-500" />
+                {canSelectSeller ? (
+                  <select
+                    value={selectedSellerId || ''}
+                    onChange={e => setSelectedSellerId(e.target.value || null)}
+                    className="input-field !py-1 !text-xs flex-1"
+                  >
+                    <option value="">Sin vendedor</option>
+                    {sellers.map(s => (
+                      <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-xs text-slate-400">Vendedor: <span className="text-white">{userSellerName}</span></span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Totals and actions */}
           <div className="border-t border-slate-700/50 p-3 space-y-2">

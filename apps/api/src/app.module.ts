@@ -28,6 +28,7 @@ import { PayablesModule } from './modules/payables/payables.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
 import { RedisModule } from './redis/redis.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
+import { SellersModule } from './modules/sellers/sellers.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { RolePermissionsModule } from './modules/role-permissions/role-permissio
     PayablesModule,
     FiscalModule,
     RolePermissionsModule,
+    SellersModule,
   ],
 })
 export class AppModule {}

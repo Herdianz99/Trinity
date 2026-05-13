@@ -58,6 +58,9 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
+      include: {
+        seller: { select: { id: true, code: true, name: true, isActive: true } },
+      },
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     const { password, ...rest } = user;

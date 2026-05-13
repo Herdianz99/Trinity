@@ -1,5 +1,35 @@
 # Trinity ERP — Progreso
 
+## Sesion 17 — Vendedores, Comisiones, CRUD Cajas, Campos Factura (Completada)
+
+### Migracion Prisma
+- Nuevo modelo `Seller` (code, name, phone, isActive, userId unico vinculado a User)
+- `commissionPct Float @default(0)` en Category para calculo de comisiones
+- Invoice: `sellerId` ahora apunta a Seller (no a User), nuevo `cashierId` apunta a User
+- InvoiceItem: +unitPriceWithoutIva, +unitPriceWithoutIvaBs, +costUsd, +costBs
+- Migracion: `20260512210000_add_sellers_commissions_and_invoice_fields`
+
+### Backend (NestJS)
+- **SellersModule** completo: CRUD, toggle-active, assign-user, generateCode (VEN-001, VEN-002...)
+- **Reporte de comisiones**: `GET /sellers/:id/commission-report?from&to` calcula comision por categoria usando unitPriceWithoutIva × cantidad × commissionPct/100 sobre facturas PAID
+- **InvoicesService**: auto-asigna seller desde user.seller al crear, guarda cashierId al cobrar, calcula nuevos campos InvoiceItem (unitPriceWithoutIva, costUsd con brega)
+- **QuotationsService**: convertToInvoice actualizado con misma logica de seller y campos nuevos
+- **CashRegistersService**: CRUD admin completo (findAllAdmin, createRegister, updateRegister, toggleActiveRegister)
+- **CategoriesService**: DTO actualizado para incluir commissionPct
+- **UsersService**: findOne incluye seller vinculado
+
+### Frontend
+- `/settings/sellers` — CRUD vendedores con modal crear/editar/vincular usuario
+- `/settings/cash-registers` — CRUD cajas con toggle fiscal y activar/desactivar
+- `/reports/commissions` — Reporte de comisiones por vendedor con desglose por categoria
+- **POS**: selector de vendedor (dropdown para ADMIN/SUPERVISOR, solo lectura para SELLER/CASHIER)
+- **Categorias**: campo commissionPct en formularios inline de crear/editar, badge visual
+- **Sidebar**: seccion REPORTES (ADMIN/SUPERVISOR), items Vendedores y Cajas en CONFIGURACION
+
+### Datos de prueba
+- Vendedor VEN-001 (Carlos Mendez) vinculado a seller@trinity.com
+- Vendedor VEN-002 (Ana Rodriguez) sin vincular
+
 ## Sesion 16 — Lazy Loading Tabs + Montos Bs estandarizados (Completada)
 
 ### Lazy Loading en Tabs

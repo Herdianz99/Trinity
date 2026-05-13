@@ -9,6 +9,7 @@ interface Category {
   id: string;
   name: string;
   code: string | null;
+  commissionPct: number;
   parentId: string | null;
   printAreaId: string | null;
   printArea: { id: string; name: string } | null;
@@ -29,10 +30,12 @@ export default function CategoriesPage() {
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
   const [editPrintAreaId, setEditPrintAreaId] = useState('');
+  const [editCommissionPct, setEditCommissionPct] = useState('0');
   const [addingParentId, setAddingParentId] = useState<string | null | 'root'>(null);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
   const [newPrintAreaId, setNewPrintAreaId] = useState('');
+  const [newCommissionPct, setNewCommissionPct] = useState('0');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -87,6 +90,7 @@ export default function CategoriesPage() {
       if (isRoot) {
         body.code = newCode.toUpperCase();
         if (newPrintAreaId) body.printAreaId = newPrintAreaId;
+        body.commissionPct = parseFloat(newCommissionPct) || 0;
       }
       const res = await fetch('/api/proxy/categories', {
         method: 'POST',
@@ -97,6 +101,7 @@ export default function CategoriesPage() {
         setNewName('');
         setNewCode('');
         setNewPrintAreaId('');
+        setNewCommissionPct('0');
         setAddingParentId(null);
         fetchCategories();
         setMessage({ type: 'success', text: 'Categoria creada' });
@@ -123,6 +128,7 @@ export default function CategoriesPage() {
       if (isRoot) {
         body.code = editCode.toUpperCase();
         body.printAreaId = editPrintAreaId || null;
+        body.commissionPct = parseFloat(editCommissionPct) || 0;
       }
       const res = await fetch(`/api/proxy/categories/${id}`, {
         method: 'PATCH',
@@ -222,6 +228,21 @@ export default function CategoriesPage() {
                   ))}
                 </select>
               )}
+              {isRoot && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={editCommissionPct}
+                    onChange={(e) => setEditCommissionPct(e.target.value)}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="input-field !py-1 !px-2 text-sm w-16 text-center"
+                    placeholder="0"
+                  />
+                  <span className="text-xs text-slate-500">%com</span>
+                </div>
+              )}
               <button
                 onClick={() => handleUpdate(cat.id, isRoot)}
                 disabled={saving}
@@ -248,6 +269,11 @@ export default function CategoriesPage() {
                   {cat.printArea.name}
                 </span>
               )}
+              {isRoot && cat.commissionPct > 0 && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">
+                  {cat.commissionPct}% com
+                </span>
+              )}
               <span className="text-xs text-slate-600 mr-2">
                 {hasChildren ? `${cat.children.length} sub` : ''}
               </span>
@@ -272,6 +298,7 @@ export default function CategoriesPage() {
                   setEditName(cat.name);
                   setEditCode(cat.code || '');
                   setEditPrintAreaId(cat.printAreaId || '');
+                  setEditCommissionPct(String(cat.commissionPct || 0));
                 }}
                 className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-white transition-colors"
                 title="Editar"
@@ -376,6 +403,19 @@ export default function CategoriesPage() {
                 <option key={pa.id} value={pa.id}>{pa.name}</option>
               ))}
             </select>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={newCommissionPct}
+                onChange={(e) => setNewCommissionPct(e.target.value)}
+                min="0"
+                max="100"
+                step="0.1"
+                className="input-field !py-1.5 !px-2 text-sm w-16 text-center"
+                placeholder="0"
+              />
+              <span className="text-xs text-slate-500">%</span>
+            </div>
             <button onClick={() => handleAdd(null)} disabled={saving} className="text-sm text-green-400 hover:text-green-300 font-medium">
               {saving ? <Loader2 className="animate-spin" size={14} /> : 'Crear'}
             </button>

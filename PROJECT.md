@@ -188,11 +188,25 @@ model PrintArea {
   updatedAt   DateTime   @updatedAt
 }
 
+model Seller {
+  id        String    @id @default(cuid())
+  code      String    @unique  // auto-generado: VEN-001, VEN-002...
+  name      String
+  phone     String?
+  isActive  Boolean   @default(true)
+  userId    String?   @unique  // vínculo 1:1 con User
+  user      User?     @relation(fields: [userId], references: [id])
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model Category {
   id                  String     @id @default(cuid())
   name                String
   code                String     @unique  // "HER", "PLO", "ELE" — 3 letras, configurable
   lastProductNumber   Int        @default(0)  // correlativo por categoría, SELECT FOR UPDATE al crear producto
+  commissionPct       Float      @default(0)  // % de comisión para vendedores
   printAreaId         String?    // área de impresión asignada
   printArea           PrintArea? @relation(...)
   parentId            String?
@@ -409,7 +423,10 @@ model Invoice {
   items           InvoiceItem[]
   payments        Payment[]
   createdById     String
-  sellerId        String?       // vendedor que creó la pre-factura
+  sellerId        String?       // Seller que atendió la venta
+  seller          Seller?       @relation(fields: [sellerId], references: [id])
+  cashierId       String?       // User que cobró la factura
+  cashier         User?         @relation("InvoiceCashier", fields: [cashierId], references: [id])
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }
@@ -418,16 +435,20 @@ enum InvoiceStatus { DRAFT PENDING PAID PARTIAL CREDIT CANCELLED }
 enum InvoiceType   { SALE DEBIT_NOTE CREDIT_NOTE }
 
 model InvoiceItem {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice @relation(...)
-  productId   String
-  productName String  // snapshot del nombre
-  quantity    Float
-  unitPrice   Float   // precio al momento de la venta en USD
-  ivaType     IvaType
-  ivaAmount   Float
-  totalUsd    Float
+  id                    String  @id @default(cuid())
+  invoiceId             String
+  invoice               Invoice @relation(...)
+  productId             String
+  productName           String  // snapshot del nombre
+  quantity              Float
+  unitPrice             Float   // precio al momento de la venta en USD (con IVA)
+  ivaType               IvaType
+  ivaAmount             Float
+  totalUsd              Float
+  unitPriceWithoutIva   Float   @default(0)  // precio base sin IVA
+  unitPriceWithoutIvaBs Float   @default(0)
+  costUsd               Float   @default(0)  // costo con brega para comisiones
+  costBs                Float   @default(0)
 }
 
 model Payment {

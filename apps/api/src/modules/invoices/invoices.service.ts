@@ -138,6 +138,8 @@ export class InvoicesService {
         items: true,
         payments: true,
         receivables: true,
+        seller: { select: { id: true, code: true, name: true } },
+        cashier: { select: { id: true, name: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
@@ -158,6 +160,10 @@ export class InvoicesService {
       );
     }
 
+    // Get company config for brega calculation
+    const config = await this.prisma.companyConfig.findFirst();
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
     // Determine cash register
     let cashRegisterId = dto.cashRegisterId;
     if (!cashRegisterId) {
@@ -175,6 +181,17 @@ export class InvoicesService {
           throw new BadRequestException('No hay cajas registradoras disponibles');
         }
         cashRegisterId = defaultRegister.id;
+      }
+    }
+
+    // Determine seller: from dto, from user's linked seller, or null
+    let sellerId: string | null = dto.sellerId || null;
+    if (!sellerId) {
+      const userSeller = await this.prisma.seller.findUnique({
+        where: { userId: user.id },
+      });
+      if (userSeller) {
+        sellerId = userSeller.id;
       }
     }
 
@@ -197,9 +214,20 @@ export class InvoicesService {
       // priceDetal already includes IVA — extract base price
       const priceWithIva = item.unitPrice ?? product.priceDetal;
       const ivaRate = IVA_RATES[product.ivaType] || 0;
-      const baseUnitPrice = priceWithIva / (1 + ivaRate);
+      const ivaMultiplier = 1 + ivaRate;
+      const baseUnitPrice = priceWithIva / ivaMultiplier;
       const lineSubtotal = baseUnitPrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
+
+      // unitPriceWithoutIva = unitPriceUsd / ivaMultiplier (price without IVA)
+      const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
+      const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
+
+      // costUsd: if bregaApplies, apply brega; otherwise use raw cost
+      const costUsd = product.bregaApplies
+        ? product.costUsd * (1 + bregaGlobalPct / 100)
+        : product.costUsd;
+      const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
@@ -215,6 +243,10 @@ export class InvoicesService {
         unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
         ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
         totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
+        unitPriceWithoutIva,
+        unitPriceWithoutIvaBs,
+        costUsd,
+        costBs,
       });
     }
 
@@ -241,7 +273,6 @@ export class InvoicesService {
         data: { lastInvoiceNumber: nextNumber },
       });
 
-      const config = await tx.companyConfig.findFirst();
       const prefix = config?.invoicePrefix || 'FAC';
       const year = new Date().getFullYear().toString().slice(-2);
       const correlativo = nextNumber.toString().padStart(8, '0');
@@ -262,12 +293,13 @@ export class InvoicesService {
           exchangeRate: rate.rate,
           notes: dto.notes,
           createdById: user.id,
-          sellerId: isSeller ? user.id : null,
+          sellerId,
           items: { create: itemsData },
         },
         include: {
           items: true,
           customer: true,
+          seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
         },
       });
@@ -463,7 +495,7 @@ export class InvoicesService {
         });
       }
 
-      // Update invoice status, IGTF, and release lock
+      // Update invoice status, IGTF, cashier, and release lock
       const newStatus = dto.isCredit ? 'CREDIT' : 'PAID';
       const updatedInvoice = await tx.invoice.update({
         where: { id },
@@ -475,6 +507,7 @@ export class InvoicesService {
             ? new Date(Date.now() + (dto.creditDays || 30) * 86400000)
             : null,
           paidAt: new Date(),
+          cashierId: user.id,
           lockedById: null,
           lockedAt: null,
           igtfUsd: invoiceIgtfUsd,
@@ -582,6 +615,10 @@ export class InvoicesService {
       throw new BadRequestException('No hay tasa BCV registrada para hoy');
     }
 
+    // Get company config for brega calculation
+    const config = await this.prisma.companyConfig.findFirst();
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
     // Fetch products and calculate totals
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
@@ -600,9 +637,17 @@ export class InvoicesService {
       // priceDetal already includes IVA — extract base price
       const priceWithIva = item.unitPrice ?? product.priceDetal;
       const ivaRate = IVA_RATES[product.ivaType] || 0;
-      const baseUnitPrice = priceWithIva / (1 + ivaRate);
+      const ivaMultiplier = 1 + ivaRate;
+      const baseUnitPrice = priceWithIva / ivaMultiplier;
       const lineSubtotal = baseUnitPrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
+
+      const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
+      const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
+      const costUsd = product.bregaApplies
+        ? product.costUsd * (1 + bregaGlobalPct / 100)
+        : product.costUsd;
+      const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
@@ -618,6 +663,10 @@ export class InvoicesService {
         unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
         ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
         totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
+        unitPriceWithoutIva,
+        unitPriceWithoutIvaBs,
+        costUsd,
+        costBs,
       });
     }
 
@@ -633,6 +682,7 @@ export class InvoicesService {
         where: { id },
         data: {
           customerId: dto.customerId || null,
+          sellerId: dto.sellerId || invoice.sellerId,
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
@@ -648,6 +698,7 @@ export class InvoicesService {
         include: {
           items: true,
           customer: true,
+          seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
         },
       });

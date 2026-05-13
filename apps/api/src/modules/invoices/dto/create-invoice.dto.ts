@@ -43,6 +43,11 @@ export class CreateInvoiceDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  sellerId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @ApiProperty({ type: [CreateInvoiceItemDto] })

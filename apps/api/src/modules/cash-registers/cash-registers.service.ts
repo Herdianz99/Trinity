@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
+import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 
 @Injectable()
 export class CashRegistersService {
@@ -17,6 +18,75 @@ export class CashRegistersService {
         },
       },
       orderBy: { code: 'asc' },
+    });
+  }
+
+  async findAllAdmin() {
+    return this.prisma.cashRegister.findMany({
+      include: {
+        sessions: {
+          where: { status: 'OPEN' },
+          include: { openedBy: { select: { id: true, name: true } } },
+        },
+        _count: { select: { invoices: true } },
+      },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  async createRegister(dto: CreateCashRegisterDto) {
+    const existing = await this.prisma.cashRegister.findUnique({
+      where: { code: dto.code },
+    });
+    if (existing) {
+      throw new BadRequestException(`El codigo "${dto.code}" ya esta en uso`);
+    }
+
+    return this.prisma.cashRegister.create({
+      data: {
+        code: dto.code,
+        name: dto.name,
+        isFiscal: dto.isFiscal ?? false,
+      },
+    });
+  }
+
+  async updateRegister(id: string, dto: CreateCashRegisterDto) {
+    const register = await this.prisma.cashRegister.findUnique({ where: { id } });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+
+    if (dto.code && dto.code !== register.code) {
+      const existing = await this.prisma.cashRegister.findUnique({
+        where: { code: dto.code },
+      });
+      if (existing) {
+        throw new BadRequestException(`El codigo "${dto.code}" ya esta en uso`);
+      }
+    }
+
+    return this.prisma.cashRegister.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        isFiscal: dto.isFiscal,
+      },
+    });
+  }
+
+  async toggleActiveRegister(id: string) {
+    const register = await this.prisma.cashRegister.findUnique({
+      where: { id },
+      include: { sessions: { where: { status: 'OPEN' } } },
+    });
+    if (!register) throw new NotFoundException('Caja no encontrada');
+
+    if (register.isActive && register.sessions.length > 0) {
+      throw new BadRequestException('No se puede desactivar una caja con sesion activa');
+    }
+
+    return this.prisma.cashRegister.update({
+      where: { id },
+      data: { isActive: !register.isActive },
     });
   }
 

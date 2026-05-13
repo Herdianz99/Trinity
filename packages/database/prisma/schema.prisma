@@ -162,19 +162,21 @@ enum ExchangeRateSource {
 // ============================================
 
 model User {
-  id                 String           @id @default(cuid())
-  name               String
-  email              String           @unique
-  password           String
-  role               UserRole
-  isActive           Boolean          @default(true)
-  mustChangePassword Boolean          @default(true)
-  lastLoginAt        DateTime?
-  permissions        UserPermission[]
-  sessionsOpened     CashSession[]    @relation("SessionOpenedBy")
-  sessionsClosed     CashSession[]    @relation("SessionClosedBy")
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  id                  String           @id @default(cuid())
+  name                String
+  email               String           @unique
+  password            String
+  role                UserRole
+  isActive            Boolean          @default(true)
+  mustChangePassword  Boolean          @default(true)
+  lastLoginAt         DateTime?
+  permissions         UserPermission[]
+  sessionsOpened      CashSession[]    @relation("SessionOpenedBy")
+  sessionsClosed      CashSession[]    @relation("SessionClosedBy")
+  seller              Seller?
+  invoicesAsCashier   Invoice[]        @relation("InvoiceCashier")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
 model UserPermission {
@@ -192,6 +194,23 @@ model RolePermission {
   role      UserRole @unique
   modules   String[]
   updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// VENDEDORES
+// ============================================
+
+model Seller {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  phone     String?
+  isActive  Boolean   @default(true)
+  userId    String?   @unique
+  user      User?     @relation(fields: [userId], references: [id])
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 // ============================================
@@ -218,6 +237,7 @@ model Category {
   name              String
   code              String?    @unique
   lastProductNumber Int        @default(0)
+  commissionPct     Float      @default(0)
   printAreaId       String?
   printArea         PrintArea? @relation(fields: [printAreaId], references: [id])
   parentId          String?
@@ -523,6 +543,9 @@ model Invoice {
   printJobs      PrintJob[]
   createdById    String
   sellerId       String?
+  seller         Seller?       @relation(fields: [sellerId], references: [id])
+  cashierId      String?
+  cashier        User?         @relation("InvoiceCashier", fields: [cashierId], references: [id])
   lockedById     String?
   lockedAt       DateTime?
   createdAt      DateTime      @default(now())
@@ -530,19 +553,23 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice @relation(fields: [invoiceId], references: [id])
-  productId   String
-  productName String
-  quantity    Float
-  unitPrice   Float
-  ivaType     IvaType
-  ivaAmount    Float
-  totalUsd     Float
-  unitPriceBs  Float   @default(0)
-  ivaAmountBs  Float   @default(0)
-  totalBs      Float   @default(0)
+  id                    String  @id @default(cuid())
+  invoiceId             String
+  invoice               Invoice @relation(fields: [invoiceId], references: [id])
+  productId             String
+  productName           String
+  quantity              Float
+  unitPrice             Float
+  ivaType               IvaType
+  ivaAmount             Float
+  totalUsd              Float
+  unitPriceBs           Float   @default(0)
+  ivaAmountBs           Float   @default(0)
+  totalBs               Float   @default(0)
+  unitPriceWithoutIva   Float   @default(0)
+  unitPriceWithoutIvaBs Float   @default(0)
+  costUsd               Float   @default(0)
+  costBs                Float   @default(0)
 }
 
 model Payment {

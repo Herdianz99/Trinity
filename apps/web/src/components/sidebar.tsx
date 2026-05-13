@@ -41,6 +41,7 @@ import {
   BookOpen,
   BarChart3,
   Shield,
+  TrendingUp,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -148,6 +149,15 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    key: 'reports',
+    label: 'REPORTES',
+    icon: <TrendingUp size={20} />,
+    permission: 'reports',
+    items: [
+      { label: 'Comisiones', href: '/reports/commissions', icon: <BarChart3 size={18} /> },
+    ],
+  },
+  {
     key: 'settings',
     label: 'CONFIGURACION',
     icon: <Settings size={20} />,
@@ -156,6 +166,8 @@ const menuSections: MenuSection[] = [
       { label: 'Empresa', href: '/config', icon: <Settings size={18} /> },
       { label: 'Usuarios', href: '/settings/users', icon: <Users size={18} /> },
       { label: 'Permisos por rol', href: '/settings/role-permissions', icon: <Shield size={18} /> },
+      { label: 'Vendedores', href: '/settings/sellers', icon: <UserCheck size={18} /> },
+      { label: 'Cajas', href: '/settings/cash-registers', icon: <Monitor size={18} /> },
       { label: 'Areas de impresion', href: '/settings/print-areas', icon: <Printer size={18} /> },
       { label: 'Importacion masiva', href: '/import', icon: <Upload size={18} /> },
     ],
@@ -232,6 +244,9 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const filteredSections = menuSections.filter((section) => {
     if (section.key === 'settings') {
       return user?.role === 'ADMIN';
+    }
+    if (section.key === 'reports') {
+      return user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
     }
     return hasPermission(permissions, section.permission);
   });
