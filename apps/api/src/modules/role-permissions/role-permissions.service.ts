@@ -20,9 +20,28 @@ export class RolePermissionsService {
   ) {}
 
   async findAll() {
-    return this.prisma.rolePermission.findMany({
+    const existing = await this.prisma.rolePermission.findMany({
       orderBy: { role: 'asc' },
     });
+
+    // Ensure all roles from the enum have a record
+    const existingRoles = new Set(existing.map((rp) => rp.role));
+    const allRoles = Object.values(UserRole);
+    const missing = allRoles.filter((r) => !existingRoles.has(r));
+
+    if (missing.length > 0) {
+      const { ROLE_PERMISSIONS } = await import('../auth/role-permissions');
+      for (const role of missing) {
+        const modules = ROLE_PERMISSIONS[role] || ['dashboard'];
+        const created = await this.prisma.rolePermission.create({
+          data: { role, modules: modules.includes('*') ? VALID_MODULES : modules },
+        });
+        existing.push(created);
+      }
+      existing.sort((a, b) => a.role.localeCompare(b.role));
+    }
+
+    return existing;
   }
 
   async getModulesForRole(role: UserRole): Promise<string[]> {
