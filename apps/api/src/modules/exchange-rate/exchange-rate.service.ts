@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
+import * as https from 'https';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { UserRole } from '@prisma/client';
@@ -73,14 +74,28 @@ export class ExchangeRateService {
     });
   }
 
+  private fetchBcvHtml(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const req = https.get(
+        'https://www.bcv.org.ve/',
+        {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          rejectUnauthorized: false, // BCV uses a government cert not in Node's CA store
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => resolve(data));
+        },
+      );
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+    });
+  }
+
   async fetchFromBcv(): Promise<number | null> {
     try {
-      const response = await fetch('https://www.bcv.org.ve/', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      });
-      const html = await response.text();
+      const html = await this.fetchBcvHtml();
       const cheerio = await import('cheerio');
       const $ = cheerio.load(html);
 
