@@ -133,7 +133,7 @@ export default function POSPage() {
   const [userSellerName, setUserSellerName] = useState<string | null>(null);
 
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
-  const canSelectSeller = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
+  const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
 
   // Fetch exchange rate and user info on load
   useEffect(() => {

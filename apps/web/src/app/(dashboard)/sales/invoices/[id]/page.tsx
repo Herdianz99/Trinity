@@ -25,6 +25,8 @@ interface InvoiceDetail {
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
   cashRegister: { id: string; code: string; name: string } | null;
+  seller: { id: string; code: string; name: string } | null;
+  cashier: { id: string; name: string } | null;
   items: InvoiceItem[];
   payments: Payment[];
   receivables: ReceivableLink[];
@@ -38,8 +40,8 @@ interface InvoiceItem {
   unitPrice: number;
   unitPriceBs: number;
   ivaType: string;
-  ivaPct: number;
-  ivaUsd: number;
+  ivaAmount: number;
+  ivaAmountBs: number;
   totalUsd: number;
   totalBs: number;
 }
@@ -111,6 +113,13 @@ const TYPE_LABELS: Record<string, string> = {
   FINANCING_PLATFORM: 'Plataforma',
 };
 
+const IVA_TYPE_LABELS: Record<string, string> = {
+  EXEMPT: 'Exento',
+  REDUCED: 'Reducido (8%)',
+  GENERAL: 'General (16%)',
+  SPECIAL: 'Especial (31%)',
+};
+
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -174,11 +183,12 @@ export default function InvoiceDetailPage() {
   const hasReceivables = invoice.receivables && invoice.receivables.length > 0;
 
   // Group IVA by type
-  const ivaByType: Record<string, { pct: number; total: number }> = {};
+  const ivaByType: Record<string, { label: string; total: number; totalBs: number }> = {};
   invoice.items.forEach(item => {
-    const key = item.ivaType || `${item.ivaPct}%`;
-    if (!ivaByType[key]) ivaByType[key] = { pct: item.ivaPct, total: 0 };
-    ivaByType[key].total += item.ivaUsd;
+    const key = item.ivaType || 'EXEMPT';
+    if (!ivaByType[key]) ivaByType[key] = { label: IVA_TYPE_LABELS[key] || key, total: 0, totalBs: 0 };
+    ivaByType[key].total += item.ivaAmount || 0;
+    ivaByType[key].totalBs += item.ivaAmountBs || 0;
   });
 
   const totalPaymentsUsd = invoice.payments.reduce((s, p) => s + p.amountUsd, 0);
@@ -252,6 +262,18 @@ export default function InvoiceDetailPage() {
                 <p className="text-xs text-slate-500 uppercase">Tasa del dia</p>
                 <p className="text-white font-mono">Bs {invoice.exchangeRate?.toFixed(2)}</p>
               </div>
+              {invoice.seller && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Vendedor</p>
+                  <p className="text-white">{invoice.seller.name}</p>
+                </div>
+              )}
+              {invoice.cashier && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Cobrado por</p>
+                  <p className="text-white">{invoice.cashier.name}</p>
+                </div>
+              )}
             </div>
 
             {/* Datos cliente */}
@@ -302,7 +324,7 @@ export default function InvoiceDetailPage() {
                     <td className="px-4 py-3 text-right font-mono text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300">${item.unitPrice?.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">Bs {item.unitPriceBs?.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-center text-slate-400 text-xs">{item.ivaType || `${item.ivaPct}%`}</td>
+                    <td className="px-4 py-3 text-center text-slate-400 text-xs">{IVA_TYPE_LABELS[item.ivaType] || item.ivaType}</td>
                     <td className="px-4 py-3 text-right font-mono text-white">${item.totalUsd?.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300 hidden lg:table-cell">Bs {item.totalBs?.toFixed(2)}</td>
                   </tr>
@@ -311,45 +333,42 @@ export default function InvoiceDetailPage() {
             </table>
           </div>
 
-          {/* Totals */}
+          {/* Totals — two columns: USD | Bs */}
           <div className="card p-6">
-            <div className="max-w-sm ml-auto space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Subtotal USD</span>
-                <span className="text-white font-mono">${invoice.subtotalUsd?.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Subtotal Bs</span>
-                <span className="text-slate-300 font-mono">Bs {invoice.subtotalBs?.toFixed(2)}</span>
-              </div>
-              {Object.entries(ivaByType).map(([key, val]) => (
-                <div key={key} className="flex justify-between text-sm">
-                  <span className="text-slate-400">IVA {key}</span>
-                  <span className="text-white font-mono">${val.total.toFixed(2)}</span>
+            <div className="max-w-lg ml-auto grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 text-sm">
+              {/* Header */}
+              <span></span>
+              <span className="text-slate-500 text-xs text-right font-medium uppercase">USD</span>
+              <span className="text-slate-500 text-xs text-right font-medium uppercase">Bs</span>
+
+              {/* Subtotal */}
+              <span className="text-slate-400">Subtotal</span>
+              <span className="text-white font-mono text-right">${invoice.subtotalUsd?.toFixed(2)}</span>
+              <span className="text-slate-300 font-mono text-right">Bs {invoice.subtotalBs?.toFixed(2)}</span>
+
+              {/* IVA rows */}
+              {Object.entries(ivaByType).filter(([, val]) => val.total > 0).map(([key, val]) => (
+                <div key={key} className="contents">
+                  <span className="text-slate-400">IVA {val.label}</span>
+                  <span className="text-white font-mono text-right">${val.total.toFixed(2)}</span>
+                  <span className="text-slate-300 font-mono text-right">Bs {val.totalBs.toFixed(2)}</span>
                 </div>
               ))}
+
+              {/* IGTF */}
               {invoice.igtfUsd > 0 && (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-amber-400">IGTF (3%) USD</span>
-                    <span className="text-amber-400 font-mono">${invoice.igtfUsd?.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-amber-400">IGTF (3%) Bs</span>
-                    <span className="text-amber-400 font-mono">Bs {invoice.igtfBs?.toFixed(2)}</span>
-                  </div>
-                </>
+                <div className="contents">
+                  <span className="text-amber-400">IGTF (3%)</span>
+                  <span className="text-amber-400 font-mono text-right">${invoice.igtfUsd?.toFixed(2)}</span>
+                  <span className="text-amber-400 font-mono text-right">Bs {invoice.igtfBs?.toFixed(2)}</span>
+                </div>
               )}
-              <div className="border-t border-slate-700/50 pt-2 mt-2">
-                <div className="flex justify-between text-base font-bold">
-                  <span className="text-slate-300">Total USD</span>
-                  <span className="text-green-400 font-mono">${invoice.totalUsd?.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Total Bs</span>
-                  <span className="text-slate-300 font-mono">Bs {invoice.totalBs?.toFixed(2)}</span>
-                </div>
-              </div>
+
+              {/* Separator + Total */}
+              <div className="col-span-3 border-t border-slate-700/50 mt-1 pt-2"></div>
+              <span className="text-slate-300 font-bold text-base">Total</span>
+              <span className="text-green-400 font-mono font-bold text-base text-right">${invoice.totalUsd?.toFixed(2)}</span>
+              <span className="text-slate-300 font-mono font-bold text-base text-right">Bs {invoice.totalBs?.toFixed(2)}</span>
             </div>
           </div>
         </TabsContent>

@@ -195,9 +195,9 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">{new Date(inv.createdAt).toLocaleDateString('es-VE')}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => openDetail(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Ver detalle">
+                      <Link href={`/sales/invoices/${inv.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 inline-flex" title="Ver detalle">
                         <Eye size={15} />
-                      </button>
+                      </Link>
                       {['PAID', 'CREDIT'].includes(inv.status) && (
                         <button onClick={() => handlePrint(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
                           <Printer size={15} />
