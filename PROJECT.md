@@ -51,6 +51,7 @@ Trinity es single-tenant. No existe tenantId en las queries. Una instalación = 
 | `WAREHOUSE` | Gestiona inventario, recibe compras, despacha |
 | `BUYER` | Gestiona compras y proveedores |
 | `ACCOUNTANT` | CxC, CxP, reportes financieros |
+| `AUDITOR` | Solo lectura: dashboard e inventario |
 
 ### Flujo Principal de Ventas
 ```
@@ -162,7 +163,7 @@ model User {
 }
 
 enum UserRole {
-  ADMIN SUPERVISOR CASHIER SELLER WAREHOUSE BUYER ACCOUNTANT
+  ADMIN SUPERVISOR CASHIER SELLER WAREHOUSE BUYER ACCOUNTANT AUDITOR
 }
 
 model UserPermission {

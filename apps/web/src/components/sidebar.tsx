@@ -174,6 +174,17 @@ const menuSections: MenuSection[] = [
   },
 ];
 
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  SUPERVISOR: 'Supervisor',
+  CASHIER: 'Cajero',
+  SELLER: 'Vendedor',
+  WAREHOUSE: 'Almacenista',
+  BUYER: 'Comprador',
+  ACCOUNTANT: 'Contador',
+  AUDITOR: 'Auditor',
+};
+
 interface SidebarProps {
   user: { name: string; email: string; role: string } | null;
   permissions: string[];
@@ -389,7 +400,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
         {!collapsed && user && (
           <div className="px-2 mb-3">
             <p className="text-sm font-medium text-slate-200 truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user.role}</p>
+            <p className="text-xs text-slate-500 truncate">{ROLE_LABELS[user.role] || user.role}</p>
           </div>
         )}
         <button

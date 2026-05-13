@@ -30,7 +30,12 @@ export class ExchangeRateController {
   @Get('fetch-bcv')
   async fetchBcv() {
     const rate = await this.service.fetchFromBcv();
-    return { rate };
+    if (rate === null) {
+      return { rate: null, error: 'No se pudo obtener la tasa del BCV. Intente de nuevo o ingrese manualmente.' };
+    }
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    return { rate, source: 'BCV', date: today.toISOString() };
   }
 
   @Get()

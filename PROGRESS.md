@@ -1,5 +1,35 @@
 # Trinity ERP — Progreso
 
+## Sesion 18 — Rol Auditor, Scraping BCV y Consulta SENIAT (Completada)
+
+### Rol AUDITOR
+- Nuevo valor `AUDITOR` en enum `UserRole` de Prisma
+- Migracion: `20260513000000_add_auditor_role`
+- Permisos por defecto: `dashboard`, `inventory`
+- ROLE_LABELS en espanol en toda la interfaz:
+  - Tabla de usuarios, selectores de rol, pagina de permisos por rol, sidebar
+  - ADMIN=Administrador, SUPERVISOR=Supervisor, CASHIER=Cajero, SELLER=Vendedor, WAREHOUSE=Almacenista, BUYER=Comprador, ACCOUNTANT=Contador, AUDITOR=Auditor
+- Color del badge AUDITOR: cyan
+
+### Scraping BCV
+- Endpoint `GET /exchange-rate/fetch-bcv` mejorado con `cheerio` para parseo robusto de la pagina del BCV
+- Selector: `#dolar strong` para obtener la tasa del dolar
+- User-Agent configurado para evitar bloqueo
+- Respuesta mejorada: incluye rate, source, date; o error descriptivo si falla
+- Frontend: boton "Obtener del BCV" en pagina de config y en banner de tasa faltante
+- Flujo: fetch → muestra tasa obtenida en campo editable → usuario confirma con "Confirmar y guardar"
+- Si falla el scraping: mensaje de error con opcion de ingresar manualmente
+- Source se guarda correctamente como 'BCV' cuando viene del scraping
+
+### Consulta SENIAT
+- Backend: `POST /customers/seniat-parse` parsea HTML de respuesta del SENIAT
+  - Extrae: documentType, documentNumber, name, commercialName, fiscalName
+  - Usa regex + cheerio como fallback para multiples patrones del SENIAT
+- Frontend: boton "SENIAT" junto al campo RIF en:
+  - `/sales/customers/new` (crear cliente)
+  - `/sales/customers/[id]` (editar cliente)
+- Flujo: window.open() al SENIAT → usuario completa formulario y captcha → app hace polling de localStorage cada 500ms → parsea y pre-llena campos
+
 ## Sesion 17 — Vendedores, Comisiones, CRUD Cajas, Campos Factura (Completada)
 
 ### Migracion Prisma

@@ -18,6 +18,18 @@ const ROLE_COLORS: Record<string, string> = {
   WAREHOUSE: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
   BUYER: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   ACCOUNTANT: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  SUPERVISOR: 'Supervisor',
+  CASHIER: 'Cajero',
+  SELLER: 'Vendedor',
+  WAREHOUSE: 'Almacenista',
+  BUYER: 'Comprador',
+  ACCOUNTANT: 'Contador',
+  AUDITOR: 'Auditor',
 };
 
 const AVAILABLE_MODULES: { key: string; label: string }[] = [
@@ -35,7 +47,7 @@ const AVAILABLE_MODULES: { key: string; label: string }[] = [
   { key: 'settings', label: 'Configuracion' },
 ];
 
-const ROLE_ORDER = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT'];
+const ROLE_ORDER = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR'];
 
 export default function RolePermissionsPage() {
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
@@ -151,7 +163,7 @@ export default function RolePermissionsPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold border ${ROLE_COLORS[rp.role]}`}>
-                    {rp.role}
+                    {ROLE_LABELS[rp.role] || rp.role}
                   </span>
                   {isAdmin && (
                     <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">

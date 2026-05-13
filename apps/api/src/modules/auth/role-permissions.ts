@@ -8,4 +8,5 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   WAREHOUSE: ['dashboard', 'inventory', 'purchases'],
   BUYER: ['dashboard', 'catalog', 'purchases', 'payables'],
   ACCOUNTANT: ['dashboard', 'receivables', 'payables', 'fiscal'],
+  AUDITOR: ['dashboard', 'inventory'],
 };

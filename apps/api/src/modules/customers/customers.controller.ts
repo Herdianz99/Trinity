@@ -22,6 +22,11 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 export class CustomersController {
   constructor(private readonly service: CustomersService) {}
 
+  @Post('seniat-parse')
+  parseSeniat(@Body() body: { html: string }) {
+    return this.service.parseSeniatHtml(body.html);
+  }
+
   @Get()
   findAll(
     @Query('search') search?: string,

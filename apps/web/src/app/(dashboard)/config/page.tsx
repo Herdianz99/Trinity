@@ -49,6 +49,7 @@ export default function ConfigPage() {
   const [todayRate, setTodayRate] = useState<{ rate: number; source: string } | null>(null);
   const [rateHistory, setRateHistory] = useState<any[]>([]);
   const [newRate, setNewRate] = useState('');
+  const [rateFromBcv, setRateFromBcv] = useState(false);
   const [fetchingBcv, setFetchingBcv] = useState(false);
   const [savingRate, setSavingRate] = useState(false);
 
@@ -178,12 +179,14 @@ export default function ConfigPage() {
         const data = await res.json();
         if (data.rate) {
           setNewRate(data.rate.toString());
+          setRateFromBcv(true);
+          setMessage({ type: 'success', text: `Tasa obtenida del BCV: Bs ${data.rate.toFixed(2)} — Confirma y registra` });
         } else {
-          setMessage({ type: 'error', text: 'No se pudo obtener la tasa del BCV' });
+          setMessage({ type: 'error', text: data.error || 'No se pudo obtener la tasa del BCV. Ingresa manualmente.' });
         }
       }
     } catch {
-      setMessage({ type: 'error', text: 'Error al consultar BCV' });
+      setMessage({ type: 'error', text: 'Error al consultar BCV. Ingresa la tasa manualmente.' });
     } finally {
       setFetchingBcv(false);
     }
@@ -275,7 +278,7 @@ export default function ConfigPage() {
                 step="0.01"
                 min="0.01"
                 value={newRate}
-                onChange={(e) => setNewRate(e.target.value)}
+                onChange={(e) => { setNewRate(e.target.value); setRateFromBcv(false); }}
                 className="input-field !py-2 text-sm w-40"
                 placeholder="Ej: 36.50"
               />
@@ -291,12 +294,12 @@ export default function ConfigPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleSaveRate(newRate && fetchingBcv ? 'BCV' : 'MANUAL')}
+              onClick={() => { handleSaveRate(rateFromBcv ? 'BCV' : 'MANUAL'); setRateFromBcv(false); }}
               disabled={savingRate || !newRate}
               className="btn-primary !py-2 text-sm flex items-center gap-2"
             >
               {savingRate && <Loader2 className="animate-spin" size={14} />}
-              Registrar tasa
+              {rateFromBcv ? 'Confirmar y guardar' : 'Registrar tasa'}
             </button>
           </div>
 

@@ -19,6 +19,7 @@ enum UserRole {
   WAREHOUSE
   BUYER
   ACCOUNTANT
+  AUDITOR
 }
 
 enum IvaType {

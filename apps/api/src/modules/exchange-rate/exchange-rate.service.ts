@@ -75,23 +75,33 @@ export class ExchangeRateService {
 
   async fetchFromBcv(): Promise<number | null> {
     try {
-      const response = await fetch('https://www.bcv.org.ve/');
+      const response = await fetch('https://www.bcv.org.ve/', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
       const html = await response.text();
+      const cheerio = await import('cheerio');
+      const $ = cheerio.load(html);
 
-      // Parse the BCV page for dollar rate
-      // The BCV site has the dollar rate in a div with id "dolar"
-      const dolarMatch = html.match(/<div[^>]*id="dolar"[^>]*>[\s\S]*?<strong>([\d,.]+)<\/strong>/i);
-      if (!dolarMatch) {
-        // Try alternative pattern
-        const altMatch = html.match(/<span[^>]*class="[^"]*field-content[^"]*"[^>]*>([\d,]+[\d.]*)<\/span>/);
-        if (altMatch) {
-          return parseFloat(altMatch[1].replace(',', '.'));
-        }
-        return null;
+      // The BCV page has the dollar rate inside #dolar strong
+      const dolarText = $('#dolar strong').text().trim();
+      if (dolarText) {
+        // Format is like "36,71880000" or "1.236,50" — replace dots (thousands) and comma (decimal)
+        const rateStr = dolarText.replace(/\./g, '').replace(',', '.');
+        const rate = parseFloat(rateStr);
+        if (!isNaN(rate) && rate > 0) return rate;
       }
 
-      const rateStr = dolarMatch[1].replace('.', '').replace(',', '.');
-      return parseFloat(rateStr);
+      // Fallback: try the field-content span pattern
+      const altText = $('div#dolar .field-content').text().trim();
+      if (altText) {
+        const rateStr = altText.replace(/\./g, '').replace(',', '.');
+        const rate = parseFloat(rateStr);
+        if (!isNaN(rate) && rate > 0) return rate;
+      }
+
+      return null;
     } catch {
       return null;
     }

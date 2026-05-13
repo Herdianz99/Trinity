@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, UserCheck, Save, Loader2, ChevronLeft, ChevronRight,
-  ExternalLink, DollarSign, X,
+  ExternalLink, DollarSign, X, Search,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -23,6 +23,8 @@ interface CxCData {
   totalDebt: number; totalOverdue: number; availableCredit: number;
   receivables: Receivable[];
 }
+
+const SENIAT_URL = 'https://contribuyentes.seniat.gob.ve/getContribuyente/GetInfoContribuyente';
 
 const INV_BADGES: Record<string, string> = {
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
@@ -58,6 +60,54 @@ export default function CustomerDetailPage() {
   // CxC pagination (client-side)
   const [cxcPage, setCxcPage] = useState(1);
   const [cxcLoading, setCxcLoading] = useState(false);
+
+  // SENIAT lookup
+  const [seniatLoading, setSeniatLoading] = useState(false);
+  const seniatPollRef = useRef<any>(null);
+
+  function openSeniat() {
+    setSeniatLoading(true);
+    localStorage.removeItem('seniat_result');
+    window.open(SENIAT_URL, 'seniat_window', 'width=900,height=700,scrollbars=yes');
+    seniatPollRef.current = setInterval(async () => {
+      const result = localStorage.getItem('seniat_result');
+      if (result) {
+        clearInterval(seniatPollRef.current);
+        localStorage.removeItem('seniat_result');
+        setSeniatLoading(false);
+        try {
+          const res = await fetch('/api/proxy/customers/seniat-parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ html: result }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.name) {
+              setForm((f: any) => ({
+                ...f,
+                name: data.name,
+                documentType: data.documentType || f.documentType,
+                rif: data.documentNumber || f.rif,
+              }));
+              setSaveMsg({ type: 'success', text: 'Datos importados del SENIAT correctamente' });
+            } else {
+              setSaveMsg({ type: 'error', text: 'No se encontraron datos en la respuesta del SENIAT' });
+            }
+          }
+        } catch {
+          setSaveMsg({ type: 'error', text: 'Error al procesar datos del SENIAT' });
+        }
+      }
+    }, 500);
+    setTimeout(() => {
+      if (seniatPollRef.current) { clearInterval(seniatPollRef.current); setSeniatLoading(false); }
+    }, 300000);
+  }
+
+  useEffect(() => {
+    return () => { if (seniatPollRef.current) clearInterval(seniatPollRef.current); };
+  }, []);
 
   // Pay receivable
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -205,7 +255,19 @@ export default function CustomerDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">RIF / Documento</label>
-                <input type="text" value={form.rif || ''} onChange={e => setForm((f: any) => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm" placeholder="J-12345678-9" />
+                <div className="flex gap-2">
+                  <input type="text" value={form.rif || ''} onChange={e => setForm((f: any) => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" />
+                  <button
+                    type="button"
+                    onClick={openSeniat}
+                    disabled={seniatLoading}
+                    className="btn-secondary !py-2 text-xs flex items-center gap-1.5 whitespace-nowrap"
+                    title="Consultar SENIAT"
+                  >
+                    {seniatLoading ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />}
+                    SENIAT
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Tipo Doc.</label>

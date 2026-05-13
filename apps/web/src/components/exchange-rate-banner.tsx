@@ -7,6 +7,8 @@ export default function ExchangeRateBanner() {
   const [hasRate, setHasRate] = useState<boolean | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [newRate, setNewRate] = useState('');
+  const [rateFromBcv, setRateFromBcv] = useState(false);
+  const [bcvMessage, setBcvMessage] = useState('');
   const [fetchingBcv, setFetchingBcv] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -31,15 +33,22 @@ export default function ExchangeRateBanner() {
 
   async function handleFetchBcv() {
     setFetchingBcv(true);
+    setBcvMessage('');
     try {
       const res = await fetch('/api/proxy/exchange-rate/fetch-bcv');
       if (res.ok) {
         const data = await res.json();
         if (data.rate) {
           setNewRate(data.rate.toString());
+          setRateFromBcv(true);
+          setBcvMessage(`Tasa obtenida del BCV: Bs ${data.rate.toFixed(2)}`);
+        } else {
+          setBcvMessage(data.error || 'No se pudo obtener la tasa. Ingresa manualmente.');
         }
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      setBcvMessage('Error al consultar BCV. Ingresa manualmente.');
+    } finally {
       setFetchingBcv(false);
     }
   }
@@ -51,7 +60,7 @@ export default function ExchangeRateBanner() {
       const res = await fetch('/api/proxy/exchange-rate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rate: Number(newRate), source: 'MANUAL' }),
+        body: JSON.stringify({ rate: Number(newRate), source: rateFromBcv ? 'BCV' : 'MANUAL' }),
       });
       if (res.ok) {
         setHasRate(true);
@@ -101,12 +110,16 @@ export default function ExchangeRateBanner() {
                   step="0.01"
                   min="0.01"
                   value={newRate}
-                  onChange={(e) => setNewRate(e.target.value)}
+                  onChange={(e) => { setNewRate(e.target.value); setRateFromBcv(false); }}
                   className="input-field !py-2 text-sm"
                   placeholder="Ej: 36.50"
                   autoFocus
                 />
               </div>
+
+              {bcvMessage && (
+                <p className={`text-xs ${rateFromBcv ? 'text-green-400' : 'text-amber-400'}`}>{bcvMessage}</p>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -123,7 +136,7 @@ export default function ExchangeRateBanner() {
                   className="btn-primary !py-2 text-sm flex-1 flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 className="animate-spin" size={14} />}
-                  Guardar
+                  {rateFromBcv ? 'Confirmar y guardar' : 'Guardar'}
                 </button>
               </div>
 

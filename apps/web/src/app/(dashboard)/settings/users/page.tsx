@@ -33,9 +33,21 @@ const ROLE_COLORS: Record<string, string> = {
   WAREHOUSE: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
   BUYER: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   ACCOUNTANT: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
 };
 
-const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT'];
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  SUPERVISOR: 'Supervisor',
+  CASHIER: 'Cajero',
+  SELLER: 'Vendedor',
+  WAREHOUSE: 'Almacenista',
+  BUYER: 'Comprador',
+  ACCOUNTANT: 'Contador',
+  AUDITOR: 'Auditor',
+};
+
+const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR'];
 
 function formatDate(date: string | null) {
   if (!date) return 'Nunca';
@@ -93,7 +105,8 @@ export default function UsersPage() {
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.role.toLowerCase().includes(search.toLowerCase())
+      u.role.toLowerCase().includes(search.toLowerCase()) ||
+      (ROLE_LABELS[u.role] || '').toLowerCase().includes(search.toLowerCase())
   );
 
   async function handleCreate(e: React.FormEvent) {
@@ -302,7 +315,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[user.role] || 'bg-slate-500/15 text-slate-400'}`}>
-                        {user.role}
+                        {ROLE_LABELS[user.role] || user.role}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -394,7 +407,7 @@ export default function UsersPage() {
                 className="input-field"
               >
                 {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>
                 ))}
               </select>
             </div>
@@ -455,7 +468,7 @@ export default function UsersPage() {
                 className="input-field"
               >
                 {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                  <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>
                 ))}
               </select>
             </div>
