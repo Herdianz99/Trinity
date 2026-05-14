@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tag, Plus, Edit2, Trash2, Loader2, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Tag, Plus, Edit2, Trash2, Loader2, X, ExternalLink } from 'lucide-react';
 
 interface Brand {
   id: string;
@@ -11,6 +12,7 @@ interface Brand {
 }
 
 export default function BrandsPage() {
+  const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,7 +179,7 @@ export default function BrandsPage() {
                       <button onClick={() => setEditingId(null)} className="text-xs text-slate-400">Cancelar</button>
                     </div>
                   ) : (
-                    <span className="text-white font-medium">{brand.name}</span>
+                    <button onClick={() => router.push(`/catalog/brands/${brand.id}`)} className="text-white font-medium hover:underline text-left">{brand.name}</button>
                   )}
                 </td>
                 <td className="px-4 py-3 text-center text-slate-400">

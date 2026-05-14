@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Package, Save, Loader2, AlertTriangle,
-  ChevronLeft, ChevronRight, ExternalLink,
+  ChevronLeft, ChevronRight, ExternalLink, LogOut,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -208,9 +208,9 @@ export default function ProductDetailPage() {
   }, [activeTab, product, purchPage, fetchPurchases]);
 
   // ── Save handler ──
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!product) return;
+  async function handleSave(e?: React.FormEvent): Promise<boolean> {
+    if (e) e.preventDefault();
+    if (!product) return false;
     setSaving(true);
     setSaveMsg(null);
     try {
@@ -242,15 +242,22 @@ export default function ProductDetailPage() {
         const updated = await res.json();
         setProduct(updated);
         setSaveMsg({ type: 'success', text: 'Producto actualizado' });
+        return true;
       } else {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error');
       }
     } catch (err: any) {
       setSaveMsg({ type: 'error', text: err.message || 'Error al guardar' });
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSaveAndExit() {
+    const ok = await handleSave();
+    if (ok) router.push('/catalog/products');
   }
 
   // ── Helpers ──
@@ -480,6 +487,15 @@ export default function ProductDetailPage() {
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSaveAndExit}
+                className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
+                Guardar y salir
+              </button>
               <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 Guardar cambios

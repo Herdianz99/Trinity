@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Truck, Save, Loader2, ChevronLeft, ChevronRight, ExternalLink,
+  ArrowLeft, Truck, Save, Loader2, ChevronLeft, ChevronRight, ExternalLink, LogOut,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -114,8 +114,8 @@ export default function SupplierDetailPage() {
     if (activeTab === 'cxp') fetchAccount();
   }, [activeTab, fetchAccount]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave(e?: React.FormEvent): Promise<boolean> {
+    if (e) e.preventDefault();
     setSaving(true); setSaveMsg(null);
     try {
       const body = {
@@ -130,8 +130,14 @@ export default function SupplierDetailPage() {
       if (res.ok) {
         setSaveMsg({ type: 'success', text: 'Proveedor actualizado' });
         fetchSupplier();
+        return true;
       } else { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Error'); }
-    } catch (err: any) { setSaveMsg({ type: 'error', text: err.message }); } finally { setSaving(false); }
+    } catch (err: any) { setSaveMsg({ type: 'error', text: err.message }); return false; } finally { setSaving(false); }
+  }
+
+  async function handleSaveAndExit() {
+    const ok = await handleSave();
+    if (ok) router.push('/catalog/suppliers');
   }
 
   function fmtDate(iso: string) {
@@ -223,6 +229,15 @@ export default function SupplierDetailPage() {
               </label>
             </div>
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSaveAndExit}
+                className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
+                Guardar y salir
+              </button>
               <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 Guardar cambios

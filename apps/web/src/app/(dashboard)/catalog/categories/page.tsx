@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Layers, Plus, Edit2, Trash2, Loader2, X, ChevronRight, ChevronDown, FolderOpen, Folder
+  Layers, Plus, Edit2, Trash2, Loader2, X, ChevronRight, ChevronDown, FolderOpen, Folder, ExternalLink
 } from 'lucide-react';
 
 interface Category {
@@ -22,6 +23,7 @@ interface PrintArea {
 }
 
 export default function CategoriesPage() {
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [printAreas, setPrintAreas] = useState<PrintArea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -259,11 +261,14 @@ export default function CategoriesPage() {
             </div>
           ) : (
             <>
-              <span className={`flex-1 text-sm ${depth === 0 ? 'font-semibold text-white' : 'text-slate-300'}`}>
+              <button
+                onClick={() => router.push(`/catalog/categories/${cat.id}`)}
+                className={`flex-1 text-sm text-left hover:underline ${depth === 0 ? 'font-semibold text-white' : 'text-slate-300'}`}
+              >
                 {isRoot && cat.code ? (
                   <><span className="text-amber-400 font-mono tracking-wider">{cat.code}</span><span className="text-slate-600 mx-1.5">&mdash;</span>{cat.name}</>
                 ) : cat.name}
-              </span>
+              </button>
               {isRoot && cat.printArea && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 border border-slate-600/40">
                   {cat.printArea.name}
