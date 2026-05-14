@@ -137,6 +137,7 @@ model CompanyConfig {
   islrRetentionPct       Float    @default(0)
   isIGTFContributor      Boolean  @default(false)
   igtfPct                Float    @default(3)
+  fiscalCreditCode       String   @default("01")
   updatedAt              DateTime @updatedAt
 }
 
