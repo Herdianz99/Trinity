@@ -63,7 +63,7 @@ if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     cat > "$NGINX_CONF" <<'HTTPCONF'
 server {
     listen 80;
-    server_name eltrebol.app www.eltrebol.app api.eltrebol.app;
+    server_name eltrebol.app api.eltrebol.app;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -89,7 +89,6 @@ if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     certbot certonly \
         --nginx \
         -d "$DOMAIN" \
-        -d "www.$DOMAIN" \
         --non-interactive \
         --agree-tos \
         --email "$EMAIL" \
