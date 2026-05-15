@@ -227,8 +227,8 @@ function buildFrame(data: string): Uint8Array {
 
   // LRC = XOR of all data bytes and ETX
   let lrc = 0;
-  for (const byte of dataBytes) {
-    lrc ^= byte;
+  for (let i = 0; i < dataBytes.length; i++) {
+    lrc ^= dataBytes[i];
   }
   lrc ^= ETX;
 
