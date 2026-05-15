@@ -5,7 +5,12 @@ export class CloseSessionDto {
   @ApiProperty()
   @IsNumber()
   @Min(0)
-  closingBalance: number;
+  closingBalanceUsd: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  closingBalanceBs: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

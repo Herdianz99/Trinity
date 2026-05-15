@@ -370,30 +370,36 @@ model Customer {
 }
 
 model CashRegister {
-  id              String    @id @default(cuid())
-  code            String    @unique  // "01", "02", etc. — 2 dígitos
-  name            String            // "Caja 1", "Caja Principal", etc.
-  lastInvoiceNumber Int     @default(0)  // contador de 8 dígitos, nunca reinicia
-  isActive        Boolean   @default(true)
-  currentUserId   String?           // cajero activo en este turno
-  openedAt        DateTime?
-  invoices        Invoice[]
-  sessions        CashSession[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String        @id @default(cuid())
+  code              String        @unique  // "01", "02", etc.
+  name              String
+  isFiscal          Boolean       @default(false)
+  isShared          Boolean       @default(false)  // cajas compartidas visibles para todos
+  isActive          Boolean       @default(true)
+  lastInvoiceNumber Int           @default(0)
+  comPort           String?       // puerto COM para maquina fiscal
+  sessions          CashSession[]
+  invoices          Invoice[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
 model CashSession {
-  id              String        @id @default(cuid())
-  cashRegisterId  String
-  cashRegister    CashRegister  @relation(...)
-  userId          String
-  openingBalance  Float         @default(0)
-  closingBalance  Float?
-  status          SessionStatus @default(OPEN)
-  notes           String?
-  openedAt        DateTime      @default(now())
-  closedAt        DateTime?
+  id                String        @id @default(cuid())
+  cashRegisterId    String
+  cashRegister      CashRegister  @relation(...)
+  openedById        String
+  openedBy          User          @relation("SessionOpenedBy", ...)
+  closedById        String?
+  closedBy          User?         @relation("SessionClosedBy", ...)
+  openingBalanceUsd Float         @default(0)
+  openingBalanceBs  Float         @default(0)
+  closingBalanceUsd Float?
+  closingBalanceBs  Float?
+  status            SessionStatus @default(OPEN)
+  notes             String?
+  openedAt          DateTime      @default(now())
+  closedAt          DateTime?
 }
 
 enum SessionStatus { OPEN CLOSED }
@@ -784,13 +790,14 @@ model QuotationItem {
 **PDF:** @react-pdf/renderer para facturas A4 y formato 80mm.
 
 **Reglas de cajas (CashRegister):**
-- Un cajero puede abrir turno en cualquier caja que esté disponible (sin turno activo)
-- Dos cajeros pueden trabajar en la misma caja simultáneamente (cajas compartidas)
-- Una caja puede tener múltiples sesiones activas al mismo tiempo
-- Un cajero en el POS y en el historial solo ve las facturas de la caja donde tiene turno activo
-- ADMIN y SUPERVISOR pueden ver facturas de todas las cajas
-- Las devoluciones deben hacerse en la misma caja que emitió la factura original (preparación para máquina fiscal)
-- En el futuro cada cajero tendrá su caja individual exclusiva — el modelo ya lo soporta
+- Cualquier usuario puede abrir sesion en cualquier caja activa que no tenga sesion abierta
+- Una caja solo puede tener UNA sesion OPEN a la vez
+- Cajas con `isShared: true` aparecen disponibles para todos los usuarios en el POS
+- Cajas con `isShared: false` (exclusivas) solo aparecen para quien abrio la sesion
+- En el POS: GET /cash-registers/available retorna cajas donde el usuario tiene sesion + cajas compartidas abiertas
+- SELLER no ve selector de caja ni boton cobrar en POS, solo puede guardar pre-facturas
+- El arqueo de cierre compara conteo fisico (USD/Bs) vs esperado (fondo apertura + ventas)
+- Las devoluciones deben hacerse en la misma caja que emitio la factura original (preparacion para maquina fiscal)
 
 **Códigos de productos por categoría:**
 - Formato:  — ejemplo HER00001, HER00002, PLO00001

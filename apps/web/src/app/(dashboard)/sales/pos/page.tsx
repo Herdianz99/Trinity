@@ -125,7 +125,8 @@ export default function POSPage() {
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashRegisters, setCashRegisters] = useState<any[]>([]);
   const [loadingCash, setLoadingCash] = useState(true);
-  const [openingBalance, setOpeningBalance] = useState('');
+  const [openingBalanceUsd, setOpeningBalanceUsd] = useState('');
+  const [openingBalanceBs, setOpeningBalanceBs] = useState('');
   const [openingCashId, setOpeningCashId] = useState<string | null>(null);
 
   // Pending invoices drawer
@@ -193,9 +194,12 @@ export default function POSPage() {
   }, []);
 
   // Cash register selection — check localStorage on mount
+  // SELLER role: no cash modal needed, they can't charge
+  const isSeller = userRole === 'SELLER';
+
   const fetchCashRegisters = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/cash-registers');
+      const res = await fetch('/api/proxy/cash-registers/available');
       const data = await res.json();
       if (Array.isArray(data)) setCashRegisters(data);
     } catch {}
@@ -203,17 +207,28 @@ export default function POSPage() {
   }, []);
 
   useEffect(() => {
+    if (isSeller) { setLoadingCash(false); return; }
     const savedId = localStorage.getItem('selectedCashRegisterId');
     if (savedId) {
       fetch(`/api/proxy/cash-registers/${savedId}`)
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-        .then(data => { setSelectedCashRegister(data); setLoadingCash(false); })
+        .then(data => {
+          // Verify register still has open session
+          if (data.sessions?.length > 0) {
+            setSelectedCashRegister(data);
+          } else {
+            localStorage.removeItem('selectedCashRegisterId');
+            setShowCashModal(true);
+            fetchCashRegisters();
+          }
+          setLoadingCash(false);
+        })
         .catch(() => { localStorage.removeItem('selectedCashRegisterId'); setShowCashModal(true); fetchCashRegisters(); });
     } else {
       setShowCashModal(true);
       fetchCashRegisters();
     }
-  }, [fetchCashRegisters]);
+  }, [fetchCashRegisters, isSeller]);
 
   function selectCashRegister(cr: any) {
     setSelectedCashRegister(cr);
@@ -222,21 +237,23 @@ export default function POSPage() {
   }
 
   async function openCashSession(cashRegisterId: string) {
-    const balance = parseFloat(openingBalance) || 0;
     try {
-      const res = await fetch(`/api/proxy/cash-registers/${cashRegisterId}/open-session`, {
+      const res = await fetch(`/api/proxy/cash-registers/${cashRegisterId}/open`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ openingBalance: balance }),
+        body: JSON.stringify({
+          openingBalanceUsd: parseFloat(openingBalanceUsd) || 0,
+          openingBalanceBs: parseFloat(openingBalanceBs) || 0,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al abrir sesión');
+        throw new Error(err.message || 'Error al abrir sesion');
       }
-      setOpeningBalance('');
+      setOpeningBalanceUsd('');
+      setOpeningBalanceBs('');
       setOpeningCashId(null);
       await fetchCashRegisters();
-      // Re-fetch and select this register
       const detail = await fetch(`/api/proxy/cash-registers/${cashRegisterId}`).then(r => r.json());
       selectCashRegister(detail);
     } catch (err: any) {
@@ -871,10 +888,7 @@ export default function POSPage() {
   }
 
   // Cash register selection modal (fullscreen, non-dismissable)
-  if (showCashModal) {
-    const openRegisters = cashRegisters.filter(cr => cr.sessions && cr.sessions.length > 0);
-    const closedRegisters = cashRegisters.filter(cr => !cr.sessions || cr.sessions.length === 0);
-
+  if (showCashModal && !isSeller) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900/98 flex items-center justify-center p-6">
         <div className="w-full max-w-2xl">
@@ -886,21 +900,21 @@ export default function POSPage() {
             <p className="text-slate-400 mt-2">Elige la caja donde vas a operar</p>
           </div>
 
-          {/* Open registers */}
-          {openRegisters.length > 0 && (
+          {/* Available registers (from /available endpoint — user's own + shared) */}
+          {cashRegisters.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-sm font-semibold text-green-400 uppercase tracking-wider mb-3">Cajas con sesion activa</h3>
               <div className="grid gap-3">
-                {openRegisters.map(cr => (
+                {cashRegisters.map(cr => (
                   <div key={cr.id} className="card p-4 flex items-center justify-between hover:border-green-500/30 transition-colors">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-white">{cr.name}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
                         {cr.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
+                        {cr.isShared && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">Compartida</span>}
                       </div>
                       <p className="text-xs text-slate-400 mt-1">
-                        {cr.sessions.length} sesion(es) activa(s) — {cr.sessions.map((s: any) => s.openedBy?.name).join(', ')}
+                        {cr.sessions?.map((s: any) => s.openedBy?.name).join(', ')}
                       </p>
                     </div>
                     <button onClick={() => selectCashRegister(cr)} className="btn-primary text-sm px-4 py-2">Usar esta caja</button>
@@ -910,47 +924,11 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Closed registers */}
-          {closedRegisters.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Cajas cerradas</h3>
-              <div className="grid gap-3">
-                {closedRegisters.map(cr => (
-                  <div key={cr.id} className="card p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white">{cr.name}</span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
-                          {cr.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">Sin sesion activa</p>
-                      </div>
-                      {openingCashId === cr.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={openingBalance}
-                            onChange={e => setOpeningBalance(e.target.value)}
-                            placeholder="Fondo USD"
-                            className="input-field w-28 !py-1.5 text-sm"
-                            autoFocus
-                          />
-                          <button onClick={() => openCashSession(cr.id)} className="btn-primary text-sm px-3 py-1.5">Abrir</button>
-                          <button onClick={() => setOpeningCashId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setOpeningCashId(cr.id)} className="px-4 py-2 text-sm rounded-lg border border-slate-600 text-slate-300 hover:border-green-500/40 hover:text-white transition-colors">Abrir caja</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {cashRegisters.length === 0 && (
-            <div className="text-center text-slate-400 py-8">No hay cajas registradas en el sistema</div>
+            <div className="text-center py-8">
+              <p className="text-slate-400 mb-4">No hay cajas abiertas disponibles. Abre una caja primero.</p>
+              <button onClick={() => window.location.href = '/cash'} className="btn-primary px-6 py-2">Ir a cajas</button>
+            </div>
           )}
         </div>
       </div>

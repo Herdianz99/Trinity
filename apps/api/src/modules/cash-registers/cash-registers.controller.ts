@@ -31,15 +31,14 @@ export class CashRegistersController {
     return this.service.findAll();
   }
 
-  @Get('cash-registers/admin')
-  @Roles(UserRole.ADMIN)
-  findAllAdmin() {
-    return this.service.findAllAdmin();
+  @Get('cash-registers/available')
+  findAvailable(@CurrentUser() user: { id: string }) {
+    return this.service.findAvailable(user.id);
   }
 
-  @Get('cash-registers/open')
-  findOpen() {
-    return this.service.findOpen();
+  @Get('cash-registers/:id')
+  findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
   }
 
   @Roles(UserRole.ADMIN)
@@ -49,7 +48,7 @@ export class CashRegistersController {
   }
 
   @Roles(UserRole.ADMIN)
-  @Patch('cash-registers/:id/update')
+  @Patch('cash-registers/:id')
   updateRegister(@Param('id') id: string, @Body() dto: CreateCashRegisterDto) {
     return this.service.updateRegister(id, dto);
   }
@@ -60,26 +59,29 @@ export class CashRegistersController {
     return this.service.toggleActiveRegister(id);
   }
 
-  @Get('cash-sessions')
-  findAllSessions(
-    @Query('cashRegisterId') cashRegisterId?: string,
-    @Query('status') status?: string,
-  ) {
-    return this.service.findAllSessions(cashRegisterId, status);
-  }
-
-  @Get('cash-registers/:id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
-  }
-
-  @Post('cash-registers/:id/open-session')
+  @Post('cash-registers/:id/open')
   openSession(
     @Param('id') id: string,
     @Body() dto: OpenSessionDto,
     @CurrentUser() user: { id: string },
   ) {
     return this.service.openSession(id, dto, user.id);
+  }
+
+  @Get('cash-registers/:id/sessions')
+  findRegisterSessions(@Param('id') id: string) {
+    return this.service.findRegisterSessions(id);
+  }
+
+  @Get('cash-sessions')
+  findAllSessions(
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.findAllSessions({ cashRegisterId, userId, status, from, to });
   }
 
   @Post('cash-sessions/:id/close')
@@ -94,5 +96,14 @@ export class CashRegistersController {
   @Get('cash-sessions/:id/summary')
   getSessionSummary(@Param('id') id: string) {
     return this.service.getSessionSummary(id);
+  }
+
+  @Get('cash-sessions/:id/payments')
+  findSessionPayments(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('methodId') methodId?: string,
+  ) {
+    return this.service.findSessionPayments(id, parseInt(page || '1', 10), methodId);
   }
 }

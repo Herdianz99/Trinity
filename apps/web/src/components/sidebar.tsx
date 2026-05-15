@@ -112,7 +112,7 @@ const menuSections: MenuSection[] = [
     icon: <Banknote size={20} />,
     permission: 'cash',
     items: [
-      { label: 'Gestion de cajas', href: '/cash', icon: <Banknote size={18} /> },
+      { label: 'Cajas', href: '/cash', icon: <Banknote size={18} /> },
       { label: 'Sesiones', href: '/cash/sessions', icon: <History size={18} /> },
     ],
   },

@@ -1,5 +1,39 @@
 # Trinity ERP — Progreso
 
+## Sesion 25 — Rediseno modulo de cajas con sesiones compartidas/exclusivas (Completada)
+
+### Migracion de base de datos
+- Agregado campo `isShared` a CashRegister (Boolean, default false)
+- Split de balances en CashSession: `openingBalance` → `openingBalanceUsd` + `openingBalanceBs`, `closingBalance` → `closingBalanceUsd` + `closingBalanceBs`
+- Migracion SQL preserva datos existentes (copia openingBalance a openingBalanceUsd, etc.)
+
+### Backend (NestJS)
+- Rediseño completo de CashRegistersModule:
+  - `GET /cash-registers` — lista todas las cajas con sesion activa
+  - `GET /cash-registers/available` — cajas disponibles para el usuario (propias + compartidas abiertas)
+  - `GET /cash-registers/:id` — detalle de caja con sesion activa
+  - `POST /cash-registers` — crear caja (ADMIN)
+  - `PATCH /cash-registers/:id` — editar caja con isShared (ADMIN)
+  - `PATCH /cash-registers/:id/toggle-active` — activar/desactivar
+  - `POST /cash-registers/:id/open` — abrir sesion con balanceUsd y balanceBs
+  - `POST /cash-sessions/:id/close` — cerrar sesion con conteo fisico USD y Bs
+  - `GET /cash-sessions/:id/summary` — resumen detallado con diferencias USD/Bs
+  - `GET /cash-registers/:id/sessions` — historial de sesiones de una caja
+  - `GET /cash-sessions` — historial global con filtros (caja, usuario, estado, rango fechas)
+  - `GET /cash-sessions/:id/payments` — pagos de una sesion con paginacion 20/pagina y filtro por metodo
+- Una caja solo puede tener UNA sesion OPEN a la vez
+- DTOs actualizados: OpenSessionDto (balanceUsd, balanceBs), CloseSessionDto (balanceUsd, balanceBs), CreateCashRegisterDto (isShared)
+
+### Frontend (Next.js)
+- `/cash` — Lista de cajas en tabla: nombre, codigo, tipo (Fiscal/Normal), compartida (Si/No), estado (Abierta/Cerrada), abierta por, hora apertura. Click navega a detalle. Boton abrir caja con modal USD/Bs.
+- `/cash/[id]` — Detalle de caja con tabs:
+  - Tab "Sesion actual": layout 2 columnas (30% resumen fondos/totales/metodos + 70% tabla pagos paginada con filtro por metodo). Botones Reporte X/Z (solo fiscal), Cerrar caja.
+  - Tab "Historial de cierres": tabla de sesiones pasadas, click abre modal con detalle completo.
+  - Modal cerrar caja: resumen ventas, campos conteo fisico USD/Bs, diferencia automatica (verde/rojo), notas.
+- `/cash/sessions` — Historial global con filtros: caja, estado, rango de fechas.
+- POS: selector de caja usa endpoint `/available` (solo cajas propias + compartidas). SELLERs no ven selector ni boton cobrar. Si no hay cajas disponibles muestra boton "Ir a cajas".
+- Sidebar: seccion CAJA con items "Cajas" y "Sesiones".
+
 ## Sesion 24 — Migracion metodos de pago de enum a tabla dinamica (Completada)
 
 ### Migracion de base de datos

@@ -5,7 +5,12 @@ export class OpenSessionDto {
   @ApiProperty()
   @IsNumber()
   @Min(0)
-  openingBalance: number;
+  openingBalanceUsd: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  openingBalanceBs: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

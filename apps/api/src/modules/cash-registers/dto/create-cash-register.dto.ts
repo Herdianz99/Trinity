@@ -17,6 +17,11 @@ export class CreateCashRegisterDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsBoolean()
+  isShared?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
   comPort?: string;
 }
