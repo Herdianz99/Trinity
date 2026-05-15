@@ -48,7 +48,7 @@ interface InvoiceItem {
 
 interface Payment {
   id: string;
-  method: string;
+  method: { name: string } | null;
   amountUsd: number;
   amountBs: number;
   exchangeRate: number;
@@ -83,16 +83,7 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelado',
 };
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de venta',
-  PAGO_MOVIL: 'Pago movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+// Payment method labels come from payment.method.name (relation)
 
 const REC_STATUS_COLORS: Record<string, string> = {
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
@@ -397,7 +388,7 @@ export default function InvoiceDetailPage() {
                   <tbody>
                     {invoice.payments.map(p => (
                       <tr key={p.id} className="border-b border-slate-700/30">
-                        <td className="px-4 py-3 text-slate-300">{PAYMENT_LABELS[p.method] || p.method.replace(/_/g, ' ')}</td>
+                        <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">{p.exchangeRate?.toFixed(2)}</td>

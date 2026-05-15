@@ -265,19 +265,20 @@ export class CashRegistersService {
 
     const invoices = await this.prisma.invoice.findMany({
       where,
-      include: { payments: true },
+      include: { payments: { include: { method: true } } },
     });
 
     const byMethod: Record<string, { method: string; count: number; totalUsd: number; totalBs: number }> = {};
 
     for (const inv of invoices) {
       for (const p of inv.payments) {
-        if (!byMethod[p.method]) {
-          byMethod[p.method] = { method: p.method, count: 0, totalUsd: 0, totalBs: 0 };
+        const methodName = (p as any).method?.name || p.methodId;
+        if (!byMethod[methodName]) {
+          byMethod[methodName] = { method: methodName, count: 0, totalUsd: 0, totalBs: 0 };
         }
-        byMethod[p.method].count += 1;
-        byMethod[p.method].totalUsd += p.amountUsd;
-        byMethod[p.method].totalBs += p.amountBs;
+        byMethod[methodName].count += 1;
+        byMethod[methodName].totalUsd += p.amountUsd;
+        byMethod[methodName].totalBs += p.amountBs;
       }
     }
 

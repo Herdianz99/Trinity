@@ -9,16 +9,7 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED: 'bg-slate-700/50 text-slate-400 border-slate-600',
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de Venta',
-  PAGO_MOVIL: 'Pago Movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+// Payment method labels now come from the API (method field in response)
 
 export default function CashSessionsPage() {
   const [registers, setRegisters] = useState<any[]>([]);
@@ -226,7 +217,7 @@ export default function CashSessionsPage() {
                         {summaryData.totalSalesByMethod?.length > 0 ? (
                           summaryData.totalSalesByMethod.map((m: any) => (
                             <tr key={m.method} className="border-b border-slate-700/30">
-                              <td className="px-3 py-2 text-white">{METHOD_LABELS[m.method] || m.method}</td>
+                              <td className="px-3 py-2 text-white">{m.method}</td>
                               <td className="px-3 py-2 text-center text-slate-300">{m.count}</td>
                               <td className="px-3 py-2 text-right text-slate-300">${m.totalUsd.toFixed(2)}</td>
                               <td className="px-3 py-2 text-right text-slate-300">Bs {m.totalBs.toFixed(2)}</td>

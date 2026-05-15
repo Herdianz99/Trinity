@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
-import { UserRole, PaymentMethod } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
@@ -19,8 +19,6 @@ const IVA_RATES: Record<string, number> = {
   GENERAL: 0.16,
   SPECIAL: 0.31,
 };
-
-const IGTF_METHODS: string[] = ['CASH_USD', 'ZELLE'];
 
 @Injectable()
 export class InvoicesService {
@@ -136,7 +134,7 @@ export class InvoicesService {
         customer: true,
         cashRegister: true,
         items: true,
-        payments: true,
+        payments: { include: { method: true } },
         receivables: true,
         seller: { select: { id: true, code: true, name: true } },
         cashier: { select: { id: true, name: true } },
@@ -387,6 +385,20 @@ export class InvoicesService {
       }
     }
 
+    // Fetch payment method records for all methodIds in dto
+    const methodIds = dto.payments.map(p => p.methodId);
+    const paymentMethods = await this.prisma.paymentMethod.findMany({
+      where: { id: { in: methodIds } },
+    });
+    const methodMap = new Map(paymentMethods.map(m => [m.id, m]));
+
+    // Validate all methodIds exist
+    for (const p of dto.payments) {
+      if (!methodMap.has(p.methodId)) {
+        throw new BadRequestException(`Metodo de pago con id "${p.methodId}" no encontrado`);
+      }
+    }
+
     // IGTF: se calcula UNA sola vez por factura, sobre el primer pago en divisas
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;
@@ -394,7 +406,10 @@ export class InvoicesService {
     let invoiceIgtfBs = 0;
 
     if (isIGTFContributor && invoice.igtfUsd === 0) {
-      const firstForeignPayment = dto.payments.find(p => IGTF_METHODS.includes(p.method));
+      const firstForeignPayment = dto.payments.find(p => {
+        const method = methodMap.get(p.methodId);
+        return method?.isDivisa;
+      });
       if (firstForeignPayment) {
         invoiceIgtfUsd = Math.round(firstForeignPayment.amountUsd * (igtfPct / 100) * 100) / 100;
         invoiceIgtfBs = Math.round(invoiceIgtfUsd * invoice.exchangeRate * 100) / 100;
@@ -413,10 +428,11 @@ export class InvoicesService {
       // Create payments
       let igtfAssigned = false;
       for (const payment of dto.payments) {
+        const paymentMethod = methodMap.get(payment.methodId)!;
         let paymentIgtfUsd = 0;
         let paymentIgtfBs = 0;
 
-        if (!igtfAssigned && invoiceIgtfUsd > 0 && IGTF_METHODS.includes(payment.method)) {
+        if (!igtfAssigned && invoiceIgtfUsd > 0 && paymentMethod.isDivisa) {
           paymentIgtfUsd = invoiceIgtfUsd;
           paymentIgtfBs = invoiceIgtfBs;
           igtfAssigned = true;
@@ -425,7 +441,7 @@ export class InvoicesService {
         await tx.payment.create({
           data: {
             invoiceId: id,
-            method: payment.method,
+            methodId: payment.methodId,
             amountUsd: payment.amountUsd,
             amountBs: payment.amountBs,
             exchangeRate: invoice.exchangeRate,
@@ -435,12 +451,12 @@ export class InvoicesService {
           },
         });
 
-        // Create Receivable for Cashea/Crediagro
-        if (payment.method === 'CASHEA' || payment.method === 'CREDIAGRO') {
+        // Create Receivable for financing platforms (Cashea, Crediagro, etc.)
+        if (paymentMethod.createsReceivable) {
           await tx.receivable.create({
             data: {
               type: 'FINANCING_PLATFORM',
-              platformName: payment.method === 'CASHEA' ? 'Cashea' : 'Crediagro',
+              platformName: paymentMethod.name,
               invoiceId: id,
               amountUsd: payment.amountUsd,
               amountBs: payment.amountBs,
@@ -523,7 +539,7 @@ export class InvoicesService {
         },
         include: {
           items: true,
-          payments: true,
+          payments: { include: { method: true } },
           customer: true,
           receivables: true,
           seller: { select: { id: true, code: true, name: true } },

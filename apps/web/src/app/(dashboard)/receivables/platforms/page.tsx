@@ -21,7 +21,7 @@ interface Receivable {
   balanceUsd: number;
   status: string;
   createdAt: string;
-  payments: { id: string; amountUsd: number; createdAt: string; method: string }[];
+  payments: { id: string; amountUsd: number; createdAt: string; method: { id: string; name: string } | null }[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -38,16 +38,7 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de venta',
-  PAGO_MOVIL: 'Pago movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+// Payment method labels come from payment.method.name (relation)
 
 export default function PlatformsPage() {
   const [tab, setTab] = useState<'Cashea' | 'Crediagro'>('Cashea');
@@ -67,7 +58,8 @@ export default function PlatformsPage() {
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
+  const [payMethod, setPayMethod] = useState('');
+  const [paymentMethodsList, setPaymentMethodsList] = useState<{ id: string; name: string }[]>([]);
   const [payReference, setPayReference] = useState('');
   const [processing, setProcessing] = useState(false);
 
@@ -121,6 +113,7 @@ export default function PlatformsPage() {
 
   useEffect(() => {
     try { fetch('/api/proxy/exchange-rate/today').then(r => r.text()).then(t => { if (t) { try { setTodayRate(JSON.parse(t)?.rate || 0); } catch {} } }); } catch {}
+    fetch('/api/proxy/payment-methods/flat').then(r => r.json()).then(data => { if (Array.isArray(data)) setPaymentMethodsList(data); }).catch(() => {});
   }, []);
 
   useEffect(() => { fetchReceivables(); }, [fetchReceivables]);
@@ -132,7 +125,7 @@ export default function PlatformsPage() {
       const data = await res.json();
       setSelectedReceivable(data);
       setPayAmount(data.balanceUsd.toFixed(2));
-      setPayMethod('TRANSFERENCIA');
+      setPayMethod('');
       setPayReference('');
       setPayModalOpen(true);
     } catch {}
@@ -156,7 +149,7 @@ export default function PlatformsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amountUsd: parseFloat(payAmount),
-          method: payMethod,
+          methodId: payMethod,
           reference: payReference || undefined,
         }),
       });
@@ -321,7 +314,8 @@ export default function PlatformsPage() {
                 <label className="text-sm text-slate-400 mb-1 block">Metodo de pago</label>
                 <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  {Object.entries(PAYMENT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  <option value="">-- Seleccionar --</option>
+                  {paymentMethodsList.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </div>
               <div>
@@ -329,7 +323,7 @@ export default function PlatformsPage() {
                 <input type="text" value={payReference} onChange={e => setPayReference(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </div>
-              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0}
+              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0 || !payMethod}
                 className="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                 {processing ? <Loader2 className="animate-spin" size={18} /> : <DollarSign size={18} />}
                 Confirmar cobro
@@ -376,7 +370,7 @@ export default function PlatformsPage() {
                         <tr key={p.id} className="border-b border-slate-700/30">
                           <td className="px-3 py-2 text-slate-300 text-xs">{new Date(p.createdAt).toLocaleString()}</td>
                           <td className="px-3 py-2 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-slate-300">{PAYMENT_LABELS[p.method] || p.method}</td>
+                          <td className="px-3 py-2 text-slate-300">{p.method?.name || 'Metodo'}</td>
                           <td className="px-3 py-2 text-slate-400 text-xs">{p.reference || '-'}</td>
                         </tr>
                       ))}

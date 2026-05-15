@@ -9,16 +9,7 @@ const IVA_LABELS: Record<string, string> = {
   SPECIAL: 'Especial 31%',
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de Venta',
-  PAGO_MOVIL: 'Pago Movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+// Payment method labels now come from the PaymentMethod table via relation
 
 @Injectable()
 export class InvoicePdfService {
@@ -31,7 +22,7 @@ export class InvoicePdfService {
         customer: true,
         cashRegister: true,
         items: true,
-        payments: true,
+        payments: { include: { method: true } },
       },
     });
 
@@ -160,7 +151,7 @@ export class InvoicePdfService {
         y += 14;
         doc.fontSize(9).font('Helvetica');
         for (const p of invoice.payments) {
-          const label = METHOD_LABELS[p.method] || p.method;
+          const label = (p as any).method?.name || 'Metodo';
           doc.text(`${label}: $${p.amountUsd.toFixed(2)} / Bs ${p.amountBs.toFixed(2)}${p.reference ? ` (Ref: ${p.reference})` : ''}`, 40, y);
           y += 12;
         }

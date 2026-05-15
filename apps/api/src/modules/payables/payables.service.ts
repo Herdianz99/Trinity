@@ -55,7 +55,7 @@ export class PayablesService {
           purchaseOrder: { select: { id: true, number: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
-            select: { id: true, amountUsd: true, createdAt: true, method: true },
+            select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },
           },
         },
       }),
@@ -80,6 +80,7 @@ export class PayablesService {
         },
         payments: {
           orderBy: { createdAt: 'desc' },
+          include: { method: true },
         },
       },
     });
@@ -176,7 +177,7 @@ export class PayablesService {
           amountUsd: dto.amountUsd,
           amountBs,
           exchangeRate: rate.rate,
-          method: dto.method as any,
+          methodId: dto.methodId,
           reference: dto.reference,
           notes: dto.notes,
           createdById: userId,
@@ -218,7 +219,7 @@ export class PayablesService {
         purchaseOrder: { select: { id: true, number: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, amountUsd: true, createdAt: true, method: true },
+          select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },
         },
       },
     });

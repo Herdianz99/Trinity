@@ -99,6 +99,51 @@ async function main() {
   });
   console.log('Cash registers created');
 
+  // --- Payment Methods ---
+  const paymentMethodsData = [
+    { id: 'pm_cash_usd', name: 'Efectivo USD', isDivisa: true, createsReceivable: false, sortOrder: 1 },
+    { id: 'pm_cash_bs', name: 'Efectivo Bs', isDivisa: false, createsReceivable: false, sortOrder: 2 },
+    { id: 'pm_punto_venta', name: 'Punto de Venta', isDivisa: false, createsReceivable: false, sortOrder: 3 },
+    { id: 'pm_pago_movil', name: 'Pago Movil', isDivisa: false, createsReceivable: false, sortOrder: 4 },
+    { id: 'pm_zelle', name: 'Zelle', isDivisa: true, createsReceivable: false, sortOrder: 5 },
+    { id: 'pm_transferencia', name: 'Transferencia', isDivisa: false, createsReceivable: false, sortOrder: 6 },
+    { id: 'pm_cashea', name: 'Cashea', isDivisa: true, createsReceivable: true, sortOrder: 7 },
+    { id: 'pm_crediagro', name: 'Crediagro', isDivisa: true, createsReceivable: true, sortOrder: 8 },
+  ];
+  for (const pm of paymentMethodsData) {
+    await prisma.paymentMethod.upsert({
+      where: { id: pm.id },
+      update: {},
+      create: pm,
+    });
+  }
+  // Children for Punto de Venta
+  const pdvChildren = [
+    { id: 'pm_pdv_banesco', name: 'Punto de Venta Banesco', fiscalCode: 'PDB', sortOrder: 1, parentId: 'pm_punto_venta' },
+    { id: 'pm_pdv_mercantil', name: 'Punto de Venta Mercantil', fiscalCode: 'PDM', sortOrder: 2, parentId: 'pm_punto_venta' },
+    { id: 'pm_pdv_provincial', name: 'Punto de Venta Provincial', fiscalCode: 'PDP', sortOrder: 3, parentId: 'pm_punto_venta' },
+  ];
+  for (const child of pdvChildren) {
+    await prisma.paymentMethod.upsert({
+      where: { id: child.id },
+      update: {},
+      create: child,
+    });
+  }
+  // Children for Pago Movil
+  const pmChildren = [
+    { id: 'pm_pm_banesco', name: 'Pago Movil Banesco', fiscalCode: 'PMB', sortOrder: 1, parentId: 'pm_pago_movil' },
+    { id: 'pm_pm_mercantil', name: 'Pago Movil Mercantil', fiscalCode: 'PMM', sortOrder: 2, parentId: 'pm_pago_movil' },
+  ];
+  for (const child of pmChildren) {
+    await prisma.paymentMethod.upsert({
+      where: { id: child.id },
+      update: {},
+      create: child,
+    });
+  }
+  console.log('Payment methods created');
+
   // --- Warehouse ---
   const warehouse = await prisma.warehouse.upsert({
     where: { id: 'default-warehouse' },

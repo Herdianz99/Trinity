@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -10,43 +11,49 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { FiscalPaymentMethodsService } from './fiscal-payment-methods.service';
-import { CreateFiscalPaymentMethodDto } from './dto/create-fiscal-payment-method.dto';
+import { PaymentMethodsService } from './payment-methods.service';
+import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
-@ApiTags('Fiscal Payment Methods')
+@ApiTags('Payment Methods')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller()
-export class FiscalPaymentMethodsController {
-  constructor(private readonly service: FiscalPaymentMethodsService) {}
+export class PaymentMethodsController {
+  constructor(private readonly service: PaymentMethodsService) {}
 
-  @Get('fiscal-payment-methods')
+  @Get('payment-methods')
   findAll() {
     return this.service.findAll();
   }
 
-  @Get('fiscal-payment-methods/active')
-  findActive() {
-    return this.service.findActive();
+  @Get('payment-methods/flat')
+  findFlat() {
+    return this.service.findFlat();
   }
 
   @Roles(UserRole.ADMIN)
-  @Post('fiscal-payment-methods')
-  create(@Body() dto: CreateFiscalPaymentMethodDto) {
+  @Post('payment-methods')
+  create(@Body() dto: CreatePaymentMethodDto) {
     return this.service.create(dto);
   }
 
   @Roles(UserRole.ADMIN)
-  @Patch('fiscal-payment-methods/:id')
-  update(@Param('id') id: string, @Body() dto: CreateFiscalPaymentMethodDto) {
+  @Patch('payment-methods/:id')
+  update(@Param('id') id: string, @Body() dto: CreatePaymentMethodDto) {
     return this.service.update(id, dto);
   }
 
   @Roles(UserRole.ADMIN)
-  @Patch('fiscal-payment-methods/:id/toggle-active')
+  @Patch('payment-methods/:id/toggle-active')
   toggleActive(@Param('id') id: string) {
     return this.service.toggleActive(id);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Delete('payment-methods/:id')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }

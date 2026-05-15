@@ -11,26 +11,6 @@ const IVA_SIGNS: Record<string, string> = {
   EXEMPT: ' ',    // 0%
 };
 
-/** Maps payment method enum keys to fiscal payment method names for lookup */
-const PAYMENT_METHOD_NAME_MAP: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo',
-  PUNTO_DE_VENTA: 'Punto de Venta',
-  PAGO_MOVIL: 'Pago Movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
-
-interface FiscalPaymentMethod {
-  id: string;
-  name: string;
-  fiscalCode: string;
-  isDivisa: boolean;
-  isActive: boolean;
-}
-
 interface FiscalCompanyConfig {
   isIGTFContributor?: boolean;
   igtfPct?: number;
@@ -60,7 +40,6 @@ function fmtDate(d: Date): string {
  */
 export function buildFiscalCommands(
   invoice: any,
-  fiscalPaymentMethods: FiscalPaymentMethod[],
   companyConfig: FiscalCompanyConfig,
 ): string[] {
   const commands: string[] = [];
@@ -141,20 +120,13 @@ export function buildFiscalCommands(
     const creditCode = (companyConfig.fiscalCreditCode || '01').padStart(2, '0');
     commands.push(`1${creditCode}`);
   } else {
-    // Build fiscal code lookup map from fiscal payment methods table
-    const fiscalCodeMap = new Map<string, string>();
-    for (const fpm of fiscalPaymentMethods) {
-      fiscalCodeMap.set(fpm.name, fpm.fiscalCode);
-    }
-
-    // Process each payment
+    // Process each payment — fiscal code comes from payment.method.fiscalCode (relation)
     for (let i = 0; i < payments.length; i++) {
       const payment = payments[i];
       const isLast = i === payments.length - 1;
 
-      // Look up fiscal code via name mapping
-      const fiscalName = PAYMENT_METHOD_NAME_MAP[payment.method] || payment.method;
-      const fiscalCode = (fiscalCodeMap.get(fiscalName) || '01').padStart(2, '0');
+      // Fiscal code from the PaymentMethod relation included in payment
+      const fiscalCode = (payment.method?.fiscalCode || '01').padStart(2, '0');
 
       // All amounts in Bs
       const amountBs = payment.amountBs || (payment.amountUsd * exchangeRate);

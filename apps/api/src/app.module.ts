@@ -29,7 +29,7 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
 import { RedisModule } from './redis/redis.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
 import { SellersModule } from './modules/sellers/sellers.module';
-import { FiscalPaymentMethodsModule } from './modules/fiscal-payment-methods/fiscal-payment-methods.module';
+import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 
 @Module({
   imports: [
@@ -63,7 +63,7 @@ import { FiscalPaymentMethodsModule } from './modules/fiscal-payment-methods/fis
     FiscalModule,
     RolePermissionsModule,
     SellersModule,
-    FiscalPaymentMethodsModule,
+    PaymentMethodsModule,
   ],
 })
 export class AppModule {}

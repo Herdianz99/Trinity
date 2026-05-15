@@ -34,9 +34,15 @@ interface PayablePayment {
   id: string;
   amountUsd: number;
   amountBs: number;
-  method: string;
+  method: { id: string; name: string } | null;
+  methodId: string | null;
   reference: string | null;
   createdAt: string;
+}
+
+interface PaymentMethodOption {
+  id: string;
+  name: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -53,17 +59,6 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de venta',
-  PAGO_MOVIL: 'Pago movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
-
 export default function PayableDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -77,9 +72,10 @@ export default function PayableDetailPage() {
   // Pay form
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
+  const [payMethod, setPayMethod] = useState('');
   const [payReference, setPayReference] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
 
   const fetchPayable = useCallback(async () => {
     setLoading(true);
@@ -94,7 +90,15 @@ export default function PayableDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => { fetchPayable(); }, [fetchPayable]);
+  const fetchPaymentMethods = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/payment-methods/flat');
+      const data = await res.json();
+      setPaymentMethods(Array.isArray(data) ? data : data.data || []);
+    } catch {}
+  }, []);
+
+  useEffect(() => { fetchPayable(); fetchPaymentMethods(); }, [fetchPayable, fetchPaymentMethods]);
 
   async function handlePay() {
     setProcessing(true);
@@ -105,7 +109,7 @@ export default function PayableDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amountUsd: parseFloat(payAmount),
-          method: payMethod,
+          methodId: payMethod,
           reference: payReference || undefined,
         }),
       });
@@ -167,7 +171,7 @@ export default function PayableDetailPage() {
             </button>
           )}
           {payable.status !== 'PAID' && (
-            <button onClick={() => { setPayOpen(true); setPayAmount(payable.balanceUsd.toFixed(2)); setPayMethod('TRANSFERENCIA'); setPayReference(''); }}
+            <button onClick={() => { setPayOpen(true); setPayAmount(payable.balanceUsd.toFixed(2)); setPayMethod(''); setPayReference(''); }}
               className="text-sm px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium flex items-center gap-1.5">
               <DollarSign size={14} /> Registrar pago
             </button>
@@ -302,7 +306,7 @@ export default function PayableDetailPage() {
                       <td className="px-4 py-3 text-slate-300 text-xs">{fmtDate(p.createdAt)}</td>
                       <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-slate-300">{PAYMENT_LABELS[p.method] || p.method}</td>
+                      <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs">{p.reference || '—'}</td>
                     </tr>
                   ))}
@@ -354,8 +358,9 @@ export default function PayableDetailPage() {
                 <label className="text-sm text-slate-400 mb-1 block">Metodo de pago</label>
                 <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  {Object.entries(PAYMENT_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
+                  <option value="">Seleccionar metodo</option>
+                  {paymentMethods.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </div>
@@ -364,7 +369,7 @@ export default function PayableDetailPage() {
                 <input type="text" value={payReference} onChange={e => setPayReference(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" placeholder="Numero de referencia" />
               </div>
-              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0}
+              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0 || !payMethod}
                 className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                 {processing ? <Loader2 className="animate-spin" size={18} /> : <DollarSign size={18} />}
                 Confirmar pago

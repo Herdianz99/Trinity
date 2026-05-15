@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsOptional, IsEnum, Min } from 'class-validator';
+import { IsNumber, IsString, IsOptional, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PayReceivableDto {
@@ -9,7 +9,7 @@ export class PayReceivableDto {
 
   @ApiProperty()
   @IsString()
-  method: string;
+  methodId: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

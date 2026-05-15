@@ -61,7 +61,7 @@ export class ReceivablesService {
           invoice: { select: { id: true, number: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
-            select: { id: true, amountUsd: true, createdAt: true, method: true },
+            select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },
           },
         },
       }),
@@ -84,6 +84,7 @@ export class ReceivablesService {
         invoice: { select: { id: true, number: true, totalUsd: true, createdAt: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
+          include: { method: true },
         },
       },
     });
@@ -193,7 +194,7 @@ export class ReceivablesService {
           amountUsd: dto.amountUsd,
           amountBs,
           exchangeRate: rate.rate,
-          method: dto.method as any,
+          methodId: dto.methodId,
           reference: dto.reference,
           cashSessionId: dto.cashSessionId,
           notes: dto.notes,
@@ -237,7 +238,7 @@ export class ReceivablesService {
         invoice: { select: { id: true, number: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, amountUsd: true, createdAt: true, method: true },
+          select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },
         },
       },
     });

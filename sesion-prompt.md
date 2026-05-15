@@ -1,110 +1,108 @@
-Perfecto, ahora entiendo el flujo del SENIAT. No es scraping automático — es abrir la página del SENIAT en un iframe o ventana emergente, el usuario completa el captcha manualmente, y cuando el SENIAT retorna el resultado el sistema extrae los datos automáticamente con el parser que me pasaste.
-Guarda esto en tu session-prompt.md y dáselo a Claude Code:
-
-
 Lee el PROJECT.md y el PROGRESS.md antes de escribir cualquier línea de código.
-Vamos a implementar tres funcionalidades: nuevo rol Auditor, scraping BCV y consulta SENIAT.
+Vamos a migrar los métodos de pago de enum a tabla dinámica con soporte de grupos y subgrupos.
+⚠️ IMPORTANTE: No tocar el archivo apps/web/src/lib/fiscal-printer.ts — solo actualizar la parte donde se obtiene el fiscalCode del método de pago para pasárselo a la impresora. El código de impresión fiscal funciona correctamente y no debe modificarse.
 Antes de escribir cualquier código consulta las skills disponibles especialmente frontend-design.
-PARTE 1 — Nuevo rol AUDITOR y nombres en español
-Actualizar el enum UserRole en Prisma:
-prismaenum UserRole {
-  ADMIN
-  SUPERVISOR
-  CASHIER
-  SELLER
-  WAREHOUSE
-  BUYER
-  ACCOUNTANT
-  AUDITOR
+PARTE 1 — Migración de Prisma
+Eliminar el enum PaymentMethod y reemplazarlo por un modelo:
+prismamodel PaymentMethod {
+  id                String          @id @default(cuid())
+  name              String          @unique
+  isDivisa          Boolean         @default(false)
+  createsReceivable Boolean         @default(false)
+  isActive          Boolean         @default(true)
+  sortOrder         Int             @default(0)
+  fiscalCode        String?
+  parentId          String?
+  parent            PaymentMethod?  @relation("SubMethods", fields: [parentId], references: [id])
+  children          PaymentMethod[] @relation("SubMethods")
+  payments          Payment[]
+  receivablePayments ReceivablePayment[]
+  payablePayments   PayablePayment[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }
-Corre migración con nombre add_auditor_role.
-En role-permissions.ts agregar:
-typescriptAUDITOR: ['dashboard', 'inventory']
-En toda la interfaz donde se muestren roles usar estos nombres en español:
-typescriptexport const ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'Administrador',
-  SUPERVISOR: 'Supervisor',
-  CASHIER: 'Cajero',
-  SELLER: 'Vendedor',
-  WAREHOUSE: 'Almacenista',
-  BUYER: 'Comprador',
-  ACCOUNTANT: 'Contador',
-  AUDITOR: 'Auditor',
-}
-Aplicar ROLE_LABELS en:
+En Payment, ReceivablePayment y PayablePayment cambiar:
 
-Tabla de usuarios /settings/users
-Modal de crear/editar usuario (selector de rol)
-Página de permisos por rol /settings/role-permissions
-Badge de rol en el header del sistema
-Cualquier otro lugar donde se muestre el rol
+method PaymentMethod (enum) → methodId String + method PaymentMethod @relation(...)
 
-PARTE 2 — Scraping BCV
-El BCV publica la tasa en https://www.bcv.org.ve/ — el selector CSS del dólar es #dolar strong o similar.
-En ExchangeRateModule agregar:
+Corre migración con nombre migrate_payment_method_enum_to_table.
+Seed — crear los métodos de pago iniciales:
+Padres sin hijos (se usan directamente):
+- Efectivo USD     | isDivisa=true  | createsReceivable=false | sortOrder=1
+- Efectivo Bs      | isDivisa=false | createsReceivable=false | sortOrder=2
+- Zelle            | isDivisa=true  | createsReceivable=false | sortOrder=6
+- Transferencia    | isDivisa=false | createsReceivable=false | sortOrder=7
+- Cashea           | isDivisa=true  | createsReceivable=true  | sortOrder=8
+- Crediagro        | isDivisa=true  | createsReceivable=true  | sortOrder=9
 
-GET /exchange-rate/fetch-bcv — hace scraping de bcv.org.ve:
+Padres con hijos (agrupadores):
+- Punto de Venta   | isDivisa=false | sortOrder=3
+    └── Punto de Venta Banesco    | fiscalCode="PDB" | sortOrder=1
+    └── Punto de Venta Mercantil  | fiscalCode="PDM" | sortOrder=2
+    └── Punto de Venta Provincial | fiscalCode="PDP" | sortOrder=3
+- Pago Móvil       | isDivisa=false | sortOrder=4
+    └── Pago Móvil Banesco        | fiscalCode="PMB" | sortOrder=1
+    └── Pago Móvil Mercantil      | fiscalCode="PMM" | sortOrder=2
+PARTE 2 — Backend (NestJS)
+Nuevo PaymentMethodsModule:
 
-Usar node-fetch + cheerio (ya instalados en el proyecto de RestaurantOS, verificar si están en Trinity)
-Si no están instalados: pnpm add node-fetch cheerio en el paquete de la API
-Selector: buscar el valor del dólar en la página
-Retorna: { rate: number, source: 'BCV', date: today }
-Si falla el scraping retornar error descriptivo
-NO guarda automáticamente — solo retorna el valor para que el usuario confirme
+GET /payment-methods — lista métodos padres con sus hijos anidados
+GET /payment-methods/flat — lista todos los métodos activos sin anidar (para selects)
+POST /payment-methods — crear método (solo ADMIN):
+
+Si tiene parentId es un hijo
+Si no tiene parentId es un padre/grupo
 
 
+PATCH /payment-methods/:id — editar
+PATCH /payment-methods/:id/toggle-active — activar/desactivar
+DELETE /payment-methods/:id — solo si no tiene pagos registrados ni hijos activos
 
-En el frontend, en la página de configuración /settings sección de tasa de cambio:
+Actualizar InvoicesService:
 
-Botón "Obtener del BCV" → llama a GET /exchange-rate/fetch-bcv
-Muestra el valor obtenido en un campo editable con mensaje "Tasa obtenida del BCV: Bs X.XX — ¿Confirmar?"
-Botón "Confirmar y guardar" → llama a POST /exchange-rate con el valor
-Si el scraping falla → mostrar mensaje de error con opción de ingresar manualmente
+La lógica del IGTF ya no es if method in ['CASH_USD', 'ZELLE'] sino:
+if paymentMethod.isDivisa && companyConfig.isIGTFContributor
+La lógica de CxC ya no es if method in ['CASHEA', 'CREDIAGRO'] sino:
+if paymentMethod.createsReceivable
+Al crear un pago usar methodId en lugar del enum
+Al obtener el fiscalCode para la impresora fiscal → paymentMethod.fiscalCode
 
-También agregar el botón "Obtener del BCV" en el banner que aparece cuando no hay tasa del día.
-PARTE 3 — Consulta SENIAT
-El flujo es: abrir la página del SENIAT en un iframe dentro de un modal → usuario completa el formulario y el captcha → cuando el SENIAT retorna el resultado → extraer los datos automáticamente con un parser.
-URL del SENIAT: https://contribuyentes.seniat.gob.ve/getContribuyente/GetInfoContribuyente
-Backend — Nuevo endpoint en CustomersModule:
+Actualizar ReceivablesService y PayablesService de la misma forma.
+PARTE 3 — Frontend (Next.js)
+POS — Modal de cobro:
+Rediseñar los botones de métodos de pago:
 
-POST /customers/seniat-parse — recibe el HTML de respuesta del SENIAT y extrae los datos:
+Cargar métodos desde GET /payment-methods al abrir el modal
+Mostrar solo los métodos padres activos ordenados por sortOrder
+Si un padre tiene hijos → al hacer clic se despliega un submenú con los hijos
+Si un padre no tiene hijos → se selecciona directamente
+Al seleccionar un método hijo o padre sin hijos:
 
-Body: { html: string }
-Parsear usando la misma lógica del código JS proporcionado:
-
-Extraer nombre completo
-Extraer tipo de documento (V/E/J/G/C/P) y número
-Extraer nombre comercial y nombre fiscal si existen (formato "NOMBRE COMERCIAL (NOMBRE FISCAL)")
-
-
-Retornar: { documentType, documentNumber, name, commercialName?, fiscalName? }
-
+Si isDivisa = true → campo principal en USD, Bs calculado automáticamente
+Si isDivisa = false → campo principal en Bs, USD calculado automáticamente
+Si isDivisa = true y isIGTFContributor = true y es el primer pago en divisa → calcular IGTF
 
 
-Frontend — Botón "Consultar SENIAT" en formulario de cliente:
-En la página de crear cliente /sales/customers/new y editar /sales/customers/[id], agregar botón "Consultar SENIAT" al lado del campo RIF/documento.
-Al hacer clic:
 
-Abrir un modal grande (90% de la pantalla) con un <iframe> que carga la URL del SENIAT
-Mostrar instrucciones: "Complete el formulario en el SENIAT y resuelva el captcha. Los datos se importarán automáticamente."
-El iframe tiene un MutationObserver o polling cada 500ms que detecta cuando el SENIAT retornó resultados (cuando el contenido del iframe cambia y contiene "VISUALIZAR")
-Cuando detecta el resultado → extrae el innerHTML del iframe → llama a POST /customers/seniat-parse con el HTML
-Cierra el modal automáticamente
-Pre-llena los campos del formulario: documentType, número de documento, nombre
-Mostrar toast: "Datos importados del SENIAT correctamente"
+Página /settings/payment-methods — Gestión de métodos de pago:
 
-Nota importante sobre el iframe:
-El SENIAT puede bloquear iframes por headers de seguridad (X-Frame-Options). Si esto ocurre, usar window.open() para abrir en ventana nueva y usar localStorage como canal de comunicación entre la ventana del SENIAT y la aplicación:
+Accesible solo para ADMIN bajo CONFIGURACIÓN en el sidebar
+Lista de métodos padres con sus hijos anidados (mismo estilo que categorías)
+Por cada método padre: nombre, tipo (Divisa/Bs), hijos count, estado, acciones
+Por cada hijo: nombre, fiscalCode, estado, acciones
+Botón "+ Nuevo método" → modal con campos: nombre, isDivisa, createsReceivable, sortOrder, fiscalCode, parentId (opcional)
+Botón "+ Agregar variante" por cada padre → crea hijo con parentId pre-llenado
+Drag & drop para reordenar (actualiza sortOrder)
 
-La ventana nueva intenta leer el resultado y lo guarda en localStorage('seniat_result')
-La app principal hace polling de localStorage cada 500ms esperando el resultado
-Cuando aparece el resultado → procesar y limpiar localStorage
-
+Reemplazar todos los diccionarios hardcodeados de labels de métodos de pago en todos los archivos por datos que vengan de la API.
+⚠️ Sobre fiscal-printer.ts:
+Solo actualizar la línea donde se obtiene el fiscalCode — debe leerlo de payment.method.fiscalCode en lugar del diccionario hardcodeado. No modificar nada más de ese archivo.
 Al terminar:
 
-Verificar que el rol AUDITOR aparece en el selector de usuarios con nombre "Auditor"
-Verificar que todos los roles muestran nombres en español en toda la interfaz
-Verificar que el botón BCV obtiene la tasa y permite confirmarla
-Haz commit con el mensaje feat: auditor role, BCV scraping and SENIAT lookup for customers
+Verificar que el POS muestra los grupos correctamente y el submenú funciona
+Verificar que IGTF se calcula correctamente con los nuevos flags
+Verificar que Cashea/Crediagro siguen generando CxC
+Verificar que fiscal-printer.ts sigue funcionando (no romper la integración fiscal)
+Haz commit con el mensaje feat: migrate payment methods from enum to dynamic table with groups
 Haz push a GitHub
 Actualiza el PROGRESS.md y el PROJECT.md

@@ -84,16 +84,7 @@ enum InvoiceType {
   CREDIT_NOTE
 }
 
-enum PaymentMethod {
-  CASH_USD
-  CASH_BS
-  PUNTO_DE_VENTA
-  PAGO_MOVIL
-  ZELLE
-  TRANSFERENCIA
-  CASHEA
-  CREDIAGRO
-}
+// PaymentMethod is now a table (see model below) instead of an enum
 
 enum ReceivableType {
   CUSTOMER_CREDIT
@@ -478,17 +469,25 @@ model Customer {
 }
 
 // ============================================
-// METODOS DE PAGO FISCAL
+// METODOS DE PAGO
 // ============================================
 
-model FiscalPaymentMethod {
-  id         String   @id @default(cuid())
-  name       String   @unique
-  fiscalCode String   @unique
-  isDivisa   Boolean  @default(false)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model PaymentMethod {
+  id                 String            @id @default(cuid())
+  name               String            @unique
+  isDivisa           Boolean           @default(false)
+  createsReceivable  Boolean           @default(false)
+  isActive           Boolean           @default(true)
+  sortOrder          Int               @default(0)
+  fiscalCode         String?
+  parentId           String?
+  parent             PaymentMethod?    @relation("SubMethods", fields: [parentId], references: [id])
+  children           PaymentMethod[]   @relation("SubMethods")
+  payments           Payment[]
+  receivablePayments ReceivablePayment[]
+  payablePayments    PayablePayment[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 // ============================================
@@ -594,7 +593,8 @@ model Payment {
   id           String        @id @default(cuid())
   invoiceId    String
   invoice      Invoice       @relation(fields: [invoiceId], references: [id])
-  method       PaymentMethod
+  methodId     String
+  method       PaymentMethod @relation(fields: [methodId], references: [id])
   amountUsd    Float
   amountBs     Float
   exchangeRate Float
@@ -637,7 +637,8 @@ model ReceivablePayment {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
-  method        PaymentMethod
+  methodId      String
+  method        PaymentMethod @relation(fields: [methodId], references: [id])
   reference     String?
   cashSessionId String?
   notes         String?
@@ -680,7 +681,8 @@ model PayablePayment {
   amountUsd    Float
   amountBs     Float
   exchangeRate Float
-  method       PaymentMethod
+  methodId     String
+  method       PaymentMethod @relation(fields: [methodId], references: [id])
   reference    String?
   notes        String?
   createdById  String

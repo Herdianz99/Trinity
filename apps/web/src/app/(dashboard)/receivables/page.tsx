@@ -32,7 +32,7 @@ interface Receivable {
   paidAt: string | null;
   notes: string | null;
   balanceUsd: number;
-  payments: { id: string; amountUsd: number; createdAt: string; method: string }[];
+  payments: { id: string; amountUsd: number; createdAt: string; method: { id: string; name: string } | null }[];
   createdAt: string;
 }
 
@@ -67,16 +67,10 @@ const TYPE_COLORS: Record<string, string> = {
   FINANCING_PLATFORM: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
 };
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de venta',
-  PAGO_MOVIL: 'Pago movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+interface PaymentMethod {
+  id: string;
+  name: string;
+}
 
 export default function ReceivablesPage() {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
@@ -98,11 +92,12 @@ export default function ReceivablesPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('TRANSFERENCIA');
+  const [payMethod, setPayMethod] = useState('');
   const [payReference, setPayReference] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [todayRate, setTodayRate] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   const fetchReceivables = useCallback(async () => {
     setLoading(true);
@@ -154,6 +149,13 @@ export default function ReceivablesPage() {
   useEffect(() => { fetchReceivables(); }, [fetchReceivables]);
   useEffect(() => { fetchSummary(); fetchConfig(); fetchRate(); }, [fetchSummary, fetchConfig, fetchRate]);
 
+  useEffect(() => {
+    fetch('/api/proxy/payment-methods/flat')
+      .then(r => r.json())
+      .then(data => setPaymentMethods(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
   function isNearDue(dueDate: string | null) {
     if (!dueDate) return false;
     const due = new Date(dueDate);
@@ -174,7 +176,7 @@ export default function ReceivablesPage() {
       const data = await res.json();
       setSelectedReceivable(data);
       setPayAmount(data.balanceUsd.toFixed(2));
-      setPayMethod('TRANSFERENCIA');
+      setPayMethod('');
       setPayReference('');
       setPayNotes('');
       setPayModalOpen(true);
@@ -204,7 +206,7 @@ export default function ReceivablesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amountUsd: parseFloat(payAmount),
-          method: payMethod,
+          methodId: payMethod,
           reference: payReference || undefined,
           notes: payNotes || undefined,
         }),
@@ -471,8 +473,9 @@ export default function ReceivablesPage() {
                 <label className="text-sm text-slate-400 mb-1 block">Metodo de pago</label>
                 <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  {Object.entries(PAYMENT_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
+                  <option value="">-- Seleccionar --</option>
+                  {paymentMethods.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </div>
@@ -494,7 +497,7 @@ export default function ReceivablesPage() {
                 </div>
               )}
 
-              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0}
+              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0 || !payMethod}
                 className="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                 {processing ? <Loader2 className="animate-spin" size={18} /> : <DollarSign size={18} />}
                 Confirmar cobro
@@ -598,7 +601,7 @@ export default function ReceivablesPage() {
                             <td className="px-3 py-2 text-slate-300 text-xs">{new Date(p.createdAt).toLocaleString()}</td>
                             <td className="px-3 py-2 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
                             <td className="px-3 py-2 text-right text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-slate-300">{PAYMENT_LABELS[p.method] || p.method}</td>
+                            <td className="px-3 py-2 text-slate-300">{p.method?.name || 'Metodo'}</td>
                             <td className="px-3 py-2 text-slate-400 text-xs">{p.reference || '-'}</td>
                           </tr>
                         ))}

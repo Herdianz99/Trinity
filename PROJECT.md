@@ -452,21 +452,33 @@ model InvoiceItem {
   costBs                Float   @default(0)
 }
 
+model PaymentMethod {
+  id                 String            @id @default(cuid())
+  name               String            @unique
+  isDivisa           Boolean           @default(false)
+  createsReceivable  Boolean           @default(false)
+  isActive           Boolean           @default(true)
+  sortOrder          Int               @default(0)
+  fiscalCode         String?
+  parentId           String?           // self-referencing for groups/variants
+  parent             PaymentMethod?    @relation("SubMethods")
+  children           PaymentMethod[]   @relation("SubMethods")
+  payments           Payment[]
+  receivablePayments ReceivablePayment[]
+  payablePayments    PayablePayment[]
+}
+
 model Payment {
   id          String        @id @default(cuid())
   invoiceId   String
   invoice     Invoice       @relation(...)
-  method      PaymentMethod
+  methodId    String
+  method      PaymentMethod @relation(...)
   amountUsd   Float
   amountBs    Float
   exchangeRate Float
   reference   String?
   createdAt   DateTime      @default(now())
-}
-
-enum PaymentMethod {
-  CASH_USD CASH_BS PUNTO_DE_VENTA PAGO_MOVIL ZELLE
-  TRANSFERENCIA CASHEA CREDIAGRO
 }
 ```
 
@@ -477,6 +489,7 @@ enum PaymentMethod {
 - CompanyConfig con bregaGlobalPct: 0 (sin exchangeRate — viene de tabla ExchangeRate)
 - 2 cajas: Caja 1 (código "01"), Caja 2 (código "02")
 - Almacén por defecto: "Almacén Principal"
+- Métodos de pago: Efectivo USD, Efectivo Bs, Punto de Venta (con variantes Banesco/Mercantil/Provincial), Pago Movil (con variantes Banesco/Mercantil), Zelle, Transferencia, Cashea, Crediagro
 - 5 categorías de prueba con subcategorías
 - 3 marcas de prueba
 - 2 proveedores de prueba
@@ -553,8 +566,8 @@ enum PaymentMethod {
 - InvoicesModule:
   - POST /invoices — crear pre-factura (SELLER) o factura directa (CASHIER/ADMIN)
   - PATCH /invoices/:id/approve — CASHIER toma pre-factura y cobra
-  - POST /invoices/:id/pay — registrar pago:
-    - Si Cashea/Crediagro → crea CxC a la plataforma
+  - POST /invoices/:id/pay — registrar pago (usa methodId en vez de enum):
+    - Si paymentMethod.createsReceivable → crea CxC a la plataforma
     - Si isCredit → requiere creditAuthPassword, crea CxC al cliente
     - Descuenta stock automáticamente
     - Crea StockMovements tipo SALE
@@ -749,7 +762,7 @@ model QuotationItem {
 
 **Búsqueda:** PostgreSQL tsvector con trigger automático. Búsqueda por nombre, código, barcode, referencia proveedor.
 
-**Cashea/Crediagro:** Son `PaymentMethod` especiales. Al cobrar con ellos se crea CxC a la plataforma. La estructura permite agregar nuevas plataformas sin cambiar código.
+**Plataformas de financiamiento (Cashea/Crediagro):** Son métodos de pago con `createsReceivable: true` en la tabla PaymentMethod. Al cobrar con ellos se crea CxC automáticamente. Para agregar nuevas plataformas basta crear un nuevo método con ese flag activado desde /settings/payment-methods.
 
 **Crédito a clientes:** Requiere `creditAuthPassword` (bcrypt). Al aprobar → crea CxC, descuenta cupo.
 

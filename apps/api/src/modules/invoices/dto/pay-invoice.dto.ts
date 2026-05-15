@@ -1,7 +1,6 @@
 import {
   IsArray,
   ValidateNested,
-  IsEnum,
   IsNumber,
   IsOptional,
   IsBoolean,
@@ -10,12 +9,11 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { PaymentMethod } from '@prisma/client';
 
 export class PaymentItemDto {
-  @ApiProperty({ enum: PaymentMethod })
-  @IsEnum(PaymentMethod)
-  method: PaymentMethod;
+  @ApiProperty()
+  @IsString()
+  methodId: string;
 
   @ApiProperty()
   @IsNumber()

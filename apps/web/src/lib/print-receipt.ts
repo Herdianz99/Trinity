@@ -17,16 +17,7 @@ const IVA_LABELS: Record<string, string> = {
   SPECIAL: 'IVA 31%',
 };
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CASH_USD: 'Efectivo USD',
-  CASH_BS: 'Efectivo Bs',
-  PUNTO_DE_VENTA: 'Punto de Venta',
-  PAGO_MOVIL: 'Pago Movil',
-  ZELLE: 'Zelle',
-  TRANSFERENCIA: 'Transferencia',
-  CASHEA: 'Cashea',
-  CREDIAGRO: 'Crediagro',
-};
+// Payment method labels now come from payment.method.name (relation)
 
 interface CompanyInfo {
   companyName?: string;
@@ -184,8 +175,8 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   if (payments.length > 0) {
     html += `<div class="bold">Forma de pago:</div>`;
     for (const p of payments) {
-      const label = PAYMENT_LABELS[p.method] || p.method;
-      const isBs = ['CASH_BS', 'PUNTO_DE_VENTA', 'PAGO_MOVIL', 'TRANSFERENCIA'].includes(p.method);
+      const label = p.method?.name || 'Metodo';
+      const isBs = !(p.method?.isDivisa ?? true);
       const amount = isBs ? `${fmt(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
       html += `<div class="row"><span>${label}:</span><span>${amount}</span></div>`;
       if (p.reference) html += `<div style="font-size:10px;padding-left:8px;">Ref: ${p.reference}</div>`;

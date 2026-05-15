@@ -1,5 +1,52 @@
 # Trinity ERP — Progreso
 
+## Sesion 24 — Migracion metodos de pago de enum a tabla dinamica (Completada)
+
+### Migracion de base de datos
+- Eliminado enum `PaymentMethod` de Prisma, reemplazado por modelo `PaymentMethod` (tabla)
+- Modelo soporta jerarquia padre/hijo (grupos y variantes): ej. "Punto de Venta" > "PDV Banesco", "PDV Mercantil"
+- Campos: `name`, `isDivisa`, `createsReceivable`, `isActive`, `sortOrder`, `fiscalCode`, `parentId`
+- Migracion SQL: convierte columnas enum a FK `methodId` en Payment, ReceivablePayment, PayablePayment preservando datos existentes
+- Eliminado modelo `FiscalPaymentMethod` (reemplazado por campo `fiscalCode` en PaymentMethod)
+- Seed actualizado con metodos por defecto y variantes iniciales (PDV Banesco/Mercantil/Provincial, PM Banesco/Mercantil)
+
+### Backend (NestJS)
+- Nuevo modulo `PaymentMethodsModule` con CRUD completo:
+  - `GET /payment-methods` — lista padres con hijos anidados
+  - `GET /payment-methods/flat` — lista plana de metodos seleccionables (hojas activas)
+  - `POST /payment-methods` — crear (ADMIN)
+  - `PATCH /payment-methods/:id` — editar (ADMIN)
+  - `PATCH /payment-methods/:id/toggle-active` — activar/desactivar (ADMIN)
+  - `DELETE /payment-methods/:id` — eliminar si no tiene pagos ni hijos activos (ADMIN)
+- `InvoicesService.pay()`: IGTF ahora usa `paymentMethod.isDivisa` en vez de lista hardcodeada; CxC usa `paymentMethod.createsReceivable`; pagos usan `methodId`
+- `ReceivablesService` y `PayablesService`: pagos usan `methodId`, incluyen relacion `method` en queries
+- `CashRegistersService`: resumen de sesion agrupa por `method.name` (dinamico)
+- `InvoicePdfService`: labels de metodos vienen de relacion `payment.method.name`
+- Eliminado modulo `FiscalPaymentMethodsModule` (redundante)
+
+### Frontend (Next.js)
+- POS — modal de cobro rediseñado:
+  - Metodos de pago cargados desde API (`GET /payment-methods`)
+  - Padres sin hijos: boton directo
+  - Padres con hijos: desplegable con submenu de variantes
+  - `isDivisa` determina campo principal (USD vs Bs) y calculo IGTF
+  - Envio de pagos usa `methodId` en vez de enum
+- Eliminados TODOS los diccionarios hardcodeados `PAYMENT_LABELS`/`METHOD_LABELS` de:
+  - `sales/pos/page.tsx`, `sales/invoices/[id]/page.tsx`
+  - `receivables/page.tsx`, `receivables/[id]/page.tsx`, `receivables/platforms/page.tsx`
+  - `payables/page.tsx`, `payables/[id]/page.tsx`
+  - `cash/sessions/page.tsx`
+  - `lib/print-receipt.ts`, `lib/fiscal-printer.ts`
+- Dropdowns de metodo de pago en CxC y CxP ahora cargan desde API (`/payment-methods/flat`)
+- Nueva pagina `/settings/payment-methods` (solo ADMIN):
+  - Lista metodos padres con hijos anidados (estilo arbol)
+  - Badges: Divisa/Bolivares, Genera CxC, Codigo Fiscal
+  - Acciones: crear, editar, activar/desactivar, eliminar, agregar variante
+  - Modal de creacion/edicion con todos los campos
+- `fiscal-printer.ts`: obtiene `fiscalCode` de `payment.method.fiscalCode` (relacion) — codigo de impresion NO modificado
+- `print-receipt.ts`: obtiene nombre de `payment.method.name` y moneda de `payment.method.isDivisa`
+- Sidebar: agregado enlace "Metodos de pago" en seccion CONFIGURACION
+
 ## Sesion 19 — Auto-impresion ticket 80mm al cobrar (Completada)
 
 ### Auto-impresion de ticket al cobrar en POS

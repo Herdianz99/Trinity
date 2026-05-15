@@ -39,16 +39,17 @@ const IVA_LABELS: Record<string, string> = {
   SPECIAL: 'Especial 31%',
 };
 
-const PAYMENT_METHODS = [
-  { key: 'CASH_USD', label: 'Efectivo USD', currency: 'USD' },
-  { key: 'CASH_BS', label: 'Efectivo Bs', currency: 'BS' },
-  { key: 'PUNTO_DE_VENTA', label: 'Punto de Venta', currency: 'BS' },
-  { key: 'PAGO_MOVIL', label: 'Pago Movil', currency: 'BS' },
-  { key: 'ZELLE', label: 'Zelle', currency: 'USD' },
-  { key: 'TRANSFERENCIA', label: 'Transferencia', currency: 'BS' },
-  { key: 'CASHEA', label: 'Cashea', currency: 'USD' },
-  { key: 'CREDIAGRO', label: 'Crediagro', currency: 'USD' },
-];
+interface PaymentMethodData {
+  id: string;
+  name: string;
+  isDivisa: boolean;
+  createsReceivable: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  fiscalCode: string | null;
+  parentId: string | null;
+  children?: PaymentMethodData[];
+}
 
 const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
 
@@ -66,7 +67,9 @@ interface CartItem {
 }
 
 interface PaymentLine {
-  method: string;
+  methodId: string;
+  methodName: string;
+  isDivisa: boolean;
   amountUsd: number;
   amountBs: number;
   reference: string;
@@ -99,7 +102,8 @@ export default function POSPage() {
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string } | null>(null);
-  const [fiscalPaymentMethods, setFiscalPaymentMethods] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
@@ -180,10 +184,10 @@ export default function POSPage() {
           phone: data.phone || '',
         });
       });
-    fetch('/api/proxy/fiscal-payment-methods/active')
+    fetch('/api/proxy/payment-methods')
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) setFiscalPaymentMethods(data);
+        if (Array.isArray(data)) setPaymentMethods(data);
       })
       .catch(() => {});
   }, []);
@@ -379,8 +383,7 @@ export default function POSPage() {
   const totalBs = totalUsd * exchangeRate;
 
   // IGTF: se calcula una sola vez sobre el primer pago en divisas
-  const igtfApplicableMethods = ['CASH_USD', 'ZELLE'];
-  const firstForeignPayment = payments.find(p => igtfApplicableMethods.includes(p.method));
+  const firstForeignPayment = payments.find(p => p.isDivisa);
   const isIGTFApplicable = companyConfig?.isIGTFContributor && firstForeignPayment && firstForeignPayment.amountUsd > 0;
   const igtfUsd = isIGTFApplicable
     ? Math.round(firstForeignPayment.amountUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
@@ -393,26 +396,26 @@ export default function POSPage() {
   const totalPaidUsd = payments.reduce((s, p) => s + p.amountUsd, 0);
   const remaining = grandTotalUsd - totalPaidUsd;
 
-  function addPayment(methodKey: string) {
-    const method = PAYMENT_METHODS.find(m => m.key === methodKey);
-    if (!method) return;
+  function addPayment(pm: PaymentMethodData) {
     const amountUsd = Math.max(0, remaining);
     setPayments(prev => [...prev, {
-      method: methodKey,
+      methodId: pm.id,
+      methodName: pm.name,
+      isDivisa: pm.isDivisa,
       amountUsd: Math.round(amountUsd * 100) / 100,
       amountBs: Math.round(amountUsd * exchangeRate * 100) / 100,
       reference: '',
     }]);
+    setExpandedGroup(null);
   }
 
   function updatePayment(idx: number, field: string, value: any) {
     setPayments(prev => prev.map((p, i) => {
       if (i !== idx) return p;
       const updated = { ...p, [field]: value };
-      const pm = PAYMENT_METHODS.find(m => m.key === p.method);
-      if (field === 'amountUsd' && pm?.currency === 'USD') {
+      if (field === 'amountUsd' && p.isDivisa) {
         updated.amountBs = Math.round(Number(value) * exchangeRate * 100) / 100;
-      } else if (field === 'amountBs' && pm?.currency === 'BS') {
+      } else if (field === 'amountBs' && !p.isDivisa) {
         updated.amountUsd = exchangeRate > 0 ? Math.round(Number(value) / exchangeRate * 100) / 100 : 0;
       }
       return updated;
@@ -578,7 +581,7 @@ export default function POSPage() {
               productCode: cartCodeMap.get(item.productId) || '',
             })),
           };
-          const commands = buildFiscalCommands(enrichedResult, fiscalPaymentMethods, companyConfig || {});
+          const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
         } catch {}
       } else if (selectedCashRegister) {
@@ -643,7 +646,7 @@ export default function POSPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payments: payments.map(p => ({
-            method: p.method,
+            methodId: p.methodId,
             amountUsd: Number(p.amountUsd),
             amountBs: Number(p.amountBs),
             reference: p.reference || undefined,
@@ -670,7 +673,7 @@ export default function POSPage() {
               productCode: cartCodeMap.get(item.productId) || '',
             })),
           };
-          const commands = buildFiscalCommands(enrichedResult, fiscalPaymentMethods, companyConfig || {});
+          const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
         } catch {}
       } else if (selectedCashRegister) {
@@ -1319,67 +1322,88 @@ export default function POSPage() {
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {PAYMENT_METHODS.map(pm => (
-                    <button
-                      key={pm.key}
-                      onClick={() => addPayment(pm.key)}
-                      className="px-3 py-2 rounded-lg border border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-xs text-slate-300 hover:text-white transition-colors"
-                    >
-                      {pm.label}
-                    </button>
+                  {paymentMethods.filter(pm => pm.isActive).map(pm => (
+                    pm.children && pm.children.filter(c => c.isActive).length > 0 ? (
+                      <div key={pm.id} className="relative">
+                        <button
+                          onClick={() => setExpandedGroup(expandedGroup === pm.id ? null : pm.id)}
+                          className={`w-full px-3 py-2 rounded-lg border text-xs transition-colors ${expandedGroup === pm.id ? 'border-green-500/40 bg-green-500/10 text-white' : 'border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-slate-300 hover:text-white'}`}
+                        >
+                          {pm.name} ▾
+                        </button>
+                        {expandedGroup === pm.id && (
+                          <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                            {pm.children.filter(c => c.isActive).map(child => (
+                              <button
+                                key={child.id}
+                                onClick={() => addPayment(child)}
+                                className="w-full px-3 py-2 text-xs text-slate-300 hover:bg-green-500/10 hover:text-white text-left transition-colors"
+                              >
+                                {child.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        key={pm.id}
+                        onClick={() => addPayment(pm)}
+                        className="px-3 py-2 rounded-lg border border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        {pm.name}
+                      </button>
+                    )
                   ))}
                 </div>
               </div>
 
               {payments.length > 0 && (
                 <div className="space-y-3">
-                  {payments.map((p, idx) => {
-                    const pm = PAYMENT_METHODS.find(m => m.key === p.method);
-                    return (
-                      <div key={idx} className="card p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-white font-medium">{pm?.label}</span>
-                          <button onClick={() => removePayment(idx)} className="text-slate-500 hover:text-red-400"><X size={14} /></button>
+                  {payments.map((p, idx) => (
+                    <div key={idx} className="card p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-white font-medium">{p.methodName}</span>
+                        <button onClick={() => removePayment(idx)} className="text-slate-500 hover:text-red-400"><X size={14} /></button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500">USD</label>
+                          <input
+                            type="number"
+                            value={p.amountUsd}
+                            onChange={e => updatePayment(idx, 'amountUsd', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm"
+                            step="0.01"
+                            min="0"
+                            readOnly={!p.isDivisa}
+                          />
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-xs text-slate-500">USD</label>
-                            <input
-                              type="number"
-                              value={p.amountUsd}
-                              onChange={e => updatePayment(idx, 'amountUsd', Number(e.target.value))}
-                              className="input-field !py-1.5 text-sm"
-                              step="0.01"
-                              min="0"
-                              readOnly={pm?.currency === 'BS'}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500">Bs</label>
-                            <input
-                              type="number"
-                              value={p.amountBs}
-                              onChange={e => updatePayment(idx, 'amountBs', Number(e.target.value))}
-                              className="input-field !py-1.5 text-sm"
-                              step="0.01"
-                              min="0"
-                              readOnly={pm?.currency === 'USD'}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500">Referencia</label>
-                            <input
-                              type="text"
-                              value={p.reference}
-                              onChange={e => updatePayment(idx, 'reference', e.target.value)}
-                              className="input-field !py-1.5 text-sm"
-                              placeholder="Opcional"
-                            />
-                          </div>
+                        <div>
+                          <label className="text-xs text-slate-500">Bs</label>
+                          <input
+                            type="number"
+                            value={p.amountBs}
+                            onChange={e => updatePayment(idx, 'amountBs', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm"
+                            step="0.01"
+                            min="0"
+                            readOnly={p.isDivisa}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500">Referencia</label>
+                          <input
+                            type="text"
+                            value={p.reference}
+                            onChange={e => updatePayment(idx, 'reference', e.target.value)}
+                            className="input-field !py-1.5 text-sm"
+                            placeholder="Opcional"
+                          />
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
 

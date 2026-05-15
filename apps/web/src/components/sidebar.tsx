@@ -165,6 +165,7 @@ const menuSections: MenuSection[] = [
       { label: 'Usuarios', href: '/settings/users', icon: <Users size={18} /> },
       { label: 'Permisos por rol', href: '/settings/role-permissions', icon: <Shield size={18} /> },
       { label: 'Vendedores', href: '/settings/sellers', icon: <UserCheck size={18} /> },
+      { label: 'Metodos de pago', href: '/settings/payment-methods', icon: <CreditCard size={18} /> },
       { label: 'Cajas', href: '/settings/cash-registers', icon: <Monitor size={18} /> },
       { label: 'Areas de impresion', href: '/settings/print-areas', icon: <Printer size={18} /> },
       { label: 'Importacion masiva', href: '/import', icon: <Upload size={18} /> },

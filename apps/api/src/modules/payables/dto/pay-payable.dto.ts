@@ -6,7 +6,7 @@ export class PayPayableDto {
   amountUsd: number;
 
   @IsString()
-  method: string;
+  methodId: string;
 
   @IsOptional()
   @IsString()
