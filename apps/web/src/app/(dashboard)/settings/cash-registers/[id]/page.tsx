@@ -12,6 +12,7 @@ interface CashRegister {
   code: string;
   name: string;
   isFiscal: boolean;
+  isShared: boolean;
   isActive: boolean;
   comPort: string | null;
 }
@@ -25,7 +26,7 @@ export default function CashRegisterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', isFiscal: false, comPort: '' });
+  const [form, setForm] = useState({ name: '', isFiscal: false, isShared: false, comPort: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -39,6 +40,7 @@ export default function CashRegisterDetailPage() {
       setForm({
         name: data.name,
         isFiscal: data.isFiscal,
+        isShared: data.isShared || false,
         comPort: data.comPort || '',
       });
     } catch (err: any) {
@@ -61,9 +63,10 @@ export default function CashRegisterDetailPage() {
         name: form.name,
         code: register?.code,
         isFiscal: form.isFiscal,
+        isShared: form.isShared,
         comPort: form.comPort || undefined,
       };
-      const res = await fetch(`/api/proxy/cash-registers/${id}/update`, {
+      const res = await fetch(`/api/proxy/cash-registers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -193,6 +196,23 @@ export default function CashRegisterDetailPage() {
                 {form.isFiscal ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                 {form.isFiscal ? 'Si' : 'No'}
               </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">Compartida:</label>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, isShared: !f.isShared }))}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  form.isShared
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                }`}
+              >
+                {form.isShared ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                {form.isShared ? 'Si' : 'No'}
+              </button>
+              <span className="text-xs text-slate-500">Visible para todos los usuarios en el POS</span>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">

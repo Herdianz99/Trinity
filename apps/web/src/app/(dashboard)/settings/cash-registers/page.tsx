@@ -22,6 +22,7 @@ interface CashRegister {
   name: string;
   code: string;
   isFiscal: boolean;
+  isShared: boolean;
   isActive: boolean;
   sessions: CashRegisterSession[];
   createdAt: string;
@@ -40,12 +41,13 @@ export default function CashRegistersPage() {
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
   const [formIsFiscal, setFormIsFiscal] = useState(false);
+  const [formIsShared, setFormIsShared] = useState(false);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchRegisters = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/cash-registers/admin');
+      const res = await fetch('/api/proxy/cash-registers');
       if (res.ok) {
         const data = await res.json();
         setRegisters(data);
@@ -66,6 +68,7 @@ export default function CashRegistersPage() {
     setFormName('');
     setFormCode('');
     setFormIsFiscal(false);
+    setFormIsShared(false);
     setFormError('');
     setModalOpen(true);
   }
@@ -75,6 +78,7 @@ export default function CashRegistersPage() {
     setFormName(register.name);
     setFormCode(register.code);
     setFormIsFiscal(register.isFiscal);
+    setFormIsShared(register.isShared);
     setFormError('');
     setModalOpen(true);
   }
@@ -85,10 +89,10 @@ export default function CashRegistersPage() {
     setSaving(true);
 
     try {
-      const body = { name: formName, code: formCode, isFiscal: formIsFiscal };
+      const body = { name: formName, code: formCode, isFiscal: formIsFiscal, isShared: formIsShared };
 
       const url = editingRegister
-        ? `/api/proxy/cash-registers/${editingRegister.id}/update`
+        ? `/api/proxy/cash-registers/${editingRegister.id}`
         : '/api/proxy/cash-registers';
       const method = editingRegister ? 'PATCH' : 'POST';
 
@@ -170,6 +174,9 @@ export default function CashRegistersPage() {
                   Tipo
                 </th>
                 <th className="text-center text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3">
+                  Compartida
+                </th>
+                <th className="text-center text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3">
                   Sesiones activas
                 </th>
                 <th className="text-center text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3">
@@ -183,13 +190,13 @@ export default function CashRegistersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={7} className="text-center py-12">
                     <Loader2 className="animate-spin text-green-500 mx-auto" size={28} />
                   </td>
                 </tr>
               ) : registers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-slate-500">
+                  <td colSpan={7} className="text-center py-12 text-slate-500">
                     No hay cajas registradoras registradas
                   </td>
                 </tr>
@@ -221,6 +228,15 @@ export default function CashRegistersPage() {
                           <span className="bg-slate-500/15 text-slate-400 border border-slate-500/30 px-2 py-0.5 rounded-full text-xs">
                             Normal
                           </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {register.isShared ? (
+                          <span className="bg-purple-500/15 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-xs">
+                            Si
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-xs">No</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300 text-center">
@@ -338,6 +354,23 @@ export default function CashRegistersPage() {
                 {formIsFiscal ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                 {formIsFiscal ? 'Si' : 'No'}
               </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">Compartida:</label>
+              <button
+                type="button"
+                onClick={() => setFormIsShared(!formIsShared)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  formIsShared
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                }`}
+              >
+                {formIsShared ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                {formIsShared ? 'Si' : 'No'}
+              </button>
+              <span className="text-xs text-slate-500">Visible para todos en el POS</span>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
