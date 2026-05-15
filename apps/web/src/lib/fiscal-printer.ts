@@ -338,7 +338,8 @@ export async function sendToFiscalPrinter(commands: string[], comPort?: string):
     return;
   }
 
-  let port: SerialPort | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let port: any = null;
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
 
