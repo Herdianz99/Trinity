@@ -47,6 +47,7 @@ export class CashRegistersService {
         code: dto.code,
         name: dto.name,
         isFiscal: dto.isFiscal ?? false,
+        comPort: dto.comPort,
       },
     });
   }
@@ -69,6 +70,7 @@ export class CashRegistersService {
       data: {
         name: dto.name,
         isFiscal: dto.isFiscal,
+        comPort: dto.comPort,
       },
     });
   }

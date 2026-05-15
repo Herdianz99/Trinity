@@ -87,6 +87,7 @@ export default function POSPage() {
   const [exchangeRate, setExchangeRate] = useState<number>(0);
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payments, setPayments] = useState<PaymentLine[]>([]);
+  const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [isCredit, setIsCredit] = useState(false);
   const [creditAuthPassword, setCreditAuthPassword] = useState('');
   const [creditDays, setCreditDays] = useState(30);
@@ -95,7 +96,8 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number } | null>(null);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string } | null>(null);
+  const [fiscalPaymentMethods, setFiscalPaymentMethods] = useState<any[]>([]);
   const [scannerActive, setScannerActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
@@ -169,8 +171,19 @@ export default function POSPage() {
         if (data) setCompanyConfig({
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
+          fiscalCreditCode: data.fiscalCreditCode || '01',
+          companyName: data.companyName || '',
+          rif: data.rif || '',
+          address: data.address || '',
+          phone: data.phone || '',
         });
       });
+    fetch('/api/proxy/fiscal-payment-methods/active')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setFiscalPaymentMethods(data);
+      })
+      .catch(() => {});
   }, []);
 
   // Cash register selection — check localStorage on mount
@@ -492,9 +505,99 @@ export default function POSPage() {
     }
   }
 
+  async function handleConfirmCredit() {
+    if (!customerId) {
+      setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' });
+      return;
+    }
+    if (!creditAuthPassword) {
+      setMessage({ type: 'error', text: 'Debe ingresar la clave de autorizacion' });
+      return;
+    }
+    setProcessing(true);
+    setMessage(null);
+    try {
+      let targetInvoiceId = existingInvoiceId;
+
+      if (!targetInvoiceId) {
+        const createRes = await fetch('/api/proxy/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId,
+            cashRegisterId: selectedCashRegister?.id || undefined,
+            sellerId: selectedSellerId || undefined,
+            items: cart.map(i => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+            })),
+          }),
+        });
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}));
+          throw new Error(err.message || 'Error al crear factura');
+        }
+        const created = await createRes.json();
+        targetInvoiceId = created.id;
+      }
+
+      const payRes = await fetch(`/api/proxy/invoices/${targetInvoiceId}/pay`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payments: [],
+          isCredit: true,
+          creditAuthPassword,
+          creditDays,
+        }),
+      });
+      if (!payRes.ok) {
+        const err = await payRes.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al procesar credito');
+      }
+      const result = await payRes.json();
+
+      // Fiscal register: generate fiscal commands; otherwise print thermal receipt
+      if (selectedCashRegister?.isFiscal) {
+        try {
+          const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+          const cartCodeMap = new Map(cart.map(c => [c.productId, c.code]));
+          const enrichedResult = {
+            ...result,
+            items: (result.items || []).map((item: any) => ({
+              ...item,
+              productCode: cartCodeMap.get(item.productId) || '',
+            })),
+          };
+          const commands = buildFiscalCommands(enrichedResult, fiscalPaymentMethods, companyConfig || {});
+          await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+        } catch {}
+      } else if (selectedCashRegister) {
+        try {
+          const { printReceipt } = await import('@/lib/print-receipt');
+          await printReceipt(result, companyConfig || {});
+        } catch {}
+      }
+
+      setCart([]);
+      setCustomerId(null);
+      setCustomerName('');
+      setCreditAuthPassword('');
+      setCreditModalOpen(false);
+      setExistingInvoiceId(null);
+      setMessage({ type: 'success', text: `Factura ${result.number} registrada a credito` });
+      fetchPending();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   async function handleConfirmPayment() {
-    if (payments.length === 0 && !isCredit) return;
-    if (!isCredit && remaining > 0.01) {
+    if (payments.length === 0) return;
+    if (remaining > 0.01) {
       setMessage({ type: 'error', text: 'El monto pagado no cubre el total' });
       return;
     }
@@ -536,9 +639,7 @@ export default function POSPage() {
             amountBs: Number(p.amountBs),
             reference: p.reference || undefined,
           })),
-          isCredit,
-          creditAuthPassword: isCredit ? creditAuthPassword : undefined,
-          creditDays: isCredit ? creditDays : undefined,
+          isCredit: false,
         }),
       });
       if (!payRes.ok) {
@@ -546,12 +647,35 @@ export default function POSPage() {
         throw new Error(err.message || 'Error al procesar pago');
       }
       const result = await payRes.json();
+
+      // Fiscal register: generate fiscal commands; otherwise print thermal receipt
+      if (selectedCashRegister?.isFiscal) {
+        try {
+          const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+          // Enrich invoice items with product codes from cart
+          const cartCodeMap = new Map(cart.map(c => [c.productId, c.code]));
+          const enrichedResult = {
+            ...result,
+            items: (result.items || []).map((item: any) => ({
+              ...item,
+              productCode: cartCodeMap.get(item.productId) || '',
+            })),
+          };
+          const commands = buildFiscalCommands(enrichedResult, fiscalPaymentMethods, companyConfig || {});
+          await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+        } catch {}
+      } else if (selectedCashRegister) {
+        try {
+          const { printReceipt } = await import('@/lib/print-receipt');
+          await printReceipt(result, companyConfig || {});
+        } catch {}
+      }
+
       setCart([]);
       setCustomerId(null);
       setCustomerName('');
       setPayments([]);
       setPayModalOpen(false);
-      setIsCredit(false);
       setExistingInvoiceId(null);
       setMessage({ type: 'success', text: `Factura ${result.number} cobrada exitosamente` });
       fetchPending();
@@ -1120,14 +1244,22 @@ export default function POSPage() {
                     className="btn-secondary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {processing ? <Loader2 className="animate-spin" size={16} /> : <Clock size={16} />}
-                    En espera
+                    Aparcar
                   </button>
                   <button
-                    onClick={() => { setPayments([]); setIsCredit(false); setPayModalOpen(true); }}
+                    onClick={() => { setPayments([]); setPayModalOpen(true); }}
                     disabled={cart.length === 0 || processing}
                     className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <DollarSign size={16} /> Cobrar
+                  </button>
+                  <button
+                    onClick={() => { setCreditAuthPassword(''); setCreditDays(30); setCreditModalOpen(true); }}
+                    disabled={cart.length === 0 || processing}
+                    className="!py-3 px-3 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                    title="Facturar a credito"
+                  >
+                    <CreditCard size={18} />
                   </button>
                 </>
               )}
@@ -1262,57 +1394,90 @@ export default function POSPage() {
                 </span>
               </div>
 
-              <div className="card p-3 space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isCredit}
-                    onChange={e => setIsCredit(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
-                  />
-                  <div className="flex items-center gap-2">
-                    <CreditCard size={16} className="text-blue-400" />
-                    <span className="text-sm text-white">Factura a credito</span>
-                  </div>
-                </label>
-
-                {isCredit && (
-                  <div className="grid grid-cols-2 gap-3 pl-7">
-                    <div>
-                      <label className="text-xs text-slate-500 flex items-center gap-1"><Lock size={12} /> Clave de autorizacion</label>
-                      <input
-                        type="password"
-                        value={creditAuthPassword}
-                        onChange={e => setCreditAuthPassword(e.target.value)}
-                        className="input-field !py-1.5 text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">Dias de credito</label>
-                      <input
-                        type="number"
-                        value={creditDays}
-                        onChange={e => setCreditDays(Number(e.target.value))}
-                        className="input-field !py-1.5 text-sm"
-                        min="1"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={processing || (!isCredit && remaining > 0.01)}
+                  disabled={processing || remaining > 0.01}
                   className="btn-primary !py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
                 >
                   {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}
                   Confirmar cobro
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Modal */}
+      {creditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCreditModalOpen(false)} />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CreditCard size={20} className="text-blue-400" />
+                  Factura a Credito
+                </h2>
+                <div className="flex gap-4 mt-1">
+                  <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
+                  <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
+                </div>
+              </div>
+              <button onClick={() => setCreditModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400">
+                <X size={18} />
+              </button>
+            </div>
+
+            {!customerId && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">
+                Debe asignar un cliente para facturar a credito. No se puede facturar a credito como consumidor final.
+              </div>
+            )}
+
+            {customerId && (
+              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm mb-4">
+                Cliente: <span className="font-medium text-white">{customerName}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-slate-300 mb-1.5 block flex items-center gap-1.5">
+                  <Lock size={14} /> Clave de autorizacion
+                </label>
+                <input
+                  type="password"
+                  value={creditAuthPassword}
+                  onChange={e => setCreditAuthPassword(e.target.value)}
+                  className="input-field"
+                  placeholder="Ingrese la clave de autorizacion"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito</label>
+                <input
+                  type="number"
+                  value={creditDays}
+                  onChange={e => setCreditDays(Number(e.target.value))}
+                  className="input-field"
+                  min="1"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
+              <button onClick={() => setCreditModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
+              <button
+                onClick={handleConfirmCredit}
+                disabled={processing || !customerId || !creditAuthPassword}
+                className="!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 transition-colors"
+              >
+                {processing ? <Loader2 className="animate-spin" size={16} /> : <CreditCard size={16} />}
+                Confirmar credito
+              </button>
             </div>
           </div>
         </div>

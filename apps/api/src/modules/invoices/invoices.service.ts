@@ -520,6 +520,9 @@ export class InvoicesService {
           payments: true,
           customer: true,
           receivables: true,
+          seller: { select: { id: true, code: true, name: true } },
+          cashier: { select: { id: true, name: true } },
+          cashRegister: { select: { id: true, code: true, name: true, isFiscal: true } },
         },
       });
 

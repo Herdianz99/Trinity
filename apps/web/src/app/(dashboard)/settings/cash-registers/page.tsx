@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Monitor,
   Plus,
@@ -27,6 +28,7 @@ interface CashRegister {
 }
 
 export default function CashRegistersPage() {
+  const router = useRouter();
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -202,8 +204,13 @@ export default function CashRegistersPage() {
                       <td className="px-4 py-3 text-sm text-slate-300 font-mono">
                         {register.code}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300 font-medium">
-                        {register.name}
+                      <td className="px-4 py-3 text-sm font-medium">
+                        <button
+                          onClick={() => router.push(`/settings/cash-registers/${register.id}`)}
+                          className="text-slate-300 hover:text-green-400 transition-colors text-left"
+                        >
+                          {register.name}
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         {register.isFiscal ? (
@@ -239,7 +246,7 @@ export default function CashRegistersPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => openEdit(register)}
+                            onClick={() => router.push(`/settings/cash-registers/${register.id}`)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                             title="Editar"
                           >

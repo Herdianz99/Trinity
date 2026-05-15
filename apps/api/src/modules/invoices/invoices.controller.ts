@@ -48,6 +48,17 @@ export class InvoicesController {
     return this.service.findPending(today === 'true');
   }
 
+  @Get(':id/pdf')
+  async getPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generatePdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="factura-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
@@ -110,16 +121,5 @@ export class InvoicesController {
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
     return this.service.delete(id, user);
-  }
-
-  @Get(':id/pdf')
-  async getPdf(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.pdfService.generatePdf(id);
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="factura-${id}.pdf"`,
-      'Content-Length': buffer.length,
-    });
-    res.end(buffer);
   }
 }

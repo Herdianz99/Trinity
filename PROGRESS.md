@@ -1,5 +1,18 @@
 # Trinity ERP — Progreso
 
+## Sesion 19 — Auto-impresion ticket 80mm al cobrar (Completada)
+
+### Auto-impresion de ticket al cobrar en POS
+- Backend: `invoices.pay()` ahora incluye seller, cashier y cashRegister en la respuesta
+- Nuevo archivo `apps/web/src/lib/print-receipt.ts`: genera ticket HTML 80mm e imprime via iframe aislado (evita conflicto CSS con print-monitor de comandas)
+- Ticket incluye: encabezado empresa (nombre, RIF, direccion, telefono), numero factura, fecha/hora, caja, vendedor, cajero, cliente, items detallados, subtotal, IVA desglosado, IGTF, totales USD/Bs, tasa de cambio, metodos de pago, badge credito si aplica
+- POS: companyConfig ampliado para guardar datos de empresa (companyName, rif, address, phone)
+- Solo imprime en cajas NO fiscales (`isFiscal === false`)
+- Import dinamico de print-receipt para no afectar el bundle
+
+### Pendiente para sesion futura
+- **QZ Tray (impresion silenciosa)**: instalar QZ Tray en cada PC para imprimir directo a impresora termica sin dialogo del navegador. Configuracion por PC (localStorage) para seleccionar impresora. Aplica tanto para tickets de venta como para comandas de despacho.
+
 ## Sesion 18 — Rol Auditor, Scraping BCV y Consulta SENIAT (Completada)
 
 ### Rol AUDITOR

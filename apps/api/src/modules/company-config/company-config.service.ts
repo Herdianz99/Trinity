@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateCompanyConfigDto } from './dto/update-company-config.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class CompanyConfigService {
@@ -19,10 +20,17 @@ export class CompanyConfigService {
   }
 
   async update(dto: UpdateCompanyConfigDto) {
+    const data: any = { ...dto };
+
+    // Hash creditAuthPassword before saving
+    if (data.creditAuthPassword) {
+      data.creditAuthPassword = await bcrypt.hash(data.creditAuthPassword, 10);
+    }
+
     return this.prisma.companyConfig.upsert({
       where: { id: 'singleton' },
-      update: dto,
-      create: { id: 'singleton', ...dto },
+      update: data,
+      create: { id: 'singleton', ...data },
     });
   }
 }

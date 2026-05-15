@@ -29,10 +29,21 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
       body,
     });
 
+    const resContentType = res.headers.get('content-type') || 'application/json';
+
+    // Binary responses (PDF, images, etc.) must be forwarded as ArrayBuffer
+    if (resContentType.includes('application/pdf') || resContentType.includes('application/octet-stream')) {
+      const buffer = await res.arrayBuffer();
+      const responseHeaders: Record<string, string> = { 'Content-Type': resContentType };
+      const disposition = res.headers.get('content-disposition');
+      if (disposition) responseHeaders['Content-Disposition'] = disposition;
+      return new NextResponse(buffer, { status: res.status, headers: responseHeaders });
+    }
+
     const data = await res.text();
     return new NextResponse(data, {
       status: res.status,
-      headers: { 'Content-Type': res.headers.get('content-type') || 'application/json' },
+      headers: { 'Content-Type': resContentType },
     });
   } catch {
     return NextResponse.json({ message: 'Error connecting to API' }, { status: 502 });

@@ -81,4 +81,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   igtfPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  creditAuthPassword?: string;
 }

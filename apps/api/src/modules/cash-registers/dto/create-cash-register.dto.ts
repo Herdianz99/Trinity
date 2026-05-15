@@ -14,4 +14,9 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsBoolean()
   isFiscal?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  comPort?: string;
 }
