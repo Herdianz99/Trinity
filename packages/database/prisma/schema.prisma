@@ -585,6 +585,7 @@ model InvoiceItem {
   totalBs               Float   @default(0)
   unitPriceWithoutIva   Float   @default(0)
   unitPriceWithoutIvaBs Float   @default(0)
+  discountPct           Float   @default(0)
   costUsd               Float   @default(0)
   costBs                Float   @default(0)
 }

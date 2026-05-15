@@ -5,6 +5,7 @@ import {
   ValidateNested,
   IsNumber,
   Min,
+  Max,
   IsEnum,
   MinLength,
 } from 'class-validator';
@@ -27,6 +28,13 @@ export class CreateInvoiceItemDto {
   @IsNumber()
   @Min(0)
   unitPrice?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPct?: number;
 }
 
 export class CreateInvoiceDto {

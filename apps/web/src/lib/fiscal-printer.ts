@@ -124,6 +124,12 @@ export function buildFiscalCommands(
     const name = item.productName || item.name || 'Producto';
 
     commands.push(`${ivaSign}${priceStr}${qtyStr}|${code}|${name}`);
+
+    // Line discount: p-XXXX (2 int + 2 dec, e.g. 10.50% = p-1050)
+    const discountPct = item.discountPct || 0;
+    if (discountPct > 0) {
+      commands.push(`p-${formatFixed(discountPct, 2, 2)}`);
+    }
   }
 
   // --- Subtotal ---

@@ -22,6 +22,7 @@ import {
   PanelRightOpen,
   FileCheck,
   ArrowRightLeft,
+  Percent,
 } from 'lucide-react';
 
 const IVA_RATES: Record<string, number> = {
@@ -61,6 +62,7 @@ interface CartItem {
   ivaType: string;
   stock: number;
   priceOverridden: boolean;
+  discountPct: number;
 }
 
 interface PaymentLine {
@@ -257,6 +259,7 @@ export default function POSPage() {
             ivaType: item.ivaType,
             stock: 999,
             priceOverridden: false,
+            discountPct: item.discountPct || 0,
           })));
           if (data.customer) {
             setCustomerId(data.customer.id);
@@ -332,6 +335,7 @@ export default function POSPage() {
         ivaType: product.ivaType,
         stock: product.stock?.[0]?.quantity || 0,
         priceOverridden: false,
+        discountPct: 0,
       }];
     });
     setSearchQuery('');
@@ -363,7 +367,8 @@ export default function POSPage() {
   let subtotalUsd = 0;
   cart.forEach(i => {
     const rate = IVA_RATES[i.ivaType] || 0;
-    const basePrice = i.unitPrice / (1 + rate);
+    const discountMultiplier = 1 - (i.discountPct || 0) / 100;
+    const basePrice = (i.unitPrice / (1 + rate)) * discountMultiplier;
     const lineSubtotal = basePrice * i.quantity;
     const iva = lineSubtotal * rate;
     subtotalUsd += lineSubtotal;
@@ -431,6 +436,7 @@ export default function POSPage() {
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
+          discountPct: i.discountPct || 0,
         })),
       };
 
@@ -483,6 +489,7 @@ export default function POSPage() {
             productId: i.productId,
             quantity: i.quantity,
             unitPrice: i.unitPrice,
+            discountPct: i.discountPct || 0,
           })),
         }),
       });
@@ -531,6 +538,7 @@ export default function POSPage() {
               productId: i.productId,
               quantity: i.quantity,
               unitPrice: i.unitPrice,
+              discountPct: i.discountPct || 0,
             })),
           }),
         });
@@ -618,6 +626,7 @@ export default function POSPage() {
               productId: i.productId,
               quantity: i.quantity,
               unitPrice: i.unitPrice,
+              discountPct: i.discountPct || 0,
             })),
           }),
         });
@@ -748,6 +757,7 @@ export default function POSPage() {
         ivaType: item.ivaType || 'GENERAL',
         stock: 999,
         priceOverridden: false,
+        discountPct: item.discountPct || 0,
       })));
       if (fullInvoice.customer) {
         setCustomerId(fullInvoice.customer.id);
@@ -1156,6 +1166,26 @@ export default function POSPage() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Precio modificado</span>
                     )}
                     <span className="text-xs text-slate-600">{IVA_LABELS[item.ivaType]}</span>
+                    <div className="flex items-center gap-0.5 ml-1">
+                      <Percent size={10} className="text-slate-600" />
+                      <input
+                        type="number"
+                        value={item.discountPct || ''}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value);
+                          const pct = isNaN(v) ? 0 : Math.min(100, Math.max(0, v));
+                          setCart(prev => prev.map(c => c.productId === item.productId ? { ...c, discountPct: pct } : c));
+                        }}
+                        placeholder="0"
+                        className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-orange-400 text-right focus:outline-none focus:border-orange-500/50"
+                        step="0.5"
+                        min="0"
+                        max="100"
+                      />
+                    </div>
+                    {item.discountPct > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20">-{item.discountPct}%</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1168,7 +1198,7 @@ export default function POSPage() {
                   </button>
                 </div>
                 <span className="text-sm text-white font-medium w-16 text-right">
-                  ${(item.unitPrice * item.quantity).toFixed(2)}
+                  ${(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100)).toFixed(2)}
                 </span>
                 <button onClick={() => removeItem(item.productId)} className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400">
                   <Trash2 size={14} />

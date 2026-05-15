@@ -216,10 +216,15 @@ export class InvoicesService {
       const ivaRate = IVA_RATES[product.ivaType] || 0;
       const ivaMultiplier = 1 + ivaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
-      const lineSubtotal = baseUnitPrice * item.quantity;
+
+      // Apply line discount
+      const discountPct = item.discountPct || 0;
+      const discountMultiplier = 1 - discountPct / 100;
+      const discountedBasePrice = baseUnitPrice * discountMultiplier;
+      const lineSubtotal = discountedBasePrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
 
-      // unitPriceWithoutIva = unitPriceUsd / ivaMultiplier (price without IVA)
+      // unitPriceWithoutIva = base price WITHOUT discount (for reference)
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
       const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
 
@@ -245,6 +250,7 @@ export class InvoicesService {
         totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
         unitPriceWithoutIva,
         unitPriceWithoutIvaBs,
+        discountPct,
         costUsd,
         costBs,
       });
@@ -642,7 +648,12 @@ export class InvoicesService {
       const ivaRate = IVA_RATES[product.ivaType] || 0;
       const ivaMultiplier = 1 + ivaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
-      const lineSubtotal = baseUnitPrice * item.quantity;
+
+      // Apply line discount
+      const discountPct = item.discountPct || 0;
+      const discountMultiplier = 1 - discountPct / 100;
+      const discountedBasePrice = baseUnitPrice * discountMultiplier;
+      const lineSubtotal = discountedBasePrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
 
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
@@ -668,6 +679,7 @@ export class InvoicesService {
         totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
         unitPriceWithoutIva,
         unitPriceWithoutIvaBs,
+        discountPct,
         costUsd,
         costBs,
       });
