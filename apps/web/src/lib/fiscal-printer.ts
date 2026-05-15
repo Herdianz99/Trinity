@@ -366,7 +366,7 @@ export async function sendToFiscalPrinter(commands: string[], comPort?: string):
     writer = port.writable.getWriter();
 
     // Check printer status
-    const status = await checkPrinterStatus(writer, reader);
+    const status = await checkPrinterStatus(writer!, reader!);
     if (!status.ready) {
       throw new Error(
         `Impresora fiscal no esta lista. Status: 0x${status.status.toString(16)}, Error: 0x${status.error.toString(16)}`,
@@ -375,7 +375,7 @@ export async function sendToFiscalPrinter(commands: string[], comPort?: string):
 
     // Send each command sequentially
     for (let i = 0; i < commands.length; i++) {
-      await sendCommand(writer, reader, commands[i]);
+      await sendCommand(writer!, reader!, commands[i]);
       // Small delay between commands to let the printer process
       await new Promise((r) => setTimeout(r, 50));
     }
