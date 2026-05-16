@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, UserCheck, Loader2, Search } from 'lucide-react';
 
-const SENIAT_URL = 'https://contribuyentes.seniat.gob.ve/getContribuyente/GetInfoContribuyente';
+const SENIAT_URL = 'http://contribuyente.seniat.gob.ve/BuscaRif/BuscaRif.jsp';
 
 const defaultForm = {
   name: '', documentType: 'V', rif: '', phone: '', email: '', address: '',

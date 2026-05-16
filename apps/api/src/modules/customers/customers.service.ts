@@ -87,9 +87,10 @@ export class CustomersService {
 
   parseSeniatHtml(html: string) {
     try {
-      // Extract data using the SENIAT response patterns
-      // The SENIAT returns info like: "NOMBRE O RAZÓN SOCIAL: ..."
-      // or in table cells with specific labels
+      // BuscaRif.jsp response parsing
+      // Based on the SENIAT BuscaRif response format:
+      // The HTML contains a section starting with "VISUALIZAR"
+      // followed by the name after a semicolon and the RIF before &nbsp
 
       let documentType = '';
       let documentNumber = '';
@@ -97,24 +98,58 @@ export class CustomersService {
       let commercialName: string | undefined;
       let fiscalName: string | undefined;
 
-      // Try to extract RIF pattern: V-12345678-9, J-12345678-9, etc.
-      const rifMatch = html.match(/([VEJGCP])-?(\d{5,9})-?(\d)/i);
-      if (rifMatch) {
-        documentType = rifMatch[1].toUpperCase();
-        documentNumber = `${rifMatch[2]}-${rifMatch[3]}`;
+      // Normalize: collapse to single line
+      let code = html.replace(/\r?\n/g, '');
+
+      // Extract from VISUALIZAR section (BuscaRif format)
+      const vizMatch = code.match(/VISUALIZAR.*/gi);
+      if (vizMatch) {
+        const vizCode = vizMatch.join('');
+
+        // Check for "No existe el contribuyente"
+        if (vizCode.includes('No existe el contribuyente')) {
+          return { documentType: '', documentNumber: '', name: '', error: 'No existe el contribuyente solicitado' };
+        }
+
+        // Extract name: after semicolon, grab text with name-valid characters
+        const nameMatch = vizCode.match(/;[;\)\(\.\,\'\&\´ñÑ\w\s]+/gi);
+        if (nameMatch) {
+          name = nameMatch[0]
+            .replace(/amp;/g, '')
+            .replace(/;/g, '')
+            .trim();
+        }
+
+        // Extract RIF: letter + digits before &nbsp
+        const rifMatch = vizCode.match(/[VEJGCP]\d+(?=&nbsp)/gi);
+        if (rifMatch) {
+          const ci = rifMatch.join('');
+          documentType = ci[0].toUpperCase();
+          documentNumber = ci.replace(/^[A-Za-z]/, '');
+        }
       }
 
-      // Try to extract name — look for "Nombre o Razón Social" or "RAZÓN SOCIAL"
-      const namePatterns = [
-        /Raz[oó]n\s*Social\s*[:：]\s*([^<\n]+)/i,
-        /Nombre\s*o\s*Raz[oó]n\s*Social\s*[:：]\s*([^<\n]+)/i,
-        /NOMBRE\s*[:：]\s*([^<\n]+)/i,
-      ];
-      for (const pattern of namePatterns) {
-        const match = html.match(pattern);
-        if (match) {
-          name = match[1].trim();
-          break;
+      // Fallback: try generic RIF pattern if VISUALIZAR method didn't find it
+      if (!documentNumber) {
+        const rifFallback = html.match(/([VEJGCP])-?(\d{5,9})-?(\d)/i);
+        if (rifFallback) {
+          documentType = rifFallback[1].toUpperCase();
+          documentNumber = `${rifFallback[2]}-${rifFallback[3]}`;
+        }
+      }
+
+      // Fallback: try "Razon Social" label patterns
+      if (!name) {
+        const namePatterns = [
+          /Raz[oó]n\s*Social\s*[:：]\s*([^<\n]+)/i,
+          /Nombre\s*o\s*Raz[oó]n\s*Social\s*[:：]\s*([^<\n]+)/i,
+        ];
+        for (const pattern of namePatterns) {
+          const match = html.match(pattern);
+          if (match) {
+            name = match[1].trim();
+            break;
+          }
         }
       }
 
@@ -123,29 +158,10 @@ export class CustomersService {
       if (parenMatch) {
         commercialName = parenMatch[1].trim();
         fiscalName = parenMatch[2].trim();
+        name = commercialName;
       }
 
-      // Fallback: try cheerio-based parsing if available
-      if (!name) {
-        try {
-          const cheerio = require('cheerio');
-          const $ = cheerio.load(html);
-          // Look for common SENIAT result patterns in table cells
-          $('td').each((_: number, el: any) => {
-            const text = $(el).text().trim();
-            if (text.match(/Raz[oó]n Social/i)) {
-              const next = $(el).next('td').text().trim();
-              if (next) name = next;
-            }
-            if (text.match(/Nombre Comercial/i)) {
-              const next = $(el).next('td').text().trim();
-              if (next) commercialName = next;
-            }
-          });
-        } catch { /* cheerio not critical */ }
-      }
-
-      // Clean up name
+      // Clean up
       name = name.replace(/\s+/g, ' ').trim();
 
       return { documentType, documentNumber, name, commercialName, fiscalName };

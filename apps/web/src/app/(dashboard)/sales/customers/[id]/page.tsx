@@ -24,7 +24,7 @@ interface CxCData {
   receivables: Receivable[];
 }
 
-const SENIAT_URL = 'https://contribuyentes.seniat.gob.ve/getContribuyente/GetInfoContribuyente';
+const SENIAT_URL = 'http://contribuyente.seniat.gob.ve/BuscaRif/BuscaRif.jsp';
 
 const INV_BADGES: Record<string, string> = {
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
