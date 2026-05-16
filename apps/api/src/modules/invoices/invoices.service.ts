@@ -141,7 +141,13 @@ export class InvoicesService {
       },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
-    return invoice;
+    return {
+      ...invoice,
+      receivables: invoice.receivables.map(r => ({
+        ...r,
+        balanceUsd: r.amountUsd - r.paidAmountUsd,
+      })),
+    };
   }
 
   async create(
@@ -251,6 +257,7 @@ export class InvoicesService {
         discountPct,
         costUsd,
         costBs,
+        priceOverridden: item.priceOverridden || (item.unitPrice != null && Math.abs(item.unitPrice - product.priceDetal) > 0.001),
       });
     }
 
@@ -723,6 +730,7 @@ export class InvoicesService {
         discountPct,
         costUsd,
         costBs,
+        priceOverridden: item.priceOverridden || (item.unitPrice != null && Math.abs(item.unitPrice - product.priceDetal) > 0.001),
       });
     }
 

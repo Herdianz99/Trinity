@@ -4,6 +4,7 @@ import {
   IsArray,
   ValidateNested,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   IsEnum,
@@ -35,6 +36,11 @@ export class CreateInvoiceItemDto {
   @Min(0)
   @Max(100)
   discountPct?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  priceOverridden?: boolean;
 }
 
 export class CreateInvoiceDto {

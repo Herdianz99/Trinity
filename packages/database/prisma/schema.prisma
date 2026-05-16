@@ -591,6 +591,7 @@ model InvoiceItem {
   discountPct           Float   @default(0)
   costUsd               Float   @default(0)
   costBs                Float   @default(0)
+  priceOverridden       Boolean @default(false)
 }
 
 model Payment {

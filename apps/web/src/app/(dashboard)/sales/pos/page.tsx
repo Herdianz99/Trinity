@@ -465,6 +465,7 @@ export default function POSPage() {
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           discountPct: i.discountPct || 0,
+          priceOverridden: i.priceOverridden || false,
         })),
       };
 

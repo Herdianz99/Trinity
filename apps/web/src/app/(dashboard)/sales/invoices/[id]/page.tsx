@@ -44,6 +44,8 @@ interface InvoiceItem {
   ivaAmountBs: number;
   totalUsd: number;
   totalBs: number;
+  discountPct?: number;
+  priceOverridden?: boolean;
 }
 
 interface Payment {
@@ -63,7 +65,7 @@ interface ReceivableLink {
   type: string;
   amountUsd: number;
   paidAmountUsd: number;
-  balanceUsd: number;
+  balanceUsd?: number;
   status: string;
 }
 
@@ -311,6 +313,12 @@ export default function InvoiceDetailPage() {
                     <td className="px-4 py-3">
                       {item.productCode && <span className="font-mono text-xs text-green-400 mr-2">{item.productCode}</span>}
                       <span className="text-white">{item.productName}</span>
+                      {item.priceOverridden && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Precio modificado</span>
+                      )}
+                      {(item.discountPct ?? 0) > 0 && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20">-{item.discountPct}% desc.</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300">${item.unitPrice?.toFixed(2)}</td>
@@ -433,9 +441,9 @@ export default function InvoiceDetailPage() {
                   {invoice.receivables.map(r => (
                     <tr key={r.id} className="border-b border-slate-700/30">
                       <td className="px-4 py-3 text-slate-300">{TYPE_LABELS[r.type] || r.type}</td>
-                      <td className="px-4 py-3 text-right font-mono text-white">${r.amountUsd.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-300">${r.paidAmountUsd.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-amber-400">${r.balanceUsd.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-white">${(r.amountUsd ?? 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-slate-300">${(r.paidAmountUsd ?? 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-400">${((r.balanceUsd != null ? r.balanceUsd : r.amountUsd - r.paidAmountUsd) ?? 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${REC_STATUS_COLORS[r.status] || ''}`}>
                           {REC_STATUS_LABELS[r.status] || r.status}
