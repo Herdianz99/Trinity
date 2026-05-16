@@ -18,6 +18,7 @@ import { ReceiptPdfService } from './receipt-pdf.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
+import { QueryPendingDocumentsDto } from './dto/query-pending-documents.dto';
 
 @ApiTags('Receipts')
 @ApiBearerAuth()
@@ -35,11 +36,8 @@ export class ReceiptsController {
   }
 
   @Get('pending-documents')
-  getPendingDocuments(
-    @Query('type') type: 'COLLECTION' | 'PAYMENT',
-    @Query('entityId') entityId: string,
-  ) {
-    return this.receiptsService.getPendingDocuments(type, entityId);
+  getPendingDocuments(@Query() query: QueryPendingDocumentsDto) {
+    return this.receiptsService.getPendingDocuments(query);
   }
 
   @Get(':id/pdf')

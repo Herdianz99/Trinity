@@ -12,12 +12,19 @@ interface PendingDoc {
   receivableId?: string;
   payableId?: string;
   description: string;
+  reference?: string | null;
   date: string;
   amountUsd: number;
   amountBsHistoric: number;
   exchangeRate: number;
   balanceUsd: number;
   status: string;
+}
+
+interface PlatformMethod {
+  id: string;
+  name: string;
+  createsReceivable: boolean;
 }
 
 interface SelectedDoc extends PendingDoc {
@@ -60,6 +67,15 @@ export default function NewReceiptPage() {
   const searchParams = useSearchParams();
   const type = (searchParams.get('type') || 'COLLECTION') as 'COLLECTION' | 'PAYMENT';
   const isCollection = type === 'COLLECTION';
+
+  // Source tab for COLLECTION type
+  const [sourceTab, setSourceTab] = useState<'customer' | 'platform'>('customer');
+  const [platformMethods, setPlatformMethods] = useState<PlatformMethod[]>([]);
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Entity selection (combobox)
   const [entityId, setEntityId] = useState('');
@@ -162,24 +178,64 @@ export default function NewReceiptPage() {
     })();
   }, []);
 
-  // Fetch pending documents when entity changes
+  // Fetch platform methods (for COLLECTION tab)
   useEffect(() => {
-    if (!entityId) {
-      setPendingDocs([]);
-      setSelectedDocs([]);
-      return;
-    }
+    if (!isCollection) return;
     (async () => {
-      setLoadingDocs(true);
       try {
-        const res = await fetch(`/api/proxy/receipts/pending-documents?type=${type}&entityId=${entityId}`);
+        const res = await fetch('/api/proxy/payment-methods/flat');
         const json = await res.json();
-        setPendingDocs(json || []);
-        setSelectedDocs([]);
+        const filtered = (json || []).filter((m: any) => m.createsReceivable);
+        setPlatformMethods(filtered);
       } catch { /* ignore */ }
-      setLoadingDocs(false);
     })();
-  }, [entityId, type]);
+  }, [isCollection]);
+
+  // Fetch pending documents when entity/platform/search changes
+  const fetchPendingDocs = useCallback(async (search?: string) => {
+    const params = new URLSearchParams();
+
+    if (isCollection && sourceTab === 'platform') {
+      if (!selectedPlatform) { setPendingDocs([]); return; }
+      params.set('platformName', selectedPlatform);
+    } else if (isCollection && sourceTab === 'customer') {
+      if (!entityId) { setPendingDocs([]); return; }
+      params.set('customerId', entityId);
+    } else {
+      // PAYMENT type
+      if (!entityId) { setPendingDocs([]); return; }
+      params.set('type', 'PAYMENT');
+      params.set('entityId', entityId);
+    }
+
+    if (search) params.set('search', search);
+
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`/api/proxy/receipts/pending-documents?${params}`);
+      const json = await res.json();
+      // New API returns { receivables: [...], payables: [] } for COLLECTION
+      // and flat array for PAYMENT
+      if (Array.isArray(json)) {
+        setPendingDocs(json);
+      } else if (json.receivables) {
+        setPendingDocs(json.receivables);
+      } else {
+        setPendingDocs([]);
+      }
+      setSelectedDocs([]);
+    } catch { /* ignore */ }
+    setLoadingDocs(false);
+  }, [isCollection, sourceTab, selectedPlatform, entityId]);
+
+  // Debounced fetch (triggers on entity/platform/search changes)
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchPendingDocs(searchQuery);
+    }, searchQuery ? 300 : 0);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [fetchPendingDocs, searchQuery]);
 
   // Move document to selected
   const addDoc = (doc: PendingDoc) => {
@@ -231,10 +287,8 @@ export default function NewReceiptPage() {
     setSaving(true);
     setMessage(null);
     try {
-      const body = {
+      const body: any = {
         type,
-        customerId: isCollection ? entityId : undefined,
-        supplierId: !isCollection ? entityId : undefined,
         itemIds: selectedDocs.map((d) => ({
           receivableId: d.receivableId,
           payableId: d.payableId,
@@ -243,6 +297,13 @@ export default function NewReceiptPage() {
         })),
         notes,
       };
+      if (isCollection && sourceTab === 'platform') {
+        body.platformName = selectedPlatform;
+      } else if (isCollection) {
+        body.customerId = entityId;
+      } else {
+        body.supplierId = entityId;
+      }
       const res = await fetch('/api/proxy/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -265,10 +326,8 @@ export default function NewReceiptPage() {
     setMessage(null);
     try {
       // First save as draft
-      const body = {
+      const body: any = {
         type,
-        customerId: isCollection ? entityId : undefined,
-        supplierId: !isCollection ? entityId : undefined,
         itemIds: selectedDocs.map((d) => ({
           receivableId: d.receivableId,
           payableId: d.payableId,
@@ -277,6 +336,13 @@ export default function NewReceiptPage() {
         })),
         notes,
       };
+      if (isCollection && sourceTab === 'platform') {
+        body.platformName = selectedPlatform;
+      } else if (isCollection) {
+        body.customerId = entityId;
+      } else {
+        body.supplierId = entityId;
+      }
       const res = await fetch('/api/proxy/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -459,82 +525,142 @@ export default function NewReceiptPage() {
         </div>
       )}
 
-      {/* Section 1: Entity selector (combobox) */}
+      {/* Section 1: Entity selector */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-        <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
-          {isCollection ? 'Cliente' : 'Proveedor'}
-        </h2>
-        <div ref={comboRef} className="relative">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={entityId ? entityName : comboQuery}
-              onChange={(e) => {
-                if (entityId) {
-                  clearEntity();
-                  setComboQuery(e.target.value);
-                } else {
-                  setComboQuery(e.target.value);
-                }
-              }}
-              onFocus={() => { if (comboResults.length > 0 && !entityId) setComboOpen(true); }}
-              placeholder={`Buscar ${isCollection ? 'cliente' : 'proveedor'} por nombre o RIF...`}
-              className={`w-full bg-slate-700 border text-white rounded-lg pl-9 pr-10 py-2.5 text-sm transition-colors ${
-                entityId ? 'border-green-500/50 bg-green-500/5' : 'border-slate-600'
+        {/* Tabs for COLLECTION type */}
+        {isCollection && (
+          <div className="flex gap-1 mb-4 p-1 bg-slate-900/50 rounded-lg w-fit">
+            <button
+              onClick={() => { setSourceTab('customer'); setSelectedPlatform(''); setPendingDocs([]); setSelectedDocs([]); setSearchQuery(''); }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                sourceTab === 'customer' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
-              readOnly={!!entityId}
-            />
-            {entityId ? (
-              <button
-                onClick={clearEntity}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
-            ) : comboLoading ? (
-              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 animate-spin" />
-            ) : null}
+            >
+              Cliente
+            </button>
+            <button
+              onClick={() => { setSourceTab('platform'); clearEntity(); setSearchQuery(''); }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                sourceTab === 'platform' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Plataforma financiera
+            </button>
           </div>
+        )}
 
-          {/* Dropdown results */}
-          {comboOpen && comboResults.length > 0 && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-              {comboResults.map((entity) => {
-                const doc = 'documentType' in entity ? (entity as Customer).documentType : null;
-                return (
+        {/* Customer/Supplier combobox (shown for PAYMENT or COLLECTION+customer tab) */}
+        {(sourceTab === 'customer' || !isCollection) && (
+          <>
+            <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
+              {isCollection ? 'Cliente' : 'Proveedor'}
+            </h2>
+            <div ref={comboRef} className="relative">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={entityId ? entityName : comboQuery}
+                  onChange={(e) => {
+                    if (entityId) {
+                      clearEntity();
+                      setComboQuery(e.target.value);
+                    } else {
+                      setComboQuery(e.target.value);
+                    }
+                  }}
+                  onFocus={() => { if (comboResults.length > 0 && !entityId) setComboOpen(true); }}
+                  placeholder={`Buscar ${isCollection ? 'cliente' : 'proveedor'} por nombre o RIF...`}
+                  className={`w-full bg-slate-700 border text-white rounded-lg pl-9 pr-10 py-2.5 text-sm transition-colors ${
+                    entityId ? 'border-green-500/50 bg-green-500/5' : 'border-slate-600'
+                  }`}
+                  readOnly={!!entityId}
+                />
+                {entityId ? (
                   <button
-                    key={entity.id}
-                    onClick={() => selectEntity(entity)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/30 last:border-0"
+                    onClick={clearEntity}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{entity.name}</p>
-                      <p className="text-xs text-slate-400">
-                        {doc ? `${doc} ` : ''}{entity.rif || ''}
-                      </p>
-                    </div>
+                    <X size={16} />
                   </button>
-                );
-              })}
+                ) : comboLoading ? (
+                  <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 animate-spin" />
+                ) : null}
+              </div>
+
+              {/* Dropdown results */}
+              {comboOpen && comboResults.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  {comboResults.map((entity) => {
+                    const doc = 'documentType' in entity ? (entity as Customer).documentType : null;
+                    return (
+                      <button
+                        key={entity.id}
+                        onClick={() => selectEntity(entity)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/30 last:border-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{entity.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {doc ? `${doc} ` : ''}{entity.rif || ''}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {comboOpen && comboQuery.length >= 2 && comboResults.length === 0 && !comboLoading && (
+                <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl px-3 py-4 text-center text-sm text-slate-500">
+                  No se encontraron resultados
+                </div>
+              )}
             </div>
-          )}
-          {comboOpen && comboQuery.length >= 2 && comboResults.length === 0 && !comboLoading && (
-            <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl px-3 py-4 text-center text-sm text-slate-500">
-              No se encontraron resultados
-            </div>
-          )}
-        </div>
+          </>
+        )}
+
+        {/* Platform dropdown (shown for COLLECTION+platform tab) */}
+        {isCollection && sourceTab === 'platform' && (
+          <>
+            <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
+              Plataforma
+            </h2>
+            <select
+              value={selectedPlatform}
+              onChange={(e) => { setSelectedPlatform(e.target.value); setSelectedDocs([]); setSearchQuery(''); }}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2.5 text-sm"
+            >
+              <option value="">-- Seleccionar plataforma --</option>
+              {platformMethods.map((m) => (
+                <option key={m.id} value={m.name}>{m.name}</option>
+              ))}
+            </select>
+          </>
+        )}
       </div>
 
       {/* Section 2: Document selection */}
-      {entityId && (
+      {(entityId || (isCollection && sourceTab === 'platform' && selectedPlatform)) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Left: Pending documents */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700/50">
-              <h3 className="text-sm font-semibold text-slate-300">Documentos pendientes</h3>
-              <p className="text-xs text-slate-500">{pendingDocs.length} disponible{pendingDocs.length !== 1 ? 's' : ''}</p>
+            <div className="px-4 py-3 border-b border-slate-700/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300">Documentos pendientes</h3>
+                  <p className="text-xs text-slate-500">{pendingDocs.length} disponible{pendingDocs.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por N. factura o N. orden..."
+                  className="w-full bg-slate-900 border border-slate-600 text-white rounded-lg pl-8 pr-3 py-1.5 text-xs"
+                />
+              </div>
             </div>
             {loadingDocs ? (
               <div className="flex items-center justify-center py-12">
@@ -574,7 +700,12 @@ export default function NewReceiptPage() {
                             {doc.documentType}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-slate-300 font-mono">{doc.description}</td>
+                        <td className="px-3 py-2">
+                          <span className="text-slate-300 font-mono">{doc.description}</span>
+                          {doc.reference && (
+                            <span className="block text-[10px] text-slate-500">Ref: {doc.reference}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right text-white font-mono">${fmt(doc.amountUsd)}</td>
                         <td className="px-3 py-2 text-right text-slate-400 font-mono">{fmt(doc.amountBsHistoric)}</td>
                         <td className="px-3 py-2 text-right text-amber-400 font-mono">${fmt(doc.balanceUsd)}</td>

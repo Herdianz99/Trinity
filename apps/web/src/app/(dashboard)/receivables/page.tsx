@@ -21,6 +21,7 @@ interface Receivable {
   customerId: string | null;
   customer: { id: string; name: string; documentType: string; rif: string | null } | null;
   platformName: string | null;
+  reference: string | null;
   invoiceId: string;
   invoice: { id: string; number: string };
   amountUsd: number;
@@ -81,6 +82,7 @@ export default function ReceivablesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [type, setType] = useState('');
   const [status, setStatus] = useState('');
+  const [reference, setReference] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [overdue, setOverdue] = useState(false);
@@ -107,6 +109,7 @@ export default function ReceivablesPage() {
       params.set('limit', '20');
       if (type) params.set('type', type);
       if (status) params.set('status', status);
+      if (reference) params.set('reference', reference);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (overdue) params.set('overdue', 'true');
@@ -120,7 +123,7 @@ export default function ReceivablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, type, status, from, to, overdue]);
+  }, [page, type, status, reference, from, to, overdue]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -315,6 +318,12 @@ export default function ReceivablesPage() {
             </select>
           </div>
           <div>
+            <label className="text-xs text-slate-400 mb-1 block">Ref / Orden</label>
+            <input type="text" value={reference} onChange={e => { setReference(e.target.value); setPage(1); }}
+              placeholder="N. orden..."
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 w-36" />
+          </div>
+          <div>
             <label className="text-xs text-slate-400 mb-1 block">Desde</label>
             <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }}
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
@@ -341,6 +350,7 @@ export default function ReceivablesPage() {
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Cliente / Plataforma</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Factura</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Ref / Orden</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cobrado USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo USD</th>
@@ -351,11 +361,11 @@ export default function ReceivablesPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-8">
+                <tr><td colSpan={10} className="text-center py-8">
                   <Loader2 className="animate-spin mx-auto text-slate-400" size={24} />
                 </td></tr>
               ) : receivables.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-8 text-slate-500">No hay cuentas por cobrar</td></tr>
+                <tr><td colSpan={10} className="text-center py-8 text-slate-500">No hay cuentas por cobrar</td></tr>
               ) : receivables.map(r => {
                 const rowOverdue = isOverdue(r.dueDate, r.status);
                 const rowNearDue = !rowOverdue && isNearDue(r.dueDate) && r.status !== 'PAID';
@@ -373,6 +383,9 @@ export default function ReceivablesPage() {
                       <Link href={`/receivables/${r.id}`} className="text-green-400 hover:text-green-300 hover:underline">
                         {r.invoice.number}
                       </Link>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400 font-mono">
+                      {r.reference || '-'}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-200">${r.amountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-slate-300">${r.paidAmountUsd.toFixed(2)}</td>
@@ -540,6 +553,12 @@ export default function ReceivablesPage() {
                   <span className="text-slate-400">Factura</span>
                   <span className="text-slate-200 font-mono">{selectedReceivable.invoice.number}</span>
                 </div>
+                {selectedReceivable.reference && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Ref / Orden</span>
+                    <span className="text-slate-200 font-mono">{selectedReceivable.reference}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-400">Fecha creacion</span>
                   <span className="text-slate-200">{new Date(selectedReceivable.createdAt).toLocaleString()}</span>

@@ -489,6 +489,7 @@ export class InvoicesService {
             data: {
               type: 'FINANCING_PLATFORM',
               platformName: paymentMethod.name,
+              reference: payment.reference || null,
               invoiceId: id,
               amountUsd: payment.amountUsd,
               amountBs: payment.amountBs,

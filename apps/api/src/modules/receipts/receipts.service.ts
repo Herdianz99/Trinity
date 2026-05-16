@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
+import { QueryPendingDocumentsDto } from './dto/query-pending-documents.dto';
 
 @Injectable()
 export class ReceiptsService {
@@ -86,8 +87,8 @@ export class ReceiptsService {
 
   async create(dto: CreateReceiptDto, userId: string) {
     // Validate entity
-    if (dto.type === 'COLLECTION' && !dto.customerId) {
-      throw new BadRequestException('Se requiere un cliente para recibos de cobro');
+    if (dto.type === 'COLLECTION' && !dto.customerId && !dto.platformName) {
+      throw new BadRequestException('Se requiere un cliente o plataforma para recibos de cobro');
     }
     if (dto.type === 'PAYMENT' && !dto.supplierId) {
       throw new BadRequestException('Se requiere un proveedor para recibos de pago');
@@ -422,39 +423,22 @@ export class ReceiptsService {
     });
   }
 
-  async getPendingDocuments(type: 'COLLECTION' | 'PAYMENT', entityId: string) {
-    if (type === 'COLLECTION') {
-      // Get pending receivables for a customer
-      const receivables = await this.prisma.receivable.findMany({
-        where: {
-          customerId: entityId,
-          status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-        },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          invoice: { select: { id: true, number: true, createdAt: true } },
-        },
-      });
+  async getPendingDocuments(query: QueryPendingDocumentsDto) {
+    // Legacy support: type=PAYMENT + entityId → flat array of payables
+    if (query.type === 'PAYMENT' && query.entityId) {
+      const where: any = {
+        supplierId: query.entityId,
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      };
 
-      return receivables.map((r) => ({
-        id: r.id,
-        documentType: 'CxC',
-        receivableId: r.id,
-        description: r.invoice?.number || `CxC-${r.id.slice(-6)}`,
-        date: r.createdAt,
-        amountUsd: r.amountUsd,
-        amountBsHistoric: r.amountBs,
-        exchangeRate: r.exchangeRate,
-        balanceUsd: this.round2(r.amountUsd - r.paidAmountUsd),
-        status: r.status,
-      }));
-    } else {
-      // Get pending payables for a supplier
+      if (query.search) {
+        where.purchaseOrder = {
+          number: { contains: query.search, mode: 'insensitive' },
+        };
+      }
+
       const payables = await this.prisma.payable.findMany({
-        where: {
-          supplierId: entityId,
-          status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-        },
+        where,
         orderBy: { createdAt: 'asc' },
         include: {
           purchaseOrder: { select: { id: true, number: true, createdAt: true } },
@@ -474,5 +458,61 @@ export class ReceiptsService {
         status: p.status,
       }));
     }
+
+    // Collection mode: by customer or platform
+    const receivableWhere: any = {
+      status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+    };
+
+    if (query.customerId) {
+      receivableWhere.customerId = query.customerId;
+    } else if (query.platformName) {
+      receivableWhere.type = 'FINANCING_PLATFORM';
+      receivableWhere.platformName = query.platformName;
+    } else if (query.type === 'COLLECTION' && query.entityId) {
+      // Legacy: type=COLLECTION + entityId → customer receivables
+      receivableWhere.customerId = query.entityId;
+    }
+
+    if (query.search) {
+      receivableWhere.OR = [
+        { invoice: { number: { contains: query.search, mode: 'insensitive' } } },
+        { reference: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const receivables = await this.prisma.receivable.findMany({
+      where: receivableWhere,
+      orderBy: { createdAt: 'asc' },
+      include: {
+        invoice: { select: { id: true, number: true, createdAt: true } },
+      },
+    });
+
+    return {
+      receivables: receivables.map((r) => ({
+        id: r.id,
+        type: r.type,
+        platformName: r.platformName,
+        invoiceNumber: r.invoice?.number || null,
+        reference: r.reference,
+        amountUsd: r.amountUsd,
+        amountBs: r.amountBs,
+        paidAmountUsd: r.paidAmountUsd,
+        pendingUsd: this.round2(r.amountUsd - r.paidAmountUsd),
+        dueDate: r.dueDate,
+        createdAt: r.createdAt,
+        // Backward compat fields for existing frontend
+        documentType: 'CxC',
+        receivableId: r.id,
+        description: r.invoice?.number || `CxC-${r.id.slice(-6)}`,
+        date: r.createdAt,
+        amountBsHistoric: r.amountBs,
+        exchangeRate: r.exchangeRate,
+        balanceUsd: this.round2(r.amountUsd - r.paidAmountUsd),
+        status: r.status,
+      })),
+      payables: [],
+    };
   }
 }

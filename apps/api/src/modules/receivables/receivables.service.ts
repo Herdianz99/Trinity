@@ -30,6 +30,9 @@ export class ReceivablesService {
     if (query.platformName) {
       where.platformName = query.platformName;
     }
+    if (query.reference) {
+      where.reference = { contains: query.reference, mode: 'insensitive' };
+    }
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {

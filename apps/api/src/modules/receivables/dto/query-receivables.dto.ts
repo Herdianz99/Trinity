@@ -26,6 +26,11 @@ export class QueryReceivablesDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  reference?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
   from?: string;
 
   @ApiProperty({ required: false })

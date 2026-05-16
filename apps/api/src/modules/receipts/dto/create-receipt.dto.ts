@@ -31,6 +31,10 @@ export class CreateReceiptDto {
   @IsString()
   supplierId?: string;
 
+  @IsOptional()
+  @IsString()
+  platformName?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ReceiptItemDto)

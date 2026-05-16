@@ -639,6 +639,7 @@ model Receivable {
   customerId    String?
   customer      Customer?           @relation(fields: [customerId], references: [id])
   platformName  String?
+  reference     String?
   invoiceId     String
   invoice       Invoice             @relation(fields: [invoiceId], references: [id])
   amountUsd     Float
