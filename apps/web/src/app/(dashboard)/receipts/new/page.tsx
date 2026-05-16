@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft, ArrowRight, Loader2, Save, CreditCard, X, ChevronRight as ChevronRightIcon,
+  ArrowLeft, ArrowRight, Loader2, Save, CreditCard, X, Search,
 } from 'lucide-react';
 
 interface PendingDoc {
@@ -29,6 +29,7 @@ interface SelectedDoc extends PendingDoc {
 interface Customer {
   id: string;
   name: string;
+  documentType: string | null;
   rif: string | null;
 }
 
@@ -60,11 +61,15 @@ export default function NewReceiptPage() {
   const type = (searchParams.get('type') || 'COLLECTION') as 'COLLECTION' | 'PAYMENT';
   const isCollection = type === 'COLLECTION';
 
-  // Entity selection
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  // Entity selection (combobox)
   const [entityId, setEntityId] = useState('');
-  const [entitySearch, setEntitySearch] = useState('');
+  const [entityName, setEntityName] = useState('');
+  const [comboQuery, setComboQuery] = useState('');
+  const [comboResults, setComboResults] = useState<(Customer | Supplier)[]>([]);
+  const [comboOpen, setComboOpen] = useState(false);
+  const [comboLoading, setComboLoading] = useState(false);
+  const comboRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Documents
   const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
@@ -104,20 +109,47 @@ export default function NewReceiptPage() {
     })();
   }, []);
 
-  // Fetch entities
+  // Debounced entity search
   useEffect(() => {
-    (async () => {
-      if (isCollection) {
-        const res = await fetch('/api/proxy/customers?limit=500');
-        const json = await res.json();
-        setCustomers(json.data || []);
-      } else {
-        const res = await fetch('/api/proxy/suppliers?limit=500');
-        const json = await res.json();
-        setSuppliers(json.data || json || []);
+    if (comboQuery.length < 2) {
+      setComboResults([]);
+      setComboOpen(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setComboLoading(true);
+      try {
+        if (isCollection) {
+          const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(comboQuery)}&limit=15`);
+          const json = await res.json();
+          setComboResults(json.data || []);
+        } else {
+          const res = await fetch('/api/proxy/suppliers?limit=500');
+          const json = await res.json();
+          const list: Supplier[] = json.data || json || [];
+          const q = comboQuery.toLowerCase();
+          setComboResults(list.filter((s) =>
+            s.name.toLowerCase().includes(q) || (s.rif && s.rif.toLowerCase().includes(q))
+          ));
+        }
+        setComboOpen(true);
+      } catch { /* ignore */ }
+      setComboLoading(false);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [comboQuery, isCollection]);
+
+  // Close combobox on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
+        setComboOpen(false);
       }
-    })();
-  }, [isCollection]);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Fetch payment methods
   useEffect(() => {
@@ -357,15 +389,23 @@ export default function NewReceiptPage() {
       : [m]
   );
 
-  // Filtered entity list
-  const filteredCustomers = customers.filter((c) =>
-    c.name.toLowerCase().includes(entitySearch.toLowerCase()) ||
-    (c.rif && c.rif.includes(entitySearch))
-  );
-  const filteredSuppliers = suppliers.filter((s) =>
-    s.name.toLowerCase().includes(entitySearch.toLowerCase()) ||
-    (s.rif && s.rif.includes(entitySearch))
-  );
+  // Select entity from combobox
+  const selectEntity = (entity: Customer | Supplier) => {
+    setEntityId(entity.id);
+    setEntityName(entity.name);
+    setComboQuery(entity.name);
+    setComboOpen(false);
+  };
+
+  // Clear entity selection
+  const clearEntity = () => {
+    setEntityId('');
+    setEntityName('');
+    setComboQuery('');
+    setComboResults([]);
+    setPendingDocs([]);
+    setSelectedDocs([]);
+  };
 
   if (rateLoading) {
     return (
@@ -413,34 +453,71 @@ export default function NewReceiptPage() {
         </div>
       )}
 
-      {/* Section 1: Entity selector */}
+      {/* Section 1: Entity selector (combobox) */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
         <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
           {isCollection ? 'Cliente' : 'Proveedor'}
         </h2>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={entitySearch}
-            onChange={(e) => setEntitySearch(e.target.value)}
-            placeholder={`Buscar ${isCollection ? 'cliente' : 'proveedor'}...`}
-            className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2.5 text-sm"
-          />
-          <select
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            className="flex-1 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2.5 text-sm"
-          >
-            <option value="">Seleccionar {isCollection ? 'cliente' : 'proveedor'}</option>
-            {isCollection
-              ? filteredCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.rif ? ` (${c.rif})` : ''}</option>
-                ))
-              : filteredSuppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}{s.rif ? ` (${s.rif})` : ''}</option>
-                ))
-            }
-          </select>
+        <div ref={comboRef} className="relative">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={entityId ? entityName : comboQuery}
+              onChange={(e) => {
+                if (entityId) {
+                  clearEntity();
+                  setComboQuery(e.target.value);
+                } else {
+                  setComboQuery(e.target.value);
+                }
+              }}
+              onFocus={() => { if (comboResults.length > 0 && !entityId) setComboOpen(true); }}
+              placeholder={`Buscar ${isCollection ? 'cliente' : 'proveedor'} por nombre o RIF...`}
+              className={`w-full bg-slate-700 border text-white rounded-lg pl-9 pr-10 py-2.5 text-sm transition-colors ${
+                entityId ? 'border-green-500/50 bg-green-500/5' : 'border-slate-600'
+              }`}
+              readOnly={!!entityId}
+            />
+            {entityId ? (
+              <button
+                onClick={clearEntity}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            ) : comboLoading ? (
+              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 animate-spin" />
+            ) : null}
+          </div>
+
+          {/* Dropdown results */}
+          {comboOpen && comboResults.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+              {comboResults.map((entity) => {
+                const doc = 'documentType' in entity ? (entity as Customer).documentType : null;
+                return (
+                  <button
+                    key={entity.id}
+                    onClick={() => selectEntity(entity)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/30 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{entity.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {doc ? `${doc} ` : ''}{entity.rif || ''}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {comboOpen && comboQuery.length >= 2 && comboResults.length === 0 && !comboLoading && (
+            <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl px-3 py-4 text-center text-sm text-slate-500">
+              No se encontraron resultados
+            </div>
+          )}
         </div>
       </div>
 
