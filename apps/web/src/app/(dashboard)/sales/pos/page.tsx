@@ -896,9 +896,16 @@ export default function POSPage() {
       const codeReader = new BrowserMultiFormatReader();
       setScannerActive(true);
 
+      // Wait for React to render the <video> element before attaching the stream
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (!videoRef.current) {
+        throw new Error('No se pudo inicializar el video');
+      }
+
       const controls = await codeReader.decodeFromVideoDevice(
         undefined,
-        videoRef.current!,
+        videoRef.current,
         (result) => {
           if (result) {
             const code = result.getText();
@@ -1053,7 +1060,7 @@ export default function POSPage() {
 
           {scannerActive && (
             <div className="mt-3 rounded-lg overflow-hidden border border-slate-700">
-              <video ref={videoRef} className="w-full max-h-48 object-cover" />
+              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-48 object-cover" />
             </div>
           )}
         </div>
