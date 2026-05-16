@@ -41,6 +41,7 @@ import {
   BarChart3,
   Shield,
   TrendingUp,
+  FileX2,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -67,6 +68,7 @@ const menuSections: MenuSection[] = [
       { label: 'POS', href: '/sales/pos', icon: <Monitor size={18} /> },
       { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={18} /> },
       { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={18} /> },
+      { label: 'Notas Cr/Db', href: '/credit-debit-notes', icon: <FileX2 size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
     ],
   },

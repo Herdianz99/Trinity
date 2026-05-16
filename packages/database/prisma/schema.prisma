@@ -37,6 +37,26 @@ enum MovementType {
   TRANSFER_IN
   TRANSFER_OUT
   COUNT_ADJUST
+  RETURN_IN
+  RETURN_OUT
+}
+
+enum NoteType {
+  NCV
+  NDV
+  NCC
+  NDC
+}
+
+enum NoteOrigin {
+  MERCHANDISE
+  MANUAL
+}
+
+enum NoteStatus {
+  DRAFT
+  POSTED
+  CANCELLED
 }
 
 enum TransferStatus {
@@ -446,6 +466,7 @@ model PurchaseOrder {
   receivedAt            DateTime?
   items                 PurchaseOrderItem[]
   payables              Payable[]
+  creditDebitNotes      CreditDebitNote[]
   createdById           String
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
@@ -521,13 +542,14 @@ model CashRegister {
   name              String
   isFiscal          Boolean       @default(false)
   isShared          Boolean       @default(false)
-  isActive          Boolean       @default(true)
-  lastInvoiceNumber Int           @default(0)
+  isActive          Boolean          @default(true)
+  lastInvoiceNumber Int              @default(0)
   comPort           String?
   sessions          CashSession[]
   invoices          Invoice[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  creditDebitNotes  CreditDebitNote[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 model CashSession {
@@ -577,11 +599,12 @@ model Invoice {
   dueDate        DateTime?
   paidAt         DateTime?
   notes          String?
-  items          InvoiceItem[]
-  payments       Payment[]
-  receivables    Receivable[]
-  printJobs      PrintJob[]
-  createdById    String
+  items            InvoiceItem[]
+  payments         Payment[]
+  receivables      Receivable[]
+  printJobs        PrintJob[]
+  creditDebitNotes CreditDebitNote[]
+  createdById      String
   sellerId       String?
   seller         Seller?       @relation(fields: [sellerId], references: [id])
   cashierId      String?
@@ -860,4 +883,54 @@ model QuotationItem {
   ivaAmountBs  Float     @default(0)
   totalUsd     Float
   totalBs      Float     @default(0)
+}
+
+// ============================================
+// NOTAS DE CREDITO / DEBITO
+// ============================================
+
+model CreditDebitNote {
+  id              String              @id @default(cuid())
+  number          String              @unique
+  type            NoteType
+  origin          NoteOrigin
+  status          NoteStatus          @default(DRAFT)
+  invoiceId       String?
+  invoice         Invoice?            @relation(fields: [invoiceId], references: [id])
+  cashRegisterId  String?
+  cashRegister    CashRegister?       @relation(fields: [cashRegisterId], references: [id])
+  fiscalNumber    String?
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  subtotalUsd     Float               @default(0)
+  ivaUsd          Float               @default(0)
+  totalUsd        Float               @default(0)
+  subtotalBs      Float               @default(0)
+  ivaBs           Float               @default(0)
+  totalBs         Float               @default(0)
+  exchangeRate    Float               @default(0)
+  manualAmountUsd Float?
+  manualPct       Float?
+  notes           String?
+  items           CreditDebitNoteItem[]
+  createdById     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+model CreditDebitNoteItem {
+  id           String          @id @default(cuid())
+  noteId       String
+  note         CreditDebitNote @relation(fields: [noteId], references: [id])
+  productId    String?
+  productName  String
+  productCode  String
+  quantity     Float
+  unitPriceUsd Float
+  unitPriceBs  Float
+  ivaType      IvaType
+  ivaAmount    Float
+  ivaAmountBs  Float
+  totalUsd     Float
+  totalBs      Float
 }

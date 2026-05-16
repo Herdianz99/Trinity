@@ -31,6 +31,7 @@ import { RolePermissionsModule } from './modules/role-permissions/role-permissio
 import { SellersModule } from './modules/sellers/sellers.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
+import { CreditDebitNotesModule } from './modules/credit-debit-notes/credit-debit-notes.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ReceiptsModule } from './modules/receipts/receipts.module';
     SellersModule,
     PaymentMethodsModule,
     ReceiptsModule,
+    CreditDebitNotesModule,
   ],
 })
 export class AppModule {}

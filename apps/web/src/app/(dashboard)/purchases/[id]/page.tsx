@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, ShoppingCart, Loader2, Edit2, Send, Ban, PackageCheck, X, ExternalLink,
+  ArrowLeft, ShoppingCart, Loader2, Edit2, Send, Ban, PackageCheck, X, ExternalLink, FileX2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -267,6 +267,16 @@ export default function PurchaseDetailPage() {
               <Ban size={14} /> Cancelar
             </button>
           )}
+          {order.status === 'RECEIVED' && (
+            <>
+              <button onClick={() => router.push(`/credit-debit-notes/new?type=NCC&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                <FileX2 size={14} /> Nota de crédito
+              </button>
+              <button onClick={() => router.push(`/credit-debit-notes/new?type=NDC&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                <FileX2 size={14} /> Nota de débito
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -281,6 +291,7 @@ export default function PurchaseDetailPage() {
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="recepciones">Recepciones</TabsTrigger>
           {order.isCredit && <TabsTrigger value="cxp">Cuenta por pagar</TabsTrigger>}
+          <TabsTrigger value="notas">Notas Cr/Db</TabsTrigger>
         </TabsList>
 
         {/* ═══ TAB: Info ═══ */}
@@ -442,6 +453,11 @@ export default function PurchaseDetailPage() {
             </div>
           </TabsContent>
         )}
+
+        {/* ═══ TAB: Notas Cr/Db ═══ */}
+        <TabsContent value="notas">
+          <PurchaseNotesTab purchaseOrderId={id} />
+        </TabsContent>
       </Tabs>
 
       {/* Receive Modal */}
@@ -502,6 +518,66 @@ export default function PurchaseDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PurchaseNotesTab({ purchaseOrderId }: { purchaseOrderId: string }) {
+  const router = useRouter();
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch_() {
+      try {
+        const res = await fetch(`/api/proxy/credit-debit-notes?purchaseOrderId=${purchaseOrderId}&limit=50`);
+        const json = await res.json();
+        setNotes(json.data || []);
+      } catch {}
+      setLoading(false);
+    }
+    fetch_();
+  }, [purchaseOrderId]);
+
+  const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-green-500" size={24} /></div>;
+  if (notes.length === 0) return <div className="text-center py-12 text-slate-500">No hay notas vinculadas a esta orden</div>;
+
+  const TYPE_LABELS_: Record<string, string> = { NCV: 'NC Venta', NDV: 'ND Venta', NCC: 'NC Compra', NDC: 'ND Compra' };
+  const STATUS_LABELS_: Record<string, string> = { DRAFT: 'Borrador', POSTED: 'Confirmada', CANCELLED: 'Anulada' };
+  const STATUS_COLORS_: Record<string, string> = { DRAFT: 'text-amber-400 border-amber-500/30 bg-amber-500/10', POSTED: 'text-green-400 border-green-500/30 bg-green-500/10', CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10' };
+
+  return (
+    <div className="card overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-700/50">
+            <th className="text-left px-4 py-3 text-slate-400 font-medium">Número</th>
+            <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
+            <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+            <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
+            <th className="text-center px-4 py-3 text-slate-400 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {notes.map((n: any) => (
+            <tr key={n.id} className="border-b border-slate-700/30">
+              <td className="px-4 py-3 text-white font-mono">{n.number}</td>
+              <td className="px-4 py-3 text-slate-300">{TYPE_LABELS_[n.type] || n.type}</td>
+              <td className="px-4 py-3 text-right font-mono text-white">$ {fmt(n.totalUsd)}</td>
+              <td className="px-4 py-3 text-center">
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS_[n.status]}`}>{STATUS_LABELS_[n.status]}</span>
+              </td>
+              <td className="px-4 py-3 text-center">
+                <button onClick={() => router.push(`/credit-debit-notes/${n.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                  Ver <ExternalLink size={10} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

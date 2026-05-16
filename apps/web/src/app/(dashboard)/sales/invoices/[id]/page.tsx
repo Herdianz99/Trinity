@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileText, Loader2, Printer, Ban, ExternalLink, DollarSign, X,
+  ArrowLeft, FileText, Loader2, Printer, Ban, ExternalLink, DollarSign, X, FileX2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -208,9 +208,17 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {['PAID', 'CREDIT'].includes(invoice.status) && (
-            <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
-              <Printer size={14} /> Imprimir PDF
-            </button>
+            <>
+              <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
+                <Printer size={14} /> Imprimir PDF
+              </button>
+              <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                <FileX2 size={14} /> Nota de crédito
+              </button>
+              <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                <FileX2 size={14} /> Nota de débito
+              </button>
+            </>
           )}
           {invoice.status === 'PAID' && (
             <button onClick={handleCancel} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
@@ -231,6 +239,7 @@ export default function InvoiceDetailPage() {
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="pagos">Pagos</TabsTrigger>
           {hasReceivables && <TabsTrigger value="cxc">CxC vinculada</TabsTrigger>}
+          <TabsTrigger value="notas">Notas Cr/Db</TabsTrigger>
         </TabsList>
 
         {/* TAB: Informacion General */}
@@ -461,7 +470,72 @@ export default function InvoiceDetailPage() {
             </div>
           </TabsContent>
         )}
+
+        {/* TAB: Notas Cr/Db */}
+        <TabsContent value="notas">
+          <InvoiceNotesTab invoiceId={id} />
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function InvoiceNotesTab({ invoiceId }: { invoiceId: string }) {
+  const router = useRouter();
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch_() {
+      try {
+        const res = await fetch(`/api/proxy/credit-debit-notes?invoiceId=${invoiceId}&limit=50`);
+        const json = await res.json();
+        setNotes(json.data || []);
+      } catch {}
+      setLoading(false);
+    }
+    fetch_();
+  }, [invoiceId]);
+
+  const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-green-500" size={24} /></div>;
+  if (notes.length === 0) return <div className="text-center py-12 text-slate-500">No hay notas vinculadas a esta factura</div>;
+
+  const TYPE_LABELS_: Record<string, string> = { NCV: 'NC Venta', NDV: 'ND Venta', NCC: 'NC Compra', NDC: 'ND Compra' };
+  const STATUS_LABELS_: Record<string, string> = { DRAFT: 'Borrador', POSTED: 'Confirmada', CANCELLED: 'Anulada' };
+  const STATUS_COLORS_: Record<string, string> = { DRAFT: 'text-amber-400 border-amber-500/30 bg-amber-500/10', POSTED: 'text-green-400 border-green-500/30 bg-green-500/10', CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10' };
+
+  return (
+    <div className="card overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-700/50">
+            <th className="text-left px-4 py-3 text-slate-400 font-medium">Número</th>
+            <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
+            <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+            <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
+            <th className="text-center px-4 py-3 text-slate-400 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {notes.map((n: any) => (
+            <tr key={n.id} className="border-b border-slate-700/30">
+              <td className="px-4 py-3 text-white font-mono">{n.number}</td>
+              <td className="px-4 py-3 text-slate-300">{TYPE_LABELS_[n.type] || n.type}</td>
+              <td className="px-4 py-3 text-right font-mono text-white">$ {fmt(n.totalUsd)}</td>
+              <td className="px-4 py-3 text-center">
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS_[n.status]}`}>{STATUS_LABELS_[n.status]}</span>
+              </td>
+              <td className="px-4 py-3 text-center">
+                <button onClick={() => router.push(`/credit-debit-notes/${n.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                  Ver <ExternalLink size={10} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
