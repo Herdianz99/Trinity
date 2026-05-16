@@ -399,6 +399,31 @@ export class InvoicesService {
       }
     }
 
+    // Stock validation: if allowNegativeStock is false, check stock before proceeding
+    if (config && config.allowNegativeStock === false) {
+      const productIds = invoice.items.map(i => i.productId);
+      const stocks = await this.prisma.stock.findMany({
+        where: { productId: { in: productIds }, warehouseId: warehouseId! },
+        include: { product: { select: { name: true, saleUnit: true } } },
+      });
+      const stockMap = new Map(stocks.map(s => [s.productId, s]));
+
+      const insufficientItems: string[] = [];
+      for (const item of invoice.items) {
+        const stockRecord = stockMap.get(item.productId);
+        const available = stockRecord?.quantity ?? 0;
+        if (available < item.quantity) {
+          const name = stockRecord?.product?.name || item.productName;
+          const unit = stockRecord?.product?.saleUnit || 'und';
+          insufficientItems.push(`Stock insuficiente para '${name}'. Stock disponible: ${available} ${unit}`);
+        }
+      }
+
+      if (insufficientItems.length > 0) {
+        throw new BadRequestException(insufficientItems.join('. '));
+      }
+    }
+
     // IGTF: se calcula UNA sola vez por factura, sobre el primer pago en divisas
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;

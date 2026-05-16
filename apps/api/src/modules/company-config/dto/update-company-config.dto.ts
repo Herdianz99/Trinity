@@ -86,4 +86,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsString()
   creditAuthPassword?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  allowNegativeStock?: boolean;
 }

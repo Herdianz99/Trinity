@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
+import { sendToFiscalPrinter } from '@/lib/fiscal-printer';
 
 interface PaymentMethodOption {
   id: string;
@@ -53,6 +54,8 @@ export default function CashDetailPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [historyDetail, setHistoryDetail] = useState<any>(null);
   const [loadingHistoryDetail, setLoadingHistoryDetail] = useState(false);
+
+  const [reportLoading, setReportLoading] = useState<'X' | 'Z' | null>(null);
 
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -189,6 +192,20 @@ export default function CashDetailPage() {
       setHistoryDetail(data);
     } catch {}
     setLoadingHistoryDetail(false);
+  }
+
+  async function handleFiscalReport(type: 'X' | 'Z') {
+    setReportLoading(type);
+    setMessage(null);
+    try {
+      const command = type === 'X' ? 'I0X' : 'I0Z';
+      await sendToFiscalPrinter([command]);
+      setMessage({ type: 'success', text: `Reporte ${type} enviado correctamente` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || `Error al enviar Reporte ${type}` });
+    } finally {
+      setReportLoading(null);
+    }
   }
 
   // Calculate close modal difference
@@ -411,11 +428,21 @@ export default function CashDetailPage() {
           <div className="flex justify-end gap-3 mt-4">
             {register.isFiscal && (
               <>
-                <button className="px-4 py-2 text-sm rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors">
-                  <FileText size={14} className="inline mr-1.5" />Reporte X
+                <button
+                  onClick={() => handleFiscalReport('X')}
+                  disabled={reportLoading !== null}
+                  className="px-4 py-2 text-sm rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {reportLoading === 'X' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  Reporte X
                 </button>
-                <button className="px-4 py-2 text-sm rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors">
-                  <FileText size={14} className="inline mr-1.5" />Reporte Z
+                <button
+                  onClick={() => handleFiscalReport('Z')}
+                  disabled={reportLoading !== null}
+                  className="px-4 py-2 text-sm rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {reportLoading === 'Z' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  Reporte Z
                 </button>
               </>
             )}

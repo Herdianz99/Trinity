@@ -101,7 +101,7 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string } | null>(null);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean } | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
@@ -183,6 +183,7 @@ export default function POSPage() {
           rif: data.rif || '',
           address: data.address || '',
           phone: data.phone || '',
+          allowNegativeStock: data.allowNegativeStock ?? true,
         });
       });
     fetch('/api/proxy/payment-methods')
@@ -341,6 +342,11 @@ export default function POSPage() {
   }, [customerSearch]);
 
   function addToCart(product: any) {
+    const stockQty = product.stock?.[0]?.quantity || 0;
+    const blockNoStock = companyConfig?.allowNegativeStock === false;
+
+    if (blockNoStock && stockQty <= 0) return;
+
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
@@ -354,7 +360,7 @@ export default function POSPage() {
         originalPrice: product.priceDetal,
         quantity: 1,
         ivaType: product.ivaType,
-        stock: product.stock?.[0]?.quantity || 0,
+        stock: stockQty,
         priceOverridden: false,
         discountPct: 0,
       }];
@@ -1008,11 +1014,15 @@ export default function POSPage() {
         {/* Search results */}
         {searchResults.length > 0 && (
           <div className="card mb-3 max-h-80 overflow-y-auto">
-            {searchResults.map(product => (
+            {searchResults.map(product => {
+              const prodStock = product.stock?.[0]?.quantity || 0;
+              const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+              return (
               <button
                 key={product.id}
                 onClick={() => addToCart(product)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700/40 border-b border-slate-700/30 last:border-0 text-left transition-colors"
+                disabled={blockNoStock}
+                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${blockNoStock ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700/40'}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1026,13 +1036,18 @@ export default function POSPage() {
                     <div className="text-sm font-medium text-green-400">${product.priceDetal?.toFixed(2)}</div>
                     <div className="text-xs text-slate-500">Bs {(product.priceDetal * exchangeRate).toFixed(2)}</div>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${(product.stock?.[0]?.quantity || 0) > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
-                    Stock: {product.stock?.[0]?.quantity || 0}
-                  </span>
-                  <Plus size={18} className="text-green-400" />
+                  {blockNoStock ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full text-red-400 bg-red-500/10 border border-red-500/20 font-medium">Sin stock</span>
+                  ) : (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                      Stock: {prodStock}
+                    </span>
+                  )}
+                  <Plus size={18} className={blockNoStock ? 'text-slate-600' : 'text-green-400'} />
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -1168,6 +1183,9 @@ export default function POSPage() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20">-{item.discountPct}%</span>
                     )}
                   </div>
+                  {companyConfig?.allowNegativeStock === false && item.quantity > item.stock && (
+                    <p className="text-[10px] text-red-400 mt-0.5">Stock disponible: {item.stock}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => updateQuantity(item.productId, -1)} className="p-1 rounded hover:bg-slate-600 text-slate-400">

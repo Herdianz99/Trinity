@@ -20,6 +20,7 @@ interface CompanyConfig {
   islrRetentionPct: number;
   isIGTFContributor: boolean;
   igtfPct: number;
+  allowNegativeStock: boolean;
 }
 
 export default function ConfigPage() {
@@ -40,6 +41,7 @@ export default function ConfigPage() {
     islrRetentionPct: 0,
     isIGTFContributor: false,
     igtfPct: 3,
+    allowNegativeStock: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,6 +112,7 @@ export default function ConfigPage() {
           islrRetentionPct: data.islrRetentionPct ?? 0,
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
+          allowNegativeStock: data.allowNegativeStock ?? true,
         });
       }
     } catch {
@@ -160,6 +163,7 @@ export default function ConfigPage() {
           islrRetentionPct: Number(config.islrRetentionPct),
           isIGTFContributor: config.isIGTFContributor,
           igtfPct: Number(config.igtfPct),
+          allowNegativeStock: config.allowNegativeStock,
           ...(creditAuthPassword ? { creditAuthPassword } : {}),
         }),
       });
@@ -502,6 +506,28 @@ export default function ConfigPage() {
                   <p className="text-xs text-slate-500 mt-1">Actualmente 3% por ley venezolana</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Sales config */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Ventas</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Configuracion general de ventas y facturacion.
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.allowNegativeStock}
+                  onChange={(e) => handleChange('allowNegativeStock', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Permitir ventas sin stock</span>
+                  <p className="text-xs text-slate-500">Si esta desactivado, no se podran facturar productos con stock insuficiente</p>
+                </div>
+              </label>
             </div>
           </div>
 

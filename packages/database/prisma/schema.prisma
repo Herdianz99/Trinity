@@ -129,6 +129,7 @@ model CompanyConfig {
   isIGTFContributor      Boolean  @default(false)
   igtfPct                Float    @default(3)
   fiscalCreditCode       String   @default("01")
+  allowNegativeStock     Boolean  @default(true)
   updatedAt              DateTime @updatedAt
 }
 
