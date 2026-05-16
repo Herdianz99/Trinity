@@ -1,5 +1,52 @@
 # Trinity ERP — Progreso
 
+## Sesion 27 — Notas de Crédito y Débito (Completada)
+
+### Migracion de base de datos
+- Nuevos enums: `NoteType` (NCV, NDV, NCC, NDC), `NoteOrigin` (MERCHANDISE, MANUAL), `NoteStatus` (DRAFT, POSTED, CANCELLED)
+- Agregado `RETURN_IN`, `RETURN_OUT` a `MovementType`
+- Nuevo modelo `CreditDebitNote`: numero, tipo, origen, status, factura/OC vinculada, subtotales/IVA/total en USD y Bs, tasa, monto manual o porcentaje
+- Nuevo modelo `CreditDebitNoteItem`: producto, cantidad, precios unitarios, IVA, totales
+- Relaciones: `creditDebitNotes` en Invoice, PurchaseOrder y CashRegister
+
+### Backend (NestJS)
+- Nuevo modulo `CreditDebitNotesModule` con endpoints:
+  - `GET /credit-debit-notes` — lista con filtros: type, status, invoiceId, purchaseOrderId, search, from, to, page, limit
+  - `GET /credit-debit-notes/:id` — detalle con items y documento vinculado
+  - `POST /credit-debit-notes` — crear nota en DRAFT:
+    - MERCHANDISE: valida items originales, calcula precios sin IVA, IVA, totales
+    - MANUAL: monto fijo o porcentaje del documento padre, IVA proporcional
+    - Genera correlativo: NCV-0001, NDV-0001, NCC-0001, NDC-0001
+  - `POST /credit-debit-notes/:id/post` — confirmar nota (transaccion):
+    - NCV: RETURN_IN inventario + reduce CxC
+    - NDV: crea nueva CxC al cliente
+    - NCC: RETURN_OUT inventario + reduce CxP
+    - NDC: crea nueva CxP al proveedor
+  - `PATCH /credit-debit-notes/:id/cancel` — anular nota DRAFT
+  - `GET /credit-debit-notes/:id/pdf` — PDF con PDFKit
+- DTOs: CreateNoteDto (type, origin, items, manualAmountUsd, manualPct), QueryNotesDto
+
+### Frontend (Next.js)
+- Sidebar: "Notas Cr/Db" en seccion VENTAS con icono FileX2
+- `/credit-debit-notes` — lista con filtros tipo, estado, fecha, busqueda por numero, paginacion
+- `/credit-debit-notes/new?type=NCV&invoiceId=xxx` — crear nota:
+  - Muestra datos del documento origen (factura/OC)
+  - Tab "Devolucion de mercancia": tabla items con cantidad editable, totales en tiempo real
+  - Tab "Ajuste manual": monto fijo o porcentaje con calculo automatico
+  - Resumen con subtotal, IVA, total USD/Bs
+  - Botones: "Guardar borrador" y "Crear y confirmar"
+- `/credit-debit-notes/[id]` — detalle:
+  - Tab "Informacion General": tipo, origen, documento vinculado, items o detalle manual, totales
+  - Tab "Efectos contables": muestra efectos en inventario y CxC/CxP segun tipo
+  - Botones: Confirmar (DRAFT), Anular (DRAFT), Imprimir PDF (POSTED)
+- Factura detalle (`/sales/invoices/[id]`): botones "Nota de credito"/"Nota de debito" + tab "Notas Cr/Db"
+- OC detalle (`/purchases/[id]`): botones "Nota de credito"/"Nota de debito" + tab "Notas Cr/Db"
+
+### Pendientes para futuras sesiones
+- Validacion IGTF: si NCV y factura tiene IGTF, total debe == factura.totalUsd (solo reversal completo)
+- Fiscal: enviar a impresora fiscal al confirmar
+- Acumular notas: validar que suma de notas previas + nueva no exceda total del documento
+
 ## Sesion 26 — Recibos de Cobro y Pago con Diferencial Cambiario (Completada)
 
 ### Migracion de base de datos
