@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import * as https from 'https';
+import * as cheerio from 'cheerio';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { UserRole } from '@prisma/client';
@@ -96,7 +97,6 @@ export class ExchangeRateService {
   async fetchFromBcv(): Promise<number | null> {
     try {
       const html = await this.fetchBcvHtml();
-      const cheerio = await import('cheerio');
       const $ = cheerio.load(html);
 
       // The BCV page has the dollar rate inside #dolar strong
