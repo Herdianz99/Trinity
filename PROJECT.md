@@ -726,7 +726,8 @@ model QuotationItem {
 #### Sesión 13 — Despliegue en DigitalOcean ✅
 #### Sesión 14 — IGTF y Estandarización de Montos en Bs ✅
 #### Sesión 15 — UX Correctiva: Paginas dedicadas con Tabs ✅
-#### Sesiones 16-18 — Por definir
+#### Sesión 16 — Lazy Loading Tabs + Montos Bs estandarizados ✅
+#### Sesión 26 — Recibos de Cobro/Pago con Diferencial Cambiario ✅
 
 ---
 

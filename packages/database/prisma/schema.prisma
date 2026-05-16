@@ -105,6 +105,23 @@ enum PayableStatus {
   OVERDUE
 }
 
+enum ReceiptType {
+  COLLECTION
+  PAYMENT
+}
+
+enum ReceiptStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum ReceiptItemType {
+  RECEIVABLE
+  PAYABLE
+  DIFFERENTIAL
+}
+
 // ============================================
 // CONFIG
 // ============================================
@@ -261,6 +278,7 @@ model Supplier {
   products         Product[]
   purchaseOrders   PurchaseOrder[]
   payables         Payable[]
+  receipts         Receipt[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -465,6 +483,7 @@ model Customer {
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]
+  receipts     Receipt[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -487,6 +506,7 @@ model PaymentMethod {
   payments           Payment[]
   receivablePayments ReceivablePayment[]
   payablePayments    PayablePayment[]
+  receiptPayments    ReceiptPayment[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
@@ -631,6 +651,7 @@ model Receivable {
   paidAt        DateTime?
   notes         String?
   payments      ReceivablePayment[]
+  receiptItems  ReceiptItem[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 }
@@ -675,6 +696,7 @@ model Payable {
   paidAt          DateTime?
   notes           String?
   payments        PayablePayment[]
+  receiptItems    ReceiptItem[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -691,6 +713,64 @@ model PayablePayment {
   reference    String?
   notes        String?
   createdById  String
+  createdAt    DateTime      @default(now())
+}
+
+// ============================================
+// RECIBOS DE COBRO / PAGO
+// ============================================
+
+model Receipt {
+  id              String          @id @default(cuid())
+  number          String          @unique
+  type            ReceiptType
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  supplierId      String?
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id])
+  status          ReceiptStatus   @default(DRAFT)
+  totalUsd        Float           @default(0)
+  totalBsHistoric Float           @default(0)
+  totalBsToday    Float           @default(0)
+  exchangeRate    Float           @default(0)
+  differentialBs  Float           @default(0)
+  hasDifferential Boolean         @default(false)
+  notes           String?
+  items           ReceiptItem[]
+  payments        ReceiptPayment[]
+  cashSessionId   String?
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model ReceiptItem {
+  id               String          @id @default(cuid())
+  receiptId        String
+  receipt          Receipt         @relation(fields: [receiptId], references: [id])
+  itemType         ReceiptItemType
+  receivableId     String?
+  receivable       Receivable?     @relation(fields: [receivableId], references: [id])
+  payableId        String?
+  payable          Payable?        @relation(fields: [payableId], references: [id])
+  description      String
+  amountUsd        Float           @default(0)
+  amountBsHistoric Float           @default(0)
+  amountBsToday    Float           @default(0)
+  differentialBs   Float           @default(0)
+  sign             Int             @default(1)
+}
+
+model ReceiptPayment {
+  id           String        @id @default(cuid())
+  receiptId    String
+  receipt      Receipt       @relation(fields: [receiptId], references: [id])
+  methodId     String
+  method       PaymentMethod @relation(fields: [methodId], references: [id])
+  amountUsd    Float         @default(0)
+  amountBs     Float         @default(0)
+  exchangeRate Float         @default(0)
+  reference    String?
   createdAt    DateTime      @default(now())
 }
 

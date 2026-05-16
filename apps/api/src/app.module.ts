@@ -30,6 +30,7 @@ import { RedisModule } from './redis/redis.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
 import { SellersModule } from './modules/sellers/sellers.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
+import { ReceiptsModule } from './modules/receipts/receipts.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.
     RolePermissionsModule,
     SellersModule,
     PaymentMethodsModule,
+    ReceiptsModule,
   ],
 })
 export class AppModule {}

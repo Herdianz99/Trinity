@@ -1,5 +1,54 @@
 # Trinity ERP — Progreso
 
+## Sesion 26 — Recibos de Cobro y Pago con Diferencial Cambiario (Completada)
+
+### Migracion de base de datos
+- Nuevos enums: `ReceiptType` (COLLECTION, PAYMENT), `ReceiptStatus` (DRAFT, POSTED, CANCELLED), `ReceiptItemType` (RECEIVABLE, PAYABLE, DIFFERENTIAL)
+- Nuevo modelo `Receipt`: numero, tipo, cliente/proveedor, totales USD/Bs historico/Bs hoy, tasa del dia, diferencial cambiario, items, pagos
+- Nuevo modelo `ReceiptItem`: tipo documento (CxC/CxP/Diferencial), montos USD y Bs, signo (+1/-1)
+- Nuevo modelo `ReceiptPayment`: metodo de pago, montos USD/Bs, referencia
+- Relaciones agregadas: `receiptItems` en Receivable y Payable, `receipts` en Customer y Supplier, `receiptPayments` en PaymentMethod
+- Migracion: `20260516000000_add_receipts_module`
+
+### Backend (NestJS)
+- Nuevo modulo `ReceiptsModule` con endpoints:
+  - `GET /receipts` — lista con filtros: type, status, customerId, supplierId, from, to, page, limit
+  - `GET /receipts/pending-documents?type&entityId` — documentos pendientes (CxC o CxP) de un cliente/proveedor
+  - `GET /receipts/:id` — detalle completo con items, pagos, cliente/proveedor
+  - `POST /receipts` — crear recibo en borrador:
+    - Obtiene tasa del dia (error si no existe)
+    - Por cada item: calcula amountBsHistoric (proporcional al original) y amountBsToday (USD x tasa hoy)
+    - Calcula totales y diferencial cambiario (totalBsToday - totalBsHistoric)
+    - Si diferencial != 0 → crea item adicional tipo DIFFERENTIAL
+    - Genera numero correlativo: RCB-XXXX (cobro) o RPG-XXXX (pago)
+  - `POST /receipts/:id/post` — confirmar y procesar recibo:
+    - Valida que suma de pagos >= saldo neto
+    - Por cada item RECEIVABLE → crea ReceivablePayment y actualiza estado
+    - Por cada item PAYABLE → crea PayablePayment y actualiza estado
+    - Items DIFFERENTIAL no generan movimiento en CxC/CxP
+    - Registra pagos del recibo, cambia status a POSTED
+    - Todo en transaccion Prisma
+  - `PATCH /receipts/:id/cancel` — cancelar recibo DRAFT unicamente
+
+### Frontend (Next.js)
+- Sidebar: "Recibos de cobro" bajo CxC, "Recibos de pago" bajo CxP
+- `/receipts/collection` — lista recibos de cobro con filtros, paginacion
+- `/receipts/payment` — lista recibos de pago con filtros, paginacion
+- `/receipts/new?type=COLLECTION|PAYMENT` — crear recibo:
+  - Seccion 1: selector de cliente/proveedor con busqueda
+  - Seccion 2: dos listas lado a lado (pendientes ← → seleccionados)
+    - CxC con fondo verde, CxP con fondo rojo
+    - Monto editable para abonos parciales
+    - Columna "Bs a tasa hoy" en seleccionados
+  - Seccion 3: resumen con totales USD, Bs historico, tasa, Bs hoy, diferencial cambiario
+    - Indicador "SE COBRA" (verde) o "SE PAGA" (rojo)
+    - Botones "Guardar borrador" y "Procesar recibo"
+  - Modal de cobro/pago: multiples metodos, monto pre-llenado, referencia
+- `/receipts/[id]` — detalle con tabs:
+  - Tab "Informacion General": datos recibo, tabla documentos (con fila diferencial en amarillo), totales
+  - Tab "Pagos registrados": tabla metodos de pago usados
+  - Botones: Procesar (DRAFT), Cancelar (DRAFT)
+
 ## Sesion 25 — Rediseno modulo de cajas con sesiones compartidas/exclusivas (Completada)
 
 ### Migracion de base de datos

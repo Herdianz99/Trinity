@@ -123,6 +123,7 @@ const menuSections: MenuSection[] = [
     permission: 'receivables',
     items: [
       { label: 'Cuentas por cobrar', href: '/receivables', icon: <HandCoins size={18} /> },
+      { label: 'Recibos de cobro', href: '/receipts/collection', icon: <FileText size={18} /> },
       { label: 'Por plataforma', href: '/receivables/platforms', icon: <CreditCard size={18} /> },
     ],
   },
@@ -133,6 +134,7 @@ const menuSections: MenuSection[] = [
     permission: 'payables',
     items: [
       { label: 'Cuentas por pagar', href: '/payables', icon: <Receipt size={18} /> },
+      { label: 'Recibos de pago', href: '/receipts/payment', icon: <FileText size={18} /> },
     ],
   },
   {
