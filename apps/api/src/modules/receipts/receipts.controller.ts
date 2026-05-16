@@ -6,12 +6,15 @@ import {
   Param,
   Body,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReceiptsService } from './receipts.service';
+import { ReceiptPdfService } from './receipt-pdf.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
@@ -21,7 +24,10 @@ import { QueryReceiptsDto } from './dto/query-receipts.dto';
 @UseGuards(AuthGuard('jwt'))
 @Controller('receipts')
 export class ReceiptsController {
-  constructor(private readonly receiptsService: ReceiptsService) {}
+  constructor(
+    private readonly receiptsService: ReceiptsService,
+    private readonly pdfService: ReceiptPdfService,
+  ) {}
 
   @Get()
   findAll(@Query() query: QueryReceiptsDto) {
@@ -34,6 +40,17 @@ export class ReceiptsController {
     @Query('entityId') entityId: string,
   ) {
     return this.receiptsService.getPendingDocuments(type, entityId);
+  }
+
+  @Get(':id/pdf')
+  async getPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generatePdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="recibo-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id')

@@ -173,7 +173,13 @@ export default function ReceiptDetailPage() {
   };
 
   const addPaymentLine = () => {
-    setPaymentLines((prev) => [...prev, { methodId: '', methodName: '', isDivisa: false, amountUsd: 0, amountBs: 0, reference: '' }]);
+    setPaymentLines((prev) => {
+      const netAbsUsd = Math.abs(receipt?.totalUsd || 0);
+      const usedUsd = prev.reduce((s, l) => s + l.amountUsd, 0);
+      const remainingUsd = Math.max(0, Math.round((netAbsUsd - usedUsd) * 100) / 100);
+      const remainingBs = Math.round(remainingUsd * todayRate * 100) / 100;
+      return [...prev, { methodId: '', methodName: '', isDivisa: false, amountUsd: remainingUsd, amountBs: remainingBs, reference: '' }];
+    });
   };
 
   const removePaymentLine = (index: number) => {
@@ -294,6 +300,17 @@ export default function ReceiptDetailPage() {
                 Cancelar
               </button>
             </>
+          )}
+          {receipt.status === 'POSTED' && (
+            <a
+              href={`/api/proxy/receipts/${id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+            >
+              <Printer size={16} />
+              Imprimir PDF
+            </a>
           )}
         </div>
       </div>

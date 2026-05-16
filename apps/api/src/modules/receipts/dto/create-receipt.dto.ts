@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsArray, ValidateNested, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ReceiptItemDto {
@@ -16,11 +16,11 @@ class ReceiptItemDto {
 
   @IsOptional()
   @IsNumber()
-  amountUsd?: number; // for partial payments
+  amountUsd?: number;
 }
 
 export class CreateReceiptDto {
-  @IsEnum(['COLLECTION', 'PAYMENT'])
+  @IsIn(['COLLECTION', 'PAYMENT'])
   type: 'COLLECTION' | 'PAYMENT';
 
   @IsOptional()

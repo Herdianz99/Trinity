@@ -342,7 +342,13 @@ export default function NewReceiptPage() {
 
   // Payment line helpers
   const addPaymentLine = () => {
-    setPaymentLines((prev) => [...prev, { methodId: '', methodName: '', isDivisa: false, amountUsd: 0, amountBs: 0, reference: '' }]);
+    setPaymentLines((prev) => {
+      const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
+      const usedUsd = prev.reduce((s, l) => s + l.amountUsd, 0);
+      const remainingUsd = Math.max(0, Math.round((netAbsUsd - usedUsd) * 100) / 100);
+      const remainingBs = Math.round(remainingUsd * todayRate * 100) / 100;
+      return [...prev, { methodId: '', methodName: '', isDivisa: false, amountUsd: remainingUsd, amountBs: remainingBs, reference: '' }];
+    });
   };
 
   const removePaymentLine = (index: number) => {

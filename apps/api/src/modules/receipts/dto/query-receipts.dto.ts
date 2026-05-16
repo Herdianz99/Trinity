@@ -1,12 +1,12 @@
-import { IsOptional, IsString, IsEnum, IsNumberString } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsNumber } from 'class-validator';
 
 export class QueryReceiptsDto {
   @IsOptional()
-  @IsEnum(['COLLECTION', 'PAYMENT'])
+  @IsIn(['COLLECTION', 'PAYMENT'])
   type?: 'COLLECTION' | 'PAYMENT';
 
   @IsOptional()
-  @IsEnum(['DRAFT', 'POSTED', 'CANCELLED'])
+  @IsIn(['DRAFT', 'POSTED', 'CANCELLED'])
   status?: 'DRAFT' | 'POSTED' | 'CANCELLED';
 
   @IsOptional()
@@ -26,10 +26,10 @@ export class QueryReceiptsDto {
   to?: string;
 
   @IsOptional()
-  @IsNumberString()
+  @IsNumber()
   page?: number;
 
   @IsOptional()
-  @IsNumberString()
+  @IsNumber()
   limit?: number;
 }
