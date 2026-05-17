@@ -522,14 +522,14 @@ export class InvoicesService {
 
         // Handle SALDO_A_FAVOR: consume customer's unapplied NCV notes
         if (payment.methodId === 'pm_saldo_favor' && invoice.customerId) {
-          let remaining = payment.amountUsd;
           const customerInvoices = await tx.invoice.findMany({
             where: { customerId: invoice.customerId },
             select: { id: true },
           });
           const invIds = customerInvoices.map((i) => i.id);
+          let creditNotes: any[] = [];
           if (invIds.length > 0) {
-            const creditNotes = await tx.creditDebitNote.findMany({
+            creditNotes = await tx.creditDebitNote.findMany({
               where: {
                 invoiceId: { in: invIds },
                 type: 'NCV',
@@ -538,15 +538,22 @@ export class InvoicesService {
               },
               orderBy: { createdAt: 'asc' },
             });
-            for (const note of creditNotes) {
-              if (remaining <= 0) break;
-              const used = Math.min(remaining, note.totalUsd);
-              remaining -= used;
-              await tx.creditDebitNote.update({
-                where: { id: note.id },
-                data: { appliedAt: new Date() },
-              });
-            }
+          }
+          const availableBalance = creditNotes.reduce((sum, n) => sum + n.totalUsd, 0);
+          if (payment.amountUsd > availableBalance + 0.01) {
+            throw new BadRequestException(
+              `El monto excede el saldo a favor disponible del cliente ($${availableBalance.toFixed(2)})`,
+            );
+          }
+          let remaining = payment.amountUsd;
+          for (const note of creditNotes) {
+            if (remaining <= 0) break;
+            const used = Math.min(remaining, note.totalUsd);
+            remaining -= used;
+            await tx.creditDebitNote.update({
+              where: { id: note.id },
+              data: { appliedAt: new Date() },
+            });
           }
         }
       }

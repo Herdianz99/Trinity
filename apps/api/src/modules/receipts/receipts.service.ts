@@ -617,7 +617,7 @@ export class ReceiptsService {
         description: `${n.number} (${n.invoice?.number || ''})`,
         date: n.createdAt,
         amountUsd: n.totalUsd,
-        amountBs: n.totalBs,
+        amountBsHistoric: n.totalBs,
         exchangeRate: n.exchangeRate,
         balanceUsd: n.totalUsd,
         status: 'POSTED',

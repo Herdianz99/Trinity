@@ -111,7 +111,7 @@ export default function NewReceiptPage() {
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
   const [processing, setProcessing] = useState(false);
 
-  const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Fetch today's rate
   useEffect(() => {

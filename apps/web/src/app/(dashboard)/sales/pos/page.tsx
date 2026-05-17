@@ -449,9 +449,14 @@ export default function POSPage() {
   function updatePayment(idx: number, field: string, value: any) {
     setPayments(prev => prev.map((p, i) => {
       if (i !== idx) return p;
-      const updated = { ...p, [field]: value };
+      let numValue = Number(value);
+      // Cap saldo a favor to available balance
+      if (p.methodId === 'pm_saldo_favor' && field === 'amountUsd' && creditBalance) {
+        numValue = Math.min(numValue, creditBalance.totalUsd);
+      }
+      const updated = { ...p, [field]: p.methodId === 'pm_saldo_favor' && field === 'amountUsd' ? numValue : value };
       if (field === 'amountUsd' && p.isDivisa) {
-        updated.amountBs = Math.round(Number(value) * exchangeRate * 100) / 100;
+        updated.amountBs = Math.round(Number(updated.amountUsd) * exchangeRate * 100) / 100;
       } else if (field === 'amountBs' && !p.isDivisa) {
         updated.amountUsd = exchangeRate > 0 ? Math.round(Number(value) / exchangeRate * 100) / 100 : 0;
       }
@@ -1390,7 +1395,7 @@ export default function POSPage() {
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {paymentMethods.filter(pm => pm.isActive).map(pm => (
+                  {paymentMethods.filter(pm => pm.isActive && pm.id !== 'pm_saldo_favor').map(pm => (
                     pm.children && pm.children.filter(c => c.isActive).length > 0 ? (
                       <div key={pm.id} className="relative">
                         <button
@@ -1427,7 +1432,7 @@ export default function POSPage() {
               </div>
 
               {/* Credit balance banner */}
-              {creditBalance?.hasBalance && remaining > 0.01 && (
+              {creditBalance?.hasBalance && remaining > 0.01 && !payments.some(p => p.methodId === 'pm_saldo_favor') && (
                 <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                   <div>
                     <span className="text-sm text-green-300 font-medium">Saldo a favor del cliente</span>
@@ -1473,6 +1478,7 @@ export default function POSPage() {
                             className="input-field !py-1.5 text-sm"
                             step="0.01"
                             min="0"
+                            max={p.methodId === 'pm_saldo_favor' && creditBalance ? creditBalance.totalUsd : undefined}
                             readOnly={!p.isDivisa}
                           />
                         </div>
