@@ -62,6 +62,8 @@ fi
 log "Aplicando migraciones de base de datos..."
 cd "$PROJECT_DIR"
 SCHEMA="packages/database/prisma/schema.prisma"
+# Cargar DATABASE_URL desde .env (prisma no lo encuentra desde la ruta .pnpm/)
+export $(grep -E '^DATABASE_URL=' "$PROJECT_DIR/.env" | xargs)
 echo "  Usando prisma: $PRISMA_BIN"
 echo "  Schema: $SCHEMA"
 if timeout 120 "$PRISMA_BIN" migrate deploy --schema="$SCHEMA" 2>&1; then
