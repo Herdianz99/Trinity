@@ -15,6 +15,8 @@ interface Note {
   status: string;
   totalUsd: number;
   totalBs: number;
+  paidAmountUsd: number;
+  appliedAt: string | null;
   createdAt: string;
   invoice: { id: string; number: string; customer: { name: string } | null } | null;
   purchaseOrder: { id: string; number: string; supplier: { name: string } | null } | null;
@@ -152,6 +154,7 @@ export default function CreditDebitNotesPage() {
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Doc. Origen</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Entidad</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
+                <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Acción</th>
@@ -177,6 +180,19 @@ export default function CreditDebitNotesPage() {
                     {note.invoice?.customer?.name || note.purchaseOrder?.supplier?.name || '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-white font-mono">$ {fmt(note.totalUsd)}</td>
+                  <td className="px-4 py-3 text-right font-mono">
+                    {note.status === 'POSTED' && !note.appliedAt ? (
+                      note.paidAmountUsd > 0 ? (
+                        <span className="text-amber-400">$ {fmt(note.totalUsd - note.paidAmountUsd)}</span>
+                      ) : (
+                        <span className="text-green-400">$ {fmt(note.totalUsd)}</span>
+                      )
+                    ) : note.appliedAt ? (
+                      <span className="text-slate-500">$ 0,00</span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[note.status]}`}>
                       {STATUS_LABELS[note.status]}

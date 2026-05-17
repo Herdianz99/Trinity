@@ -21,6 +21,8 @@ interface NoteDetail {
   ivaBs: number;
   totalBs: number;
   exchangeRate: number;
+  paidAmountUsd: number;
+  appliedAt: string | null;
   manualAmountUsd: number | null;
   manualPct: number | null;
   notes: string | null;
@@ -350,6 +352,56 @@ export default function CreditDebitNoteDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Balance / Saldo pendiente */}
+          {note.status === 'POSTED' && (
+            <div className="card p-5 mt-4">
+              <h3 className="text-xs text-slate-500 uppercase mb-3">Saldo de la nota</h3>
+              {(() => {
+                const remaining = Math.round((note.totalUsd - (note.paidAmountUsd || 0)) * 100) / 100;
+                const paidPct = note.totalUsd > 0 ? Math.round(((note.paidAmountUsd || 0) / note.totalUsd) * 100) : 0;
+                const isFullyApplied = !!note.appliedAt || remaining <= 0.01;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-500">Monto total</p>
+                        <p className="text-white font-mono">$ {fmt(note.totalUsd)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Consumido</p>
+                        <p className="text-white font-mono">$ {fmt(note.paidAmountUsd || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Saldo pendiente</p>
+                        <p className={`font-mono font-bold ${isFullyApplied ? 'text-slate-500' : 'text-green-400'}`}>
+                          $ {fmt(remaining)}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-slate-500">Progreso de consumo</span>
+                        <span className="text-xs text-slate-400">{paidPct}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${isFullyApplied ? 'bg-slate-500' : 'bg-green-500'}`}
+                          style={{ width: `${Math.min(paidPct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    {isFullyApplied && (
+                      <div className="p-2.5 rounded-lg bg-slate-500/10 border border-slate-500/20 text-slate-400 text-xs">
+                        Esta nota ha sido completamente consumida.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Notes */}
           {note.notes && (
