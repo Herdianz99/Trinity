@@ -1,5 +1,44 @@
 # Trinity ERP — Progreso
 
+## Sesion 33 — Cliente por defecto, notas en recibos y saldo a favor (Completada)
+
+### Migracion de base de datos
+- `20260516250000_add_missing_tables`: Crea tablas faltantes (CreditDebitNote, CreditDebitNoteItem, PrintArea, PrintJob, PriceAdjustmentLog) que existian via db push pero sin migracion
+- `20260517200000_add_default_customer_config`: Agrega `isDefault` a Customer y `defaultCustomerId` a CompanyConfig
+
+### Schema
+- Customer: nuevo campo `isDefault Boolean @default(false)`
+- CompanyConfig: nuevo campo `defaultCustomerId String?`
+
+### Backend (NestJS)
+- **InvoicesService.create()**: Auto-asigna `defaultCustomerId` de CompanyConfig cuando no se proporciona cliente
+- **InvoicesService.pay()**: Soporte para metodo `pm_saldo_favor` — consume NCV (notas de credito venta) no aplicadas del cliente, marcando `appliedAt`
+- **CustomersService.getCreditBalance()**: Nuevo metodo que calcula saldo a favor del cliente basado en NCV POSTED sin aplicar
+- **CustomersController**: Nuevo endpoint `GET /customers/:id/credit-balance`
+- **UpdateCompanyConfigDto**: Nuevo campo `defaultCustomerId?: string | null`
+
+### Frontend (Next.js)
+- **Config page** (`/config`):
+  - Nueva seccion "Cliente por defecto" con combobox de busqueda
+  - Muestra cliente seleccionado con badge verde
+  - Busqueda con debounce y dropdown de resultados
+  - Guarda `defaultCustomerId` en CompanyConfig
+- **Receipts** (`/receipts/new`):
+  - Fix: NCV/NDV ahora aparecen en documentos pendientes al crear recibo
+  - Merge de `json.notes` con `json.receivables` en fetchPendingDocs
+  - Correccion de logica de signo para notas (NCV=-1, NDV=+1)
+  - Inclusion de `creditDebitNoteId` en payload de creacion
+- **POS** (`/sales/pos`):
+  - Fetch automatico de saldo a favor al seleccionar cliente
+  - Badge verde junto al nombre del cliente mostrando saldo disponible
+  - Banner en modal de pago con boton "Usar saldo" que agrega pago tipo `pm_saldo_favor`
+  - Monto auto-calculado como minimo entre saldo y monto pendiente
+
+### Seed
+- Nuevo cliente por defecto: `***CLIENTE FINAL***` (isDefault: true)
+- CompanyConfig actualizado con `defaultCustomerId`
+- Nuevo metodo de pago: "Saldo a Favor" (id: `pm_saldo_favor`, sortOrder: 99)
+
 ## Sesion 32 — Sistema de Claves Dinamicas de Autorizacion (Completada)
 
 ### Migracion de base de datos

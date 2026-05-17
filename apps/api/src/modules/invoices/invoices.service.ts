@@ -183,6 +183,12 @@ export class InvoicesService {
     const config = await this.prisma.companyConfig.findFirst();
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
 
+    // Auto-assign default customer if none provided
+    let customerId = dto.customerId || null;
+    if (!customerId && config?.defaultCustomerId) {
+      customerId = config.defaultCustomerId;
+    }
+
     // Determine cash register
     let cashRegisterId = dto.cashRegisterId;
     if (!cashRegisterId) {
@@ -307,7 +313,7 @@ export class InvoicesService {
         data: {
           number: invoiceNumber,
           cashRegisterId,
-          customerId: dto.customerId || null,
+          customerId,
           status,
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
@@ -512,6 +518,36 @@ export class InvoicesService {
               exchangeRate: invoice.exchangeRate,
             },
           });
+        }
+
+        // Handle SALDO_A_FAVOR: consume customer's unapplied NCV notes
+        if (payment.methodId === 'pm_saldo_favor' && invoice.customerId) {
+          let remaining = payment.amountUsd;
+          const customerInvoices = await tx.invoice.findMany({
+            where: { customerId: invoice.customerId },
+            select: { id: true },
+          });
+          const invIds = customerInvoices.map((i) => i.id);
+          if (invIds.length > 0) {
+            const creditNotes = await tx.creditDebitNote.findMany({
+              where: {
+                invoiceId: { in: invIds },
+                type: 'NCV',
+                status: 'POSTED',
+                appliedAt: null,
+              },
+              orderBy: { createdAt: 'asc' },
+            });
+            for (const note of creditNotes) {
+              if (remaining <= 0) break;
+              const used = Math.min(remaining, note.totalUsd);
+              remaining -= used;
+              await tx.creditDebitNote.update({
+                where: { id: note.id },
+                data: { appliedAt: new Date() },
+              });
+            }
+          }
         }
       }
 

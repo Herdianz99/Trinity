@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon, Search, UserCheck, X } from 'lucide-react';
 
 interface CompanyConfig {
   companyName: string;
@@ -21,6 +21,14 @@ interface CompanyConfig {
   isIGTFContributor: boolean;
   igtfPct: number;
   allowNegativeStock: boolean;
+  defaultCustomerId: string;
+}
+
+interface CustomerOption {
+  id: string;
+  name: string;
+  rif: string | null;
+  documentType: string;
 }
 
 export default function ConfigPage() {
@@ -42,6 +50,7 @@ export default function ConfigPage() {
     isIGTFContributor: false,
     igtfPct: 3,
     allowNegativeStock: true,
+    defaultCustomerId: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,6 +78,14 @@ export default function ConfigPage() {
   const [printAreas, setPrintAreas] = useState<{ id: string; name: string }[]>([]);
   const [selectedPrintAreaId, setSelectedPrintAreaId] = useState('');
 
+  // Default customer state
+  const [defaultCustomerName, setDefaultCustomerName] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const customerSearchRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchConfig();
     fetchExchangeRate();
@@ -85,6 +102,38 @@ export default function ConfigPage() {
       }
     } catch { /* ignore */ }
   }
+
+  // Close customer dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (customerSearchRef.current && !customerSearchRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Customer search with debounce
+  useEffect(() => {
+    if (!customerSearch || customerSearch.length < 2) {
+      setCustomerOptions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoadingCustomers(true);
+      try {
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=8`);
+        if (res.ok) {
+          const json = await res.json();
+          setCustomerOptions(json.data || []);
+          setShowCustomerDropdown(true);
+        }
+      } catch { /* ignore */ }
+      finally { setLoadingCustomers(false); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
 
   function handlePrintAreaChange(id: string) {
     setSelectedPrintAreaId(id);
@@ -119,7 +168,17 @@ export default function ConfigPage() {
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
+          defaultCustomerId: data.defaultCustomerId || '',
         });
+        if (data.defaultCustomerId) {
+          try {
+            const custRes = await fetch(`/api/proxy/customers/${data.defaultCustomerId}`);
+            if (custRes.ok) {
+              const cust = await custRes.json();
+              setDefaultCustomerName(cust.name);
+            }
+          } catch { /* ignore */ }
+        }
         if (data.logo) {
           setLogo(data.logo);
           setLogoPreview(data.logo);
@@ -174,6 +233,7 @@ export default function ConfigPage() {
           isIGTFContributor: config.isIGTFContributor,
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
+          defaultCustomerId: config.defaultCustomerId || null,
           ...(creditAuthPassword ? { creditAuthPassword } : {}),
           ...(logoChanged ? { logo } : {}),
         }),
@@ -657,6 +717,76 @@ export default function ConfigPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mt-1">Se pedira esta clave al cajero cuando intente facturar a credito</p>
+            </div>
+          </div>
+
+          {/* Default customer */}
+          <div className="card p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <UserCheck size={20} className="text-green-400" />
+              <h2 className="text-lg font-semibold text-white">Cliente por defecto</h2>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">
+              Este cliente se asignara automaticamente a las facturas sin cliente.
+            </p>
+            {config.defaultCustomerId && defaultCustomerName ? (
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <UserCheck size={16} className="text-green-400" />
+                  <span className="text-sm text-green-300 font-medium">{defaultCustomerName}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleChange('defaultCustomerId', '');
+                    setDefaultCustomerName('');
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  title="Quitar cliente por defecto"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : null}
+            <div className="w-full md:w-80 relative" ref={customerSearchRef}>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                {config.defaultCustomerId ? 'Cambiar cliente' : 'Buscar cliente'}
+              </label>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onFocus={() => customerOptions.length > 0 && setShowCustomerDropdown(true)}
+                  className="input-field pl-9"
+                  placeholder="Buscar por nombre o RIF..."
+                />
+                {loadingCustomers && (
+                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+                )}
+              </div>
+              {showCustomerDropdown && customerOptions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                  {customerOptions.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        handleChange('defaultCustomerId', c.id);
+                        setDefaultCustomerName(c.name);
+                        setCustomerSearch('');
+                        setShowCustomerDropdown(false);
+                        setCustomerOptions([]);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700/50 transition-colors flex items-center justify-between"
+                    >
+                      <span className="text-sm text-white">{c.name}</span>
+                      {c.rif && <span className="text-xs text-slate-400">{c.documentType}-{c.rif}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

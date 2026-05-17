@@ -203,6 +203,7 @@ model CompanyConfig {
   igtfPct                Float    @default(3)
   fiscalCreditCode       String   @default("01")
   allowNegativeStock     Boolean  @default(true)
+  defaultCustomerId      String?
   logo                   String?  @db.Text
   updatedAt              DateTime @updatedAt
 }
@@ -577,6 +578,7 @@ model Customer {
   address      String?
   creditLimit  Float        @default(0)
   creditDays   Int          @default(0)
+  isDefault    Boolean      @default(false)
   isActive     Boolean      @default(true)
   invoices     Invoice[]
   quotations   Quotation[]

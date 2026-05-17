@@ -170,6 +170,55 @@ export class CustomersService {
     }
   }
 
+  async getCreditBalance(id: string) {
+    const customer = await this.prisma.customer.findUnique({ where: { id } });
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+
+    // Get today's rate for Bs conversion
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    const todayRate = rate?.rate || 0;
+
+    // Find NCV (credit notes) that are POSTED but not yet applied via a receipt
+    const customerInvoices = await this.prisma.invoice.findMany({
+      where: { customerId: id },
+      select: { id: true, number: true },
+    });
+    const invoiceIds = customerInvoices.map((inv) => inv.id);
+    const invoiceMap = new Map(customerInvoices.map((inv) => [inv.id, inv.number]));
+
+    let creditNotes: any[] = [];
+    if (invoiceIds.length > 0) {
+      creditNotes = await this.prisma.creditDebitNote.findMany({
+        where: {
+          invoiceId: { in: invoiceIds },
+          type: 'NCV',
+          status: 'POSTED',
+          appliedAt: null,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    const items = creditNotes.map((n) => ({
+      id: n.id,
+      description: `${n.number} - Devolucion ${invoiceMap.get(n.invoiceId) || ''}`,
+      amountUsd: n.totalUsd,
+      remainingUsd: n.totalUsd,
+    }));
+
+    const totalUsd = items.reduce((sum, i) => sum + i.remainingUsd, 0);
+    const totalBs = Math.round(totalUsd * todayRate * 100) / 100;
+
+    return {
+      hasBalance: totalUsd > 0,
+      totalUsd: Math.round(totalUsd * 100) / 100,
+      totalBs,
+      items,
+    };
+  }
+
   async remove(id: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { id },

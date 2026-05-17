@@ -37,6 +37,11 @@ export class CustomersController {
     return this.service.findAll({ search, isActive, page, limit });
   }
 
+  @Get(':id/credit-balance')
+  getCreditBalance(@Param('id') id: string) {
+    return this.service.getCreditBalance(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

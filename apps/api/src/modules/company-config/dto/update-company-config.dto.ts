@@ -96,5 +96,11 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsString()
+  defaultCustomerId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
   logo?: string | null;
 }

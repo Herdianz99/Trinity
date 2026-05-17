@@ -11,6 +11,7 @@ interface PendingDoc {
   documentType: string;
   receivableId?: string;
   payableId?: string;
+  creditDebitNoteId?: string;
   description: string;
   reference?: string | null;
   date: string;
@@ -19,6 +20,7 @@ interface PendingDoc {
   exchangeRate: number;
   balanceUsd: number;
   status: string;
+  sign?: number;
 }
 
 interface PlatformMethod {
@@ -214,12 +216,14 @@ export default function NewReceiptPage() {
     try {
       const res = await fetch(`/api/proxy/receipts/pending-documents?${params}`);
       const json = await res.json();
-      // New API returns { receivables: [...], payables: [] } for COLLECTION
+      // New API returns { receivables: [...], notes: [...], payables: [] } for COLLECTION
       // and flat array for PAYMENT
       if (Array.isArray(json)) {
         setPendingDocs(json);
       } else if (json.receivables) {
-        setPendingDocs(json.receivables);
+        // Merge receivables and notes (NCV/NDV) into a single list
+        const allDocs = [...json.receivables, ...(json.notes || [])];
+        setPendingDocs(allDocs);
       } else {
         setPendingDocs([]);
       }
@@ -239,7 +243,8 @@ export default function NewReceiptPage() {
 
   // Move document to selected
   const addDoc = (doc: PendingDoc) => {
-    const sign = doc.documentType === 'CxC' ? 1 : -1;
+    // Use sign from API for notes, otherwise: CxC/CxP = +1, CREDIT_NOTE = -1, DEBIT_NOTE = +1
+    const sign = doc.sign ?? (doc.documentType === 'CxC' || doc.documentType === 'CxP' ? 1 : doc.documentType === 'DEBIT_NOTE' ? 1 : -1);
     const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
     setSelectedDocs((prev) => [...prev, {
       ...doc,
@@ -292,6 +297,7 @@ export default function NewReceiptPage() {
         itemIds: selectedDocs.map((d) => ({
           receivableId: d.receivableId,
           payableId: d.payableId,
+          creditDebitNoteId: d.creditDebitNoteId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -331,6 +337,7 @@ export default function NewReceiptPage() {
         itemIds: selectedDocs.map((d) => ({
           receivableId: d.receivableId,
           payableId: d.payableId,
+          creditDebitNoteId: d.creditDebitNoteId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),

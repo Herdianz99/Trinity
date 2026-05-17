@@ -143,6 +143,9 @@ export default function POSPage() {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [userSellerName, setUserSellerName] = useState<string | null>(null);
 
+  // Credit balance state
+  const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
+
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
 
@@ -342,6 +345,15 @@ export default function POSPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [customerSearch]);
+
+  // Fetch credit balance when customer changes
+  useEffect(() => {
+    if (!customerId) { setCreditBalance(null); return; }
+    fetch(`/api/proxy/customers/${customerId}/credit-balance`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCreditBalance(data); })
+      .catch(() => setCreditBalance(null));
+  }, [customerId]);
 
   function addToCart(product: any) {
     const stockQty = product.stock?.[0]?.quantity || 0;
@@ -1128,6 +1140,11 @@ export default function POSPage() {
                   <div className="flex items-center gap-2">
                     <User size={14} className="text-green-400" />
                     <span className="text-sm text-white">{customerName}</span>
+                    {creditBalance?.hasBalance && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                        Saldo: ${creditBalance.totalUsd.toFixed(2)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={openEditClient} className="p-1 rounded hover:bg-slate-600 text-slate-400 hover:text-blue-400" title="Editar cliente">
@@ -1408,6 +1425,35 @@ export default function POSPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Credit balance banner */}
+              {creditBalance?.hasBalance && remaining > 0.01 && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div>
+                    <span className="text-sm text-green-300 font-medium">Saldo a favor del cliente</span>
+                    <div className="text-xs text-green-400/70 mt-0.5">
+                      ${creditBalance.totalUsd.toFixed(2)} USD / Bs {creditBalance.totalBs.toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const useAmount = Math.min(creditBalance.totalUsd, remaining);
+                      setPayments(prev => [...prev, {
+                        methodId: 'pm_saldo_favor',
+                        methodName: 'Saldo a Favor',
+                        isDivisa: true,
+                        amountUsd: Math.round(useAmount * 100) / 100,
+                        amountBs: Math.round(useAmount * exchangeRate * 100) / 100,
+                        reference: '',
+                      }]);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-medium hover:bg-green-500/30 transition-colors"
+                  >
+                    Usar saldo
+                  </button>
+                </div>
+              )}
 
               {payments.length > 0 && (
                 <div className="space-y-3">
