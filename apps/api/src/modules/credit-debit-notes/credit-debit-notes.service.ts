@@ -115,6 +115,10 @@ export class CreditDebitNotesService {
       });
       if (!invoice) throw new NotFoundException('Factura no encontrada');
 
+      // Fully returned invoices cannot have more notes
+      if (invoice.status === 'RETURNED') {
+        throw new BadRequestException('La factura ya fue devuelta completamente');
+      }
       // NCV with MANUAL origin only applies to CREDIT invoices
       if (dto.type === 'NCV' && dto.origin === 'MANUAL' && invoice.status !== 'CREDIT') {
         throw new BadRequestException('Las notas de crédito por ajuste solo aplican a facturas a crédito');
@@ -122,6 +126,12 @@ export class CreditDebitNotesService {
       // NDV only applies to CREDIT invoices
       if (dto.type === 'NDV' && invoice.status !== 'CREDIT') {
         throw new BadRequestException('Las notas de débito solo aplican a facturas a crédito');
+      }
+      // NCV MERCHANDISE: allows PAID, CREDIT, PARTIALLY_RETURNED
+      if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE') {
+        if (!['PAID', 'CREDIT', 'PARTIALLY_RETURNED'].includes(invoice.status)) {
+          throw new BadRequestException('Solo se pueden devolver facturas procesadas o a crédito');
+        }
       }
     }
 
@@ -356,6 +366,51 @@ export class CreditDebitNotesService {
                 update: { quantity: { increment: item.quantity } },
                 create: { productId: item.productId, warehouseId, quantity: item.quantity },
               });
+            }
+
+            // Update invoice status: RETURNED or PARTIALLY_RETURNED
+            if (note.invoiceId) {
+              const invoice = await tx.invoice.findUnique({
+                where: { id: note.invoiceId },
+                include: { items: true },
+              });
+              if (invoice) {
+                // Sum all returned qty from this note's items
+                const returnedQtyMap: Record<string, number> = {};
+                for (const item of note.items) {
+                  if (item.productId) {
+                    returnedQtyMap[item.productId] = (returnedQtyMap[item.productId] || 0) + item.quantity;
+                  }
+                }
+                // Check if total returned matches total in invoice (considering all posted NCV notes)
+                const allPostedNotes = await tx.creditDebitNote.findMany({
+                  where: { invoiceId: note.invoiceId, type: 'NCV', origin: 'MERCHANDISE', status: 'POSTED' },
+                  include: { items: true },
+                });
+                const totalReturnedByProduct: Record<string, number> = {};
+                for (const n of allPostedNotes) {
+                  for (const item of n.items) {
+                    if (item.productId) {
+                      totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
+                    }
+                  }
+                }
+                // Add current note items (not yet POSTED at this point in transaction)
+                for (const item of note.items) {
+                  if (item.productId) {
+                    totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
+                  }
+                }
+
+                const allReturned = invoice.items.every(
+                  (invItem) => (totalReturnedByProduct[invItem.productId] || 0) >= invItem.quantity
+                );
+
+                await tx.invoice.update({
+                  where: { id: note.invoiceId },
+                  data: { status: allReturned ? 'RETURNED' : 'PARTIALLY_RETURNED' },
+                });
+              }
             }
           }
           // Reduce Receivable

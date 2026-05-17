@@ -24,8 +24,15 @@ interface Invoice {
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; rif: string | null } | null;
+  seller: { id: string; code: string; name: string } | null;
   cashRegister: { id: string; code: string; name: string } | null;
   _count: { items: number };
+}
+
+interface Seller {
+  id: string;
+  code: string;
+  name: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,6 +41,8 @@ const STATUS_COLORS: Record<string, string> = {
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
   CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  RETURNED: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+  PARTIALLY_RETURNED: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -42,6 +51,8 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Procesado',
   CREDIT: 'Credito',
   CANCELLED: 'Cancelado',
+  RETURNED: 'Devuelto',
+  PARTIALLY_RETURNED: 'Dev. Parcial',
 };
 
 export default function InvoicesPage() {
@@ -50,12 +61,32 @@ export default function InvoicesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [status, setStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  const [sellers, setSellers] = useState<Seller[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch sellers for dropdown
+  useEffect(() => {
+    fetch('/api/proxy/sellers').then(r => r.json()).then(data => {
+      setSellers(Array.isArray(data) ? data : data.data || []);
+    }).catch(() => {});
+  }, []);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -64,6 +95,8 @@ export default function InvoicesPage() {
       params.set('page', page.toString());
       params.set('limit', '20');
       if (status) params.set('status', status);
+      if (searchDebounced) params.set('search', searchDebounced);
+      if (sellerId) params.set('sellerId', sellerId);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       const res = await fetch(`/api/proxy/invoices?${params}`);
@@ -76,7 +109,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status, from, to]);
+  }, [page, status, searchDebounced, sellerId, from, to]);
 
   useEffect(() => {
     fetchInvoices();
@@ -132,19 +165,39 @@ export default function InvoicesPage() {
       )}
 
       {/* Filters */}
-      <div className="card p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="card p-4 mb-6 space-y-3">
+        {/* Search bar */}
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por factura, cliente o cedula/RIF..."
+            className="input-field !py-2.5 !pl-9 text-sm w-full"
+          />
+        </div>
+        {/* Dropdowns and dates */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm">
             <option value="">Todos los estados</option>
             <option value="PENDING">En Espera</option>
             <option value="PAID">Procesado</option>
             <option value="CREDIT">Credito</option>
+            <option value="RETURNED">Devuelto</option>
+            <option value="PARTIALLY_RETURNED">Dev. Parcial</option>
             <option value="CANCELLED">Cancelado</option>
+          </select>
+          <select value={sellerId} onChange={e => { setSellerId(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm">
+            <option value="">Todos los vendedores</option>
+            {sellers.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
           </select>
           <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Desde" />
           <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Hasta" />
-          {(status || from || to) && (
-            <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setPage(1); }} className="btn-secondary !py-2.5 text-sm">
+          {(status || from || to || search || sellerId) && (
+            <button onClick={() => { setStatus(''); setFrom(''); setTo(''); setSearch(''); setSellerId(''); setPage(1); }} className="btn-secondary !py-2.5 text-sm">
               Limpiar filtros
             </button>
           )}
@@ -159,7 +212,7 @@ export default function InvoicesPage() {
               <tr className="border-b border-slate-700/50">
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden sm:table-cell">Cliente</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Caja</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Vendedor</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Total Bs</th>
@@ -184,7 +237,7 @@ export default function InvoicesPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{inv.customer?.name || 'Sin cliente'}</td>
-                  <td className="px-4 py-3 text-slate-400 hidden md:table-cell text-xs">{inv.cashRegister?.code}</td>
+                  <td className="px-4 py-3 text-slate-400 hidden md:table-cell text-xs">{inv.seller?.name || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[inv.status] || ''}`}>
                       {STATUS_LABELS[inv.status] || inv.status}

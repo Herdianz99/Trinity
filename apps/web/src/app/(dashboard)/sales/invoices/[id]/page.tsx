@@ -75,6 +75,8 @@ const STATUS_COLORS: Record<string, string> = {
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
   CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  RETURNED: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+  PARTIALLY_RETURNED: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -83,6 +85,8 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Procesado',
   CREDIT: 'Credito',
   CANCELLED: 'Cancelado',
+  RETURNED: 'Devuelto',
+  PARTIALLY_RETURNED: 'Dev. Parcial',
 };
 
 // Payment method labels come from payment.method.name (relation)
@@ -196,12 +200,12 @@ export default function InvoiceDetailPage() {
           </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {['PAID', 'CREDIT'].includes(invoice.status) && (
+          {['PAID', 'CREDIT', 'RETURNED', 'PARTIALLY_RETURNED'].includes(invoice.status) && (
             <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
               <Printer size={14} /> Imprimir PDF
             </button>
           )}
-          {invoice.status === 'PAID' && hasPerm('RETURN_INVOICE') && (
+          {['PAID', 'PARTIALLY_RETURNED'].includes(invoice.status) && hasPerm('RETURN_INVOICE') && (
             <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
               <FileX2 size={14} /> Devolver factura
             </button>

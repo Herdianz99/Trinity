@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "InvoiceStatus" ADD VALUE 'RETURNED';
+ALTER TYPE "InvoiceStatus" ADD VALUE 'PARTIALLY_RETURNED';

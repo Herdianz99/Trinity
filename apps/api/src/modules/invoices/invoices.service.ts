@@ -27,7 +27,9 @@ export class InvoicesService {
   async findAll(filters: {
     status?: string;
     customerId?: string;
+    sellerId?: string;
     cashRegisterId?: string;
+    search?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -39,7 +41,17 @@ export class InvoicesService {
 
     if (filters.status) where.status = filters.status;
     if (filters.customerId) where.customerId = filters.customerId;
+    if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.cashRegisterId) where.cashRegisterId = filters.cashRegisterId;
+
+    // Unified search: invoice number, customer name, or customer rif
+    if (filters.search) {
+      where.OR = [
+        { number: { contains: filters.search, mode: 'insensitive' } },
+        { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { customer: { rif: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
 
     if (filters.from || filters.to) {
       where.createdAt = {};
@@ -60,6 +72,7 @@ export class InvoicesService {
         where,
         include: {
           customer: { select: { id: true, name: true, rif: true } },
+          seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
           _count: { select: { items: true } },
         },

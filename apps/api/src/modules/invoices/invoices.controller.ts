@@ -34,13 +34,15 @@ export class InvoicesController {
   findAll(
     @Query('status') status?: string,
     @Query('customerId') customerId?: string,
+    @Query('sellerId') sellerId?: string,
     @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.service.findAll({ status, customerId, cashRegisterId, from, to, page, limit });
+    return this.service.findAll({ status, customerId, sellerId, cashRegisterId, search, from, to, page, limit });
   }
 
   @Get('pending')
