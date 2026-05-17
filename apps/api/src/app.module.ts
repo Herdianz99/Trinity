@@ -34,6 +34,7 @@ import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { CreditDebitNotesModule } from './modules/credit-debit-notes/credit-debit-notes.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { PaymentSchedulesModule } from './modules/payment-schedules/payment-schedules.module';
+import { DynamicKeysModule } from './modules/dynamic-keys/dynamic-keys.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { PaymentSchedulesModule } from './modules/payment-schedules/payment-sche
     CreditDebitNotesModule,
     ExpensesModule,
     PaymentSchedulesModule,
+    DynamicKeysModule,
   ],
 })
 export class AppModule {}

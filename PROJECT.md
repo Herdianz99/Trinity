@@ -846,6 +846,18 @@ model QuotationItem {
 
 ---
 
+**Claves Dinamicas de Autorizacion (DynamicKeysModule):**
+- Modelos: DynamicKey (keyHash bcrypt, isActive), DynamicKeyPermission (enum DynamicKeyPerm), DynamicKeyLog (audit trail)
+- 13 permisos configurables: eliminar NC/ND venta/compra, eliminar recibo cobro/pago, eliminar gasto, modificar precio, anular sesion caja, cambiar tasa, ajuste inventario, dar descuento, facturar a credito
+- CRUD de claves solo ADMIN, validacion abierta a autenticados
+- Validacion: itera claves activas, bcrypt.compare, verifica permiso, crea log con entityType/entityId/action
+- Componente reutilizable DynamicKeyModal: campo password, llama POST /dynamic-keys/validate, ejecuta callback si autorizado
+- Integrado en: anular notas credito/debito, cancelar recibos cobro/pago, eliminar gastos
+- Frontend: /settings/dynamic-keys (gestion), /settings/dynamic-keys/[id]/logs (historial)
+- Sidebar: bajo CONFIGURACION
+
+---
+
 **Control de Gastos (ExpensesModule):**
 - Modelos: ExpenseCategory (10 predefinidas), Expense
 - CRUD de categorías (solo ADMIN)

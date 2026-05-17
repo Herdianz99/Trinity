@@ -6,6 +6,7 @@ import {
   ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface NoteDetail {
   id: string;
@@ -87,6 +88,7 @@ export default function CreditDebitNoteDetailPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [posting, setPosting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const fetchNote = useCallback(async () => {
     setLoading(true);
@@ -124,8 +126,11 @@ export default function CreditDebitNoteDetailPage() {
     }
   }
 
-  async function handleCancel() {
-    if (!confirm('¿Anular esta nota?')) return;
+  function requestCancel() {
+    setAuthModalOpen(true);
+  }
+
+  async function executeCancel() {
     setCancelling(true);
     try {
       const res = await fetch(`/api/proxy/credit-debit-notes/${id}/cancel`, {
@@ -143,6 +148,17 @@ export default function CreditDebitNoteDetailPage() {
     } finally {
       setCancelling(false);
     }
+  }
+
+  function getCancelPermission(): string {
+    if (!note) return '';
+    const map: Record<string, string> = {
+      NCV: 'DELETE_CREDIT_NOTE_SALE',
+      NDV: 'DELETE_DEBIT_NOTE_SALE',
+      NCC: 'DELETE_CREDIT_NOTE_PURCHASE',
+      NDC: 'DELETE_DEBIT_NOTE_PURCHASE',
+    };
+    return map[note.type] || '';
   }
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -192,7 +208,7 @@ export default function CreditDebitNoteDetailPage() {
               <button onClick={handlePost} disabled={posting} className="btn-primary text-sm flex items-center gap-1.5">
                 {posting ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />} Confirmar nota
               </button>
-              <button onClick={handleCancel} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+              <button onClick={requestCancel} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
                 {cancelling ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Anular
               </button>
             </>
@@ -402,6 +418,16 @@ export default function CreditDebitNoteDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <DynamicKeyModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthorized={executeCancel}
+        permission={getCancelPermission()}
+        entityType="CreditDebitNote"
+        entityId={id}
+        action={`Anular ${note.type} ${note.number}`}
+      />
     </div>
   );
 }

@@ -1,5 +1,49 @@
 # Trinity ERP — Progreso
 
+## Sesion 32 — Sistema de Claves Dinamicas de Autorizacion (Completada)
+
+### Migracion de base de datos
+- Nuevo enum: `DynamicKeyPerm` (13 permisos: DELETE_CREDIT_NOTE_SALE, DELETE_DEBIT_NOTE_SALE, DELETE_CREDIT_NOTE_PURCHASE, DELETE_DEBIT_NOTE_PURCHASE, DELETE_RECEIPT_COLLECTION, DELETE_RECEIPT_PAYMENT, DELETE_EXPENSE, MODIFY_PRODUCT_PRICE, CANCEL_CASH_SESSION, CHANGE_EXCHANGE_RATE, MANUAL_STOCK_ADJUSTMENT, GIVE_DISCOUNT, ALLOW_CREDIT_INVOICE)
+- Nuevos modelos: `DynamicKey`, `DynamicKeyPermission`, `DynamicKeyLog`
+- DynamicKey: name, keyHash (bcrypt), isActive, relacion con User
+- DynamicKeyPermission: dynamicKeyId + permission (DynamicKeyPerm), unique constraint
+- DynamicKeyLog: dynamicKeyId, permission, action, entityType, entityId, createdAt
+- Relacion: User → dynamicKeys
+- Migracion: `add_dynamic_keys_system`
+
+### Backend (NestJS)
+- Nuevo modulo: `DynamicKeysModule` con controller, service, DTOs
+- DTOs: CreateDynamicKeyDto, UpdateDynamicKeyDto, ValidateKeyDto
+- Endpoints (solo ADMIN excepto validate):
+  - `GET /dynamic-keys` — lista claves con permisos, logCount, createdBy (sin hash)
+  - `GET /dynamic-keys/:id/logs` — historial de uso con filtros from/to, paginacion
+  - `POST /dynamic-keys` — crear clave (hashea con bcrypt, crea permisos en transaccion)
+  - `PATCH /dynamic-keys/:id` — editar nombre, permisos, clave opcional (transaccion: borra permisos viejos + recrea)
+  - `PATCH /dynamic-keys/:id/toggle-active` — activar/desactivar
+  - `DELETE /dynamic-keys/:id` — eliminar clave
+  - `POST /dynamic-keys/validate` — validar clave (abierto a autenticados): itera claves activas, bcrypt.compare, verifica permiso, crea log, retorna { authorized, keyName } o 401
+- Registrado en AppModule
+
+### Frontend (Next.js)
+- Componente reutilizable: `DynamicKeyModal` (apps/web/src/components/dynamic-key-modal.tsx)
+  - Props: isOpen, onClose, onAuthorized, permission, title, description, entityType, entityId, action
+  - Campo password con toggle mostrar/ocultar, autoFocus
+  - Llama POST /dynamic-keys/validate, ejecuta onAuthorized() si autorizado
+  - Muestra error y limpia campo si falla
+- Pagina `/settings/dynamic-keys` — Gestion de claves:
+  - Tabla: Nombre, Permisos (badges), Estado (Activa/Inactiva), Creada por, Usos, Acciones
+  - Acciones: Editar, Activar/Desactivar, Ver logs, Eliminar
+  - Modal crear/editar: nombre, clave (password, opcional en edicion), grid checkboxes permisos en espanol
+- Pagina `/settings/dynamic-keys/[id]/logs` — Historial de uso:
+  - Filtros: rango de fechas
+  - Tabla: Fecha, Permiso usado, Accion, Tipo registro, ID registro
+  - Paginacion 20 por pagina
+- Sidebar: nueva entrada "Claves de autorizacion" (KeyRound) bajo CONFIGURACION
+- Integracion del modal en acciones protegidas:
+  - `/credit-debit-notes/[id]`: boton "Anular" abre DynamicKeyModal con permiso segun tipo (NCV→DELETE_CREDIT_NOTE_SALE, NDV→DELETE_DEBIT_NOTE_SALE, NCC→DELETE_CREDIT_NOTE_PURCHASE, NDC→DELETE_DEBIT_NOTE_PURCHASE)
+  - `/receipts/[id]`: boton "Cancelar" abre DynamicKeyModal con DELETE_RECEIPT_COLLECTION o DELETE_RECEIPT_PAYMENT segun tipo
+  - `/expenses`: boton "Eliminar" abre DynamicKeyModal con DELETE_EXPENSE
+
 ## Sesion 31 — Separar tipo de pago del estado en facturas (Completada)
 
 ### Migracion de base de datos

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface Expense {
   id: string;
@@ -84,6 +85,8 @@ export default function ExpensesPage() {
   const [todayRate, setTodayRate] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Permissions
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
@@ -246,10 +249,15 @@ export default function ExpensesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Eliminar este gasto?')) return;
+  function requestDelete(id: string) {
+    setPendingDeleteId(id);
+    setAuthModalOpen(true);
+  }
+
+  async function executeDelete() {
+    if (!pendingDeleteId) return;
     try {
-      const res = await fetch(`/api/proxy/expenses/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/proxy/expenses/${pendingDeleteId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || 'Error');
@@ -259,6 +267,8 @@ export default function ExpensesPage() {
       fetchSummary();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
+    } finally {
+      setPendingDeleteId(null);
     }
   }
 
@@ -412,7 +422,7 @@ export default function ExpensesPage() {
                         </button>
                       )}
                       {isAdmin && (
-                        <button onClick={() => handleDelete(exp.id)} className="p-1.5 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-red-400 transition-colors" title="Eliminar">
+                        <button onClick={() => requestDelete(exp.id)} className="p-1.5 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-red-400 transition-colors" title="Eliminar">
                           <Trash2 size={14} />
                         </button>
                       )}
@@ -455,16 +465,17 @@ export default function ExpensesPage() {
           <h3 className="text-sm font-semibold text-slate-300 mb-4">Gastos por Categoria (USD)</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={summary.byCategory.sort((a, b) => b.totalUsd - a.totalUsd)} layout="vertical" margin={{ left: 120, right: 20, top: 5, bottom: 5 }}>
+              <BarChart data={[...summary.byCategory].sort((a, b) => b.totalUsd - a.totalUsd)} layout="vertical" margin={{ left: 120, right: 20, top: 5, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="categoryName" tick={{ fill: '#cbd5e1', fontSize: 12 }} axisLine={false} tickLine={false} width={110} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   labelStyle={{ color: '#e2e8f0' }}
+                  itemStyle={{ color: '#e2e8f0' }}
                   formatter={(value: any) => [`$${Number(value).toFixed(2)}`, 'Total USD']}
                 />
                 <Bar dataKey="totalUsd" radius={[0, 4, 4, 0]}>
-                  {summary.byCategory.sort((a, b) => b.totalUsd - a.totalUsd).map((_, i) => (
+                  {[...summary.byCategory].sort((a, b) => b.totalUsd - a.totalUsd).map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Bar>
@@ -473,6 +484,16 @@ export default function ExpensesPage() {
           </div>
         </div>
       )}
+
+      <DynamicKeyModal
+        isOpen={authModalOpen}
+        onClose={() => { setAuthModalOpen(false); setPendingDeleteId(null); }}
+        onAuthorized={executeDelete}
+        permission="DELETE_EXPENSE"
+        entityType="Expense"
+        entityId={pendingDeleteId || undefined}
+        action={`Eliminar gasto`}
+      />
 
       {/* Modal */}
       {modalOpen && (

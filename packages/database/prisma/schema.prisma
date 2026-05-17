@@ -162,6 +162,22 @@ enum ReceiptItemType {
   DEBIT_NOTE
 }
 
+enum DynamicKeyPerm {
+  DELETE_CREDIT_NOTE_SALE
+  DELETE_DEBIT_NOTE_SALE
+  DELETE_CREDIT_NOTE_PURCHASE
+  DELETE_DEBIT_NOTE_PURCHASE
+  DELETE_RECEIPT_COLLECTION
+  DELETE_RECEIPT_PAYMENT
+  DELETE_EXPENSE
+  MODIFY_PRODUCT_PRICE
+  CANCEL_CASH_SESSION
+  CHANGE_EXCHANGE_RATE
+  MANUAL_STOCK_ADJUSTMENT
+  GIVE_DISCOUNT
+  ALLOW_CREDIT_INVOICE
+}
+
 // ============================================
 // CONFIG
 // ============================================
@@ -229,6 +245,7 @@ model User {
   invoicesAsCashier   Invoice[]        @relation("InvoiceCashier")
   expenses            Expense[]
   paymentSchedules    PaymentSchedule[]
+  dynamicKeys         DynamicKey[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -248,6 +265,43 @@ model RolePermission {
   role      UserRole @unique
   modules   String[]
   updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// CLAVES DINAMICAS DE AUTORIZACION
+// ============================================
+
+model DynamicKey {
+  id          String                @id @default(cuid())
+  name        String
+  keyHash     String
+  isActive    Boolean               @default(true)
+  permissions DynamicKeyPermission[]
+  logs        DynamicKeyLog[]
+  createdById String
+  createdBy   User                  @relation(fields: [createdById], references: [id])
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model DynamicKeyPermission {
+  id           String         @id @default(cuid())
+  dynamicKeyId String
+  dynamicKey   DynamicKey     @relation(fields: [dynamicKeyId], references: [id], onDelete: Cascade)
+  permission   DynamicKeyPerm
+
+  @@unique([dynamicKeyId, permission])
+}
+
+model DynamicKeyLog {
+  id           String         @id @default(cuid())
+  dynamicKeyId String
+  dynamicKey   DynamicKey     @relation(fields: [dynamicKeyId], references: [id], onDelete: Cascade)
+  permission   DynamicKeyPerm
+  action       String
+  entityType   String?
+  entityId     String?
+  createdAt    DateTime       @default(now())
 }
 
 // ============================================

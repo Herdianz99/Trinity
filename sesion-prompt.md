@@ -1,183 +1,172 @@
 Lee el PROJECT.md y el PROGRESS.md antes de escribir cualquier línea de código.
-Vamos a rediseñar completamente el módulo de cajas siguiendo un nuevo flujo de trabajo.
+Vamos a implementar el sistema de Claves Dinámicas de Autorización.
 Antes de escribir cualquier código consulta las skills disponibles especialmente frontend-design.
 PARTE 1 — Migración de Prisma
-Actualizar modelo CashRegister:
-prismamodel CashRegister {
-  id                String        @id @default(cuid())
-  code              String        @unique
-  name              String
-  isFiscal          Boolean       @default(false)
-  isShared          Boolean       @default(false)
-  isActive          Boolean       @default(true)
-  lastInvoiceNumber Int           @default(0)
-  sessions          CashSession[]
-  invoices          Invoice[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+prismamodel DynamicKey {
+  id          String              @id @default(cuid())
+  name        String              // "Autorización María Supervisora"
+  keyHash     String              // bcrypt hash de la clave
+  isActive    Boolean             @default(true)
+  permissions DynamicKeyPermission[]
+  logs        DynamicKeyLog[]
+  createdById String
+  createdBy   User                @relation(...)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 }
-Actualizar modelo CashSession:
-prismamodel CashSession {
-  id                  String       @id @default(cuid())
-  cashRegisterId      String
-  cashRegister        CashRegister @relation(...)
-  openedById          String
-  openedBy            User         @relation("SessionOpenedBy", ...)
-  closedById          String?
-  closedBy            User?        @relation("SessionClosedBy", ...)
-  openingBalanceUsd   Float        @default(0)
-  openingBalanceBs    Float        @default(0)
-  closingBalanceUsd   Float?
-  closingBalanceBs    Float?
-  status              SessionStatus @default(OPEN)
-  notes               String?
-  openedAt            DateTime     @default(now())
-  closedAt            DateTime?
-}
-Corre migración con nombre redesign_cash_register_module.
 
+model DynamicKeyPermission {
+  id           String          @id @default(cuid())
+  dynamicKeyId String
+  dynamicKey   DynamicKey      @relation(...)
+  permission   DynamicKeyPerm
+}
+
+model DynamicKeyLog {
+  id           String          @id @default(cuid())
+  dynamicKeyId String
+  dynamicKey   DynamicKey      @relation(...)
+  permission   DynamicKeyPerm  // qué permiso se usó
+  action       String          // descripción de la acción realizada
+  entityType   String?         // "Invoice", "CreditDebitNote", etc.
+  entityId     String?         // ID del registro afectado
+  createdAt    DateTime        @default(now())
+}
+
+enum DynamicKeyPerm {
+  DELETE_CREDIT_NOTE_SALE      // eliminar nota de crédito de venta
+  DELETE_DEBIT_NOTE_SALE       // eliminar nota de débito de venta
+  DELETE_CREDIT_NOTE_PURCHASE  // eliminar nota de crédito de compra
+  DELETE_DEBIT_NOTE_PURCHASE   // eliminar nota de débito de compra
+  DELETE_RECEIPT_COLLECTION    // eliminar recibo de cobro
+  DELETE_RECEIPT_PAYMENT       // eliminar recibo de pago
+  DELETE_EXPENSE               // eliminar gasto
+  MODIFY_PRODUCT_PRICE         // modificar precio de producto
+  CANCEL_CASH_SESSION          // anular sesión de caja
+  CHANGE_EXCHANGE_RATE         // cambiar tasa BCV manualmente
+  MANUAL_STOCK_ADJUSTMENT      // hacer ajuste manual de inventario
+  GIVE_DISCOUNT                // dar descuento en POS
+  ALLOW_CREDIT_INVOICE         // permitir facturar a crédito
+}
+Corre migración con nombre add_dynamic_keys_system.
 PARTE 2 — Backend (NestJS)
-Actualizar CashRegistersModule:
+Nuevo DynamicKeysModule:
+GET /dynamic-keys — lista todas las claves con sus permisos (sin el hash) — solo ADMIN
+GET /dynamic-keys/:id/logs — historial de uso de una clave con filtros ?from&to&page&limit
+POST /dynamic-keys — crear clave (solo ADMIN):
 
-GET /cash-registers — lista todas las cajas con su sesión activa si tiene
-GET /cash-registers/available — cajas disponibles para el usuario actual:
+Body: { name, key, permissions: DynamicKeyPerm[] }
+Hashear la clave con bcrypt antes de guardar
+Nunca retornar el hash
 
-Cajas con sesión activa abiertas por el usuario actual
-Cajas con sesión activa marcadas como isShared = true
+PATCH /dynamic-keys/:id — editar nombre y permisos (solo ADMIN)
+PATCH /dynamic-keys/:id/toggle-active — activar/desactivar (solo ADMIN)
+DELETE /dynamic-keys/:id — eliminar clave (solo ADMIN)
+POST /dynamic-keys/validate — validar clave y permiso:
 
-
-GET /cash-registers/:id — detalle de la caja con sesión activa actual
-POST /cash-registers — crear caja (solo ADMIN)
-PATCH /cash-registers/:id — editar caja (solo ADMIN)
-POST /cash-registers/:id/open — abrir sesión:
-
-Body: { openingBalanceUsd, openingBalanceBs, notes? }
-Cualquier usuario puede abrir cualquier caja
-Una caja solo puede tener UNA sesión OPEN a la vez
-Retorna la sesión creada
-
-
-POST /cash-sessions/:id/close — cerrar sesión:
-
-Body: { closingBalanceUsd, closingBalanceBs, notes? }
-Guarda closedById = currentUser.id
-Calcula resumen: totales por método de pago durante la sesión
-
-
-GET /cash-sessions/:id/summary — resumen detallado:
-
-openingBalanceUsd, openingBalanceBs
-paymentsByMethod: [{ methodName, count, totalUsd, totalBs }]
-totalUsd, totalBs
-invoiceCount
-closingBalanceUsd?, closingBalanceBs?
-differenceUsd?, differenceBs?
-
-
-GET /cash-registers/:id/sessions — historial de sesiones cerradas de esa caja, ordenadas por closedAt DESC
-GET /cash-sessions/:sessionId/payments — lista de pagos de una sesión con filtro ?methodId, paginación 20 por página, ordenados por createdAt DESC
-
+Body: { key, permission, entityType?, entityId?, action }
+Buscar todas las claves activas
+Comparar con bcrypt contra cada una
+Si encuentra coincidencia → verificar que tiene el permiso solicitado
+Si tiene el permiso → crear DynamicKeyLog con todos los datos
+Retornar: { authorized: true/false, keyName?: string }
+Si no autorizado → retornar 401
 
 PARTE 3 — Frontend (Next.js)
-Página /cash — Lista de cajas:
+Componente reutilizable DynamicKeyModal:
+Crear en apps/web/src/components/dynamic-key-modal.tsx:
+typescriptinterface DynamicKeyModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onAuthorized: () => void  // callback cuando se autoriza
+  permission: DynamicKeyPerm
+  title?: string            // "Esta acción requiere autorización"
+  description?: string      // "Ingresa la clave de supervisor para continuar"
+  entityType?: string
+  entityId?: string
+  action: string            // descripción para el log
+}
+El modal muestra:
 
-Header: "Cajas registradoras"
-Tabla: Nombre, Código, Tipo (badge Fiscal/Normal), Compartida (badge Sí/No), Estado (badge verde Abierta / gris Cerrada), Abierta por, Hora apertura
-Click en fila → navega a /cash/[id]
-Filas de cajas cerradas → botón "Abrir caja" que abre modal de apertura
-Filas de cajas abiertas → botón "Ver" que navega al detalle
+Título y descripción
+Campo de clave (tipo password, con toggle mostrar/ocultar)
+Botón "Autorizar"
+Al hacer clic → llama a POST /dynamic-keys/validate
+Si autorizado → cierra el modal y ejecuta onAuthorized()
+Si no autorizado → muestra error "Clave incorrecta o sin permisos para esta acción"
+El campo se limpia automáticamente si falla
 
-Modal "Abrir caja":
+Implementar el modal en estas acciones:
+Eliminar nota de crédito de venta (DELETE_CREDIT_NOTE_SALE):
 
-Nombre de la caja (solo lectura)
-Campo "Fondo inicial USD"
-Campo "Fondo inicial Bs"
-Notas opcionales
-Botón "Abrir caja"
+En /credit-debit-notes/[id] botón "Cancelar" para notas NCV → abrir DynamicKeyModal antes de proceder
 
-Página /cash/[id] — Detalle de caja:
-Header: nombre de la caja + badge estado + badge Fiscal/Normal + badge Compartida/Exclusiva
-Tab "Sesión actual" (visible solo si hay sesión OPEN):
+Eliminar nota de débito de venta (DELETE_DEBIT_NOTE_SALE):
 
-Layout dos columnas:
+En /credit-debit-notes/[id] botón "Cancelar" para notas NDV
 
-Columna izquierda: (30% del ancho)
+Eliminar nota de crédito de compra (DELETE_CREDIT_NOTE_PURCHASE):
 
-Título "Fondos de apertura"
-Fondo USD: valor (solo lectura, bloqueado)
-Fondo Bs: valor (solo lectura, bloqueado)
-Separador
-Título "Totales del día"
-Total cobrado USD
-Total cobrado Bs
-Total facturas
+En /credit-debit-notes/[id] botón "Cancelar" para notas NCC
 
+Eliminar nota de débito de compra (DELETE_DEBIT_NOTE_PURCHASE):
 
-Columna derecha: (70% del ancho)
+En /credit-debit-notes/[id] botón "Cancelar" para notas NDC
 
-Filtro por método de pago (dropdown con métodos activos)
-Tabla de pagos: Hora, Factura, Cliente, Método, Monto USD, Monto Bs
+Eliminar recibo de cobro (DELETE_RECEIPT_COLLECTION):
+
+En /receipts/[id] botón "Cancelar recibo" para recibos tipo COLLECTION
+
+Eliminar recibo de pago (DELETE_RECEIPT_PAYMENT):
+
+En /receipts/[id] botón "Cancelar recibo" para recibos tipo PAYMENT
+
+Eliminar gasto (DELETE_EXPENSE):
+
+En /expenses botón "Eliminar" por cada gasto
+
+Página /settings/dynamic-keys — Gestión de claves:
+
+Solo ADMIN
+Agregar al sidebar bajo CONFIGURACIÓN: "Claves de autorización"
+Header: "Claves de autorización" + botón "+ Nueva clave"
+Tabla: Nombre, Permisos (badges), Estado, Creada por, Fecha, Acciones
+Acciones: Editar, Activar/Desactivar, Ver logs, Eliminar
+
+Modal "Nueva clave / Editar clave":
+
+Campo nombre
+Campo clave (password) — solo al crear, al editar es opcional (si se deja vacío no cambia)
+Grid de checkboxes con todos los permisos disponibles en español:
+Eliminar nota de crédito de venta
+Eliminar nota de débito de venta
+Eliminar nota de crédito de compra
+Eliminar nota de débito de compra
+Eliminar recibo de cobro
+Eliminar recibo de pago
+Eliminar gasto
+Modificar precio de producto
+Anular sesión de caja
+Cambiar tasa BCV
+Ajuste manual de inventario
+Dar descuento en POS
+Permitir facturar a crédito
+
+Botón guardar
+
+Página /settings/dynamic-keys/[id]/logs — Historial de uso:
+
+Tabla: Fecha, Permiso usado, Acción, Tipo de registro, ID registro, Usuario del sistema
+Filtros: rango de fechas
 Paginación 20 por página
-
-
-
-
-Botones al pie (alineados a la derecha):
-
-"Reporte X" (solo si isFiscal = true, color azul)
-"Reporte Z" (solo si isFiscal = true, color naranja)
-"Cerrar caja" (color rojo) → abre modal de cierre
-
-
-
-Modal "Cerrar caja":
-
-Resumen de la sesión: totales por método de pago
-Campo "Efectivo USD contado físicamente"
-Campo "Efectivo Bs contado físicamente"
-Diferencia calculada automáticamente (verde si cuadra, rojo si hay diferencia)
-Notas opcionales
-Botón "Confirmar cierre"
-
-Tab "Historial de cierres":
-
-Tabla: Fecha apertura, Fecha cierre, Abierta por, Cerrada por, Fondo USD, Fondo Bs, Total cobrado USD, Total cobrado Bs, Diferencia
-Click en fila → abre modal con detalle completo del cierre (misma info que la sesión actual pero de solo lectura)
-Si la caja está cerrada (sin sesión activa) → este tab es el que se muestra por defecto
-
-POS — Selector de caja:
-
-Al entrar al POS verificar si el usuario tiene una caja seleccionada en localStorage
-Si no tiene → llamar a GET /cash-registers/available y mostrar modal:
-
-Título: "Selecciona una caja para comenzar"
-Lista de cajas disponibles (las que abrió el usuario + las compartidas abiertas)
-Si no hay cajas disponibles → mensaje "No hay cajas abiertas disponibles. Abre una caja primero." con botón "Ir a cajas" que navega a /cash
-Al seleccionar → guardar en localStorage y cerrar modal
-
-
-Si tiene caja seleccionada → mostrar en el header del POS: nombre de la caja + botón "Cambiar"
-Al cambiar de caja → limpiar localStorage y mostrar el modal de selección nuevamente
-Vendedores (rol SELLER): no mostrar selector de caja, no mostrar botón "Cobrar", solo "Guardar pre-factura"
-Roles con acceso a cobro (CASHIER, ADMIN, SUPERVISOR): si no tienen caja seleccionada → botón "Cobrar" aparece deshabilitado con tooltip "Selecciona una caja para cobrar"
-
-Sidebar:
-
-Renombrar sección a "CAJA"
-Items: "Cajas" → /cash, "Sesiones" → /cash/sessions (historial global de todas las sesiones)
-
-Página /cash/sessions — Historial global:
-
-Filtros: caja, usuario, estado, rango de fechas
-Tabla: Caja, Abierta por, Fecha apertura, Cerrada por, Fecha cierre, Total USD, Total Bs, Estado
-
 
 Al terminar:
 
-Verificar flujo completo: ir a /cash → abrir caja → entrar al POS → seleccionar caja → facturar → ver pagos en tiempo real en detalle de caja → cerrar caja con arqueo
-Verificar que SELLER no ve selector de caja y no puede cobrar
-Verificar que cajas compartidas aparecen para todos los usuarios en el POS
-Verificar que cajas exclusivas solo aparecen para quien las abrió
-Haz commit con el mensaje feat: redesign cash register module with shared/exclusive sessions and detailed view
+Crear una clave con permisos de eliminar NC y ND
+Intentar eliminar una nota de crédito → verificar que aparece el modal
+Ingresar la clave correcta → verificar que procede
+Ingresar una clave incorrecta → verificar que muestra error
+Verificar que el log registró la acción correctamente
+Haz commit con el mensaje feat: dynamic authorization keys system with audit log
 Haz push a GitHub
 Actualiza el PROGRESS.md y el PROJECT.md

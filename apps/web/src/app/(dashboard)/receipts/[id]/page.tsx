@@ -6,6 +6,7 @@ import {
   ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface ReceiptItem {
   id: string;
@@ -93,6 +94,7 @@ export default function ReceiptDetailPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Payment modal for processing DRAFT
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -138,8 +140,11 @@ export default function ReceiptDetailPage() {
     })();
   }, []);
 
-  const cancelReceipt = async () => {
-    if (!confirm('¿Cancelar este recibo?')) return;
+  function requestCancel() {
+    setAuthModalOpen(true);
+  }
+
+  async function executeCancel() {
     setCancelling(true);
     try {
       const res = await fetch(`/api/proxy/receipts/${id}/cancel`, { method: 'PATCH' });
@@ -151,7 +156,12 @@ export default function ReceiptDetailPage() {
       setMessage({ type: 'error', text: err.message });
     }
     setCancelling(false);
-  };
+  }
+
+  function getCancelPermission(): string {
+    if (!receipt) return '';
+    return receipt.type === 'COLLECTION' ? 'DELETE_RECEIPT_COLLECTION' : 'DELETE_RECEIPT_PAYMENT';
+  }
 
   // Payment modal
   const flatMethods = paymentMethods.flatMap((m) =>
@@ -292,7 +302,7 @@ export default function ReceiptDetailPage() {
                 Procesar
               </button>
               <button
-                onClick={cancelReceipt}
+                onClick={requestCancel}
                 disabled={cancelling}
                 className="flex items-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg font-medium transition-colors"
               >
@@ -489,6 +499,16 @@ export default function ReceiptDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <DynamicKeyModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthorized={executeCancel}
+        permission={getCancelPermission()}
+        entityType="Receipt"
+        entityId={id}
+        action={`Cancelar recibo ${receipt.number}`}
+      />
 
       {/* Payment Modal */}
       {payModalOpen && (

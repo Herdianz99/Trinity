@@ -44,6 +44,7 @@ import {
   FileX2,
   Wallet,
   CalendarClock,
+  KeyRound,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -185,6 +186,7 @@ const menuSections: MenuSection[] = [
       { label: 'Metodos de pago', href: '/settings/payment-methods', icon: <CreditCard size={18} /> },
       { label: 'Cajas', href: '/settings/cash-registers', icon: <Monitor size={18} /> },
       { label: 'Areas de impresion', href: '/settings/print-areas', icon: <Printer size={18} /> },
+      { label: 'Claves de autorizacion', href: '/settings/dynamic-keys', icon: <KeyRound size={18} /> },
       { label: 'Importacion masiva', href: '/import', icon: <Upload size={18} /> },
     ],
   },
