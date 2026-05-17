@@ -13,6 +13,7 @@ const ROUTE_PERMISSION_MAP: [string, string][] = [
   ['/purchases', 'purchases'],
   ['/cash', 'cash'],
   ['/receivables', 'receivables'],
+  ['/payment-schedules', 'payment-schedules'],
   ['/payables', 'payables'],
   ['/fiscal', 'fiscal'],
   ['/settings', 'settings'],

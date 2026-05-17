@@ -1,5 +1,63 @@
 # Trinity ERP — Progreso
 
+## Sesion 30 — Modulo de Programacion de Pagos (Completada)
+
+### Migracion de base de datos
+- Nuevos modelos: `PaymentSchedule`, `PaymentScheduleItem`
+- Nuevo enum: `PaymentScheduleStatus` (DRAFT, APPROVED, EXECUTED, CANCELLED)
+- Campo `budgetCurrency` para seleccion USD/Bs del presupuesto
+- Relaciones: User → paymentSchedules, Payable → paymentScheduleItems, CreditDebitNote → paymentScheduleItems
+- Migracion: `add_payment_schedule_module`
+
+### Backend (NestJS)
+- Nuevo modulo: `PaymentSchedulesModule` con controller, service, PDF service
+- Endpoints:
+  - `GET /payment-schedules` — lista con filtros (status, from, to, search, page, limit)
+  - `GET /payment-schedules/:id` — detalle con items agrupados por proveedor
+  - `POST /payment-schedules` — crear programacion (numeracion PSC-0001, tasa del dia, presupuesto USD/Bs)
+  - `POST /payment-schedules/:id/items` — agregar CxP o NDC a la programacion
+  - `DELETE /payment-schedules/:id/items/:itemId` — eliminar item (solo DRAFT/APPROVED)
+  - `PATCH /payment-schedules/:id/items/:itemId` — editar monto planificado
+  - `PATCH /payment-schedules/:id/status` — cambiar estado (DRAFT→APPROVED→EXECUTED, solo ADMIN/SUPERVISOR)
+  - `GET /payment-schedules/:id/pdf` — generar PDF A4 agrupado por proveedor
+  - `GET /payment-schedules/pending-payables` — documentos disponibles (CxP PENDING/PARTIAL + NDC POSTED sin aplicar)
+- Validaciones: monto no excede saldo, documento no duplicado, transiciones de estado validas
+- Recalculo automatico de totales USD/Bs al agregar/editar/eliminar items
+- Presupuesto en USD o Bs con conversion automatica usando tasa del dia
+
+### Frontend (Next.js)
+- Nueva entrada en sidebar bajo CxP: "Programacion de pagos" → /payment-schedules
+- Pagina `/payment-schedules` — Lista:
+  - Tabla: Numero, Titulo, Total USD, Total Bs, Presupuesto, Estado (badge coloreado), Creado por, Fecha, Items
+  - Filtros: estado, busqueda por numero/titulo
+  - Paginacion, click en fila navega al detalle
+- Pagina `/payment-schedules/new` — Crear:
+  - Campo titulo, presupuesto con toggle USD/Bs y conversion automatica, notas
+  - Muestra tasa del dia y equivalente en la otra moneda
+- Pagina `/payment-schedules/[id]` — Detalle:
+  - Header: numero, titulo, estado badge, botones segun estado (Aprobar, Ejecutar, Cancelar, PDF)
+  - Panel informativo: fecha, tasa, creador, cantidad de documentos
+  - Panel resumen: presupuesto (moneda elegida + equivalente), total a pagar, diferencia con alerta roja si excedido
+  - Documentos agrupados por proveedor con subtotales
+  - Cada item muestra tipo (CxP/NDC), referencia, vencimiento, saldo, monto a pagar USD/Bs
+  - Edicion inline del monto a pagar por item
+  - Filas vencidas con fondo rojo, items pagados con fondo verde
+  - Panel colapsable "Agregar documentos" con filtros (proveedor, fecha vencimiento, busqueda)
+  - Documentos disponibles con campo monto editable pre-llenado con saldo pendiente
+
+### PDF (PDFKit)
+- Formato A4 con header empresa, titulo "PROGRAMACION DE PAGOS", numero, fecha, tasa
+- Seccion presupuesto vs total con diferencia
+- Items agrupados por proveedor con tabla: referencia, tipo, vencimiento, saldo, monto USD, monto Bs
+- Subtotal por proveedor, gran total USD y Bs al final
+- Footer con creador y datos empresa
+
+### Permisos
+- Modulo `payment-schedules` agregado a VALID_MODULES
+- Defaults: ADMIN (*), SUPERVISOR, BUYER, ACCOUNTANT tienen acceso
+- Middleware de ruta: /payment-schedules → permission 'payment-schedules'
+- Pagina role-permissions: nuevo item en "Acceso a Modulos"
+
 ## Sesion 29 — Modulo de Control de Gastos (Completada)
 
 ### Migracion de base de datos

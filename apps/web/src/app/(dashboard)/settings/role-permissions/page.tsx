@@ -46,6 +46,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'receivables', label: 'Cuentas por Cobrar' },
       { key: 'payables', label: 'Cuentas por Pagar' },
       { key: 'expenses', label: 'Gastos' },
+      { key: 'payment-schedules', label: 'Programación de Pagos' },
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
       { key: 'settings', label: 'Configuracion' },

@@ -43,6 +43,7 @@ import {
   TrendingUp,
   FileX2,
   Wallet,
+  CalendarClock,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -138,6 +139,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Cuentas por pagar', href: '/payables', icon: <Receipt size={18} /> },
       { label: 'Recibos de pago', href: '/receipts/payment', icon: <FileText size={18} /> },
+      { label: 'Programación de pagos', href: '/payment-schedules', icon: <CalendarClock size={18} /> },
     ],
   },
   {

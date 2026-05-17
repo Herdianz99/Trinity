@@ -134,6 +134,13 @@ enum PayableStatus {
   OVERDUE
 }
 
+enum PaymentScheduleStatus {
+  DRAFT
+  APPROVED
+  EXECUTED
+  CANCELLED
+}
+
 enum ReceiptType {
   COLLECTION
   PAYMENT
@@ -219,6 +226,7 @@ model User {
   seller              Seller?
   invoicesAsCashier   Invoice[]        @relation("InvoiceCashier")
   expenses            Expense[]
+  paymentSchedules    PaymentSchedule[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -714,28 +722,29 @@ model ReceivablePayment {
 // ============================================
 
 model Payable {
-  id              String           @id @default(cuid())
-  supplierId      String
-  supplier        Supplier         @relation(fields: [supplierId], references: [id])
-  purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
-  amountUsd       Float
-  amountBs        Float
-  exchangeRate    Float
-  retentionUsd    Float            @default(0)
-  retentionBs     Float            @default(0)
-  netPayableUsd   Float
-  netPayableBs    Float            @default(0)
-  dueDate         DateTime?
-  status          PayableStatus    @default(PENDING)
-  paidAmountUsd   Float            @default(0)
-  paidAmountBs    Float            @default(0)
-  paidAt          DateTime?
-  notes           String?
-  payments        PayablePayment[]
-  receiptItems    ReceiptItem[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                   String                @id @default(cuid())
+  supplierId           String
+  supplier             Supplier              @relation(fields: [supplierId], references: [id])
+  purchaseOrderId      String?
+  purchaseOrder        PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  amountUsd            Float
+  amountBs             Float
+  exchangeRate         Float
+  retentionUsd         Float                 @default(0)
+  retentionBs          Float                 @default(0)
+  netPayableUsd        Float
+  netPayableBs         Float                 @default(0)
+  dueDate              DateTime?
+  status               PayableStatus         @default(PENDING)
+  paidAmountUsd        Float                 @default(0)
+  paidAmountBs         Float                 @default(0)
+  paidAt               DateTime?
+  notes                String?
+  payments             PayablePayment[]
+  receiptItems         ReceiptItem[]
+  paymentScheduleItems PaymentScheduleItem[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 }
 
 model PayablePayment {
@@ -927,12 +936,13 @@ model CreditDebitNote {
   manualAmountUsd Float?
   manualPct       Float?
   notes           String?
-  appliedAt       DateTime?
-  items           CreditDebitNoteItem[]
-  receiptItems    ReceiptItem[]
-  createdById     String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  appliedAt            DateTime?
+  items                CreditDebitNoteItem[]
+  receiptItems         ReceiptItem[]
+  paymentScheduleItems PaymentScheduleItem[]
+  createdById          String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 }
 
 model CreditDebitNoteItem {
@@ -950,6 +960,47 @@ model CreditDebitNoteItem {
   ivaAmountBs  Float
   totalUsd     Float
   totalBs      Float
+}
+
+// ============================================
+// PROGRAMACION DE PAGOS
+// ============================================
+
+model PaymentSchedule {
+  id              String                @id @default(cuid())
+  number          String                @unique
+  title           String
+  status          PaymentScheduleStatus @default(DRAFT)
+  budgetUsd       Float?
+  budgetBs        Float?
+  budgetCurrency  String?               // "USD" o "Bs" — moneda elegida por el usuario
+  totalUsd        Float                 @default(0)
+  totalBs         Float                 @default(0)
+  exchangeRate    Float                 @default(0)
+  notes           String?
+  items           PaymentScheduleItem[]
+  createdById     String
+  createdBy       User                  @relation(fields: [createdById], references: [id])
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model PaymentScheduleItem {
+  id                String           @id @default(cuid())
+  scheduleId        String
+  schedule          PaymentSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  payableId         String?
+  payable           Payable?         @relation(fields: [payableId], references: [id])
+  creditDebitNoteId String?
+  creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  supplierName      String
+  description       String
+  totalAmountUsd    Float
+  totalAmountBs     Float
+  plannedAmountUsd  Float
+  plannedAmountBs   Float
+  isPaid            Boolean          @default(false)
+  createdAt         DateTime         @default(now())
 }
 
 // ============================================

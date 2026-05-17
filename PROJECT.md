@@ -855,6 +855,20 @@ model QuotationItem {
 
 ---
 
+**Programación de Pagos (PaymentSchedulesModule):**
+- Modelos: PaymentSchedule (PSC-0001), PaymentScheduleItem
+- Estados: DRAFT → APPROVED → EXECUTED | CANCELLED
+- Presupuesto opcional en USD o Bs con conversión automática
+- Items: CxP (PENDING/PARTIAL) y NDC (POSTED sin aplicar)
+- Agrupación por proveedor con subtotales
+- Validación: monto planificado ≤ saldo pendiente, presupuesto excedido
+- PDF A4 con agrupación por proveedor, presupuesto vs total, gran total
+- Solo ADMIN/SUPERVISOR pueden aprobar y ejecutar
+- Frontend: /payment-schedules (lista), /payment-schedules/new (crear), /payment-schedules/[id] (detalle con panel agregar)
+- Sidebar: bajo CxP
+
+---
+
 ## Formato de Commits
 `tipo: Session X - descripción`
 
