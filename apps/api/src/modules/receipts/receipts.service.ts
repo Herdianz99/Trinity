@@ -522,10 +522,10 @@ export class ReceiptsService {
         amountUsd: n.totalUsd,
         amountBsHistoric: n.totalBs,
         exchangeRate: n.exchangeRate,
-        balanceUsd: n.totalUsd,
+        balanceUsd: this.round2(n.totalUsd - (n.paidAmountUsd || 0)),
         status: 'POSTED',
         sign: n.type === 'NCC' ? -1 : 1, // NCC reduces payable, NDC adds
-      }));
+      })).filter((n) => n.balanceUsd > 0.01);
 
       return [...payableDocs, ...noteDocs];
     }
@@ -619,10 +619,10 @@ export class ReceiptsService {
         amountUsd: n.totalUsd,
         amountBsHistoric: n.totalBs,
         exchangeRate: n.exchangeRate,
-        balanceUsd: n.totalUsd,
+        balanceUsd: this.round2(n.totalUsd - (n.paidAmountUsd || 0)),
         status: 'POSTED',
         sign: n.type === 'NCV' ? -1 : 1, // NCV reduces receivable, NDV adds
-      })),
+      })).filter((n) => n.balanceUsd > 0.01),
       payables: [],
     };
   }

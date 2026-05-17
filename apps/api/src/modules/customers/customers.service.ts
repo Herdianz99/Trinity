@@ -205,8 +205,9 @@ export class CustomersService {
       id: n.id,
       description: `${n.number} - Devolucion ${invoiceMap.get(n.invoiceId) || ''}`,
       amountUsd: n.totalUsd,
-      remainingUsd: n.totalUsd,
-    }));
+      paidAmountUsd: n.paidAmountUsd || 0,
+      remainingUsd: Math.round((n.totalUsd - (n.paidAmountUsd || 0)) * 100) / 100,
+    })).filter((i) => i.remainingUsd > 0.01);
 
     const totalUsd = items.reduce((sum, i) => sum + i.remainingUsd, 0);
     const totalBs = Math.round(totalUsd * todayRate * 100) / 100;

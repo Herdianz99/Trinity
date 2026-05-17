@@ -995,6 +995,7 @@ model CreditDebitNote {
   manualAmountUsd Float?
   manualPct       Float?
   notes           String?
+  paidAmountUsd        Float               @default(0)
   appliedAt            DateTime?
   items                CreditDebitNoteItem[]
   receiptItems         ReceiptItem[]
