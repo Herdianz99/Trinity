@@ -71,6 +71,8 @@ export default function PurchaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState('');
 
   // Receive
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -139,6 +141,15 @@ export default function PurchaseDetailPage() {
   }, [order]);
 
   useEffect(() => { fetchOrder(); fetchMeta(); }, [fetchOrder, fetchMeta]);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(data => {
+      if (data?.permissions) setUserPermissions(data.permissions);
+      if (data?.role) setUserRole(data.role);
+    }).catch(() => {});
+  }, []);
+
+  const hasPerm = (perm: string) => userRole === 'ADMIN' || userPermissions.includes(perm);
 
   // Lazy load: movements when recepciones tab is active
   useEffect(() => {
@@ -269,12 +280,21 @@ export default function PurchaseDetailPage() {
           )}
           {order.status === 'RECEIVED' && (
             <>
-              <button onClick={() => router.push(`/credit-debit-notes/new?type=NCC&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                <FileX2 size={14} /> Nota de crédito
-              </button>
-              <button onClick={() => router.push(`/credit-debit-notes/new?type=NDC&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                <FileX2 size={14} /> Nota de débito
-              </button>
+              {hasPerm('RETURN_PURCHASE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MERCHANDISE&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Devolver mercancia
+                </button>
+              )}
+              {hasPerm('CREDIT_NOTE_PURCHASE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MANUAL&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Nota de credito
+                </button>
+              )}
+              {hasPerm('DEBIT_NOTE_PURCHASE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NDC&origin=MANUAL&purchaseOrderId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Nota de debito
+                </button>
+              )}
             </>
           )}
         </div>

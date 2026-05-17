@@ -138,30 +138,22 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
 
   html += `<div class="separator"></div>`;
 
-  // Items
+  // Items (price includes IVA)
   for (const item of items) {
-    const lineTotal = item.quantity * item.unitPrice;
+    const ivaType = item.ivaType || 'GENERAL';
+    const rate = IVA_RATES[ivaType] || 0;
+    const unitPriceWithIva = item.unitPrice * (1 + rate);
+    const lineTotal = item.quantity * unitPriceWithIva;
     html += `<div class="item-name">${item.productName || item.name || 'Producto'}</div>`;
     html += `<div class="item-detail">
-      <span>${item.quantity} x ${fmt(item.unitPrice)}</span>
+      <span>${item.quantity} x ${fmt(unitPriceWithIva)}</span>
       <span>${fmt(lineTotal)}</span>
     </div>`;
   }
 
   html += `<div class="separator"></div>`;
 
-  // Totals
-  html += `<div class="row"><span>Subtotal:</span><span>${fmt(subtotalUsd)}</span></div>`;
-
-  for (const [type, amount] of Object.entries(ivaGroups)) {
-    html += `<div class="row"><span>${IVA_LABELS[type] || type}:</span><span>${fmt(amount)}</span></div>`;
-  }
-
-  if (igtfUsd > 0) {
-    html += `<div class="row"><span>IGTF (${company.igtfPct ?? 3}%):</span><span>${fmt(igtfUsd)}</span></div>`;
-  }
-
-  html += `<div class="separator"></div>`;
+  // Total (IVA and IGTF included, not shown separately)
   html += `<div class="row bold" style="font-size:14px;"><span>TOTAL USD:</span><span>${fmt(totalUsd)}</span></div>`;
   html += `<div class="row bold" style="font-size:14px;"><span>TOTAL Bs:</span><span>${fmt(totalBs)}</span></div>`;
 

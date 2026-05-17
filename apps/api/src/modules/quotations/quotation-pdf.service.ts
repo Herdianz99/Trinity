@@ -37,14 +37,26 @@ export class QuotationPdfService {
       const pageWidth = doc.page.width - 80;
       let y = 40;
 
-      // Header - Company info
-      doc.fontSize(16).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
-      y += 20;
-      doc.fontSize(9).font('Helvetica');
-      if (config?.rif) { doc.text(`RIF: ${config.rif}`, 40, y); y += 12; }
-      if (config?.address) { doc.text(config.address, 40, y); y += 12; }
-      if (config?.phone) { doc.text(`Tel: ${config.phone}`, 40, y); y += 12; }
-      if (config?.email) { doc.text(`Email: ${config.email}`, 40, y); y += 12; }
+      // Header - Company logo or text
+      if (config?.logo) {
+        try {
+          const base64Data = config.logo.replace(/^data:image\/\w+;base64,/, '');
+          const logoBuffer = Buffer.from(base64Data, 'base64');
+          doc.image(logoBuffer, 40, y, { height: 50 });
+          y += 55;
+        } catch {
+          doc.fontSize(16).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
+          y += 20;
+        }
+      } else {
+        doc.fontSize(16).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
+        y += 20;
+        doc.fontSize(9).font('Helvetica');
+        if (config?.rif) { doc.text(`RIF: ${config.rif}`, 40, y); y += 12; }
+        if (config?.address) { doc.text(config.address, 40, y); y += 12; }
+        if (config?.phone) { doc.text(`Tel: ${config.phone}`, 40, y); y += 12; }
+        if (config?.email) { doc.text(`Email: ${config.email}`, 40, y); y += 12; }
+      }
 
       // Quotation info (right side)
       const rightX = 350;

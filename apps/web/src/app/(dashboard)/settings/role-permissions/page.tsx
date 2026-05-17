@@ -32,20 +32,38 @@ const ROLE_LABELS: Record<string, string> = {
   AUDITOR: 'Auditor',
 };
 
-const AVAILABLE_MODULES: { key: string; label: string }[] = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'sales', label: 'Ventas y POS' },
-  { key: 'quotations', label: 'Cotizaciones' },
-  { key: 'catalog', label: 'Catalogo' },
-  { key: 'inventory', label: 'Inventario' },
-  { key: 'purchases', label: 'Compras' },
-  { key: 'cash', label: 'Caja' },
-  { key: 'receivables', label: 'Cuentas por Cobrar' },
-  { key: 'payables', label: 'Cuentas por Pagar' },
-  { key: 'fiscal', label: 'Documentos Fiscales' },
-  { key: 'users', label: 'Gestion de Usuarios' },
-  { key: 'settings', label: 'Configuracion' },
+const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[] = [
+  {
+    group: 'Acceso a Modulos',
+    items: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'sales', label: 'Ventas y POS' },
+      { key: 'quotations', label: 'Cotizaciones' },
+      { key: 'catalog', label: 'Catalogo' },
+      { key: 'inventory', label: 'Inventario' },
+      { key: 'purchases', label: 'Compras' },
+      { key: 'cash', label: 'Caja' },
+      { key: 'receivables', label: 'Cuentas por Cobrar' },
+      { key: 'payables', label: 'Cuentas por Pagar' },
+      { key: 'fiscal', label: 'Documentos Fiscales' },
+      { key: 'users', label: 'Gestion de Usuarios' },
+      { key: 'settings', label: 'Configuracion' },
+    ],
+  },
+  {
+    group: 'Notas y Devoluciones',
+    items: [
+      { key: 'RETURN_INVOICE', label: 'Devolver factura' },
+      { key: 'CREDIT_NOTE_SALE', label: 'NC Venta' },
+      { key: 'DEBIT_NOTE_SALE', label: 'ND Venta' },
+      { key: 'RETURN_PURCHASE', label: 'Devolver compra' },
+      { key: 'CREDIT_NOTE_PURCHASE', label: 'NC Compra' },
+      { key: 'DEBIT_NOTE_PURCHASE', label: 'ND Compra' },
+    ],
+  },
 ];
+
+const AVAILABLE_MODULES = MODULE_GROUPS.flatMap(g => g.items);
 
 const ROLE_ORDER = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR'];
 
@@ -196,46 +214,51 @@ export default function RolePermissionsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                {AVAILABLE_MODULES.map((mod) => {
-                  const checked = isAdmin || modules.includes(mod.key);
-                  const disabled = isAdmin;
+              {MODULE_GROUPS.map((group) => (
+                <div key={group.group} className="mb-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{group.group}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {group.items.map((mod) => {
+                      const checked = isAdmin || modules.includes(mod.key);
+                      const disabled = isAdmin;
 
-                  return (
-                    <label
-                      key={mod.key}
-                      className={`
-                        flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm cursor-pointer select-none transition-all
-                        ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
-                        ${checked
-                          ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                          : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:bg-slate-800/70 hover:border-slate-600'
-                        }
-                      `}
-                    >
-                      <div className={`
-                        flex-shrink-0 w-4.5 h-4.5 rounded flex items-center justify-center border transition-colors
-                        ${checked
-                          ? 'bg-green-500 border-green-500'
-                          : 'border-slate-600 bg-slate-800'
-                        }
-                      `}
-                        style={{ width: '18px', height: '18px' }}
-                      >
-                        {checked && <Check size={12} className="text-white" />}
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={() => toggleModule(rp.role, mod.key)}
-                        className="sr-only"
-                      />
-                      <span className="truncate">{mod.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
+                      return (
+                        <label
+                          key={mod.key}
+                          className={`
+                            flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm cursor-pointer select-none transition-all
+                            ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
+                            ${checked
+                              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                              : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:bg-slate-800/70 hover:border-slate-600'
+                            }
+                          `}
+                        >
+                          <div className={`
+                            flex-shrink-0 w-4.5 h-4.5 rounded flex items-center justify-center border transition-colors
+                            ${checked
+                              ? 'bg-green-500 border-green-500'
+                              : 'border-slate-600 bg-slate-800'
+                            }
+                          `}
+                            style={{ width: '18px', height: '18px' }}
+                          >
+                            {checked && <Check size={12} className="text-white" />}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleModule(rp.role, mod.key)}
+                            className="sr-only"
+                          />
+                          <span className="truncate">{mod.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           );
         })}

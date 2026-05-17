@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileText, Loader2, Printer, Ban, ExternalLink, DollarSign, X, FileX2,
+  ArrowLeft, FileText, Loader2, Printer, ExternalLink, DollarSign, X, FileX2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -122,7 +122,8 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [cancelling, setCancelling] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState('');
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
@@ -139,26 +140,14 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => { fetchInvoice(); }, [fetchInvoice]);
 
-  async function handleCancel() {
-    if (!confirm('Anular esta factura? Esta accion no se puede deshacer.')) return;
-    setCancelling(true);
-    try {
-      const res = await fetch(`/api/proxy/invoices/${id}/cancel`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al anular');
-      }
-      setMessage({ type: 'success', text: 'Factura anulada' });
-      fetchInvoice();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setCancelling(false);
-    }
-  }
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(data => {
+      if (data?.permissions) setUserPermissions(data.permissions);
+      if (data?.role) setUserRole(data.role);
+    }).catch(() => {});
+  }, []);
+
+  const hasPerm = (perm: string) => userRole === 'ADMIN' || userPermissions.includes(perm);
 
   function fmtDate(iso: string) {
     const d = new Date(iso);
@@ -208,22 +197,33 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {['PAID', 'CREDIT'].includes(invoice.status) && (
-            <>
-              <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
-                <Printer size={14} /> Imprimir PDF
-              </button>
-              <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                <FileX2 size={14} /> Nota de crédito
-              </button>
-              <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                <FileX2 size={14} /> Nota de débito
-              </button>
-            </>
-          )}
-          {invoice.status === 'PAID' && (
-            <button onClick={handleCancel} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
-              {cancelling ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Anular
+            <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
+              <Printer size={14} /> Imprimir PDF
             </button>
+          )}
+          {invoice.status === 'PAID' && hasPerm('RETURN_INVOICE') && (
+            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+              <FileX2 size={14} /> Devolver factura
+            </button>
+          )}
+          {invoice.status === 'CREDIT' && (
+            <>
+              {hasPerm('RETURN_INVOICE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Devolver mercancia
+                </button>
+              )}
+              {hasPerm('CREDIT_NOTE_SALE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Nota de credito
+                </button>
+              )}
+              {hasPerm('DEBIT_NOTE_SALE') && (
+                <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <FileX2 size={14} /> Nota de debito
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

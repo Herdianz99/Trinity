@@ -7,6 +7,8 @@ const VALID_MODULES = [
   'dashboard', 'sales', 'quotations', 'catalog', 'inventory',
   'purchases', 'cash', 'receivables', 'payables', 'fiscal',
   'users', 'settings',
+  'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE',
+  'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE',
 ];
 
 const CACHE_PREFIX = 'role-permissions:';

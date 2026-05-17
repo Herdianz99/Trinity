@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEmail, IsBoolean } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEmail, IsBoolean, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateCompanyConfigDto {
@@ -91,4 +91,10 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsBoolean()
   allowNegativeStock?: boolean;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  logo?: string | null;
 }

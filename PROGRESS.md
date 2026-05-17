@@ -1,5 +1,45 @@
 # Trinity ERP — Progreso
 
+## Sesion 28 — Permisos Granulares para Notas y Devoluciones + Logo + Ticket POS (Completada)
+
+### Permisos granulares para notas de credito/debito
+- Nuevos valores en `PermissionKey` enum: RETURN_INVOICE, CREDIT_NOTE_SALE, DEBIT_NOTE_SALE, RETURN_PURCHASE, CREDIT_NOTE_PURCHASE, DEBIT_NOTE_PURCHASE
+- Migracion: `add_credit_debit_note_permissions`
+- Permisos por defecto en `role-permissions.ts`: ADMIN/SUPERVISOR todos, CASHIER/SELLER solo RETURN_INVOICE, BUYER: RETURN_PURCHASE + notas compra, WAREHOUSE: RETURN_PURCHASE, ACCOUNTANT: todos
+- VALID_MODULES actualizado en `role-permissions.service.ts`
+- Pagina `/settings/role-permissions`: nuevo grupo visual "Notas y Devoluciones"
+
+### Factura de venta — botones corregidos
+- Eliminado boton "Anular" (las facturas no se anulan)
+- Status PAID: solo muestra "Devolver factura" (permiso RETURN_INVOICE) → navega a `/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=x`
+- Status CREDIT: muestra "Devolver mercancia" (RETURN_INVOICE), "Nota de credito" (CREDIT_NOTE_SALE, origin=MANUAL), "Nota de debito" (DEBIT_NOTE_SALE, origin=MANUAL)
+- Permisos verificados via fetch `/api/auth/me`
+
+### Orden de compra — botones corregidos
+- Status RECEIVED: "Devolver mercancia" (RETURN_PURCHASE), "Nota de credito" (CREDIT_NOTE_PURCHASE, origin=MANUAL), "Nota de debito" (DEBIT_NOTE_PURCHASE, origin=MANUAL)
+
+### Pagina crear nota — query param origin
+- Lee `origin` de la URL: si MERCHANDISE solo muestra tab devolucion, si MANUAL solo muestra tab ajuste manual
+- Sin origin: muestra ambos tabs (acceso directo desde menu)
+- NDV/NDC siempre forzados a MANUAL
+
+### Validacion backend
+- `CreditDebitNotesService.create()`: NCV con origin=MANUAL solo aplica a facturas CREDIT
+- NDV solo aplica a facturas CREDIT
+- NCV con origin=MERCHANDISE aplica a PAID y CREDIT
+
+### Logo de empresa en reportes PDF
+- Campo `logo String? @db.Text` en CompanyConfig (base64)
+- UI de upload en `/config` con preview, limite 500KB
+- 4 PDF services (factura, cotizacion, recibo, notas) muestran solo logo sin texto cuando existe
+
+### Ticket POS 80mm
+- Precios incluyen IVA, no se muestra desglose IVA/IGTF al cliente
+- IGTF solo se aplica cuando `cashRegister.isFiscal === true`
+
+### Body parser
+- Aumentado limite a 2MB en main.ts via NestExpressApplication.useBodyParser()
+
 ## Sesion 27 — Notas de Crédito y Débito (Completada)
 
 ### Migracion de base de datos

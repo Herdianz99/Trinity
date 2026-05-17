@@ -326,7 +326,7 @@ export class InvoicesService {
   ) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: { items: true, customer: true },
+      include: { items: true, customer: true, cashRegister: true },
     });
 
     if (!invoice) throw new NotFoundException('Factura no encontrada');
@@ -432,12 +432,14 @@ export class InvoicesService {
     }
 
     // IGTF: se calcula UNA sola vez por factura, sobre el primer pago en divisas
+    // Solo aplica si la caja es fiscal
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;
+    const isCajaFiscal = invoice.cashRegister?.isFiscal || false;
     let invoiceIgtfUsd = 0;
     let invoiceIgtfBs = 0;
 
-    if (isIGTFContributor && invoice.igtfUsd === 0) {
+    if (isIGTFContributor && isCajaFiscal && invoice.igtfUsd === 0) {
       const firstForeignPayment = dto.payments.find(p => {
         const method = methodMap.get(p.methodId);
         return method?.isDivisa;

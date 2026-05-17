@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Printer, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon } from 'lucide-react';
 
 interface CompanyConfig {
   companyName: string;
@@ -59,6 +59,12 @@ export default function ConfigPage() {
   const [fetchingBcv, setFetchingBcv] = useState(false);
   const [savingRate, setSavingRate] = useState(false);
 
+  // Logo state
+  const [logo, setLogo] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoChanged, setLogoChanged] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Print area state
   const [printAreas, setPrintAreas] = useState<{ id: string; name: string }[]>([]);
   const [selectedPrintAreaId, setSelectedPrintAreaId] = useState('');
@@ -114,6 +120,10 @@ export default function ConfigPage() {
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
         });
+        if (data.logo) {
+          setLogo(data.logo);
+          setLogoPreview(data.logo);
+        }
       }
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar la configuracion' });
@@ -165,6 +175,7 @@ export default function ConfigPage() {
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
           ...(creditAuthPassword ? { creditAuthPassword } : {}),
+          ...(logoChanged ? { logo } : {}),
         }),
       });
 
@@ -223,6 +234,32 @@ export default function ConfigPage() {
     } finally {
       setSavingRate(false);
     }
+  }
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 500 * 1024) {
+      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 500KB' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      setLogo(dataUri);
+      setLogoPreview(dataUri);
+      setLogoChanged(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveLogo() {
+    setLogo(null);
+    setLogoPreview(null);
+    setLogoChanged(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function handleChange(field: keyof CompanyConfig, value: string | number | boolean) {
@@ -327,6 +364,68 @@ export default function ConfigPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Logo Section */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <ImageIcon size={20} className="text-green-400" />
+            <h2 className="text-lg font-semibold text-white">Logo de la Empresa</h2>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            Este logo aparecera en facturas, cotizaciones, recibos y notas de credito/debito. Maximo 500KB.
+          </p>
+          <div className="flex items-start gap-6">
+            {logoPreview ? (
+              <div className="relative group">
+                <img
+                  src={logoPreview}
+                  alt="Logo"
+                  className="h-24 w-auto max-w-[200px] object-contain rounded-lg border border-slate-700 bg-white p-2"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Eliminar logo"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="h-24 w-32 flex items-center justify-center rounded-lg border border-dashed border-slate-600 bg-slate-800/50">
+                <ImageIcon size={28} className="text-slate-600" />
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary !py-2 text-sm flex items-center gap-2"
+              >
+                <Upload size={14} />
+                {logoPreview ? 'Cambiar logo' : 'Subir logo'}
+              </button>
+              {logoPreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="btn-secondary !py-2 text-sm flex items-center gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
+                >
+                  <Trash2 size={14} />
+                  Eliminar
+                </button>
+              )}
+              <p className="text-xs text-slate-500">PNG, JPG o SVG. Se guardara al presionar &quot;Guardar configuracion&quot;.</p>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">

@@ -112,24 +112,24 @@ export default function CreditDebitNotesPage() {
               placeholder="Buscar por número..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="input pl-9 w-full"
+              className="input-field pl-9 w-full"
             />
           </div>
-          <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="input">
+          <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="input-field">
             <option value="">Todos los tipos</option>
             <option value="NCV">NC Venta</option>
             <option value="NDV">ND Venta</option>
             <option value="NCC">NC Compra</option>
             <option value="NDC">ND Compra</option>
           </select>
-          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="input">
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="input-field">
             <option value="">Todos los estados</option>
             <option value="DRAFT">Borrador</option>
             <option value="POSTED">Confirmada</option>
             <option value="CANCELLED">Anulada</option>
           </select>
-          <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="input" />
-          <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="input" />
+          <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="input-field" />
+          <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="input-field" />
         </div>
       </div>
 

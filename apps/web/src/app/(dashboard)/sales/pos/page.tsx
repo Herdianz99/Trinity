@@ -407,9 +407,9 @@ export default function POSPage() {
   const totalUsd = subtotalUsd + totalIva;
   const totalBs = totalUsd * exchangeRate;
 
-  // IGTF: se calcula una sola vez sobre el primer pago en divisas
+  // IGTF: se calcula una sola vez sobre el primer pago en divisas (solo en caja fiscal)
   const firstForeignPayment = payments.find(p => p.isDivisa);
-  const isIGTFApplicable = companyConfig?.isIGTFContributor && firstForeignPayment && firstForeignPayment.amountUsd > 0;
+  const isIGTFApplicable = companyConfig?.isIGTFContributor && selectedCashRegister?.isFiscal && firstForeignPayment && firstForeignPayment.amountUsd > 0;
   const igtfUsd = isIGTFApplicable
     ? Math.round(firstForeignPayment.amountUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
     : 0;

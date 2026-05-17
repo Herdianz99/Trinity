@@ -51,9 +51,10 @@ export default function NewCreditDebitNotePage() {
   const noteType = searchParams.get('type') || 'NCV';
   const invoiceId = searchParams.get('invoiceId') || '';
   const purchaseOrderId = searchParams.get('purchaseOrderId') || '';
+  const originParam = searchParams.get('origin') as 'MERCHANDISE' | 'MANUAL' | null;
 
   const [parentDoc, setParentDoc] = useState<ParentDoc | null>(null);
-  const [origin, setOrigin] = useState<'MERCHANDISE' | 'MANUAL'>('MERCHANDISE');
+  const [origin, setOrigin] = useState<'MERCHANDISE' | 'MANUAL'>(originParam || 'MERCHANDISE');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -115,6 +116,13 @@ export default function NewCreditDebitNotePage() {
   }, [invoiceId, purchaseOrderId, isSale]);
 
   useEffect(() => { fetchParentDoc(); }, [fetchParentDoc]);
+
+  // NDV/NDC are always manual
+  useEffect(() => {
+    if (['NDV', 'NDC'].includes(noteType)) {
+      setOrigin('MANUAL');
+    }
+  }, [noteType]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -260,8 +268,8 @@ export default function NewCreditDebitNotePage() {
         </div>
       )}
 
-      {/* Origin tabs */}
-      {['NCV', 'NCC'].includes(noteType) && (
+      {/* Origin tabs - only show if no origin param forces a specific mode */}
+      {['NCV', 'NCC'].includes(noteType) && !originParam && (
         <div className="flex gap-2">
           <button
             onClick={() => setOrigin('MERCHANDISE')}
@@ -278,8 +286,7 @@ export default function NewCreditDebitNotePage() {
         </div>
       )}
 
-      {/* NDV/NDC are always manual */}
-      {['NDV', 'NDC'].includes(noteType) && (() => { if (origin !== 'MANUAL') setOrigin('MANUAL'); return null; })()}
+      {/* NDV/NDC are always manual - handled by useEffect below */}
 
       {/* MERCHANDISE tab */}
       {origin === 'MERCHANDISE' && (
@@ -309,7 +316,7 @@ export default function NewCreditDebitNotePage() {
                         max={item.quantity}
                         value={qty || ''}
                         onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, item.quantity) }))}
-                        className="input w-20 text-right"
+                        className="input-field w-20 text-right"
                       />
                     </td>
                     <td className="px-4 py-3 text-right text-white font-mono">$ {fmt(lineTotal)}</td>
@@ -330,7 +337,7 @@ export default function NewCreditDebitNotePage() {
                         max={item.receivedQty}
                         value={qty || ''}
                         onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, item.receivedQty) }))}
-                        className="input w-20 text-right"
+                        className="input-field w-20 text-right"
                       />
                     </td>
                     <td className="px-4 py-3 text-right text-white font-mono">$ {fmt(lineTotal)}</td>
@@ -366,7 +373,7 @@ export default function NewCreditDebitNotePage() {
                   step={0.01}
                   value={manualAmountUsd || ''}
                   onChange={(e) => setManualAmountUsd(Number(e.target.value) || 0)}
-                  className="input w-full"
+                  className="input-field w-full"
                 />
               </div>
               <div>
@@ -385,7 +392,7 @@ export default function NewCreditDebitNotePage() {
                   step={0.01}
                   value={manualPct || ''}
                   onChange={(e) => setManualPct(Number(e.target.value) || 0)}
-                  className="input w-full"
+                  className="input-field w-full"
                 />
               </div>
               <div>
@@ -408,7 +415,7 @@ export default function NewCreditDebitNotePage() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="input w-full"
+          className="input-field w-full"
           placeholder="Motivo de la nota..."
         />
       </div>

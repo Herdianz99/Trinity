@@ -107,6 +107,24 @@ export class CreditDebitNotesService {
       throw new BadRequestException('purchaseOrderId es requerido para notas de compra');
     }
 
+    // Validate invoice status for sales notes
+    if (['NCV', 'NDV'].includes(dto.type) && dto.invoiceId) {
+      const invoice = await this.prisma.invoice.findUnique({
+        where: { id: dto.invoiceId },
+        select: { status: true },
+      });
+      if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+      // NCV with MANUAL origin only applies to CREDIT invoices
+      if (dto.type === 'NCV' && dto.origin === 'MANUAL' && invoice.status !== 'CREDIT') {
+        throw new BadRequestException('Las notas de crédito por ajuste solo aplican a facturas a crédito');
+      }
+      // NDV only applies to CREDIT invoices
+      if (dto.type === 'NDV' && invoice.status !== 'CREDIT') {
+        throw new BadRequestException('Las notas de débito solo aplican a facturas a crédito');
+      }
+    }
+
     // Get exchange rate for today
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);

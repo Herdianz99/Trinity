@@ -82,6 +82,12 @@ enum PurchaseStatus {
 
 enum PermissionKey {
   OVERRIDE_PRICE
+  RETURN_INVOICE
+  CREDIT_NOTE_SALE
+  DEBIT_NOTE_SALE
+  RETURN_PURCHASE
+  CREDIT_NOTE_PURCHASE
+  DEBIT_NOTE_PURCHASE
 }
 
 enum SessionStatus {
@@ -167,6 +173,7 @@ model CompanyConfig {
   igtfPct                Float    @default(3)
   fiscalCreditCode       String   @default("01")
   allowNegativeStock     Boolean  @default(true)
+  logo                   String?  @db.Text
   updatedAt              DateTime @updatedAt
 }
 

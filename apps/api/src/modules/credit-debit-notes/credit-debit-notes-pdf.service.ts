@@ -55,16 +55,28 @@ export class CreditDebitNotesPdfService {
       const pageWidth = doc.page.width - 80;
       let y = 40;
 
-      // Header
-      doc.fontSize(14).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
-      y += 18;
-      if (config?.rif) {
-        doc.fontSize(9).font('Helvetica').text(`RIF: ${config.rif}`, 40, y);
-        y += 12;
-      }
-      if (config?.address) {
-        doc.fontSize(8).font('Helvetica').text(config.address, 40, y);
-        y += 12;
+      // Header - Company logo or text
+      if (config?.logo) {
+        try {
+          const base64Data = config.logo.replace(/^data:image\/\w+;base64,/, '');
+          const logoBuffer = Buffer.from(base64Data, 'base64');
+          doc.image(logoBuffer, 40, y, { height: 50 });
+          y += 55;
+        } catch {
+          doc.fontSize(14).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
+          y += 18;
+        }
+      } else {
+        doc.fontSize(14).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', 40, y);
+        y += 18;
+        if (config?.rif) {
+          doc.fontSize(9).font('Helvetica').text(`RIF: ${config.rif}`, 40, y);
+          y += 12;
+        }
+        if (config?.address) {
+          doc.fontSize(8).font('Helvetica').text(config.address, 40, y);
+          y += 12;
+        }
       }
 
       // Title
