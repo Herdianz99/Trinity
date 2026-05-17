@@ -8,7 +8,7 @@ set -e
 # ═══════════════════════════════════════════════════════════
 
 PROJECT_DIR="/opt/Trinity"
-PRISMA_VERSION="prisma@5.22.0"
+PRISMA_BIN="$PROJECT_DIR/node_modules/.bin/prisma"
 
 # Colores
 RED='\033[0;31m'
@@ -60,7 +60,7 @@ fi
 
 # ── 3. Migraciones de base de datos ──
 log "Aplicando migraciones de base de datos..."
-MIGRATION_OUTPUT=$(cd "$PROJECT_DIR/packages/database" && npx "$PRISMA_VERSION" migrate deploy 2>&1)
+MIGRATION_OUTPUT=$(cd "$PROJECT_DIR" && "$PRISMA_BIN" migrate deploy --schema=packages/database/prisma/schema.prisma 2>&1)
 if echo "$MIGRATION_OUTPUT" | grep -q "have been successfully applied"; then
   ok "Migraciones aplicadas correctamente"
 elif echo "$MIGRATION_OUTPUT" | grep -q "No pending migrations"; then
@@ -77,7 +77,7 @@ fi
 # ── 4. Regenerar Prisma Client ──
 log "Regenerando Prisma Client..."
 cd "$PROJECT_DIR"
-npx "$PRISMA_VERSION" generate --schema=packages/database/prisma/schema.prisma 2>&1 | tail -2
+"$PRISMA_BIN" generate --schema=packages/database/prisma/schema.prisma 2>&1 | tail -2
 ok "Prisma Client regenerado"
 
 # ── 5. Build y restart API ──
