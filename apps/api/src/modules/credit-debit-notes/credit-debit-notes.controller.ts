@@ -39,12 +39,12 @@ export class CreditDebitNotesController {
   }
 
   @Post()
-  create(@Body() dto: CreateNoteDto, @CurrentUser() userId: string) {
+  create(@Body() dto: CreateNoteDto, @CurrentUser('id') userId: string) {
     return this.service.create(dto, userId);
   }
 
   @Post(':id/post')
-  post(@Param('id') id: string, @CurrentUser() userId: string) {
+  post(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.service.post(id, userId);
   }
 
