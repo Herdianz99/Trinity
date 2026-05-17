@@ -10,6 +10,10 @@ class ReceiptItemDto {
   @IsString()
   payableId?: string;
 
+  @IsOptional()
+  @IsString()
+  creditDebitNoteId?: string;
+
   @IsNumber()
   @IsIn([1, -1])
   sign: number;

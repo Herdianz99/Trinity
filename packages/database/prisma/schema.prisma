@@ -148,6 +148,8 @@ enum ReceiptItemType {
   RECEIVABLE
   PAYABLE
   DIFFERENTIAL
+  CREDIT_NOTE
+  DEBIT_NOTE
 }
 
 // ============================================
@@ -781,12 +783,14 @@ model ReceiptItem {
   id               String          @id @default(cuid())
   receiptId        String
   receipt          Receipt         @relation(fields: [receiptId], references: [id])
-  itemType         ReceiptItemType
-  receivableId     String?
-  receivable       Receivable?     @relation(fields: [receivableId], references: [id])
-  payableId        String?
-  payable          Payable?        @relation(fields: [payableId], references: [id])
-  description      String
+  itemType             ReceiptItemType
+  receivableId         String?
+  receivable           Receivable?      @relation(fields: [receivableId], references: [id])
+  payableId            String?
+  payable              Payable?         @relation(fields: [payableId], references: [id])
+  creditDebitNoteId    String?
+  creditDebitNote      CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  description          String
   amountUsd        Float           @default(0)
   amountBsHistoric Float           @default(0)
   amountBsToday    Float           @default(0)
@@ -921,7 +925,9 @@ model CreditDebitNote {
   manualAmountUsd Float?
   manualPct       Float?
   notes           String?
+  appliedAt       DateTime?
   items           CreditDebitNoteItem[]
+  receiptItems    ReceiptItem[]
   createdById     String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt

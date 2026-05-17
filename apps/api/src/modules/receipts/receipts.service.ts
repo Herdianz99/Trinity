@@ -73,6 +73,9 @@ export class ReceiptsService {
             payable: {
               select: { id: true, purchaseOrder: { select: { id: true, number: true } }, netPayableUsd: true, netPayableBs: true, exchangeRate: true, status: true },
             },
+            creditDebitNote: {
+              select: { id: true, number: true, type: true, totalUsd: true, totalBs: true },
+            },
           },
         },
         payments: {
@@ -107,9 +110,10 @@ export class ReceiptsService {
 
     // Build items
     const items: Array<{
-      itemType: 'RECEIVABLE' | 'PAYABLE';
+      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
       receivableId?: string;
       payableId?: string;
+      creditDebitNoteId?: string;
       description: string;
       amountUsd: number;
       amountBsHistoric: number;
@@ -162,6 +166,30 @@ export class ReceiptsService {
           itemType: 'PAYABLE',
           payableId: item.payableId,
           description: payable.purchaseOrder?.number || `CxP-${item.payableId.slice(-6)}`,
+          amountUsd,
+          amountBsHistoric,
+          amountBsToday,
+          differentialBs: 0,
+          sign: item.sign,
+        });
+      } else if (item.creditDebitNoteId) {
+        const note = await this.prisma.creditDebitNote.findUnique({
+          where: { id: item.creditDebitNoteId },
+          include: { invoice: { select: { number: true } }, purchaseOrder: { select: { number: true } } },
+        });
+        if (!note) throw new BadRequestException(`Nota ${item.creditDebitNoteId} no encontrada`);
+        if (note.status !== 'POSTED') throw new BadRequestException(`Nota ${note.number} no está confirmada`);
+        if (note.appliedAt) throw new BadRequestException(`Nota ${note.number} ya fue aplicada`);
+
+        const isCredit = ['NCV', 'NCC'].includes(note.type);
+        const amountUsd = note.totalUsd;
+        const amountBsHistoric = note.totalBs;
+        const amountBsToday = this.round2(amountUsd * rate.rate);
+
+        items.push({
+          itemType: isCredit ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
+          creditDebitNoteId: item.creditDebitNoteId,
+          description: `${note.number} (${note.invoice?.number || note.purchaseOrder?.number || ''})`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -238,6 +266,7 @@ export class ReceiptsService {
               itemType: item.itemType,
               receivableId: item.receivableId || null,
               payableId: item.payableId || null,
+              creditDebitNoteId: item.creditDebitNoteId || null,
               description: item.description,
               amountUsd: item.amountUsd,
               amountBsHistoric: item.amountBsHistoric,
@@ -362,6 +391,12 @@ export class ReceiptsService {
               paidAt: isPaid ? new Date() : null,
             },
           });
+        } else if ((item.itemType === 'CREDIT_NOTE' || item.itemType === 'DEBIT_NOTE') && item.creditDebitNoteId) {
+          // Mark note as applied
+          await tx.creditDebitNote.update({
+            where: { id: item.creditDebitNoteId },
+            data: { appliedAt: new Date() },
+          });
         }
         // DIFFERENTIAL items don't generate CxC/CxP movements
       }
@@ -424,7 +459,7 @@ export class ReceiptsService {
   }
 
   async getPendingDocuments(query: QueryPendingDocumentsDto) {
-    // Legacy support: type=PAYMENT + entityId → flat array of payables
+    // Legacy support: type=PAYMENT + entityId → flat array of payables + notes
     if (query.type === 'PAYMENT' && query.entityId) {
       const where: any = {
         supplierId: query.entityId,
@@ -445,7 +480,27 @@ export class ReceiptsService {
         },
       });
 
-      return payables.map((p) => ({
+      // Fetch purchase notes (NCC/NDC) for this supplier's POs
+      const supplierPOs = await this.prisma.purchaseOrder.findMany({
+        where: { supplierId: query.entityId },
+        select: { id: true },
+      });
+      const poIds = supplierPOs.map((po) => po.id);
+
+      const purchaseNotes = poIds.length > 0 ? await this.prisma.creditDebitNote.findMany({
+        where: {
+          purchaseOrderId: { in: poIds },
+          type: { in: ['NCC', 'NDC'] },
+          status: 'POSTED',
+          appliedAt: null,
+        },
+        include: {
+          purchaseOrder: { select: { number: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }) : [];
+
+      const payableDocs = payables.map((p) => ({
         id: p.id,
         documentType: 'CxP',
         payableId: p.id,
@@ -457,6 +512,22 @@ export class ReceiptsService {
         balanceUsd: this.round2(p.netPayableUsd - p.paidAmountUsd),
         status: p.status,
       }));
+
+      const noteDocs = purchaseNotes.map((n) => ({
+        id: n.id,
+        documentType: n.type === 'NCC' ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
+        creditDebitNoteId: n.id,
+        description: `${n.number} (${n.purchaseOrder?.number || ''})`,
+        date: n.createdAt,
+        amountUsd: n.totalUsd,
+        amountBsHistoric: n.totalBs,
+        exchangeRate: n.exchangeRate,
+        balanceUsd: n.totalUsd,
+        status: 'POSTED',
+        sign: n.type === 'NCC' ? -1 : 1, // NCC reduces payable, NDC adds
+      }));
+
+      return [...payableDocs, ...noteDocs];
     }
 
     // Collection mode: by customer or platform
@@ -489,6 +560,32 @@ export class ReceiptsService {
       },
     });
 
+    // Fetch sale notes (NCV/NDV) for this customer's invoices
+    const customerId = query.customerId || (query.type === 'COLLECTION' ? query.entityId : null);
+    let saleNotes: any[] = [];
+    if (customerId) {
+      const customerInvoices = await this.prisma.invoice.findMany({
+        where: { customerId },
+        select: { id: true },
+      });
+      const invoiceIds = customerInvoices.map((inv) => inv.id);
+
+      if (invoiceIds.length > 0) {
+        saleNotes = await this.prisma.creditDebitNote.findMany({
+          where: {
+            invoiceId: { in: invoiceIds },
+            type: { in: ['NCV', 'NDV'] },
+            status: 'POSTED',
+            appliedAt: null,
+          },
+          include: {
+            invoice: { select: { number: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+      }
+    }
+
     return {
       receivables: receivables.map((r) => ({
         id: r.id,
@@ -511,6 +608,20 @@ export class ReceiptsService {
         exchangeRate: r.exchangeRate,
         balanceUsd: this.round2(r.amountUsd - r.paidAmountUsd),
         status: r.status,
+      })),
+      notes: saleNotes.map((n) => ({
+        id: n.id,
+        documentType: n.type === 'NCV' ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
+        creditDebitNoteId: n.id,
+        noteNumber: n.number,
+        description: `${n.number} (${n.invoice?.number || ''})`,
+        date: n.createdAt,
+        amountUsd: n.totalUsd,
+        amountBs: n.totalBs,
+        exchangeRate: n.exchangeRate,
+        balanceUsd: n.totalUsd,
+        status: 'POSTED',
+        sign: n.type === 'NCV' ? -1 : 1, // NCV reduces receivable, NDV adds
       })),
       payables: [],
     };

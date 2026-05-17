@@ -1,5 +1,28 @@
 # Trinity ERP — Progreso
 
+## Sesion 28b — Notas de Credito/Debito como Documentos Independientes (Completada)
+
+### Cambio de arquitectura
+- Las notas de credito/debito ya NO modifican CxC/CxP automaticamente al confirmarse
+- Son documentos independientes que se aplican a traves del recibo de cobro/pago
+- Al confirmar (post): solo hacen movimientos de inventario (RETURN_IN/RETURN_OUT) y cambian status a POSTED
+
+### Schema
+- Nuevos valores en `ReceiptItemType`: CREDIT_NOTE, DEBIT_NOTE
+- Campo `creditDebitNoteId` en ReceiptItem (relacion con CreditDebitNote)
+- Campo `appliedAt DateTime?` en CreditDebitNote (marca cuando fue aplicada en un recibo)
+- Migracion: `fix_credit_debit_notes_receipt_integration`
+
+### Backend
+- `CreditDebitNotesService.post()`: eliminada toda logica de CxC/CxP (Receivable/Payable)
+- `ReceiptsService.getPendingDocuments()`:
+  - Para clientes: retorna notas NCV (sign -1) y NDV (sign +1) como documentos seleccionables
+  - Para proveedores: retorna notas NCC (sign -1) y NDC (sign +1) como documentos seleccionables
+  - Solo notas con status POSTED y appliedAt null
+- `ReceiptsService.create()`: acepta items con creditDebitNoteId
+- `ReceiptsService.post()`: marca notas como aplicadas (appliedAt = now)
+- `CreateReceiptDto`: campo creditDebitNoteId en ReceiptItemDto
+
 ## Sesion 28 — Permisos Granulares para Notas y Devoluciones + Logo + Ticket POS (Completada)
 
 ### Permisos granulares para notas de credito/debito

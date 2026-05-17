@@ -330,12 +330,12 @@ export class CreditDebitNotesService {
   async post(id: string, userId: string) {
     const note = await this.prisma.creditDebitNote.findUnique({
       where: { id },
-      include: { items: true, invoice: true, purchaseOrder: true },
+      include: { items: true },
     });
     if (!note) throw new NotFoundException('Nota no encontrada');
     if (note.status !== 'DRAFT') throw new BadRequestException('Solo se pueden confirmar notas en borrador');
 
-    // Get default warehouse
+    // Get default warehouse for inventory movements
     const config = await this.prisma.companyConfig.findFirst();
     const defaultWarehouse = await this.prisma.warehouse.findFirst({
       where: { isDefault: true },
@@ -343,186 +343,89 @@ export class CreditDebitNotesService {
     const warehouseId = config?.defaultWarehouseId || defaultWarehouse?.id;
 
     await this.prisma.$transaction(async (tx) => {
-      switch (note.type) {
-        case 'NCV': {
-          // Nota Crédito Venta: return items to inventory, reduce CxC
-          if (note.origin === 'MERCHANDISE' && warehouseId) {
-            for (const item of note.items) {
-              if (!item.productId) continue;
-              await tx.stockMovement.create({
-                data: {
-                  productId: item.productId,
-                  warehouseId,
-                  type: 'RETURN_IN',
-                  quantity: item.quantity,
-                  costUsd: item.unitPriceUsd,
-                  reason: `NC Venta ${note.number}`,
-                  reference: note.number,
-                  createdById: userId,
-                },
-              });
-              await tx.stock.upsert({
-                where: { productId_warehouseId: { productId: item.productId, warehouseId } },
-                update: { quantity: { increment: item.quantity } },
-                create: { productId: item.productId, warehouseId, quantity: item.quantity },
-              });
-            }
+      // NCV with MERCHANDISE: return items to inventory
+      if (note.type === 'NCV' && note.origin === 'MERCHANDISE' && warehouseId) {
+        for (const item of note.items) {
+          if (!item.productId) continue;
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              warehouseId,
+              type: 'RETURN_IN',
+              quantity: item.quantity,
+              costUsd: item.unitPriceUsd,
+              reason: `NC Venta ${note.number}`,
+              reference: note.number,
+              createdById: userId,
+            },
+          });
+          await tx.stock.upsert({
+            where: { productId_warehouseId: { productId: item.productId, warehouseId } },
+            update: { quantity: { increment: item.quantity } },
+            create: { productId: item.productId, warehouseId, quantity: item.quantity },
+          });
+        }
 
-            // Update invoice status: RETURNED or PARTIALLY_RETURNED
-            if (note.invoiceId) {
-              const invoice = await tx.invoice.findUnique({
-                where: { id: note.invoiceId },
-                include: { items: true },
-              });
-              if (invoice) {
-                // Sum all returned qty from this note's items
-                const returnedQtyMap: Record<string, number> = {};
-                for (const item of note.items) {
-                  if (item.productId) {
-                    returnedQtyMap[item.productId] = (returnedQtyMap[item.productId] || 0) + item.quantity;
-                  }
+        // Update invoice status: RETURNED or PARTIALLY_RETURNED
+        if (note.invoiceId) {
+          const invoice = await tx.invoice.findUnique({
+            where: { id: note.invoiceId },
+            include: { items: true },
+          });
+          if (invoice) {
+            const allPostedNotes = await tx.creditDebitNote.findMany({
+              where: { invoiceId: note.invoiceId, type: 'NCV', origin: 'MERCHANDISE', status: 'POSTED' },
+              include: { items: true },
+            });
+            const totalReturnedByProduct: Record<string, number> = {};
+            for (const n of allPostedNotes) {
+              for (const item of n.items) {
+                if (item.productId) {
+                  totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
                 }
-                // Check if total returned matches total in invoice (considering all posted NCV notes)
-                const allPostedNotes = await tx.creditDebitNote.findMany({
-                  where: { invoiceId: note.invoiceId, type: 'NCV', origin: 'MERCHANDISE', status: 'POSTED' },
-                  include: { items: true },
-                });
-                const totalReturnedByProduct: Record<string, number> = {};
-                for (const n of allPostedNotes) {
-                  for (const item of n.items) {
-                    if (item.productId) {
-                      totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
-                    }
-                  }
-                }
-                // Add current note items (not yet POSTED at this point in transaction)
-                for (const item of note.items) {
-                  if (item.productId) {
-                    totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
-                  }
-                }
-
-                const allReturned = invoice.items.every(
-                  (invItem) => (totalReturnedByProduct[invItem.productId] || 0) >= invItem.quantity
-                );
-
-                await tx.invoice.update({
-                  where: { id: note.invoiceId },
-                  data: { status: allReturned ? 'RETURNED' : 'PARTIALLY_RETURNED' },
-                });
               }
             }
-          }
-          // Reduce Receivable
-          if (note.invoiceId) {
-            const receivable = await tx.receivable.findFirst({
-              where: { invoiceId: note.invoiceId, status: { in: ['PENDING', 'PARTIAL'] } },
-            });
-            if (receivable) {
-              const newPaidAmount = this.round2(receivable.paidAmountUsd + note.totalUsd);
-              const newStatus = newPaidAmount >= receivable.amountUsd ? 'PAID' : 'PARTIAL';
-              await tx.receivable.update({
-                where: { id: receivable.id },
-                data: {
-                  paidAmountUsd: newPaidAmount,
-                  paidAmountBs: this.round2(newPaidAmount * note.exchangeRate),
-                  status: newStatus,
-                  paidAt: newStatus === 'PAID' ? new Date() : undefined,
-                },
-              });
-            }
-          }
-          break;
-        }
-
-        case 'NDV': {
-          // Nota Débito Venta: create new Receivable
-          if (note.invoiceId && note.invoice) {
-            await tx.receivable.create({
-              data: {
-                type: 'CUSTOMER_CREDIT',
-                customerId: note.invoice.customerId,
-                invoiceId: note.invoiceId,
-                amountUsd: note.totalUsd,
-                amountBs: note.totalBs,
-                exchangeRate: note.exchangeRate,
-                status: 'PENDING',
-                notes: `Nota Débito ${note.number}`,
-              },
-            });
-          }
-          break;
-        }
-
-        case 'NCC': {
-          // Nota Crédito Compra: remove items from inventory, reduce CxP
-          if (note.origin === 'MERCHANDISE' && warehouseId) {
+            // Add current note items (not yet POSTED at this point)
             for (const item of note.items) {
-              if (!item.productId) continue;
-              await tx.stockMovement.create({
-                data: {
-                  productId: item.productId,
-                  warehouseId,
-                  type: 'RETURN_OUT',
-                  quantity: item.quantity,
-                  costUsd: item.unitPriceUsd,
-                  reason: `NC Compra ${note.number}`,
-                  reference: note.number,
-                  createdById: userId,
-                },
-              });
-              await tx.stock.update({
-                where: { productId_warehouseId: { productId: item.productId, warehouseId } },
-                data: { quantity: { decrement: item.quantity } },
-              });
+              if (item.productId) {
+                totalReturnedByProduct[item.productId] = (totalReturnedByProduct[item.productId] || 0) + item.quantity;
+              }
             }
-          }
-          // Reduce Payable
-          if (note.purchaseOrderId) {
-            const payable = await tx.payable.findFirst({
-              where: { purchaseOrderId: note.purchaseOrderId, status: { in: ['PENDING', 'PARTIAL'] } },
-            });
-            if (payable) {
-              const newPaidAmount = this.round2(payable.paidAmountUsd + note.totalUsd);
-              const newStatus = newPaidAmount >= payable.netPayableUsd ? 'PAID' : 'PARTIAL';
-              await tx.payable.update({
-                where: { id: payable.id },
-                data: {
-                  paidAmountUsd: newPaidAmount,
-                  paidAmountBs: this.round2(newPaidAmount * note.exchangeRate),
-                  status: newStatus,
-                  paidAt: newStatus === 'PAID' ? new Date() : undefined,
-                },
-              });
-            }
-          }
-          break;
-        }
-
-        case 'NDC': {
-          // Nota Débito Compra: create new Payable
-          if (note.purchaseOrderId && note.purchaseOrder) {
-            await tx.payable.create({
-              data: {
-                supplierId: note.purchaseOrder.supplierId,
-                purchaseOrderId: note.purchaseOrderId,
-                amountUsd: note.totalUsd,
-                amountBs: note.totalBs,
-                exchangeRate: note.exchangeRate,
-                retentionUsd: 0,
-                retentionBs: 0,
-                netPayableUsd: note.totalUsd,
-                netPayableBs: note.totalBs,
-                status: 'PENDING',
-                notes: `Nota Débito ${note.number}`,
-              },
+            const allReturned = invoice.items.every(
+              (invItem) => (totalReturnedByProduct[invItem.productId] || 0) >= invItem.quantity
+            );
+            await tx.invoice.update({
+              where: { id: note.invoiceId },
+              data: { status: allReturned ? 'RETURNED' : 'PARTIALLY_RETURNED' },
             });
           }
-          break;
         }
       }
 
-      // Update note status
+      // NCC with MERCHANDISE: remove items from inventory
+      if (note.type === 'NCC' && note.origin === 'MERCHANDISE' && warehouseId) {
+        for (const item of note.items) {
+          if (!item.productId) continue;
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              warehouseId,
+              type: 'RETURN_OUT',
+              quantity: item.quantity,
+              costUsd: item.unitPriceUsd,
+              reason: `NC Compra ${note.number}`,
+              reference: note.number,
+              createdById: userId,
+            },
+          });
+          await tx.stock.update({
+            where: { productId_warehouseId: { productId: item.productId, warehouseId } },
+            data: { quantity: { decrement: item.quantity } },
+          });
+        }
+      }
+
+      // Update note status to POSTED (no CxC/CxP effects — applied via receipts)
       await tx.creditDebitNote.update({
         where: { id },
         data: { status: 'POSTED' },
