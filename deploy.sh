@@ -52,7 +52,7 @@ fi
 # ── 2. Instalar dependencias ──
 log "Instalando dependencias..."
 if git diff "$BEFORE".."$AFTER" --name-only 2>/dev/null | grep -qE 'package\.json|pnpm-lock'; then
-  pnpm install --frozen-lockfile 2>&1 | tail -3
+  pnpm install --no-frozen-lockfile 2>&1 | tail -5
   ok "Dependencias actualizadas"
 else
   ok "Sin cambios en dependencias (saltado)"
@@ -60,25 +60,29 @@ fi
 
 # ── 3. Migraciones de base de datos ──
 log "Aplicando migraciones de base de datos..."
-MIGRATION_OUTPUT=$(cd "$PROJECT_DIR" && "$PRISMA_BIN" migrate deploy --schema=packages/database/prisma/schema.prisma 2>&1)
-if echo "$MIGRATION_OUTPUT" | grep -q "have been successfully applied"; then
+cd "$PROJECT_DIR"
+SCHEMA="packages/database/prisma/schema.prisma"
+echo "  Usando prisma: $PRISMA_BIN"
+echo "  Schema: $SCHEMA"
+if timeout 120 "$PRISMA_BIN" migrate deploy --schema="$SCHEMA" 2>&1; then
   ok "Migraciones aplicadas correctamente"
-elif echo "$MIGRATION_OUTPUT" | grep -q "No pending migrations"; then
-  ok "Sin migraciones pendientes"
 else
-  echo "$MIGRATION_OUTPUT" | tail -5
-  if echo "$MIGRATION_OUTPUT" | grep -qi "error"; then
-    fail "Error en migraciones"
+  EXIT_CODE=$?
+  if [ $EXIT_CODE -eq 124 ]; then
+    fail "Migraciones: timeout después de 120 segundos"
   else
-    ok "Migraciones procesadas"
+    fail "Error en migraciones (exit code: $EXIT_CODE)"
   fi
 fi
 
 # ── 4. Regenerar Prisma Client ──
 log "Regenerando Prisma Client..."
 cd "$PROJECT_DIR"
-"$PRISMA_BIN" generate --schema=packages/database/prisma/schema.prisma 2>&1 | tail -2
-ok "Prisma Client regenerado"
+if timeout 60 "$PRISMA_BIN" generate --schema="$SCHEMA" 2>&1 | tail -2; then
+  ok "Prisma Client regenerado"
+else
+  fail "Error generando Prisma Client"
+fi
 
 # ── 5. Build y restart API ──
 log "Construyendo y reiniciando API..."
