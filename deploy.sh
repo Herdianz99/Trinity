@@ -8,7 +8,7 @@ set -e
 # ═══════════════════════════════════════════════════════════
 
 PROJECT_DIR="/opt/Trinity"
-PRISMA_BIN="$PROJECT_DIR/node_modules/.bin/prisma"
+PRISMA_BIN="$PROJECT_DIR/node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/node_modules/.bin/prisma"
 
 # Colores
 RED='\033[0;31m'
