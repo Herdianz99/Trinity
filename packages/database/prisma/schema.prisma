@@ -984,6 +984,7 @@ model CreditDebitNote {
   cashRegisterId  String?
   cashRegister    CashRegister?       @relation(fields: [cashRegisterId], references: [id])
   fiscalNumber    String?
+  machineSerial   String?
   fiscalPrinted   Boolean             @default(false)
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])

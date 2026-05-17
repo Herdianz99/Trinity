@@ -64,8 +64,11 @@ export class CreditDebitNotesController {
   }
 
   @Patch(':id/fiscal-printed')
-  markFiscalPrinted(@Param('id') id: string) {
-    return this.service.markFiscalPrinted(id);
+  markFiscalPrinted(
+    @Param('id') id: string,
+    @Body() body: { fiscalNumber?: string; machineSerial?: string },
+  ) {
+    return this.service.markFiscalPrinted(id, body);
   }
 
   @Get(':id/pdf')

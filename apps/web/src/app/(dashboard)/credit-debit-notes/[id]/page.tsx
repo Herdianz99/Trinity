@@ -144,10 +144,23 @@ export default function CreditDebitNoteDetailPage() {
           );
           await sendToFiscalPrinter(commands, posted.invoice.cashRegister.comPort);
 
-          // Mark as fiscally printed
-          await fetch(`/api/proxy/credit-debit-notes/${posted.id}/fiscal-printed`, {
-            method: 'PATCH',
-          });
+          // Read fiscal status from Trinity Agent and save to credit note
+          try {
+            const { readFiscalStatus } = await import('@/lib/trinity-agent');
+            const fiscal = await readFiscalStatus();
+            await fetch(`/api/proxy/credit-debit-notes/${posted.id}/fiscal-printed`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fiscalNumber: fiscal?.creditNoteFiscalNumber || undefined,
+                machineSerial: fiscal?.machineSerial || undefined,
+              }),
+            });
+          } catch {
+            await fetch(`/api/proxy/credit-debit-notes/${posted.id}/fiscal-printed`, {
+              method: 'PATCH',
+            });
+          }
         } catch (fiscalErr: any) {
           setMessage({ type: 'error', text: `Nota confirmada, pero error fiscal: ${fiscalErr.message}` });
           fetchNote();
@@ -178,10 +191,23 @@ export default function CreditDebitNoteDetailPage() {
       );
       await sendToFiscalPrinter(commands, note.invoice.cashRegister?.comPort || undefined);
 
-      // Mark as fiscally printed — cannot print again
-      await fetch(`/api/proxy/credit-debit-notes/${id}/fiscal-printed`, {
-        method: 'PATCH',
-      });
+      // Read fiscal status from Trinity Agent and save to credit note
+      try {
+        const { readFiscalStatus } = await import('@/lib/trinity-agent');
+        const fiscal = await readFiscalStatus();
+        await fetch(`/api/proxy/credit-debit-notes/${id}/fiscal-printed`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fiscalNumber: fiscal?.creditNoteFiscalNumber || undefined,
+            machineSerial: fiscal?.machineSerial || undefined,
+          }),
+        });
+      } catch {
+        await fetch(`/api/proxy/credit-debit-notes/${id}/fiscal-printed`, {
+          method: 'PATCH',
+        });
+      }
 
       setMessage({ type: 'success', text: 'Nota fiscal impresa correctamente' });
       fetchNote();

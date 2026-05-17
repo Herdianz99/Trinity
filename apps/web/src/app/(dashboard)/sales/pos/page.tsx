@@ -635,7 +635,10 @@ export default function POSPage() {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fiscal),
+                body: JSON.stringify({
+                  fiscalNumber: fiscal.invoiceFiscalNumber,
+                  machineSerial: fiscal.machineSerial,
+                }),
               });
             }
           } catch {}
@@ -740,7 +743,10 @@ export default function POSPage() {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fiscal),
+                body: JSON.stringify({
+                  fiscalNumber: fiscal.invoiceFiscalNumber,
+                  machineSerial: fiscal.machineSerial,
+                }),
               });
             }
           } catch {}

@@ -604,14 +604,21 @@ export class CreditDebitNotesService {
     return { message: 'Nota cancelada' };
   }
 
-  async markFiscalPrinted(id: string) {
+  async markFiscalPrinted(
+    id: string,
+    body?: { fiscalNumber?: string; machineSerial?: string },
+  ) {
     const note = await this.prisma.creditDebitNote.findUnique({ where: { id } });
     if (!note) throw new NotFoundException('Nota no encontrada');
     if (note.fiscalPrinted) throw new BadRequestException('Esta nota ya fue impresa fiscalmente');
 
     await this.prisma.creditDebitNote.update({
       where: { id },
-      data: { fiscalPrinted: true },
+      data: {
+        fiscalPrinted: true,
+        ...(body?.fiscalNumber && { fiscalNumber: body.fiscalNumber }),
+        ...(body?.machineSerial && { machineSerial: body.machineSerial }),
+      },
     });
 
     return { message: 'Nota marcada como impresa fiscalmente' };

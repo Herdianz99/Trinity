@@ -17,7 +17,8 @@ export async function isAgentRunning(): Promise<boolean> {
 }
 
 export async function readFiscalStatus(): Promise<{
-  fiscalNumber: string;
+  invoiceFiscalNumber: string;
+  creditNoteFiscalNumber: string;
   machineSerial: string;
 } | null> {
   try {

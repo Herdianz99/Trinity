@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import { config } from './config';
 
 export interface FiscalStatus {
-  fiscalNumber: string;
+  invoiceFiscalNumber: string;
+  creditNoteFiscalNumber: string;
   machineSerial: string;
 }
 
@@ -23,15 +24,18 @@ export function readFiscalStatus(): FiscalStatus | null {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
 
-    // Número de factura fiscal: posición 21, longitud 8 (índice 20 a 28 en JS)
-    const fiscalNumber = content.substring(20, 28).trim();
+    // Número de factura fiscal: mid(21,8) → substring(20, 28)
+    const invoiceFiscalNumber = content.substring(20, 28).trim();
 
-    // Serial de máquina: posición 92, longitud 10 (índice 91 a 101 en JS)
+    // Número de nota de crédito fiscal: mid(47,8) → substring(46, 54)
+    const creditNoteFiscalNumber = content.substring(46, 54).trim();
+
+    // Serial de máquina: mid(92,10) → substring(91, 101)
     const machineSerial = content.substring(91, 101).trim();
 
-    console.log(`[FISCAL] Leído → fiscalNumber: ${fiscalNumber}, machineSerial: ${machineSerial}`);
+    console.log(`[FISCAL] Leído → invoiceFiscalNumber: ${invoiceFiscalNumber}, creditNoteFiscalNumber: ${creditNoteFiscalNumber}, machineSerial: ${machineSerial}`);
 
-    return { fiscalNumber, machineSerial };
+    return { invoiceFiscalNumber, creditNoteFiscalNumber, machineSerial };
   } catch (err) {
     console.error(`[FISCAL] Error al leer ${filePath}: ${(err as Error).message}`);
     return null;
