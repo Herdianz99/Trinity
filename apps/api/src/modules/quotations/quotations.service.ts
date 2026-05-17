@@ -352,7 +352,7 @@ export class QuotationsService {
           number: invoiceNumber,
           cashRegisterId,
           customerId: quotation.customerId,
-          status: isSeller ? 'PENDING' : 'DRAFT',
+          status: 'PENDING',
           subtotalUsd: quotation.subtotalUsd,
           subtotalBs: Math.round(quotation.subtotalUsd * rate.rate * 100) / 100,
           ivaUsd: quotation.ivaUsd,

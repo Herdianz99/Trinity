@@ -421,8 +421,9 @@ model Invoice {
   cashRegister    CashRegister  @relation(...)
   customerId      String?
   customer        Customer?     @relation(...)
-  status          InvoiceStatus @default(DRAFT)
-  type            InvoiceType   @default(SALE)
+  status          InvoiceStatus      @default(PENDING)
+  paymentType     InvoicePaymentType @default(CASH)
+  type            InvoiceType        @default(SALE)
   subtotalUsd     Float         @default(0)
   ivaUsd          Float         @default(0)
   totalUsd        Float         @default(0)
@@ -444,7 +445,8 @@ model Invoice {
   updatedAt       DateTime      @updatedAt
 }
 
-enum InvoiceStatus { DRAFT PENDING PAID PARTIAL CREDIT CANCELLED }
+enum InvoicePaymentType { CASH CREDIT }
+enum InvoiceStatus { PENDING PAID PARTIAL_RETURN RETURNED CANCELLED }
 enum InvoiceType   { SALE DEBIT_NOTE CREDIT_NOTE }
 
 model InvoiceItem {

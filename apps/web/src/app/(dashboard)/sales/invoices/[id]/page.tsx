@@ -12,6 +12,7 @@ interface InvoiceDetail {
   number: string;
   controlNumber: string | null;
   status: string;
+  paymentType: string;
   totalUsd: number;
   totalBs: number;
   subtotalUsd: number;
@@ -70,23 +71,29 @@ interface ReceivableLink {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
-  CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-  CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
-  RETURNED: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
-  PARTIALLY_RETURNED: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  PARTIAL_RETURN: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  RETURNED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  CANCELLED: 'text-slate-400 border-slate-500/30 bg-slate-500/10',
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'En Espera',
-  PENDING: 'En Espera',
-  PAID: 'Procesado',
+  PENDING: 'Pendiente',
+  PAID: 'Pagada',
+  PARTIAL_RETURN: 'Dev. Parcial',
+  RETURNED: 'Devuelta',
+  CANCELLED: 'Cancelada',
+};
+
+const PAYMENT_TYPE_COLORS: Record<string, string> = {
+  CASH: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+  CREDIT: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+};
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  CASH: 'Contado',
   CREDIT: 'Credito',
-  CANCELLED: 'Cancelado',
-  RETURNED: 'Devuelto',
-  PARTIALLY_RETURNED: 'Dev. Parcial',
 };
 
 // Payment method labels come from payment.method.name (relation)
@@ -198,36 +205,37 @@ export default function InvoiceDetailPage() {
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[invoice.status]}`}>
             {STATUS_LABELS[invoice.status]}
           </span>
+          {invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border ${PAYMENT_TYPE_COLORS[invoice.paymentType] || ''}`}>
+              {PAYMENT_TYPE_LABELS[invoice.paymentType] || invoice.paymentType}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {['PAID', 'CREDIT', 'RETURNED', 'PARTIALLY_RETURNED'].includes(invoice.status) && (
+          {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice.status) && (
             <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
               <Printer size={14} /> Imprimir PDF
             </button>
           )}
-          {['PAID', 'PARTIALLY_RETURNED'].includes(invoice.status) && hasPerm('RETURN_INVOICE') && (
+          {['PAID', 'PARTIAL_RETURN'].includes(invoice.status) && invoice.paymentType === 'CASH' && hasPerm('RETURN_INVOICE') && (
             <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
               <FileX2 size={14} /> Devolver factura
             </button>
           )}
-          {invoice.status === 'CREDIT' && (
-            <>
-              {hasPerm('RETURN_INVOICE') && (
-                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                  <FileX2 size={14} /> Devolver mercancia
-                </button>
-              )}
-              {hasPerm('CREDIT_NOTE_SALE') && (
-                <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                  <FileX2 size={14} /> Nota de credito
-                </button>
-              )}
-              {hasPerm('DEBIT_NOTE_SALE') && (
-                <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-                  <FileX2 size={14} /> Nota de debito
-                </button>
-              )}
-            </>
+          {['PAID', 'PARTIAL_RETURN'].includes(invoice.status) && invoice.paymentType === 'CREDIT' && hasPerm('RETURN_INVOICE') && (
+            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+              <FileX2 size={14} /> Devolver mercancia
+            </button>
+          )}
+          {invoice.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE') && (
+            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+              <FileX2 size={14} /> Nota de credito
+            </button>
+          )}
+          {invoice.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE') && (
+            <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+              <FileX2 size={14} /> Nota de debito
+            </button>
           )}
         </div>
       </div>

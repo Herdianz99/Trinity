@@ -175,7 +175,7 @@ export class CustomersService {
       where: { id },
       include: {
         invoices: {
-          where: { status: { in: ['DRAFT', 'PENDING', 'PAID', 'PARTIAL', 'CREDIT'] } },
+          where: { status: { in: ['PENDING', 'PAID', 'PARTIAL_RETURN'] } },
           take: 1,
         },
       },

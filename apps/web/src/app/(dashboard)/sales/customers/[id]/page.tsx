@@ -27,10 +27,19 @@ interface CxCData {
 const SENIAT_URL = 'http://contribuyente.seniat.gob.ve/BuscaRif/BuscaRif.jsp';
 
 const INV_BADGES: Record<string, string> = {
-  PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
-  CREDIT: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-  CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+  PAID: 'text-green-400 border-green-500/30 bg-green-500/10',
+  PARTIAL_RETURN: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  RETURNED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  CANCELLED: 'text-slate-400 border-slate-500/30 bg-slate-500/10',
+};
+
+const INV_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente',
+  PAID: 'Pagada',
+  PARTIAL_RETURN: 'Dev. Parcial',
+  RETURNED: 'Devuelta',
+  CANCELLED: 'Cancelada',
 };
 
 export default function CustomerDetailPage() {
@@ -353,7 +362,7 @@ export default function CustomerDetailPage() {
                         <td className="px-4 py-3 text-right font-mono text-slate-300 hidden md:table-cell">{inv.totalBs ? `Bs ${inv.totalBs.toFixed(2)}` : '—'}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${INV_BADGES[inv.status] || INV_BADGES.PENDING}`}>
-                            {inv.status === 'PAID' ? 'Pagada' : inv.status === 'CREDIT' ? 'Credito' : inv.status === 'CANCELLED' ? 'Cancelada' : 'Pendiente'}
+                            {INV_STATUS_LABELS[inv.status] || inv.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">

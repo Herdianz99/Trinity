@@ -26,6 +26,7 @@ export class InvoicesService {
 
   async findAll(filters: {
     status?: string;
+    paymentType?: string;
     customerId?: string;
     sellerId?: string;
     cashRegisterId?: string;
@@ -40,6 +41,7 @@ export class InvoicesService {
     const where: any = {};
 
     if (filters.status) where.status = filters.status;
+    if (filters.paymentType) where.paymentType = filters.paymentType;
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.cashRegisterId) where.cashRegisterId = filters.cashRegisterId;
@@ -87,7 +89,7 @@ export class InvoicesService {
   }
 
   async findPending(todayOnly = false) {
-    const where: any = { status: { in: ['PENDING', 'DRAFT'] } };
+    const where: any = { status: 'PENDING' };
 
     if (todayOnly) {
       const now = new Date();
@@ -278,9 +280,8 @@ export class InvoicesService {
     const totalUsd = subtotalUsd + totalIva;
     const totalBs = totalUsd * rate.rate;
 
-    // Determine status based on role
-    const isSeller = user.role === 'SELLER';
-    const status = isSeller ? 'PENDING' : 'DRAFT';
+    // All invoices start as PENDING
+    const status = 'PENDING';
 
     // Generate invoice number with SELECT FOR UPDATE
     const invoice = await this.prisma.$transaction(async (tx) => {
@@ -343,8 +344,8 @@ export class InvoicesService {
     });
 
     if (!invoice) throw new NotFoundException('Factura no encontrada');
-    if (!['DRAFT', 'PENDING'].includes(invoice.status)) {
-      throw new BadRequestException('Solo se pueden cobrar facturas en estado DRAFT o PENDING');
+    if (invoice.status !== 'PENDING') {
+      throw new BadRequestException('Solo se pueden cobrar facturas en estado PENDING');
     }
 
     // Validate payment total
@@ -565,12 +566,12 @@ export class InvoicesService {
         });
       }
 
-      // Update invoice status, IGTF, cashier, and release lock
-      const newStatus = dto.isCredit ? 'CREDIT' : 'PAID';
+      // Update invoice status, paymentType, IGTF, cashier, and release lock
       const updatedInvoice = await tx.invoice.update({
         where: { id },
         data: {
-          status: newStatus,
+          status: 'PAID',
+          paymentType: dto.isCredit ? 'CREDIT' : 'CASH',
           isCredit: dto.isCredit || false,
           creditDays: dto.creditDays || 0,
           dueDate: dto.isCredit
@@ -642,7 +643,7 @@ export class InvoicesService {
       include: { items: true, customer: true },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
-    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+    if (invoice.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden retomar facturas en espera');
     }
 
@@ -676,7 +677,7 @@ export class InvoicesService {
   ) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
-    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+    if (invoice.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden editar facturas en espera');
     }
 
@@ -804,9 +805,6 @@ export class InvoicesService {
     });
   }
 
-  // TODO: Las facturas PAID/CREDIT no deben cancelarse directamente.
-  // En el futuro se manejarán con Notas de Crédito que reviertan stock,
-  // movimientos de inventario y receivables asociados.
   async cancel(id: string, user: { id: string; role: UserRole }) {
     if (!['ADMIN', 'SUPERVISOR'].includes(user.role)) {
       throw new ForbiddenException('Solo ADMIN o SUPERVISOR pueden cancelar facturas');
@@ -815,13 +813,13 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
 
-    if (['PAID', 'CREDIT'].includes(invoice.status)) {
+    if (invoice.status === 'PAID') {
       throw new BadRequestException(
         'Las facturas pagadas no pueden cancelarse. Emite una nota de credito.',
       );
     }
 
-    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+    if (invoice.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden cancelar facturas en espera');
     }
 
@@ -835,7 +833,7 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
 
-    if (!['PENDING', 'DRAFT'].includes(invoice.status)) {
+    if (invoice.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden eliminar facturas en espera');
     }
 

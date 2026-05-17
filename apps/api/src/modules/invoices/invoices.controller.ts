@@ -33,6 +33,7 @@ export class InvoicesController {
   @Get()
   findAll(
     @Query('status') status?: string,
+    @Query('paymentType') paymentType?: string,
     @Query('customerId') customerId?: string,
     @Query('sellerId') sellerId?: string,
     @Query('cashRegisterId') cashRegisterId?: string,
@@ -42,7 +43,7 @@ export class InvoicesController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.service.findAll({ status, customerId, sellerId, cashRegisterId, search, from, to, page, limit });
+    return this.service.findAll({ status, paymentType, customerId, sellerId, cashRegisterId, search, from, to, page, limit });
   }
 
   @Get('pending')

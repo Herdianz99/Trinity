@@ -298,7 +298,7 @@ export class CashRegistersService {
     const invoiceWhere: any = {
       cashRegisterId: session.cashRegisterId,
       createdAt: { gte: session.openedAt },
-      status: { in: ['PAID', 'CREDIT'] },
+      status: 'PAID',
     };
     if (session.closedAt) {
       invoiceWhere.createdAt.lte = session.closedAt;
@@ -357,7 +357,7 @@ export class CashRegistersService {
     const where: any = {
       cashRegisterId,
       createdAt: { gte: openedAt },
-      status: { in: ['PAID', 'CREDIT'] },
+      status: 'PAID',
     };
     if (closedAt) {
       where.createdAt.lte = closedAt;

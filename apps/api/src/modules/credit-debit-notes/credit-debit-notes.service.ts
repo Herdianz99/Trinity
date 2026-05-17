@@ -111,7 +111,7 @@ export class CreditDebitNotesService {
     if (['NCV', 'NDV'].includes(dto.type) && dto.invoiceId) {
       const invoice = await this.prisma.invoice.findUnique({
         where: { id: dto.invoiceId },
-        select: { status: true },
+        select: { status: true, paymentType: true },
       });
       if (!invoice) throw new NotFoundException('Factura no encontrada');
 
@@ -120,17 +120,17 @@ export class CreditDebitNotesService {
         throw new BadRequestException('La factura ya fue devuelta completamente');
       }
       // NCV with MANUAL origin only applies to CREDIT invoices
-      if (dto.type === 'NCV' && dto.origin === 'MANUAL' && invoice.status !== 'CREDIT') {
+      if (dto.type === 'NCV' && dto.origin === 'MANUAL' && invoice.paymentType !== 'CREDIT') {
         throw new BadRequestException('Las notas de crédito por ajuste solo aplican a facturas a crédito');
       }
       // NDV only applies to CREDIT invoices
-      if (dto.type === 'NDV' && invoice.status !== 'CREDIT') {
+      if (dto.type === 'NDV' && invoice.paymentType !== 'CREDIT') {
         throw new BadRequestException('Las notas de débito solo aplican a facturas a crédito');
       }
-      // NCV MERCHANDISE: allows PAID, CREDIT, PARTIALLY_RETURNED
+      // NCV MERCHANDISE: allows PAID or PARTIAL_RETURN
       if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE') {
-        if (!['PAID', 'CREDIT', 'PARTIALLY_RETURNED'].includes(invoice.status)) {
-          throw new BadRequestException('Solo se pueden devolver facturas procesadas o a crédito');
+        if (!['PAID', 'PARTIAL_RETURN'].includes(invoice.status)) {
+          throw new BadRequestException('Solo se pueden devolver facturas procesadas');
         }
       }
     }
@@ -366,7 +366,7 @@ export class CreditDebitNotesService {
           });
         }
 
-        // Update invoice status: RETURNED or PARTIALLY_RETURNED
+        // Update invoice status: RETURNED or PARTIAL_RETURN
         if (note.invoiceId) {
           const invoice = await tx.invoice.findUnique({
             where: { id: note.invoiceId },
@@ -396,7 +396,7 @@ export class CreditDebitNotesService {
             );
             await tx.invoice.update({
               where: { id: note.invoiceId },
-              data: { status: allReturned ? 'RETURNED' : 'PARTIALLY_RETURNED' },
+              data: { status: allReturned ? 'RETURNED' : 'PARTIAL_RETURN' },
             });
           }
         }

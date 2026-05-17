@@ -1,5 +1,53 @@
 # Trinity ERP — Progreso
 
+## Sesion 31 — Separar tipo de pago del estado en facturas (Completada)
+
+### Migracion de base de datos
+- Nuevo enum: `InvoicePaymentType` (CASH, CREDIT)
+- Nuevo campo: `Invoice.paymentType` con default CASH
+- Enum `InvoiceStatus` actualizado: eliminados DRAFT, PARTIAL, CREDIT; renombrado PARTIALLY_RETURNED a PARTIAL_RETURN
+- Estados finales: PENDING, PAID, PARTIAL_RETURN, RETURNED, CANCELLED
+- Migracion de datos existentes:
+  - CREDIT → PAID + paymentType=CREDIT
+  - DRAFT → PENDING
+  - PARTIALLY_RETURNED → PARTIAL_RETURN
+  - PARTIAL → PENDING
+- Migracion: `separate_invoice_payment_type_from_status`
+
+### Backend (NestJS)
+- `InvoicesService`:
+  - `create()`: siempre status=PENDING (eliminado DRAFT)
+  - `pay()`: status=PAID + paymentType=CASH/CREDIT (ya no usa status=CREDIT)
+  - `cancel()`: valida solo PENDING (eliminado DRAFT)
+  - `retake()`, `updateItems()`, `delete()`: valida solo PENDING
+  - `findAll()`: nuevo filtro `?paymentType=`
+  - `findPending()`: solo filtra PENDING
+- `InvoicesController`: nuevo query param `paymentType`
+- `CreditDebitNotesService`:
+  - NCV MANUAL y NDV: valida `paymentType=CREDIT` en vez de `status=CREDIT`
+  - NCV MERCHANDISE: permite PAID y PARTIAL_RETURN
+  - Post: actualiza a RETURNED o PARTIAL_RETURN
+- `CashRegistersService`: filtros cambiados de `{ in: ['PAID','CREDIT'] }` a `'PAID'`
+- `FiscalService`: libro de ventas filtra `status='PAID'`, incluye `tipoPago` en response
+- `CustomersService`: filtro de facturas activas actualizado
+- `QuotationsService`: conversion a factura siempre status=PENDING
+
+### Frontend (Next.js)
+- `/sales/invoices` (lista):
+  - Nuevos STATUS_COLORS/LABELS: PENDING=amarillo, PAID=verde, PARTIAL_RETURN=naranja, RETURNED=rojo, CANCELLED=gris
+  - Nuevo badge de tipo de pago separado: CASH=azul "Contado", CREDIT=morado "Credito"
+  - Ambos badges mostrados juntos en tabla
+  - Nuevo filtro dropdown "Tipo de pago" (CASH/CREDIT) separado del filtro de estado
+- `/sales/invoices/[id]` (detalle):
+  - Badges de estado y tipo de pago separados en header
+  - Botones actualizados:
+    - "Devolver factura" → status=PAID + paymentType=CASH
+    - "Devolver mercancia" → status=PAID + paymentType=CREDIT
+    - "Nota de credito" → paymentType=CREDIT
+    - "Nota de debito" → paymentType=CREDIT
+- `/sales/customers/[id]`: badges actualizados con nuevos estados
+- `/fiscal/libro-ventas`: nueva columna "Tipo" (Contado/Credito) en tabla y PDF
+
 ## Sesion 30 — Modulo de Programacion de Pagos (Completada)
 
 ### Migracion de base de datos

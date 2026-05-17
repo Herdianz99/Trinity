@@ -21,7 +21,7 @@ export class FiscalService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        status: { in: ['PAID', 'CREDIT'] },
+        status: 'PAID',
         createdAt: { gte: fromDate, lte: toDate },
       },
       include: {
@@ -92,6 +92,7 @@ export class FiscalService {
           ? `${inv.customer.documentType}-${inv.customer.rif || 'S/R'}`
           : 'S/R',
         nombreCliente: inv.customer?.name || 'Cliente General',
+        tipoPago: inv.paymentType,
         baseImponibleExenta: round2(baseExenta),
         baseImponibleReducida: round2(baseReducida),
         baseImponibleGeneral: round2(baseGeneral),

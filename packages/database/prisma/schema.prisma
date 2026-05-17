@@ -96,15 +96,17 @@ enum SessionStatus {
   CLOSED
 }
 
+enum InvoicePaymentType {
+  CASH
+  CREDIT
+}
+
 enum InvoiceStatus {
-  DRAFT
   PENDING
   PAID
-  PARTIAL
-  CREDIT
-  CANCELLED
+  PARTIAL_RETURN
   RETURNED
-  PARTIALLY_RETURNED
+  CANCELLED
 }
 
 enum InvoiceType {
@@ -604,8 +606,9 @@ model Invoice {
   cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
   customerId     String?
   customer       Customer?     @relation(fields: [customerId], references: [id])
-  status         InvoiceStatus @default(DRAFT)
-  type           InvoiceType   @default(SALE)
+  status         InvoiceStatus      @default(PENDING)
+  paymentType    InvoicePaymentType @default(CASH)
+  type           InvoiceType        @default(SALE)
   subtotalUsd    Float         @default(0)
   ivaUsd         Float         @default(0)
   totalUsd       Float         @default(0)

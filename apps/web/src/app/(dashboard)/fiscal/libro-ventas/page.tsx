@@ -10,6 +10,7 @@ interface VentaRow {
   numeroControl: string;
   rifCliente: string;
   nombreCliente: string;
+  tipoPago: string;
   baseImponibleExenta: number;
   baseImponibleReducida: number;
   baseImponibleGeneral: number;
@@ -100,6 +101,7 @@ export default function LibroVentasPage() {
         <td>${r.numeroControl || ''}</td>
         <td>${r.rifCliente}</td>
         <td>${r.nombreCliente}</td>
+        <td>${r.tipoPago === 'CREDIT' ? 'Credito' : 'Contado'}</td>
         <td class="num">${formatVe(r.baseImponibleExenta)}</td>
         <td class="num">${formatVe(r.baseImponibleReducida)}</td>
         <td class="num">${formatVe(r.baseImponibleGeneral)}</td>
@@ -114,7 +116,7 @@ export default function LibroVentasPage() {
 
     const totalesRow = totales ? `
       <tr class="totales">
-        <td colspan="6"><strong>TOTALES</strong></td>
+        <td colspan="7"><strong>TOTALES</strong></td>
         <td class="num"><strong>${formatVe(totales.baseImponibleExenta)}</strong></td>
         <td class="num"><strong>${formatVe(totales.baseImponibleReducida)}</strong></td>
         <td class="num"><strong>${formatVe(totales.baseImponibleGeneral)}</strong></td>
@@ -158,7 +160,7 @@ export default function LibroVentasPage() {
         <thead>
           <tr>
             <th>N&deg;</th><th>Fecha</th><th>N&deg; Factura</th><th>N&deg; Control</th>
-            <th>RIF Cliente</th><th>Cliente</th>
+            <th>RIF Cliente</th><th>Cliente</th><th>Tipo</th>
             <th>Base Exenta</th><th>Base Reducida</th><th>Base General</th><th>Base Especial</th>
             <th>IVA 8%</th><th>IVA 16%</th><th>IVA 31%</th><th>IGTF</th><th>Total</th>
           </tr>
@@ -241,6 +243,7 @@ export default function LibroVentasPage() {
                   <th className="text-left px-3 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
                   <th className="text-left px-3 py-2.5 text-slate-400 font-medium">RIF Cliente</th>
                   <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Cliente</th>
+                  <th className="text-center px-3 py-2.5 text-slate-400 font-medium">Tipo</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base Exenta</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base Reducida</th>
                   <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base General</th>
@@ -254,7 +257,7 @@ export default function LibroVentasPage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={15} className="text-center py-8 text-slate-500">No hay facturas en este periodo</td></tr>
+                  <tr><td colSpan={16} className="text-center py-8 text-slate-500">No hay facturas en este periodo</td></tr>
                 ) : (
                   <>
                     {rows.map(r => (
@@ -265,6 +268,11 @@ export default function LibroVentasPage() {
                         <td className="px-3 py-2 text-slate-300">{r.numeroControl || '-'}</td>
                         <td className="px-3 py-2 text-slate-300">{r.rifCliente}</td>
                         <td className="px-3 py-2 text-slate-200">{r.nombreCliente}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.tipoPago === 'CREDIT' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' : 'text-blue-400 border-blue-500/30 bg-blue-500/10'}`}>
+                            {r.tipoPago === 'CREDIT' ? 'Credito' : 'Contado'}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleExenta)}</td>
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleReducida)}</td>
                         <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleGeneral)}</td>
@@ -279,7 +287,7 @@ export default function LibroVentasPage() {
                     {/* Totals row */}
                     {totales && (
                       <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                        <td colSpan={6} className="px-3 py-2.5 text-slate-100 font-bold">TOTALES ({totales.totalFacturas} facturas)</td>
+                        <td colSpan={7} className="px-3 py-2.5 text-slate-100 font-bold">TOTALES ({totales.totalFacturas} facturas)</td>
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleExenta)}</td>
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleReducida)}</td>
                         <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleGeneral)}</td>
