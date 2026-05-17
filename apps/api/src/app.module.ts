@@ -32,6 +32,7 @@ import { SellersModule } from './modules/sellers/sellers.module';
 import { PaymentMethodsModule } from './modules/payment-methods/payment-methods.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { CreditDebitNotesModule } from './modules/credit-debit-notes/credit-debit-notes.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { CreditDebitNotesModule } from './modules/credit-debit-notes/credit-debi
     PaymentMethodsModule,
     ReceiptsModule,
     CreditDebitNotesModule,
+    ExpensesModule,
   ],
 })
 export class AppModule {}

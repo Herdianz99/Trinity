@@ -45,6 +45,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'cash', label: 'Caja' },
       { key: 'receivables', label: 'Cuentas por Cobrar' },
       { key: 'payables', label: 'Cuentas por Pagar' },
+      { key: 'expenses', label: 'Gastos' },
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
       { key: 'settings', label: 'Configuracion' },
@@ -59,6 +60,12 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'RETURN_PURCHASE', label: 'Devolver compra' },
       { key: 'CREDIT_NOTE_PURCHASE', label: 'NC Compra' },
       { key: 'DEBIT_NOTE_PURCHASE', label: 'ND Compra' },
+    ],
+  },
+  {
+    group: 'Administracion',
+    items: [
+      { key: 'MANAGE_EXPENSES', label: 'Gestionar gastos' },
     ],
   },
 ];

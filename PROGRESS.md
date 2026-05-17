@@ -1,5 +1,52 @@
 # Trinity ERP — Progreso
 
+## Sesion 29 — Modulo de Control de Gastos (Completada)
+
+### Migracion de base de datos
+- Nuevos modelos: `ExpenseCategory`, `Expense`
+- Nuevo valor en `PermissionKey`: `MANAGE_EXPENSES`
+- Relacion `expenses Expense[]` en User
+- Migracion: `add_expenses_module`
+- 10 categorias predefinidas seeded via migracion (isDefault=true)
+
+### Backend (NestJS)
+- Nuevo modulo: `ExpensesModule` con controller y service
+- Endpoints de categorias:
+  - `GET /expense-categories` — todas las categorias
+  - `GET /expense-categories/active` — solo activas
+  - `POST /expense-categories` — crear (solo ADMIN)
+  - `PATCH /expense-categories/:id` — editar (solo ADMIN)
+  - `PATCH /expense-categories/:id/toggle-active` — activar/desactivar (solo ADMIN)
+- Endpoints de gastos:
+  - `GET /expenses` — lista con filtros (categoryId, from, to, search, page, limit), ordenado por date DESC
+  - `GET /expenses/summary?from&to` — resumen con totalUsd, totalBs, byCategory, byMonth
+  - `GET /expenses/:id` — detalle
+  - `POST /expenses` — crear (requiere MANAGE_EXPENSES). Calcula Bs o USD automaticamente con tasa del dia
+  - `PATCH /expenses/:id` — editar (creador o ADMIN)
+  - `DELETE /expenses/:id` — eliminar (solo ADMIN)
+- `VALID_MODULES` actualizado con 'expenses' y 'MANAGE_EXPENSES'
+- Defaults: ADMIN (*), SUPERVISOR: expenses + MANAGE_EXPENSES
+
+### Frontend (Next.js)
+- Nueva seccion en sidebar: GASTOS (icono Wallet) con items Gastos y Categorias
+- Pagina `/expenses`:
+  - 3 tarjetas resumen (Total USD rojo, Total Bs rojo, Cantidad gris)
+  - Filtros: categoria, rango de fechas (default mes actual), busqueda por descripcion/referencia
+  - Tabla: Fecha, Categoria (badge), Descripcion, Referencia, USD, Bs, Registrado por, Acciones
+  - Boton "+ Registrar gasto" (solo con permiso MANAGE_EXPENSES)
+  - Modal crear/editar con conversion automatica USD<>Bs usando tasa del dia
+  - Grafico de barras horizontal por categoria (recharts) mostrando total USD del periodo
+- Pagina `/expenses/categories`:
+  - Solo visible para ADMIN
+  - Tabla: Nombre, Descripcion, Predefinida (badge), Estado, Acciones
+  - Toggle activar/desactivar, Editar
+  - Modal crear/editar categoria
+- Pagina `/settings/role-permissions`: nuevo grupo "Administracion" con MANAGE_EXPENSES
+- Modulo 'expenses' agregado al grupo "Acceso a Modulos"
+
+### Dependencias
+- `recharts` agregado a apps/web
+
 ## Sesion 28b — Notas de Credito/Debito como Documentos Independientes (Completada)
 
 ### Cambio de arquitectura

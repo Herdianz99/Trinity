@@ -844,6 +844,17 @@ model QuotationItem {
 
 ---
 
+**Control de Gastos (ExpensesModule):**
+- Modelos: ExpenseCategory (10 predefinidas), Expense
+- CRUD de categorías (solo ADMIN)
+- CRUD de gastos con conversión automática USD↔Bs usando tasa del día
+- Resumen por período: totalUsd, totalBs, byCategory (name, totalUsd, count), byMonth
+- Permiso granular: MANAGE_EXPENSES (ADMIN y SUPERVISOR por defecto)
+- Frontend: /expenses (lista + gráfico recharts), /expenses/categories (admin)
+- Sidebar: sección GASTOS entre CxP y FISCAL
+
+---
+
 ## Formato de Commits
 `tipo: Session X - descripción`
 

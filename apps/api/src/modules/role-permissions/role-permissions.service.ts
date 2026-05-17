@@ -6,9 +6,10 @@ import { UserRole } from '@prisma/client';
 const VALID_MODULES = [
   'dashboard', 'sales', 'quotations', 'catalog', 'inventory',
   'purchases', 'cash', 'receivables', 'payables', 'fiscal',
-  'users', 'settings',
+  'users', 'settings', 'expenses',
   'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE',
   'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE',
+  'MANAGE_EXPENSES',
 ];
 
 const CACHE_PREFIX = 'role-permissions:';

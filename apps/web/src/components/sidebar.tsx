@@ -42,6 +42,7 @@ import {
   Shield,
   TrendingUp,
   FileX2,
+  Wallet,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -137,6 +138,16 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Cuentas por pagar', href: '/payables', icon: <Receipt size={18} /> },
       { label: 'Recibos de pago', href: '/receipts/payment', icon: <FileText size={18} /> },
+    ],
+  },
+  {
+    key: 'expenses',
+    label: 'GASTOS',
+    icon: <Wallet size={20} />,
+    permission: 'expenses',
+    items: [
+      { label: 'Gastos', href: '/expenses', icon: <Wallet size={18} /> },
+      { label: 'Categorias', href: '/expenses/categories', icon: <Layers size={18} /> },
     ],
   },
   {
