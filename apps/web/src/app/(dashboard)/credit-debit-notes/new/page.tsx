@@ -4,6 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, FileX2, Loader2, Save, CheckCircle } from 'lucide-react';
 
+interface ReturnSummaryItem {
+  itemId: string;
+  productId: string;
+  productName: string;
+  originalQty: number;
+  returnedQty: number;
+  availableQty: number;
+}
+
 interface InvoiceItem {
   id: string;
   productId: string;
@@ -61,6 +70,7 @@ export default function NewCreditDebitNotePage() {
 
   // MERCHANDISE state
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
+  const [returnSummary, setReturnSummary] = useState<ReturnSummaryItem[]>([]);
 
   // MANUAL state
   const [manualMode, setManualMode] = useState<'fixed' | 'pct'>('fixed');
@@ -76,9 +86,12 @@ export default function NewCreditDebitNotePage() {
     setLoading(true);
     try {
       if (isSale && invoiceId) {
-        const res = await fetch(`/api/proxy/invoices/${invoiceId}`);
-        if (!res.ok) throw new Error('Factura no encontrada');
-        const inv = await res.json();
+        const [invRes, summaryRes] = await Promise.all([
+          fetch(`/api/proxy/invoices/${invoiceId}`),
+          fetch(`/api/proxy/credit-debit-notes/invoice-return-summary/${invoiceId}`),
+        ]);
+        if (!invRes.ok) throw new Error('Factura no encontrada');
+        const inv = await invRes.json();
         setParentDoc({
           id: inv.id,
           number: inv.number,
@@ -88,10 +101,16 @@ export default function NewCreditDebitNotePage() {
           customer: inv.customer,
           items: inv.items,
         });
+        if (summaryRes.ok) {
+          setReturnSummary(await summaryRes.json());
+        }
       } else if (!isSale && purchaseOrderId) {
-        const res = await fetch(`/api/proxy/purchase-orders/${purchaseOrderId}`);
-        if (!res.ok) throw new Error('Orden de compra no encontrada');
-        const po = await res.json();
+        const [poRes, summaryRes] = await Promise.all([
+          fetch(`/api/proxy/purchase-orders/${purchaseOrderId}`),
+          fetch(`/api/proxy/credit-debit-notes/purchase-return-summary/${purchaseOrderId}`),
+        ]);
+        if (!poRes.ok) throw new Error('Orden de compra no encontrada');
+        const po = await poRes.json();
         setParentDoc({
           id: po.id,
           number: po.number,
@@ -101,6 +120,9 @@ export default function NewCreditDebitNotePage() {
           supplier: po.supplier,
           poItems: po.items,
         });
+        if (summaryRes.ok) {
+          setReturnSummary(await summaryRes.json());
+        }
       }
       // Fetch today's exchange rate
       const rateRes = await fetch('/api/proxy/exchange-rate/today');
@@ -296,6 +318,7 @@ export default function NewCreditDebitNotePage() {
               <tr className="border-b border-slate-700/50 bg-slate-800/30">
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. Original</th>
+                <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. a devolver</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
               </tr>
@@ -305,19 +328,35 @@ export default function NewCreditDebitNotePage() {
                 const qty = selectedItems[item.id] || 0;
                 const unitPrice = item.unitPriceWithoutIva || item.unitPrice / (1 + getIvaRate(item.ivaType));
                 const lineTotal = unitPrice * qty * (1 + getIvaRate(item.ivaType));
+                const summary = returnSummary.find((s) => s.itemId === item.id);
+                const availableQty = summary ? summary.availableQty : item.quantity;
+                const returnedQty = summary ? summary.returnedQty : 0;
+                const isFullyReturned = availableQty <= 0;
+                const isPartial = returnedQty > 0 && !isFullyReturned;
                 return (
-                  <tr key={item.id} className="border-b border-slate-700/30">
+                  <tr key={item.id} className={`border-b border-slate-700/30 ${isFullyReturned ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3 text-white">{item.productName}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{item.quantity}</td>
+                    <td className="px-4 py-3 text-center">
+                      {isFullyReturned ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400">Devuelto completamente</span>
+                      ) : isPartial ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">Parcial ({returnedQty}/{item.quantity})</span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-right">
-                      <input
-                        type="number"
-                        min={0}
-                        max={item.quantity}
-                        value={qty || ''}
-                        onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, item.quantity) }))}
-                        className="input-field w-20 text-right"
-                      />
+                      {isFullyReturned ? (
+                        <span className="text-xs text-slate-500">—</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={0}
+                          max={availableQty}
+                          value={qty || ''}
+                          onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, availableQty) }))}
+                          className="input-field w-20 text-right"
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-white font-mono">$ {fmt(lineTotal)}</td>
                   </tr>
@@ -326,19 +365,35 @@ export default function NewCreditDebitNotePage() {
               {!isSale && parentDoc?.poItems?.map((item) => {
                 const qty = selectedItems[item.id] || 0;
                 const lineTotal = item.costUsd * qty * (1 + getIvaRate(item.product.ivaType));
+                const summary = returnSummary.find((s) => s.itemId === item.id);
+                const availableQty = summary ? summary.availableQty : item.receivedQty;
+                const returnedQty = summary ? summary.returnedQty : 0;
+                const isFullyReturned = availableQty <= 0;
+                const isPartial = returnedQty > 0 && !isFullyReturned;
                 return (
-                  <tr key={item.id} className="border-b border-slate-700/30">
+                  <tr key={item.id} className={`border-b border-slate-700/30 ${isFullyReturned ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3 text-white">{item.product.name}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{item.receivedQty}</td>
+                    <td className="px-4 py-3 text-center">
+                      {isFullyReturned ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400">Devuelto completamente</span>
+                      ) : isPartial ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">Parcial ({returnedQty}/{item.receivedQty})</span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-right">
-                      <input
-                        type="number"
-                        min={0}
-                        max={item.receivedQty}
-                        value={qty || ''}
-                        onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, item.receivedQty) }))}
-                        className="input-field w-20 text-right"
-                      />
+                      {isFullyReturned ? (
+                        <span className="text-xs text-slate-500">—</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={0}
+                          max={availableQty}
+                          value={qty || ''}
+                          onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, availableQty) }))}
+                          className="input-field w-20 text-right"
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-white font-mono">$ {fmt(lineTotal)}</td>
                   </tr>

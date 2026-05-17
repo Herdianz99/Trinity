@@ -33,6 +33,16 @@ export class CreditDebitNotesController {
     return this.service.findAll(query);
   }
 
+  @Get('invoice-return-summary/:invoiceId')
+  invoiceReturnSummary(@Param('invoiceId') invoiceId: string) {
+    return this.service.getInvoiceReturnSummary(invoiceId);
+  }
+
+  @Get('purchase-return-summary/:purchaseOrderId')
+  purchaseReturnSummary(@Param('purchaseOrderId') purchaseOrderId: string) {
+    return this.service.getPurchaseReturnSummary(purchaseOrderId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

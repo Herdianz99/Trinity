@@ -168,8 +168,28 @@ export class CreditDebitNotesService {
         for (const dtoItem of dto.items) {
           const invItem = invoice.items.find((i) => i.id === dtoItem.invoiceItemId);
           if (!invItem) throw new BadRequestException(`Item ${dtoItem.invoiceItemId} no encontrado en factura`);
-          if (dtoItem.quantity > invItem.quantity) {
-            throw new BadRequestException(`Cantidad excede la original para ${invItem.productName}`);
+
+          // Check already returned quantities from previous POSTED notes
+          const alreadyReturned = await this.prisma.creditDebitNoteItem.aggregate({
+            where: {
+              note: {
+                invoiceId: dto.invoiceId,
+                type: 'NCV',
+                status: 'POSTED',
+                origin: 'MERCHANDISE',
+              },
+              productId: invItem.productId,
+            },
+            _sum: { quantity: true },
+          });
+          const returnedQty = alreadyReturned._sum.quantity || 0;
+          const availableQty = invItem.quantity - returnedQty;
+
+          if (availableQty <= 0) {
+            throw new BadRequestException(`El producto '${invItem.productName}' ya fue devuelto completamente`);
+          }
+          if (dtoItem.quantity > availableQty) {
+            throw new BadRequestException(`Solo puedes devolver ${availableQty} unidades de '${invItem.productName}'. Ya se devolvieron ${returnedQty}`);
           }
 
           const unitPriceUsd = invItem.unitPriceWithoutIva || invItem.unitPrice / (1 + this.getIvaRate(invItem.ivaType));
@@ -213,8 +233,28 @@ export class CreditDebitNotesService {
         for (const dtoItem of dto.items) {
           const poItem = po.items.find((i) => i.id === dtoItem.invoiceItemId);
           if (!poItem) throw new BadRequestException(`Item ${dtoItem.invoiceItemId} no encontrado en OC`);
-          if (dtoItem.quantity > poItem.receivedQty) {
-            throw new BadRequestException(`Cantidad excede la recibida para ${poItem.product.name}`);
+
+          // Check already returned quantities from previous POSTED notes
+          const alreadyReturned = await this.prisma.creditDebitNoteItem.aggregate({
+            where: {
+              note: {
+                purchaseOrderId: dto.purchaseOrderId,
+                type: 'NCC',
+                status: 'POSTED',
+                origin: 'MERCHANDISE',
+              },
+              productId: poItem.productId,
+            },
+            _sum: { quantity: true },
+          });
+          const returnedQty = alreadyReturned._sum.quantity || 0;
+          const availableQty = poItem.receivedQty - returnedQty;
+
+          if (availableQty <= 0) {
+            throw new BadRequestException(`El producto '${poItem.product.name}' ya fue devuelto completamente`);
+          }
+          if (dtoItem.quantity > availableQty) {
+            throw new BadRequestException(`Solo puedes devolver ${availableQty} unidades de '${poItem.product.name}'. Ya se devolvieron ${returnedQty}`);
           }
 
           const unitPriceUsd = poItem.costUsd;
@@ -433,6 +473,78 @@ export class CreditDebitNotesService {
     });
 
     return this.findOne(id);
+  }
+
+  async getInvoiceReturnSummary(invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true },
+    });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    const returnedItems = await this.prisma.creditDebitNoteItem.groupBy({
+      by: ['productId'],
+      where: {
+        note: {
+          invoiceId,
+          type: 'NCV',
+          status: 'POSTED',
+          origin: 'MERCHANDISE',
+        },
+      },
+      _sum: { quantity: true },
+    });
+    const returnedMap = new Map(
+      returnedItems.map((r) => [r.productId, r._sum.quantity || 0]),
+    );
+
+    return invoice.items.map((item) => {
+      const returnedQty = returnedMap.get(item.productId) || 0;
+      return {
+        itemId: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        originalQty: item.quantity,
+        returnedQty,
+        availableQty: Math.max(0, item.quantity - returnedQty),
+      };
+    });
+  }
+
+  async getPurchaseReturnSummary(purchaseOrderId: string) {
+    const po = await this.prisma.purchaseOrder.findUnique({
+      where: { id: purchaseOrderId },
+      include: { items: { include: { product: true } } },
+    });
+    if (!po) throw new NotFoundException('Orden de compra no encontrada');
+
+    const returnedItems = await this.prisma.creditDebitNoteItem.groupBy({
+      by: ['productId'],
+      where: {
+        note: {
+          purchaseOrderId,
+          type: 'NCC',
+          status: 'POSTED',
+          origin: 'MERCHANDISE',
+        },
+      },
+      _sum: { quantity: true },
+    });
+    const returnedMap = new Map(
+      returnedItems.map((r) => [r.productId, r._sum.quantity || 0]),
+    );
+
+    return po.items.map((item) => {
+      const returnedQty = returnedMap.get(item.productId) || 0;
+      return {
+        itemId: item.id,
+        productId: item.productId,
+        productName: item.product.name,
+        originalQty: item.receivedQty,
+        returnedQty,
+        availableQty: Math.max(0, item.receivedQty - returnedQty),
+      };
+    });
   }
 
   async cancel(id: string) {
