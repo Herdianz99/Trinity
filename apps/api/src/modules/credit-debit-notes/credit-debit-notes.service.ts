@@ -165,6 +165,19 @@ export class CreditDebitNotesService {
         });
         if (!invoice) throw new NotFoundException('Factura no encontrada');
 
+        // IGTF invoices require full return — all items at full quantities
+        if (invoice.igtfUsd > 0) {
+          const dtoItemMap = new Map(dto.items.map((i) => [i.invoiceItemId, i.quantity]));
+          for (const invItem of invoice.items) {
+            const dtoQty = dtoItemMap.get(invItem.id);
+            if (dtoQty === undefined || dtoQty < invItem.quantity) {
+              throw new BadRequestException(
+                'Esta factura tiene IGTF. La devolución debe ser completa — se deben incluir todos los productos en sus cantidades originales',
+              );
+            }
+          }
+        }
+
         for (const dtoItem of dto.items) {
           const invItem = invoice.items.find((i) => i.id === dtoItem.invoiceItemId);
           if (!invItem) throw new BadRequestException(`Item ${dtoItem.invoiceItemId} no encontrado en factura`);

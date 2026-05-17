@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, FileX2, Loader2, Save, CheckCircle } from 'lucide-react';
+import { ArrowLeft, FileX2, Loader2, Save, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface ReturnSummaryItem {
   itemId: string;
@@ -41,6 +41,7 @@ interface ParentDoc {
   totalUsd: number;
   totalBs: number;
   exchangeRate: number;
+  igtfUsd?: number;
   customer?: { name: string; rif: string | null } | null;
   supplier?: { name: string; rif: string | null } | null;
   items?: InvoiceItem[];
@@ -98,6 +99,7 @@ export default function NewCreditDebitNotePage() {
           totalUsd: inv.totalUsd,
           totalBs: inv.totalBs,
           exchangeRate: inv.exchangeRate,
+          igtfUsd: inv.igtfUsd || 0,
           customer: inv.customer,
           items: inv.items,
         });
@@ -145,6 +147,22 @@ export default function NewCreditDebitNotePage() {
       setOrigin('MANUAL');
     }
   }, [noteType]);
+
+  // IGTF: force full return when invoice has IGTF and origin is MERCHANDISE
+  const isIgtfFullReturn = isSale && origin === 'MERCHANDISE' && (parentDoc?.igtfUsd ?? 0) > 0;
+
+  useEffect(() => {
+    if (!isIgtfFullReturn || !parentDoc?.items) return;
+    const allItems: Record<string, number> = {};
+    parentDoc.items.forEach((item) => {
+      const summary = returnSummary.find((s) => s.itemId === item.id);
+      const availableQty = summary ? summary.availableQty : item.quantity;
+      if (availableQty > 0) {
+        allItems[item.id] = availableQty;
+      }
+    });
+    setSelectedItems(allItems);
+  }, [isIgtfFullReturn, parentDoc, returnSummary]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -310,6 +328,16 @@ export default function NewCreditDebitNotePage() {
 
       {/* NDV/NDC are always manual - handled by useEffect below */}
 
+      {/* IGTF full return alert */}
+      {isIgtfFullReturn && (
+        <div className="flex items-center gap-3 p-4 rounded-lg border bg-red-500/10 border-red-500/30 text-red-400">
+          <AlertTriangle size={20} className="shrink-0" />
+          <p className="text-sm font-medium">
+            Esta factura tiene IGTF ($ {fmt(parentDoc?.igtfUsd ?? 0)}). La devolución debe ser completa — se deben incluir todos los productos en sus cantidades originales.
+          </p>
+        </div>
+      )}
+
       {/* MERCHANDISE tab */}
       {origin === 'MERCHANDISE' && (
         <div className="card overflow-hidden">
@@ -355,6 +383,8 @@ export default function NewCreditDebitNotePage() {
                           value={qty || ''}
                           onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, availableQty) }))}
                           className="input-field w-20 text-right"
+                          readOnly={isIgtfFullReturn}
+                          disabled={isIgtfFullReturn}
                         />
                       )}
                     </td>

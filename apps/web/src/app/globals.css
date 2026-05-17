@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     --background: 222 47% 6%;
     --foreground: 210 40% 96%;
     --card: 222 40% 10%;
@@ -56,6 +57,13 @@
   .card {
     @apply bg-slate-800/40 border border-slate-700/50 rounded-xl backdrop-blur-sm;
   }
+}
+
+/* Number input spinners — dark theme */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* Custom scrollbar */
