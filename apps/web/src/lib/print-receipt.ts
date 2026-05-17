@@ -190,7 +190,104 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   return html;
 }
 
+function buildReceiptText(invoice: any, company: CompanyInfo): string {
+  const items: any[] = invoice.items || [];
+  const payments: any[] = invoice.payments || [];
+  const customer = invoice.customer;
+  const seller = invoice.seller;
+  const exchangeRate = invoice.exchangeRate || 0;
+  const isCredit = invoice.isCredit || false;
+  const igtfUsd = invoice.igtfUsd || 0;
+
+  let subtotalUsd = 0;
+  for (const item of items) {
+    subtotalUsd += item.quantity * item.unitPrice;
+  }
+  const totalIva = Object.entries(IVA_RATES).reduce((sum, [type, rate]) => {
+    const groupTotal = items
+      .filter((i: any) => (i.ivaType || 'GENERAL') === type)
+      .reduce((s: number, i: any) => s + i.quantity * i.unitPrice * rate, 0);
+    return sum + groupTotal;
+  }, 0);
+  const totalUsd = invoice.totalUsd ?? subtotalUsd + totalIva + igtfUsd;
+  const totalBs = invoice.totalBs ?? totalUsd * exchangeRate;
+
+  const w = 42;
+  const sep = '-'.repeat(w);
+  const lines: string[] = [];
+
+  const center = (s: string) => s.substring(0, w).padStart(Math.floor((w + s.length) / 2));
+
+  lines.push(center(company.companyName || 'EMPRESA'));
+  if (company.rif) lines.push(center(`RIF: ${company.rif}`));
+  if (company.address) lines.push(center(company.address));
+  if (company.phone) lines.push(center(`Telf: ${company.phone}`));
+  lines.push(sep);
+  lines.push(center(`FACTURA: ${invoice.number || 'S/N'}`));
+  lines.push(center(fmtDate(invoice.paidAt || invoice.createdAt)));
+  lines.push(sep);
+
+  if (seller) lines.push(`Vendedor: ${seller.name}`);
+  if (customer) {
+    lines.push(`Cliente: ${customer.name}`);
+    if (customer.rif) lines.push(`RIF: ${customer.documentType ? customer.documentType + '-' : ''}${customer.rif}`);
+  } else {
+    lines.push('Cliente: Consumidor Final');
+  }
+  lines.push(sep);
+
+  for (const item of items) {
+    const ivaType = item.ivaType || 'GENERAL';
+    const rate = IVA_RATES[ivaType] || 0;
+    const unitPriceWithIva = item.unitPrice * (1 + rate);
+    const lineTotal = item.quantity * unitPriceWithIva;
+    lines.push(item.productName || item.name || 'Producto');
+    lines.push(`  ${item.quantity} x ${fmt(unitPriceWithIva)}${' '.repeat(Math.max(1, w - 4 - String(item.quantity).length - fmt(unitPriceWithIva).length - fmt(lineTotal).length - 3))}${fmt(lineTotal)}`);
+  }
+  lines.push(sep);
+
+  lines.push(`TOTAL USD:${' '.repeat(w - 10 - fmt(totalUsd).length)}${fmt(totalUsd)}`);
+  lines.push(`TOTAL Bs: ${' '.repeat(w - 10 - fmt(totalBs).length)}${fmt(totalBs)}`);
+  if (exchangeRate > 0) lines.push(center(`Tasa: ${fmt(exchangeRate)} Bs/USD`));
+  lines.push(sep);
+
+  if (payments.length > 0) {
+    lines.push('Forma de pago:');
+    for (const p of payments) {
+      const label = p.method?.name || 'Metodo';
+      const isBs = !(p.method?.isDivisa ?? true);
+      const amount = isBs ? `${fmt(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      lines.push(`  ${label}: ${amount}`);
+      if (p.reference) lines.push(`    Ref: ${p.reference}`);
+    }
+  }
+
+  if (isCredit) {
+    lines.push(sep);
+    lines.push(center('*** VENTA A CREDITO ***'));
+    if (invoice.creditDays) lines.push(center(`Plazo: ${invoice.creditDays} dias`));
+  }
+
+  lines.push(sep);
+  lines.push(center('Gracias por su compra'));
+  lines.push(center('*** No constituye factura fiscal ***'));
+
+  return lines.join('\n');
+}
+
 export async function printReceipt(invoice: any, company: CompanyInfo): Promise<void> {
+  // Try Trinity Agent first
+  try {
+    const { isAgentRunning, printTicket } = await import('@/lib/trinity-agent');
+    const agentUp = await isAgentRunning();
+    if (agentUp) {
+      const text = buildReceiptText(invoice, company);
+      const printed = await printTicket(text);
+      if (printed) return;
+    }
+  } catch {}
+
+  // Fallback: iframe + window.print()
   const receiptHTML = buildReceiptHTML(invoice, company);
 
   return new Promise<void>((resolve) => {

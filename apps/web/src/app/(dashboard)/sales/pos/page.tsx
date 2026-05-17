@@ -626,6 +626,19 @@ export default function POSPage() {
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+
+          // Read fiscal status from Trinity Agent and save to invoice
+          try {
+            const { readFiscalStatus } = await import('@/lib/trinity-agent');
+            const fiscal = await readFiscalStatus();
+            if (fiscal) {
+              await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fiscal),
+              });
+            }
+          } catch {}
         } catch {}
       } else if (selectedCashRegister) {
         try {
@@ -718,6 +731,19 @@ export default function POSPage() {
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+
+          // Read fiscal status from Trinity Agent and save to invoice
+          try {
+            const { readFiscalStatus } = await import('@/lib/trinity-agent');
+            const fiscal = await readFiscalStatus();
+            if (fiscal) {
+              await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fiscal),
+              });
+            }
+          } catch {}
         } catch {}
       } else if (selectedCashRegister) {
         try {

@@ -882,6 +882,22 @@ export class InvoicesService {
     });
   }
 
+  async updateFiscalInfo(
+    id: string,
+    data: { fiscalNumber: string; machineSerial: string },
+  ) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    return this.prisma.invoice.update({
+      where: { id },
+      data: {
+        fiscalNumber: data.fiscalNumber,
+        fiscalMachineSerial: data.machineSerial,
+      },
+    });
+  }
+
   async delete(id: string, user: { id: string; role: UserRole }) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');

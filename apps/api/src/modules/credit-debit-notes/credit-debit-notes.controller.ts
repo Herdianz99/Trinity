@@ -63,6 +63,11 @@ export class CreditDebitNotesController {
     return this.service.cancel(id);
   }
 
+  @Patch(':id/fiscal-printed')
+  markFiscalPrinted(@Param('id') id: string) {
+    return this.service.markFiscalPrinted(id);
+  }
+
   @Get(':id/pdf')
   async pdf(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.pdfService.generate(id);

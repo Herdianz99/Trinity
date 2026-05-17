@@ -1,0 +1,7 @@
+{
+  "port": 8765,
+  "fiscalEnabled": true,
+  "fiscalStatusPath": "C:/IntTFHKA/Status.txt",
+  "thermalEnabled": true,
+  "thermalPrinterName": "NOMBRE_IMPRESORA"
+}

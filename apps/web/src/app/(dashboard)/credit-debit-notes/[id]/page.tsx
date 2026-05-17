@@ -16,6 +16,8 @@ interface NoteDetail {
   status: string;
   subtotalUsd: number;
   ivaUsd: number;
+  igtfUsd: number;
+  igtfBs: number;
   totalUsd: number;
   subtotalBs: number;
   ivaBs: number;
@@ -23,11 +25,18 @@ interface NoteDetail {
   exchangeRate: number;
   paidAmountUsd: number;
   appliedAt: string | null;
+  fiscalPrinted: boolean;
   manualAmountUsd: number | null;
   manualPct: number | null;
   notes: string | null;
   createdAt: string;
-  invoice: { id: string; number: string; totalUsd: number; totalBs: number; customer: { id: string; name: string; rif: string | null } | null; cashRegister: { code: string; name: string } | null } | null;
+  invoice: {
+    id: string; number: string; fiscalNumber: string | null; fiscalMachineSerial: string | null; createdAt: string;
+    totalUsd: number; totalBs: number;
+    customer: { id: string; name: string; rif: string | null; documentType: string | null; address: string | null; phone: string | null } | null;
+    cashRegister: { code: string; name: string; isFiscal: boolean; comPort: string | null } | null;
+  } | null;
+  cashRegister: { code: string; name: string; isFiscal: boolean; comPort: string | null } | null;
   purchaseOrder: { id: string; number: string; totalUsd: number; totalBs: number; supplier: { id: string; name: string; rif: string | null } | null } | null;
   items: NoteItem[];
 }
@@ -119,12 +128,65 @@ export default function CreditDebitNoteDetailPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error al confirmar');
       }
+      const posted = await res.json();
+
+      // Fiscal printing for NCV if invoice's cash register is fiscal
+      if (posted.type === 'NCV' && posted.invoice?.cashRegister?.isFiscal) {
+        try {
+          const { buildFiscalCreditNoteCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+          const configRes = await fetch('/api/proxy/config');
+          const companyConfig = configRes.ok ? await configRes.json() : {};
+          const commands = buildFiscalCreditNoteCommands(
+            posted,
+            posted.invoice,
+            posted.invoice.customer,
+            companyConfig,
+          );
+          await sendToFiscalPrinter(commands, posted.invoice.cashRegister.comPort);
+
+          // Mark as fiscally printed
+          await fetch(`/api/proxy/credit-debit-notes/${posted.id}/fiscal-printed`, {
+            method: 'PATCH',
+          });
+        } catch (fiscalErr: any) {
+          setMessage({ type: 'error', text: `Nota confirmada, pero error fiscal: ${fiscalErr.message}` });
+          fetchNote();
+          return;
+        }
+      }
+
       setMessage({ type: 'success', text: 'Nota confirmada exitosamente' });
       fetchNote();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setPosting(false);
+    }
+  }
+
+  async function handleFiscalPrint() {
+    if (!note || !note.invoice) return;
+    try {
+      const { buildFiscalCreditNoteCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+      const configRes = await fetch('/api/proxy/config');
+      const companyConfig = configRes.ok ? await configRes.json() : {};
+      const commands = buildFiscalCreditNoteCommands(
+        note,
+        note.invoice,
+        note.invoice.customer,
+        companyConfig,
+      );
+      await sendToFiscalPrinter(commands, note.invoice.cashRegister?.comPort || undefined);
+
+      // Mark as fiscally printed — cannot print again
+      await fetch(`/api/proxy/credit-debit-notes/${id}/fiscal-printed`, {
+        method: 'PATCH',
+      });
+
+      setMessage({ type: 'success', text: 'Nota fiscal impresa correctamente' });
+      fetchNote();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
     }
   }
 
@@ -201,9 +263,16 @@ export default function CreditDebitNoteDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {note.status === 'POSTED' && (
-            <button onClick={() => window.open(`/api/proxy/credit-debit-notes/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
-              <Printer size={14} /> Imprimir PDF
-            </button>
+            <>
+              {note.type === 'NCV' && note.invoice?.cashRegister?.isFiscal && !note.fiscalPrinted && (
+                <button onClick={handleFiscalPrint} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <Printer size={14} /> Imprimir
+                </button>
+              )}
+              <button onClick={() => window.open(`/api/proxy/credit-debit-notes/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
+                <Printer size={14} /> Imprimir PDF
+              </button>
+            </>
           )}
           {note.status === 'DRAFT' && (
             <>
@@ -333,7 +402,7 @@ export default function CreditDebitNoteDetailPage() {
 
           {/* Totals */}
           <div className="card p-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-xs text-slate-500 uppercase">Subtotal USD</p>
                 <p className="text-white font-mono text-lg">$ {fmt(note.subtotalUsd)}</p>
@@ -342,6 +411,12 @@ export default function CreditDebitNoteDetailPage() {
                 <p className="text-xs text-slate-500 uppercase">IVA USD</p>
                 <p className="text-white font-mono text-lg">$ {fmt(note.ivaUsd)}</p>
               </div>
+              {note.igtfUsd > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">IGTF USD</p>
+                  <p className="text-amber-400 font-mono text-lg">$ {fmt(note.igtfUsd)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Total USD</p>
                 <p className="text-green-400 font-mono text-xl font-bold">$ {fmt(note.totalUsd)}</p>

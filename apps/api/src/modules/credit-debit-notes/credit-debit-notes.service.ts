@@ -80,10 +80,15 @@ export class CreditDebitNotesService {
       include: {
         invoice: {
           select: {
-            id: true, number: true, totalUsd: true, totalBs: true, exchangeRate: true,
-            customer: { select: { id: true, name: true, rif: true } },
-            cashRegister: { select: { id: true, code: true, name: true } },
+            id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true, createdAt: true,
+            totalUsd: true, totalBs: true, exchangeRate: true, igtfUsd: true,
+            customer: { select: { id: true, name: true, rif: true, documentType: true, address: true, phone: true } },
+            cashRegister: { select: { id: true, code: true, name: true, isFiscal: true, comPort: true } },
+            payments: { select: { amountUsd: true, amountBs: true, method: { select: { fiscalCode: true } } } },
           },
+        },
+        cashRegister: {
+          select: { id: true, code: true, name: true, isFiscal: true, comPort: true },
         },
         purchaseOrder: {
           select: {
@@ -146,6 +151,8 @@ export class CreditDebitNotesService {
 
     let subtotalUsd = 0;
     let ivaUsd = 0;
+    let igtfUsd = 0;
+    let igtfBs = 0;
     let totalUsd = 0;
     let subtotalBs = 0;
     let ivaBs = 0;
@@ -164,6 +171,14 @@ export class CreditDebitNotesService {
           include: { items: true },
         });
         if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+        // Fetch product codes for all items
+        const productIds = invoice.items.map((i) => i.productId);
+        const products = await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, code: true },
+        });
+        const productCodeMap = new Map(products.map((p) => [p.id, p.code]));
 
         // IGTF invoices require full return — all items at full quantities
         if (invoice.igtfUsd > 0) {
@@ -224,7 +239,7 @@ export class CreditDebitNotesService {
           noteItems.push({
             productId: invItem.productId,
             productName: invItem.productName,
-            productCode: invItem.productId,
+            productCode: productCodeMap.get(invItem.productId) || '',
             quantity: dtoItem.quantity,
             unitPriceUsd: this.round2(unitPriceUsd),
             unitPriceBs,
@@ -338,6 +353,20 @@ export class CreditDebitNotesService {
       totalBs = this.round2(totalUsd * exchangeRate);
     }
 
+    // IGTF: copy from invoice when it's a full merchandise return with IGTF
+    if (dto.origin === 'MERCHANDISE' && ['NCV', 'NDV'].includes(dto.type) && dto.invoiceId) {
+      const invForIgtf = await this.prisma.invoice.findUnique({
+        where: { id: dto.invoiceId },
+        select: { igtfUsd: true, igtfBs: true },
+      });
+      if (invForIgtf && invForIgtf.igtfUsd > 0) {
+        igtfUsd = this.round2(invForIgtf.igtfUsd);
+        igtfBs = this.round2(invForIgtf.igtfBs);
+        totalUsd = this.round2(totalUsd + igtfUsd);
+        totalBs = this.round2(totalBs + igtfBs);
+      }
+    }
+
     // Generate sequential number
     const prefix = dto.type; // NCV, NDV, NCC, NDC
     const lastNote = await this.prisma.creditDebitNote.findFirst({
@@ -363,6 +392,8 @@ export class CreditDebitNotesService {
         cashRegisterId: dto.cashRegisterId || null,
         subtotalUsd: this.round2(subtotalUsd),
         ivaUsd: this.round2(ivaUsd),
+        igtfUsd: this.round2(igtfUsd),
+        igtfBs: this.round2(igtfBs),
         totalUsd: this.round2(totalUsd),
         subtotalBs: this.round2(subtotalBs),
         ivaBs: this.round2(ivaBs),
@@ -571,5 +602,18 @@ export class CreditDebitNotesService {
     });
 
     return { message: 'Nota cancelada' };
+  }
+
+  async markFiscalPrinted(id: string) {
+    const note = await this.prisma.creditDebitNote.findUnique({ where: { id } });
+    if (!note) throw new NotFoundException('Nota no encontrada');
+    if (note.fiscalPrinted) throw new BadRequestException('Esta nota ya fue impresa fiscalmente');
+
+    await this.prisma.creditDebitNote.update({
+      where: { id },
+      data: { fiscalPrinted: true },
+    });
+
+    return { message: 'Nota marcada como impresa fiscalmente' };
   }
 }

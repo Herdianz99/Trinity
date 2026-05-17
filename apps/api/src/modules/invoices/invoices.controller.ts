@@ -110,6 +110,14 @@ export class InvoicesController {
     return this.service.updateControlNumber(id, controlNumber, user);
   }
 
+  @Patch(':id/fiscal-info')
+  updateFiscalInfo(
+    @Param('id') id: string,
+    @Body() body: { fiscalNumber: string; machineSerial: string },
+  ) {
+    return this.service.updateFiscalInfo(id, body);
+  }
+
   @Patch(':id/cancel')
   cancel(
     @Param('id') id: string,

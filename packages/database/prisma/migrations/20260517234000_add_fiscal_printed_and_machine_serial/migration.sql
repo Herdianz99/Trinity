@@ -1,0 +1,2 @@
+ALTER TABLE "CreditDebitNote" ADD COLUMN IF NOT EXISTS "fiscalPrinted" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "fiscalMachineSerial" TEXT;

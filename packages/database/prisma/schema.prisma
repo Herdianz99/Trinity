@@ -656,9 +656,10 @@ model CashSession {
 model Invoice {
   id             String        @id @default(cuid())
   number         String        @unique
-  fiscalNumber   String?
-  controlNumber  String?
-  cashRegisterId String
+  fiscalNumber        String?
+  controlNumber       String?
+  fiscalMachineSerial String?
+  cashRegisterId      String
   cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
   customerId     String?
   customer       Customer?     @relation(fields: [customerId], references: [id])
@@ -983,10 +984,13 @@ model CreditDebitNote {
   cashRegisterId  String?
   cashRegister    CashRegister?       @relation(fields: [cashRegisterId], references: [id])
   fiscalNumber    String?
+  fiscalPrinted   Boolean             @default(false)
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   subtotalUsd     Float               @default(0)
   ivaUsd          Float               @default(0)
+  igtfUsd         Float               @default(0)
+  igtfBs          Float               @default(0)
   totalUsd        Float               @default(0)
   subtotalBs      Float               @default(0)
   ivaBs           Float               @default(0)

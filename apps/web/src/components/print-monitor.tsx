@@ -38,22 +38,70 @@ export default function PrintMonitor() {
     }
   }, []);
 
+  const buildTicketText = useCallback((job: PrintJob): string => {
+    const createdDate = new Date(job.createdAt);
+    const dateStr = createdDate.toLocaleDateString('es-VE', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+    const timeStr = createdDate.toLocaleTimeString('es-VE', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+
+    const lines: string[] = [];
+    const w = 42; // 80mm printer ~42 chars
+    const sep = '-'.repeat(w);
+
+    lines.push(job.printArea.name.substring(0, w).padStart((w + job.printArea.name.length) / 2));
+    lines.push(`Factura: ${job.invoice.number}`.padStart((w + `Factura: ${job.invoice.number}`.length) / 2));
+    lines.push(`${dateStr} ${timeStr}`.padStart((w + `${dateStr} ${timeStr}`.length) / 2));
+    lines.push(sep);
+    lines.push('Cod.   Ref.Prov   Descripcion         Cant');
+    lines.push(sep);
+
+    for (const item of job.items) {
+      const code = (item.code || '').substring(0, 6).padEnd(6);
+      const ref = (item.supplierRef || '-').substring(0, 10).padEnd(10);
+      const name = (item.name || '').substring(0, 20).padEnd(20);
+      const qty = String(item.quantity).padStart(4);
+      lines.push(`${code} ${ref} ${name} ${qty}`);
+    }
+
+    lines.push(sep);
+    const totalUnits = job.items.reduce((s, i) => s + i.quantity, 0);
+    lines.push(`Items: ${job.items.length} | Total unidades: ${totalUnits}`);
+
+    return lines.join('\n');
+  }, []);
+
   const handlePrint = useCallback(async (job: PrintJob) => {
     if (isPrinting.current) return;
     isPrinting.current = true;
 
+    // Try printing via Trinity Agent first
+    try {
+      const { isAgentRunning, printTicket } = await import('@/lib/trinity-agent');
+      const agentUp = await isAgentRunning();
+      if (agentUp) {
+        const content = buildTicketText(job);
+        const printed = await printTicket(content);
+        if (printed) {
+          await markAsPrinted(job.id);
+          isPrinting.current = false;
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback: use window.print()
     setCurrentJob(job);
-
-    // Wait for React to render the print content
     await new Promise((resolve) => setTimeout(resolve, 100));
-
     window.print();
 
     await markAsPrinted(job.id);
 
     setCurrentJob(null);
     isPrinting.current = false;
-  }, [markAsPrinted]);
+  }, [markAsPrinted, buildTicketText]);
 
   const fetchPendingJobs = useCallback(async () => {
     if (isPrinting.current || !printAreaId.current) return;

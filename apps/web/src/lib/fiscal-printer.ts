@@ -157,6 +157,110 @@ export function buildFiscalCommands(
 }
 
 /**
+ * IVA devolution prefixes per The Factory protocol.
+ * Credit notes use d0-d3 instead of IVA sign characters.
+ */
+const IVA_DEVOLUTION: Record<string, string> = {
+  EXEMPT: 'd0',
+  GENERAL: 'd1',
+  REDUCED: 'd2',
+  SPECIAL: 'd3',
+};
+
+/**
+ * Builds fiscal commands for a credit note (Nota de Crédito de Venta).
+ * Protocol: The Factory HKA — same as invoice but with mandatory
+ * affected-document header and d0-d3 item prefixes.
+ */
+export function buildFiscalCreditNoteCommands(
+  note: any,
+  invoice: any,
+  customer: any,
+  companyConfig: FiscalCompanyConfig,
+): string[] {
+  const commands: string[] = [];
+  const items: any[] = note.items || [];
+  const payments: any[] = note.payments || [];
+  const exchangeRate = note.exchangeRate || 0;
+
+  // ── 1. Affected document header (mandatory for credit notes) ──
+  // iF* — Fiscal number returned by the printer for the original invoice
+  commands.push(`iF*${invoice.fiscalNumber || ''}`);
+
+  // iD* — Original invoice date DD/MM/YYYY
+  if (invoice.createdAt) {
+    const d = new Date(invoice.createdAt);
+    commands.push(`iD*${fmtDate(d)}`);
+  }
+
+  // iI* — Serial/registration number of the fiscal machine that printed the invoice
+  commands.push(`iI*${invoice.fiscalMachineSerial || ''}`);
+
+  // iR* — Customer RIF: {documentType}-{rif}
+  if (customer && customer.rif) {
+    const docType = customer.documentType || '';
+    const rif = docType ? `${docType}-${customer.rif}` : customer.rif;
+    commands.push(`iR*${rif}`);
+  } else {
+    commands.push('iR*V-12345678');
+  }
+
+  // iS* — Customer name
+  commands.push(`iS*${customer ? customer.name : 'CONSUMIDOR FINAL'}`);
+
+  // ── 2. Devolution items ──
+  // Format: d{0-3}{price 8int+2dec}{qty 5int+3dec}|{code}|{name}
+  for (const item of items) {
+    const ivaType = item.ivaType || 'GENERAL';
+    const prefix = IVA_DEVOLUTION[ivaType] || 'd1';
+
+    // unitPriceBs is base price in Bs (without IVA)
+    const unitPriceBs = item.unitPriceBs || (item.unitPriceUsd * exchangeRate);
+
+    const priceStr = formatFixed(unitPriceBs, 8, 2);
+    const qtyStr = formatFixed(item.quantity, 5, 3);
+    const code = item.productCode || '';
+    const name = item.productName || 'Producto';
+
+    commands.push(`${prefix}${priceStr}${qtyStr}|${code}|${name}`);
+  }
+
+  // ── 3. Subtotal ──
+  commands.push('3');
+
+  // ── 4. Payments ──
+  // If invoice has IGTF → replicate exact same payment methods from the invoice
+  // If no IGTF → close with default 101
+  const invoicePayments: any[] = invoice.payments || [];
+  const hasIgtf = (invoice.igtfUsd || 0) > 0;
+
+  if (hasIgtf && invoicePayments.length > 0) {
+    for (let i = 0; i < invoicePayments.length; i++) {
+      const payment = invoicePayments[i];
+      const isLast = i === invoicePayments.length - 1;
+      const fiscalCode = (payment.method?.fiscalCode || '01').padStart(2, '0');
+      const amountBs = payment.amountBs || (payment.amountUsd * exchangeRate);
+
+      if (isLast) {
+        commands.push(`1${fiscalCode}`);
+      } else {
+        const amountStr = formatFixed(amountBs, 10, 2);
+        commands.push(`2${fiscalCode}${amountStr}`);
+      }
+    }
+  } else {
+    commands.push('101');
+  }
+
+  // ── 5. IGTF ──
+  if (companyConfig.isIGTFContributor) {
+    commands.push('199');
+  }
+
+  return commands;
+}
+
+/**
  * Shows all fiscal commands in an alert for visual validation (fallback).
  */
 export function showFiscalCommands(commands: string[]): void {
