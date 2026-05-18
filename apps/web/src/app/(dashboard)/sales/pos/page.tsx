@@ -625,13 +625,11 @@ export default function POSPage() {
             })),
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
-          await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
 
-          // Read fiscal status from Trinity Agent and save to invoice
-          try {
-            const { readFiscalStatus } = await import('@/lib/trinity-agent');
-            const fiscal = await readFiscalStatus();
-            if (fiscal) {
+          // Save fiscal status obtained directly from serial port
+          if (fiscal) {
+            try {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -640,8 +638,8 @@ export default function POSPage() {
                   machineSerial: fiscal.machineSerial,
                 }),
               });
-            }
-          } catch {}
+            } catch {}
+          }
         } catch {}
       } else if (selectedCashRegister) {
         try {
@@ -733,13 +731,11 @@ export default function POSPage() {
             })),
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
-          await sendToFiscalPrinter(commands, selectedCashRegister?.comPort);
+          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
 
-          // Read fiscal status from Trinity Agent and save to invoice
-          try {
-            const { readFiscalStatus } = await import('@/lib/trinity-agent');
-            const fiscal = await readFiscalStatus();
-            if (fiscal) {
+          // Save fiscal status obtained directly from serial port
+          if (fiscal) {
+            try {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -748,8 +744,8 @@ export default function POSPage() {
                   machineSerial: fiscal.machineSerial,
                 }),
               });
-            }
-          } catch {}
+            } catch {}
+          }
         } catch {}
       } else if (selectedCashRegister) {
         try {

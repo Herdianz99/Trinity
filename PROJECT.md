@@ -838,11 +838,18 @@ model QuotationItem {
 - Si una categoría no tiene área asignada: no imprime nada para esos items
 - La impresión es automática al procesar el pago de la factura
 
-**Máquinas fiscales y puertos COM:**
-- El navegador web no puede acceder a puertos COM directamente
-- Solución fase 1: agente local instalado en la PC de caja, actúa como puente WebSocket entre el navegador y el puerto COM
-- Solución fase 2 (FASE 6): migrar POS a Electron para acceso nativo a COM y modo offline
-- Campo fiscalNumber en Invoice reservado para el número que devuelva la máquina fiscal
+**Máquinas fiscales — Integración directa por Web Serial:**
+- Comunicación directa desde el navegador (Chrome/Edge) con la impresora fiscal via Web Serial API
+- Protocolo: The Factory HKA, RS232 9600/8/even/1, flujo STX+DATA+ETX+LRC
+- Al conectar: detecta modelo automáticamente (SV) e identifica familia A o B
+- Antes de cada operación: polling con ENQ para verificar estado y detectar errores (sin papel, memoria llena, etc.)
+- Después de imprimir factura o NC: lee S1 para obtener número fiscal, serial y RIF directamente del puerto
+- Validación LRC en todas las tramas recibidas con reintento automático
+- Modelos soportados: HKA80 (Z7C), HKA112 (Z7A), SRP-270/280/350/812, HSP7000, TALLY1125/1140, DT-230, P3100DL, PP9/PP9-PLUS
+- Familia A: soporta facturas, notas de crédito y notas de débito
+- Familia B: soporta facturas y notas de crédito (NO notas de débito)
+- Trinity Agent (puerto 8765) ahora solo se usa para tickets térmicos 80mm, no para lectura fiscal
+- Campo fiscalNumber en Invoice almacena el número devuelto por la máquina fiscal
 
 ---
 

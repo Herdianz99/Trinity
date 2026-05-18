@@ -142,12 +142,10 @@ export default function CreditDebitNoteDetailPage() {
             posted.invoice.customer,
             companyConfig,
           );
-          await sendToFiscalPrinter(commands, posted.invoice.cashRegister.comPort);
+          const fiscal = await sendToFiscalPrinter(commands, posted.invoice.cashRegister.comPort, true);
 
-          // Read fiscal status from Trinity Agent and save to credit note
+          // Save fiscal status obtained directly from serial port
           try {
-            const { readFiscalStatus } = await import('@/lib/trinity-agent');
-            const fiscal = await readFiscalStatus();
             await fetch(`/api/proxy/credit-debit-notes/${posted.id}/fiscal-printed`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -189,12 +187,10 @@ export default function CreditDebitNoteDetailPage() {
         note.invoice.customer,
         companyConfig,
       );
-      await sendToFiscalPrinter(commands, note.invoice.cashRegister?.comPort || undefined);
+      const fiscal = await sendToFiscalPrinter(commands, note.invoice.cashRegister?.comPort || undefined, true);
 
-      // Read fiscal status from Trinity Agent and save to credit note
+      // Save fiscal status obtained directly from serial port
       try {
-        const { readFiscalStatus } = await import('@/lib/trinity-agent');
-        const fiscal = await readFiscalStatus();
         await fetch(`/api/proxy/credit-debit-notes/${id}/fiscal-printed`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

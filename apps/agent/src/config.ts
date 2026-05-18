@@ -3,16 +3,12 @@ import * as path from 'path';
 
 export interface AgentConfig {
   port: number;
-  fiscalEnabled: boolean;
-  fiscalStatusPath: string;
   thermalEnabled: boolean;
   thermalPrinterName: string;
 }
 
 const REQUIRED_FIELDS: (keyof AgentConfig)[] = [
   'port',
-  'fiscalEnabled',
-  'fiscalStatusPath',
   'thermalEnabled',
   'thermalPrinterName',
 ];

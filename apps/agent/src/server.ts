@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config';
-import { readFiscalStatus } from './fiscal';
 import { printTicket } from './printer';
 
 const app = express();
@@ -34,30 +33,10 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    version: '1.0.0',
-    fiscalEnabled: config.fiscalEnabled,
+    version: '1.1.0',
     thermalEnabled: config.thermalEnabled,
     printerName: config.thermalPrinterName,
   });
-});
-
-// GET /status
-app.get('/status', (_req, res) => {
-  if (!config.fiscalEnabled) {
-    return res.status(503).json({
-      error: 'Módulo fiscal desactivado en config.json',
-    });
-  }
-
-  const result = readFiscalStatus();
-
-  if (!result) {
-    return res.status(404).json({
-      error: 'No se pudo leer Status.txt. Verifica que la ruta sea correcta.',
-    });
-  }
-
-  return res.json(result);
 });
 
 // POST /print-ticket
@@ -90,14 +69,14 @@ app.post('/print-ticket', async (req, res) => {
 // Iniciar servidor
 app.listen(config.port, () => {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║       TRINITY AGENT v1.0.0              ║');
+  console.log('║       TRINITY AGENT v1.1.0              ║');
   console.log('╠══════════════════════════════════════════╣');
   console.log(`║  Puerto: ${config.port}                          ║`);
-  console.log(`║  Fiscal: ${config.fiscalEnabled ? 'ACTIVO' : 'DESACTIVADO'}                     ║`);
   console.log(`║  Impresora: ${config.thermalEnabled ? 'ACTIVA' : 'DESACTIVADA'}                  ║`);
   if (config.thermalEnabled) {
     console.log(`║  Nombre: ${config.thermalPrinterName}`);
   }
+  console.log('║  Fiscal: via Web Serial (navegador)     ║');
   console.log('╚══════════════════════════════════════════╝');
   console.log(`\nServidor corriendo en http://localhost:${config.port}`);
   console.log('Presiona Ctrl+C para detener.\n');

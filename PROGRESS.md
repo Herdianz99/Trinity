@@ -1,5 +1,29 @@
 # Trinity ERP — Progreso
 
+## Sesion 34 — Integración fiscal directa por Web Serial (Completada)
+
+### Mejoras en apps/web/src/lib/fiscal-printer.ts
+- **MEJORA 1 — Leer S1 directo del puerto serial:** Nueva función `readStatusS1()` lee el número fiscal, serial de máquina y RIF directamente del puerto serial después de imprimir, eliminando la dependencia de `C:/IntTFHKA/Status.txt`
+- **MEJORA 2 — Detectar modelo con SV:** Nueva función `detectPrinterModel()` identifica automáticamente el modelo de impresora (HKA80, HKA112, SRP-350, etc.) y su familia (A o B) al conectar
+- **MEJORA 3 — Validar LRC:** Nueva función `validateLRC()` verifica la integridad de todas las tramas recibidas, con reintento automático (NAK + retry) en caso de corrupción
+- **MEJORA 4 — Polling con ENQ:** Nueva función `waitForReady()` verifica que la impresora esté lista antes de cada operación, con detección de errores (sin papel, error mecánico, memoria llena)
+- **MEJORA 5 — Detección de navegador:** Nueva función `isFiscalPrinterSupported()` verifica Web Serial API y contexto seguro (HTTPS/localhost)
+- Nueva clase `SerialIO` con buffer para lectura robusta de bytes fragmentados del puerto serial
+- Nueva función `sendReadCommand()` implementa flujo tipo 2 (comando de lectura simple) del protocolo The Factory
+- `sendToFiscalPrinter()` ahora retorna `FiscalStatusResult | null` con los datos fiscales leídos del S1
+
+### Integración en frontend
+- **POS** (`/sales/pos`): 2 puntos de integración actualizados — ya no llaman a `readFiscalStatus()` del trinity-agent, usan directamente el retorno de `sendToFiscalPrinter(commands, comPort, true)`
+- **Notas de crédito** (`/credit-debit-notes/[id]`): 2 puntos de integración actualizados — mismo cambio
+- `trinity-agent.ts`: eliminada la función `readFiscalStatus()` — solo queda `isAgentRunning()` y `printTicket()` para tickets térmicos
+
+### Limpieza del agent
+- `apps/agent/src/fiscal.ts`: eliminada la lógica de lectura de `Status.txt`
+- `apps/agent/src/server.ts`: eliminado endpoint `GET /status`, eliminada importación de `readFiscalStatus`, versión actualizada a 1.1.0
+- `apps/agent/src/config.ts`: eliminados campos `fiscalEnabled` y `fiscalStatusPath` del tipo `AgentConfig`
+- `apps/agent/config.json`: eliminados campos `fiscalEnabled` y `fiscalStatusPath`
+- `apps/agent/README.md`: actualizado para reflejar que la comunicación fiscal es via Web Serial
+
 ## Sesion 33 — Cliente por defecto, notas en recibos y saldo a favor (Completada)
 
 ### Migracion de base de datos

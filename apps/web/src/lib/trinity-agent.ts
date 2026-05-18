@@ -16,29 +16,6 @@ export async function isAgentRunning(): Promise<boolean> {
   }
 }
 
-export async function readFiscalStatus(): Promise<{
-  invoiceFiscalNumber: string;
-  creditNoteFiscalNumber: string;
-  machineSerial: string;
-} | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const res = await fetch(`${AGENT_URL}/status`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 export async function printTicket(content: string): Promise<boolean> {
   try {
     const controller = new AbortController();
