@@ -35,6 +35,7 @@ import { CreditDebitNotesModule } from './modules/credit-debit-notes/credit-debi
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { PaymentSchedulesModule } from './modules/payment-schedules/payment-schedules.module';
 import { DynamicKeysModule } from './modules/dynamic-keys/dynamic-keys.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { DynamicKeysModule } from './modules/dynamic-keys/dynamic-keys.module';
     ScheduleModule.forRoot(),
     RedisModule,
     PrismaModule,
+    HealthModule,
     AuthModule,
     UsersModule,
     CompanyConfigModule,

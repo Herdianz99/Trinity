@@ -10,6 +10,21 @@ set -e
 PROJECT_DIR="/opt/Trinity"
 PRISMA_BIN="$PROJECT_DIR/node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/node_modules/.bin/prisma"
 
+# Cargar variables de entorno
+if [ -f /opt/Trinity/.env ]; then
+  set -a
+  source /opt/Trinity/.env
+  set +a
+elif [ -f /opt/Trinity/apps/api/.env ]; then
+  set -a
+  source /opt/Trinity/apps/api/.env
+  set +a
+elif [ -f /opt/Trinity/packages/database/.env ]; then
+  set -a
+  source /opt/Trinity/packages/database/.env
+  set +a
+fi
+
 # Colores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -18,7 +33,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 step=0
-total=8
+total=9
 errors=0
 
 log()   { step=$((step+1)); echo -e "\n${CYAN}[$step/$total]${NC} $1"; }
@@ -62,10 +77,10 @@ fi
 log "Aplicando migraciones de base de datos..."
 cd "$PROJECT_DIR"
 SCHEMA="packages/database/prisma/schema.prisma"
-# Cargar DATABASE_URL desde .env del paquete database
-export $(grep -E '^DATABASE_URL=' "$PROJECT_DIR/packages/database/.env" | xargs)
+# DATABASE_URL ya fue cargado via source al inicio del script
 echo "  Usando prisma: $PRISMA_BIN"
 echo "  Schema: $SCHEMA"
+echo "  DATABASE_URL: ${DATABASE_URL:0:30}..."
 if timeout 120 "$PRISMA_BIN" migrate deploy --schema="$SCHEMA" 2>&1; then
   ok "Migraciones aplicadas correctamente"
 else
@@ -77,7 +92,33 @@ else
   fi
 fi
 
-# ── 4. Regenerar Prisma Client ──
+# ── 4. Auditoría de schema (red de seguridad) ──
+log "Auditando schema de base de datos..."
+cd "$PROJECT_DIR"
+
+if [ -n "$DATABASE_URL" ]; then
+  # Ejecutar check-schema.sql pasando URL explícitamente
+  AUDIT_OUTPUT=$(psql "$DATABASE_URL" -f deploy/check-schema.sql 2>&1 || true)
+
+  if echo "$AUDIT_OUTPUT" | grep -q "MISSING"; then
+    warn "Se detectaron elementos faltantes en el schema"
+    echo "$AUDIT_OUTPUT" | grep "MISSING" | head -20 | while read line; do
+      echo -e "    ${YELLOW}→${NC} $line"
+    done
+    echo -e "  ${CYAN}Ejecutando fix-schema.sql...${NC}"
+    if psql "$DATABASE_URL" -f deploy/fix-schema.sql 2>&1 | tail -5; then
+      ok "Schema corregido automáticamente"
+    else
+      fail "Error ejecutando fix-schema.sql"
+    fi
+  else
+    ok "Schema sincronizado correctamente"
+  fi
+else
+  fail "DATABASE_URL no disponible — verificar archivos .env"
+fi
+
+# ── 5. Regenerar Prisma Client ──
 log "Regenerando Prisma Client..."
 cd "$PROJECT_DIR"
 if timeout 60 "$PRISMA_BIN" generate --schema="$SCHEMA" 2>&1 | tail -2; then
@@ -86,7 +127,7 @@ else
   fail "Error generando Prisma Client"
 fi
 
-# ── 5. Build y restart API ──
+# ── 6. Build y restart API ──
 log "Construyendo y reiniciando API..."
 cd "$PROJECT_DIR"
 pnpm --filter api build 2>&1 | tail -3
@@ -107,7 +148,7 @@ else
   pm2 logs trinity-api --lines 10 --nostream 2>/dev/null || true
 fi
 
-# ── 6. Build y restart Web ──
+# ── 7. Build y restart Web ──
 log "Construyendo y reiniciando Web..."
 cd "$PROJECT_DIR"
 pnpm --filter web build 2>&1 | tail -5
@@ -127,17 +168,33 @@ else
   pm2 logs trinity-web --lines 10 --nostream 2>/dev/null || true
 fi
 
-# ── 7. Verificar servicios ──
-log "Verificando servicios..."
+# ── 8. Health check con reintentos ──
+log "Verificando servicios (health check)..."
 sleep 2
 
-API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/ 2>/dev/null || echo "000")
-if [ "$API_CODE" != "000" ]; then
-  ok "API respondiendo (HTTP $API_CODE)"
+# Health check API con reintentos
+API_HEALTHY=false
+for i in $(seq 1 15); do
+  HEALTH_RESPONSE=$(curl -s http://localhost:4000/health 2>/dev/null || echo "")
+  if echo "$HEALTH_RESPONSE" | node -e "
+    const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+    process.exit(d.status==='ok' && d.database==='ok' ? 0 : 1);
+  " 2>/dev/null; then
+    API_HEALTHY=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "$API_HEALTHY" = true ]; then
+  ok "API health check OK (database conectada)"
 else
-  fail "API no responde"
+  fail "API health check falló después de 30s"
+  echo -e "  ${YELLOW}Última respuesta: $HEALTH_RESPONSE${NC}"
+  pm2 logs trinity-api --lines 15 --nostream 2>/dev/null || true
 fi
 
+# Verificar Web
 WEB_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ 2>/dev/null || echo "000")
 if [ "$WEB_CODE" != "000" ]; then
   ok "Web respondiendo (HTTP $WEB_CODE)"
@@ -145,7 +202,7 @@ else
   fail "Web no responde"
 fi
 
-# ── 8. Guardar estado PM2 ──
+# ── 9. Guardar estado PM2 ──
 log "Guardando estado de PM2..."
 pm2 save 2>&1 | tail -1
 ok "Estado guardado"

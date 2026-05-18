@@ -45,3 +45,10 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Siempre usar transacciones Prisma para operaciones que afecten múltiples tablas
 - Usar SELECT FOR UPDATE para correlativos (facturas, códigos de productos)
 - Todo campo monetario en USD debe tener su campo equivalente en Bs en el mismo modelo. Los montos en Bs se calculan y guardan al momento de crear/actualizar el registro usando la tasa del día. Nunca calcular Bs en tiempo de ejecución.
+
+## Migraciones Prisma — CRITICO
+- NUNCA usar `prisma migrate resolve --applied` sin verificar que las columnas existen en la BD
+- Toda migración debe usar `IF NOT EXISTS` en ALTER TABLE y CREATE TABLE
+- Si una migración falla en deploy, NO marcarla como aplicada — revisar el error real y corregirlo
+- Si es necesario resolver manualmente: primero ejecutar el SQL, LUEGO usar resolve --applied
+- El script `deploy/fix-schema.sql` se ejecuta automáticamente en cada deploy como red de seguridad
