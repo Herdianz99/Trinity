@@ -11,6 +11,8 @@ interface InvoiceDetail {
   id: string;
   number: string;
   controlNumber: string | null;
+  fiscalNumber: string | null;
+  fiscalMachineSerial: string | null;
   status: string;
   paymentType: string;
   totalUsd: number;
@@ -25,7 +27,7 @@ interface InvoiceDetail {
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
-  cashRegister: { id: string; code: string; name: string } | null;
+  cashRegister: { id: string; code: string; name: string; isFiscal?: boolean } | null;
   seller: { id: string; code: string; name: string } | null;
   cashier: { id: string; name: string } | null;
   items: InvoiceItem[];
@@ -264,13 +266,25 @@ export default function InvoiceDetailPage() {
                   <p className="text-white font-mono">{invoice.controlNumber}</p>
                 </div>
               )}
+              {invoice.fiscalNumber && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">N. Fiscal</p>
+                  <p className="text-green-400 font-mono font-semibold">{invoice.fiscalNumber}</p>
+                </div>
+              )}
+              {invoice.fiscalMachineSerial && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Serial Impresora</p>
+                  <p className="text-green-400 font-mono text-xs">{invoice.fiscalMachineSerial}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Fecha</p>
                 <p className="text-white font-mono">{fmtDate(invoice.createdAt)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase">Caja</p>
-                <p className="text-white">{invoice.cashRegister?.code || '—'}</p>
+                <p className="text-white">{invoice.cashRegister?.code || '—'}{invoice.cashRegister?.isFiscal ? ' (Fiscal)' : ''}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase">Tasa del dia</p>

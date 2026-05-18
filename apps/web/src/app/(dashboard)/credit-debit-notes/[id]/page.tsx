@@ -25,6 +25,8 @@ interface NoteDetail {
   exchangeRate: number;
   paidAmountUsd: number;
   appliedAt: string | null;
+  fiscalNumber: string | null;
+  machineSerial: string | null;
   fiscalPrinted: boolean;
   manualAmountUsd: number | null;
   manualPct: number | null;
@@ -342,6 +344,18 @@ export default function CreditDebitNoteDetailPage() {
                 <p className="text-xs text-slate-500 uppercase">Tasa</p>
                 <p className="text-white font-mono">Bs {fmt(note.exchangeRate)}</p>
               </div>
+              {note.fiscalNumber && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">N. Fiscal</p>
+                  <p className="text-green-400 font-mono font-semibold">{note.fiscalNumber}</p>
+                </div>
+              )}
+              {note.machineSerial && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Serial Impresora</p>
+                  <p className="text-green-400 font-mono text-xs">{note.machineSerial}</p>
+                </div>
+              )}
             </div>
 
             {/* Linked document */}
