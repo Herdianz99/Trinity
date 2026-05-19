@@ -10,19 +10,13 @@ set -e
 PROJECT_DIR="/opt/Trinity"
 PRISMA_BIN="$PROJECT_DIR/node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/node_modules/.bin/prisma"
 
-# Cargar DATABASE_URL desde .env de forma robusta
-if [ -f /opt/Trinity/.env ]; then
-  export DATABASE_URL=$(grep -oP '(?<=DATABASE_URL=")[^"]+' /opt/Trinity/.env || grep -oP '(?<=DATABASE_URL=)[^\s]+' /opt/Trinity/.env)
-fi
+# Cargar DATABASE_URL desde packages/database/.env
+export DATABASE_URL=$(grep -oP '(?<=DATABASE_URL=")[^"]+' /opt/Trinity/packages/database/.env)
 
 if [ -z "$DATABASE_URL" ]; then
-  echo "  ✗ No se pudo cargar DATABASE_URL desde .env"
+  echo "  ✗ No se pudo cargar DATABASE_URL desde packages/database/.env"
   exit 1
 fi
-
-# Asegurarse de que packages/database/.env también tiene el DATABASE_URL
-# Prisma lo busca ahí específicamente
-echo "DATABASE_URL=\"$DATABASE_URL\"" > /opt/Trinity/packages/database/.env
 
 # Colores
 RED='\033[0;31m'
