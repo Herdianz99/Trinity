@@ -229,6 +229,8 @@ export class InvoicesService {
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     let subtotalUsd = 0;
+    let subtotalBsAccum = 0;
+    let ivaBsAccum = 0;
     const ivaBreakdown: Record<string, number> = {};
     const itemsData: any[] = [];
 
@@ -249,6 +251,11 @@ export class InvoicesService {
       const lineSubtotal = discountedBasePrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
 
+      // Bs driven: calculate from Bs subtotal to match fiscal printer
+      const lineSubtotalBs = Math.round(lineSubtotal * rate.rate * 100) / 100;
+      const lineIvaBs = Math.round(lineSubtotalBs * ivaRate * 100) / 100;
+      const lineTotalBs = Math.round((lineSubtotalBs + lineIvaBs) * 100) / 100;
+
       // unitPriceWithoutIva = base price WITHOUT discount (for reference)
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
       const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
@@ -260,6 +267,8 @@ export class InvoicesService {
       const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
+      subtotalBsAccum += lineSubtotalBs;
+      ivaBsAccum += lineIvaBs;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
 
       itemsData.push({
@@ -271,8 +280,8 @@ export class InvoicesService {
         ivaAmount,
         totalUsd: lineSubtotal + ivaAmount,
         unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
-        ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
-        totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
+        ivaAmountBs: lineIvaBs,
+        totalBs: lineTotalBs,
         unitPriceWithoutIva,
         unitPriceWithoutIvaBs,
         discountPct,
@@ -284,7 +293,6 @@ export class InvoicesService {
 
     const totalIva = Object.values(ivaBreakdown).reduce((s, v) => s + v, 0);
     const totalUsd = subtotalUsd + totalIva;
-    const totalBs = totalUsd * rate.rate;
 
     // All invoices start as PENDING
     const status = 'PENDING';
@@ -318,9 +326,9 @@ export class InvoicesService {
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
-          totalBs: Math.round(totalBs * 100) / 100,
-          subtotalBs: Math.round(subtotalUsd * rate.rate * 100) / 100,
-          ivaBs: Math.round(totalIva * rate.rate * 100) / 100,
+          subtotalBs: Math.round(subtotalBsAccum * 100) / 100,
+          ivaBs: Math.round(ivaBsAccum * 100) / 100,
+          totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
           exchangeRate: rate.rate,
           notes: dto.notes,
           createdById: user.id,
@@ -754,6 +762,8 @@ export class InvoicesService {
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     let subtotalUsd = 0;
+    let subtotalBsAccum = 0;
+    let ivaBsAccum = 0;
     const ivaBreakdown: Record<string, number> = {};
     const itemsData: any[] = [];
 
@@ -774,6 +784,11 @@ export class InvoicesService {
       const lineSubtotal = discountedBasePrice * item.quantity;
       const ivaAmount = lineSubtotal * ivaRate;
 
+      // Bs driven: calculate from Bs subtotal to match fiscal printer
+      const lineSubtotalBs = Math.round(lineSubtotal * rate.rate * 100) / 100;
+      const lineIvaBs = Math.round(lineSubtotalBs * ivaRate * 100) / 100;
+      const lineTotalBs = Math.round((lineSubtotalBs + lineIvaBs) * 100) / 100;
+
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
       const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
       const costUsd = product.bregaApplies
@@ -782,6 +797,8 @@ export class InvoicesService {
       const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
+      subtotalBsAccum += lineSubtotalBs;
+      ivaBsAccum += lineIvaBs;
       ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
 
       itemsData.push({
@@ -793,8 +810,8 @@ export class InvoicesService {
         ivaAmount,
         totalUsd: lineSubtotal + ivaAmount,
         unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,
-        ivaAmountBs: Math.round(ivaAmount * rate.rate * 100) / 100,
-        totalBs: Math.round((lineSubtotal + ivaAmount) * rate.rate * 100) / 100,
+        ivaAmountBs: lineIvaBs,
+        totalBs: lineTotalBs,
         unitPriceWithoutIva,
         unitPriceWithoutIvaBs,
         discountPct,
@@ -806,7 +823,6 @@ export class InvoicesService {
 
     const totalIva = Object.values(ivaBreakdown).reduce((s, v) => s + v, 0);
     const totalUsd = subtotalUsd + totalIva;
-    const totalBs = totalUsd * rate.rate;
 
     // Update in transaction: delete old items, create new, update totals, release lock
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -820,9 +836,9 @@ export class InvoicesService {
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
           totalUsd: Math.round(totalUsd * 100) / 100,
-          totalBs: Math.round(totalBs * 100) / 100,
-          subtotalBs: Math.round(subtotalUsd * rate.rate * 100) / 100,
-          ivaBs: Math.round(totalIva * rate.rate * 100) / 100,
+          subtotalBs: Math.round(subtotalBsAccum * 100) / 100,
+          ivaBs: Math.round(ivaBsAccum * 100) / 100,
+          totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
           exchangeRate: rate.rate,
           notes: dto.notes,
           lockedById: null,
