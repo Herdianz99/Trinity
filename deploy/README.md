@@ -46,13 +46,19 @@ Este script actualiza:
 - `NEXT_PUBLIC_API_URL=https://api.eltrebol.app` (frontend)
 - `CORS_ORIGIN=https://eltrebol.app` (backend)
 
-### 4. Rebuild y restart
+### 4. Deploy (actualizar y rebuild)
 
 ```bash
-bash deploy.sh
+ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"
 ```
 
-Esto ejecuta: git pull, pnpm install, prisma migrate, build, restart PM2.
+**IMPORTANTE:** Siempre hacer `git pull` antes de `bash deploy.sh`. El script deploy.sh
+se actualiza a sí mismo dentro del repositorio, pero si se ejecuta directamente sin pull
+previo, la versión vieja ya está cargada en memoria y los cambios al script no aplican
+hasta la próxima ejecución. Haciendo `git pull` primero se garantiza que siempre se
+ejecuta la versión más reciente del script.
+
+El script ejecuta: pnpm install, prisma migrate, prisma generate, build API + Web, restart PM2, health check.
 
 ### 5. Verificar
 

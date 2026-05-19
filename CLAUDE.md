@@ -33,11 +33,13 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Siempre usar setUTCHours para rangos de fecha en queries de backend
 - Para fechas locales en frontend usar getFullYear()/getMonth()/getDate() nunca toISOString()
 
-## Deploy a producción (DigitalOcean)
+## Deploy al servidor
 - Servidor: `134.209.220.233` (root)
 - Ruta del proyecto: `/opt/Trinity`
-- Comando de deploy: `ssh root@134.209.220.233 "cd /opt/Trinity && bash deploy.sh"`
-- El script `deploy.sh` ejecuta: git pull, pnpm install, prisma migrate, prisma generate, build API + Web, restart PM2, verificación
+- SIEMPRE usar este comando para hacer deploy:
+  `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`
+- NUNCA usar solo `bash deploy.sh` sin hacer `git pull` primero — el script se actualiza a sí mismo y la versión vieja en memoria no refleja los cambios
+- El script `deploy.sh` ejecuta: pnpm install, prisma migrate, prisma generate, build API + Web, restart PM2, health check
 - PM2 procesos: `trinity-api` (puerto 4000), `trinity-web` (puerto 3000)
 - Prisma en servidor usa v5: `npx prisma@5.22.0`
 
