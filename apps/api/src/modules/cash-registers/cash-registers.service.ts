@@ -77,6 +77,7 @@ export class CashRegistersService {
         isFiscal: dto.isFiscal ?? false,
         isShared: dto.isShared ?? false,
         comPort: dto.comPort,
+        fiscalMachineSerial: dto.fiscalMachineSerial,
       },
     });
   }
@@ -103,6 +104,7 @@ export class CashRegistersService {
         isFiscal: dto.isFiscal,
         isShared: dto.isShared,
         comPort: dto.comPort,
+        fiscalMachineSerial: dto.fiscalMachineSerial,
       },
     });
   }

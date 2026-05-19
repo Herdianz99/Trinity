@@ -24,4 +24,9 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsString()
   comPort?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  fiscalMachineSerial?: string;
 }

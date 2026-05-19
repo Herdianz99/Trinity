@@ -301,7 +301,7 @@ export default function ProductDetailPage() {
   const costConBrecha = costUsd + brechaAmt;
   const gananciaDetal = costConBrecha * Number(form.gananciaPct) / 100;
   const gananciaMayor = costConBrecha * Number(form.gananciaMayorPct) / 100;
-  const ivaPct = IVA_PCTS[form.ivaType] || 16;
+  const ivaPct = IVA_PCTS[form.ivaType] ?? 16;
   const subtotalDetal = costConBrecha + gananciaDetal;
   const ivaDetal = subtotalDetal * ivaPct / 100;
   const priceDetal = subtotalDetal + ivaDetal;
