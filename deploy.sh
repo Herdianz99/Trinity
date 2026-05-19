@@ -10,19 +10,14 @@ set -e
 PROJECT_DIR="/opt/Trinity"
 PRISMA_BIN="$PROJECT_DIR/node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/node_modules/.bin/prisma"
 
-# Cargar variables de entorno
+# Cargar DATABASE_URL desde .env de forma robusta
 if [ -f /opt/Trinity/.env ]; then
-  set -a
-  source /opt/Trinity/.env
-  set +a
-elif [ -f /opt/Trinity/apps/api/.env ]; then
-  set -a
-  source /opt/Trinity/apps/api/.env
-  set +a
-elif [ -f /opt/Trinity/packages/database/.env ]; then
-  set -a
-  source /opt/Trinity/packages/database/.env
-  set +a
+  export DATABASE_URL=$(grep -oP '(?<=DATABASE_URL=")[^"]+' /opt/Trinity/.env || grep -oP '(?<=DATABASE_URL=)[^\s]+' /opt/Trinity/.env)
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  echo "  ✗ No se pudo cargar DATABASE_URL desde .env"
+  exit 1
 fi
 
 # Colores
