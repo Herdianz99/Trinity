@@ -485,6 +485,19 @@ export class InvoicesService {
       ? Math.round((invoice.totalBs + invoiceIgtfBs) * 100) / 100
       : invoice.totalBs;
 
+    // Adjust last payment so USD and Bs sums match invoice totals exactly
+    if (dto.payments.length >= 1) {
+      const lastIdx = dto.payments.length - 1;
+      const prevUsd = dto.payments.slice(0, lastIdx).reduce((s, p) => s + p.amountUsd, 0);
+      const prevBs = dto.payments.slice(0, lastIdx).reduce((s, p) => s + p.amountBs, 0);
+      const adjustedUsd = Math.round((newTotalUsd - prevUsd) * 100) / 100;
+      const adjustedBs = Math.round((newTotalBs - prevBs) * 100) / 100;
+      if (adjustedUsd >= 0 && adjustedBs >= 0) {
+        dto.payments[lastIdx].amountUsd = adjustedUsd;
+        dto.payments[lastIdx].amountBs = adjustedBs;
+      }
+    }
+
     // Execute everything in transaction
     const result = await this.prisma.$transaction(async (tx) => {
       // Create payments

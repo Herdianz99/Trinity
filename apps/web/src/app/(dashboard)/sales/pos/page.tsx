@@ -406,6 +406,8 @@ export default function POSPage() {
   // Calculate totals — priceDetal includes IVA, extract base for proper breakdown
   const ivaByType: Record<string, number> = {};
   let subtotalUsd = 0;
+  let subtotalBsAccum = 0;
+  let ivaBsAccum = 0;
   cart.forEach(i => {
     const rate = IVA_RATES[i.ivaType] || 0;
     const discountMultiplier = 1 - (i.discountPct || 0) / 100;
@@ -414,10 +416,15 @@ export default function POSPage() {
     const iva = lineSubtotal * rate;
     subtotalUsd += lineSubtotal;
     ivaByType[i.ivaType] = (ivaByType[i.ivaType] || 0) + iva;
+    // Bs driven: calculate from rounded Bs subtotal to match fiscal printer
+    const lineSubtotalBs = Math.round(lineSubtotal * exchangeRate * 100) / 100;
+    const lineIvaBs = Math.round(lineSubtotalBs * rate * 100) / 100;
+    subtotalBsAccum += lineSubtotalBs;
+    ivaBsAccum += lineIvaBs;
   });
   const totalIva = Object.values(ivaByType).reduce((s, v) => s + v, 0);
   const totalUsd = subtotalUsd + totalIva;
-  const totalBs = totalUsd * exchangeRate;
+  const totalBs = Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100;
 
   // IGTF: se calcula una sola vez sobre el primer pago en divisas (solo en caja fiscal)
   const firstForeignPayment = payments.find(p => p.isDivisa);
@@ -432,17 +439,34 @@ export default function POSPage() {
   // Payment calculations
   const totalPaidUsd = payments.reduce((s, p) => s + p.amountUsd, 0);
   const remaining = grandTotalUsd - totalPaidUsd;
+  const totalPaidBs = payments.reduce((s, p) => s + p.amountBs, 0);
+  const remainingBs = Math.round((grandTotalBs - totalPaidBs) * 100) / 100;
 
   function addPayment(pm: PaymentMethodData) {
-    const amountUsd = Math.max(0, remaining);
-    setPayments(prev => [...prev, {
-      methodId: pm.id,
-      methodName: pm.name,
-      isDivisa: pm.isDivisa,
-      amountUsd: Math.round(amountUsd * 100) / 100,
-      amountBs: Math.round(amountUsd * exchangeRate * 100) / 100,
-      reference: '',
-    }]);
+    if (pm.isDivisa) {
+      // USD method: fill with remaining USD, derive Bs
+      const amountUsd = Math.round(Math.max(0, remaining) * 100) / 100;
+      setPayments(prev => [...prev, {
+        methodId: pm.id,
+        methodName: pm.name,
+        isDivisa: true,
+        amountUsd,
+        amountBs: Math.round(amountUsd * exchangeRate * 100) / 100,
+        reference: '',
+      }]);
+    } else {
+      // Bs method: fill with remaining Bs, derive USD
+      const amountBs = Math.round(Math.max(0, remainingBs) * 100) / 100;
+      const amountUsd = exchangeRate > 0 ? Math.round(amountBs / exchangeRate * 100) / 100 : 0;
+      setPayments(prev => [...prev, {
+        methodId: pm.id,
+        methodName: pm.name,
+        isDivisa: false,
+        amountUsd,
+        amountBs,
+        reference: '',
+      }]);
+    }
     setExpandedGroup(null);
   }
 
