@@ -259,7 +259,7 @@ export default function InvoiceDetailPage() {
         {/* TAB: Informacion General */}
         <TabsContent value="info">
           <div className="card p-6 mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
               {invoice.controlNumber && (
                 <div>
                   <p className="text-xs text-slate-500 uppercase">N. Control</p>
@@ -281,13 +281,13 @@ export default function InvoiceDetailPage() {
               {invoice.seller && (
                 <div>
                   <p className="text-xs text-slate-500 uppercase">Vendedor</p>
-                  <p className="text-white">{invoice.seller.name}</p>
+                  <p className="text-white truncate">{invoice.seller.name}</p>
                 </div>
               )}
               {invoice.cashier && (
                 <div>
                   <p className="text-xs text-slate-500 uppercase">Cobrado por</p>
-                  <p className="text-white">{invoice.cashier.name}</p>
+                  <p className="text-white truncate">{invoice.cashier.name}</p>
                 </div>
               )}
             </div>
