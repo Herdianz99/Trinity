@@ -344,19 +344,40 @@ export default function CreditDebitNoteDetailPage() {
                 <p className="text-xs text-slate-500 uppercase">Tasa</p>
                 <p className="text-white font-mono">Bs {fmt(note.exchangeRate)}</p>
               </div>
-              {note.fiscalNumber && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">N. Fiscal</p>
-                  <p className="text-green-400 font-mono font-semibold">{note.fiscalNumber}</p>
-                </div>
-              )}
-              {note.machineSerial && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">Serial Impresora</p>
-                  <p className="text-green-400 font-mono text-xs">{note.machineSerial}</p>
-                </div>
-              )}
             </div>
+
+            {/* Datos fiscales — visible cuando la caja es fiscal */}
+            {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && (
+              <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
+                <h3 className="text-xs text-slate-500 uppercase mb-2">Datos Fiscales</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-400">N. Fiscal:</span>
+                    {note.fiscalNumber ? (
+                      <span className="text-green-400 ml-2 font-mono font-semibold">{note.fiscalNumber}</span>
+                    ) : (
+                      <span className="text-yellow-500 ml-2">No guardado</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Serial Impresora:</span>
+                    {note.machineSerial ? (
+                      <span className="text-green-400 ml-2 font-mono">{note.machineSerial}</span>
+                    ) : (
+                      <span className="text-yellow-500 ml-2">No guardado</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Impreso:</span>
+                    {note.fiscalPrinted ? (
+                      <span className="text-green-400 ml-2">Sí</span>
+                    ) : (
+                      <span className="text-yellow-500 ml-2">No</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Linked document */}
             <div className="bg-slate-900/50 rounded-lg p-4 mb-6">

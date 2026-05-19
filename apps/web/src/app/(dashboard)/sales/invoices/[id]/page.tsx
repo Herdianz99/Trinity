@@ -266,18 +266,6 @@ export default function InvoiceDetailPage() {
                   <p className="text-white font-mono">{invoice.controlNumber}</p>
                 </div>
               )}
-              {invoice.fiscalNumber && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">N. Fiscal</p>
-                  <p className="text-green-400 font-mono font-semibold">{invoice.fiscalNumber}</p>
-                </div>
-              )}
-              {invoice.fiscalMachineSerial && (
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">Serial Impresora</p>
-                  <p className="text-green-400 font-mono text-xs">{invoice.fiscalMachineSerial}</p>
-                </div>
-              )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Fecha</p>
                 <p className="text-white font-mono">{fmtDate(invoice.createdAt)}</p>
@@ -303,6 +291,31 @@ export default function InvoiceDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Datos fiscales */}
+            {invoice.cashRegister?.isFiscal && (
+              <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
+                <h3 className="text-xs text-slate-500 uppercase mb-2">Datos Fiscales</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-400">N. Fiscal:</span>
+                    {invoice.fiscalNumber ? (
+                      <span className="text-green-400 ml-2 font-mono font-semibold">{invoice.fiscalNumber}</span>
+                    ) : (
+                      <span className="text-yellow-500 ml-2">No guardado</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Serial Impresora:</span>
+                    {invoice.fiscalMachineSerial ? (
+                      <span className="text-green-400 ml-2 font-mono">{invoice.fiscalMachineSerial}</span>
+                    ) : (
+                      <span className="text-yellow-500 ml-2">No guardado</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Datos cliente */}
             {invoice.customer && (
