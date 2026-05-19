@@ -270,18 +270,6 @@ export default function InvoiceDetailPage() {
                   <p className="text-white font-mono">{invoice.controlNumber}</p>
                 </div>
               )}
-              <div>
-                <p className="text-xs text-slate-500 uppercase">Fecha</p>
-                <p className="text-white font-mono">{fmtDate(invoice.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase">Caja</p>
-                <p className="text-white">{invoice.cashRegister?.code || '—'}{invoice.cashRegister?.isFiscal ? ' (Fiscal)' : ''}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase">Tasa del dia</p>
-                <p className="text-white font-mono">Bs {invoice.exchangeRate?.toFixed(2)}</p>
-              </div>
               {invoice.seller && (
                 <div>
                   <p className="text-xs text-slate-500 uppercase">Vendedor</p>
@@ -294,6 +282,18 @@ export default function InvoiceDetailPage() {
                   <p className="text-white truncate">{invoice.cashier.name}</p>
                 </div>
               )}
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Caja</p>
+                <p className="text-white">{invoice.cashRegister?.code || '—'}{invoice.cashRegister?.isFiscal ? ' (Fiscal)' : ''}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Fecha</p>
+                <p className="text-white font-mono">{fmtDate(invoice.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Tasa del dia</p>
+                <p className="text-white font-mono">Bs {invoice.exchangeRate?.toFixed(2)}</p>
+              </div>
             </div>
 
             {/* Datos fiscales */}
