@@ -202,7 +202,11 @@ export default function InvoiceDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white font-mono">{invoice.number}</h1>
-            <p className="text-slate-400 text-sm">{invoice.customer?.name || 'Sin cliente'}</p>
+            <p className="text-slate-400 text-sm">
+              {invoice.customer
+                ? <>{invoice.customer.documentType}-{invoice.customer.rif || '—'} · {invoice.customer.name}{invoice.customer.phone ? ` · ${invoice.customer.phone}` : ''}</>
+                : 'Sin cliente'}
+            </p>
           </div>
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[invoice.status]}`}>
             {STATUS_LABELS[invoice.status]}
@@ -317,28 +321,6 @@ export default function InvoiceDetailPage() {
               </div>
             )}
 
-            {/* Datos cliente */}
-            {invoice.customer && (
-              <div className="bg-slate-900/50 rounded-lg p-4 mb-6">
-                <h3 className="text-xs text-slate-500 uppercase mb-2">Cliente</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span className="text-slate-400">Nombre:</span>
-                    <span className="text-white ml-2">{invoice.customer.name}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Documento:</span>
-                    <span className="text-white ml-2">{invoice.customer.documentType}-{invoice.customer.rif || '—'}</span>
-                  </div>
-                  {invoice.customer.phone && (
-                    <div>
-                      <span className="text-slate-400">Telefono:</span>
-                      <span className="text-white ml-2">{invoice.customer.phone}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Items table */}
