@@ -20,6 +20,10 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+# Asegurarse de que packages/database/.env también tiene el DATABASE_URL
+# Prisma lo busca ahí específicamente
+echo "DATABASE_URL=\"$DATABASE_URL\"" > /opt/Trinity/packages/database/.env
+
 # Colores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
