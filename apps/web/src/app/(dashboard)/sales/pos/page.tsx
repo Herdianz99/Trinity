@@ -183,7 +183,7 @@ export default function POSPage() {
         if (data) setCompanyConfig({
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
-          fiscalCreditCode: data.fiscalCreditCode || '01',
+          fiscalCreditCode: data.fiscalCreditCode || '10',
           companyName: data.companyName || '',
           rif: data.rif || '',
           address: data.address || '',
@@ -625,9 +625,9 @@ export default function POSPage() {
             })),
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
+          console.log('[FISCAL-CREDITO] Comandos:', JSON.stringify(commands));
           const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
 
-          // Save fiscal status obtained directly from serial port
           if (fiscal) {
             try {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
@@ -640,7 +640,9 @@ export default function POSPage() {
               });
             } catch {}
           }
-        } catch {}
+        } catch (fiscalErr: any) {
+          console.error('[FISCAL-CREDITO] ERROR:', fiscalErr.message);
+        }
       } else if (selectedCashRegister) {
         try {
           const { printReceipt } = await import('@/lib/print-receipt');
@@ -731,9 +733,9 @@ export default function POSPage() {
             })),
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
+          console.log('[FISCAL-CONTADO] Comandos:', JSON.stringify(commands));
           const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
 
-          // Save fiscal status obtained directly from serial port
           if (fiscal) {
             try {
               await fetch(`/api/proxy/invoices/${result.id}/fiscal-info`, {
@@ -746,7 +748,9 @@ export default function POSPage() {
               });
             } catch {}
           }
-        } catch {}
+        } catch (fiscalErr: any) {
+          console.error('[FISCAL-CONTADO] ERROR:', fiscalErr.message);
+        }
       } else if (selectedCashRegister) {
         try {
           const { printReceipt } = await import('@/lib/print-receipt');

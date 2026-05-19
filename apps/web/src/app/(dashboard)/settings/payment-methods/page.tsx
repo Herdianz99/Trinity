@@ -14,6 +14,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
+import { FISCAL_PAYMENT_POSITIONS } from '@/lib/fiscal-payment-codes';
 
 interface PaymentMethod {
   id: string;
@@ -385,13 +386,18 @@ export default function PaymentMethodsPage() {
 
               <div>
                 <label className="text-sm text-slate-400">Codigo fiscal (para impresora)</label>
-                <input
-                  type="text"
+                <select
                   value={formFiscalCode}
                   onChange={e => setFormFiscalCode(e.target.value)}
                   className="input-field mt-1"
-                  placeholder="Ej: PDB, PMB"
-                />
+                >
+                  <option value="">Sin codigo fiscal</option>
+                  {FISCAL_PAYMENT_POSITIONS.map(pos => (
+                    <option key={pos.code} value={pos.code}>
+                      {pos.code} - {pos.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

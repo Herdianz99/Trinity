@@ -201,7 +201,7 @@ model CompanyConfig {
   islrRetentionPct       Float    @default(0)
   isIGTFContributor      Boolean  @default(false)
   igtfPct                Float    @default(3)
-  fiscalCreditCode       String   @default("01")
+  fiscalCreditCode       String   @default("10")
   allowNegativeStock     Boolean  @default(true)
   defaultCustomerId      String?
   logo                   String?  @db.Text
@@ -623,8 +623,9 @@ model CashRegister {
   isShared          Boolean       @default(false)
   isActive          Boolean          @default(true)
   lastInvoiceNumber Int              @default(0)
-  comPort           String?
-  sessions          CashSession[]
+  comPort              String?
+  fiscalMachineSerial  String?
+  sessions             CashSession[]
   invoices          Invoice[]
   creditDebitNotes  CreditDebitNote[]
   createdAt         DateTime         @default(now())

@@ -52,10 +52,10 @@ export function buildFiscalCommands(
   // iR* = RIF (cannot be empty — printer hangs)
   if (customer && customer.rif) {
     const docType = customer.documentType || '';
-    const rif = docType ? `${docType}${customer.rif}` : customer.rif;
+    const rif = docType ? `${docType}-${customer.rif}` : customer.rif;
     commands.push(`iR*${rif}`);
   } else {
-    commands.push('iR*V12345678');
+    commands.push('iR*V-00000000');
   }
 
   commands.push(`iS*${customer ? customer.name : 'CONSUMIDOR FINAL'}`);
@@ -116,9 +116,8 @@ export function buildFiscalCommands(
 
   // --- Payment methods ---
   if (isCredit) {
-    // Credit: send only 1 + fiscalCreditCode
-    const creditCode = (companyConfig.fiscalCreditCode || '01').padStart(2, '0');
-    commands.push(`1${creditCode}`);
+    // Credit: always use fiscal position 10 (Credito)
+    commands.push('110');
   } else {
     // Process each payment — fiscal code comes from payment.method.fiscalCode (relation)
     for (let i = 0; i < payments.length; i++) {
@@ -136,7 +135,8 @@ export function buildFiscalCommands(
         commands.push(`1${fiscalCode}`);
       } else {
         // Not last: send as type 2 (more payments follow) with amount
-        // Amount: 10 integer + 2 decimal digits = 12 chars
+        // Payment amount: 10 integer + 2 decimal = 12 chars (per protocol manual)
+        // NOTE: item prices use 8+2=10 chars, but payment amounts use 10+2=12 chars
         const amountStr = formatFixed(amountBs, 10, 2);
         commands.push(`2${fiscalCode}${amountStr}`);
       }
@@ -202,7 +202,7 @@ export function buildFiscalCreditNoteCommands(
     const rif = docType ? `${docType}-${customer.rif}` : customer.rif;
     commands.push(`iR*${rif}`);
   } else {
-    commands.push('iR*V-12345678');
+    commands.push('iR*V-00000000');
   }
 
   // iS* — Customer name
@@ -244,6 +244,7 @@ export function buildFiscalCreditNoteCommands(
       if (isLast) {
         commands.push(`1${fiscalCode}`);
       } else {
+        // Payment amount: 10 integer + 2 decimal = 12 chars (per protocol manual)
         const amountStr = formatFixed(amountBs, 10, 2);
         commands.push(`2${fiscalCode}${amountStr}`);
       }
@@ -272,15 +273,20 @@ export function showFiscalCommands(commands: string[]): void {
 // Serial communication with The Factory HKA fiscal printers
 // Protocol: RS232, 9600 baud, 8 data bits, even parity, 1 stop bit
 //
-// Command types:
-//   1) SIMPLE (invoice, NC, ND, etc.):  PC→STX+DATA+ETX+LRC  Printer→ACK|NAK
-//   2) READ SIMPLE (S1, S2, SV, etc.):  PC→STX+DATA+ETX+LRC  Printer→ACK
-//                                        Printer→STX+RESPONSE+ETX+LRC  PC→ACK
-//   3) READ INFO (reports, U4F, etc.):  multi-block with ETB + EOT
+// Confirmed protocol (tested with HKA80/Z7C):
+//   ENQ (0x05) → 5-byte status: STX+STS1+STS2+ETX+LRC
 //
+//   SIMPLE commands (invoice items, payments, etc.):
+//     PC: STX+DATA+ETX+LRC → Printer: ACK|NAK or 5-byte status frame
+//
+//   READ commands (S1, S2, SV, etc.):
+//     PC: STX+CMD+ETX+LRC → Printer: data frame directly
+//     OR: Printer: status frame → PC: ENQ → Printer: data frame
+//     PC: ACK after receiving data
+//
+// Response format: librería (fields separated by 0x0A, command echo prefix)
 // Frame: STX(0x02) + DATA + ETX(0x03) + LRC
 // LRC = XOR of all bytes from DATA through ETX (inclusive)
-// ENQ (0x05) = independent status query, response: STX+STS1+STS2+ETX+LRC
 // ═══════════════════════════════════════════════════════════════════
 
 const STX = 0x02;
@@ -378,9 +384,19 @@ class SerialIO {
   async readFrame(timeoutMs: number): Promise<Uint8Array> {
     const deadline = Date.now() + timeoutMs;
 
+    // Discard any bytes before STX (noise/garbage on the line)
+    while (this.pending.length > 0 && this.pending[0] !== STX) {
+      this.pending.shift();
+    }
+
     // Accumulate until we find ETX after STX
     while (true) {
-      // Look for ETX in pending buffer (skip position 0 which should be STX)
+      // Ensure first byte is STX; discard garbage if needed
+      while (this.pending.length > 0 && this.pending[0] !== STX) {
+        this.pending.shift();
+      }
+
+      // Look for ETX in pending buffer (skip position 0 which is STX)
       const etxIdx = this.pending.indexOf(ETX, 1);
       if (etxIdx >= 0) {
         // Need everything up to ETX + 1 byte for LRC
@@ -416,6 +432,38 @@ class SerialIO {
       const value = (result as ReadableStreamReadResult<Uint8Array>).value;
       if (value) for (let j = 0; j < value.length; j++) this.pending.push(value[j]);
     }
+  }
+
+  /**
+   * Flush pending state: send ACK+ENQ repeatedly until we get stable
+   * 5-byte status responses, discarding any leftover data frames.
+   */
+  async flush(): Promise<void> {
+    let stableCount = 0;
+
+    for (let round = 0; round < 15 && stableCount < 3; round++) {
+      // ACK any pending frame, then ENQ for status
+      await this.write(new Uint8Array([ACK]));
+      await new Promise((r) => setTimeout(r, 100));
+      await this.write(new Uint8Array([ENQ]));
+
+      try {
+        const frame = await this.readFrame(800);
+        if (frame.length === 5 && frame[0] === STX && frame[3] === ETX) {
+          stableCount++;
+        } else {
+          // Got a data frame — pending state being drained
+          stableCount = 0;
+          await this.write(new Uint8Array([ACK]));
+        }
+      } catch {
+        // Timeout — no response, try again
+        stableCount = 0;
+      }
+    }
+
+    // Final silence check — discard any remaining bytes
+    this.pending = [];
   }
 
   releaseLocks(): void {
@@ -498,6 +546,14 @@ async function waitForReady(io: SerialIO, timeoutMs = 30000): Promise<void> {
       throw new Error('Respuesta a ENQ malformada');
     }
 
+    // Validate LRC on ENQ response: XOR of STS1 + STS2 + ETX
+    const enqLrc = response[1] ^ response[2] ^ ETX;
+    if (enqLrc !== response[4]) {
+      // LRC mismatch — skip this response and retry
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      continue;
+    }
+
     const sts1 = response[1];
     const sts2 = response[2];
 
@@ -512,33 +568,55 @@ async function waitForReady(io: SerialIO, timeoutMs = 30000): Promise<void> {
       throw new Error('Memoria fiscal llena — la impresora no acepta más operaciones');
     }
 
-    // STS1: ready states (fiscal or training, idle)
-    if (sts1 === 0x60 || sts1 === 0x40) {
+    // Printer is ready to accept commands in ANY of these states:
+    // 0x40 = training idle, 0x42 = training non-fiscal doc
+    // 0x44 = training fiscal doc, 0x60 = fiscal idle
+    // 0x61 = fiscal doc header phase, 0x62 = fiscal non-fiscal doc
+    // 0x64 = fiscal doc with items, 0x66 = fiscal doc + non-fiscal
+    // All are valid "ready for next command" as long as STS2 has no errors
+    if ((sts2 & 0x04) === 0) {
+      // No command error in STS2 — printer is ready
       return;
     }
 
-    // Busy (in transaction) — wait and retry
+    // STS2 has error flag — wait and retry
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   throw new Error('Timeout: la impresora no respondió en estado de espera tras 30 segundos');
 }
 
-// ─── Simple command (type 1 — ACK only) ─────────────────────────
+// ─── Simple command (type 1 — ACK or status frame) ──────────────
 
-async function sendSimpleCommand(io: SerialIO, command: string): Promise<void> {
+async function sendSimpleCommand(io: SerialIO, command: string, timeoutMs = 5000): Promise<void> {
   const frame = buildFrame(command);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     await io.write(frame);
 
-    const response = await io.read(1, 5000);
+    const firstByte = await io.read(1, timeoutMs);
 
-    if (response[0] === ACK) {
+    if (firstByte[0] === ACK) {
       return;
     }
 
-    if (response[0] === NAK) {
+    // Printer may respond with a 5-byte status frame (STX STS1 STS2 ETX LRC)
+    // instead of a single ACK byte
+    if (firstByte[0] === STX) {
+      const rest = await io.read(4, timeoutMs);
+      // rest = [STS1, STS2, ETX, LRC]
+      const sts2 = rest[1];
+      // Check for error in STS2 (bit 2 = command error)
+      if ((sts2 & 0x04) !== 0) {
+        throw new Error(
+          `Impresora reportó error (STS2=0x${sts2.toString(16)}) al comando: ${command.substring(0, 20)}`,
+        );
+      }
+      // Status frame without error = command accepted
+      return;
+    }
+
+    if (firstByte[0] === NAK) {
       if (attempt < MAX_RETRIES - 1) {
         await new Promise((r) => setTimeout(r, 200));
         continue;
@@ -555,44 +633,57 @@ async function sendSimpleCommand(io: SerialIO, command: string): Promise<void> {
     }
 
     throw new Error(
-      `Respuesta inesperada 0x${response[0].toString(16)} al comando: ${command.substring(0, 20)}`,
+      `Respuesta inesperada 0x${firstByte[0].toString(16)} al comando: ${command.substring(0, 20)}`,
     );
   }
 }
 
-// ─── Read command (type 2 — ACK + response frame) ───────────────
+// ─── Read command (type 2 — data frame or status+ENQ+data) ──────
 
 /**
  * Sends a read command (S1, SV, S2, etc.) and returns the DATA portion
- * of the response (without STX, ETX, LRC).
+ * of the response as a string (librería format: fields separated by \n).
  *
- * Flow:  PC: STX+cmd+ETX+LRC → Printer: ACK
- *        Printer: STX+DATA+ETX+LRC → PC: ACK
+ * Confirmed protocol (HKA80/Z7C):
+ *   PC: STX+cmd+ETX+LRC
+ *   Printer responds with EITHER:
+ *     a) Data frame directly (normal after clean state)
+ *     b) 5-byte status frame → PC sends ENQ → Printer sends data frame
+ *   PC: ACK to confirm
  */
-async function sendReadCommand(io: SerialIO, cmd: string): Promise<Uint8Array> {
+async function sendReadCommand(io: SerialIO, cmd: string): Promise<string> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const frame = buildFrame(cmd);
       await io.write(frame);
 
-      // Wait for initial ACK
-      const ackByte = await io.read(1, 2000);
-      if (ackByte[0] === NAK) throw new Error('NAK recibido — comando rechazado');
-      if (ackByte[0] !== ACK) throw new Error(`Esperaba ACK, recibí 0x${ackByte[0].toString(16)}`);
-
-      // Read response frame: STX + DATA + ETX + LRC
+      // Read response frame
       const responseFrame = await io.readFrame(5000);
 
-      // Validate LRC
-      validateLRC(responseFrame);
+      // Check if it's a 5-byte status frame (STX STS1 STS2 ETX LRC)
+      if (responseFrame.length === 5 && responseFrame[3] === ETX) {
+        const sts2 = responseFrame[2];
+        if ((sts2 & 0x04) !== 0) {
+          throw new Error(`Error en comando ${cmd}: STS2=0x${sts2.toString(16)}`);
+        }
 
-      // Send ACK to confirm reception
+        // Status frame received — send ENQ to request data frame
+        await io.write(new Uint8Array([ENQ]));
+        const dataFrame = await io.readFrame(5000);
+        validateLRC(dataFrame);
+        await io.write(new Uint8Array([ACK]));
+
+        const decoder = new TextDecoder();
+        return decoder.decode(dataFrame.slice(1, dataFrame.length - 2));
+      }
+
+      // Data frame received directly
+      validateLRC(responseFrame);
       await io.write(new Uint8Array([ACK]));
 
-      // Return DATA only (strip STX at start, ETX+LRC at end)
-      return responseFrame.slice(1, responseFrame.length - 2);
+      const decoder = new TextDecoder();
+      return decoder.decode(responseFrame.slice(1, responseFrame.length - 2));
     } catch (err) {
-      // On LRC failure or read error, send NAK and retry
       try { await io.write(new Uint8Array([NAK])); } catch {}
       if (attempt === MAX_RETRIES - 1) throw err;
       await new Promise((r) => setTimeout(r, 300));
@@ -622,10 +713,11 @@ const PRINTER_MODELS: Record<string, { name: string; family: 'A' | 'B' }> = {
 
 async function detectPrinterModel(io: SerialIO): Promise<PrinterModelInfo> {
   await waitForReady(io);
-  const data = await sendReadCommand(io, 'SV');
-  const decoder = new TextDecoder();
-  const text = decoder.decode(data);
-  const modelCode = text.substring(0, 3);
+  const text = await sendReadCommand(io, 'SV');
+
+  // Librería format: "SV\nZ7C\nVE" → fields[0]=echo, fields[1]=model, fields[2]=country
+  const fields = text.split('\n');
+  const modelCode = fields.length >= 2 ? fields[1] : text.substring(0, 3);
 
   const info = PRINTER_MODELS[modelCode];
   if (!info) {
@@ -636,30 +728,129 @@ async function detectPrinterModel(io: SerialIO): Promise<PrinterModelInfo> {
 
 // ─── Read S1 status (MEJORA 1) ──────────────────────────────────
 
+/**
+ * Reads S1 status from the printer.
+ *
+ * Confirmed librería format (HKA80/Z7C, Family A):
+ *   f[0]  = echo+status (e.g., "S100" = echo "S1" + status "00")
+ *   f[1]  = subtotal ventas
+ *   f[2]  = ultima factura
+ *   f[3]  = cant. facturas
+ *   f[4]  = ult. nota debito
+ *   f[5]  = cant. notas debito
+ *   f[6]  = ult. nota credito
+ *   f[7]  = cant. notas credito
+ *   f[8]  = ultimo DNF
+ *   f[9]  = cant. DNF
+ *   f[10] = cierres Z
+ *   f[11] = reportes MF
+ *   f[12] = RIF
+ *   f[13] = serial maquina
+ *   f[14] = hora (HHMMSS)
+ *   f[15] = fecha (DDMMYY)
+ */
 async function readStatusS1(
   io: SerialIO,
-  family: 'A' | 'B',
+  _family: 'A' | 'B',
 ): Promise<FiscalStatusResult> {
   await waitForReady(io);
-  const data = await sendReadCommand(io, 'S1');
-  const decoder = new TextDecoder();
-  const text = decoder.decode(data);
+  const text = await sendReadCommand(io, 'S1');
+  const f = text.split('\n');
 
-  if (family === 'A') {
-    return {
-      invoiceFiscalNumber:    text.substring(21, 29).trim(),
-      debitNoteFiscalNumber:  text.substring(34, 42).trim(),
-      creditNoteFiscalNumber: text.substring(47, 55).trim(),
-      rif:                    text.substring(81, 92).trim(),
-      machineSerial:          text.substring(92, 102).trim(),
-    };
-  } else {
-    return {
-      invoiceFiscalNumber:    text.substring(21, 29).trim(),
-      creditNoteFiscalNumber: text.substring(88, 96).trim(),
-      rif:                    text.substring(55, 66).trim(),
-      machineSerial:          text.substring(66, 76).trim(),
-    };
+  // Require minimum fields for reliable parsing
+  if (f.length < 14) {
+    throw new Error(`Respuesta S1 incompleta: ${f.length} campos (esperados >= 14)`);
+  }
+
+  return {
+    invoiceFiscalNumber:    f[2]?.trim() || '',
+    debitNoteFiscalNumber:  f[4]?.trim() || '',
+    creditNoteFiscalNumber: f[6]?.trim() || '',
+    rif:                    f[12]?.trim() || '',
+    machineSerial:          f[13]?.trim() || '',
+  };
+}
+
+// ─── Connection helper ───────────────────────────────────────────
+
+/**
+ * Opens the serial port (trying saved ports first, then prompting the user),
+ * flushes any pending state, detects the printer model, and calls `fn`
+ * with the SerialIO and model info. Cleans up (release locks, close port)
+ * in all cases.
+ */
+async function withFiscalPrinter<T>(
+  fn: (io: SerialIO, model: PrinterModelInfo) => Promise<T>,
+): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let port: any = null;
+  let io: SerialIO | null = null;
+
+  try {
+    // Try saved port first; if ENQ fails, forget it and ask the user to pick
+    const savedPorts = await (navigator as any).serial.getPorts();
+
+    for (const saved of savedPorts) {
+      try {
+        await saved.open(SERIAL_CONFIG);
+        if (saved.readable && saved.writable) {
+          const testIO = new SerialIO(saved.readable.getReader(), saved.writable.getWriter());
+          try {
+            // Quick ENQ to verify the printer is actually on this port
+            await testIO.write(new Uint8Array([ENQ]));
+            const resp = await testIO.read(5, 2000);
+            if (resp[0] === STX && resp[3] === ETX) {
+              // Printer responded — use this port
+              port = saved;
+              io = testIO;
+              console.log('[FISCAL] Puerto guardado OK — impresora respondió');
+              break;
+            }
+          } catch {
+            // No response — wrong port
+          }
+          testIO.releaseLocks();
+        }
+        await saved.close();
+      } catch {
+        // Port busy or can't open — skip
+      }
+
+      // Forget this non-working port so it doesn't get reused
+      try { await saved.forget(); } catch {}
+    }
+
+    // No saved port worked — ask the user to pick
+    if (!port) {
+      port = await (navigator as any).serial.requestPort();
+      if (!port) {
+        throw new Error('No se seleccionó ningún puerto serial');
+      }
+      await port.open(SERIAL_CONFIG);
+      if (!port.readable || !port.writable) {
+        throw new Error('No se pudo abrir el puerto serial');
+      }
+      io = new SerialIO(port.readable.getReader(), port.writable.getWriter());
+    }
+
+    // Flush pending state from previous interrupted sessions
+    await io!.flush();
+
+    // Detect printer model
+    const model = await detectPrinterModel(io!);
+    console.log(`[FISCAL] Impresora detectada: ${model.modelName} (${model.modelCode}) — Familia ${model.family}`);
+
+    if (model.family === 'B') {
+      console.warn('[FISCAL] Esta impresora es Familia B y no soporta Notas de Débito.');
+    }
+
+    // Wait for printer ready
+    await waitForReady(io!);
+
+    return await fn(io!, model);
+  } finally {
+    io?.releaseLocks();
+    try { await port?.close(); } catch {}
   }
 }
 
@@ -684,66 +875,104 @@ export async function sendToFiscalPrinter(
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let port: any = null;
-  let io: SerialIO | null = null;
-
   try {
-    // Try to find existing paired port or request one
-    const ports = await (navigator as any).serial.getPorts();
-    if (ports.length > 0) {
-      port = ports[0];
-    } else {
-      port = await (navigator as any).serial.requestPort();
-    }
+    return await withFiscalPrinter(async (io, model) => {
+      // Send each command sequentially
+      for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
 
-    if (!port) {
-      throw new Error('No se seleccionó ningún puerto serial');
-    }
+        // Reports (I0Z, I0X) need longer timeout — manual says ~20s for Z
+        const isReport = cmd.startsWith('I0');
+        const cmdTimeout = isReport ? 25000 : 5000;
 
-    await port.open(SERIAL_CONFIG);
+        await sendSimpleCommand(io, cmd, cmdTimeout);
 
-    if (!port.readable || !port.writable) {
-      throw new Error('No se pudo abrir el puerto serial');
-    }
-
-    io = new SerialIO(port.readable.getReader(), port.writable.getWriter());
-
-    // Detect printer model (MEJORA 2)
-    const model = await detectPrinterModel(io);
-    console.log(`[FISCAL] Impresora detectada: ${model.modelName} (${model.modelCode}) — Familia ${model.family}`);
-
-    if (model.family === 'B') {
-      console.warn('[FISCAL] Esta impresora es Familia B y no soporta Notas de Débito.');
-    }
-
-    // Wait for printer ready before sending commands (MEJORA 4)
-    await waitForReady(io);
-
-    // Send each command sequentially (type 1 — simple commands)
-    for (let i = 0; i < commands.length; i++) {
-      await sendSimpleCommand(io, commands[i]);
-      // Small delay between commands to let the printer process
-      await new Promise((r) => setTimeout(r, 50));
-    }
-
-    // Read S1 status if requested (MEJORA 1)
-    let fiscalStatus: FiscalStatusResult | null = null;
-    if (readStatusAfter) {
-      try {
-        fiscalStatus = await readStatusS1(io, model.family);
-        console.log('[FISCAL] S1 leído:', fiscalStatus);
-      } catch (err: any) {
-        console.error('[FISCAL] Error leyendo S1:', err.message);
+        // Poll ENQ until printer is ready before sending next command
+        if (i < commands.length - 1) {
+          await waitForReady(io, isReport ? 30000 : 10000);
+        }
       }
-    }
 
-    return fiscalStatus;
+      // Read S1 status if requested
+      let fiscalStatus: FiscalStatusResult | null = null;
+      if (readStatusAfter) {
+        try {
+          fiscalStatus = await readStatusS1(io, model.family);
+          console.log('[FISCAL] S1 leído:', fiscalStatus);
+        } catch (err: any) {
+          console.error('[FISCAL] Error leyendo S1:', err.message);
+        }
+      }
+
+      return fiscalStatus;
+    });
   } catch (err: any) {
     showFiscalCommands(commands);
     throw new Error(`Error de impresora fiscal: ${err.message}`);
-  } finally {
-    io?.releaseLocks();
-    try { await port?.close(); } catch {}
+  }
+}
+
+// ─── Printer tools (settings page) ──────────────────────────────
+
+/**
+ * Connects to the printer, detects model, reads S1 status.
+ * Returns model info and status (serial, RIF, last invoice/NC numbers).
+ */
+export async function readPrinterStatus(): Promise<{
+  model: PrinterModelInfo;
+  status: FiscalStatusResult;
+}> {
+  return withFiscalPrinter(async (io, model) => {
+    const status = await readStatusS1(io, model.family);
+    return { model, status };
+  });
+}
+
+/**
+ * Connects to the printer and sends a single raw command.
+ * Useful for diagnostics: "D" (print config), "7" (void document),
+ * "I0X" (X report), "I0Z" (Z close), etc.
+ */
+export async function sendRawFiscalCommand(
+  command: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await withFiscalPrinter(async (io) => {
+      const isReport = command.startsWith('I0');
+      const cmdTimeout = isReport ? 25000 : 5000;
+      await sendSimpleCommand(io, command, cmdTimeout);
+    });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Sends multiple raw commands in a single printer connection.
+ * Calls onProgress(index, total) after each command succeeds.
+ * Returns the number of successfully sent commands.
+ */
+export async function sendMultipleFiscalCommands(
+  commands: string[],
+  onProgress?: (sent: number, total: number) => void,
+): Promise<{ success: boolean; sent: number; total: number; error?: string }> {
+  const total = commands.length;
+  try {
+    const sent = await withFiscalPrinter(async (io) => {
+      let count = 0;
+      for (const cmd of commands) {
+        await sendSimpleCommand(io, cmd, 5000);
+        count++;
+        onProgress?.(count, total);
+        if (count < total) {
+          await waitForReady(io, 10000);
+        }
+      }
+      return count;
+    });
+    return { success: true, sent, total };
+  } catch (err: any) {
+    return { success: false, sent: 0, total, error: err.message };
   }
 }

@@ -220,7 +220,7 @@ CREATE TABLE IF NOT EXISTS "CompanyConfig" (
     "islrRetentionPct" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "isIGTFContributor" BOOLEAN NOT NULL DEFAULT false,
     "igtfPct" DOUBLE PRECISION NOT NULL DEFAULT 3,
-    "fiscalCreditCode" TEXT NOT NULL DEFAULT '01',
+    "fiscalCreditCode" TEXT NOT NULL DEFAULT '10',
     "allowNegativeStock" BOOLEAN NOT NULL DEFAULT true,
     "defaultCustomerId" TEXT,
     "logo" TEXT,
@@ -937,7 +937,8 @@ ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "ivaRetentionPct" DOUBLE PR
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "islrRetentionPct" DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "isIGTFContributor" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "igtfPct" DOUBLE PRECISION NOT NULL DEFAULT 3;
-ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "fiscalCreditCode" TEXT NOT NULL DEFAULT '01';
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "fiscalCreditCode" TEXT NOT NULL DEFAULT '10';
+UPDATE "CompanyConfig" SET "fiscalCreditCode" = '10' WHERE "fiscalCreditCode" = '01';
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "allowNegativeStock" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "defaultCustomerId" TEXT;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "logo" TEXT;
