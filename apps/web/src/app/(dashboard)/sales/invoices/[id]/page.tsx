@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileText, Loader2, Printer, ExternalLink, DollarSign, X, FileX2,
+  AlertTriangle, RotateCcw, Save, Edit3, Copy,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -13,6 +14,7 @@ interface InvoiceDetail {
   controlNumber: string | null;
   fiscalNumber: string | null;
   fiscalMachineSerial: string | null;
+  fiscalPrinted: boolean;
   status: string;
   paymentType: string;
   totalUsd: number;
@@ -27,7 +29,7 @@ interface InvoiceDetail {
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
-  cashRegister: { id: string; code: string; name: string; isFiscal?: boolean } | null;
+  cashRegister: { id: string; code: string; name: string; isFiscal?: boolean; comPort?: string; fiscalMachineSerial?: string } | null;
   seller: { id: string; code: string; name: string } | null;
   cashier: { id: string; name: string } | null;
   items: InvoiceItem[];
@@ -161,6 +163,93 @@ export default function InvoiceDetailPage() {
   }, []);
 
   const hasPerm = (perm: string) => userRole === 'ADMIN' || userPermissions.includes(perm);
+  const isAdmin = userRole === 'ADMIN';
+
+  const [fiscalLoading, setFiscalLoading] = useState(false);
+  const [reprintLoading, setReprintLoading] = useState(false);
+  const [editingFiscal, setEditingFiscal] = useState(false);
+  const [editFiscalNumber, setEditFiscalNumber] = useState('');
+  const [editMachineSerial, setEditMachineSerial] = useState('');
+
+  // Fetch companyConfig for fiscal commands
+  const [companyConfig, setCompanyConfig] = useState<any>(null);
+  useEffect(() => {
+    fetch('/api/proxy/config').then(r => r.json()).then(setCompanyConfig).catch(() => {});
+  }, []);
+
+  // Print fiscal invoice (for pending fiscal print)
+  const handleFiscalPrint = async () => {
+    if (!invoice || !invoice.cashRegister?.isFiscal) return;
+    setFiscalLoading(true);
+    setMessage(null);
+    try {
+      const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+      const commands = buildFiscalCommands(invoice, companyConfig || {});
+      const fiscal = await sendToFiscalPrinter(commands, invoice.cashRegister?.comPort, true);
+      if (fiscal) {
+        await fetch(`/api/proxy/invoices/${id}/fiscal-info`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fiscalNumber: fiscal.invoiceFiscalNumber,
+            machineSerial: fiscal.machineSerial,
+          }),
+        });
+        setMessage({ type: 'success', text: 'Factura impresa fiscalmente' });
+        fetchInvoice();
+      } else {
+        setMessage({ type: 'error', text: 'No se pudo conectar con la impresora fiscal' });
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
+    } finally {
+      setFiscalLoading(false);
+    }
+  };
+
+  // Reprint fiscal invoice (RF command)
+  const handleFiscalReprint = async () => {
+    if (!invoice?.fiscalNumber || !invoice.cashRegister?.isFiscal) return;
+    setReprintLoading(true);
+    setMessage(null);
+    try {
+      const { sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
+      // RF command: 7 digits start + 7 digits end (same number for single reprint)
+      const raw = invoice.fiscalNumber.replace(/\D/g, '');
+      const num7 = raw.slice(-7).padStart(7, '0');
+      const rfCommand = `RF${num7}${num7}`;
+      await sendToFiscalPrinter([rfCommand], invoice.cashRegister?.comPort, false);
+      setMessage({ type: 'success', text: `Reimpresion fiscal enviada (${rfCommand})` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Error al reimprimir: ${err.message}` });
+    } finally {
+      setReprintLoading(false);
+    }
+  };
+
+  // Admin: manually update fiscal status
+  const handleSaveFiscalStatus = async (markPrinted: boolean) => {
+    setMessage(null);
+    try {
+      const body: any = { fiscalPrinted: markPrinted };
+      if (editFiscalNumber) body.fiscalNumber = editFiscalNumber;
+      if (editMachineSerial) body.fiscalMachineSerial = editMachineSerial;
+      const res = await fetch(`/api/proxy/invoices/${id}/fiscal-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Error al actualizar');
+      }
+      setMessage({ type: 'success', text: 'Estado fiscal actualizado' });
+      setEditingFiscal(false);
+      fetchInvoice();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  };
 
   function fmtDate(iso: string) {
     const d = new Date(iso);
@@ -216,8 +305,25 @@ export default function InvoiceDetailPage() {
               {PAYMENT_TYPE_LABELS[invoice.paymentType] || invoice.paymentType}
             </span>
           )}
+          {invoice.cashRegister?.isFiscal && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && !invoice.fiscalPrinted && (
+            <span className="text-xs px-2.5 py-1 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-1">
+              <AlertTriangle size={12} /> Por Imprimir
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Fiscal: Imprimir (pending fiscal print) */}
+          {invoice.cashRegister?.isFiscal && !invoice.fiscalPrinted && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
+            <button onClick={handleFiscalPrint} disabled={fiscalLoading} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50">
+              {fiscalLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir Fiscal
+            </button>
+          )}
+          {/* Fiscal: Reimprimir (already printed) */}
+          {invoice.cashRegister?.isFiscal && invoice.fiscalPrinted && invoice.fiscalNumber && (
+            <button onClick={handleFiscalReprint} disabled={reprintLoading} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors disabled:opacity-50">
+              {reprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} Reimprimir Fiscal
+            </button>
+          )}
           {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice.status) && (
             <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
               <Printer size={14} /> Imprimir PDF
@@ -298,26 +404,70 @@ export default function InvoiceDetailPage() {
 
             {/* Datos fiscales */}
             {invoice.cashRegister?.isFiscal && (
-              <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
-                <h3 className="text-xs text-slate-500 uppercase mb-2">Datos Fiscales</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span className="text-slate-400">N. Fiscal:</span>
-                    {invoice.fiscalNumber ? (
-                      <span className="text-green-400 ml-2 font-mono font-semibold">{invoice.fiscalNumber}</span>
-                    ) : (
-                      <span className="text-yellow-500 ml-2">No guardado</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Serial Impresora:</span>
-                    {invoice.fiscalMachineSerial ? (
-                      <span className="text-green-400 ml-2 font-mono">{invoice.fiscalMachineSerial}</span>
-                    ) : (
-                      <span className="text-yellow-500 ml-2">No guardado</span>
-                    )}
-                  </div>
+              <div className={`rounded-lg p-4 mb-6 border ${invoice.fiscalPrinted ? 'bg-slate-900/50 border-slate-700/50' : 'bg-orange-500/5 border-orange-500/30'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs text-slate-500 uppercase flex items-center gap-2">
+                    Datos Fiscales
+                    {invoice.fiscalPrinted ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 uppercase">Impresa</span>
+                    ) : invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 uppercase flex items-center gap-1">
+                        <AlertTriangle size={10} /> Pendiente de impresion
+                      </span>
+                    ) : null}
+                  </h3>
+                  {isAdmin && !editingFiscal && (
+                    <button onClick={() => { setEditingFiscal(true); setEditFiscalNumber(invoice.fiscalNumber || ''); setEditMachineSerial(invoice.fiscalMachineSerial || ''); }} className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors">
+                      <Edit3 size={12} /> Editar
+                    </button>
+                  )}
                 </div>
+                {!editingFiscal ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="text-slate-400">N. Fiscal:</span>
+                      {invoice.fiscalNumber ? (
+                        <span className="text-green-400 ml-2 font-mono font-semibold">{invoice.fiscalNumber}</span>
+                      ) : (
+                        <span className="text-yellow-500 ml-2">No guardado</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Serial Impresora:</span>
+                      {invoice.fiscalMachineSerial ? (
+                        <span className="text-green-400 ml-2 font-mono">{invoice.fiscalMachineSerial}</span>
+                      ) : (
+                        <span className="text-yellow-500 ml-2">No guardado</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-400 block mb-1">Numero Fiscal</label>
+                        <input type="text" value={editFiscalNumber} onChange={e => setEditFiscalNumber(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-white text-sm font-mono focus:border-green-500 focus:outline-none" placeholder="00000001" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 block mb-1">Serial Maquina Fiscal</label>
+                        <input type="text" value={editMachineSerial} onChange={e => setEditMachineSerial(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-white text-sm font-mono focus:border-green-500 focus:outline-none" placeholder="Z7C12345678" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleSaveFiscalStatus(true)} className="text-xs px-3 py-1.5 rounded bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25 flex items-center gap-1 transition-colors">
+                        <Save size={12} /> Marcar como impresa
+                      </button>
+                      {invoice.fiscalPrinted && (
+                        <button onClick={() => handleSaveFiscalStatus(false)} className="text-xs px-3 py-1.5 rounded bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 flex items-center gap-1 transition-colors">
+                          <RotateCcw size={12} /> Marcar pendiente
+                        </button>
+                      )}
+                      <button onClick={() => setEditingFiscal(false)} className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

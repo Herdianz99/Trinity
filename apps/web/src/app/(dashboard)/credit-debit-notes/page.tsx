@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileX2, Search, Loader2, ChevronLeft, ChevronRight, Eye,
+  FileX2, Search, Loader2, ChevronLeft, ChevronRight, Eye, AlertTriangle,
 } from 'lucide-react';
 
 interface Note {
@@ -17,9 +17,11 @@ interface Note {
   totalBs: number;
   paidAmountUsd: number;
   appliedAt: string | null;
+  fiscalPrinted: boolean;
   createdAt: string;
-  invoice: { id: string; number: string; customer: { name: string } | null } | null;
+  invoice: { id: string; number: string; customer: { name: string } | null; cashRegister?: { isFiscal: boolean } | null } | null;
   purchaseOrder: { id: string; number: string; supplier: { name: string } | null } | null;
+  cashRegister?: { isFiscal: boolean } | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -194,9 +196,16 @@ export default function CreditDebitNotesPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[note.status]}`}>
-                      {STATUS_LABELS[note.status]}
-                    </span>
+                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[note.status]}`}>
+                        {STATUS_LABELS[note.status]}
+                      </span>
+                      {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && !note.fiscalPrinted && note.status === 'POSTED' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-0.5" title="Pendiente de impresion fiscal">
+                          <AlertTriangle size={10} /> Fiscal
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{fmtDate(note.createdAt)}</td>
                   <td className="px-4 py-3 text-center">

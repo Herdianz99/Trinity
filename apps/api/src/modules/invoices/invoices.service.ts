@@ -35,6 +35,7 @@ export class InvoicesService {
     to?: string;
     page?: number;
     limit?: number;
+    fiscalPrinted?: string;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -42,6 +43,8 @@ export class InvoicesService {
 
     if (filters.status) where.status = filters.status;
     if (filters.paymentType) where.paymentType = filters.paymentType;
+    if (filters.fiscalPrinted === 'true') where.fiscalPrinted = true;
+    if (filters.fiscalPrinted === 'false') where.fiscalPrinted = false;
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.cashRegisterId) where.cashRegisterId = filters.cashRegisterId;
@@ -75,7 +78,7 @@ export class InvoicesService {
         include: {
           customer: { select: { id: true, name: true, rif: true } },
           seller: { select: { id: true, code: true, name: true } },
-          cashRegister: { select: { id: true, code: true, name: true } },
+          cashRegister: { select: { id: true, code: true, name: true, isFiscal: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -156,8 +159,23 @@ export class InvoicesService {
       },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    // Enrich items with product codes for fiscal reprint
+    const productIds = invoice.items.map(i => i.productId);
+    const products = productIds.length > 0
+      ? await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, code: true },
+        })
+      : [];
+    const codeMap = new Map(products.map(p => [p.id, p.code]));
+
     return {
       ...invoice,
+      items: invoice.items.map(item => ({
+        ...item,
+        productCode: codeMap.get(item.productId) || null,
+      })),
       receivables: invoice.receivables.map(r => ({
         ...r,
         balanceUsd: r.amountUsd - r.paidAmountUsd,
@@ -923,7 +941,35 @@ export class InvoicesService {
       data: {
         fiscalNumber: data.fiscalNumber,
         fiscalMachineSerial: data.machineSerial,
+        fiscalPrinted: true,
       },
+    });
+  }
+
+  async updateFiscalStatus(
+    id: string,
+    data: {
+      fiscalPrinted?: boolean;
+      fiscalNumber?: string | null;
+      fiscalMachineSerial?: string | null;
+    },
+    user: { id: string; role: UserRole },
+  ) {
+    if (user.role !== 'ADMIN') {
+      throw new ForbiddenException('Solo ADMIN puede modificar el estado fiscal');
+    }
+
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    const updateData: any = {};
+    if (data.fiscalPrinted !== undefined) updateData.fiscalPrinted = data.fiscalPrinted;
+    if (data.fiscalNumber !== undefined) updateData.fiscalNumber = data.fiscalNumber;
+    if (data.fiscalMachineSerial !== undefined) updateData.fiscalMachineSerial = data.fiscalMachineSerial;
+
+    return this.prisma.invoice.update({
+      where: { id },
+      data: updateData,
     });
   }
 

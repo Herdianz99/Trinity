@@ -95,10 +95,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20',
-  APPROVED: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-  EXECUTED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-  CANCELLED: 'bg-red-500/15 text-red-400 border-red-500/20',
+  DRAFT: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+  APPROVED: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+  EXECUTED: 'text-green-400 border-green-500/30 bg-green-500/10',
+  CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
 };
 
 const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -316,14 +316,14 @@ export default function PaymentScheduleDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
-        <Loader2 className="animate-spin text-zinc-500" size={32} />
+        <Loader2 className="animate-spin text-slate-500" size={32} />
       </div>
     );
   }
 
   if (!schedule) {
     return (
-      <div className="p-6 text-center text-zinc-500">
+      <div className="p-6 text-center text-slate-500">
         <p>Programacion no encontrada</p>
         <button onClick={() => router.push('/payment-schedules')} className="mt-4 text-blue-400 hover:underline">
           Volver
@@ -340,7 +340,7 @@ export default function PaymentScheduleDetailPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       {/* Toast */}
       {message && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${message.type === 'error' ? 'bg-red-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${message.type === 'error' ? 'bg-red-500/90 text-white' : 'bg-green-500/90 text-white'}`}>
           {message.text}
         </div>
       )}
@@ -350,28 +350,28 @@ export default function PaymentScheduleDetailPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/payment-schedules')}
-            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
           >
             <ArrowLeft size={18} />
           </button>
-          <div className="p-2 rounded-lg bg-blue-500/10">
-            <CalendarClock className="text-blue-400" size={24} />
+          <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+            <CalendarClock className="text-green-400" size={24} />
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-zinc-100">{schedule.number}</h1>
+              <h1 className="text-xl font-bold text-slate-100">{schedule.number}</h1>
               <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLORS[schedule.status]}`}>
                 {STATUS_LABELS[schedule.status]}
               </span>
             </div>
-            <p className="text-sm text-zinc-400">{schedule.title}</p>
+            <p className="text-sm text-slate-400">{schedule.title}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handlePrintPdf}
-            className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
           >
             <Printer size={16} />
             Imprimir PDF
@@ -390,7 +390,7 @@ export default function PaymentScheduleDetailPage() {
             <button
               onClick={() => handleStatusChange('EXECUTED')}
               disabled={processing}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
             >
               <Check size={16} />
               Marcar ejecutado
@@ -411,47 +411,47 @@ export default function PaymentScheduleDetailPage() {
 
       {/* Info bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-          <p className="text-xs text-zinc-500">Fecha</p>
-          <p className="text-sm text-zinc-200 font-medium">{new Date(schedule.createdAt).toLocaleDateString('es-VE')}</p>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <p className="text-xs text-slate-500">Fecha</p>
+          <p className="text-sm text-slate-200 font-medium">{new Date(schedule.createdAt).toLocaleDateString('es-VE')}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-          <p className="text-xs text-zinc-500">Tasa del dia</p>
-          <p className="text-sm text-zinc-200 font-medium">Bs {fmt(schedule.exchangeRate)}</p>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <p className="text-xs text-slate-500">Tasa del dia</p>
+          <p className="text-sm text-slate-200 font-medium">Bs {fmt(schedule.exchangeRate)}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-          <p className="text-xs text-zinc-500">Creado por</p>
-          <p className="text-sm text-zinc-200 font-medium">{schedule.createdBy.name}</p>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <p className="text-xs text-slate-500">Creado por</p>
+          <p className="text-sm text-slate-200 font-medium">{schedule.createdBy.name}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-          <p className="text-xs text-zinc-500">Documentos</p>
-          <p className="text-sm text-zinc-200 font-medium">{schedule.items.length} items</p>
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <p className="text-xs text-slate-500">Documentos</p>
+          <p className="text-sm text-slate-200 font-medium">{schedule.items.length} items</p>
         </div>
       </div>
 
       {/* Summary Panel */}
-      <div className={`bg-zinc-900 border rounded-xl p-4 mb-4 ${exceeded ? 'border-red-500/40' : 'border-zinc-800'}`}>
+      <div className={`bg-slate-900 border rounded-xl p-4 mb-4 ${exceeded ? 'border-red-500/40' : 'border-slate-800'}`}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {hasBudget && (
             <div>
-              <p className="text-xs text-zinc-500 mb-1">Presupuesto</p>
-              <p className="text-lg font-bold text-zinc-100">
+              <p className="text-xs text-slate-500 mb-1">Presupuesto</p>
+              <p className="text-lg font-bold text-slate-100">
                 {schedule.budgetCurrency === 'Bs' ? `Bs ${fmt(schedule.budgetBs!)}` : `$${fmt(schedule.budgetUsd!)}`}
               </p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-slate-500">
                 {schedule.budgetCurrency === 'Bs' ? `$${fmt(schedule.budgetUsd!)}` : `Bs ${fmt(schedule.budgetBs!)}`}
               </p>
             </div>
           )}
           <div>
-            <p className="text-xs text-zinc-500 mb-1">Total a pagar</p>
-            <p className="text-lg font-bold text-zinc-100">${fmt(schedule.totalUsd)}</p>
-            <p className="text-xs text-zinc-500">Bs {fmt(schedule.totalBs)}</p>
+            <p className="text-xs text-slate-500 mb-1">Total a pagar</p>
+            <p className="text-lg font-bold text-slate-100">${fmt(schedule.totalUsd)}</p>
+            <p className="text-xs text-slate-500">Bs {fmt(schedule.totalBs)}</p>
           </div>
           {hasBudget && (
             <div>
-              <p className="text-xs text-zinc-500 mb-1">Diferencia</p>
-              <p className={`text-lg font-bold ${exceeded ? 'text-red-400' : 'text-emerald-400'}`}>
+              <p className="text-xs text-slate-500 mb-1">Diferencia</p>
+              <p className={`text-lg font-bold ${exceeded ? 'text-red-400' : 'text-green-400'}`}>
                 {exceeded ? `-$${fmt(Math.abs(diffUsd))}` : `+$${fmt(diffUsd)}`}
               </p>
               {exceeded && (
@@ -464,18 +464,18 @@ export default function PaymentScheduleDetailPage() {
           )}
         </div>
         {schedule.notes && (
-          <div className="mt-3 pt-3 border-t border-zinc-800">
-            <p className="text-xs text-zinc-500">Notas: <span className="text-zinc-400">{schedule.notes}</span></p>
+          <div className="mt-3 pt-3 border-t border-slate-800">
+            <p className="text-xs text-slate-500">Notas: <span className="text-slate-400">{schedule.notes}</span></p>
           </div>
         )}
       </div>
 
       {/* Documents grouped by supplier */}
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-zinc-300 mb-3">Documentos por proveedor</h2>
+        <h2 className="text-sm font-semibold text-slate-300 mb-3">Documentos por proveedor</h2>
 
         {schedule.groupedBySupplier.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center text-zinc-500">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center text-slate-500">
             <CalendarClock className="mx-auto mb-3 opacity-40" size={36} />
             <p>No hay documentos en esta programacion</p>
             {canEdit && (
@@ -490,12 +490,12 @@ export default function PaymentScheduleDetailPage() {
         ) : (
           <div className="space-y-3">
             {schedule.groupedBySupplier.map((group) => (
-              <div key={group.supplierName} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+              <div key={group.supplierName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 {/* Supplier header */}
-                <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 border-b border-zinc-800">
-                  <h3 className="font-semibold text-zinc-200">{group.supplierName}</h3>
-                  <div className="text-sm text-zinc-400">
-                    <span className="font-medium text-zinc-200">${fmt(group.totalUsd)}</span>
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-800/50 border-b border-slate-800">
+                  <h3 className="font-semibold text-slate-200">{group.supplierName}</h3>
+                  <div className="text-sm text-slate-400">
+                    <span className="font-medium text-slate-200">${fmt(group.totalUsd)}</span>
                     <span className="mx-2">|</span>
                     <span>Bs {fmt(group.totalBs)}</span>
                   </div>
@@ -504,7 +504,7 @@ export default function PaymentScheduleDetailPage() {
                 {/* Items table */}
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-zinc-500 border-b border-zinc-800/50">
+                    <tr className="text-slate-500 border-b border-slate-800/50">
                       <th className="text-left px-4 py-2 font-medium">Tipo</th>
                       <th className="text-left px-4 py-2 font-medium">Referencia</th>
                       <th className="text-left px-4 py-2 font-medium">Vencimiento</th>
@@ -525,9 +525,9 @@ export default function PaymentScheduleDetailPage() {
                       return (
                         <tr
                           key={item.id}
-                          className={`border-b border-zinc-800/30 ${
+                          className={`border-b border-slate-800/30 ${
                             item.isPaid
-                              ? 'bg-emerald-500/5'
+                              ? 'bg-green-500/5'
                               : isOverdue
                                 ? 'bg-red-500/5'
                                 : ''
@@ -542,32 +542,32 @@ export default function PaymentScheduleDetailPage() {
                               {item.creditDebitNoteId ? 'NDC' : 'CxP'}
                             </span>
                             {item.isPaid && (
-                              <span className="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-emerald-500/15 text-emerald-400 border-emerald-500/20">
+                              <span className="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-green-500/15 text-green-400 border-green-500/20">
                                 Pagado
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-zinc-200 font-mono text-xs">{item.description}</td>
-                          <td className="px-4 py-2.5 text-zinc-400">
+                          <td className="px-4 py-2.5 text-slate-200 font-mono text-xs">{item.description}</td>
+                          <td className="px-4 py-2.5 text-slate-400">
                             {dueDate ? dueDate.toLocaleDateString('es-VE') : '-'}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-zinc-400">${fmt(item.totalAmountUsd)}</td>
-                          <td className="px-4 py-2.5 text-right font-medium text-zinc-200">
+                          <td className="px-4 py-2.5 text-right text-slate-400">${fmt(item.totalAmountUsd)}</td>
+                          <td className="px-4 py-2.5 text-right font-medium text-slate-200">
                             {isEditing ? (
                               <div className="flex items-center justify-end gap-1">
                                 <input
                                   type="number"
                                   step="0.01"
-                                  className="w-24 bg-zinc-800 border border-blue-500 rounded px-2 py-1 text-sm text-right"
+                                  className="w-24 bg-slate-800 border border-blue-500 rounded px-2 py-1 text-sm text-right"
                                   value={editAmount}
                                   onChange={(e) => setEditAmount(e.target.value)}
                                   onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateItem(item.id); if (e.key === 'Escape') setEditingItemId(null); }}
                                   autoFocus
                                 />
-                                <button onClick={() => handleUpdateItem(item.id)} className="p-1 text-emerald-400 hover:text-emerald-300">
+                                <button onClick={() => handleUpdateItem(item.id)} className="p-1 text-green-400 hover:text-green-300">
                                   <Check size={14} />
                                 </button>
-                                <button onClick={() => setEditingItemId(null)} className="p-1 text-zinc-500 hover:text-zinc-300">
+                                <button onClick={() => setEditingItemId(null)} className="p-1 text-slate-500 hover:text-slate-300">
                                   <X size={14} />
                                 </button>
                               </div>
@@ -586,7 +586,7 @@ export default function PaymentScheduleDetailPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-zinc-400">Bs {fmt(item.plannedAmountBs)}</td>
+                          <td className="px-4 py-2.5 text-right text-slate-400">Bs {fmt(item.plannedAmountBs)}</td>
                           {canEdit && (
                             <td className="px-4 py-2.5 text-center">
                               <button
@@ -611,26 +611,26 @@ export default function PaymentScheduleDetailPage() {
 
       {/* Add Documents Panel */}
       {canEdit && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <button
             onClick={() => setShowAddPanel(!showAddPanel)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/50 transition-colors"
           >
-            <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
               <Plus size={16} className="text-blue-400" />
               Agregar documentos
             </div>
-            {showAddPanel ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
+            {showAddPanel ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
           </button>
 
           {showAddPanel && (
-            <div className="border-t border-zinc-800 p-4">
+            <div className="border-t border-slate-800 p-4">
               {/* Filters */}
               <div className="flex flex-wrap gap-3 mb-4">
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Proveedor</label>
+                  <label className="block text-xs text-slate-500 mb-1">Proveedor</label>
                   <select
-                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 min-w-[180px]"
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 min-w-[180px]"
                     value={filterSupplierId}
                     onChange={(e) => setFilterSupplierId(e.target.value)}
                   >
@@ -641,22 +641,22 @@ export default function PaymentScheduleDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Vence antes de</label>
+                  <label className="block text-xs text-slate-500 mb-1">Vence antes de</label>
                   <input
                     type="date"
-                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200"
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
                     value={filterDueBefore}
                     onChange={(e) => setFilterDueBefore(e.target.value)}
                   />
                 </div>
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-zinc-500 mb-1">Busqueda</label>
+                  <label className="block text-xs text-slate-500 mb-1">Busqueda</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                     <input
                       type="text"
                       placeholder="Proveedor o referencia..."
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-200"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200"
                       value={filterSearch}
                       onChange={(e) => setFilterSearch(e.target.value)}
                     />
@@ -667,15 +667,15 @@ export default function PaymentScheduleDetailPage() {
               {/* Pending payables table */}
               {pendingLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="animate-spin text-zinc-500" size={24} />
+                  <Loader2 className="animate-spin text-slate-500" size={24} />
                 </div>
               ) : filteredPending.length === 0 ? (
-                <p className="text-sm text-zinc-500 text-center py-6">No hay documentos disponibles</p>
+                <p className="text-sm text-slate-500 text-center py-6">No hay documentos disponibles</p>
               ) : (
                 <div className="max-h-[400px] overflow-y-auto">
                   <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-zinc-900">
-                      <tr className="text-zinc-500 border-b border-zinc-800">
+                    <thead className="sticky top-0 bg-slate-900">
+                      <tr className="text-slate-500 border-b border-slate-800">
                         <th className="text-left px-3 py-2 font-medium">Proveedor</th>
                         <th className="text-left px-3 py-2 font-medium">Referencia</th>
                         <th className="text-center px-3 py-2 font-medium">Tipo</th>
@@ -695,12 +695,12 @@ export default function PaymentScheduleDetailPage() {
                         return (
                           <tr
                             key={`${p.type}-${p.id}`}
-                            className={`border-b border-zinc-800/30 ${
+                            className={`border-b border-slate-800/30 ${
                               isOverdue ? 'bg-red-500/5' : isUrgent ? 'bg-amber-500/5' : ''
                             }`}
                           >
-                            <td className="px-3 py-2.5 text-zinc-200">{p.supplierName}</td>
-                            <td className="px-3 py-2.5 text-zinc-400 font-mono text-xs">{p.reference}</td>
+                            <td className="px-3 py-2.5 text-slate-200">{p.supplierName}</td>
+                            <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{p.reference}</td>
                             <td className="px-3 py-2.5 text-center">
                               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
                                 p.type === 'NDC'
@@ -710,8 +710,8 @@ export default function PaymentScheduleDetailPage() {
                                 {p.type}
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-right text-zinc-200 font-medium">${fmt(p.balanceUsd)}</td>
-                            <td className={`px-3 py-2.5 ${isOverdue ? 'text-red-400 font-medium' : isUrgent ? 'text-amber-400' : 'text-zinc-400'}`}>
+                            <td className="px-3 py-2.5 text-right text-slate-200 font-medium">${fmt(p.balanceUsd)}</td>
+                            <td className={`px-3 py-2.5 ${isOverdue ? 'text-red-400 font-medium' : isUrgent ? 'text-amber-400' : 'text-slate-400'}`}>
                               {dueDate ? dueDate.toLocaleDateString('es-VE') : '-'}
                             </td>
                             <td className="px-3 py-2.5">
@@ -720,7 +720,7 @@ export default function PaymentScheduleDetailPage() {
                                 step="0.01"
                                 min="0"
                                 max={p.balanceUsd}
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right text-zinc-200"
+                                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-right text-slate-200"
                                 value={plannedAmounts[p.id] ?? p.balanceUsd}
                                 onChange={(e) => setPlannedAmounts((prev) => ({ ...prev, [p.id]: e.target.value }))}
                               />

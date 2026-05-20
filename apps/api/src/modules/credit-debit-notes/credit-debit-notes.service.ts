@@ -64,8 +64,15 @@ export class CreditDebitNotesService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          invoice: { select: { id: true, number: true, customer: { select: { id: true, name: true } } } },
+          invoice: {
+            select: {
+              id: true, number: true,
+              customer: { select: { id: true, name: true } },
+              cashRegister: { select: { isFiscal: true } },
+            },
+          },
           purchaseOrder: { select: { id: true, number: true, supplier: { select: { id: true, name: true } } } },
+          cashRegister: { select: { isFiscal: true } },
         },
       }),
       this.prisma.creditDebitNote.count({ where }),

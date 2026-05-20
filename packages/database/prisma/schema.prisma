@@ -660,6 +660,7 @@ model Invoice {
   fiscalNumber        String?
   controlNumber       String?
   fiscalMachineSerial String?
+  fiscalPrinted       Boolean       @default(false)
   cashRegisterId      String
   cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
   customerId     String?

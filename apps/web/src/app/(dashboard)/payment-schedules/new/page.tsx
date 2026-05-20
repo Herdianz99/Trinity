@@ -80,7 +80,7 @@ export default function NewPaymentSchedulePage() {
     <div className="p-6 max-w-[700px] mx-auto">
       {/* Toast */}
       {message && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${message.type === 'error' ? 'bg-red-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${message.type === 'error' ? 'bg-red-500/90 text-white' : 'bg-green-500/90 text-white'}`}>
           {message.text}
         </div>
       )}
@@ -89,32 +89,32 @@ export default function NewPaymentSchedulePage() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => router.push('/payment-schedules')}
-          className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors"
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="p-2 rounded-lg bg-blue-500/10">
-          <CalendarClock className="text-blue-400" size={24} />
+        <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+          <CalendarClock className="text-green-400" size={24} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">Nueva Programacion de Pagos</h1>
+          <h1 className="text-xl font-bold text-slate-100">Nueva Programacion de Pagos</h1>
           {todayRate > 0 && (
-            <p className="text-sm text-zinc-500">Tasa del dia: Bs {fmt(todayRate)}</p>
+            <p className="text-sm text-slate-500">Tasa del dia: Bs {fmt(todayRate)}</p>
           )}
         </div>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-5">
         {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">
             Titulo <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             placeholder='Ej: "Pagos semana 19-25 Mayo"'
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -122,10 +122,10 @@ export default function NewPaymentSchedulePage() {
 
         {/* Budget */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">
             Presupuesto
           </label>
-          <p className="text-xs text-zinc-500 mb-2">Deja en 0 si no quieres validar presupuesto</p>
+          <p className="text-xs text-slate-500 mb-2">Deja en 0 si no quieres validar presupuesto</p>
 
           <div className="flex gap-2 mb-2">
             <button
@@ -133,8 +133,8 @@ export default function NewPaymentSchedulePage() {
               onClick={() => setBudgetCurrency('USD')}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 budgetCurrency === 'USD'
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                  : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-750'
+                  ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
               }`}
             >
               USD ($)
@@ -145,7 +145,7 @@ export default function NewPaymentSchedulePage() {
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 budgetCurrency === 'Bs'
                   ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                  : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-750'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
               }`}
             >
               Bolivares (Bs)
@@ -153,20 +153,20 @@ export default function NewPaymentSchedulePage() {
           </div>
 
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input
               type="number"
               step="0.01"
               min="0"
               placeholder="0.00"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-9 pr-4 py-2.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
               value={budgetAmount}
               onChange={(e) => setBudgetAmount(e.target.value)}
             />
           </div>
 
           {budgetNum > 0 && todayRate > 0 && (
-            <div className="mt-2 text-xs text-zinc-500">
+            <div className="mt-2 text-xs text-slate-500">
               {budgetCurrency === 'USD'
                 ? `Equivalente: Bs ${fmt(budgetBs)}`
                 : `Equivalente: $${fmt(budgetUsd)}`
@@ -177,10 +177,10 @@ export default function NewPaymentSchedulePage() {
 
         {/* Notes */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Notas</label>
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">Notas</label>
           <textarea
             placeholder="Notas opcionales..."
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 resize-none focus:border-blue-500 focus:outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:border-blue-500 focus:outline-none"
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -192,7 +192,7 @@ export default function NewPaymentSchedulePage() {
           <button
             type="button"
             onClick={() => router.push('/payment-schedules')}
-            className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors"
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
           >
             Cancelar
           </button>

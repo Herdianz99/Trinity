@@ -42,8 +42,9 @@ export class InvoicesController {
     @Query('to') to?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('fiscalPrinted') fiscalPrinted?: string,
   ) {
-    return this.service.findAll({ status, paymentType, customerId, sellerId, cashRegisterId, search, from, to, page, limit });
+    return this.service.findAll({ status, paymentType, customerId, sellerId, cashRegisterId, search, from, to, page, limit, fiscalPrinted });
   }
 
   @Get('pending')
@@ -116,6 +117,20 @@ export class InvoicesController {
     @Body() body: { fiscalNumber: string; machineSerial: string },
   ) {
     return this.service.updateFiscalInfo(id, body);
+  }
+
+  @Patch(':id/fiscal-status')
+  updateFiscalStatus(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      fiscalPrinted?: boolean;
+      fiscalNumber?: string | null;
+      fiscalMachineSerial?: string | null;
+    },
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.updateFiscalStatus(id, body, user);
   }
 
   @Patch(':id/cancel')

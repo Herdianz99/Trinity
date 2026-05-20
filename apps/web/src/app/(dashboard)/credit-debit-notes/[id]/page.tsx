@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink,
+  ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink, AlertTriangle,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -284,13 +284,18 @@ export default function CreditDebitNoteDetailPage() {
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[note.status]}`}>
             {STATUS_LABELS[note.status]}
           </span>
+          {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && note.status === 'POSTED' && !note.fiscalPrinted && (
+            <span className="text-xs px-2.5 py-1 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-1">
+              <AlertTriangle size={12} /> Por Imprimir
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {note.status === 'POSTED' && (
             <>
               {note.type === 'NCV' && note.invoice?.cashRegister?.isFiscal && !note.fiscalPrinted && (
-                <button onClick={handleFiscalPrint} className="btn-secondary text-sm flex items-center gap-1.5">
-                  <Printer size={14} /> Imprimir
+                <button onClick={handleFiscalPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors">
+                  <Printer size={14} /> Imprimir Fiscal
                 </button>
               )}
               <button onClick={() => window.open(`/api/proxy/credit-debit-notes/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
@@ -348,8 +353,17 @@ export default function CreditDebitNoteDetailPage() {
 
             {/* Datos fiscales — visible cuando la caja es fiscal */}
             {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && (
-              <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
-                <h3 className="text-xs text-slate-500 uppercase mb-2">Datos Fiscales</h3>
+              <div className={`rounded-lg p-4 mb-6 border ${note.fiscalPrinted ? 'bg-slate-900/50 border-slate-700/50' : 'bg-orange-500/5 border-orange-500/30'}`}>
+                <h3 className="text-xs text-slate-500 uppercase mb-2 flex items-center gap-2">
+                  Datos Fiscales
+                  {note.fiscalPrinted ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 uppercase">Impresa</span>
+                  ) : note.status === 'POSTED' ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/20 uppercase flex items-center gap-1">
+                      <AlertTriangle size={10} /> Pendiente de impresion
+                    </span>
+                  ) : null}
+                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                   <div>
                     <span className="text-slate-400">N. Fiscal:</span>
@@ -365,14 +379,6 @@ export default function CreditDebitNoteDetailPage() {
                       <span className="text-green-400 ml-2 font-mono">{note.machineSerial}</span>
                     ) : (
                       <span className="text-yellow-500 ml-2">No guardado</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Impreso:</span>
-                    {note.fiscalPrinted ? (
-                      <span className="text-green-400 ml-2">Sí</span>
-                    ) : (
-                      <span className="text-yellow-500 ml-2">No</span>
                     )}
                   </div>
                 </div>
