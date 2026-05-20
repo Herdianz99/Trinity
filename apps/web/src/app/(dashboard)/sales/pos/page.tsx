@@ -438,7 +438,7 @@ export default function POSPage() {
 
   // Payment calculations
   const totalPaidUsd = payments.reduce((s, p) => s + p.amountUsd, 0);
-  const remaining = grandTotalUsd - totalPaidUsd;
+  const remaining = Math.round((grandTotalUsd - totalPaidUsd) * 100) / 100;
   const totalPaidBs = payments.reduce((s, p) => s + p.amountBs, 0);
   const remainingBs = Math.round((grandTotalBs - totalPaidBs) * 100) / 100;
 
@@ -455,9 +455,9 @@ export default function POSPage() {
         reference: '',
       }]);
     } else {
-      // Bs method: fill with remaining Bs, derive USD
+      // Bs method: fill with remaining Bs, use remaining USD directly to avoid rounding discrepancy
       const amountBs = Math.round(Math.max(0, remainingBs) * 100) / 100;
-      const amountUsd = exchangeRate > 0 ? Math.round(amountBs / exchangeRate * 100) / 100 : 0;
+      const amountUsd = Math.round(Math.max(0, remaining) * 100) / 100;
       setPayments(prev => [...prev, {
         methodId: pm.id,
         methodName: pm.name,
@@ -691,7 +691,31 @@ export default function POSPage() {
 
   async function handleConfirmPayment() {
     if (payments.length === 0) return;
-    if (remaining > 0.01) {
+
+    // Build final payments adjusting last one to close tiny USD/Bs rounding gaps
+    const finalPayments = payments.map(p => ({
+      methodId: p.methodId,
+      amountUsd: Number(p.amountUsd),
+      amountBs: Number(p.amountBs),
+      reference: p.reference || undefined,
+    }));
+    if (finalPayments.length > 0) {
+      const lastIdx = finalPayments.length - 1;
+      const prevUsd = finalPayments.slice(0, lastIdx).reduce((s, p) => s + p.amountUsd, 0);
+      const prevBs = finalPayments.slice(0, lastIdx).reduce((s, p) => s + p.amountBs, 0);
+      const gapUsd = Math.round((grandTotalUsd - prevUsd) * 100) / 100;
+      const gapBs = Math.round((grandTotalBs - prevBs) * 100) / 100;
+      const diffUsd = Math.abs(gapUsd - finalPayments[lastIdx].amountUsd);
+      const diffBs = Math.abs(gapBs - finalPayments[lastIdx].amountBs);
+      if (diffUsd <= 0.02 && diffBs <= 0.02 && gapUsd >= 0 && gapBs >= 0) {
+        finalPayments[lastIdx].amountUsd = gapUsd;
+        finalPayments[lastIdx].amountBs = gapBs;
+      }
+    }
+
+    const finalPaidUsd = finalPayments.reduce((s, p) => s + p.amountUsd, 0);
+    const finalRemaining = grandTotalUsd - finalPaidUsd;
+    if (finalRemaining > 0.01) {
       setMessage({ type: 'error', text: 'El monto pagado no cubre el total' });
       return;
     }
@@ -728,12 +752,7 @@ export default function POSPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          payments: payments.map(p => ({
-            methodId: p.methodId,
-            amountUsd: Number(p.amountUsd),
-            amountBs: Number(p.amountBs),
-            reference: p.reference || undefined,
-          })),
+          payments: finalPayments,
           isCredit: false,
         }),
       });
