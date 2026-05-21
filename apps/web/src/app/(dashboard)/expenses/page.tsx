@@ -72,6 +72,7 @@ export default function ExpensesPage() {
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'info' | 'payment'>('info');
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState({
     categoryId: '',
@@ -81,9 +82,13 @@ export default function ExpensesPage() {
     amountBs: '',
     date: new Date().toISOString().split('T')[0],
     notes: '',
+    cashSessionId: '',
+    methodId: '',
   });
   const [todayRate, setTodayRate] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
+  const [openSessions, setOpenSessions] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -92,6 +97,8 @@ export default function ExpensesPage() {
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [userRole, setUserRole] = useState('');
   const [userId, setUserId] = useState('');
+
+  useEffect(() => { document.title = 'Gastos | Trinity ERP'; }, []);
 
   useEffect(() => {
     fetch('/api/proxy/auth/me').then(r => r.json()).then(data => {
@@ -158,7 +165,14 @@ export default function ExpensesPage() {
     } catch {}
   }, []);
 
-  useEffect(() => { fetchCategories(); fetchRate(); }, [fetchCategories, fetchRate]);
+  useEffect(() => {
+    fetchCategories();
+    fetchRate();
+    fetch('/api/proxy/payment-methods/flat')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setPaymentMethods(data); })
+      .catch(() => {});
+  }, [fetchCategories, fetchRate]);
   useEffect(() => { fetchExpenses(); fetchSummary(); }, [fetchExpenses, fetchSummary]);
 
   useEffect(() => {
@@ -170,6 +184,7 @@ export default function ExpensesPage() {
 
   function openCreateModal() {
     setEditingExpense(null);
+    setModalTab('info');
     setFormData({
       categoryId: categories[0]?.id || '',
       description: '',
@@ -178,12 +193,16 @@ export default function ExpensesPage() {
       amountBs: '',
       date: new Date().toISOString().split('T')[0],
       notes: '',
+      cashSessionId: '',
+      methodId: '',
     });
     setModalOpen(true);
+    fetchOpenSessions();
   }
 
   function openEditModal(exp: Expense) {
     setEditingExpense(exp);
+    setModalTab('info');
     setFormData({
       categoryId: exp.categoryId,
       description: exp.description,
@@ -192,8 +211,20 @@ export default function ExpensesPage() {
       amountBs: exp.amountBs.toString(),
       date: exp.date.split('T')[0],
       notes: exp.notes || '',
+      cashSessionId: '',
+      methodId: '',
     });
     setModalOpen(true);
+  }
+
+  async function fetchOpenSessions() {
+    try {
+      const res = await fetch('/api/proxy/cash-sessions?status=OPEN');
+      const data = await res.json();
+      setOpenSessions(Array.isArray(data) ? data : []);
+    } catch {
+      setOpenSessions([]);
+    }
   }
 
   function handleAmountUsdChange(val: string) {
@@ -223,6 +254,8 @@ export default function ExpensesPage() {
       if (formData.notes) body.notes = formData.notes;
       if (formData.amountUsd) body.amountUsd = parseFloat(formData.amountUsd);
       if (formData.amountBs) body.amountBs = parseFloat(formData.amountBs);
+      if (formData.cashSessionId) body.cashSessionId = formData.cashSessionId;
+      if (formData.methodId) body.methodId = formData.methodId;
 
       const url = editingExpense ? `/api/proxy/expenses/${editingExpense.id}` : '/api/proxy/expenses';
       const method = editingExpense ? 'PATCH' : 'POST';
@@ -508,89 +541,154 @@ export default function ExpensesPage() {
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Categoria *</label>
-                <select
-                  value={formData.categoryId}
-                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+            {/* Tabs */}
+            {!editingExpense && (
+              <div className="flex gap-1 mb-4 border-b border-slate-700/50">
+                <button
+                  onClick={() => setModalTab('info')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${modalTab === 'info' ? 'border-red-400 text-red-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                 >
-                  <option value="">Seleccionar...</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                  Informacion
+                </button>
+                <button
+                  onClick={() => setModalTab('payment')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${modalTab === 'payment' ? 'border-red-400 text-red-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                >
+                  Pago desde caja
+                </button>
               </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Descripcion *</label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
-                  placeholder="Descripcion del gasto"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Referencia</label>
-                  <input
-                    type="text"
-                    value={formData.reference}
-                    onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
-                    placeholder="# comprobante"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Fecha *</label>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Monto USD</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.amountUsd}
-                    onChange={(e) => handleAmountUsdChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Monto Bs</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.amountBs}
-                    onChange={(e) => handleAmountBsChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-              {todayRate > 0 && (
-                <p className="text-xs text-slate-500">Tasa del dia: {todayRate.toFixed(2)} Bs/USD</p>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* INFO TAB */}
+              {(modalTab === 'info' || editingExpense) && (
+                <>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Categoria *</label>
+                    <select
+                      value={formData.categoryId}
+                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                    >
+                      <option value="">Seleccionar...</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Descripcion *</label>
+                    <input
+                      type="text"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                      placeholder="Descripcion del gasto"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Referencia</label>
+                      <input
+                        type="text"
+                        value={formData.reference}
+                        onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                        placeholder="# comprobante"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fecha *</label>
+                      <input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        required
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Monto USD</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.amountUsd}
+                        onChange={(e) => handleAmountUsdChange(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Monto Bs</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.amountBs}
+                        onChange={(e) => handleAmountBsChange(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  {todayRate > 0 && (
+                    <p className="text-xs text-slate-500">Tasa del dia: {todayRate.toFixed(2)} Bs/USD</p>
+                  )}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Notas</label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm resize-none"
+                      placeholder="Notas adicionales..."
+                    />
+                  </div>
+                </>
               )}
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Notas</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm resize-none"
-                  placeholder="Notas adicionales..."
-                />
-              </div>
+
+              {/* PAYMENT TAB */}
+              {modalTab === 'payment' && !editingExpense && (
+                <>
+                  <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                    <p className="text-xs text-slate-400">
+                      Vincula este gasto a una sesion de caja abierta. Al hacerlo, se creara un movimiento de egreso automatico en la caja seleccionada.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Sesion de caja (opcional)</label>
+                    <select
+                      value={formData.cashSessionId}
+                      onChange={(e) => setFormData({ ...formData, cashSessionId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                    >
+                      <option value="">Sin vincular a caja</option>
+                      {openSessions.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.cashRegister?.name || s.cashRegister?.code || 'Caja'} — {s.openedBy?.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {formData.cashSessionId && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Metodo de pago</label>
+                      <select
+                        value={formData.methodId}
+                        onChange={(e) => setFormData({ ...formData, methodId: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                      >
+                        <option value="">Sin metodo especifico</option>
+                        {paymentMethods.map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
               <button
                 type="submit"
                 disabled={processing}

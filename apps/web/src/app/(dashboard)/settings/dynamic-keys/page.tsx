@@ -40,6 +40,7 @@ const PERM_LABELS: Record<string, string> = {
   MANUAL_STOCK_ADJUSTMENT: 'Ajuste inventario',
   GIVE_DISCOUNT: 'Dar descuento POS',
   ALLOW_CREDIT_INVOICE: 'Facturar a credito',
+  MANUAL_CASH_MOVEMENT: 'Movimiento manual caja',
 };
 
 const ALL_PERMS = Object.keys(PERM_LABELS);
@@ -70,6 +71,7 @@ export default function DynamicKeysPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Claves Dinamicas | Trinity ERP'; }, []);
   useEffect(() => { fetchKeys(); }, [fetchKeys]);
 
   function openCreate() {

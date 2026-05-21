@@ -398,15 +398,50 @@ export class CashRegistersService {
 
     const session = await this.prisma.cashSession.findUnique({ where: { id: sessionId } });
 
+    // Get cash movements for this session
+    const cashMovements = await this.prisma.cashMovement.findMany({
+      where: { cashSessionId: sessionId },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        expense: { select: { id: true, description: true, category: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let movementsIncomeUsd = 0;
+    let movementsIncomeBs = 0;
+    let movementsExpenseUsd = 0;
+    let movementsExpenseBs = 0;
+
+    for (const mov of cashMovements) {
+      if (mov.type === 'INCOME') {
+        movementsIncomeUsd += mov.amountUsd;
+        movementsIncomeBs += mov.amountBs;
+      } else {
+        movementsExpenseUsd += mov.amountUsd;
+        movementsExpenseBs += mov.amountBs;
+      }
+    }
+
+    const salesTotalUsd = invoices.reduce((s, i) => s + i.totalUsd, 0);
+    const salesTotalBs = invoices.reduce((s, i) => s + i.totalBs, 0);
+
     return {
       openingBalanceUsd: session?.openingBalanceUsd || 0,
       openingBalanceBs: session?.openingBalanceBs || 0,
       invoiceCount: invoices.length,
-      totalUsd: invoices.reduce((s, i) => s + i.totalUsd, 0),
-      totalBs: invoices.reduce((s, i) => s + i.totalBs, 0),
+      totalUsd: salesTotalUsd + movementsIncomeUsd - movementsExpenseUsd,
+      totalBs: salesTotalBs + movementsIncomeBs - movementsExpenseBs,
+      salesTotalUsd: salesTotalUsd,
+      salesTotalBs: salesTotalBs,
       paymentsByMethod: Object.values(byMethod),
       changeOutflows,
       totalChangeBs,
+      cashMovements,
+      movementsIncomeUsd: Math.round(movementsIncomeUsd * 100) / 100,
+      movementsIncomeBs: Math.round(movementsIncomeBs * 100) / 100,
+      movementsExpenseUsd: Math.round(movementsExpenseUsd * 100) / 100,
+      movementsExpenseBs: Math.round(movementsExpenseBs * 100) / 100,
     };
   }
 }

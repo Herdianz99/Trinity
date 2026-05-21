@@ -13,6 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Plus,
+  ArrowUpRight,
+  ArrowDownRight,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import { sendToFiscalPrinter } from '@/lib/fiscal-printer';
@@ -56,6 +61,13 @@ export default function CashDetailPage() {
   const [loadingHistoryDetail, setLoadingHistoryDetail] = useState(false);
 
   const [reportLoading, setReportLoading] = useState<'X' | 'Z' | null>(null);
+
+  // Manual movement modal
+  const [movementModalOpen, setMovementModalOpen] = useState(false);
+  const [movementForm, setMovementForm] = useState({ type: 'INCOME' as 'INCOME' | 'EXPENSE', amount: '', currency: 'USD' as 'USD' | 'BS', reason: '', dynamicKey: '' });
+  const [movementSaving, setMovementSaving] = useState(false);
+  const [movementError, setMovementError] = useState('');
+  const [showDynKey, setShowDynKey] = useState(false);
 
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -198,6 +210,45 @@ export default function CashDetailPage() {
     setLoadingHistoryDetail(false);
   }
 
+  function openMovementModal() {
+    setMovementForm({ type: 'INCOME', amount: '', currency: 'USD', reason: '', dynamicKey: '' });
+    setMovementError('');
+    setShowDynKey(false);
+    setMovementModalOpen(true);
+  }
+
+  async function handleCreateMovement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sessionId || !movementForm.amount || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()) return;
+    setMovementSaving(true);
+    setMovementError('');
+    try {
+      const res = await fetch('/api/proxy/cash-movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cashSessionId: sessionId,
+          type: movementForm.type,
+          amount: parseFloat(movementForm.amount),
+          currency: movementForm.currency,
+          reason: movementForm.reason.trim(),
+          dynamicKey: movementForm.dynamicKey.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al crear movimiento');
+      }
+      setMovementModalOpen(false);
+      setMessage({ type: 'success', text: `Movimiento ${movementForm.type === 'INCOME' ? 'de ingreso' : 'de egreso'} registrado` });
+      fetchSummary();
+    } catch (err: any) {
+      setMovementError(err.message);
+    } finally {
+      setMovementSaving(false);
+    }
+  }
+
   async function handleFiscalReport(type: 'X' | 'Z') {
     setReportLoading(type);
     setMessage(null);
@@ -311,18 +362,18 @@ export default function CashDetailPage() {
 
                 <div className="my-3 border-t border-slate-700/50" />
 
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Totales del dia</h3>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Ventas del dia</h3>
                 {loadingSummary ? (
                   <Loader2 className="animate-spin text-slate-500 mx-auto" size={18} />
                 ) : summary ? (
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-400">Total USD</span>
-                      <span className="text-sm font-bold text-green-400">${summary.totalUsd.toFixed(2)}</span>
+                      <span className="text-sm text-slate-400">Ventas USD</span>
+                      <span className="text-sm font-bold text-green-400">${(summary.salesTotalUsd ?? summary.totalUsd).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-400">Total Bs</span>
-                      <span className="text-sm font-bold text-green-400">Bs {summary.totalBs.toFixed(2)}</span>
+                      <span className="text-sm text-slate-400">Ventas Bs</span>
+                      <span className="text-sm font-bold text-green-400">Bs {(summary.salesTotalBs ?? summary.totalBs).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-400">Facturas</span>
@@ -360,6 +411,44 @@ export default function CashDetailPage() {
                       <div className="flex justify-between text-xs font-bold border-t border-slate-700/30 pt-1">
                         <span className="text-amber-300">Total vueltos</span>
                         <span className="text-amber-400">-Bs {summary.totalChangeBs.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {summary && (summary.movementsIncomeUsd > 0 || summary.movementsExpenseUsd > 0) && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Movimientos de caja</h3>
+                    <div className="space-y-1.5">
+                      {summary.movementsIncomeUsd > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-green-400">Ingresos</span>
+                          <span className="text-green-400">+${summary.movementsIncomeUsd.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {summary.movementsExpenseUsd > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-orange-400">Egresos</span>
+                          <span className="text-orange-400">-${summary.movementsExpenseUsd.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {summary && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Balance neto</h3>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="text-white">Neto USD</span>
+                        <span className="text-white">${summary.totalUsd.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="text-white">Neto Bs</span>
+                        <span className="text-white">Bs {summary.totalBs.toFixed(2)}</span>
                       </div>
                     </div>
                   </>
@@ -447,6 +536,59 @@ export default function CashDetailPage() {
             </div>
           </div>
 
+          {/* Cash movements list */}
+          {summary?.cashMovements?.length > 0 && (
+            <div className="card overflow-hidden mt-4">
+              <div className="px-4 py-3 border-b border-slate-700/50">
+                <span className="text-sm font-medium text-white">Movimientos de caja ({summary.cashMovements.length})</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                    <th className="px-4 py-2 font-medium">Hora</th>
+                    <th className="px-4 py-2 font-medium">Tipo</th>
+                    <th className="px-4 py-2 font-medium">Razon</th>
+                    <th className="px-4 py-2 font-medium">Usuario</th>
+                    <th className="px-4 py-2 font-medium text-right">USD</th>
+                    <th className="px-4 py-2 font-medium text-right">Bs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.cashMovements.map((mov: any) => (
+                    <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                      <td className="px-4 py-2 text-slate-400">{new Date(mov.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1.5">
+                          {mov.type === 'INCOME' ? (
+                            <ArrowUpRight size={14} className="text-green-400" />
+                          ) : (
+                            <ArrowDownRight size={14} className="text-red-400" />
+                          )}
+                          <span className={mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}>
+                            {mov.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
+                          </span>
+                          {mov.isManual ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">MANUAL</span>
+                          ) : mov.expenseId ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400">GASTO</span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-slate-300">{mov.reason}</td>
+                      <td className="px-4 py-2 text-slate-400">{mov.createdBy?.name}</td>
+                      <td className={`px-4 py-2 text-right font-medium ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                        {mov.type === 'INCOME' ? '+' : '-'}${mov.amountUsd.toFixed(2)}
+                      </td>
+                      <td className={`px-4 py-2 text-right ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                        {mov.type === 'INCOME' ? '+' : '-'}Bs {mov.amountBs.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Action buttons at bottom */}
           <div className="flex justify-end gap-3 mt-4">
             {register.isFiscal && (
@@ -469,6 +611,12 @@ export default function CashDetailPage() {
                 </button>
               </>
             )}
+            <button
+              onClick={openMovementModal}
+              className="px-4 py-2 text-sm rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-colors flex items-center gap-1.5"
+            >
+              <Plus size={14} /> Movimiento manual
+            </button>
             <button
               onClick={openCloseModal}
               className="px-4 py-2 text-sm rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors"
@@ -526,6 +674,135 @@ export default function CashDetailPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* MANUAL MOVEMENT MODAL */}
+      {movementModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setMovementModalOpen(false)}>
+          <div className="card p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Movimiento manual</h3>
+              <button onClick={() => setMovementModalOpen(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+
+            {movementError && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {movementError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateMovement} className="space-y-4">
+              {/* Type toggle */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1.5">Tipo</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMovementForm(p => ({ ...p, type: 'INCOME' }))}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                      movementForm.type === 'INCOME'
+                        ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                        : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <ArrowUpRight size={16} /> Ingreso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMovementForm(p => ({ ...p, type: 'EXPENSE' }))}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                      movementForm.type === 'EXPENSE'
+                        ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                        : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <ArrowDownRight size={16} /> Egreso
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount + currency */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Monto</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={movementForm.amount}
+                    onChange={e => setMovementForm(p => ({ ...p, amount: e.target.value }))}
+                    className="input-field flex-1"
+                    placeholder="0.00"
+                    required
+                    autoFocus
+                  />
+                  <select
+                    value={movementForm.currency}
+                    onChange={e => setMovementForm(p => ({ ...p, currency: e.target.value as 'USD' | 'BS' }))}
+                    className="input-field !w-24"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="BS">Bs</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Razon</label>
+                <input
+                  type="text"
+                  value={movementForm.reason}
+                  onChange={e => setMovementForm(p => ({ ...p, reason: e.target.value }))}
+                  className="input-field"
+                  placeholder="Razon del movimiento..."
+                  required
+                />
+              </div>
+
+              {/* Dynamic key */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Clave de autorizacion</label>
+                <div className="relative">
+                  <input
+                    type={showDynKey ? 'text' : 'password'}
+                    value={movementForm.dynamicKey}
+                    onChange={e => setMovementForm(p => ({ ...p, dynamicKey: e.target.value }))}
+                    className="input-field !pr-12"
+                    placeholder="Ingrese la clave..."
+                    required
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDynKey(!showDynKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    {showDynKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setMovementModalOpen(false)} className="flex-1 px-4 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white transition-colors">
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={movementSaving || !movementForm.amount || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()}
+                  className={`flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                    movementForm.type === 'INCOME'
+                      ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
+                      : 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                  } disabled:opacity-50`}
+                >
+                  {movementSaving ? <Loader2 className="animate-spin" size={16} /> : movementForm.type === 'INCOME' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                  Registrar {movementForm.type === 'INCOME' ? 'ingreso' : 'egreso'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

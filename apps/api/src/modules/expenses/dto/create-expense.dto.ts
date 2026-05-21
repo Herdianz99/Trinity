@@ -25,4 +25,12 @@ export class CreateExpenseDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  cashSessionId?: string;
+
+  @IsOptional()
+  @IsString()
+  methodId?: string;
 }

@@ -205,6 +205,54 @@ export class ExpensesService {
       throw new BadRequestException('Debe proporcionar al menos un monto (USD o Bs)');
     }
 
+    // If cashSessionId provided, validate session is OPEN and create CashMovement
+    if (dto.cashSessionId) {
+      const session = await this.prisma.cashSession.findUnique({
+        where: { id: dto.cashSessionId },
+      });
+      if (!session) throw new BadRequestException('Sesion de caja no encontrada');
+      if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
+
+      return this.prisma.$transaction(async (tx) => {
+        const expense = await tx.expense.create({
+          data: {
+            categoryId: dto.categoryId,
+            description: dto.description,
+            reference: dto.reference,
+            amountUsd: amountUsd!,
+            amountBs: amountBs!,
+            exchangeRate: rate.rate,
+            date: new Date(dto.date),
+            notes: dto.notes,
+            createdById: userId,
+            cashSessionId: dto.cashSessionId,
+            methodId: dto.methodId,
+          },
+          include: {
+            category: { select: { name: true } },
+            createdBy: { select: { name: true } },
+          },
+        });
+
+        await tx.cashMovement.create({
+          data: {
+            cashSessionId: dto.cashSessionId!,
+            type: 'EXPENSE',
+            amountUsd: amountUsd!,
+            amountBs: amountBs!,
+            exchangeRate: rate.rate,
+            currency: dto.amountUsd ? 'USD' : 'BS',
+            reason: `Gasto: ${dto.description}`,
+            isManual: false,
+            expenseId: expense.id,
+            createdById: userId,
+          },
+        });
+
+        return expense;
+      });
+    }
+
     return this.prisma.expense.create({
       data: {
         categoryId: dto.categoryId,

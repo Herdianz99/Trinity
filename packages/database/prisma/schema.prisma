@@ -176,6 +176,12 @@ enum DynamicKeyPerm {
   MANUAL_STOCK_ADJUSTMENT
   GIVE_DISCOUNT
   ALLOW_CREDIT_INVOICE
+  MANUAL_CASH_MOVEMENT
+}
+
+enum CashMovementType {
+  INCOME
+  EXPENSE
 }
 
 // ============================================
@@ -245,6 +251,7 @@ model User {
   seller              Seller?
   invoicesAsCashier   Invoice[]        @relation("InvoiceCashier")
   expenses            Expense[]
+  cashMovements       CashMovement[]
   paymentSchedules    PaymentSchedule[]
   dynamicKeys         DynamicKey[]
   createdAt           DateTime         @default(now())
@@ -608,6 +615,7 @@ model PaymentMethod {
   payablePayments    PayablePayment[]
   receiptPayments    ReceiptPayment[]
   changePayments     Payment[]         @relation("ChangeMethod")
+  expenses           Expense[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
@@ -649,6 +657,27 @@ model CashSession {
   notes             String?
   openedAt          DateTime      @default(now())
   closedAt          DateTime?
+  cashMovements     CashMovement[]
+  expenses          Expense[]     @relation("ExpenseSession")
+}
+
+model CashMovement {
+  id            String           @id @default(cuid())
+  cashSessionId String
+  cashSession   CashSession      @relation(fields: [cashSessionId], references: [id])
+  type          CashMovementType
+  amountUsd     Float            @default(0)
+  amountBs      Float            @default(0)
+  exchangeRate  Float            @default(0)
+  currency      String           // "USD" o "BS"
+  reason        String
+  isManual      Boolean          @default(true)
+  expenseId     String?          @unique
+  expense       Expense?         @relation(fields: [expenseId], references: [id])
+  dynamicKeyId  String?
+  createdById   String
+  createdBy     User             @relation(fields: [createdById], references: [id])
+  createdAt     DateTime         @default(now())
 }
 
 // ============================================
@@ -1092,18 +1121,23 @@ model ExpenseCategory {
 }
 
 model Expense {
-  id           String          @id @default(cuid())
-  categoryId   String
-  category     ExpenseCategory @relation(fields: [categoryId], references: [id])
-  description  String
-  reference    String?
-  amountUsd    Float
-  amountBs     Float
-  exchangeRate Float
-  date         DateTime
-  notes        String?
-  createdById  String
-  createdBy    User            @relation(fields: [createdById], references: [id])
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  categoryId     String
+  category       ExpenseCategory @relation(fields: [categoryId], references: [id])
+  description    String
+  reference      String?
+  amountUsd      Float
+  amountBs       Float
+  exchangeRate   Float
+  date           DateTime
+  notes          String?
+  cashSessionId  String?
+  cashSession    CashSession?    @relation("ExpenseSession", fields: [cashSessionId], references: [id])
+  methodId       String?
+  method         PaymentMethod?  @relation(fields: [methodId], references: [id])
+  cashMovement   CashMovement?
+  createdById    String
+  createdBy      User            @relation(fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
