@@ -175,6 +175,16 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
     }
   }
 
+  // Change (vuelto)
+  if (invoice.changeBs > 0) {
+    const changeUsd = exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0;
+    const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
+    html += `<div class="separator"></div>`;
+    html += `<div class="row bold"><span>Vuelto:</span><span>${fmt(invoice.changeBs)} Bs</span></div>`;
+    html += `<div style="font-size:11px;padding-left:4px;">${fmt(changeUsd)} USD x ${fmt(exchangeRate)} = ${fmt(invoice.changeBs)} Bs</div>`;
+    html += `<div style="font-size:11px;padding-left:4px;">Metodo: ${changeMethodName}</div>`;
+  }
+
   // Credit badge
   if (isCredit) {
     html += `<div class="credit-badge">*** VENTA A CREDITO ***</div>`;
@@ -260,6 +270,17 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
       lines.push(`  ${label}: ${amount}`);
       if (p.reference) lines.push(`    Ref: ${p.reference}`);
     }
+  }
+
+  // Change (vuelto)
+  if (invoice.changeBs > 0) {
+    const changeUsd = exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0;
+    const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
+    lines.push(sep);
+    const vueltoBs = fmt(invoice.changeBs);
+    lines.push(`Vuelto:${' '.repeat(w - 7 - vueltoBs.length - 3)}${vueltoBs} Bs`);
+    lines.push(`  ${fmt(changeUsd)} USD x ${fmt(exchangeRate)} = ${vueltoBs} Bs`);
+    lines.push(`  Metodo: ${changeMethodName}`);
   }
 
   if (isCredit) {
