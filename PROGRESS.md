@@ -1,5 +1,33 @@
 # Trinity ERP — Progreso
 
+## Sesion 37 — Movimientos manuales de caja con clave dinamica y gastos desde caja
+
+### Migracion de base de datos
+- `20260521100000_add_cash_movements_and_expense_payment`: Agrega enum `CashMovementType` (INCOME, EXPENSE), modelo `CashMovement` con relaciones a CashSession/User/Expense, agrega `MANUAL_CASH_MOVEMENT` a DynamicKeyPerm, agrega campos `cashSessionId`, `methodId`, `cashMovement` a Expense
+
+### Schema
+- CashMovement: nuevo modelo con id, cashSessionId, type, amountUsd, amountBs, exchangeRate, currency, reason, isManual, expenseId (unique), dynamicKeyId, createdById, createdAt
+- Expense: nuevos campos opcionales `cashSessionId`, `methodId`, relacion `cashMovement`
+- CashSession: nueva relacion `cashMovements[]` y `expenses[]`
+
+### Backend (NestJS)
+- **CashMovementsModule**: Nuevo modulo con controller, service y DTO
+  - `GET /cash-movements?cashSessionId=`: Lista movimientos de una sesion
+  - `POST /cash-movements`: Crea movimiento manual con validacion de clave dinamica (MANUAL_CASH_MOVEMENT), verificacion de sesion abierta, calculo dual USD/Bs
+- **ExpensesService.create()**: Si se recibe `cashSessionId`, valida sesion abierta y crea CashMovement de tipo EXPENSE con `isManual=false` vinculado al gasto (transaccion Prisma)
+- **CashRegistersService.getSessionSalesData()**: Ahora incluye movimientos de caja en el resumen: `cashMovements[]`, `movementsIncomeUsd/Bs`, `movementsExpenseUsd/Bs`, `salesTotalUsd/Bs` separado del `totalUsd/Bs` neto
+
+### Frontend (Next.js)
+- **Sesion de caja** (`/cash/[id]`):
+  - Boton "Movimiento manual" en barra de acciones
+  - Modal con selector Ingreso/Egreso, monto + moneda, razon, y campo de clave dinamica
+  - Tabla de movimientos con badges de color: MANUAL (amarillo), GASTO (naranja)
+  - Resumen actualizado: "Ventas del dia" separado de "Movimientos de caja" y "Balance neto"
+- **Gastos** (`/expenses`):
+  - Modal rediseñado con tabs: "Informacion" (campos existentes) y "Pago desde caja" (selector de sesion abierta + metodo de pago)
+  - Al vincular gasto a caja, se crea movimiento de egreso automatico
+- **Claves dinamicas** (`/settings/dynamic-keys`): Agregado label `MANUAL_CASH_MOVEMENT: 'Movimiento manual caja'`
+
 ## Sesion 36 — Consulta SENIAT automatica via proxy backend
 
 ### Backend (NestJS)

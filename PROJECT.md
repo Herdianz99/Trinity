@@ -856,23 +856,34 @@ model QuotationItem {
 
 **Claves Dinamicas de Autorizacion (DynamicKeysModule):**
 - Modelos: DynamicKey (keyHash bcrypt, isActive), DynamicKeyPermission (enum DynamicKeyPerm), DynamicKeyLog (audit trail)
-- 13 permisos configurables: eliminar NC/ND venta/compra, eliminar recibo cobro/pago, eliminar gasto, modificar precio, anular sesion caja, cambiar tasa, ajuste inventario, dar descuento, facturar a credito
+- 14 permisos configurables: eliminar NC/ND venta/compra, eliminar recibo cobro/pago, eliminar gasto, modificar precio, anular sesion caja, cambiar tasa, ajuste inventario, dar descuento, facturar a credito, movimiento manual caja
 - CRUD de claves solo ADMIN, validacion abierta a autenticados
 - Validacion: itera claves activas, bcrypt.compare, verifica permiso, crea log con entityType/entityId/action
 - Componente reutilizable DynamicKeyModal: campo password, llama POST /dynamic-keys/validate, ejecuta callback si autorizado
-- Integrado en: anular notas credito/debito, cancelar recibos cobro/pago, eliminar gastos
+- Integrado en: anular notas credito/debito, cancelar recibos cobro/pago, eliminar gastos, movimientos manuales de caja
 - Frontend: /settings/dynamic-keys (gestion), /settings/dynamic-keys/[id]/logs (historial)
 - Sidebar: bajo CONFIGURACION
 
 ---
 
+**Movimientos Manuales de Caja (CashMovementsModule):**
+- Modelo: CashMovement (tipo INCOME/EXPENSE, montos duales USD/Bs, isManual, relacion opcional a Expense)
+- Requiere clave dinamica con permiso MANUAL_CASH_MOVEMENT para crear movimientos manuales
+- Valida sesion abierta y tasa de cambio del dia
+- Se integra al resumen de sesion: ingresos/egresos manuales + egresos por gastos = balance neto
+- Frontend: boton "Movimiento manual" en sesion de caja, modal con tipo/monto/razon/clave
+- Badges en lista de movimientos: MANUAL (amarillo), GASTO (naranja)
+
+---
+
 **Control de Gastos (ExpensesModule):**
-- Modelos: ExpenseCategory (10 predefinidas), Expense
+- Modelos: ExpenseCategory (10 predefinidas), Expense (con campos opcionales cashSessionId, methodId)
 - CRUD de categorías (solo ADMIN)
 - CRUD de gastos con conversión automática USD↔Bs usando tasa del día
+- Gastos pueden vincularse a sesion de caja abierta: crea CashMovement de tipo EXPENSE automaticamente
 - Resumen por período: totalUsd, totalBs, byCategory (name, totalUsd, count), byMonth
 - Permiso granular: MANAGE_EXPENSES (ADMIN y SUPERVISOR por defecto)
-- Frontend: /expenses (lista + gráfico recharts), /expenses/categories (admin)
+- Frontend: /expenses (lista + grafico recharts + modal con tabs Info/Pago desde caja), /expenses/categories (admin)
 - Sidebar: sección GASTOS entre CxP y FISCAL
 
 ---
