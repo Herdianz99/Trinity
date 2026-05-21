@@ -21,7 +21,9 @@ interface SeniatModalProps {
 export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: SeniatModalProps) {
   const [sessionId, setSessionId] = useState('');
   const [captchaBase64, setCaptchaBase64] = useState('');
+  const [searchBy, setSearchBy] = useState<'rif' | 'cedula'>('rif');
   const [rif, setRif] = useState('');
+  const [cedula, setCedula] = useState('');
   const [captcha, setCaptcha] = useState('');
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -33,8 +35,10 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
   useEffect(() => {
     if (isOpen) {
       setRif(initialRif || '');
+      setCedula('');
       setCaptcha('');
       setError('');
+      setSearchBy('rif');
       fetchCaptcha(false);
     } else {
       setSessionId('');
@@ -70,17 +74,24 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
     }
   }
 
+  const searchValue = searchBy === 'rif' ? rif : cedula;
+  const hasSearchValue = searchValue.trim().length > 0;
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!rif.trim() || !captcha.trim() || !sessionId) return;
+    if (!hasSearchValue || !captcha.trim() || !sessionId) return;
 
     setSearching(true);
     setError('');
     try {
+      const body: any = { sessionId, captcha: captcha.trim() };
+      if (searchBy === 'rif') body.rif = rif.trim().toUpperCase();
+      else body.cedula = cedula.trim().toUpperCase();
+
       const res = await fetch('/api/proxy/customers/seniat-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, rif: rif.trim().toUpperCase(), captcha: captcha.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -127,19 +138,54 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
         </div>
 
         <form onSubmit={handleSearch} className="p-4 space-y-3">
-          {/* RIF field */}
+          {/* Search type toggle */}
+          <div className="flex gap-1 bg-slate-900/50 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setSearchBy('rif')}
+              className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${searchBy === 'rif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              RIF
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchBy('cedula')}
+              className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${searchBy === 'cedula' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              Cedula / Pasaporte
+            </button>
+          </div>
+
+          {/* RIF or Cedula field */}
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">RIF (ej: V123456789)</label>
-            <input
-              ref={rifInputRef}
-              type="text"
-              value={rif}
-              onChange={e => setRif(e.target.value.toUpperCase())}
-              maxLength={10}
-              className="input-field !py-2 text-sm w-full font-mono"
-              placeholder="V123456789"
-              disabled={searching}
-            />
+            {searchBy === 'rif' ? (
+              <>
+                <label className="text-xs text-slate-400 mb-1 block">RIF (ej: V123456789)</label>
+                <input
+                  ref={rifInputRef}
+                  type="text"
+                  value={rif}
+                  onChange={e => setRif(e.target.value.toUpperCase())}
+                  maxLength={10}
+                  className="input-field !py-2 text-sm w-full font-mono"
+                  placeholder="V123456789"
+                  disabled={searching}
+                />
+              </>
+            ) : (
+              <>
+                <label className="text-xs text-slate-400 mb-1 block">Cedula o Pasaporte (ej: 12345678)</label>
+                <input
+                  type="text"
+                  value={cedula}
+                  onChange={e => setCedula(e.target.value.toUpperCase())}
+                  maxLength={12}
+                  className="input-field !py-2 text-sm w-full font-mono"
+                  placeholder="12345678"
+                  disabled={searching}
+                />
+              </>
+            )}
           </div>
 
           {/* Captcha image + input */}
@@ -213,7 +259,7 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
             </button>
             <button
               type="submit"
-              disabled={searching || !rif.trim() || !captcha.trim() || !sessionId}
+              disabled={searching || !hasSearchValue || !captcha.trim() || !sessionId}
               className="btn-primary !py-2 text-xs flex items-center gap-1.5"
             >
               {searching ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />}
