@@ -26,6 +26,8 @@ interface InvoiceDetail {
   igtfUsd: number;
   igtfBs: number;
   exchangeRate: number;
+  totalPaidUsd: number;
+  changeBs: number;
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
@@ -62,6 +64,8 @@ interface Payment {
   reference: string | null;
   igtfUsd: number;
   igtfBs: number;
+  changeAmountBs: number;
+  changeMethod: { name: string } | null;
   createdAt: string;
 }
 
@@ -154,6 +158,10 @@ export default function InvoiceDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchInvoice(); }, [fetchInvoice]);
+
+  useEffect(() => {
+    if (invoice) document.title = `${invoice.number} - ${invoice.customer?.name || 'Sin cliente'} | Trinity ERP`;
+  }, [invoice]);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(data => {
@@ -597,6 +605,27 @@ export default function InvoiceDetailPage() {
                     </tr>
                   </tfoot>
                 </table>
+
+                {/* Change (vuelto) info */}
+                {invoice.changeBs > 0 && (
+                  <div className="px-4 py-3 border-t border-amber-500/20 bg-amber-500/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-medium text-amber-300">Total recibido USD</span>
+                        <span className="text-sm font-mono text-white ml-3">${invoice.totalPaidUsd?.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-amber-300">Vuelto dado</span>
+                        <span className="text-sm font-mono text-amber-400 ml-3">Bs {invoice.changeBs?.toFixed(2)}</span>
+                        {invoice.payments.find(p => p.changeAmountBs > 0)?.changeMethod && (
+                          <span className="text-xs text-slate-400 ml-2">
+                            ({invoice.payments.find(p => p.changeAmountBs > 0)?.changeMethod?.name})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

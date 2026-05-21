@@ -145,9 +145,12 @@ export default function POSPage() {
 
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
+  const [changeMethodId, setChangeMethodId] = useState<string | null>(null);
 
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
+
+  useEffect(() => { document.title = 'POS | Trinity ERP'; }, []);
 
   // Fetch exchange rate and user info on load
   useEffect(() => {
@@ -442,6 +445,16 @@ export default function POSPage() {
   const totalPaidBs = payments.reduce((s, p) => s + p.amountBs, 0);
   const remainingBs = Math.round((grandTotalBs - totalPaidBs) * 100) / 100;
 
+  // Change (vuelto) calculation: only when USD payments exceed total
+  const totalPaidDivisaUsd = payments
+    .filter(p => p.isDivisa)
+    .reduce((s, p) => s + p.amountUsd, 0);
+  const changeUsd = totalPaidDivisaUsd > grandTotalUsd + 0.01
+    ? Math.round((totalPaidDivisaUsd - grandTotalUsd) * 100) / 100
+    : 0;
+  const changeBsCalc = Math.round(changeUsd * exchangeRate * 100) / 100;
+  const hasChange = changeUsd > 0.01;
+
   function addPayment(pm: PaymentMethodData) {
     if (pm.isDivisa) {
       // USD method: fill with remaining USD, derive Bs
@@ -715,8 +728,12 @@ export default function POSPage() {
 
     const finalPaidUsd = finalPayments.reduce((s, p) => s + p.amountUsd, 0);
     const finalRemaining = grandTotalUsd - finalPaidUsd;
-    if (finalRemaining > 0.01) {
+    if (finalRemaining > 0.01 && !hasChange) {
       setMessage({ type: 'error', text: 'El monto pagado no cubre el total' });
+      return;
+    }
+    if (hasChange && !changeMethodId) {
+      setMessage({ type: 'error', text: 'Seleccione un metodo de vuelto' });
       return;
     }
     setProcessing(true);
@@ -754,6 +771,7 @@ export default function POSPage() {
         body: JSON.stringify({
           payments: finalPayments,
           isCredit: false,
+          changeMethodId: hasChange ? changeMethodId : undefined,
         }),
       });
       if (!payRes.ok) {
@@ -1428,7 +1446,7 @@ export default function POSPage() {
                     Aparcar
                   </button>
                   <button
-                    onClick={() => { setPayments([]); setPayModalOpen(true); }}
+                    onClick={() => { setPayments([]); setChangeMethodId(null); setPayModalOpen(true); }}
                     disabled={cart.length === 0 || processing}
                     className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
@@ -1619,18 +1637,51 @@ export default function POSPage() {
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center justify-between">
-                <span className="text-sm text-slate-400">Pendiente por cobrar</span>
-                <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
-                  ${Math.max(0, remaining).toFixed(2)}
-                </span>
-              </div>
+              {/* Pendiente / Vuelto */}
+              {!hasChange ? (
+                <div className="card p-3 flex items-center justify-between">
+                  <span className="text-sm text-slate-400">Pendiente por cobrar</span>
+                  <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
+                    ${Math.max(0, remaining).toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto</span>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
+                      <span className="text-slate-400 mx-2">×</span>
+                      <span className="text-sm text-slate-400">{exchangeRate.toFixed(2)} Bs/$</span>
+                      <span className="text-slate-400 mx-2">=</span>
+                      <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Metodo de vuelto</label>
+                    <select
+                      value={changeMethodId || ''}
+                      onChange={e => setChangeMethodId(e.target.value || null)}
+                      className="input-field !py-2 text-sm w-full"
+                    >
+                      <option value="">Seleccionar metodo...</option>
+                      {paymentMethods
+                        .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
+                        .filter(pm => !pm.isDivisa && pm.isActive)
+                        .map(pm => (
+                          <option key={pm.id} value={pm.id}>{pm.name}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={processing || remaining > 0.01}
+                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId)}
                   className="btn-primary !py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
                 >
                   {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}

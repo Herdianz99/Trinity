@@ -78,6 +78,10 @@ export default function CashDetailPage() {
 
   useEffect(() => { fetchRegister(); }, [fetchRegister]);
 
+  useEffect(() => {
+    if (register) document.title = `${register.name} | Trinity ERP`;
+  }, [register]);
+
   // Fetch payment methods for filter dropdown
   useEffect(() => {
     fetch('/api/proxy/payment-methods/flat')
@@ -338,6 +342,25 @@ export default function CashDetailPage() {
                           <span className="text-slate-200">${m.totalUsd.toFixed(2)}</span>
                         </div>
                       ))}
+                    </div>
+                  </>
+                )}
+
+                {summary && summary.changeOutflows?.length > 0 && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Vueltos (egresos)</h3>
+                    <div className="space-y-1.5">
+                      {summary.changeOutflows.map((c: any, i: number) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-slate-400">{c.invoiceNumber}</span>
+                          <span className="text-amber-400">-Bs {c.changeBs.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-xs font-bold border-t border-slate-700/30 pt-1">
+                        <span className="text-amber-300">Total vueltos</span>
+                        <span className="text-amber-400">-Bs {summary.totalChangeBs.toFixed(2)}</span>
+                      </div>
                     </div>
                   </>
                 )}

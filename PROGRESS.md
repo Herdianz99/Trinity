@@ -1,5 +1,36 @@
 # Trinity ERP — Progreso
 
+## Sesion 35 — Manejo de vuelto en pagos USD con cambio en Bs (Completada)
+
+### Migracion de base de datos
+- `20260521000000_add_change_management_to_payments`: Agrega `totalPaidUsd` y `changeBs` a Invoice, `changeAmountBs` y `changeMethodId` a Payment con relacion a PaymentMethod
+
+### Schema
+- Invoice: nuevos campos `totalPaidUsd Float @default(0)`, `changeBs Float @default(0)`
+- Payment: nuevos campos `changeAmountBs Float @default(0)`, `changeMethodId String?`, relacion `changeMethod PaymentMethod?`
+- PaymentMethod: nueva relacion `changePayments Payment[] @relation("ChangeMethod")`
+
+### Backend (NestJS)
+- **InvoicesService.pay()**: Calcula vuelto cuando pagos en divisas (isDivisa=true) exceden el total de la factura. changeUsd = totalPaidDivisaUsd - totalFactura, changeBs = changeUsd × tasa. Valida que changeMethodId sea proporcionado y no sea divisa. Guarda totalPaidUsd y changeBs en Invoice, changeAmountBs y changeMethodId en Payment. Omite ajuste de ultimo pago cuando hay sobrepago.
+- **PayInvoiceDto**: Nuevo campo opcional `changeMethodId?: string`
+- **InvoicesService.findOne()**: Include de payments actualizado para cargar relacion `changeMethod`
+- **CashRegistersService.getSessionSalesData()**: Agrega tracking de vueltos (changeOutflows) con numero de factura, monto y metodo. Retorna `changeOutflows[]` y `totalChangeBs` en el summary de sesion.
+
+### Frontend (Next.js)
+- **POS** (`/sales/pos`):
+  - Calculo en tiempo real de vuelto: totalPaidDivisaUsd vs grandTotalUsd
+  - Seccion "Vuelto" con fondo amarillo mostrando: $X.XX × tasa Bs/$ = Bs X.XX
+  - Selector de metodo de vuelto (solo metodos isDivisa=false)
+  - Boton confirmar deshabilitado si hay vuelto y no se selecciono metodo
+  - Envia changeMethodId al backend en el body del pago
+- **Detalle factura** (`/sales/invoices/[id]`):
+  - Si changeBs > 0, muestra barra amarilla en tab Pagos con "Total recibido USD" y "Vuelto dado: Bs X.XX (metodo)"
+  - Interfaces actualizadas con totalPaidUsd, changeBs, changeAmountBs, changeMethod
+- **Arqueo de caja** (`/cash/[id]`):
+  - Seccion "Vueltos (egresos)" en el sidebar de resumen de sesion
+  - Lista cada vuelto con numero de factura y monto negativo en Bs
+  - Total de vueltos al final de la seccion
+
 ## Sesion 34 — Integración fiscal directa por Web Serial (Completada)
 
 ### Mejoras en apps/web/src/lib/fiscal-printer.ts

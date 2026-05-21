@@ -367,10 +367,12 @@ export class CashRegistersService {
 
     const invoices = await this.prisma.invoice.findMany({
       where,
-      include: { payments: { include: { method: true } } },
+      include: { payments: { include: { method: true, changeMethod: true } } },
     });
 
     const byMethod: Record<string, { methodName: string; count: number; totalUsd: number; totalBs: number }> = {};
+    const changeOutflows: Array<{ invoiceNumber: string; changeBs: number; changeMethodName: string }> = [];
+    let totalChangeBs = 0;
 
     for (const inv of invoices) {
       for (const p of inv.payments) {
@@ -381,6 +383,16 @@ export class CashRegistersService {
         byMethod[methodName].count += 1;
         byMethod[methodName].totalUsd += p.amountUsd;
         byMethod[methodName].totalBs += p.amountBs;
+
+        // Track change outflows
+        if ((p as any).changeAmountBs > 0) {
+          changeOutflows.push({
+            invoiceNumber: inv.number,
+            changeBs: (p as any).changeAmountBs,
+            changeMethodName: (p as any).changeMethod?.name || 'Efectivo Bs',
+          });
+          totalChangeBs += (p as any).changeAmountBs;
+        }
       }
     }
 
@@ -393,6 +405,8 @@ export class CashRegistersService {
       totalUsd: invoices.reduce((s, i) => s + i.totalUsd, 0),
       totalBs: invoices.reduce((s, i) => s + i.totalBs, 0),
       paymentsByMethod: Object.values(byMethod),
+      changeOutflows,
+      totalChangeBs,
     };
   }
 }

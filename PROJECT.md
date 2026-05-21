@@ -736,6 +736,7 @@ model QuotationItem {
 #### Sesión 15 — UX Correctiva: Paginas dedicadas con Tabs ✅
 #### Sesión 16 — Lazy Loading Tabs + Montos Bs estandarizados ✅
 #### Sesión 26 — Recibos de Cobro/Pago con Diferencial Cambiario ✅
+#### Sesión 35 — Manejo de vuelto en pagos USD ✅
 
 ---
 
@@ -887,6 +888,17 @@ model QuotationItem {
 - Solo ADMIN/SUPERVISOR pueden aprobar y ejecutar
 - Frontend: /payment-schedules (lista), /payment-schedules/new (crear), /payment-schedules/[id] (detalle con panel agregar)
 - Sidebar: bajo CxP
+
+---
+
+**Manejo de Vuelto en Pagos USD:**
+- Cuando el cliente paga con USD (métodos isDivisa=true) y el monto excede el total de la factura, el sistema calcula el vuelto en Bs automáticamente
+- changeUsd = totalPaidDivisaUsd - totalFactura, changeBs = changeUsd × exchangeRate
+- El cajero debe seleccionar un método de vuelto (solo métodos isDivisa=false: Efectivo Bs, Pago Móvil, etc.)
+- Se guarda en Invoice: totalPaidUsd (total real recibido en USD) y changeBs (vuelto dado en Bs)
+- Se guarda en Payment: changeAmountBs y changeMethodId en el primer pago en divisas
+- El vuelto aparece en el arqueo de caja como egreso con descripción del número de factura
+- No se crea un registro separado de movimiento de caja — se trackea directamente en Payment y se agrega al summary
 
 ---
 

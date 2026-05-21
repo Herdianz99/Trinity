@@ -52,4 +52,9 @@ export class PayInvoiceDto {
   @IsOptional()
   @IsNumber()
   creditDays?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  changeMethodId?: string;
 }

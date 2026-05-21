@@ -607,6 +607,7 @@ model PaymentMethod {
   receivablePayments ReceivablePayment[]
   payablePayments    PayablePayment[]
   receiptPayments    ReceiptPayment[]
+  changePayments     Payment[]         @relation("ChangeMethod")
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
@@ -677,6 +678,8 @@ model Invoice {
   igtfBs         Float         @default(0)
   subtotalBs     Float         @default(0)
   ivaBs          Float         @default(0)
+  totalPaidUsd   Float         @default(0)
+  changeBs       Float         @default(0)
   isCredit       Boolean       @default(false)
   creditDays     Int           @default(0)
   dueDate        DateTime?
@@ -730,9 +733,12 @@ model Payment {
   amountBs     Float
   exchangeRate Float
   reference    String?
-  igtfUsd      Float         @default(0)
-  igtfBs       Float         @default(0)
-  createdAt    DateTime      @default(now())
+  igtfUsd         Float         @default(0)
+  igtfBs          Float         @default(0)
+  changeAmountBs  Float         @default(0)
+  changeMethodId  String?
+  changeMethod    PaymentMethod? @relation("ChangeMethod", fields: [changeMethodId], references: [id])
+  createdAt       DateTime      @default(now())
 }
 
 // ============================================

@@ -152,7 +152,7 @@ export class InvoicesService {
         customer: true,
         cashRegister: true,
         items: true,
-        payments: { include: { method: true } },
+        payments: { include: { method: true, changeMethod: true } },
         receivables: true,
         seller: { select: { id: true, code: true, name: true } },
         cashier: { select: { id: true, name: true } },
@@ -503,8 +503,15 @@ export class InvoicesService {
       ? Math.round((invoice.totalBs + invoiceIgtfBs) * 100) / 100
       : invoice.totalBs;
 
+    // Calculate total paid in USD from divisa methods
+    const totalPaidDivisaUsd = dto.payments
+      .filter(p => methodMap.get(p.methodId)?.isDivisa)
+      .reduce((s, p) => s + p.amountUsd, 0);
+    const hasOverpayment = totalPaidDivisaUsd > newTotalUsd + 0.01;
+
     // Adjust last payment so USD and Bs sums match invoice totals exactly
-    if (dto.payments.length >= 1) {
+    // Skip adjustment when there's an overpayment (change scenario)
+    if (dto.payments.length >= 1 && !hasOverpayment) {
       const lastIdx = dto.payments.length - 1;
       const prevUsd = dto.payments.slice(0, lastIdx).reduce((s, p) => s + p.amountUsd, 0);
       const prevBs = dto.payments.slice(0, lastIdx).reduce((s, p) => s + p.amountBs, 0);
@@ -513,6 +520,24 @@ export class InvoicesService {
       if (adjustedUsd >= 0 && adjustedBs >= 0) {
         dto.payments[lastIdx].amountUsd = adjustedUsd;
         dto.payments[lastIdx].amountBs = adjustedBs;
+      }
+    }
+
+    // Change (vuelto) calculation
+    let changeUsd = 0;
+    let changeBs = 0;
+    if (hasOverpayment) {
+      changeUsd = Math.round((totalPaidDivisaUsd - newTotalUsd) * 100) / 100;
+      changeBs = Math.round(changeUsd * invoice.exchangeRate * 100) / 100;
+      if (!dto.changeMethodId) {
+        throw new BadRequestException('Debe seleccionar un metodo de vuelto cuando el pago en USD excede el total');
+      }
+      const changeMethod = await this.prisma.paymentMethod.findUnique({ where: { id: dto.changeMethodId } });
+      if (!changeMethod) {
+        throw new BadRequestException('Metodo de vuelto no encontrado');
+      }
+      if (changeMethod.isDivisa) {
+        throw new BadRequestException('El metodo de vuelto no puede ser en divisas');
       }
     }
 
@@ -658,6 +683,23 @@ export class InvoicesService {
         });
       }
 
+      // Record change (vuelto) on the first divisa payment
+      if (changeBs > 0 && dto.changeMethodId) {
+        const firstDivisaPayment = await tx.payment.findFirst({
+          where: { invoiceId: id },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (firstDivisaPayment) {
+          await tx.payment.update({
+            where: { id: firstDivisaPayment.id },
+            data: {
+              changeAmountBs: changeBs,
+              changeMethodId: dto.changeMethodId,
+            },
+          });
+        }
+      }
+
       // Update invoice status, paymentType, IGTF, cashier, and release lock
       const updatedInvoice = await tx.invoice.update({
         where: { id },
@@ -677,10 +719,12 @@ export class InvoicesService {
           igtfBs: invoiceIgtfBs,
           totalUsd: newTotalUsd,
           totalBs: newTotalBs,
+          totalPaidUsd: hasOverpayment ? Math.round(totalPaidDivisaUsd * 100) / 100 : 0,
+          changeBs: changeBs,
         },
         include: {
           items: true,
-          payments: { include: { method: true } },
+          payments: { include: { method: true, changeMethod: true } },
           customer: true,
           receivables: true,
           seller: { select: { id: true, code: true, name: true } },
