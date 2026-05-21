@@ -1,7 +1,60 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import * as http from 'http';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+
+const SENIAT_BASE = 'http://contribuyente.seniat.gob.ve/BuscaRif';
+
+// In-memory store for SENIAT sessions (JSESSIONID cookie ↔ sessionId)
+const seniatSessions = new Map<string, { cookies: string; createdAt: number }>();
+
+// Clean up sessions older than 5 minutes
+function cleanSeniatSessions() {
+  const now = Date.now();
+  for (const [key, val] of seniatSessions) {
+    if (now - val.createdAt > 5 * 60 * 1000) seniatSessions.delete(key);
+  }
+}
+
+function httpGet(url: string, headers?: Record<string, string>): Promise<{ statusCode: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { headers }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => resolve({ statusCode: res.statusCode || 0, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout conectando al SENIAT')); });
+  });
+}
+
+function httpPost(url: string, body: string, headers?: Record<string, string>): Promise<{ statusCode: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = http.request({
+      hostname: parsed.hostname,
+      port: parsed.port || 80,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), ...headers },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => resolve({ statusCode: res.statusCode || 0, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout conectando al SENIAT')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+function extractCookies(headers: http.IncomingHttpHeaders): string {
+  const raw = headers['set-cookie'];
+  if (!raw) return '';
+  return raw.map(c => c.split(';')[0]).join('; ');
+}
 
 @Injectable()
 export class CustomersService {
@@ -167,6 +220,70 @@ export class CustomersService {
       return { documentType, documentNumber, name, commercialName, fiscalName };
     } catch {
       return { documentType: '', documentNumber: '', name: '', error: 'No se pudo parsear la respuesta del SENIAT' };
+    }
+  }
+
+  async getSeniatCaptcha(): Promise<{ sessionId: string; captchaBase64: string }> {
+    cleanSeniatSessions();
+    try {
+      // Step 1: GET the page to obtain session cookie
+      const pageRes = await httpGet(`${SENIAT_BASE}/BuscaRif.jsp`);
+      const cookies = extractCookies(pageRes.headers);
+
+      // Step 2: GET the captcha image with the session cookie
+      const captchaRes = await httpGet(`${SENIAT_BASE}/Captcha.jpg`, {
+        Cookie: cookies,
+        Referer: `${SENIAT_BASE}/BuscaRif.jsp`,
+      });
+
+      if (!captchaRes.body.length) {
+        throw new BadRequestException('No se pudo obtener el captcha del SENIAT');
+      }
+
+      // Step 3: Store session and return captcha
+      const sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      seniatSessions.set(sessionId, { cookies, createdAt: Date.now() });
+
+      const captchaBase64 = captchaRes.body.toString('base64');
+      return { sessionId, captchaBase64 };
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException('No se pudo conectar con el SENIAT: ' + (err.message || 'Error desconocido'));
+    }
+  }
+
+  async lookupSeniat(dto: { sessionId: string; rif?: string; cedula?: string; captcha: string }) {
+    cleanSeniatSessions();
+    const session = seniatSessions.get(dto.sessionId);
+    if (!session) {
+      throw new BadRequestException('Sesion SENIAT expirada. Intente de nuevo.');
+    }
+
+    try {
+      // Build form data
+      const params = new URLSearchParams();
+      params.set('p_rif', dto.rif || '');
+      params.set('p_cedula', dto.cedula || '');
+      params.set('codigo', dto.captcha);
+      params.set('busca', ' Buscar ');
+
+      const res = await httpPost(`${SENIAT_BASE}/BuscaRif.jsp`, params.toString(), {
+        Cookie: session.cookies,
+        Referer: `${SENIAT_BASE}/BuscaRif.jsp`,
+      });
+
+      // Clean up session
+      seniatSessions.delete(dto.sessionId);
+
+      // Decode response (SENIAT uses windows-1252)
+      const html = res.body.toString('latin1');
+
+      // Use existing parser
+      return this.parseSeniatHtml(html);
+    } catch (err: any) {
+      seniatSessions.delete(dto.sessionId);
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException('Error al consultar el SENIAT: ' + (err.message || 'Error desconocido'));
     }
   }
 

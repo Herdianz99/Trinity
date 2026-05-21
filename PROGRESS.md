@@ -1,5 +1,28 @@
 # Trinity ERP — Progreso
 
+## Sesion 36 — Consulta SENIAT automatica via proxy backend
+
+### Backend (NestJS)
+- **CustomersService.getSeniatCaptcha()**: Endpoint proxy que hace GET a SENIAT para obtener cookie de sesion, luego descarga la imagen del captcha con esa cookie. Almacena la cookie en un Map en memoria (auto-limpieza 5min). Retorna `{ sessionId, captchaBase64 }`.
+- **CustomersService.lookupSeniat()**: Recibe sessionId + RIF + captcha, recupera la cookie almacenada, hace POST a SENIAT con los datos del formulario, parsea el HTML de respuesta con `parseSeniatHtml()`. Retorna datos estructurados (name, documentType, documentNumber).
+- **CustomersController**: Nuevos endpoints `GET /customers/seniat-captcha` y `POST /customers/seniat-lookup`
+- Usa modulo `http` de Node.js para las peticiones (SENIAT es HTTP, no HTTPS)
+- Decodifica respuesta como latin1 (windows-1252) ya que SENIAT usa ese charset
+
+### Frontend (Next.js)
+- **SeniatModal** (`/components/seniat-modal.tsx`): Componente reutilizable con:
+  - Campo RIF con pre-llenado desde el formulario padre
+  - Imagen de captcha cargada via proxy backend
+  - Boton de recarga de captcha
+  - Busqueda que llama al backend y auto-llena el formulario padre con los datos
+  - Manejo de errores con recarga automatica de captcha para reintentar
+- **Nuevo cliente** (`/sales/customers/new`): Reemplazado popup SENIAT + polling localStorage por SeniatModal
+- **Detalle cliente** (`/sales/customers/[id]`): Mismo cambio
+- **POS** (`/sales/pos`): Mismo cambio — openSeniatFromPos() reemplazado por SeniatModal
+
+### Eliminado
+- Toda la logica de `window.open()` + `localStorage.setItem('seniat_result')` + `setInterval` polling que nunca funcionaba (problema de cross-origin entre SENIAT y localhost)
+
 ## Sesion 35 — Manejo de vuelto en pagos USD con cambio en Bs (Completada)
 
 ### Migracion de base de datos

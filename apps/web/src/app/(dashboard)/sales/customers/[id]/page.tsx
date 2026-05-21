@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, UserCheck, Save, Loader2, ChevronLeft, ChevronRight,
   ExternalLink, DollarSign, X, Search, LogOut,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import SeniatModal from '@/components/seniat-modal';
 
 interface Customer {
   id: string; name: string; documentType: string; rif: string | null;
@@ -23,8 +24,6 @@ interface CxCData {
   totalDebt: number; totalOverdue: number; availableCredit: number;
   receivables: Receivable[];
 }
-
-const SENIAT_URL = 'http://contribuyente.seniat.gob.ve/BuscaRif/BuscaRif.jsp';
 
 const INV_BADGES: Record<string, string> = {
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
@@ -71,52 +70,17 @@ export default function CustomerDetailPage() {
   const [cxcLoading, setCxcLoading] = useState(false);
 
   // SENIAT lookup
-  const [seniatLoading, setSeniatLoading] = useState(false);
-  const seniatPollRef = useRef<any>(null);
+  const [seniatOpen, setSeniatOpen] = useState(false);
 
-  function openSeniat() {
-    setSeniatLoading(true);
-    localStorage.removeItem('seniat_result');
-    window.open(SENIAT_URL, 'seniat_window', 'width=900,height=700,scrollbars=yes');
-    seniatPollRef.current = setInterval(async () => {
-      const result = localStorage.getItem('seniat_result');
-      if (result) {
-        clearInterval(seniatPollRef.current);
-        localStorage.removeItem('seniat_result');
-        setSeniatLoading(false);
-        try {
-          const res = await fetch('/api/proxy/customers/seniat-parse', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ html: result }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.name) {
-              setForm((f: any) => ({
-                ...f,
-                name: data.name,
-                documentType: data.documentType || f.documentType,
-                rif: data.documentNumber || f.rif,
-              }));
-              setSaveMsg({ type: 'success', text: 'Datos importados del SENIAT correctamente' });
-            } else {
-              setSaveMsg({ type: 'error', text: 'No se encontraron datos en la respuesta del SENIAT' });
-            }
-          }
-        } catch {
-          setSaveMsg({ type: 'error', text: 'Error al procesar datos del SENIAT' });
-        }
-      }
-    }, 500);
-    setTimeout(() => {
-      if (seniatPollRef.current) { clearInterval(seniatPollRef.current); setSeniatLoading(false); }
-    }, 300000);
+  function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
+    setForm((f: any) => ({
+      ...f,
+      name: data.name,
+      documentType: data.documentType || f.documentType,
+      rif: data.documentNumber || f.rif,
+    }));
+    setSaveMsg({ type: 'success', text: 'Datos importados del SENIAT correctamente' });
   }
-
-  useEffect(() => {
-    return () => { if (seniatPollRef.current) clearInterval(seniatPollRef.current); };
-  }, []);
 
   // Pay receivable
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -161,6 +125,10 @@ export default function CustomerDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
+
+  useEffect(() => {
+    if (customer) document.title = `${customer.name} | Trinity ERP`;
+  }, [customer]);
 
   // Lazy load: invoices when sales tab is active
   useEffect(() => {
@@ -274,12 +242,11 @@ export default function CustomerDetailPage() {
                   <input type="text" value={form.rif || ''} onChange={e => setForm((f: any) => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" />
                   <button
                     type="button"
-                    onClick={openSeniat}
-                    disabled={seniatLoading}
+                    onClick={() => setSeniatOpen(true)}
                     className="btn-secondary !py-2 text-xs flex items-center gap-1.5 whitespace-nowrap"
                     title="Consultar SENIAT"
                   >
-                    {seniatLoading ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />}
+                    <Search size={14} />
                     SENIAT
                   </button>
                 </div>
@@ -475,6 +442,13 @@ export default function CustomerDetailPage() {
           ) : null}
         </TabsContent>
       </Tabs>
+
+      <SeniatModal
+        isOpen={seniatOpen}
+        onClose={() => setSeniatOpen(false)}
+        onResult={handleSeniatResult}
+        initialRif={form.rif ? `${form.documentType || 'V'}${String(form.rif).replace(/\D/g, '')}` : ''}
+      />
     </div>
   );
 }

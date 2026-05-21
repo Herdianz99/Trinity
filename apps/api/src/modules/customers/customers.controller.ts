@@ -27,6 +27,16 @@ export class CustomersController {
     return this.service.parseSeniatHtml(body.html);
   }
 
+  @Get('seniat-captcha')
+  getSeniatCaptcha() {
+    return this.service.getSeniatCaptcha();
+  }
+
+  @Post('seniat-lookup')
+  lookupSeniat(@Body() body: { sessionId: string; rif?: string; cedula?: string; captcha: string }) {
+    return this.service.lookupSeniat(body);
+  }
+
   @Get()
   findAll(
     @Query('search') search?: string,

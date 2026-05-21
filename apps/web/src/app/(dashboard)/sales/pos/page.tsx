@@ -24,6 +24,7 @@ import {
   ArrowRightLeft,
   Percent,
 } from 'lucide-react';
+import SeniatModal from '@/components/seniat-modal';
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -119,8 +120,7 @@ export default function POSPage() {
   const [showEditClient, setShowEditClient] = useState(false);
   const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
   const [savingClient, setSavingClient] = useState(false);
-  const [seniatLoading, setSeniatLoading] = useState(false);
-  const seniatPollRef = useRef<any>(null);
+  const [seniatOpen, setSeniatOpen] = useState(false);
 
   // Cash register selection
   const [selectedCashRegister, setSelectedCashRegister] = useState<any>(null);
@@ -835,49 +835,15 @@ export default function POSPage() {
   }
 
   // SENIAT lookup from POS client modal
-  function openSeniatFromPos() {
-    setSeniatLoading(true);
-    localStorage.removeItem('seniat_result');
-    window.open('http://contribuyente.seniat.gob.ve/BuscaRif/BuscaRif.jsp', 'seniat_window', 'width=900,height=700,scrollbars=yes');
-    seniatPollRef.current = setInterval(async () => {
-      const result = localStorage.getItem('seniat_result');
-      if (result) {
-        clearInterval(seniatPollRef.current);
-        localStorage.removeItem('seniat_result');
-        setSeniatLoading(false);
-        try {
-          const res = await fetch('/api/proxy/customers/seniat-parse', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ html: result }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.name) {
-              setClientForm(f => ({
-                ...f,
-                name: data.name,
-                documentType: data.documentType || f.documentType,
-                rif: data.documentNumber || f.rif,
-              }));
-              setMessage({ type: 'success', text: 'Datos importados del SENIAT' });
-            } else {
-              setMessage({ type: 'error', text: data.error || 'No se encontraron datos en la respuesta del SENIAT' });
-            }
-          }
-        } catch {
-          setMessage({ type: 'error', text: 'Error al procesar datos del SENIAT' });
-        }
-      }
-    }, 500);
-    setTimeout(() => {
-      if (seniatPollRef.current) { clearInterval(seniatPollRef.current); setSeniatLoading(false); }
-    }, 300000);
+  function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
+    setClientForm(f => ({
+      ...f,
+      name: data.name,
+      documentType: data.documentType || f.documentType,
+      rif: data.documentNumber || f.rif,
+    }));
+    setMessage({ type: 'success', text: 'Datos importados del SENIAT' });
   }
-
-  useEffect(() => {
-    return () => { if (seniatPollRef.current) clearInterval(seniatPollRef.current); };
-  }, []);
 
   // Client modal functions
   async function handleSaveClient(isEdit: boolean) {
@@ -1799,12 +1765,11 @@ export default function POSPage() {
                     />
                     <button
                       type="button"
-                      onClick={openSeniatFromPos}
-                      disabled={seniatLoading}
+                      onClick={() => setSeniatOpen(true)}
                       className="btn-secondary !py-2 text-xs flex items-center gap-1 whitespace-nowrap"
                       title="Consultar SENIAT"
                     >
-                      {seniatLoading ? <Loader2 className="animate-spin" size={13} /> : <Search size={13} />}
+                      <Search size={13} />
                       SENIAT
                     </button>
                   </div>
@@ -1950,6 +1915,13 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      <SeniatModal
+        isOpen={seniatOpen}
+        onClose={() => setSeniatOpen(false)}
+        onResult={handleSeniatResult}
+        initialRif={clientForm.rif ? `${clientForm.documentType}${clientForm.rif.replace(/\D/g, '')}` : ''}
+      />
     </div>
   );
 }
