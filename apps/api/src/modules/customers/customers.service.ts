@@ -278,8 +278,20 @@ export class CustomersService {
       // Decode response (SENIAT uses windows-1252)
       const html = res.body.toString('latin1');
 
+      // Check for common SENIAT error patterns before parsing
+      if (html.includes('codigo de validacion incorrecto') || html.includes('codigo incorrecto') || html.includes('captcha')) {
+        return { documentType: '', documentNumber: '', name: '', error: 'Captcha incorrecto. Intente de nuevo.' };
+      }
+
       // Use existing parser
-      return this.parseSeniatHtml(html);
+      const result = this.parseSeniatHtml(html);
+
+      // If parser found nothing and no explicit error, the captcha was likely wrong
+      if (!result.name && !result.documentNumber && !result.error) {
+        return { ...result, error: 'No se encontraron datos. Verifique el RIF y el captcha.' };
+      }
+
+      return result;
     } catch (err: any) {
       seniatSessions.delete(dto.sessionId);
       if (err instanceof BadRequestException) throw err;

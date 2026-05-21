@@ -35,7 +35,7 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
       setRif(initialRif || '');
       setCaptcha('');
       setError('');
-      fetchCaptcha();
+      fetchCaptcha(false);
     } else {
       setSessionId('');
       setCaptchaBase64('');
@@ -43,9 +43,9 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  async function fetchCaptcha() {
+  async function fetchCaptcha(keepError = false) {
     setLoading(true);
-    setError('');
+    if (!keepError) setError('');
     setCaptchaBase64('');
     setSessionId('');
     setCaptcha('');
@@ -58,10 +58,10 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
       const data = await res.json();
       setSessionId(data.sessionId);
       setCaptchaBase64(data.captchaBase64);
-      // Focus RIF field if empty, otherwise focus captcha
+      // Focus captcha input after loading
       setTimeout(() => {
-        if (!rif && rifInputRef.current) rifInputRef.current.focus();
-        else if (captchaInputRef.current) captchaInputRef.current.focus();
+        if (captchaInputRef.current) captchaInputRef.current.focus();
+        else if (rifInputRef.current) rifInputRef.current.focus();
       }, 100);
     } catch (err: any) {
       setError(err.message || 'No se pudo conectar con el SENIAT');
@@ -88,8 +88,9 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
       }
       if (data.error) {
         setError(data.error);
-        // Refresh captcha for retry
-        fetchCaptcha();
+        setSearching(false);
+        // Refresh captcha but keep error visible
+        fetchCaptcha(true);
         return;
       }
       if (data.name) {
@@ -97,11 +98,15 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
         onClose();
       } else {
         setError('No se encontraron datos. Verifique el RIF y el captcha.');
-        fetchCaptcha();
+        setSearching(false);
+        fetchCaptcha(true);
+        return;
       }
     } catch (err: any) {
       setError(err.message || 'Error al consultar');
-      fetchCaptcha();
+      setSearching(false);
+      fetchCaptcha(true);
+      return;
     } finally {
       setSearching(false);
     }
@@ -157,7 +162,7 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
                   </div>
                   <button
                     type="button"
-                    onClick={fetchCaptcha}
+                    onClick={() => fetchCaptcha(false)}
                     disabled={loading}
                     className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
                     title="Recargar captcha"
@@ -181,7 +186,7 @@ export default function SeniatModal({ isOpen, onClose, onResult, initialRif }: S
                 <p className="text-xs text-red-400 mb-2">No se pudo cargar el captcha</p>
                 <button
                   type="button"
-                  onClick={fetchCaptcha}
+                  onClick={() => fetchCaptcha(false)}
                   className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto"
                 >
                   <RefreshCw size={12} /> Reintentar
