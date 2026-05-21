@@ -13,6 +13,7 @@ import {
   DollarSign,
   Hash,
   X,
+  FileText,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -307,6 +308,14 @@ export default function ExpensesPage() {
 
   const totalPages = Math.ceil(total / 25);
 
+  function openReportPdf() {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (categoryId) params.set('categoryId', categoryId);
+    window.open(`/api/proxy/expenses/report-pdf?${params}`, '_blank');
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
@@ -320,15 +329,24 @@ export default function ExpensesPage() {
             <p className="text-sm text-slate-400">{total} gastos en el periodo</p>
           </div>
         </div>
-        {canManage && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors"
+            onClick={openReportPdf}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
           >
-            <Plus size={16} />
-            Registrar gasto
+            <FileText size={16} />
+            Reporte PDF
           </button>
-        )}
+          {canManage && (
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors"
+            >
+              <Plus size={16} />
+              Registrar gasto
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Toast */}

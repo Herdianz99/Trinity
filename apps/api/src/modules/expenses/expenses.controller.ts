@@ -7,12 +7,15 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { ExpensesService } from './expenses.service';
+import { ExpenseReportPdfService } from './expense-report-pdf.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -22,7 +25,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(AuthGuard('jwt'))
 @Controller()
 export class ExpensesController {
-  constructor(private readonly service: ExpensesService) {}
+  constructor(
+    private readonly service: ExpensesService,
+    private readonly reportPdfService: ExpenseReportPdfService,
+  ) {}
 
   // ============ CATEGORIES ============
 
@@ -81,6 +87,22 @@ export class ExpensesController {
     @Query('to') to?: string,
   ) {
     return this.service.getSummary({ from, to });
+  }
+
+  @Get('expenses/report-pdf')
+  async getReportPdf(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('categoryId') categoryId?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.reportPdfService.generateReport({ from, to, categoryId });
+    res!.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="reporte-gastos.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res!.end(buffer);
   }
 
   @Get('expenses/:id')
