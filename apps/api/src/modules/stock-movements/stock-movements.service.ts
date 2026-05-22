@@ -69,4 +69,73 @@ export class StockMovementsService {
       },
     };
   }
+
+  /**
+   * Kardex: returns ALL movements for a product ordered ASC with computed running balance.
+   * Groups all warehouses into a single running total.
+   */
+  async getKardex(productId: string, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+
+    // Get total count
+    const total = await this.prisma.stockMovement.count({
+      where: { productId },
+    });
+
+    // To compute the running balance for the current page, we need
+    // the sum of all quantities BEFORE the current page's first row.
+    // All movements ordered by createdAt ASC.
+    let balanceBefore = 0;
+    if (skip > 0) {
+      const preceding = await this.prisma.stockMovement.findMany({
+        where: { productId },
+        orderBy: { createdAt: 'asc' },
+        take: skip,
+        select: { quantity: true },
+      });
+      balanceBefore = preceding.reduce((sum, m) => sum + m.quantity, 0);
+    }
+
+    // Fetch the page's movements
+    const movements = await this.prisma.stockMovement.findMany({
+      where: { productId },
+      include: {
+        warehouse: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take: limit,
+    });
+
+    // Compute running balance for each row
+    let runningBalance = balanceBefore;
+    const data = movements.map((m) => {
+      runningBalance += m.quantity;
+      return {
+        ...m,
+        stockAfter: runningBalance,
+      };
+    });
+
+    // Compute totals for this page
+    const totalEntries = movements
+      .filter((m) => m.quantity > 0)
+      .reduce((s, m) => s + m.quantity, 0);
+    const totalExits = movements
+      .filter((m) => m.quantity < 0)
+      .reduce((s, m) => s + Math.abs(m.quantity), 0);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        balanceBefore,
+        totalEntries,
+        totalExits,
+      },
+    };
+  }
 }

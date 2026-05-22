@@ -94,11 +94,12 @@ export default function ProductDetailPage() {
   // ── Active tab (lazy loading) ──
   const [activeTab, setActiveTab] = useState('info');
 
-  // ── Movements ──
+  // ── Movements (Kardex) ──
   const [movements, setMovements] = useState<Movement[]>([]);
   const [movPage, setMovPage] = useState(1);
   const [movTotalPages, setMovTotalPages] = useState(0);
   const [movLoading, setMovLoading] = useState(false);
+  const [movMeta, setMovMeta] = useState<{ balanceBefore: number; totalEntries: number; totalExits: number; total: number }>({ balanceBefore: 0, totalEntries: 0, totalExits: 0, total: 0 });
 
   // ── Purchase history ──
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
@@ -177,15 +178,20 @@ export default function ProductDetailPage() {
     if (!product) return;
     setMovLoading(true);
     try {
-      const res = await fetch(`/api/proxy/stock-movements?productId=${product.id}&page=${movPage}&limit=20`);
+      const res = await fetch(`/api/proxy/stock-movements/kardex/${product.id}?page=${movPage}&limit=50`);
       if (res.ok) {
         const data = await res.json();
         setMovements(data.data);
         setMovTotalPages(data.meta.totalPages);
+        setMovMeta({
+          balanceBefore: data.meta.balanceBefore,
+          totalEntries: data.meta.totalEntries,
+          totalExits: data.meta.totalExits,
+          total: data.meta.total,
+        });
       }
     } catch { /* ignore */ } finally {
       setMovLoading(false);
-
     }
   }, [product, movPage]);
 
@@ -700,7 +706,7 @@ export default function ProductDetailPage() {
                               {mov.costUsd > 0 ? `$${mov.costUsd.toFixed(2)}` : '—'}
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-white font-semibold">
-                              {mov.stockAfter > 0 ? mov.stockAfter : mov.stockAfter === 0 ? '0' : '—'}
+                              {mov.stockAfter}
                             </td>
                             <td className="px-4 py-3 text-slate-400">{mov.warehouse.name}</td>
                             <td className="px-4 py-3 text-slate-400 font-mono text-xs">{mov.reference || mov.reason || '—'}</td>
@@ -726,23 +732,22 @@ export default function ProductDetailPage() {
                         );
                       })}
                     </tbody>
-                    {movements.length > 0 && (() => {
-                      const totalEntries = movements.filter(m => ['PURCHASE', 'ADJUSTMENT_IN', 'TRANSFER_IN'].includes(m.type) || (m.type === 'COUNT_ADJUST' && m.quantity > 0)).reduce((s, m) => s + Math.abs(m.quantity), 0);
-                      const totalExits = movements.filter(m => ['SALE', 'ADJUSTMENT_OUT', 'TRANSFER_OUT'].includes(m.type) || (m.type === 'COUNT_ADJUST' && m.quantity < 0)).reduce((s, m) => s + Math.abs(m.quantity), 0);
-                      return (
-                        <tfoot>
-                          <tr className="border-t border-slate-700/50 bg-slate-800/30">
-                            <td colSpan={2} className="px-4 py-3 text-slate-300 font-semibold">Totales de pagina</td>
-                            <td className="px-4 py-3 text-right font-mono">
-                              <span className="text-green-400">+{totalEntries}</span>
-                              {' / '}
-                              <span className="text-red-400">-{totalExits}</span>
-                            </td>
-                            <td colSpan={5}></td>
-                          </tr>
-                        </tfoot>
-                      );
-                    })()}
+                    {movements.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t border-slate-700/50 bg-slate-800/30">
+                          <td colSpan={2} className="px-4 py-3 text-slate-300 font-semibold">Totales</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            <span className="text-green-400">+{movMeta.totalEntries}</span>
+                            {' / '}
+                            <span className="text-red-400">-{movMeta.totalExits}</span>
+                          </td>
+                          <td colSpan={2} className="px-4 py-3 text-right font-mono text-white font-semibold">
+                            Saldo: {movements.length > 0 ? movements[movements.length - 1].stockAfter : 0}
+                          </td>
+                          <td colSpan={3}></td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
                 {movTotalPages > 1 && (

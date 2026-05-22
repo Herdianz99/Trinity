@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { StockMovementsService } from './stock-movements.service';
@@ -9,6 +9,21 @@ import { StockMovementsService } from './stock-movements.service';
 @Controller('stock-movements')
 export class StockMovementsController {
   constructor(private readonly stockMovementsService: StockMovementsService) {}
+
+  @Get('kardex/:productId')
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getKardex(
+    @Param('productId') productId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stockMovementsService.getKardex(
+      productId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 50,
+    );
+  }
 
   @Get()
   @ApiQuery({ name: 'productId', required: false })
