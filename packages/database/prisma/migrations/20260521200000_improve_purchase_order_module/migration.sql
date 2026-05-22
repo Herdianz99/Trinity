@@ -47,9 +47,9 @@ ALTER TABLE "PurchaseOrder" ALTER COLUMN "exchangeRate" SET DEFAULT 1;
 
 -- AlterTable: StockMovement - change costUsd to non-nullable with default, add stockAfter
 DO $$ BEGIN
-  ALTER TABLE "StockMovement" ALTER COLUMN "costUsd" SET NOT NULL;
-  ALTER TABLE "StockMovement" ALTER COLUMN "costUsd" SET DEFAULT 0;
   UPDATE "StockMovement" SET "costUsd" = 0 WHERE "costUsd" IS NULL;
+  ALTER TABLE "StockMovement" ALTER COLUMN "costUsd" SET DEFAULT 0;
+  ALTER TABLE "StockMovement" ALTER COLUMN "costUsd" SET NOT NULL;
 EXCEPTION WHEN others THEN NULL;
 END $$;
 
