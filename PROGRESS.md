@@ -1,5 +1,43 @@
 # Trinity ERP — Progreso
 
+## Sesion 40 — Rediseno modulo de compras como Facturas de Compra
+
+### Migracion de base de datos
+- `20260522200000_redesign_purchase_bill_module`: Recrea enum PurchaseStatus (PENDING/PROCESSED/CANCELLED reemplaza DRAFT/SENT/PARTIAL/RECEIVED/CANCELLED), agrega 18 campos a PurchaseOrder (purchaseNumber, supplierSerialNumber, supplierInvoiceNumber, discountGlobal%, subtotal, exemptAmount, taxableBase, totalIva, totalSurcharge, retentionVoucherNumber, responsibleId, processedAt, warehouseId), agrega 5 campos a PurchaseOrderItem (discountPct, discountUsd, discountBs, netCostUsd, netCostBs), backfill de datos existentes
+
+### Schema
+- PurchaseStatus: cambia de DRAFT/SENT/PARTIAL/RECEIVED/CANCELLED a PENDING/PROCESSED/CANCELLED
+- PurchaseOrder: nuevos campos purchaseNumber (Int, correlativo), supplierSerialNumber, supplierInvoiceNumber, discountGlobalPct/Usd/Bs, subtotalUsd/Bs, exemptAmountUsd/Bs, taxableBaseUsd/Bs, totalIvaUsd/Bs, totalSurchargeUsd/Bs, retentionVoucherNumber, responsibleId (relacion User), processedAt, warehouseId (relacion Warehouse)
+- PurchaseOrderItem: nuevos campos discountPct, discountUsd, discountBs, netCostUsd, netCostBs
+- User: nueva relacion purchaseBills
+- Warehouse: nueva relacion purchaseBills
+
+### Backend (NestJS)
+- **PurchaseOrdersController**: Ruta cambia de `/purchase-orders` a `/purchases`, nuevos endpoints POST `:id/process` y PATCH `:id/cancel`, eliminados changeStatus y receive
+- **PurchaseOrdersService**: Reescritura completa
+  - `generatePurchaseNumber(tx)`: Correlativo FC-XXXXX con SELECT FOR UPDATE
+  - `calculateItemValues()`: Calcula descuentos por linea, neto USD/Bs
+  - `calculateFiscalTotals()`: Subtotal, descuento global prorrateado, exento, base imponible, IVA total, recargo, total con conversion dual USD/Bs
+  - `create()`: Transaccion con purchaseNumber, items con descuentos, distribucion de recargos, totales fiscales precalculados, status PENDING
+  - `process()`: Verifica PENDING, actualiza inventario (skip servicios), crea StockMovement, actualiza costo/precios producto, crea Payable si credito (con retenciones IVA/ISLR)
+  - `cancel()`: Solo permite cancelar PENDING
+  - `findAll()`: Filtra por invoiceDate, incluye responsible y payables
+  - `update()`: Recalcula items y totales fiscales
+  - `getSuggestedPrices()`: Usa netCostUsd en vez de costUsd
+- **CreatePurchaseOrderDto**: Nuevos campos supplierSerialNumber, supplierInvoiceNumber, receivedDate, warehouseId, discountGlobalPct, retentionVoucherNumber, discountPct en items
+- **ProcessPurchaseBillDto**: Reemplaza ReceivePurchaseOrderDto, contiene opcional priceUpdates[]
+- **FiscalService.libroCompras()**: Filtra por PROCESSED y invoiceDate, usa campos precalculados (exemptAmountUsd, taxableBaseUsd, totalIvaUsd), retorna purchaseNumber, comprasExentas, baseImponible, creditoFiscal, comprobanteRetencion, retencionIva
+- **FiscalService.resumen()**: Actualizado para usar nuevos nombres de campos
+
+### Frontend (Next.js)
+- **Sidebar**: "Ordenes de compra" renombrado a "Facturas de compra"
+- **Lista compras** (`/purchases`): Nuevas columnas (N° Doc, N° Factura prov., Proveedor, Fecha, Total USD, Estado), badges PENDING/PROCESSED/CANCELLED, accion cancelar via PATCH
+- **Nueva factura** (`/purchases/new`): Grid 3x4 header (proveedor, moneda, tasa, almacen, fechas, credito, numeros fiscales, responsable), tabla items con descuento por linea + IVA + badge servicio, footer fiscal (descuento global, recargo, exento, base imponible, IVA, total USD/Bs, retenciones), modal actualizacion precios, botones guardar/procesar/cancelar
+- **Detalle factura** (`/purchases/[id]`): 3 tabs (Informacion General con items y totales fiscales, Cuenta por pagar lazy, Notas Cr/Db lazy), modal procesar con comparacion precios
+- **Libro de compras** (`/fiscal/libro-compras`): Columnas actualizadas a nuevo formato (N° Doc, N° Factura Prov., Compras Exentas, Base Imponible, Credito Fiscal, Comp. Retencion, Ret. IVA)
+- **Pagina edit eliminada**: `/purchases/[id]/edit` removida (edicion se hace desde detalle)
+- **Referencias actualizadas**: Todas las paginas que referenciaban `/api/proxy/purchase-orders` actualizadas a `/api/proxy/purchases`, labels actualizados en suppliers, payables, credit-debit-notes, config, products
+
 ## Sesion 39 — Analisis de Inventario ABC con rotacion, rentabilidad y sugerencias de compra
 
 ### Backend (NestJS)

@@ -329,22 +329,55 @@ enum MovementType {
 }
 
 model PurchaseOrder {
-  id          String              @id @default(cuid())
-  number      String              @unique  // PO-0001
-  supplierId  String
-  supplier    Supplier            @relation(...)
-  status      PurchaseStatus      @default(DRAFT)
-  totalUsd    Float               @default(0)
-  notes       String?
-  receivedAt  DateTime?
-  items       PurchaseOrderItem[]
-  createdById String
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id                    String              @id @default(cuid())
+  purchaseNumber        Int                 // correlativo numérico
+  number                String              @unique  // FC-XXXXX
+  supplierId            String
+  supplier              Supplier            @relation(...)
+  status                PurchaseStatus      @default(PENDING)
+  supplierSerialNumber  String?             // serial proveedor
+  supplierInvoiceNumber String?             // N° factura proveedor
+  supplierControlNumber String?             // N° control proveedor
+  invoiceDate           DateTime?
+  receivedDate          DateTime?
+  currency              String              @default("USD")
+  exchangeRate          Float               @default(1)
+  isCredit              Boolean             @default(false)
+  creditDays            Int                 @default(0)
+  discountGlobalPct     Float               @default(0)
+  discountGlobalUsd     Float               @default(0)
+  discountGlobalBs      Float               @default(0)
+  subtotalUsd           Float               @default(0)
+  subtotalBs            Float               @default(0)
+  exemptAmountUsd       Float               @default(0)
+  exemptAmountBs        Float               @default(0)
+  taxableBaseUsd        Float               @default(0)
+  taxableBaseBs         Float               @default(0)
+  totalIvaUsd           Float               @default(0)
+  totalIvaBs            Float               @default(0)
+  surchargeUsd          Float               @default(0)
+  totalSurchargeUsd     Float               @default(0)
+  totalSurchargeBs      Float               @default(0)
+  totalUsd              Float               @default(0)
+  totalBs               Float               @default(0)
+  retentionVoucherNumber String?
+  applyIslr             Boolean             @default(false)
+  islrRetentionPct      Float               @default(0)
+  notes                 String?
+  responsibleId         String?
+  responsible           User?               @relation("PurchaseBills", ...)
+  warehouseId           String?
+  warehouse             Warehouse?          @relation("PurchaseBills", ...)
+  processedAt           DateTime?
+  items                 PurchaseOrderItem[]
+  payables              Payable[]
+  createdById           String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 }
 
 enum PurchaseStatus {
-  DRAFT SENT PARTIAL RECEIVED CANCELLED
+  PENDING PROCESSED CANCELLED
 }
 
 model PurchaseOrderItem {
@@ -356,6 +389,11 @@ model PurchaseOrderItem {
   quantity        Float
   costUsd         Float
   totalUsd        Float
+  discountPct     Float         @default(0)
+  discountUsd     Float         @default(0)
+  discountBs      Float         @default(0)
+  netCostUsd      Float         @default(0)
+  netCostBs       Float         @default(0)
   receivedQty     Float         @default(0)
 }
 
@@ -556,23 +594,24 @@ model Payment {
 - Página de conteo físico paso a paso
 - Reporte valorizado al pie de la página de stock
 
-#### Sesión 4 — Compras
+#### Sesión 4 — Compras (rediseñado en Sesión 40 como Facturas de Compra)
 **Backend:**
-- PurchaseOrdersModule:
-  - CRUD órdenes de compra con numeración PO-0001
-  - PATCH /purchase-orders/:id/receive — recibir orden:
-    1. Actualiza stock en almacén seleccionado
-    2. Actualiza costUsd del producto
-    3. Recalcula priceDetal y priceMayor automáticamente
-    4. Crea StockMovements tipo PURCHASE
-  - GET /purchase-orders/reorder-suggestions — productos bajo mínimo con historial
+- PurchaseOrdersModule (ruta `/purchases`):
+  - CRUD facturas de compra con numeración FC-XXXXX (correlativo SELECT FOR UPDATE)
+  - Estados simplificados: PENDING → PROCESSED → CANCELLED
+  - POST /purchases — crear factura con descuentos por línea, descuento global, recargos, totales fiscales precalculados
+  - POST /purchases/:id/process — procesar: actualiza inventario, costos, precios, crea CxP si crédito
+  - PATCH /purchases/:id/cancel — cancelar (solo PENDING)
+  - GET /purchases/reorder-suggestions — productos bajo mínimo con historial
+  - Campos fiscales precalculados: subtotal, exemptAmount, taxableBase, totalIva, totalSurcharge (USD + Bs)
+  - Retenciones IVA (75% para agentes) e ISLR configurables
 
 **Frontend:**
-- Sección COMPRAS en sidebar: Órdenes de compra, Sugerencias de reorden
-- Tabla de órdenes con estados y filtros
-- Modal crear orden: selector proveedor, items con búsqueda de producto
-- Vista de recepción: confirmar cantidades recibidas por item
-- Página de sugerencias de reorden
+- Sección COMPRAS en sidebar: Facturas de compra, Sugerencias de reorden, Análisis ABC
+- Lista de facturas con badges de estado y acciones
+- Formulario nueva factura: grid 3×4 header, items con descuento por línea, footer fiscal, modal precios
+- Detalle con 3 tabs: Información, CxP, Notas Cr/Db
+- Libro de compras fiscal actualizado con campos precalculados
 
 #### Sesión 5 — Ventas y POS
 **Backend:**
