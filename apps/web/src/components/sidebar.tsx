@@ -107,6 +107,7 @@ const menuSections: MenuSection[] = [
     permission: 'purchases',
     items: [
       { label: 'Ordenes de compra', href: '/purchases', icon: <ShoppingCart size={18} /> },
+      { label: 'Analisis ABC', href: '/purchases/analysis', icon: <BarChart3 size={18} /> },
       { label: 'Sugerencias reorden', href: '/purchases/reorder', icon: <AlertTriangle size={18} /> },
       { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={18} /> },
     ],

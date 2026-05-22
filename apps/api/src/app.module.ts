@@ -36,6 +36,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
 import { PaymentSchedulesModule } from './modules/payment-schedules/payment-schedules.module';
 import { DynamicKeysModule } from './modules/dynamic-keys/dynamic-keys.module';
 import { CashMovementsModule } from './modules/cash-movements/cash-movements.module';
+import { InventoryAnalysisModule } from './modules/inventory-analysis/inventory-analysis.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -78,6 +79,7 @@ import { HealthModule } from './modules/health/health.module';
     PaymentSchedulesModule,
     DynamicKeysModule,
     CashMovementsModule,
+    InventoryAnalysisModule,
   ],
 })
 export class AppModule {}

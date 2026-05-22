@@ -1,5 +1,26 @@
 # Trinity ERP — Progreso
 
+## Sesion 39 — Analisis de Inventario ABC con rotacion, rentabilidad y sugerencias de compra
+
+### Backend (NestJS)
+- **InventoryAnalysisModule**: Nuevo modulo con controller y service
+  - `GET /inventory-analysis/abc?from&to`: Clasificacion ABC — calcula ventas por producto en el periodo, ordena por ventas DESC, clasifica A (80%), B (95%), C (resto), incluye stock, costo, margen, valor inventario
+  - `GET /inventory-analysis/rotation?from&to`: Rotacion de inventario — rotationRate, daysOfInventory, dailySalesAvg, alertas (stock bajo, stock muerto, exceso >180 dias)
+  - `GET /inventory-analysis/profitability?from&to`: Rentabilidad — revenue, cost, grossProfit, grossMarginPct por producto
+  - `GET /inventory-analysis/summary?from&to`: Resumen ejecutivo — totales por clase ABC, valor inventario, alertas, top producto, mas rentable
+  - `GET /inventory-analysis/purchase-suggestions?from&to`: Sugerencias de compra — productos bajo minStock, cantidad sugerida (30 dias), agrupado por proveedor
+- **StockMovementsController**: Nuevo endpoint `GET /stock-movements/kardex/:productId` con balance acumulado computado
+
+### Frontend (Next.js)
+- **Analisis de inventario** (`/purchases/analysis`):
+  - Selector de periodo: 30/60/90 dias o personalizado con date pickers
+  - 4 tarjetas resumen: productos analizados, valor inventario, alertas stock, stock muerto
+  - Tab "Clasificacion ABC": grafico barras + pie chart distribucion, tabla con clase/codigo/producto/ventas/margen, filtro por clase
+  - Tab "Rotacion": tabla con stock/ventas/rotacion/dias inventario/alertas, badges de alerta (Stock bajo, Exceso, Sin movimiento), filtro solo alertas
+  - Tab "Rentabilidad": grafico barras horizontal top 10, tabla con ventas/costo/ganancia/margen con totales al pie
+  - Tab "Sugerencias de compra": agrupado por proveedor, boton "Crear orden" por proveedor, total inversion estimada
+- **Sidebar**: Entrada "Analisis ABC" bajo COMPRAS con icono BarChart3
+
 ## Sesion 38 — Mejoras modulo de compras: recargos, servicios, precios editables y kardex
 
 ### Migracion de base de datos
