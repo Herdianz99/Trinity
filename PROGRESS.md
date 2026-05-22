@@ -1,5 +1,44 @@
 # Trinity ERP — Progreso
 
+## Sesion 38 — Mejoras modulo de compras: recargos, servicios, precios editables y kardex
+
+### Migracion de base de datos
+- `20260521200000_improve_purchase_order_module`: Agrega `isService` a Product, nuevos campos a PurchaseOrder (invoiceDate, receivedDate, currency, surchargeUsd, surchargeDistribution, totalWithSurchargeUsd), cambia exchangeRate default a 1, agrega stockAfter y costUsd no-nullable a StockMovement
+
+### Schema
+- Product: nuevo campo `isService Boolean @default(false)` — productos tipo servicio no manejan inventario
+- PurchaseOrder: nuevos campos `invoiceDate DateTime?`, `receivedDate DateTime?`, `currency String @default("USD")`, `surchargeUsd Float @default(0)`, `surchargeDistribution String @default("PROPORTIONAL")`, `totalWithSurchargeUsd Float @default(0)`, `exchangeRate` cambia default de 0 a 1
+- StockMovement: `costUsd` cambia de `Float?` a `Float @default(0)`, nuevo campo `stockAfter Float @default(0)`
+
+### Backend (NestJS)
+- **ProductsService.search()**: Incluye `isService` en query y response
+- **CreateProductDto**: Nuevo campo `isService?: boolean`
+- **CreatePurchaseOrderDto**: Nuevos campos `invoiceDate`, `currency` (USD/BS), `exchangeRate`, `surchargeUsd`, `surchargeDistribution` (PROPORTIONAL/EQUAL)
+- **ReceivePurchaseOrderDto**: Nuevo campo `receivedDate?: string`
+- **PurchaseOrdersService.create()**: Soporta moneda BS (convierte a USD dividiendo por tasa), calcula y distribuye recargos (proporcional o equitativo, excluyendo servicios)
+- **PurchaseOrdersService.update()**: Misma logica de conversion y recargos que create
+- **PurchaseOrdersService.findOne()**: Incluye isService, gananciaPct, gananciaMayorPct, ivaType, bregaApplies del producto
+- **PurchaseOrdersService.findAll()**: Incluye isService en producto
+- **PurchaseOrdersService.receive()**: Usa receivedDate, busca tasa para esa fecha, skip stock/movements para isService, calcula stockAfter (suma total entre almacenes), guarda receivedDate
+- **PurchaseOrdersService.getSuggestedPrices()**: Nuevo endpoint — retorna comparacion de costos y precios sugeridos para items no-servicio
+- **PurchaseOrdersService.updatePrices()**: Nuevo endpoint — actualiza ganancia% y recalcula precios por producto
+- **PurchaseOrdersController**: Nuevos endpoints `GET :id/suggested-prices`, `PATCH :id/update-prices`
+- **StockMovementsService**: Ordena ASC cuando filtra por productId (kardex), DESC para listado general
+
+### Frontend (Next.js)
+- **Nuevo producto** (`/catalog/products/new`): Toggle `isService` con descripcion explicativa
+- **Detalle producto** (`/catalog/products/[code]`):
+  - Info tab: toggle isService, badge SERVICIO en header
+  - Movimientos tab (Kardex): nuevas columnas "Costo unit." y "Stock despues", colores verde/rojo para entradas/salidas, totales de pagina al pie
+  - Precios tab: completamente rediseñada — editable con ganancia% ↔ precio bidireccional, formula inversa, boton "Guardar precios"
+- **Nueva compra** (`/purchases/new`): Fecha factura, selector moneda USD/BS, tasa de cambio, conversion automatica, seccion de recargos (monto + distribucion), items muestran badge SERVICIO, recargo por item y costo final
+- **Editar compra** (`/purchases/[id]/edit`): Reescrita con mismos campos que nueva compra, carga valores existentes
+- **Detalle compra** (`/purchases/[id]`):
+  - Info tab: muestra fecha factura, fecha recepcion, moneda, tasa, info de recargos, badges servicio
+  - Recepciones tab: columna "Stock despues"
+  - Modal recepcion rediseñado con dos tabs: "Confirmar recepcion" (almacen + fecha + items) y "Actualizar precios de venta" (tabla comparativa con ganancia%/precio editable bidireccional)
+  - Dos botones: "Recibir sin actualizar precios" y "Aplicar precios y recibir"
+
 ## Sesion 37 — Movimientos manuales de caja con clave dinamica y gastos desde caja
 
 ### Migracion de base de datos

@@ -405,6 +405,7 @@ model Product {
   brand            Brand?              @relation(fields: [brandId], references: [id])
   supplierId       String?
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
+  isService        Boolean             @default(false)
   purchaseUnit     String              @default("UNIT")
   saleUnit         String              @default("UNIT")
   conversionFactor Float               @default(1)
@@ -465,7 +466,8 @@ model StockMovement {
   warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
   type        MovementType
   quantity    Float
-  costUsd     Float?
+  costUsd     Float         @default(0)
+  stockAfter  Float         @default(0)
   reason      String?
   reference   String?
   createdById String
@@ -538,9 +540,15 @@ model PurchaseOrder {
   supplierId            String
   supplier              Supplier            @relation(fields: [supplierId], references: [id])
   status                PurchaseStatus      @default(DRAFT)
+  invoiceDate           DateTime?
+  receivedDate          DateTime?
+  currency              String              @default("USD")
   totalUsd              Float               @default(0)
   totalBs               Float               @default(0)
-  exchangeRate          Float               @default(0)
+  exchangeRate          Float               @default(1)
+  surchargeUsd          Float               @default(0)
+  surchargeDistribution String              @default("PROPORTIONAL")
+  totalWithSurchargeUsd Float               @default(0)
   isCredit              Boolean             @default(false)
   creditDays            Int                 @default(0)
   supplierControlNumber String?

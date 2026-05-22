@@ -21,7 +21,7 @@ const defaultForm = {
   categoryId: '', brandId: '', supplierId: '',
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
   costUsd: 0, bregaApplies: true, gananciaPct: 0, gananciaMayorPct: 0,
-  ivaType: 'GENERAL', minStock: 0, isActive: true,
+  ivaType: 'GENERAL', minStock: 0, isActive: true, isService: false,
 };
 
 export default function NewProductPage() {
@@ -61,6 +61,8 @@ export default function NewProductPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Nuevo Producto | Trinity ERP'; }, []);
+
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
 
   function calcPreviewPrice(costUsd: number, gananciaPct: number, bregaApplies: boolean, ivaType: string) {
@@ -91,6 +93,7 @@ export default function NewProductPage() {
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
+        isService: form.isService,
       };
       if (form.code) body.code = form.code;
 
@@ -295,12 +298,19 @@ export default function NewProductPage() {
               <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
               <input type="number" step="1" value={form.minStock} onChange={e => setForm(f => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-6">
               <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
                 <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
                 Producto activo
               </label>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                <input type="checkbox" checked={form.isService} onChange={e => setForm(f => ({ ...f, isService: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40" />
+                Articulo de servicio
+              </label>
             </div>
+            {form.isService && (
+              <p className="text-xs text-amber-400/80 mt-1">Los articulos de servicio no generan movimiento de inventario</p>
+            )}
           </div>
         </div>
 

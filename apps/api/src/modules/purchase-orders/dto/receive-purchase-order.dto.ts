@@ -1,4 +1,4 @@
-import { IsString, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ReceiveItemDto {
@@ -17,6 +17,10 @@ export class ReceiveItemDto {
 export class ReceivePurchaseOrderDto {
   @IsString()
   warehouseId: string;
+
+  @IsOptional()
+  @IsDateString()
+  receivedDate?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

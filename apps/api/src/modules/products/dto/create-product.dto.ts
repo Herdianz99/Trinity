@@ -93,6 +93,11 @@ export class CreateProductDto {
   @Min(0)
   minStock?: number;
 
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  isService?: boolean;
+
   @ApiProperty({ required: false, default: true })
   @IsOptional()
   @IsBoolean()

@@ -78,4 +78,17 @@ export class PurchaseOrdersController {
   ) {
     return this.service.receive(id, dto, user.id);
   }
+
+  @Get(':id/suggested-prices')
+  getSuggestedPrices(@Param('id') id: string) {
+    return this.service.getSuggestedPrices(id);
+  }
+
+  @Patch(':id/update-prices')
+  updatePrices(
+    @Param('id') id: string,
+    @Body('items') items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[],
+  ) {
+    return this.service.updatePrices(id, items);
+  }
 }

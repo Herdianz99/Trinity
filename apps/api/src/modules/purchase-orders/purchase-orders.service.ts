@@ -45,22 +45,45 @@ export class PurchaseOrdersService {
 
   async create(dto: CreatePurchaseOrderDto, userId: string) {
     const number = await this.generateNumber();
-    const exchangeRate = await this.getTodayRate();
+    const currency = dto.currency || 'USD';
+    const rate = dto.exchangeRate || (await this.getTodayRate()) || 1;
+    const surchargeUsd = dto.surchargeUsd || 0;
+    const surchargeDistribution = dto.surchargeDistribution || 'PROPORTIONAL';
 
+    // Build items — if currency is BS, convert costs to USD by dividing by rate
     const items = dto.items.map((item) => {
-      const totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+      const costUsd = currency === 'BS'
+        ? Math.round((item.costUsd / rate) * 100) / 100
+        : item.costUsd;
+      const totalUsd = Math.round(item.quantity * costUsd * 100) / 100;
       return {
         productId: item.productId,
         quantity: item.quantity,
-        costUsd: item.costUsd,
-        costBs: Math.round(item.costUsd * exchangeRate * 100) / 100,
+        costUsd,
+        costBs: Math.round(costUsd * rate * 100) / 100,
         totalUsd,
-        totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+        totalBs: Math.round(totalUsd * rate * 100) / 100,
       };
     });
 
+    // Distribute surcharge among items
+    if (surchargeUsd > 0) {
+      const totalCostUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
+      for (const item of items) {
+        const share = surchargeDistribution === 'PROPORTIONAL'
+          ? totalCostUsd > 0 ? (item.totalUsd / totalCostUsd) * surchargeUsd : 0
+          : surchargeUsd / items.length;
+        const perUnit = Math.round((share / item.quantity) * 100) / 100;
+        item.costUsd = Math.round((item.costUsd + perUnit) * 100) / 100;
+        item.costBs = Math.round(item.costUsd * rate * 100) / 100;
+        item.totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+        item.totalBs = Math.round(item.totalUsd * rate * 100) / 100;
+      }
+    }
+
     const totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
-    const totalBs = Math.round(totalUsd * exchangeRate * 100) / 100;
+    const totalBs = Math.round(totalUsd * rate * 100) / 100;
+    const totalWithSurchargeUsd = Math.round(totalUsd * 100) / 100;
 
     // Calculate ISLR if applicable
     let islrRetentionPct: number | null = null;
@@ -70,7 +93,6 @@ export class PurchaseOrdersService {
     if (dto.applyIslr && dto.islrRetentionPct != null && dto.islrRetentionPct > 0) {
       islrRetentionPct = dto.islrRetentionPct;
       islrRetentionUsd = Math.round(totalUsd * (islrRetentionPct / 100) * 100) / 100;
-      // Bs will be calculated at receive time with current rate
     }
 
     return this.prisma.purchaseOrder.create({
@@ -81,18 +103,23 @@ export class PurchaseOrdersService {
         isCredit: dto.isCredit || false,
         creditDays: dto.creditDays || 0,
         supplierControlNumber: dto.supplierControlNumber || null,
+        invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : null,
+        currency,
+        surchargeUsd,
+        surchargeDistribution,
         islrRetentionPct,
         islrRetentionUsd,
         islrRetentionBs,
         totalUsd: Math.round(totalUsd * 100) / 100,
         totalBs,
-        exchangeRate,
+        totalWithSurchargeUsd,
+        exchangeRate: rate,
         createdById: userId,
         items: { create: items },
       },
       include: {
         supplier: { select: { id: true, name: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true } } } },
+        items: { include: { product: { select: { id: true, code: true, name: true, isService: true } } } },
       },
     });
   }
@@ -134,7 +161,7 @@ export class PurchaseOrdersService {
         orderBy: { createdAt: 'desc' },
         include: {
           supplier: { select: { id: true, name: true } },
-          items: { include: { product: { select: { id: true, code: true, name: true } } } },
+          items: { include: { product: { select: { id: true, code: true, name: true, isService: true } } } },
         },
       }),
       this.prisma.purchaseOrder.count({ where }),
@@ -154,7 +181,7 @@ export class PurchaseOrdersService {
         items: {
           include: {
             product: {
-              select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true },
+              select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true, isService: true, gananciaPct: true, gananciaMayorPct: true, ivaType: true, bregaApplies: true },
             },
           },
         },
@@ -176,9 +203,16 @@ export class PurchaseOrdersService {
     if (dto.supplierControlNumber !== undefined) updateData.supplierControlNumber = dto.supplierControlNumber || null;
     if (dto.isCredit !== undefined) updateData.isCredit = dto.isCredit;
     if (dto.creditDays !== undefined) updateData.creditDays = dto.creditDays;
+    if (dto.invoiceDate !== undefined) updateData.invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : null;
+    if (dto.currency !== undefined) updateData.currency = dto.currency;
+    if (dto.surchargeUsd !== undefined) updateData.surchargeUsd = dto.surchargeUsd;
+    if (dto.surchargeDistribution !== undefined) updateData.surchargeDistribution = dto.surchargeDistribution;
 
     if (dto.items) {
-      const exchangeRate = await this.getTodayRate();
+      const currency = dto.currency || order.currency || 'USD';
+      const rate = dto.exchangeRate || order.exchangeRate || (await this.getTodayRate()) || 1;
+      const surchargeUsd = dto.surchargeUsd ?? order.surchargeUsd ?? 0;
+      const surchargeDistribution = dto.surchargeDistribution || order.surchargeDistribution || 'PROPORTIONAL';
 
       // Delete existing items and recreate
       await this.prisma.purchaseOrderItem.deleteMany({
@@ -186,24 +220,45 @@ export class PurchaseOrdersService {
       });
 
       const items = dto.items.map((item) => {
-        const totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+        const costUsd = currency === 'BS'
+          ? Math.round((item.costUsd / rate) * 100) / 100
+          : item.costUsd;
+        const totalUsd = Math.round(item.quantity * costUsd * 100) / 100;
         return {
           purchaseOrderId: id,
           productId: item.productId,
           quantity: item.quantity,
-          costUsd: item.costUsd,
-          costBs: Math.round(item.costUsd * exchangeRate * 100) / 100,
+          costUsd,
+          costBs: Math.round(costUsd * rate * 100) / 100,
           totalUsd,
-          totalBs: Math.round(totalUsd * exchangeRate * 100) / 100,
+          totalBs: Math.round(totalUsd * rate * 100) / 100,
         };
       });
+
+      // Distribute surcharge
+      if (surchargeUsd > 0) {
+        const totalCostUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
+        for (const item of items) {
+          const share = surchargeDistribution === 'PROPORTIONAL'
+            ? totalCostUsd > 0 ? (item.totalUsd / totalCostUsd) * surchargeUsd : 0
+            : surchargeUsd / items.length;
+          const perUnit = Math.round((share / item.quantity) * 100) / 100;
+          item.costUsd = Math.round((item.costUsd + perUnit) * 100) / 100;
+          item.costBs = Math.round(item.costUsd * rate * 100) / 100;
+          item.totalUsd = Math.round(item.quantity * item.costUsd * 100) / 100;
+          item.totalBs = Math.round(item.totalUsd * rate * 100) / 100;
+        }
+      }
 
       await this.prisma.purchaseOrderItem.createMany({ data: items });
 
       updateData.totalUsd = items.reduce((sum, i) => sum + i.totalUsd, 0);
-      updateData.totalBs = Math.round(updateData.totalUsd * exchangeRate * 100) / 100;
-      updateData.exchangeRate = exchangeRate;
+      updateData.totalBs = Math.round(updateData.totalUsd * rate * 100) / 100;
+      updateData.totalWithSurchargeUsd = Math.round(updateData.totalUsd * 100) / 100;
+      updateData.exchangeRate = rate;
     }
+
+    if (dto.exchangeRate !== undefined) updateData.exchangeRate = dto.exchangeRate;
 
     // Recalculate ISLR if applicable
     if (dto.applyIslr !== undefined) {
@@ -224,7 +279,7 @@ export class PurchaseOrdersService {
       data: updateData,
       include: {
         supplier: { select: { id: true, name: true } },
-        items: { include: { product: { select: { id: true, code: true, name: true } } } },
+        items: { include: { product: { select: { id: true, code: true, name: true, isService: true } } } },
       },
     });
   }
@@ -261,6 +316,15 @@ export class PurchaseOrdersService {
     });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
 
+    // Determine receivedDate
+    const receivedDate = dto.receivedDate ? new Date(dto.receivedDate) : new Date();
+
+    // Get exchange rate for receivedDate
+    const rateDate = new Date(receivedDate);
+    rateDate.setUTCHours(0, 0, 0, 0);
+    const dateRate = await this.prisma.exchangeRate.findUnique({ where: { date: rateDate } });
+    const receiveRate = dateRate?.rate || order.exchangeRate || 1;
+
     return this.prisma.$transaction(async (tx) => {
       for (const receiveItem of dto.items) {
         const poItem = order.items.find((i) => i.id === receiveItem.purchaseOrderItemId);
@@ -281,8 +345,13 @@ export class PurchaseOrdersService {
           data: { receivedQty: newReceivedQty },
         });
 
+        // Skip stock/movement for service items
+        if (poItem.product.isService) {
+          continue;
+        }
+
         // Update stock
-        await tx.stock.upsert({
+        const stockRecord = await tx.stock.upsert({
           where: {
             productId_warehouseId: {
               productId: poItem.productId,
@@ -298,6 +367,12 @@ export class PurchaseOrdersService {
             quantity: { increment: receiveItem.receivedQty },
           },
         });
+
+        // Calculate stockAfter (total across all warehouses)
+        const allStock = await tx.stock.findMany({
+          where: { productId: poItem.productId },
+        });
+        const stockAfter = allStock.reduce((sum, s) => sum + s.quantity, 0);
 
         // Update product costUsd and recalculate prices
         const product = await tx.product.findUnique({ where: { id: poItem.productId } });
@@ -323,7 +398,7 @@ export class PurchaseOrdersService {
           });
         }
 
-        // Create StockMovement
+        // Create StockMovement with stockAfter and costUsd
         await tx.stockMovement.create({
           data: {
             productId: poItem.productId,
@@ -331,8 +406,10 @@ export class PurchaseOrdersService {
             type: 'PURCHASE',
             quantity: receiveItem.receivedQty,
             costUsd: receiveItem.costUsd,
+            stockAfter,
             reference: order.number,
             createdById: userId,
+            createdAt: receivedDate,
           },
         });
       }
@@ -345,31 +422,27 @@ export class PurchaseOrdersService {
       const allReceived = updatedItems.every((i) => i.receivedQty >= i.quantity);
       const newStatus = allReceived ? 'RECEIVED' : 'PARTIAL';
 
-      // Get today's exchange rate for Bs calculations
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      const todayRate = await tx.exchangeRate.findUnique({ where: { date: today } });
-      const receiveRate = todayRate?.rate || 0;
       const updatedTotalBs = Math.round(order.totalUsd * receiveRate * 100) / 100;
 
       const updatedOrder = await tx.purchaseOrder.update({
         where: { id },
         data: {
           status: newStatus,
-          receivedAt: allReceived ? new Date() : undefined,
+          receivedAt: allReceived ? receivedDate : undefined,
+          receivedDate,
           totalBs: updatedTotalBs,
           exchangeRate: receiveRate,
         },
         include: {
           supplier: { select: { id: true, name: true, isRetentionAgent: true } },
-          items: { include: { product: { select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true, ivaType: true } } } },
+          items: { include: { product: { select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true, ivaType: true, isService: true } } } },
         },
       });
 
       // Create Payable if credit order and fully received
       if (order.isCredit && allReceived) {
-        if (!todayRate) {
-          throw new BadRequestException('No hay tasa BCV registrada para hoy. Necesaria para crear CxP.');
+        if (!dateRate && !order.exchangeRate) {
+          throw new BadRequestException('No hay tasa registrada para la fecha de recepcion. Necesaria para crear CxP.');
         }
 
         const amountUsd = updatedOrder.totalUsd;
@@ -381,10 +454,9 @@ export class PurchaseOrdersService {
 
         // Calculate IVA retention if supplier is retention agent
         if (updatedOrder.supplier.isRetentionAgent) {
-          const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
-          const ivaRetentionPct = config?.ivaRetentionPct || 75;
+          const cfg = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+          const ivaRetentionPct = cfg?.ivaRetentionPct || 75;
 
-          // Calculate total IVA from received items
           let totalIva = 0;
           for (const item of updatedItems) {
             const product = updatedOrder.items.find((i) => i.productId === item.productId);
@@ -403,7 +475,6 @@ export class PurchaseOrdersService {
         if (updatedOrder.islrRetentionPct && updatedOrder.islrRetentionPct > 0) {
           islrRetentionUsd = Math.round(amountUsd * (updatedOrder.islrRetentionPct / 100) * 100) / 100;
           const islrRetentionBs = Math.round(islrRetentionUsd * exchangeRate * 100) / 100;
-          // Update the order with calculated ISLR amounts
           await tx.purchaseOrder.update({
             where: { id },
             data: {
@@ -416,7 +487,6 @@ export class PurchaseOrdersService {
         const netPayableUsd = Math.round((amountUsd - retentionUsd - islrRetentionUsd) * 100) / 100;
         const netPayableBs = Math.round(netPayableUsd * exchangeRate * 100) / 100;
 
-        // Calculate due date
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + (order.creditDays || 0));
 
@@ -438,6 +508,100 @@ export class PurchaseOrdersService {
       }
 
       return updatedOrder;
+    });
+  }
+
+  async getSuggestedPrices(id: string) {
+    const order = await this.findOne(id);
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
+    return order.items
+      .filter((item) => !item.product.isService)
+      .map((item) => {
+        const product = item.product;
+        const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
+        const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
+        const newCost = item.costUsd;
+
+        const suggestedPriceDetal = Math.round(
+          newCost * (1 + bregaPct / 100) * (1 + product.gananciaPct / 100) * ivaMultiplier * 100,
+        ) / 100;
+        const suggestedPriceMayor = Math.round(
+          newCost * (1 + bregaPct / 100) * (1 + product.gananciaMayorPct / 100) * ivaMultiplier * 100,
+        ) / 100;
+
+        return {
+          productId: product.id,
+          productCode: product.code,
+          productName: product.name,
+          currentCostUsd: product.costUsd,
+          newCostUsd: newCost,
+          currentGananciaPct: product.gananciaPct,
+          currentGananciaMayorPct: product.gananciaMayorPct,
+          currentPriceDetal: product.priceDetal,
+          suggestedPriceDetal,
+          currentPriceMayor: product.priceMayor,
+          suggestedPriceMayor,
+          bregaPct,
+          ivaMultiplier,
+          ivaType: product.ivaType,
+        };
+      });
+  }
+
+  async updatePrices(id: string, items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[]) {
+    const order = await this.findOne(id);
+    if (order.status !== 'RECEIVED') {
+      throw new BadRequestException('Solo se pueden actualizar precios de ordenes RECEIVED');
+    }
+
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
+    return this.prisma.$transaction(async (tx) => {
+      const results: any[] = [];
+
+      for (const item of items) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product) continue;
+
+        const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
+        const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
+
+        const priceDetal = Math.round(
+          product.costUsd * (1 + bregaPct / 100) * (1 + item.gananciaPct / 100) * ivaMultiplier * 100,
+        ) / 100;
+        const priceMayor = Math.round(
+          product.costUsd * (1 + bregaPct / 100) * (1 + item.gananciaMayorPct / 100) * ivaMultiplier * 100,
+        ) / 100;
+
+        const updated = await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            gananciaPct: item.gananciaPct,
+            gananciaMayorPct: item.gananciaMayorPct,
+            priceDetal,
+            priceMayor,
+          },
+        });
+
+        results.push({
+          productId: updated.id,
+          code: updated.code,
+          name: updated.name,
+          gananciaPct: updated.gananciaPct,
+          gananciaMayorPct: updated.gananciaMayorPct,
+          priceDetal: updated.priceDetal,
+          priceMayor: updated.priceMayor,
+        });
+      }
+
+      return results;
     });
   }
 

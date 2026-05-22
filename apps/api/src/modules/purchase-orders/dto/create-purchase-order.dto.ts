@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsBoolean, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsBoolean, IsInt, IsIn, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePurchaseOrderItemDto {
@@ -43,6 +43,30 @@ export class CreatePurchaseOrderDto {
   @IsNumber()
   @Min(0)
   islrRetentionPct?: number;
+
+  @IsOptional()
+  @IsDateString()
+  invoiceDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['USD', 'BS'])
+  currency?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  exchangeRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  surchargeUsd?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['PROPORTIONAL', 'EQUAL'])
+  surchargeDistribution?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

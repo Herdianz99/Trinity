@@ -7,18 +7,27 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
+const IVA_MULTIPLIERS: Record<string, number> = { EXEMPT: 1, REDUCED: 1.08, GENERAL: 1.16, SPECIAL: 1.31 };
+
 interface PurchaseOrder {
   id: string;
   number: string;
   supplier: { id: string; name: string };
   status: 'DRAFT' | 'SENT' | 'PARTIAL' | 'RECEIVED' | 'CANCELLED';
   totalUsd: number;
+  totalWithSurchargeUsd: number;
   notes: string | null;
   isCredit: boolean;
   creditDays: number;
   supplierControlNumber: string | null;
   islrRetentionPct: number;
   islrRetentionUsd: number;
+  invoiceDate: string | null;
+  receivedDate: string | null;
+  currency: string;
+  exchangeRate: number;
+  surchargeUsd: number;
+  surchargeDistribution: string;
   items: POItem[];
   createdAt: string;
 }
@@ -26,7 +35,7 @@ interface PurchaseOrder {
 interface POItem {
   id: string;
   productId: string;
-  product: { id: string; code: string; name: string };
+  product: { id: string; code: string; name: string; isService?: boolean; costUsd?: number; priceDetal?: number; priceMayor?: number; gananciaPct?: number; gananciaMayorPct?: number; ivaType?: string; bregaApplies?: boolean };
   quantity: number;
   costUsd: number;
   totalUsd: number;
@@ -35,14 +44,22 @@ interface POItem {
 
 interface Warehouse { id: string; name: string; }
 interface Movement {
-  id: string; type: string; quantity: number; costUsd: number | null;
-  reference: string | null; createdAt: string;
+  id: string; type: string; quantity: number; costUsd: number;
+  stockAfter: number; reference: string | null; createdAt: string;
   product: { id: string; code: string; name: string };
   warehouse: { id: string; name: string };
 }
 interface Payable {
   id: string; amountUsd: number; balanceUsd: number; dueDate: string | null;
   status: string; purchaseOrder: { id: string; number: string } | null;
+}
+interface SuggestedPrice {
+  productId: string; productCode: string; productName: string;
+  currentCostUsd: number; newCostUsd: number;
+  currentGananciaPct: number; currentGananciaMayorPct: number;
+  currentPriceDetal: number; suggestedPriceDetal: number;
+  currentPriceMayor: number; suggestedPriceMayor: number;
+  bregaPct: number; ivaMultiplier: number; ivaType: string;
 }
 
 const STATUS_BADGES: Record<string, string> = {
@@ -78,8 +95,14 @@ export default function PurchaseDetailPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [receiveModal, setReceiveModal] = useState(false);
   const [receiveWarehouse, setReceiveWarehouse] = useState('');
-  const [receiveItems, setReceiveItems] = useState<{ purchaseOrderItemId: string; receivedQty: number; costUsd: number; originalCost: number; productName: string; maxQty: number }[]>([]);
+  const [receiveDate, setReceiveDate] = useState('');
+  const [receiveItems, setReceiveItems] = useState<{ purchaseOrderItemId: string; receivedQty: number; costUsd: number; originalCost: number; productName: string; maxQty: number; isService?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [receiveTab, setReceiveTab] = useState<'confirm' | 'prices'>('confirm');
+
+  // Suggested prices
+  const [suggestedPrices, setSuggestedPrices] = useState<SuggestedPrice[]>([]);
+  const [priceEdits, setPriceEdits] = useState<Record<string, { gananciaPct: number; gananciaMayorPct: number; priceDetal: number; priceMayor: number }>>({});
 
   // Active tab + lazy loading
   const [activeTab, setActiveTab] = useState('info');
@@ -143,6 +166,10 @@ export default function PurchaseDetailPage() {
   useEffect(() => { fetchOrder(); fetchMeta(); }, [fetchOrder, fetchMeta]);
 
   useEffect(() => {
+    if (order) document.title = `${order.number} - ${order.supplier.name} | Trinity ERP`;
+  }, [order]);
+
+  useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(data => {
       if (data?.permissions) setUserPermissions(data.permissions);
       if (data?.role) setUserRole(data.role);
@@ -151,12 +178,10 @@ export default function PurchaseDetailPage() {
 
   const hasPerm = (perm: string) => userRole === 'ADMIN' || userPermissions.includes(perm);
 
-  // Lazy load: movements when recepciones tab is active
   useEffect(() => {
     if (activeTab === 'recepciones' && order) fetchMovements();
   }, [activeTab, order, fetchMovements]);
 
-  // Lazy load: payables when cxp tab is active
   useEffect(() => {
     if (activeTab === 'cxp' && order) fetchPayables();
   }, [activeTab, order, fetchPayables]);
@@ -178,9 +203,11 @@ export default function PurchaseDetailPage() {
     }
   }
 
-  function openReceive() {
+  async function openReceive() {
     if (!order) return;
     setReceiveWarehouse(warehouses[0]?.id || '');
+    setReceiveDate('');
+    setReceiveTab('confirm');
     setReceiveItems(order.items.filter(i => i.receivedQty < i.quantity).map(i => ({
       purchaseOrderItemId: i.id,
       receivedQty: i.quantity - i.receivedQty,
@@ -188,12 +215,59 @@ export default function PurchaseDetailPage() {
       originalCost: i.costUsd,
       productName: `${i.product.code} - ${i.product.name}`,
       maxQty: i.quantity - i.receivedQty,
+      isService: i.product.isService,
     })));
+
+    // Fetch suggested prices
+    try {
+      const res = await fetch(`/api/proxy/purchase-orders/${id}/suggested-prices`);
+      if (res.ok) {
+        const prices: SuggestedPrice[] = await res.json();
+        setSuggestedPrices(prices);
+        const edits: Record<string, { gananciaPct: number; gananciaMayorPct: number; priceDetal: number; priceMayor: number }> = {};
+        for (const p of prices) {
+          edits[p.productId] = {
+            gananciaPct: p.currentGananciaPct,
+            gananciaMayorPct: p.currentGananciaMayorPct,
+            priceDetal: p.suggestedPriceDetal,
+            priceMayor: p.suggestedPriceMayor,
+          };
+        }
+        setPriceEdits(edits);
+      }
+    } catch { /* ignore */ }
+
     setReceiveModal(true);
   }
 
-  async function handleReceive(e: React.FormEvent) {
-    e.preventDefault();
+  function handleGananciaChange(productId: string, field: 'gananciaPct' | 'gananciaMayorPct', value: number) {
+    const sp = suggestedPrices.find(p => p.productId === productId);
+    if (!sp) return;
+    const cost = sp.newCostUsd;
+    const base = cost * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
+    const prev = priceEdits[productId] || { gananciaPct: sp.currentGananciaPct, gananciaMayorPct: sp.currentGananciaMayorPct, priceDetal: sp.suggestedPriceDetal, priceMayor: sp.suggestedPriceMayor };
+    if (field === 'gananciaPct') {
+      setPriceEdits({ ...priceEdits, [productId]: { ...prev, gananciaPct: value, priceDetal: Math.round(base * (1 + value / 100) * 100) / 100 } });
+    } else {
+      setPriceEdits({ ...priceEdits, [productId]: { ...prev, gananciaMayorPct: value, priceMayor: Math.round(base * (1 + value / 100) * 100) / 100 } });
+    }
+  }
+
+  function handlePriceChange(productId: string, field: 'priceDetal' | 'priceMayor', value: number) {
+    const sp = suggestedPrices.find(p => p.productId === productId);
+    if (!sp) return;
+    const cost = sp.newCostUsd;
+    const base = cost * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
+    const ganancia = base > 0 ? ((value / base) - 1) * 100 : 0;
+    const prev = priceEdits[productId] || { gananciaPct: sp.currentGananciaPct, gananciaMayorPct: sp.currentGananciaMayorPct, priceDetal: sp.suggestedPriceDetal, priceMayor: sp.suggestedPriceMayor };
+    if (field === 'priceDetal') {
+      setPriceEdits({ ...priceEdits, [productId]: { ...prev, priceDetal: value, gananciaPct: Math.round(ganancia * 100) / 100 } });
+    } else {
+      setPriceEdits({ ...priceEdits, [productId]: { ...prev, priceMayor: value, gananciaMayorPct: Math.round(ganancia * 100) / 100 } });
+    }
+  }
+
+  async function handleReceive(updatePrices: boolean) {
     setSaving(true);
     setMessage(null);
     try {
@@ -202,6 +276,7 @@ export default function PurchaseDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           warehouseId: receiveWarehouse,
+          receivedDate: receiveDate || undefined,
           items: receiveItems.map(i => ({
             purchaseOrderItemId: i.purchaseOrderItemId,
             receivedQty: Number(i.receivedQty),
@@ -209,15 +284,29 @@ export default function PurchaseDetailPage() {
           })),
         }),
       });
-      if (res.ok) {
-        setReceiveModal(false);
-        fetchOrder();
-        fetchMovements();
-        setMessage({ type: 'success', text: 'Orden recibida — stock y precios actualizados' });
-      } else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error');
       }
+
+      // Update prices if requested
+      if (updatePrices && Object.keys(priceEdits).length > 0) {
+        const priceItems = Object.entries(priceEdits).map(([productId, data]) => ({
+          productId,
+          gananciaPct: data.gananciaPct,
+          gananciaMayorPct: data.gananciaMayorPct,
+        }));
+        await fetch(`/api/proxy/purchase-orders/${id}/update-prices`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: priceItems }),
+        });
+      }
+
+      setReceiveModal(false);
+      fetchOrder();
+      fetchMovements();
+      setMessage({ type: 'success', text: updatePrices ? 'Orden recibida — precios actualizados' : 'Orden recibida — stock actualizado' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -319,13 +408,39 @@ export default function PurchaseDetailPage() {
           <div className="card p-6 mb-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div>
-                <p className="text-xs text-slate-500 uppercase">Fecha</p>
+                <p className="text-xs text-slate-500 uppercase">Fecha creacion</p>
                 <p className="text-white font-mono">{fmtDate(order.createdAt)}</p>
               </div>
+              {order.invoiceDate && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Fecha factura</p>
+                  <p className="text-white font-mono">{fmtDate(order.invoiceDate)}</p>
+                </div>
+              )}
+              {order.receivedDate && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Fecha recepcion</p>
+                  <p className="text-green-400 font-mono">{fmtDate(order.receivedDate)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Total USD</p>
                 <p className="text-white font-mono font-bold">${order.totalUsd.toFixed(2)}</p>
               </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Moneda</p>
+                <p className="text-slate-300">{order.currency || 'USD'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Tasa</p>
+                <p className="text-slate-300 font-mono">{order.exchangeRate?.toFixed(4)}</p>
+              </div>
+              {order.surchargeUsd > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Recargo</p>
+                  <p className="text-cyan-400 font-mono">${order.surchargeUsd.toFixed(2)} ({order.surchargeDistribution === 'PROPORTIONAL' ? 'Proporcional' : 'Partes iguales'})</p>
+                </div>
+              )}
               {order.isCredit && (
                 <div>
                   <p className="text-xs text-slate-500 uppercase">Credito</p>
@@ -365,6 +480,7 @@ export default function PurchaseDetailPage() {
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs text-green-400">{item.product.code}</span>
                       <span className="text-white ml-2">{item.product.name}</span>
+                      {item.product.isService && <span className="ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded font-bold">SERVICIO</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-right font-mono">
@@ -403,6 +519,7 @@ export default function PurchaseDetailPage() {
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Almacen</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">Costo USD</th>
+                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Stock despues</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -415,7 +532,8 @@ export default function PurchaseDetailPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-400">{m.warehouse.name}</td>
                       <td className="px-4 py-3 text-right font-mono text-white">{m.quantity}</td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-300">{m.costUsd != null ? `$${m.costUsd.toFixed(2)}` : '—'}</td>
+                      <td className="px-4 py-3 text-right font-mono text-slate-300">${m.costUsd.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-cyan-400">{m.stockAfter}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -460,10 +578,7 @@ export default function PurchaseDetailPage() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => router.push(`/payables/${p.id}`)}
-                        className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                      >
+                      <button onClick={() => router.push(`/payables/${p.id}`)} className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1">
                         Ver CxP <ExternalLink size={12} />
                       </button>
                     </div>
@@ -484,7 +599,7 @@ export default function PurchaseDetailPage() {
       {receiveModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 px-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setReceiveModal(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
               <div>
                 <h2 className="text-lg font-bold text-white">Recibir Orden {order.number}</h2>
@@ -492,49 +607,139 @@ export default function PurchaseDetailPage() {
               </div>
               <button onClick={() => setReceiveModal(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
             </div>
-            <form onSubmit={handleReceive} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Almacen destino *</label>
-                <select value={receiveWarehouse} onChange={e => setReceiveWarehouse(e.target.value)} className="input-field !py-2 text-sm" required>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700/50">
-                    <th className="text-left px-3 py-2 text-slate-400 font-medium">Producto</th>
-                    <th className="text-right px-3 py-2 text-slate-400 font-medium">Pendiente</th>
-                    <th className="text-right px-3 py-2 text-slate-400 font-medium">Recibir</th>
-                    <th className="text-right px-3 py-2 text-slate-400 font-medium">Costo USD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receiveItems.map((item, idx) => (
-                    <tr key={item.purchaseOrderItemId} className="border-b border-slate-700/30">
-                      <td className="px-3 py-2 text-white text-sm">{item.productName}</td>
-                      <td className="px-3 py-2 text-right text-slate-300 font-mono">{item.maxQty}</td>
-                      <td className="px-3 py-2 text-right">
-                        <input type="number" min="0" max={item.maxQty} value={item.receivedQty}
-                          onChange={e => { const n = [...receiveItems]; n[idx] = { ...n[idx], receivedQty: Number(e.target.value) }; setReceiveItems(n); }}
-                          className="input-field !py-1 text-sm w-20 text-right font-mono" />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input type="number" min="0" step="0.01" value={item.costUsd}
-                          onChange={e => { const n = [...receiveItems]; n[idx] = { ...n[idx], costUsd: Number(e.target.value) }; setReceiveItems(n); }}
-                          className="input-field !py-1 text-sm w-24 text-right font-mono" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            {/* Tab buttons */}
+            <div className="px-6 pt-3 flex gap-2">
+              <button onClick={() => setReceiveTab('confirm')} className={`px-4 py-2 text-sm rounded-lg transition-colors ${receiveTab === 'confirm' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+                Confirmar recepcion
+              </button>
+              <button onClick={() => setReceiveTab('prices')} className={`px-4 py-2 text-sm rounded-lg transition-colors ${receiveTab === 'prices' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+                Actualizar precios de venta
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {receiveTab === 'confirm' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Almacen destino *</label>
+                      <select value={receiveWarehouse} onChange={e => setReceiveWarehouse(e.target.value)} className="input-field !py-2 text-sm" required>
+                        {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Fecha de recepcion</label>
+                      <input type="date" value={receiveDate} onChange={e => setReceiveDate(e.target.value)} className="input-field !py-2 text-sm" placeholder="Hoy si vacio" />
+                    </div>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left px-3 py-2 text-slate-400 font-medium">Producto</th>
+                        <th className="text-right px-3 py-2 text-slate-400 font-medium">Pendiente</th>
+                        <th className="text-right px-3 py-2 text-slate-400 font-medium">Recibir</th>
+                        <th className="text-right px-3 py-2 text-slate-400 font-medium">Costo USD</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receiveItems.map((item, idx) => (
+                        <tr key={item.purchaseOrderItemId} className="border-b border-slate-700/30">
+                          <td className="px-3 py-2 text-white text-sm">
+                            {item.productName}
+                            {item.isService && <span className="ml-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded font-bold">SERVICIO</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-300 font-mono">{item.maxQty}</td>
+                          <td className="px-3 py-2 text-right">
+                            <input type="number" min="0" max={item.maxQty} value={item.receivedQty}
+                              onChange={e => { const n = [...receiveItems]; n[idx] = { ...n[idx], receivedQty: Number(e.target.value) }; setReceiveItems(n); }}
+                              className="input-field !py-1 text-sm w-20 text-right font-mono" />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <input type="number" min="0" step="0.01" value={item.costUsd}
+                              onChange={e => { const n = [...receiveItems]; n[idx] = { ...n[idx], costUsd: Number(e.target.value) }; setReceiveItems(n); }}
+                              className="input-field !py-1 text-sm w-24 text-right font-mono" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {receiveTab === 'prices' && (
+                <div className="overflow-x-auto">
+                  {suggestedPrices.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-8">No hay productos (no servicio) para actualizar</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700/50">
+                          <th className="text-left px-2 py-2 text-slate-400 font-medium text-xs">Producto</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo ant.</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo nuevo</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Detal</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Precio Detal</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Mayor</th>
+                          <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Precio Mayor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {suggestedPrices.map(sp => {
+                          const edits = priceEdits[sp.productId] || { gananciaPct: sp.currentGananciaPct, gananciaMayorPct: sp.currentGananciaMayorPct, priceDetal: sp.suggestedPriceDetal, priceMayor: sp.suggestedPriceMayor };
+                          const costUp = sp.newCostUsd > sp.currentCostUsd;
+                          const costDown = sp.newCostUsd < sp.currentCostUsd;
+                          return (
+                            <tr key={sp.productId} className="border-b border-slate-700/30">
+                              <td className="px-2 py-2 text-white text-xs">
+                                <span className="font-mono text-green-400">{sp.productCode}</span>
+                                <span className="ml-1">{sp.productName}</span>
+                              </td>
+                              <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">${sp.currentCostUsd.toFixed(2)}</td>
+                              <td className={`px-2 py-2 text-right font-mono text-xs font-bold ${costUp ? 'text-red-400' : costDown ? 'text-green-400' : 'text-white'}`}>
+                                ${sp.newCostUsd.toFixed(2)}
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                <input type="number" step="0.1" value={edits.gananciaPct}
+                                  onChange={e => handleGananciaChange(sp.productId, 'gananciaPct', Number(e.target.value))}
+                                  className="input-field !py-0.5 text-xs w-16 text-right font-mono" />
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                <input type="number" step="0.01" value={edits.priceDetal}
+                                  onChange={e => handlePriceChange(sp.productId, 'priceDetal', Number(e.target.value))}
+                                  className="input-field !py-0.5 text-xs w-20 text-right font-mono" />
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                <input type="number" step="0.1" value={edits.gananciaMayorPct}
+                                  onChange={e => handleGananciaChange(sp.productId, 'gananciaMayorPct', Number(e.target.value))}
+                                  className="input-field !py-0.5 text-xs w-16 text-right font-mono" />
+                              </td>
+                              <td className="px-2 py-2 text-right">
+                                <input type="number" step="0.01" value={edits.priceMayor}
+                                  onChange={e => handlePriceChange(sp.productId, 'priceMayor', Number(e.target.value))}
+                                  className="input-field !py-0.5 text-xs w-20 text-right font-mono" />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button type="button" onClick={() => setReceiveModal(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
-                <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
+                <button type="button" onClick={() => handleReceive(false)} disabled={saving} className="btn-secondary !py-2.5 text-sm flex items-center gap-2">
                   {saving && <Loader2 className="animate-spin" size={16} />}
-                  <PackageCheck size={16} /> Confirmar recepcion
+                  Recibir sin actualizar precios
+                </button>
+                <button type="button" onClick={() => handleReceive(true)} disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">
+                  {saving && <Loader2 className="animate-spin" size={16} />}
+                  <PackageCheck size={16} /> Aplicar precios y recibir
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -573,7 +778,7 @@ function PurchaseNotesTab({ purchaseOrderId }: { purchaseOrderId: string }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-700/50">
-            <th className="text-left px-4 py-3 text-slate-400 font-medium">Número</th>
+            <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
             <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
             <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
             <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>

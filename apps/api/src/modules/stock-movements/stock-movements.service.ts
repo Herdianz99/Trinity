@@ -52,7 +52,7 @@ export class StockMovementsService {
           product: { select: { id: true, code: true, name: true } },
           warehouse: { select: { id: true, name: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: filters.productId ? 'asc' : 'desc' },
         skip,
         take: limit,
       }),

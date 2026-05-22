@@ -19,6 +19,7 @@ interface Product {
   categoryId: string | null;
   brandId: string | null;
   supplierId: string | null;
+  isService: boolean;
   purchaseUnit: string;
   saleUnit: string;
   conversionFactor: number;
@@ -40,7 +41,7 @@ interface Category { id: string; name: string; children: { id: string; name: str
 interface Brand { id: string; name: string; }
 interface Supplier { id: string; name: string; }
 interface Movement {
-  id: string; type: string; quantity: number; costUsd: number | null;
+  id: string; type: string; quantity: number; costUsd: number; stockAfter: number;
   reason: string | null; reference: string | null; createdAt: string; createdById: string;
   warehouse: { id: string; name: string };
 }
@@ -105,6 +106,14 @@ export default function ProductDetailPage() {
   const [purchPage, setPurchPage] = useState(1);
   const [purchTotalPages, setPurchTotalPages] = useState(0);
 
+  // ── Editable prices (Prices tab) ──
+  const [priceGananciaPct, setPriceGananciaPct] = useState(0);
+  const [priceFinalDetal, setPriceFinalDetal] = useState(0);
+  const [priceGananciaMayorPct, setPriceGananciaMayorPct] = useState(0);
+  const [priceFinalMayor, setPriceFinalMayor] = useState(0);
+  const [savingPrices, setSavingPrices] = useState(false);
+  const [priceMsg, setPriceMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // ── Fetch product ──
   const fetchProduct = useCallback(async () => {
     setLoading(true);
@@ -124,6 +133,7 @@ export default function ProductDetailPage() {
         categoryId: data.categoryId || '',
         brandId: data.brandId || '',
         supplierId: data.supplierId || '',
+        isService: data.isService ?? false,
         purchaseUnit: data.purchaseUnit,
         saleUnit: data.saleUnit,
         conversionFactor: data.conversionFactor,
@@ -197,6 +207,10 @@ export default function ProductDetailPage() {
 
   useEffect(() => { fetchProduct(); fetchMeta(); }, [fetchProduct, fetchMeta]);
 
+  useEffect(() => {
+    if (product) document.title = `${product.code} - ${product.name} | Trinity ERP`;
+  }, [product]);
+
   // Lazy load: fetch movements only when tab is active
   useEffect(() => {
     if (activeTab === 'movements' && product) fetchMovements();
@@ -206,6 +220,16 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (activeTab === 'purchases' && product) fetchPurchases();
   }, [activeTab, product, purchPage, fetchPurchases]);
+
+  // Sync editable price fields when product loads
+  useEffect(() => {
+    if (product) {
+      setPriceGananciaPct(product.gananciaPct);
+      setPriceGananciaMayorPct(product.gananciaMayorPct);
+      setPriceFinalDetal(product.priceDetal);
+      setPriceFinalMayor(product.priceMayor);
+    }
+  }, [product]);
 
   // ── Save handler ──
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
@@ -222,6 +246,7 @@ export default function ProductDetailPage() {
         categoryId: form.categoryId || undefined,
         brandId: form.brandId || undefined,
         supplierId: form.supplierId || undefined,
+        isService: form.isService,
         purchaseUnit: form.purchaseUnit,
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
@@ -258,6 +283,82 @@ export default function ProductDetailPage() {
   async function handleSaveAndExit() {
     const ok = await handleSave();
     if (ok) router.push('/catalog/products');
+  }
+
+  // ── Price editing handlers ──
+  function handleDetalGananciaChange(value: number) {
+    setPriceGananciaPct(value);
+    if (!product) return;
+    const cost = product.costUsd;
+    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    setPriceFinalDetal(cost * brechaM * (1 + value / 100) * ivaM);
+  }
+
+  function handleDetalPriceChange(value: number) {
+    setPriceFinalDetal(value);
+    if (!product) return;
+    const cost = product.costUsd;
+    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const base = cost * brechaM * ivaM;
+    if (base > 0) {
+      setPriceGananciaPct(((value / base) - 1) * 100);
+    }
+  }
+
+  function handleMayorGananciaChange(value: number) {
+    setPriceGananciaMayorPct(value);
+    if (!product) return;
+    const cost = product.costUsd;
+    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    setPriceFinalMayor(cost * brechaM * (1 + value / 100) * ivaM);
+  }
+
+  function handleMayorPriceChange(value: number) {
+    setPriceFinalMayor(value);
+    if (!product) return;
+    const cost = product.costUsd;
+    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const base = cost * brechaM * ivaM;
+    if (base > 0) {
+      setPriceGananciaMayorPct(((value / base) - 1) * 100);
+    }
+  }
+
+  async function handleSavePrices() {
+    if (!product) return;
+    setSavingPrices(true);
+    setPriceMsg(null);
+    try {
+      const res = await fetch(`/api/proxy/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gananciaPct: Number(priceGananciaPct.toFixed(2)),
+          gananciaMayorPct: Number(priceGananciaMayorPct.toFixed(2)),
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProduct(updated);
+        setForm((f: any) => ({
+          ...f,
+          gananciaPct: updated.gananciaPct,
+          gananciaMayorPct: updated.gananciaMayorPct,
+        }));
+        setPriceMsg({ type: 'success', text: 'Precios actualizados correctamente' });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al guardar');
+      }
+    } catch (err: any) {
+      setPriceMsg({ type: 'error', text: err.message || 'Error al guardar precios' });
+    } finally {
+      setSavingPrices(false);
+    }
   }
 
   // ── Helpers ──
@@ -332,6 +433,9 @@ export default function ProductDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {product.isService && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">SERVICIO</span>
+          )}
           {product.isActive ? (
             <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">Activo</span>
           ) : (
@@ -471,10 +575,16 @@ export default function ProductDetailPage() {
             {/* Stock minimum */}
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Inventario</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
                   <input type="number" step="1" value={form.minStock ?? ''} onChange={e => setForm((f: any) => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                    <input type="checkbox" checked={form.isService ?? false} onChange={e => setForm((f: any) => ({ ...f, isService: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-cyan-500 focus:ring-cyan-500/40" />
+                    Es servicio (no maneja inventario)
+                  </label>
                 </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
@@ -546,7 +656,7 @@ export default function ProductDetailPage() {
           </div>
         </TabsContent>
 
-        {/* ═══ TAB: Movimientos ═══ */}
+        {/* ═══ TAB: Movimientos (Kardex) ═══ */}
         <TabsContent value="movements">
           <div className="card overflow-hidden">
             {movLoading ? (
@@ -562,6 +672,8 @@ export default function ProductDetailPage() {
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
                         <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">Costo unit.</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">Stock despues</th>
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Almacen</th>
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Referencia</th>
                         <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
@@ -569,18 +681,27 @@ export default function ProductDetailPage() {
                     </thead>
                     <tbody>
                       {movements.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin movimientos</td></tr>
+                        <tr><td colSpan={8} className="text-center py-8 text-slate-500">Sin movimientos</td></tr>
                       ) : movements.map(mov => {
                         const ml = MOVEMENT_LABELS[mov.type] || { label: mov.type, color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' };
                         const isInvoice = mov.reference && /^FAC-/.test(mov.reference);
                         const isPO = mov.reference && /^PO-/.test(mov.reference);
+                        const isEntry = ['PURCHASE', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_ADJUST'].includes(mov.type) && mov.quantity > 0;
                         return (
                           <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                             <td className="px-4 py-3 text-slate-300">{fmtDate(mov.createdAt)}</td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-0.5 rounded-full border ${ml.color}`}>{ml.label}</span>
                             </td>
-                            <td className="px-4 py-3 text-right font-mono text-white">{mov.quantity}</td>
+                            <td className={`px-4 py-3 text-right font-mono ${isEntry ? 'text-green-400' : 'text-red-400'}`}>
+                              {isEntry ? '+' : ''}{mov.quantity}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-300">
+                              {mov.costUsd > 0 ? `$${mov.costUsd.toFixed(2)}` : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-white font-semibold">
+                              {mov.stockAfter > 0 ? mov.stockAfter : mov.stockAfter === 0 ? '0' : '—'}
+                            </td>
                             <td className="px-4 py-3 text-slate-400">{mov.warehouse.name}</td>
                             <td className="px-4 py-3 text-slate-400 font-mono text-xs">{mov.reference || mov.reason || '—'}</td>
                             <td className="px-4 py-3 text-center">
@@ -605,6 +726,23 @@ export default function ProductDetailPage() {
                         );
                       })}
                     </tbody>
+                    {movements.length > 0 && (() => {
+                      const totalEntries = movements.filter(m => ['PURCHASE', 'ADJUSTMENT_IN', 'TRANSFER_IN'].includes(m.type) || (m.type === 'COUNT_ADJUST' && m.quantity > 0)).reduce((s, m) => s + Math.abs(m.quantity), 0);
+                      const totalExits = movements.filter(m => ['SALE', 'ADJUSTMENT_OUT', 'TRANSFER_OUT'].includes(m.type) || (m.type === 'COUNT_ADJUST' && m.quantity < 0)).reduce((s, m) => s + Math.abs(m.quantity), 0);
+                      return (
+                        <tfoot>
+                          <tr className="border-t border-slate-700/50 bg-slate-800/30">
+                            <td colSpan={2} className="px-4 py-3 text-slate-300 font-semibold">Totales de pagina</td>
+                            <td className="px-4 py-3 text-right font-mono">
+                              <span className="text-green-400">+{totalEntries}</span>
+                              {' / '}
+                              <span className="text-red-400">-{totalExits}</span>
+                            </td>
+                            <td colSpan={5}></td>
+                          </tr>
+                        </tfoot>
+                      );
+                    })()}
                   </table>
                 </div>
                 {movTotalPages > 1 && (
@@ -691,71 +829,108 @@ export default function ProductDetailPage() {
           </div>
         </TabsContent>
 
-        {/* ═══ TAB: Precios ═══ */}
+        {/* ═══ TAB: Precios (Editable) ═══ */}
         <TabsContent value="prices">
-          <div className="card p-6">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">Formula de precio — Detal</h3>
-            <div className="space-y-2 font-mono text-sm mb-6">
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">Costo USD:</span>
-                <span className="text-white">${costUsd.toFixed(2)}</span>
+          <div className="card p-6 space-y-6">
+            {priceMsg && (
+              <div className={`p-3 rounded-lg border text-sm ${priceMsg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                {priceMsg.text}
               </div>
-              {brecha > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400">+ Brecha ({brecha}%):</span>
-                  <span className="text-white">${brechaAmt.toFixed(2)}</span>
+            )}
+
+            {/* Base info (read-only) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
+              <div>
+                <span className="text-xs text-slate-500 uppercase">Costo USD</span>
+                <p className="font-mono text-white text-lg">${costUsd.toFixed(2)}</p>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 uppercase">Brecha</span>
+                <p className="font-mono text-white text-lg">{brecha}%{brecha > 0 ? ` (+$${brechaAmt.toFixed(2)})` : ''}</p>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 uppercase">IVA</span>
+                <p className="font-mono text-white text-lg">{ivaPct}%</p>
+              </div>
+            </div>
+
+            {/* Detal */}
+            <div>
+              <h3 className="text-sm font-semibold text-green-400 mb-3 uppercase tracking-wider">Precio Detal</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia detal (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(priceGananciaPct.toFixed(2))}
+                    onChange={e => handleDetalGananciaChange(Number(e.target.value))}
+                    className="input-field !py-2.5 text-sm font-mono"
+                  />
                 </div>
-              )}
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">+ Ganancia detal ({Number(form.gananciaPct)}%):</span>
-                <span className="text-white">${gananciaDetal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">+ IVA ({ivaPct}%):</span>
-                <span className="text-white">${ivaDetal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1 border-t border-slate-700/50 pt-2">
-                <span className="text-green-400 font-semibold">= Precio detal:</span>
-                <span className="text-green-400 font-semibold">${priceDetal.toFixed(2)}</span>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(priceFinalDetal.toFixed(2))}
+                    onChange={e => handleDetalPriceChange(Number(e.target.value))}
+                    className="input-field !py-2.5 text-sm font-mono"
+                  />
+                </div>
               </div>
               {exchangeRate > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400">= Precio detal Bs:</span>
-                  <span className="text-slate-300">Bs {(priceDetal * exchangeRate).toFixed(2)}</span>
-                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalDetal * exchangeRate).toFixed(2)}</p>
               )}
             </div>
 
-            <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wider">Formula de precio — Mayor</h3>
-            <div className="space-y-2 font-mono text-sm">
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">Costo USD:</span>
-                <span className="text-white">${costUsd.toFixed(2)}</span>
-              </div>
-              {brecha > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400">+ Brecha ({brecha}%):</span>
-                  <span className="text-white">${brechaAmt.toFixed(2)}</span>
+            {/* Mayor */}
+            <div>
+              <h3 className="text-sm font-semibold text-blue-400 mb-3 uppercase tracking-wider">Precio Mayor</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia mayor (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(priceGananciaMayorPct.toFixed(2))}
+                    onChange={e => handleMayorGananciaChange(Number(e.target.value))}
+                    className="input-field !py-2.5 text-sm font-mono"
+                  />
                 </div>
-              )}
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">+ Ganancia mayor ({Number(form.gananciaMayorPct)}%):</span>
-                <span className="text-white">${gananciaMayor.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-400">+ IVA ({ivaPct}%):</span>
-                <span className="text-white">${ivaMayor.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1 border-t border-slate-700/50 pt-2">
-                <span className="text-blue-400 font-semibold">= Precio mayor:</span>
-                <span className="text-blue-400 font-semibold">${priceMayor.toFixed(2)}</span>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(priceFinalMayor.toFixed(2))}
+                    onChange={e => handleMayorPriceChange(Number(e.target.value))}
+                    className="input-field !py-2.5 text-sm font-mono"
+                  />
+                </div>
               </div>
               {exchangeRate > 0 && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400">= Precio mayor Bs:</span>
-                  <span className="text-slate-300">Bs {(priceMayor * exchangeRate).toFixed(2)}</span>
-                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalMayor * exchangeRate).toFixed(2)}</p>
               )}
+            </div>
+
+            {/* Formula breakdown */}
+            <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700/30 text-xs font-mono text-slate-500 space-y-1">
+              <p>Formula: costo x (1 + brecha%) x (1 + ganancia%) x (1 + IVA%)</p>
+              <p>Detal: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalDetal.toFixed(2)}</p>
+              <p>Mayor: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaMayorPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalMayor.toFixed(2)}</p>
+            </div>
+
+            {/* Save button */}
+            <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
+              <button
+                onClick={handleSavePrices}
+                disabled={savingPrices}
+                className="btn-primary !py-2.5 text-sm flex items-center gap-2"
+              >
+                {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                Guardar precios
+              </button>
             </div>
           </div>
         </TabsContent>
