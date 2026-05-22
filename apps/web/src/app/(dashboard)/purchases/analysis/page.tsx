@@ -265,6 +265,7 @@ export default function InventoryAnalysisPage() {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                         labelStyle={{ color: '#e2e8f0' }}
+                        itemStyle={{ color: '#e2e8f0' }}
                         formatter={(value: any, _name: any, props: any) => [`${Number(value).toFixed(1)}% (${props.payload.count} productos)`, '% de ventas']}
                       />
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -285,7 +286,7 @@ export default function InventoryAnalysisPage() {
                           <Cell key={i} fill={entry.fill} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} labelStyle={{ color: '#e2e8f0' }} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} labelStyle={{ color: '#e2e8f0' }} itemStyle={{ color: '#e2e8f0' }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="space-y-2 mt-2">
@@ -434,6 +435,7 @@ export default function InventoryAnalysisPage() {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                         labelStyle={{ color: '#e2e8f0' }}
+                        itemStyle={{ color: '#e2e8f0' }}
                         formatter={(value: any) => [fmtUsd(Number(value)), 'Ganancia']}
                       />
                       <Bar dataKey="grossProfit" radius={[0, 4, 4, 0]}>
