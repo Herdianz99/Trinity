@@ -30,7 +30,9 @@ export class PurchaseOrdersService {
 
   private async generatePurchaseNumber(tx: any): Promise<{ purchaseNumber: number; number: string }> {
     const result = await tx.$queryRaw<{ max: number | null }[]>`
-      SELECT MAX("purchaseNumber") as max FROM "PurchaseOrder" FOR UPDATE
+      SELECT MAX("purchaseNumber") as max FROM (
+        SELECT "purchaseNumber" FROM "PurchaseOrder" FOR UPDATE
+      ) sub
     `;
     const next = (result[0]?.max || 0) + 1;
     const number = `FC-${next.toString().padStart(5, '0')}`;
