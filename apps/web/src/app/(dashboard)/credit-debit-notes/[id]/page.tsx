@@ -118,6 +118,10 @@ export default function CreditDebitNoteDetailPage() {
 
   useEffect(() => { fetchNote(); }, [fetchNote]);
 
+  useEffect(() => {
+    if (note) document.title = `${note.number} - ${TYPE_LABELS[note.type] || note.type} | Trinity ERP`;
+  }, [note]);
+
   async function handlePost() {
     if (!confirm('¿Confirmar esta nota? Se aplicarán los efectos contables e inventario.')) return;
     setPosting(true);

@@ -82,6 +82,7 @@ export default function CreditDebitNotesPage() {
     setLoading(false);
   }, [page, type, status, from, to, search]);
 
+  useEffect(() => { document.title = 'Notas de Credito/Debito | Trinity ERP'; }, []);
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

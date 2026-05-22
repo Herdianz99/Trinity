@@ -25,13 +25,14 @@ export default function ReorderPage() {
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/proxy/purchase-orders/reorder-suggestions');
+      const res = await fetch('/api/proxy/purchases/reorder-suggestions');
       if (res.ok) setSuggestions(await res.json());
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { document.title = 'Sugerencias de Reorden | Trinity ERP'; }, []);
   useEffect(() => { fetchSuggestions(); }, [fetchSuggestions]);
 
   async function createOrderForProduct(suggestion: ReorderSuggestion) {
@@ -43,7 +44,7 @@ export default function ReorderPage() {
     const quantity = Math.max(1, suggestion.minStock - suggestion.currentStock);
 
     try {
-      const res = await fetch('/api/proxy/purchase-orders', {
+      const res = await fetch('/api/proxy/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,7 +121,7 @@ export default function ReorderPage() {
                     <button
                       onClick={() => createOrderForProduct(s)}
                       className="p-1.5 rounded-lg hover:bg-green-500/10 text-slate-400 hover:text-green-400 transition-colors"
-                      title="Crear orden de compra"
+                      title="Crear factura de compra"
                     >
                       <ShoppingCart size={14} />
                     </button>

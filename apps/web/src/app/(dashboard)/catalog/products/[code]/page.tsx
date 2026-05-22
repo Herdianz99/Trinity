@@ -782,7 +782,7 @@ export default function ProductDetailPage() {
                     <thead>
                       <tr className="border-b border-slate-700/50">
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
-                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Orden de compra</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Factura de compra</th>
                         <th className="text-left px-4 py-3 text-slate-400 font-medium">Proveedor</th>
                         <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. recibida</th>
                         <th className="text-right px-4 py-3 text-slate-400 font-medium">Costo USD</th>

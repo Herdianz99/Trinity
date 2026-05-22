@@ -1,38 +1,29 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Loader2, FileDown, Search } from 'lucide-react';
 
 interface CompraRow {
-  numero: number;
+  numero: string;
   fecha: string;
-  numeroFacturaProveedor: string;
-  numeroControlProveedor: string;
+  numeroFactura: string;
+  numeroControl: string;
   rifProveedor: string;
   nombreProveedor: string;
-  baseImponibleExenta: number;
-  baseImponibleReducida: number;
-  baseImponibleGeneral: number;
-  baseImponibleEspecial: number;
-  ivaReducido: number;
-  ivaGeneral: number;
-  ivaEspecial: number;
-  retentionIva: number;
-  islrRetention: number;
-  totalCompra: number;
+  comprasExentas: number;
+  baseImponible: number;
+  creditoFiscal: number;
+  comprobanteRetencion: string;
+  retencionIva: number;
+  total: number;
 }
 
 interface Totales {
   totalOrdenes: number;
-  baseImponibleExenta: number;
-  baseImponibleReducida: number;
-  baseImponibleGeneral: number;
-  baseImponibleEspecial: number;
-  ivaReducido: number;
-  ivaGeneral: number;
-  ivaEspecial: number;
-  retentionIva: number;
-  islrRetention: number;
+  comprasExentas: number;
+  baseImponible: number;
+  creditoFiscal: number;
+  retencionIva: number;
   totalCompras: number;
 }
 
@@ -54,6 +45,8 @@ export default function LibroComprasPage() {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => { document.title = 'Libro de Compras | Trinity ERP'; }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,35 +85,28 @@ export default function LibroComprasPage() {
       <tr>
         <td>${i + 1}</td>
         <td>${r.fecha ? new Date(r.fecha).toLocaleDateString('es-VE') : ''}</td>
-        <td>${r.numeroFacturaProveedor}</td>
-        <td>${r.numeroControlProveedor || ''}</td>
+        <td>${r.numero}</td>
+        <td>${r.numeroFactura}</td>
+        <td>${r.numeroControl || ''}</td>
         <td>${r.rifProveedor}</td>
         <td>${r.nombreProveedor}</td>
-        <td class="num">${formatVe(r.baseImponibleExenta)}</td>
-        <td class="num">${formatVe(r.baseImponibleReducida)}</td>
-        <td class="num">${formatVe(r.baseImponibleGeneral)}</td>
-        <td class="num">${formatVe(r.baseImponibleEspecial)}</td>
-        <td class="num">${formatVe(r.ivaReducido)}</td>
-        <td class="num">${formatVe(r.ivaGeneral)}</td>
-        <td class="num">${formatVe(r.ivaEspecial)}</td>
-        <td class="num">${formatVe(r.retentionIva)}</td>
-        <td class="num">${formatVe(r.islrRetention)}</td>
-        <td class="num total">${formatVe(r.totalCompra)}</td>
+        <td class="num">${formatVe(r.comprasExentas)}</td>
+        <td class="num">${formatVe(r.baseImponible)}</td>
+        <td class="num">${formatVe(r.creditoFiscal)}</td>
+        <td>${r.comprobanteRetencion || ''}</td>
+        <td class="num">${formatVe(r.retencionIva)}</td>
+        <td class="num total">${formatVe(r.total)}</td>
       </tr>
     `).join('');
 
     const totalesRow = totales ? `
       <tr class="totales">
-        <td colspan="6"><strong>TOTALES</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleExenta)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleReducida)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleGeneral)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleEspecial)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaReducido)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaGeneral)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaEspecial)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.retentionIva)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.islrRetention)}</strong></td>
+        <td colspan="7"><strong>TOTALES</strong></td>
+        <td class="num"><strong>${formatVe(totales.comprasExentas)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.baseImponible)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.creditoFiscal)}</strong></td>
+        <td></td>
+        <td class="num"><strong>${formatVe(totales.retencionIva)}</strong></td>
         <td class="num total"><strong>${formatVe(totales.totalCompras)}</strong></td>
       </tr>
     ` : '';
@@ -131,14 +117,14 @@ export default function LibroComprasPage() {
       <title>Libro de Compras - ${MONTHS[month]} ${year}</title>
       <style>
         @page { size: A4 landscape; margin: 10mm; }
-        body { font-family: Arial, sans-serif; font-size: 7pt; color: #000; }
+        body { font-family: Arial, sans-serif; font-size: 8pt; color: #000; }
         .header { text-align: center; margin-bottom: 10px; }
         .header h1 { font-size: 12pt; margin: 2px 0; }
         .header h2 { font-size: 10pt; margin: 2px 0; font-weight: normal; }
         .header p { font-size: 8pt; margin: 2px 0; color: #555; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #999; padding: 2px 3px; text-align: left; }
-        th { background: #e0e0e0; font-size: 6.5pt; }
+        th, td { border: 1px solid #999; padding: 3px 4px; text-align: left; }
+        th { background: #e0e0e0; font-size: 7pt; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
         .total { font-weight: bold; }
         .totales td { background: #f0f0f0; border-top: 2px solid #333; }
@@ -155,11 +141,10 @@ export default function LibroComprasPage() {
       <table>
         <thead>
           <tr>
-            <th>N&deg;</th><th>Fecha</th><th>N&deg; Factura</th><th>N&deg; Control</th>
+            <th>N&deg;</th><th>Fecha</th><th>N&deg; Doc</th><th>N&deg; Factura Prov.</th><th>N&deg; Control</th>
             <th>RIF Proveedor</th><th>Proveedor</th>
-            <th>Base Exenta</th><th>Base Reducida</th><th>Base General</th><th>Base Especial</th>
-            <th>IVA 8%</th><th>IVA 16%</th><th>IVA 31%</th>
-            <th>Ret. IVA</th><th>Ret. ISLR</th><th>Total</th>
+            <th>Compras Exentas</th><th>Base Imponible</th><th>Cr&eacute;dito Fiscal</th>
+            <th>Comp. Ret.</th><th>Ret. IVA</th><th>Total</th>
           </tr>
         </thead>
         <tbody>
@@ -236,59 +221,49 @@ export default function LibroComprasPage() {
                 <tr className="border-b border-slate-700/50">
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg;</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Fecha</th>
-                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Factura</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Doc</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Factura Prov.</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">RIF Proveedor</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Proveedor</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Exenta</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Red.</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Gen.</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Esp.</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">IVA 8%</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">IVA 16%</th>
-                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">IVA 31%</th>
+                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Compras Exentas</th>
+                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Imponible</th>
+                  <th className="text-right px-2 py-2.5 text-blue-400 font-medium">Credito Fiscal</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Comp. Ret.</th>
                   <th className="text-right px-2 py-2.5 text-orange-400 font-medium">Ret. IVA</th>
-                  <th className="text-right px-2 py-2.5 text-purple-400 font-medium">Ret. ISLR</th>
                   <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={16} className="text-center py-8 text-slate-500">No hay compras recibidas en este periodo</td></tr>
+                  <tr><td colSpan={13} className="text-center py-8 text-slate-500">No hay compras procesadas en este periodo</td></tr>
                 ) : (
                   <>
-                    {rows.map(r => (
-                      <tr key={r.numero} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
-                        <td className="px-2 py-2 text-slate-300">{r.numero}</td>
+                    {rows.map((r, i) => (
+                      <tr key={i} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
+                        <td className="px-2 py-2 text-slate-300">{i + 1}</td>
                         <td className="px-2 py-2 text-slate-300">{r.fecha ? new Date(r.fecha).toLocaleDateString('es-VE') : ''}</td>
-                        <td className="px-2 py-2 text-slate-200 font-mono">{r.numeroFacturaProveedor}</td>
-                        <td className="px-2 py-2 text-slate-300">{r.numeroControlProveedor || '-'}</td>
+                        <td className="px-2 py-2 text-slate-200 font-mono">{r.numero}</td>
+                        <td className="px-2 py-2 text-slate-200 font-mono">{r.numeroFactura}</td>
+                        <td className="px-2 py-2 text-slate-300">{r.numeroControl || '-'}</td>
                         <td className="px-2 py-2 text-slate-300">{r.rifProveedor}</td>
                         <td className="px-2 py-2 text-slate-200">{r.nombreProveedor}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleExenta)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleReducida)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleGeneral)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleEspecial)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaReducido)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaGeneral)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaEspecial)}</td>
-                        <td className="px-2 py-2 text-right text-orange-400 tabular-nums">{formatVe(r.retentionIva)}</td>
-                        <td className="px-2 py-2 text-right text-purple-400 tabular-nums">{formatVe(r.islrRetention)}</td>
-                        <td className="px-2 py-2 text-right text-slate-100 font-semibold tabular-nums">{formatVe(r.totalCompra)}</td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.comprasExentas)}</td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponible)}</td>
+                        <td className="px-2 py-2 text-right text-blue-400 tabular-nums">{formatVe(r.creditoFiscal)}</td>
+                        <td className="px-2 py-2 text-slate-300 font-mono">{r.comprobanteRetencion || '-'}</td>
+                        <td className="px-2 py-2 text-right text-orange-400 tabular-nums">{formatVe(r.retencionIva)}</td>
+                        <td className="px-2 py-2 text-right text-slate-100 font-semibold tabular-nums">{formatVe(r.total)}</td>
                       </tr>
                     ))}
                     {totales && (
                       <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                        <td colSpan={6} className="px-2 py-2.5 text-slate-100 font-bold">TOTALES ({totales.totalOrdenes} ordenes)</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleExenta)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleReducida)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleGeneral)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleEspecial)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaReducido)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaGeneral)}</td>
-                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaEspecial)}</td>
-                        <td className="px-2 py-2.5 text-right text-orange-400 font-bold tabular-nums">{formatVe(totales.retentionIva)}</td>
-                        <td className="px-2 py-2.5 text-right text-purple-400 font-bold tabular-nums">{formatVe(totales.islrRetention)}</td>
+                        <td colSpan={7} className="px-2 py-2.5 text-slate-100 font-bold">TOTALES ({totales.totalOrdenes} facturas)</td>
+                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.comprasExentas)}</td>
+                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponible)}</td>
+                        <td className="px-2 py-2.5 text-right text-blue-400 font-bold tabular-nums">{formatVe(totales.creditoFiscal)}</td>
+                        <td className="px-2 py-2.5"></td>
+                        <td className="px-2 py-2.5 text-right text-orange-400 font-bold tabular-nums">{formatVe(totales.retencionIva)}</td>
                         <td className="px-2 py-2.5 text-right text-blue-400 font-bold tabular-nums">{formatVe(totales.totalCompras)}</td>
                       </tr>
                     )}

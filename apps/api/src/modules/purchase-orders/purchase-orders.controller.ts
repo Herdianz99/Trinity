@@ -11,11 +11,11 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
-import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
+import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PurchaseStatus } from '@prisma/client';
 
-@Controller('purchase-orders')
+@Controller('purchases')
 @UseGuards(AuthGuard('jwt'))
 export class PurchaseOrdersController {
   constructor(private readonly service: PurchaseOrdersService) {}
@@ -62,21 +62,18 @@ export class PurchaseOrdersController {
     return this.service.update(id, dto);
   }
 
-  @Patch(':id/status')
-  changeStatus(
+  @Post(':id/process')
+  process(
     @Param('id') id: string,
-    @Body('status') status: 'SENT' | 'CANCELLED',
-  ) {
-    return this.service.changeStatus(id, status);
-  }
-
-  @Patch(':id/receive')
-  receive(
-    @Param('id') id: string,
-    @Body() dto: ReceivePurchaseOrderDto,
+    @Body() dto: ProcessPurchaseBillDto,
     @CurrentUser() user: { id: string },
   ) {
-    return this.service.receive(id, dto, user.id);
+    return this.service.process(id, dto, user.id);
+  }
+
+  @Patch(':id/cancel')
+  cancel(@Param('id') id: string) {
+    return this.service.cancel(id);
   }
 
   @Get(':id/suggested-prices')

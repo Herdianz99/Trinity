@@ -151,6 +151,7 @@ export default function PayablesPage() {
     } catch {}
   }, []);
 
+  useEffect(() => { document.title = 'Cuentas por Pagar | Trinity ERP'; }, []);
   useEffect(() => { fetchPayables(); }, [fetchPayables]);
   useEffect(() => { fetchSummary(); fetchSuppliers(); fetchRate(); fetchPaymentMethods(); }, [fetchSummary, fetchSuppliers, fetchRate, fetchPaymentMethods]);
 
@@ -434,7 +435,7 @@ export default function PayablesPage() {
                 </div>
                 {selectedPayable.purchaseOrder && (
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Orden de compra</span>
+                    <span className="text-slate-400">Factura de compra</span>
                     <span className="text-slate-200 font-mono">{selectedPayable.purchaseOrder.number}</span>
                   </div>
                 )}
@@ -528,7 +529,7 @@ export default function PayablesPage() {
                 </div>
                 {selectedPayable.purchaseOrder && (
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Orden de compra</span>
+                    <span className="text-slate-400">Factura de compra</span>
                     <span className="text-slate-200 font-mono">{selectedPayable.purchaseOrder.number}</span>
                   </div>
                 )}

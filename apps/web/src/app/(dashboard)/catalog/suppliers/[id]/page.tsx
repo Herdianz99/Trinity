@@ -27,14 +27,12 @@ interface AccountData {
 }
 
 const STATUS_BADGES: Record<string, string> = {
-  DRAFT: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  SENT: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  PARTIAL: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  RECEIVED: 'bg-green-500/10 text-green-400 border-green-500/20',
+  PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  PROCESSED: 'bg-green-500/10 text-green-400 border-green-500/20',
   CANCELLED: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Borrador', SENT: 'Enviada', PARTIAL: 'Parcial', RECEIVED: 'Recibida', CANCELLED: 'Cancelada',
+  PENDING: 'Pendiente', PROCESSED: 'Procesada', CANCELLED: 'Cancelada',
 };
 
 export default function SupplierDetailPage() {
@@ -64,6 +62,10 @@ export default function SupplierDetailPage() {
   const [accLoading, setAccLoading] = useState(false);
   const [cxpPage, setCxpPage] = useState(1);
 
+  useEffect(() => {
+    if (supplier) document.title = `${supplier.name} | Trinity ERP`;
+  }, [supplier]);
+
   const fetchSupplier = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,7 +85,7 @@ export default function SupplierDetailPage() {
   const fetchPurchases = useCallback(async () => {
     setPoLoading(true);
     try {
-      const res = await fetch(`/api/proxy/purchase-orders?supplierId=${id}&page=${poPage}&limit=20`);
+      const res = await fetch(`/api/proxy/purchases?supplierId=${id}&page=${poPage}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         setPurchases(data.data.map((o: any) => ({
@@ -265,7 +267,7 @@ export default function SupplierDetailPage() {
                   </thead>
                   <tbody>
                     {purchases.length === 0 ? (
-                      <tr><td colSpan={5} className="text-center py-8 text-slate-500">Sin ordenes de compra</td></tr>
+                      <tr><td colSpan={5} className="text-center py-8 text-slate-500">Sin facturas de compra</td></tr>
                     ) : purchases.map(p => (
                       <tr key={p.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                         <td className="px-4 py-3 font-mono text-green-400">{p.number}</td>
@@ -278,7 +280,7 @@ export default function SupplierDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <button onClick={() => router.push(`/purchases/${p.id}`)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto">
-                            Ver orden <ExternalLink size={10} />
+                            Ver factura <ExternalLink size={10} />
                           </button>
                         </td>
                       </tr>

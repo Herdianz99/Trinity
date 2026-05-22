@@ -131,98 +131,44 @@ export class FiscalService {
 
     const orders = await this.prisma.purchaseOrder.findMany({
       where: {
-        status: 'RECEIVED',
-        receivedAt: { gte: fromDate, lte: toDate },
+        status: 'PROCESSED',
+        invoiceDate: { gte: fromDate, lte: toDate },
       },
       include: {
         supplier: { select: { id: true, name: true, rif: true, isRetentionAgent: true } },
-        items: {
-          include: {
-            product: { select: { ivaType: true } },
-          },
-        },
-        payables: {
-          select: { retentionUsd: true },
-        },
+        payables: { select: { retentionUsd: true } },
       },
-      orderBy: { receivedAt: 'asc' },
+      orderBy: { invoiceDate: 'asc' },
     });
 
-    let totalBaseExenta = 0;
-    let totalBaseReducida = 0;
-    let totalBaseGeneral = 0;
-    let totalBaseEspecial = 0;
-    let totalIvaReducido = 0;
-    let totalIvaGeneral = 0;
-    let totalIvaEspecial = 0;
+    let totalExento = 0;
+    let totalBaseImponible = 0;
+    let totalCreditoFiscal = 0;
     let totalRetentionIva = 0;
-    let totalIslrRetention = 0;
     let totalCompras = 0;
 
-    const rows = orders.map((order, index) => {
-      let baseExenta = 0;
-      let baseReducida = 0;
-      let baseGeneral = 0;
-      let baseEspecial = 0;
-      let ivaReducido = 0;
-      let ivaGeneral = 0;
-      let ivaEspecial = 0;
-
-      for (const item of order.items) {
-        const base = item.costUsd * item.receivedQty;
-        const ivaRate = IVA_RATES[item.product.ivaType] || 0;
-        const iva = base * ivaRate;
-
-        switch (item.product.ivaType) {
-          case 'EXEMPT':
-            baseExenta += base;
-            break;
-          case 'REDUCED':
-            baseReducida += base;
-            ivaReducido += iva;
-            break;
-          case 'GENERAL':
-            baseGeneral += base;
-            ivaGeneral += iva;
-            break;
-          case 'SPECIAL':
-            baseEspecial += base;
-            ivaEspecial += iva;
-            break;
-        }
-      }
-
+    const rows = orders.map((order) => {
       const retentionIva = order.payables.reduce((sum, p) => sum + p.retentionUsd, 0);
-      const islrRetention = order.islrRetentionUsd || 0;
 
-      totalBaseExenta += baseExenta;
-      totalBaseReducida += baseReducida;
-      totalBaseGeneral += baseGeneral;
-      totalBaseEspecial += baseEspecial;
-      totalIvaReducido += ivaReducido;
-      totalIvaGeneral += ivaGeneral;
-      totalIvaEspecial += ivaEspecial;
+      totalExento += order.exemptAmountUsd;
+      totalBaseImponible += order.taxableBaseUsd;
+      totalCreditoFiscal += order.totalIvaUsd;
       totalRetentionIva += retentionIva;
-      totalIslrRetention += islrRetention;
       totalCompras += order.totalUsd;
 
       return {
-        numero: index + 1,
-        fecha: order.receivedAt,
-        numeroFacturaProveedor: order.number,
-        numeroControlProveedor: order.supplierControlNumber || '',
-        rifProveedor: order.supplier.rif || 'S/R',
+        numero: order.purchaseNumber,
+        fecha: order.invoiceDate || order.createdAt,
+        numeroControl: order.supplierControlNumber || '',
+        numeroFactura: order.supplierInvoiceNumber || '',
         nombreProveedor: order.supplier.name,
-        baseImponibleExenta: round2(baseExenta),
-        baseImponibleReducida: round2(baseReducida),
-        baseImponibleGeneral: round2(baseGeneral),
-        baseImponibleEspecial: round2(baseEspecial),
-        ivaReducido: round2(ivaReducido),
-        ivaGeneral: round2(ivaGeneral),
-        ivaEspecial: round2(ivaEspecial),
-        retentionIva: round2(retentionIva),
-        islrRetention: round2(islrRetention),
-        totalCompra: order.totalUsd,
+        rifProveedor: order.supplier.rif || 'S/R',
+        comprasExentas: round2(order.exemptAmountUsd),
+        baseImponible: round2(order.taxableBaseUsd),
+        creditoFiscal: round2(order.totalIvaUsd),
+        comprobanteRetencion: order.retentionVoucherNumber || '',
+        retencionIva: round2(retentionIva),
+        total: round2(order.totalUsd),
       };
     });
 
@@ -231,15 +177,10 @@ export class FiscalService {
       rows,
       totales: {
         totalOrdenes: orders.length,
-        baseImponibleExenta: round2(totalBaseExenta),
-        baseImponibleReducida: round2(totalBaseReducida),
-        baseImponibleGeneral: round2(totalBaseGeneral),
-        baseImponibleEspecial: round2(totalBaseEspecial),
-        ivaReducido: round2(totalIvaReducido),
-        ivaGeneral: round2(totalIvaGeneral),
-        ivaEspecial: round2(totalIvaEspecial),
-        retentionIva: round2(totalRetentionIva),
-        islrRetention: round2(totalIslrRetention),
+        comprasExentas: round2(totalExento),
+        baseImponible: round2(totalBaseImponible),
+        creditoFiscal: round2(totalCreditoFiscal),
+        retencionIva: round2(totalRetentionIva),
         totalCompras: round2(totalCompras),
       },
     };
@@ -254,8 +195,7 @@ export class FiscalService {
 
     const ivaDebitoFiscal =
       ventasTotales.ivaReducido + ventasTotales.ivaGeneral + ventasTotales.ivaEspecial;
-    const ivaCreditoFiscal =
-      comprasTotales.ivaReducido + comprasTotales.ivaGeneral + comprasTotales.ivaEspecial;
+    const ivaCreditoFiscal = comprasTotales.creditoFiscal;
 
     return {
       ventas: {
@@ -272,14 +212,10 @@ export class FiscalService {
       compras: {
         totalOrdenes: comprasTotales.totalOrdenes,
         baseImponibleTotal: round2(
-          comprasTotales.baseImponibleExenta +
-            comprasTotales.baseImponibleReducida +
-            comprasTotales.baseImponibleGeneral +
-            comprasTotales.baseImponibleEspecial,
+          comprasTotales.comprasExentas + comprasTotales.baseImponible,
         ),
         ivaTotal: round2(ivaCreditoFiscal),
-        retencionesIva: comprasTotales.retentionIva,
-        retencionesIslr: comprasTotales.islrRetention,
+        retencionesIva: comprasTotales.retencionIva,
         totalCompras: comprasTotales.totalCompras,
       },
       balance: {

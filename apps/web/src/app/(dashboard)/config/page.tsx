@@ -86,6 +86,8 @@ export default function ConfigPage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const customerSearchRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => { document.title = 'Configuracion | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchConfig();
     fetchExchangeRate();
@@ -624,7 +626,7 @@ export default function ConfigPage() {
                   onChange={(e) => handleChange('islrRetentionPct', e.target.value)}
                   className="input-field"
                 />
-                <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en ordenes de compra</p>
+                <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en facturas de compra</p>
               </div>
             </div>
           </div>

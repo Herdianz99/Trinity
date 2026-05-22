@@ -73,10 +73,8 @@ enum CountStatus {
 }
 
 enum PurchaseStatus {
-  DRAFT
-  SENT
-  PARTIAL
-  RECEIVED
+  PENDING
+  PROCESSED
   CANCELLED
 }
 
@@ -254,6 +252,7 @@ model User {
   cashMovements       CashMovement[]
   paymentSchedules    PaymentSchedule[]
   dynamicKeys         DynamicKey[]
+  purchaseBills       PurchaseOrder[]  @relation("PurchaseBillResponsible")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -443,6 +442,7 @@ model Warehouse {
   transfersFrom   Transfer[]       @relation("TransferFrom")
   transfersTo     Transfer[]       @relation("TransferTo")
   inventoryCounts InventoryCount[]
+  purchaseBills   PurchaseOrder[]  @relation("PurchaseBillWarehouse")
   createdAt       DateTime         @default(now())
 }
 
@@ -535,34 +535,58 @@ model InventoryCountItem {
 // ============================================
 
 model PurchaseOrder {
-  id                    String              @id @default(cuid())
-  number                String              @unique
-  supplierId            String
-  supplier              Supplier            @relation(fields: [supplierId], references: [id])
-  status                PurchaseStatus      @default(DRAFT)
-  invoiceDate           DateTime?
-  receivedDate          DateTime?
-  currency              String              @default("USD")
-  totalUsd              Float               @default(0)
-  totalBs               Float               @default(0)
-  exchangeRate          Float               @default(1)
-  surchargeUsd          Float               @default(0)
-  surchargeDistribution String              @default("PROPORTIONAL")
-  totalWithSurchargeUsd Float               @default(0)
-  isCredit              Boolean             @default(false)
-  creditDays            Int                 @default(0)
-  supplierControlNumber String?
-  islrRetentionPct      Float?
-  islrRetentionUsd      Float?
-  islrRetentionBs       Float?
-  notes                 String?
-  receivedAt            DateTime?
-  items                 PurchaseOrderItem[]
-  payables              Payable[]
-  creditDebitNotes      CreditDebitNote[]
-  createdById           String
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  number                 String              @unique
+  supplierId             String
+  supplier               Supplier            @relation(fields: [supplierId], references: [id])
+  status                 PurchaseStatus      @default(PENDING)
+  invoiceDate            DateTime?
+  receivedDate           DateTime?
+  currency               String              @default("USD")
+  totalUsd               Float               @default(0)
+  totalBs                Float               @default(0)
+  exchangeRate           Float               @default(1)
+  surchargeUsd           Float               @default(0)
+  surchargeDistribution  String              @default("PROPORTIONAL")
+  totalWithSurchargeUsd  Float               @default(0)
+  isCredit               Boolean             @default(false)
+  creditDays             Int                 @default(0)
+  supplierControlNumber  String?
+  islrRetentionPct       Float?
+  islrRetentionUsd       Float?
+  islrRetentionBs        Float?
+  notes                  String?
+  receivedAt             DateTime?
+  items                  PurchaseOrderItem[]
+  payables               Payable[]
+  creditDebitNotes       CreditDebitNote[]
+  createdById            String
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  // Purchase Bill fields
+  purchaseNumber         Int                 @default(0)
+  supplierSerialNumber   String?
+  supplierInvoiceNumber  String?
+  discountGlobalPct      Float               @default(0)
+  discountGlobalUsd      Float               @default(0)
+  discountGlobalBs       Float               @default(0)
+  subtotalUsd            Float               @default(0)
+  subtotalBs             Float               @default(0)
+  exemptAmountUsd        Float               @default(0)
+  exemptAmountBs         Float               @default(0)
+  taxableBaseUsd         Float               @default(0)
+  taxableBaseBs          Float               @default(0)
+  totalIvaUsd            Float               @default(0)
+  totalIvaBs             Float               @default(0)
+  totalSurchargeUsd      Float               @default(0)
+  totalSurchargeBs       Float               @default(0)
+  retentionVoucherNumber String?
+  responsibleId          String?
+  responsible            User?               @relation("PurchaseBillResponsible", fields: [responsibleId], references: [id])
+  processedAt            DateTime?
+  warehouseId            String?
+  warehouse              Warehouse?          @relation("PurchaseBillWarehouse", fields: [warehouseId], references: [id])
 }
 
 model PurchaseOrderItem {
@@ -577,6 +601,11 @@ model PurchaseOrderItem {
   totalUsd        Float
   totalBs         Float         @default(0)
   receivedQty     Float         @default(0)
+  discountPct     Float         @default(0)
+  discountUsd     Float         @default(0)
+  discountBs      Float         @default(0)
+  netCostUsd      Float         @default(0)
+  netCostBs       Float         @default(0)
 }
 
 // ============================================

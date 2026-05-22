@@ -1,29 +1,21 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, Min, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class ReceiveItemDto {
+export class ProcessPriceUpdateItemDto {
   @IsString()
-  purchaseOrderItemId: string;
+  productId: string;
 
   @IsNumber()
-  @Min(0)
-  receivedQty: number;
+  gananciaPct: number;
 
   @IsNumber()
-  @Min(0)
-  costUsd: number;
+  gananciaMayorPct: number;
 }
 
-export class ReceivePurchaseOrderDto {
-  @IsString()
-  warehouseId: string;
-
+export class ProcessPurchaseBillDto {
   @IsOptional()
-  @IsDateString()
-  receivedDate?: string;
-
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => ReceiveItemDto)
-  items: ReceiveItemDto[];
+  @Type(() => ProcessPriceUpdateItemDto)
+  priceUpdates?: ProcessPriceUpdateItemDto[];
 }

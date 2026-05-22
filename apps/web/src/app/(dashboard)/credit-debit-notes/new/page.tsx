@@ -108,10 +108,10 @@ export default function NewCreditDebitNotePage() {
         }
       } else if (!isSale && purchaseOrderId) {
         const [poRes, summaryRes] = await Promise.all([
-          fetch(`/api/proxy/purchase-orders/${purchaseOrderId}`),
+          fetch(`/api/proxy/purchases/${purchaseOrderId}`),
           fetch(`/api/proxy/credit-debit-notes/purchase-return-summary/${purchaseOrderId}`),
         ]);
-        if (!poRes.ok) throw new Error('Orden de compra no encontrada');
+        if (!poRes.ok) throw new Error('Factura de compra no encontrada');
         const po = await poRes.json();
         setParentDoc({
           id: po.id,
@@ -138,6 +138,8 @@ export default function NewCreditDebitNotePage() {
       setLoading(false);
     }
   }, [invoiceId, purchaseOrderId, isSale]);
+
+  useEffect(() => { document.title = `${TYPE_TITLES[noteType] || 'Nueva Nota'} | Trinity ERP`; }, [noteType]);
 
   useEffect(() => { fetchParentDoc(); }, [fetchParentDoc]);
 

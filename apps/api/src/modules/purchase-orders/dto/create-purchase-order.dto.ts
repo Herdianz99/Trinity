@@ -12,6 +12,11 @@ export class CreatePurchaseOrderItemDto {
   @IsNumber()
   @Min(0)
   costUsd: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountPct?: number;
 }
 
 export class CreatePurchaseOrderDto {
@@ -20,33 +25,23 @@ export class CreatePurchaseOrderDto {
 
   @IsOptional()
   @IsString()
-  notes?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isCredit?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  creditDays?: number;
+  supplierSerialNumber?: string;
 
   @IsOptional()
   @IsString()
   supplierControlNumber?: string;
 
   @IsOptional()
-  @IsBoolean()
-  applyIslr?: boolean;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  islrRetentionPct?: number;
+  @IsString()
+  supplierInvoiceNumber?: string;
 
   @IsOptional()
   @IsDateString()
   invoiceDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  receivedDate?: string;
 
   @IsOptional()
   @IsString()
@@ -59,6 +54,24 @@ export class CreatePurchaseOrderDto {
   exchangeRate?: number;
 
   @IsOptional()
+  @IsString()
+  warehouseId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isCredit?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  creditDays?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountGlobalPct?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   surchargeUsd?: number;
@@ -67,6 +80,23 @@ export class CreatePurchaseOrderDto {
   @IsString()
   @IsIn(['PROPORTIONAL', 'EQUAL'])
   surchargeDistribution?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  applyIslr?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  islrRetentionPct?: number;
+
+  @IsOptional()
+  @IsString()
+  retentionVoucherNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

@@ -100,6 +100,10 @@ export default function PayableDetailPage() {
 
   useEffect(() => { fetchPayable(); fetchPaymentMethods(); }, [fetchPayable, fetchPaymentMethods]);
 
+  useEffect(() => {
+    if (payable) document.title = `CxP - ${payable.supplier.name} | Trinity ERP`;
+  }, [payable]);
+
   async function handlePay() {
     setProcessing(true);
     setMessage(null);
@@ -167,7 +171,7 @@ export default function PayableDetailPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {payable.purchaseOrder && (
             <button onClick={() => router.push(`/purchases/${payable.purchaseOrderId}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <ExternalLink size={14} /> Ver orden de compra
+              <ExternalLink size={14} /> Ver factura de compra
             </button>
           )}
           {payable.status !== 'PAID' && (
@@ -201,7 +205,7 @@ export default function PayableDetailPage() {
               </div>
               {payable.purchaseOrder && (
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Orden de compra</span>
+                  <span className="text-slate-400">Factura de compra</span>
                   <button onClick={() => router.push(`/purchases/${payable.purchaseOrderId}`)} className="text-green-400 hover:text-green-300 font-mono flex items-center gap-1">
                     {payable.purchaseOrder.number} <ExternalLink size={10} />
                   </button>
