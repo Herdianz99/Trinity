@@ -73,6 +73,7 @@ interface PurchaseBill {
   processedAt: string | null;
   currency: string;
   exchangeRate: number;
+  isFiscal: boolean;
   isCredit: boolean;
   creditDays: number;
   supplierSerialNumber: string | null;
@@ -611,77 +612,87 @@ export default function PurchaseBillDetailPage() {
         <TabsContent value="info">
           {/* Info grid */}
           <div className="card p-6 mb-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-5 gap-x-6">
-              {/* Row 1 */}
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">N. Documento</p>
-                <p className="text-white font-mono font-medium">{bill.number}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Proveedor</p>
-                <p className="text-white font-medium">{bill.supplier.name}</p>
-                {bill.supplier.rif && (
-                  <p className="text-slate-400 text-xs font-mono">{bill.supplier.rif}</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Divisa</p>
-                <p className="text-white">{bill.currency || 'USD'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Factor cambiario</p>
-                <p className="text-white font-mono">{bill.exchangeRate?.toFixed(4)}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:1fr_2fr_1fr_1fr] gap-x-6">
+              {/* Col 1: Numeros del proveedor (stacked) */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">N. Serie proveedor</p>
+                  <p className="text-white font-mono">{bill.supplierSerialNumber || '--'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">N. Control fiscal</p>
+                  <p className="text-white font-mono">{bill.supplierControlNumber || '--'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">N. Factura proveedor</p>
+                  <p className="text-white font-mono">{bill.supplierInvoiceNumber || '--'}</p>
+                </div>
               </div>
 
-              {/* Row 2 */}
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">N. Serie proveedor</p>
-                <p className="text-white font-mono">{bill.supplierSerialNumber || '--'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Almacen</p>
-                <p className="text-white">{bill.warehouse?.name || '--'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Fecha factura</p>
-                <p className="text-white font-mono">
-                  {bill.invoiceDate ? fmtDate(bill.invoiceDate) : '--'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Fecha recepcion</p>
-                <p className="text-white font-mono">
-                  {bill.receivedDate ? fmtDate(bill.receivedDate) : '--'}
-                </p>
-              </div>
-
-              {/* Row 3 */}
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">N. Control fiscal</p>
-                <p className="text-white font-mono">{bill.supplierControlNumber || '--'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">N. Factura proveedor</p>
-                <p className="text-white font-mono">{bill.supplierInvoiceNumber || '--'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Forma de pago</p>
-                <p className="text-white">
-                  {bill.isCredit ? (
-                    <span>
-                      Credito{' '}
-                      <span className="text-blue-400 text-xs font-medium">
-                        ({bill.creditDays} dias)
-                      </span>
-                    </span>
-                  ) : (
-                    'Contado'
+              {/* Col 2: Proveedor + Almacen + Responsable (stacked) */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Proveedor</p>
+                  <p className="text-white font-medium">{bill.supplier.name}</p>
+                  {bill.supplier.rif && (
+                    <p className="text-slate-400 text-xs font-mono">{bill.supplier.rif}</p>
                   )}
-                </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Almacen</p>
+                  <p className="text-white">{bill.warehouse?.name || '--'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Responsable</p>
+                  <p className="text-white">{bill.responsible?.name || '--'}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase mb-1">Responsable</p>
-                <p className="text-white">{bill.responsible?.name || '--'}</p>
+
+              {/* Col 3: Divisa + Fecha factura + Forma de pago (stacked) */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Divisa</p>
+                  <p className="text-white">{bill.currency || 'USD'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Fecha factura</p>
+                  <p className="text-white font-mono">
+                    {bill.invoiceDate ? fmtDate(bill.invoiceDate) : '--'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Forma de pago</p>
+                  <p className="text-white">
+                    {bill.isCredit ? (
+                      <span>
+                        Credito{' '}
+                        <span className="text-blue-400 text-xs font-medium">
+                          ({bill.creditDays} dias)
+                        </span>
+                      </span>
+                    ) : (
+                      'Contado'
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Col 4: Factor cambiario + Fecha recepcion + Fiscal (stacked) */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Factor cambiario</p>
+                  <p className="text-white font-mono">{bill.exchangeRate?.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Fecha recepcion</p>
+                  <p className="text-white font-mono">
+                    {bill.receivedDate ? fmtDate(bill.receivedDate) : '--'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Fiscal</p>
+                  <p className="text-white">{bill.isFiscal ? 'Si' : 'No'}</p>
+                </div>
               </div>
             </div>
 

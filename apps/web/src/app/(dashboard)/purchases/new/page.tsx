@@ -144,6 +144,7 @@ export default function NewPurchaseBillPage() {
   const [receivedDate, setReceivedDate] = useState(todayStr());
   const [supplierControlNumber, setSupplierControlNumber] = useState('');
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [isFiscal, setIsFiscal] = useState(true);
   const [isCredit, setIsCredit] = useState(false);
   const [creditDays, setCreditDays] = useState<number>(30);
 
@@ -334,68 +335,99 @@ export default function NewPurchaseBillPage() {
 
   // ---- Real-time calculations ----
   const calculations = useMemo(() => {
+    const isBs = currency === 'BS';
+
     // Per-item calculations
     const itemCalcs = items.map((item) => {
       const lineBruto = item.costUsd * item.quantity;
       const lineDiscount = lineBruto * (item.discountPct / 100);
-      const importeUsd = lineBruto - lineDiscount;
+      const importePrimario = lineBruto - lineDiscount; // in the selected currency
       const ivaRate = IVA_RATES[item.ivaType] || 0;
-      const importeBs = importeUsd * exchangeRate;
-      return { ...item, lineBruto, lineDiscount, importeUsd, ivaRate, importeBs };
+      // importeUsd / importeBs depending on currency
+      const importeUsd = isBs ? importePrimario / exchangeRate : importePrimario;
+      const importeBs = isBs ? importePrimario : importePrimario * exchangeRate;
+      return { ...item, lineBruto, lineDiscount, importeUsd, importeBs, importePrimario, ivaRate };
     });
 
-    const subtotalUsd = itemCalcs.reduce((sum, i) => sum + i.importeUsd, 0);
+    const subtotalPrimario = itemCalcs.reduce((sum, i) => sum + i.importePrimario, 0);
+    const subtotalUsd = isBs ? subtotalPrimario / exchangeRate : subtotalPrimario;
+    const subtotalBs = isBs ? subtotalPrimario : subtotalPrimario * exchangeRate;
 
     // Global discount
-    const globalDiscountUsd = subtotalUsd * (discountGlobalPct / 100);
-    const subtotalAfterDiscount = subtotalUsd - globalDiscountUsd;
+    const globalDiscountPrimario = subtotalPrimario * (discountGlobalPct / 100);
+    const globalDiscountUsd = isBs ? globalDiscountPrimario / exchangeRate : globalDiscountPrimario;
+    const subtotalAfterDiscount = subtotalPrimario - globalDiscountPrimario;
 
     // Prorate global discount per item for exempt/taxable split
-    const exemptUsd = itemCalcs.reduce((sum, i) => {
+    const exemptPrimario = itemCalcs.reduce((sum, i) => {
       if (i.ivaType !== 'EXEMPT') return sum;
-      const proportion = subtotalUsd > 0 ? i.importeUsd / subtotalUsd : 0;
-      return sum + i.importeUsd - globalDiscountUsd * proportion;
+      const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
+      return sum + i.importePrimario - globalDiscountPrimario * proportion;
     }, 0);
 
-    const taxableBaseUsd = subtotalAfterDiscount - exemptUsd;
+    const exemptUsd = isBs ? exemptPrimario / exchangeRate : exemptPrimario;
+    const exemptBs = isBs ? exemptPrimario : exemptPrimario * exchangeRate;
+    const taxableBasePrimario = subtotalAfterDiscount - exemptPrimario;
+    const taxableBaseUsd = isBs ? taxableBasePrimario / exchangeRate : taxableBasePrimario;
+    const taxableBaseBs = isBs ? taxableBasePrimario : taxableBasePrimario * exchangeRate;
 
     // IVA per item (with global discount prorated)
-    const totalIvaUsd = itemCalcs.reduce((sum, i) => {
+    const totalIvaPrimario = itemCalcs.reduce((sum, i) => {
       if (i.ivaType === 'EXEMPT') return sum;
-      const proportion = subtotalUsd > 0 ? i.importeUsd / subtotalUsd : 0;
-      const itemAfterGlobalDiscount = i.importeUsd - globalDiscountUsd * proportion;
+      const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
+      const itemAfterGlobalDiscount = i.importePrimario - globalDiscountPrimario * proportion;
       return sum + itemAfterGlobalDiscount * i.ivaRate;
     }, 0);
 
-    const totalUsd = subtotalAfterDiscount + totalIvaUsd + surchargeUsd;
-    const totalBs = totalUsd * exchangeRate;
+    const totalIvaUsd = isBs ? totalIvaPrimario / exchangeRate : totalIvaPrimario;
+    const totalIvaBs = isBs ? totalIvaPrimario : totalIvaPrimario * exchangeRate;
+
+    const totalPrimario = subtotalAfterDiscount + totalIvaPrimario + surchargeUsd;
+    const totalUsd = isBs ? totalPrimario / exchangeRate : totalPrimario;
+    const totalBs = isBs ? totalPrimario : totalPrimario * exchangeRate;
 
     // IVA retention if supplier is retention agent
     const isRetentionAgent = selectedSupplier?.isRetentionAgent || false;
     const retentionIvaUsd = isRetentionAgent ? totalIvaUsd * 0.75 : 0;
-    const netPayable = isRetentionAgent ? totalUsd - retentionIvaUsd : totalUsd;
+    const retentionIvaBs = isRetentionAgent ? totalIvaBs * 0.75 : 0;
+    const netPayableUsd = isRetentionAgent ? totalUsd - retentionIvaUsd : totalUsd;
+    const netPayableBs = isRetentionAgent ? totalBs - retentionIvaBs : totalBs;
 
     return {
       itemCalcs,
       subtotalUsd,
+      subtotalBs,
       globalDiscountUsd,
+      globalDiscountBs: isBs ? globalDiscountPrimario : globalDiscountPrimario * exchangeRate,
       subtotalAfterDiscount,
+      subtotalAfterDiscountUsd: isBs ? subtotalAfterDiscount / exchangeRate : subtotalAfterDiscount,
+      subtotalAfterDiscountBs: isBs ? subtotalAfterDiscount : subtotalAfterDiscount * exchangeRate,
       exemptUsd,
+      exemptBs,
       taxableBaseUsd,
+      taxableBaseBs,
       totalIvaUsd,
+      totalIvaBs,
       totalUsd,
       totalBs,
       isRetentionAgent,
       retentionIvaUsd,
-      netPayable,
+      retentionIvaBs,
+      netPayableUsd,
+      netPayableBs,
     };
-  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier]);
+  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier, currency]);
 
   // ---- Validation ----
   function validate(): string | null {
     if (!supplierId) return 'Selecciona un proveedor';
     if (!warehouseId) return 'Selecciona un almacen';
     if (!invoiceDate) return 'Ingresa la fecha de factura';
+    if (!supplierInvoiceNumber.trim()) return 'Ingresa el N. Factura proveedor';
+    if (isFiscal) {
+      if (!supplierSerialNumber.trim()) return 'Ingresa el N. Serie proveedor (requerido para compras fiscales)';
+      if (!supplierControlNumber.trim()) return 'Ingresa el N. Control fiscal (requerido para compras fiscales)';
+    }
     const validItems = items.filter((i) => i.productId);
     if (validItems.length === 0) return 'Agrega al menos un articulo';
     for (let i = 0; i < validItems.length; i++) {
@@ -429,6 +461,7 @@ export default function NewPurchaseBillPage() {
       currency,
       exchangeRate: Number(exchangeRate),
       warehouseId,
+      isFiscal,
       isCredit,
       creditDays: isCredit ? Number(creditDays) : 0,
       discountGlobalPct: Number(discountGlobalPct),
@@ -650,285 +683,277 @@ export default function NewPurchaseBillPage() {
       )}
 
       {/* ═══ Form Header ═══ */}
-      <div className="card p-6 space-y-4">
-        {/* Row 1 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* N Documento */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              N. Documento
-            </label>
-            <input
-              type="text"
-              value="Automatico"
-              readOnly
-              className="input-field !py-2 text-sm bg-slate-900/60 text-slate-500 cursor-not-allowed"
-            />
-          </div>
-
-          {/* Proveedor searchable */}
-          <div ref={supplierRef} className="relative">
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Proveedor *
-            </label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+      <div className="card p-6 relative z-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:1fr_2fr_1fr_1fr] gap-4">
+          {/* Col 1: Numeros del proveedor (stacked) */}
+          <div className="space-y-1.5">
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                N. Serie proveedor{isFiscal ? ' *' : ''}
+              </label>
               <input
                 type="text"
-                value={
-                  supplierDropdownOpen
-                    ? supplierSearch
-                    : selectedSupplier
-                    ? `${selectedSupplier.name}${selectedSupplier.rif ? ` (${selectedSupplier.rif})` : ''}`
-                    : ''
-                }
-                onChange={(e) => {
-                  setSupplierSearch(e.target.value);
-                  setSupplierDropdownOpen(true);
-                }}
-                onFocus={() => {
-                  setSupplierDropdownOpen(true);
-                  setSupplierSearch('');
-                }}
-                className="input-field !py-2 text-sm pl-9"
-                placeholder="Buscar proveedor..."
+                value={supplierSerialNumber}
+                onChange={(e) => setSupplierSerialNumber(e.target.value)}
+                className="input-field !py-1 text-sm"
+                placeholder="Serie..."
               />
-              {supplierId && !supplierDropdownOpen && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSupplierId('');
-                    setSupplierSearch('');
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                N. Control fiscal{isFiscal ? ' *' : ''}
+              </label>
+              <input
+                type="text"
+                value={supplierControlNumber}
+                onChange={(e) => setSupplierControlNumber(e.target.value)}
+                className="input-field !py-1 text-sm"
+                placeholder="00-00000000"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                N. Factura proveedor *
+              </label>
+              <input
+                type="text"
+                value={supplierInvoiceNumber}
+                onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+                className="input-field !py-1 text-sm"
+                placeholder="Numero..."
+              />
+            </div>
+          </div>
+
+          {/* Col 2: Proveedor + Almacen + Responsable (stacked) */}
+          <div className="space-y-1.5">
+            <div ref={supplierRef} className="relative">
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Proveedor *
+              </label>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={
+                    supplierDropdownOpen
+                      ? supplierSearch
+                      : selectedSupplier
+                      ? `${selectedSupplier.name}${selectedSupplier.rif ? ` (${selectedSupplier.rif})` : ''}`
+                      : ''
+                  }
+                  onChange={(e) => {
+                    setSupplierSearch(e.target.value);
                     setSupplierDropdownOpen(true);
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-            {supplierDropdownOpen && (
-              <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                {filteredSuppliers.length === 0 ? (
-                  <div className="px-3 py-3 text-sm text-slate-400">Sin resultados</div>
-                ) : (
-                  filteredSuppliers.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        setSupplierId(s.id);
-                        setSupplierDropdownOpen(false);
-                        setSupplierSearch('');
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 transition-colors ${
-                        s.id === supplierId ? 'bg-green-500/10 text-green-400' : 'text-white'
-                      }`}
-                    >
-                      <span className="font-medium">{s.name}</span>
-                      {s.rif && (
-                        <span className="ml-2 text-slate-400 text-xs">{s.rif}</span>
-                      )}
-                      {s.isRetentionAgent && (
-                        <span className="ml-2 px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded font-bold">
-                          Ag. Ret.
-                        </span>
-                      )}
-                    </button>
-                  ))
+                  onFocus={() => {
+                    setSupplierDropdownOpen(true);
+                    setSupplierSearch('');
+                  }}
+                  className="input-field !py-1 text-sm pl-9"
+                  placeholder="Buscar proveedor..."
+                />
+                {supplierId && !supplierDropdownOpen && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupplierId('');
+                      setSupplierSearch('');
+                      setSupplierDropdownOpen(true);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400"
+                  >
+                    <X size={14} />
+                  </button>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Divisa */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Divisa
-            </label>
-            <div className="flex rounded-lg overflow-hidden border border-slate-700">
-              <button
-                type="button"
-                onClick={() => setCurrency('USD')}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                  currency === 'USD'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                }`}
-              >
-                USD
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrency('BS')}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                  currency === 'BS'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                }`}
-              >
-                Bs
-              </button>
-            </div>
-          </div>
-
-          {/* Factor cambiario */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Factor cambiario
-            </label>
-            <input
-              type="number"
-              step="0.0001"
-              min="0"
-              value={exchangeRate || ''}
-              onChange={(e) => setExchangeRate(Number(e.target.value))}
-              className="input-field !py-2 text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Row 2 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* N Serie proveedor */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              N. Serie proveedor
-            </label>
-            <input
-              type="text"
-              value={supplierSerialNumber}
-              onChange={(e) => setSupplierSerialNumber(e.target.value)}
-              className="input-field !py-2 text-sm"
-              placeholder="Serie..."
-            />
-          </div>
-
-          {/* Almacen */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Almacen *
-            </label>
-            <select
-              value={warehouseId}
-              onChange={(e) => setWarehouseId(e.target.value)}
-              className="input-field !py-2 text-sm"
-              required
-            >
-              <option value="">Seleccionar...</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Fecha factura */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Fecha factura *
-            </label>
-            <input
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
-              className="input-field !py-2 text-sm"
-              required
-            />
-          </div>
-
-          {/* Fecha recepcion */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Fecha recepcion
-            </label>
-            <input
-              type="date"
-              value={receivedDate}
-              onChange={(e) => setReceivedDate(e.target.value)}
-              className="input-field !py-2 text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Row 3 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* N Control fiscal */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              N. Control fiscal
-            </label>
-            <input
-              type="text"
-              value={supplierControlNumber}
-              onChange={(e) => setSupplierControlNumber(e.target.value)}
-              className="input-field !py-2 text-sm"
-              placeholder="00-00000000"
-            />
-          </div>
-
-          {/* N Factura proveedor */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              N. Factura proveedor
-            </label>
-            <input
-              type="text"
-              value={supplierInvoiceNumber}
-              onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-              className="input-field !py-2 text-sm"
-              placeholder="Numero..."
-            />
-          </div>
-
-          {/* Forma de pago */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Forma de pago
-            </label>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isCredit}
-                  onChange={(e) => setIsCredit(e.target.checked)}
-                  className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
-                />
-                Credito
-              </label>
-              {isCredit && (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min="1"
-                    value={creditDays || ''}
-                    onChange={(e) => setCreditDays(Number(e.target.value))}
-                    className="input-field !py-1.5 text-sm w-16 text-center"
-                  />
-                  <span className="text-xs text-slate-400">dias</span>
+              {supplierDropdownOpen && (
+                <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                  {filteredSuppliers.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-slate-400">Sin resultados</div>
+                  ) : (
+                    filteredSuppliers.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSupplierId(s.id);
+                          setSupplierDropdownOpen(false);
+                          setSupplierSearch('');
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                          s.id === supplierId ? 'bg-green-500/10 text-green-400' : 'text-white'
+                        }`}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        {s.rif && (
+                          <span className="ml-2 text-slate-400 text-xs">{s.rif}</span>
+                        )}
+                        {s.isRetentionAgent && (
+                          <span className="ml-2 px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded font-bold">
+                            Ag. Ret.
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Almacen *
+              </label>
+              <select
+                value={warehouseId}
+                onChange={(e) => setWarehouseId(e.target.value)}
+                className="input-field !py-1 text-sm"
+                required
+              >
+                <option value="">Seleccionar...</option>
+                {warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Responsable
+              </label>
+              <input
+                type="text"
+                value={user?.name || ''}
+                readOnly
+                className="input-field !py-1 text-sm bg-slate-900/60 text-slate-500 cursor-not-allowed"
+              />
+            </div>
           </div>
 
-          {/* Responsable */}
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Responsable
-            </label>
-            <input
-              type="text"
-              value={user?.name || ''}
-              readOnly
-              className="input-field !py-2 text-sm bg-slate-900/60 text-slate-500 cursor-not-allowed"
-            />
+          {/* Col 3: Divisa + Fecha factura + Forma de pago (stacked) */}
+          <div className="space-y-1.5">
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Divisa
+              </label>
+              <div className="flex rounded-lg overflow-hidden border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setCurrency('USD')}
+                  className={`flex-1 py-1 text-sm font-medium transition-colors ${
+                    currency === 'USD'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  USD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrency('BS')}
+                  className={`flex-1 py-1 text-sm font-medium transition-colors ${
+                    currency === 'BS'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  Bs
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Fecha factura *
+              </label>
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                className="input-field !py-1 text-sm"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Forma de pago
+              </label>
+              <div className="flex items-center gap-2 h-[30px]">
+                <button
+                  type="button"
+                  onClick={() => setIsCredit(!isCredit)}
+                  className="flex items-center gap-2 select-none"
+                >
+                  <div className={`relative w-9 h-5 rounded-full transition-colors ${isCredit ? 'bg-green-600' : 'bg-slate-600'}`}>
+                    <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform absolute top-0.5 ${isCredit ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                  <span className="text-sm text-slate-300">Credito</span>
+                </button>
+                {isCredit && (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="1"
+                      value={creditDays || ''}
+                      onChange={(e) => setCreditDays(Number(e.target.value))}
+                      className="input-field !py-0.5 text-sm w-14 text-center"
+                    />
+                    <span className="text-[10px] text-slate-400">dias</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Col 4: Factor cambiario + Fecha recepcion + Fiscal (stacked) */}
+          <div className="space-y-1.5">
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Factor cambiario
+              </label>
+              <input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={exchangeRate || ''}
+                onChange={(e) => setExchangeRate(Number(e.target.value))}
+                className="input-field !py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Fecha recepcion
+              </label>
+              <input
+                type="date"
+                value={receivedDate}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                className="input-field !py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Fiscal
+              </label>
+              <div className="flex items-center gap-2 h-[30px]">
+                <button
+                  type="button"
+                  onClick={() => setIsFiscal(!isFiscal)}
+                  className="flex items-center gap-2 select-none"
+                >
+                  <div className={`relative w-9 h-5 rounded-full transition-colors ${isFiscal ? 'bg-green-600' : 'bg-slate-600'}`}>
+                    <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform absolute top-0.5 ${isFiscal ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                  <span className="text-sm text-slate-300">{isFiscal ? 'Si' : 'No'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ═══ Items Table ═══ */}
-      <div className="card overflow-hidden">
+      <div className="card relative z-10">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
             Articulos
@@ -942,18 +967,18 @@ export default function NewPurchaseBillPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-visible min-w-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-800/30">
                 <th className="text-left px-3 py-3 text-slate-400 font-medium w-20">Ref. Art.</th>
                 <th className="text-left px-3 py-3 text-slate-400 font-medium min-w-[220px]">Articulo</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Cantidad</th>
-                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Precio USD</th>
+                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Precio {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-20">% Dto.</th>
-                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe USD</th>
+                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-center px-3 py-3 text-slate-400 font-medium w-16">% IVA</th>
-                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe Bs</th>
+                <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'USD' : 'Bs'}</th>
                 <th className="w-10"></th>
               </tr>
             </thead>
@@ -1067,10 +1092,10 @@ export default function NewPurchaseBillPage() {
                       />
                     </td>
 
-                    {/* Importe USD */}
+                    {/* Importe primario (en la moneda seleccionada) */}
                     <td className="px-3 py-2 text-right">
                       <span className="font-mono text-white text-sm">
-                        ${fmt(calc?.importeUsd || 0)}
+                        {currency === 'BS' ? '' : '$'}{fmt(calc?.importePrimario || 0)}
                       </span>
                     </td>
 
@@ -1091,10 +1116,10 @@ export default function NewPurchaseBillPage() {
                       </span>
                     </td>
 
-                    {/* Importe Bs */}
+                    {/* Importe secundario (en la otra moneda) */}
                     <td className="px-3 py-2 text-right">
                       <span className="font-mono text-slate-400 text-sm">
-                        {fmt(calc?.importeBs || 0)}
+                        {currency === 'BS' ? `$${fmt(calc?.importeUsd || 0)}` : fmt(calc?.importeBs || 0)}
                       </span>
                     </td>
 
@@ -1141,15 +1166,15 @@ export default function NewPurchaseBillPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {/* Subtotal */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Subtotal $</p>
+              <p className="text-xs text-slate-500 mb-1">Subtotal {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-white font-mono text-lg">
-                ${fmt(calculations.subtotalUsd)}
+                {currency === 'BS' ? fmt(calculations.subtotalBs) : `$${fmt(calculations.subtotalUsd)}`}
               </p>
             </div>
 
             {/* Recargo */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Recargo $</p>
+              <p className="text-xs text-slate-500 mb-1">Recargo {currency === 'BS' ? 'Bs' : '$'}</p>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -1185,9 +1210,9 @@ export default function NewPurchaseBillPage() {
                   className="input-field !py-1 text-sm w-20 font-mono"
                   placeholder="0"
                 />
-                {calculations.globalDiscountUsd > 0 && (
+                {(currency === 'BS' ? calculations.globalDiscountBs : calculations.globalDiscountUsd) > 0 && (
                   <span className="text-red-400 text-xs font-mono">
-                    -${fmt(calculations.globalDiscountUsd)}
+                    -{currency === 'BS' ? '' : '$'}{fmt(currency === 'BS' ? calculations.globalDiscountBs : calculations.globalDiscountUsd)}
                   </span>
                 )}
               </div>
@@ -1195,17 +1220,17 @@ export default function NewPurchaseBillPage() {
 
             {/* Sub-Total c/Dto */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Sub-Total c/Dto $</p>
+              <p className="text-xs text-slate-500 mb-1">Sub-Total c/Dto {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-white font-mono text-lg">
-                ${fmt(calculations.subtotalAfterDiscount)}
+                {currency === 'BS' ? fmt(calculations.subtotalAfterDiscountBs) : `$${fmt(calculations.subtotalAfterDiscountUsd)}`}
               </p>
             </div>
 
             {/* Monto Exento */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Monto Exento $</p>
+              <p className="text-xs text-slate-500 mb-1">Monto Exento {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-slate-300 font-mono">
-                ${fmt(calculations.exemptUsd)}
+                {currency === 'BS' ? fmt(calculations.exemptBs) : `$${fmt(calculations.exemptUsd)}`}
               </p>
             </div>
           </div>
@@ -1213,33 +1238,33 @@ export default function NewPurchaseBillPage() {
           <div className="border-t border-slate-700/50 pt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {/* Base IVA */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Base IVA $</p>
+              <p className="text-xs text-slate-500 mb-1">Base IVA {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-white font-mono">
-                ${fmt(calculations.taxableBaseUsd)}
+                {currency === 'BS' ? fmt(calculations.taxableBaseBs) : `$${fmt(calculations.taxableBaseUsd)}`}
               </p>
             </div>
 
             {/* Total IVA */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Total IVA $</p>
+              <p className="text-xs text-slate-500 mb-1">Total IVA {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-amber-400 font-mono">
-                ${fmt(calculations.totalIvaUsd)}
+                {currency === 'BS' ? fmt(calculations.totalIvaBs) : `$${fmt(calculations.totalIvaUsd)}`}
               </p>
             </div>
 
-            {/* Total USD */}
+            {/* Total primario */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Total $</p>
+              <p className="text-xs text-slate-500 mb-1">Total {currency === 'BS' ? 'Bs' : '$'}</p>
               <p className="text-green-400 font-mono text-xl font-bold">
-                ${fmt(calculations.totalUsd)}
+                {currency === 'BS' ? `Bs ${fmt(calculations.totalBs)}` : `$${fmt(calculations.totalUsd)}`}
               </p>
             </div>
 
-            {/* Total Bs */}
+            {/* Total secundario */}
             <div>
-              <p className="text-xs text-slate-500 mb-1">Total Bs</p>
+              <p className="text-xs text-slate-500 mb-1">Total {currency === 'BS' ? '$' : 'Bs'}</p>
               <p className="text-blue-400 font-mono text-lg">
-                Bs {fmt(calculations.totalBs)}
+                {currency === 'BS' ? `$${fmt(calculations.totalUsd)}` : `Bs ${fmt(calculations.totalBs)}`}
               </p>
             </div>
 
@@ -1258,7 +1283,7 @@ export default function NewPurchaseBillPage() {
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Retencion IVA (75%)</p>
                     <p className="text-purple-400 font-mono font-bold">
-                      -${fmt(calculations.retentionIvaUsd)}
+                      {currency === 'BS' ? `-Bs ${fmt(calculations.retentionIvaBs)}` : `-$${fmt(calculations.retentionIvaUsd)}`}
                     </p>
                   </div>
                   <div>
@@ -1272,15 +1297,15 @@ export default function NewPurchaseBillPage() {
                     />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">Neto a pagar $</p>
+                    <p className="text-xs text-slate-500 mb-1">Neto a pagar {currency === 'BS' ? 'Bs' : '$'}</p>
                     <p className="text-green-400 font-mono text-lg font-bold">
-                      ${fmt(calculations.netPayable)}
+                      {currency === 'BS' ? `Bs ${fmt(calculations.netPayableBs)}` : `$${fmt(calculations.netPayableUsd)}`}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">Neto a pagar Bs</p>
+                    <p className="text-xs text-slate-500 mb-1">Neto a pagar {currency === 'BS' ? '$' : 'Bs'}</p>
                     <p className="text-blue-400 font-mono">
-                      Bs {fmt(calculations.netPayable * exchangeRate)}
+                      {currency === 'BS' ? `$${fmt(calculations.netPayableUsd)}` : `Bs ${fmt(calculations.netPayableBs)}`}
                     </p>
                   </div>
                 </div>
