@@ -28,22 +28,26 @@ export class InventoryAnalysisService {
         productName: true,
         quantity: true,
         totalUsd: true,
+        returnedQty: true,
       },
     });
 
-    // Aggregate by product
+    // Aggregate by product (using effective quantity = quantity - returnedQty)
     const productMap = new Map<string, { productId: string; productName: string; totalSalesUsd: number; totalUnitsSold: number }>();
     for (const item of items) {
+      const effectiveQty = item.quantity - (item.returnedQty || 0);
+      if (effectiveQty <= 0) continue;
+      const effectiveRevenue = item.totalUsd * (effectiveQty / item.quantity);
       const existing = productMap.get(item.productId);
       if (existing) {
-        existing.totalSalesUsd += item.totalUsd;
-        existing.totalUnitsSold += item.quantity;
+        existing.totalSalesUsd += effectiveRevenue;
+        existing.totalUnitsSold += effectiveQty;
       } else {
         productMap.set(item.productId, {
           productId: item.productId,
           productName: item.productName,
-          totalSalesUsd: item.totalUsd,
-          totalUnitsSold: item.quantity,
+          totalSalesUsd: effectiveRevenue,
+          totalUnitsSold: effectiveQty,
         });
       }
     }
@@ -123,12 +127,14 @@ export class InventoryAnalysisService {
           createdAt: { gte: fromDate, lte: toDate },
         },
       },
-      select: { productId: true, quantity: true },
+      select: { productId: true, quantity: true, returnedQty: true },
     });
 
     const salesMap = new Map<string, number>();
     for (const item of items) {
-      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + item.quantity);
+      const effectiveQty = item.quantity - (item.returnedQty || 0);
+      if (effectiveQty <= 0) continue;
+      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + effectiveQty);
     }
 
     // Get all active non-service products with stock
@@ -196,25 +202,29 @@ export class InventoryAnalysisService {
         quantity: true,
         totalUsd: true,
         costUsd: true,
+        returnedQty: true,
       },
     });
 
-    // Aggregate by product
+    // Aggregate by product (using effective quantity = quantity - returnedQty)
     const productMap = new Map<string, { productId: string; productName: string; revenue: number; cost: number; unitsSold: number }>();
     for (const item of items) {
+      const effectiveQty = item.quantity - (item.returnedQty || 0);
+      if (effectiveQty <= 0) continue;
+      const effectiveRevenue = item.totalUsd * (effectiveQty / item.quantity);
+      const effectiveCost = item.costUsd * effectiveQty;
       const existing = productMap.get(item.productId);
-      const itemCost = item.costUsd * item.quantity;
       if (existing) {
-        existing.revenue += item.totalUsd;
-        existing.cost += itemCost;
-        existing.unitsSold += item.quantity;
+        existing.revenue += effectiveRevenue;
+        existing.cost += effectiveCost;
+        existing.unitsSold += effectiveQty;
       } else {
         productMap.set(item.productId, {
           productId: item.productId,
           productName: item.productName,
-          revenue: item.totalUsd,
-          cost: itemCost,
-          unitsSold: item.quantity,
+          revenue: effectiveRevenue,
+          cost: effectiveCost,
+          unitsSold: effectiveQty,
         });
       }
     }
@@ -303,11 +313,13 @@ export class InventoryAnalysisService {
           createdAt: { gte: fromDate, lte: toDate },
         },
       },
-      select: { productId: true, quantity: true },
+      select: { productId: true, quantity: true, returnedQty: true },
     });
     const salesMap = new Map<string, number>();
     for (const item of items) {
-      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + item.quantity);
+      const effectiveQty = item.quantity - (item.returnedQty || 0);
+      if (effectiveQty <= 0) continue;
+      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + effectiveQty);
     }
 
     // Products below min stock

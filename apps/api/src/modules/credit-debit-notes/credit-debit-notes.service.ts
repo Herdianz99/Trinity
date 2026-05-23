@@ -489,6 +489,17 @@ export class CreditDebitNotesService {
               where: { id: note.invoiceId },
               data: { status: allReturned ? 'RETURNED' : 'PARTIAL_RETURN' },
             });
+
+            // Update returnedQty on each InvoiceItem for inventory analysis
+            for (const invItem of invoice.items) {
+              const returned = totalReturnedByProduct[invItem.productId] || 0;
+              if (returned > 0) {
+                await tx.invoiceItem.update({
+                  where: { id: invItem.id },
+                  data: { returnedQty: returned },
+                });
+              }
+            }
           }
         }
       }

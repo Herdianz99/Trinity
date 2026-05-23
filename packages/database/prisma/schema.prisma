@@ -549,6 +549,7 @@ model PurchaseOrder {
   surchargeUsd           Float               @default(0)
   surchargeDistribution  String              @default("PROPORTIONAL")
   totalWithSurchargeUsd  Float               @default(0)
+  isFiscal               Boolean             @default(true)
   isCredit               Boolean             @default(false)
   creditDays             Int                 @default(0)
   supplierControlNumber  String?
@@ -787,6 +788,7 @@ model InvoiceItem {
   costUsd               Float   @default(0)
   costBs                Float   @default(0)
   priceOverridden       Boolean @default(false)
+  returnedQty           Float   @default(0)
 }
 
 model Payment {
