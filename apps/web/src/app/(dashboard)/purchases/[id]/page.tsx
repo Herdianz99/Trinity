@@ -12,6 +12,8 @@ import {
   ExternalLink,
   X,
   BookOpen,
+  Shield,
+  Calendar,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -103,6 +105,7 @@ interface PurchaseBill {
   retentionVoucherNumber: string | null;
   notes: string | null;
   items: PurchaseItem[];
+  retentionVoucher: RetentionVoucher | null;
   createdAt: string;
 }
 
@@ -155,6 +158,19 @@ interface CreditDebitNote {
   type: string;
   totalUsd: number;
   status: string;
+  createdAt: string;
+}
+
+interface RetentionVoucher {
+  id: string;
+  number: string;
+  purchaseOrderId: string;
+  status: 'PENDING' | 'ISSUED' | 'CANCELLED';
+  issueDate: string | null;
+  retentionAmountUsd: number;
+  retentionAmountBs: number;
+  exchangeRate: number;
+  notes: string | null;
   createdAt: string;
 }
 
@@ -261,6 +277,11 @@ export default function PurchaseBillDetailPage() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [notesFetched, setNotesFetched] = useState(false);
 
+  // Retention voucher actions
+  const [issuingRetention, setIssuingRetention] = useState(false);
+  const [issueRetentionModal, setIssueRetentionModal] = useState(false);
+  const [issueRetentionDate, setIssueRetentionDate] = useState('');
+
   // ---- Fetch bill ----
   const fetchBill = useCallback(async () => {
     setLoading(true);
@@ -326,6 +347,48 @@ export default function PurchaseBillDetailPage() {
     if (activeTab === 'cxp' && bill) fetchPayables();
     if (activeTab === 'notas' && bill) fetchNotes();
   }, [activeTab, bill, fetchPayables, fetchNotes]);
+
+  // ---- Retention voucher actions ----
+  async function handleIssueRetention() {
+    if (!bill?.retentionVoucher || !issueRetentionDate) return;
+    setIssuingRetention(true);
+    try {
+      const res = await fetch(`/api/proxy/retention-vouchers/${bill.retentionVoucher.id}/issue`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issueDate: issueRetentionDate }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al emitir comprobante');
+      }
+      setIssueRetentionModal(false);
+      setMessage({ type: 'success', text: 'Comprobante de retención emitido correctamente' });
+      fetchBill();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setIssuingRetention(false);
+    }
+  }
+
+  async function handleCancelRetention() {
+    if (!bill?.retentionVoucher) return;
+    if (!confirm('¿Anular este comprobante de retención?')) return;
+    try {
+      const res = await fetch(`/api/proxy/retention-vouchers/${bill.retentionVoucher.id}/cancel`, {
+        method: 'PATCH',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al anular comprobante');
+      }
+      setMessage({ type: 'success', text: 'Comprobante de retención anulado' });
+      fetchBill();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  }
 
   // ---- Process action ----
   async function handleOpenProcess() {
@@ -522,8 +585,6 @@ export default function PurchaseBillDetailPage() {
 
   // ---- Derived computations ----
   const isRetentionAgent = bill.supplier.isRetentionAgent;
-  const retentionIvaUsd = isRetentionAgent && bill.isCredit ? bill.totalIvaUsd * 0.75 : 0;
-  const netPayable = retentionIvaUsd > 0 ? bill.totalUsd - retentionIvaUsd : bill.totalUsd;
 
   // ---- Render ----
   return (
@@ -846,37 +907,83 @@ export default function PurchaseBillDetailPage() {
               <div></div>
             </div>
 
-            {/* IVA Retention (retention agent + credit) */}
-            {isRetentionAgent && bill.isCredit && (
+            {/* Retention Voucher */}
+            {bill.retentionVoucher && (
               <div className="border-t border-purple-500/20 pt-4">
                 <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 space-y-3">
-                  <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
-                    Retencion IVA (Agente de Retencion)
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-purple-400" />
+                      <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
+                        Comprobante de Retención IVA
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {bill.retentionVoucher.status === 'PENDING' && (
+                        <button
+                          onClick={() => {
+                            setIssueRetentionDate(new Date().toISOString().substring(0, 10));
+                            setIssueRetentionModal(true);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                          <CheckCircle size={12} />
+                          Emitir
+                        </button>
+                      )}
+                      {bill.retentionVoucher.status === 'ISSUED' && (
+                        <button
+                          onClick={handleCancelRetention}
+                          className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                          <Ban size={12} />
+                          Anular
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Retencion IVA (75%)</p>
+                      <p className="text-xs text-slate-500 mb-1">N° Comprobante</p>
+                      <p className="text-white font-mono font-bold">
+                        {bill.retentionVoucher.number}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Monto retenido $</p>
                       <p className="text-purple-400 font-mono font-bold">
-                        -${fmt(retentionIvaUsd)}
+                        -${fmt(bill.retentionVoucher.retentionAmountUsd)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">N. Comprobante retencion</p>
-                      <p className="text-white font-mono">
-                        {bill.retentionVoucherNumber || '--'}
+                      <p className="text-xs text-slate-500 mb-1">Monto retenido Bs</p>
+                      <p className="text-purple-400 font-mono">
+                        -Bs {fmt(bill.retentionVoucher.retentionAmountBs)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Neto a pagar $</p>
-                      <p className="text-green-400 font-mono text-lg font-bold">
-                        ${fmt(netPayable)}
+                      <p className="text-xs text-slate-500 mb-1">Fecha emisión</p>
+                      <p className="text-white font-mono text-sm">
+                        {bill.retentionVoucher.issueDate
+                          ? fmtDate(bill.retentionVoucher.issueDate)
+                          : '--'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Neto a pagar Bs</p>
-                      <p className="text-blue-400 font-mono">
-                        Bs {fmt(netPayable * bill.exchangeRate)}
-                      </p>
+                      <p className="text-xs text-slate-500 mb-1">Estado</p>
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                        bill.retentionVoucher.status === 'ISSUED'
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          : bill.retentionVoucher.status === 'CANCELLED'
+                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {bill.retentionVoucher.status === 'ISSUED'
+                          ? 'Emitido'
+                          : bill.retentionVoucher.status === 'CANCELLED'
+                            ? 'Anulado'
+                            : 'Pendiente'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1061,6 +1168,64 @@ export default function PurchaseBillDetailPage() {
                   Procesar con estos precios
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Issue Retention Modal ═══ */}
+      {issueRetentionModal && bill?.retentionVoucher && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIssueRetentionModal(false)} />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <Shield size={20} className="text-purple-400" />
+              <h3 className="text-lg font-semibold text-slate-100">Emitir Comprobante de Retención</h3>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Comprobante:</span>
+                <span className="text-white font-mono font-bold">{bill.retentionVoucher.number}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Monto USD:</span>
+                <span className="text-purple-400 font-mono">${fmt(bill.retentionVoucher.retentionAmountUsd)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Monto Bs:</span>
+                <span className="text-purple-400 font-mono">Bs {fmt(bill.retentionVoucher.retentionAmountBs)}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block">Fecha de emisión *</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-2.5 text-slate-500" size={14} />
+                <input
+                  type="date"
+                  value={issueRetentionDate}
+                  onChange={e => setIssueRetentionDate(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIssueRetentionModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleIssueRetention}
+                disabled={issuingRetention || !issueRetentionDate}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {issuingRetention ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />}
+                Emitir comprobante
+              </button>
             </div>
           </div>
         </div>

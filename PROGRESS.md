@@ -1,5 +1,47 @@
 # Trinity ERP — Progreso
 
+## Sesion 42 — Modulo de Comprobantes de Retencion IVA con integracion al Libro de Compras
+
+### Migracion de base de datos
+- `20260524200000_add_retention_voucher_module`: Crea enum RetentionStatus (PENDING/ISSUED/CANCELLED), tabla RetentionVoucher con campos id, number (unique), purchaseOrderId (unique FK), status, issueDate, retentionAmountUsd, retentionAmountBs, exchangeRate, notes, createdById (FK a User), timestamps. Agrega isRetentionLine (Boolean default false) y retentionVoucherId (FK opcional) a PurchaseBookEntry.
+
+### Schema
+- RetentionVoucher: nuevo modelo — comprobantes de retencion IVA vinculados 1:1 a PurchaseOrder
+- RetentionStatus: nuevo enum (PENDING, ISSUED, CANCELLED)
+- PurchaseBookEntry: nuevos campos isRetentionLine y retentionVoucherId para lineas de retencion
+- PurchaseOrder: nueva relacion retentionVoucher (1:1)
+- User: nueva relacion retentionVouchers
+
+### Backend (NestJS)
+- **RetentionVouchersModule**: Nuevo modulo con controller y service
+  - `GET /retention-vouchers`: Lista comprobantes con filtros status, supplierId, from, to, paginacion
+  - `GET /retention-vouchers/:id`: Detalle de un comprobante con relaciones
+  - `PATCH /retention-vouchers/:id/issue`: Emite comprobante (cambia a ISSUED, crea PurchaseBookEntry con isRetentionLine=true y totalBs negativo)
+  - `PATCH /retention-vouchers/:id/cancel`: Anula comprobante (elimina linea del libro si existia, cambia a CANCELLED)
+  - `GET /retention-vouchers/:id/pdf`: Datos para PDF del comprobante
+- **PurchaseOrdersService.process()**: Al procesar factura fiscal de proveedor agente de retencion, crea automaticamente RetentionVoucher en estado PENDING con monto calculado (75% del IVA por defecto). La retencion NO se agrega al libro hasta ser emitida.
+
+### Frontend (Next.js)
+- **Retenciones IVA** (`/purchases/retentions`): Nueva pagina
+  - Contadores de estado: pendientes (amarillo), emitidos (verde), anulados (rojo)
+  - Filtros: estado, fecha desde/hasta
+  - Tabla: N° Retencion, Factura, Proveedor, Monto USD, Monto Bs, Fecha emision, Estado, Acciones
+  - Modal de emision con selector de fecha
+  - Modal de detalle con datos completos
+  - Accion de anulacion con confirmacion
+- **Detalle de compra** (`/purchases/[id]`): Seccion de retencion actualizada
+  - Muestra datos del RetentionVoucher (numero, monto USD/Bs, fecha emision, estado)
+  - Boton "Emitir" si estado PENDING, con modal para seleccionar fecha
+  - Boton "Anular" si estado ISSUED
+  - Estados con badges coloreados: Pendiente (amarillo), Emitido (verde), Anulado (rojo)
+- **Libro de compras** (`/fiscal/libro-compras`): Lineas de retencion diferenciadas
+  - Entradas con isRetentionLine=true se muestran con fondo purpura sutil
+  - Sin datos de proveedor repetidos, solo muestra "↳ Retencion IVA" en columna proveedor
+  - N° comprobante en color purpura, total en purpura (negativo)
+  - Sin botones de editar/eliminar en lineas de retencion
+  - PDF exportado tambien diferencia lineas de retencion visualmente
+- **Sidebar**: Agregada entrada "Retenciones IVA" bajo seccion COMPRAS con icono Shield
+
 ## Sesion 41 — Libro de Compras con entradas editables, filtro por rango de fechas y resumen fiscal PDF
 
 ### Migracion de base de datos

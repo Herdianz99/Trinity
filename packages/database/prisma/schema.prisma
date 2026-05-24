@@ -78,6 +78,12 @@ enum PurchaseStatus {
   CANCELLED
 }
 
+enum RetentionStatus {
+  PENDING
+  ISSUED
+  CANCELLED
+}
+
 enum PermissionKey {
   OVERRIDE_PRICE
   RETURN_INVOICE
@@ -255,7 +261,8 @@ model User {
   paymentSchedules    PaymentSchedule[]
   dynamicKeys         DynamicKey[]
   purchaseBills       PurchaseOrder[]  @relation("PurchaseBillResponsible")
-  purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
+  purchaseBookEntries  PurchaseBookEntry[]  @relation("PurchaseBookEntries")
+  retentionVouchers    RetentionVoucher[]   @relation("RetentionVoucherCreator")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -566,6 +573,7 @@ model PurchaseOrder {
   payables               Payable[]
   creditDebitNotes       CreditDebitNote[]
   ivaRetentions          IvaRetention[]
+  retentionVoucher       RetentionVoucher?
   purchaseBookEntries    PurchaseBookEntry[]
   createdById            String
   createdAt              DateTime            @default(now())
@@ -1213,24 +1221,49 @@ model Expense {
 // ============================================
 
 model PurchaseBookEntry {
-  id                     String         @id @default(cuid())
+  id                     String            @id @default(cuid())
   purchaseOrderId        String?
-  purchaseOrder          PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder          PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
   entryDate              DateTime
   supplierControlNumber  String?
   supplierInvoiceNumber  String?
   supplierName           String
   supplierRif            String
-  exemptAmountBs         Float          @default(0)
-  taxableBaseBs          Float          @default(0)
-  ivaAmountBs            Float          @default(0)
+  exemptAmountBs         Float             @default(0)
+  taxableBaseBs          Float             @default(0)
+  ivaAmountBs            Float             @default(0)
   retentionVoucherNumber String?
-  retentionAmountBs      Float          @default(0)
-  totalBs                Float          @default(0)
-  isManual               Boolean        @default(false)
+  retentionAmountBs      Float             @default(0)
+  totalBs                Float             @default(0)
+  isManual               Boolean           @default(false)
+  isRetentionLine        Boolean           @default(false)
+  retentionVoucherId     String?
+  retentionVoucher       RetentionVoucher? @relation(fields: [retentionVoucherId], references: [id])
   notes                  String?
   createdById            String
-  createdBy              User           @relation("PurchaseBookEntries", fields: [createdById], references: [id])
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
+  createdBy              User              @relation("PurchaseBookEntries", fields: [createdById], references: [id])
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+// ============================================
+// COMPROBANTES DE RETENCION IVA
+// ============================================
+
+model RetentionVoucher {
+  id                  String              @id @default(cuid())
+  number              String              @unique
+  purchaseOrderId     String              @unique
+  purchaseOrder       PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
+  status              RetentionStatus     @default(PENDING)
+  issueDate           DateTime?
+  retentionAmountUsd  Float               @default(0)
+  retentionAmountBs   Float               @default(0)
+  exchangeRate        Float               @default(0)
+  notes               String?
+  bookEntries         PurchaseBookEntry[]
+  createdById         String
+  createdBy           User                @relation("RetentionVoucherCreator", fields: [createdById], references: [id])
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 }

@@ -613,6 +613,23 @@ model Payment {
 - Detalle con 3 tabs: Información, CxP, Notas Cr/Db
 - Libro de compras fiscal actualizado con campos precalculados
 
+#### Sesión 42 — Comprobantes de Retención IVA
+**Backend:**
+- RetentionVouchersModule: Gestión de comprobantes de retención IVA (modelo RetentionVoucher)
+  - GET /retention-vouchers — lista con filtros status, supplierId, from, to, paginación
+  - GET /retention-vouchers/:id — detalle con relaciones
+  - PATCH /retention-vouchers/:id/issue — emitir comprobante (crea línea en libro de compras)
+  - PATCH /retention-vouchers/:id/cancel — anular comprobante (elimina línea del libro)
+  - GET /retention-vouchers/:id/pdf — datos para PDF
+- PurchaseOrdersService.process(): crea RetentionVoucher PENDING para proveedores agentes de retención
+- Libro de compras: líneas de retención (isRetentionLine) solo aparecen cuando el comprobante es ISSUED
+
+**Frontend:**
+- Página de retenciones IVA (/purchases/retentions): contadores, filtros, tabla, modales de emisión/detalle
+- Detalle de compra: sección de retención con botones Emitir/Anular según estado
+- Libro de compras: líneas de retención diferenciadas visualmente (fondo púrpura, sin datos repetidos)
+- Sidebar: entrada "Retenciones IVA" bajo COMPRAS
+
 #### Sesión 41 — Libro de Compras con entradas editables y filtro por rango de fechas
 **Backend:**
 - PurchaseBookModule: CRUD de entradas del libro de compras (modelo PurchaseBookEntry)

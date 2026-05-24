@@ -193,6 +193,7 @@ export class PurchaseOrdersService {
         },
       },
     },
+    retentionVoucher: true,
   };
 
   async create(dto: CreatePurchaseOrderDto, userId: string) {
@@ -724,15 +725,38 @@ export class PurchaseOrdersService {
         });
       }
 
-      // Create PurchaseBookEntry automatically
-      if (order.isFiscal) {
-        // Calculate retention from IvaRetention documents created above
-        const ivaRetentions = await tx.ivaRetention.findMany({
-          where: { purchaseOrderId: order.id },
-        });
-        const retentionAmountBs = ivaRetentions.reduce((sum, r) => sum + r.retentionBs, 0);
-        const retentionVoucher = ivaRetentions.length > 0 ? ivaRetentions[0].number : (order.retentionVoucherNumber || null);
+      // Create RetentionVoucher if supplier is retention agent
+      if (order.supplier.isRetentionAgent && order.isFiscal && order.totalIvaUsd > 0) {
+        const exchangeRate = order.exchangeRate;
+        const ivaRetPct = config?.ivaRetentionPct || 75;
+        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
+        const retBs = round2(retUsd * exchangeRate);
 
+        // Generate RET-XXXX number
+        const maxResult = await tx.$queryRaw`
+          SELECT COALESCE(
+            (SELECT MAX(CAST(SUBSTRING("number" FROM 5) AS INTEGER)) FROM "RetentionVoucher"),
+            0
+          ) as max_num
+        `;
+        const nextNum = (maxResult as any[])[0].max_num + 1;
+        const retNumber = `RET-${String(nextNum).padStart(4, '0')}`;
+
+        await tx.retentionVoucher.create({
+          data: {
+            number: retNumber,
+            purchaseOrderId: order.id,
+            status: 'PENDING',
+            retentionAmountUsd: retUsd,
+            retentionAmountBs: retBs,
+            exchangeRate,
+            createdById: userId,
+          },
+        });
+      }
+
+      // Create PurchaseBookEntry automatically (invoice line — without retention, retention comes separately when issued)
+      if (order.isFiscal) {
         await tx.purchaseBookEntry.create({
           data: {
             purchaseOrderId: order.id,
@@ -744,10 +768,9 @@ export class PurchaseOrdersService {
             exemptAmountBs: order.exemptAmountBs,
             taxableBaseBs: order.taxableBaseBs,
             ivaAmountBs: order.totalIvaBs,
-            retentionVoucherNumber: retentionVoucher,
-            retentionAmountBs: round2(retentionAmountBs),
             totalBs: order.totalBs,
             isManual: false,
+            isRetentionLine: false,
             createdById: userId,
           },
         });

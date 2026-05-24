@@ -23,6 +23,7 @@ interface PurchaseBookEntry {
   retentionAmountBs: number;
   totalBs: number;
   isManual: boolean;
+  isRetentionLine: boolean;
   notes: string | null;
   createdBy: { id: string; name: string };
   createdAt: string;
@@ -270,22 +271,39 @@ export default function LibroComprasPage() {
     const to = new Date(toDate + 'T00:00:00');
     const periodoStr = `${from.toLocaleDateString('es-VE')} al ${to.toLocaleDateString('es-VE')}`;
 
-    const tableRows = entries.map((r, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
-        <td>${r.supplierControlNumber || ''}</td>
-        <td>${r.supplierInvoiceNumber || ''}</td>
-        <td>${r.supplierName}</td>
-        <td>${r.supplierRif}</td>
-        <td class="num">${formatVe(r.exemptAmountBs)}</td>
-        <td class="num">${formatVe(r.taxableBaseBs)}</td>
-        <td class="num">${formatVe(r.ivaAmountBs)}</td>
-        <td>${r.retentionVoucherNumber || ''}</td>
-        <td class="num">${formatVe(r.retentionAmountBs)}</td>
-        <td class="num total">${formatVe(r.totalBs)}</td>
-      </tr>
-    `).join('');
+    let rowNum = 0;
+    const tableRows = entries.map((r) => {
+      if (!r.isRetentionLine) rowNum++;
+      return r.isRetentionLine
+        ? `<tr class="retention-line">
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="padding-left:16px;font-style:italic;color:#8b5cf6;font-size:7pt;">↳ Retención IVA</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="color:#8b5cf6;font-weight:bold;">${r.retentionVoucherNumber || ''}</td>
+            <td class="num" style="color:#8b5cf6;">${formatVe(r.retentionAmountBs)}</td>
+            <td class="num" style="color:#8b5cf6;">${formatVe(r.totalBs)}</td>
+          </tr>`
+        : `<tr>
+            <td>${rowNum}</td>
+            <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
+            <td>${r.supplierControlNumber || ''}</td>
+            <td>${r.supplierInvoiceNumber || ''}</td>
+            <td>${r.supplierName}</td>
+            <td>${r.supplierRif}</td>
+            <td class="num">${formatVe(r.exemptAmountBs)}</td>
+            <td class="num">${formatVe(r.taxableBaseBs)}</td>
+            <td class="num">${formatVe(r.ivaAmountBs)}</td>
+            <td>${r.retentionVoucherNumber || ''}</td>
+            <td class="num">${formatVe(r.retentionAmountBs)}</td>
+            <td class="num total">${formatVe(r.totalBs)}</td>
+          </tr>`;
+    }).join('');
 
     const totalesRow = totales ? `
       <tr class="totales">
@@ -514,43 +532,75 @@ export default function LibroComprasPage() {
                 ) : (
                   <>
                     {entries.map((entry, i) => (
-                      <tr key={entry.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group">
-                        <td className="px-2 py-2 text-slate-400">{i + 1}</td>
-                        <td className="px-2 py-2 text-slate-300">
-                          {entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                      <tr key={entry.id} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group ${
+                        entry.isRetentionLine ? 'bg-purple-500/5' : ''
+                      }`}>
+                        <td className="px-2 py-2 text-slate-400">
+                          {entry.isRetentionLine ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine).length}
                         </td>
-                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">{entry.supplierControlNumber || '-'}</td>
-                        <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">{entry.supplierInvoiceNumber || '-'}</td>
+                        <td className="px-2 py-2 text-slate-300" style={entry.isRetentionLine ? { fontSize: '10px' } : {}}>
+                          {entry.isRetentionLine ? '' : entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                        </td>
+                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
+                          {entry.isRetentionLine ? '' : entry.supplierControlNumber || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
+                          {entry.isRetentionLine ? '' : entry.supplierInvoiceNumber || '-'}
+                        </td>
                         <td className="px-2 py-2 text-slate-200">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate max-w-[160px]">{entry.supplierName}</span>
-                            {entry.isManual ? (
-                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">MANUAL</span>
-                            ) : (
-                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">AUTO</span>
-                            )}
-                          </div>
+                          {entry.isRetentionLine ? (
+                            <span className="text-[10px] text-purple-400 italic pl-4">↳ Retención IVA</span>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate max-w-[160px]">{entry.supplierName}</span>
+                              {entry.isManual ? (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">MANUAL</span>
+                              ) : (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">AUTO</span>
+                              )}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">{entry.supplierRif}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(entry.exemptAmountBs)}</td>
-                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">{formatVe(entry.taxableBaseBs)}</td>
-                        <td className="px-2 py-2 text-right text-blue-400 tabular-nums font-medium">{formatVe(entry.ivaAmountBs)}</td>
-                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">{entry.retentionVoucherNumber || '-'}</td>
-                        <td className="px-2 py-2 text-right text-orange-400 tabular-nums">{formatVe(entry.retentionAmountBs)}</td>
-                        <td className="px-2 py-2 text-right text-slate-100 font-semibold tabular-nums">{formatVe(entry.totalBs)}</td>
+                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
+                          {entry.isRetentionLine ? '' : entry.supplierRif}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
+                          {entry.isRetentionLine ? '' : formatVe(entry.exemptAmountBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
+                          {entry.isRetentionLine ? '' : formatVe(entry.taxableBaseBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-blue-400 tabular-nums font-medium">
+                          {entry.isRetentionLine ? '' : formatVe(entry.ivaAmountBs)}
+                        </td>
+                        <td className="px-2 py-2 text-purple-400 font-mono text-[11px] font-medium">
+                          {entry.retentionVoucherNumber || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-right text-orange-400 tabular-nums">
+                          {entry.isRetentionLine
+                            ? formatVe(entry.retentionAmountBs)
+                            : formatVe(entry.retentionAmountBs)}
+                        </td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${
+                          entry.isRetentionLine ? 'text-purple-400 font-medium' : 'text-slate-100 font-semibold'
+                        }`}>
+                          {formatVe(entry.totalBs)}
+                        </td>
                         <td className="px-2 py-2">
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openEditModal(entry)}
-                              className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-blue-400 transition-colors"
-                              title="Editar">
-                              <Pencil size={14} />
-                            </button>
-                            <button onClick={() => handleDelete(entry.id)}
-                              className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-red-400 transition-colors"
-                              title="Eliminar">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                          {!entry.isRetentionLine && (
+                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => openEditModal(entry)}
+                                className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-blue-400 transition-colors"
+                                title="Editar">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(entry.id)}
+                                className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-red-400 transition-colors"
+                                title="Eliminar">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
