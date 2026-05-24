@@ -1,5 +1,60 @@
 # Trinity ERP — Progreso
 
+## Sesion 47 — Modulo completo de reportes de ventas con PDF
+
+### Backend (NestJS)
+- **ReportsModule**: Nuevo modulo con 9 endpoints GET para reportes de ventas
+  - `GET /reports/sales-by-period?from=&to=&groupBy=` — Ventas agrupadas por hora/dia/semana/mes con KPIs
+  - `GET /reports/sales-by-seller?from=&to=&sellerId=` — Ventas por vendedor con top productos
+  - `GET /reports/sales-by-customer?from=&to=&customerId=` — Ventas por cliente con CxC pendiente
+  - `GET /reports/sales-by-product?from=&to=&categoryId=` — Ventas por producto con costo y margen
+  - `GET /reports/comparison?period1From=&period1To=&period2From=&period2To=` — Comparativo entre 2 periodos
+  - `GET /reports/profit-margin?from=&to=&categoryId=` — Margen de ganancia por producto
+  - `GET /reports/top-customers?from=&to=&limit=` — Top clientes por monto
+  - `GET /reports/peak-hours?from=&to=` — Horas pico de ventas (24 horas)
+  - `GET /reports/sales-by-cash-register?from=&to=` — Ventas por caja registradora
+  - PDF export para 5 reportes: sales-by-period, sales-by-seller, sales-by-customer, sales-by-product, profit-margin
+  - PDFKit con layout landscape A4, header con nombre empresa y periodo, tablas formateadas
+
+- **ReportsPdfService**: Servicio de generacion PDF con helpers reutilizables
+  - `createDoc()`, `drawHeader()`, `drawTableHeader()`, `drawTableRow()`, `checkPage()`, `toBuffer()`
+  - Columnas con alineacion derecha para montos, paginacion automatica
+
+### Frontend (Next.js)
+- **9 paginas de reportes** bajo `/reports/`:
+  - `/reports/sales-period` — AreaChart con filtro groupBy, tabla 7 columnas, KPIs
+  - `/reports/sales-seller` — BarChart por vendedor, dropdown de vendedores, tabla con devoluciones
+  - `/reports/sales-customer` — Tabla ordenable con CxC pendiente, filtro por cliente
+  - `/reports/sales-product` — BarChart horizontal top 10, margen% con colores (verde >30%, amarillo >15%, rojo)
+  - `/reports/comparison` — Dos periodos lado a lado, BarChart comparativo, badges de variacion %
+  - `/reports/profit-margin` — BarChart horizontal por margen%, celdas color-coded
+  - `/reports/top-customers` — Tabla rankeada con selector de limite (10/20/50/100)
+  - `/reports/peak-hours` — BarChart 24 horas con horas pico resaltadas en verde
+  - `/reports/sales-cash` — BarChart por caja, badges de metodos de pago
+  - Todas con: filtros de fecha, boton PDF, loading states, KPI cards
+  - Graficos recharts con tema oscuro (tooltips slate-800, grids slate-700)
+
+- **Sidebar**: 9 nuevos items bajo seccion REPORTES
+
+### Archivos creados
+- `apps/api/src/modules/reports/reports.module.ts`
+- `apps/api/src/modules/reports/reports.controller.ts`
+- `apps/api/src/modules/reports/reports.service.ts`
+- `apps/api/src/modules/reports/reports-pdf.service.ts`
+- `apps/web/src/app/(dashboard)/reports/sales-period/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/sales-seller/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/sales-customer/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/sales-product/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/comparison/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/profit-margin/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/top-customers/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/peak-hours/page.tsx`
+- `apps/web/src/app/(dashboard)/reports/sales-cash/page.tsx`
+
+### Archivos modificados
+- `apps/api/src/app.module.ts` — Registro de ReportsModule
+- `apps/web/src/components/sidebar.tsx` — 9 items de reportes en sidebar
+
 ## Sesion 46 — POS Mobile-first y vistas responsive
 
 ### Frontend (Next.js)

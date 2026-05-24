@@ -173,6 +173,15 @@ const menuSections: MenuSection[] = [
     permission: 'reports',
     items: [
       { label: 'Comisiones', href: '/reports/commissions', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas por periodo', href: '/reports/sales-period', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas por vendedor', href: '/reports/sales-seller', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas por cliente', href: '/reports/sales-customer', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas por producto', href: '/reports/sales-product', icon: <BarChart3 size={18} /> },
+      { label: 'Comparativo', href: '/reports/comparison', icon: <BarChart3 size={18} /> },
+      { label: 'Margen de ganancia', href: '/reports/profit-margin', icon: <BarChart3 size={18} /> },
+      { label: 'Clientes frecuentes', href: '/reports/top-customers', icon: <BarChart3 size={18} /> },
+      { label: 'Horas pico', href: '/reports/peak-hours', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas por caja', href: '/reports/sales-cash', icon: <BarChart3 size={18} /> },
     ],
   },
   {

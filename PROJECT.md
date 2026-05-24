@@ -1023,6 +1023,32 @@ model QuotationItem {
 
 ---
 
+#### Sesión 47 — Módulo completo de reportes de ventas con PDF
+
+**ReportsModule (Backend):**
+- 9 endpoints GET de reportes: sales-by-period, sales-by-seller, sales-by-customer, sales-by-product, comparison, profit-margin, top-customers, peak-hours, sales-by-cash-register
+- 5 endpoints de PDF export (landscape A4, tablas formateadas, header con empresa)
+- Agrupación temporal (hora/día/semana/mes), filtros por vendedor/cliente/categoría
+- Comparativo entre 2 períodos con variación % y totales
+- Cálculo de margen de ganancia por producto (ventas - costo)
+- Horas pico con distribución 24h y top 3 horas destacadas
+- Ventas por caja con desglose de métodos de pago
+
+**Frontend (9 páginas):**
+- /reports/sales-period — AreaChart + tabla + KPIs + PDF
+- /reports/sales-seller — BarChart + dropdown vendedor + PDF
+- /reports/sales-customer — Tabla ordenable + CxC + PDF
+- /reports/sales-product — BarChart horizontal + margen coloreado + PDF
+- /reports/comparison — 2 períodos + BarChart comparativo + variación %
+- /reports/profit-margin — BarChart margen + celdas color-coded + PDF
+- /reports/top-customers — Tabla rankeada + selector límite
+- /reports/peak-hours — BarChart 24h + horas pico verdes
+- /reports/sales-cash — BarChart por caja + badges métodos de pago
+- Sidebar: 9 nuevos items bajo sección REPORTES
+- Gráficos recharts con tema oscuro
+
+---
+
 ## Formato de Commits
 `tipo: Session X - descripción`
 
