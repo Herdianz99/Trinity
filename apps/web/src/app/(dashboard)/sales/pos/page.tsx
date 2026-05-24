@@ -1096,7 +1096,7 @@ export default function POSPage() {
 
       {mobileView === 'search' ? (
         /* ═══ Mobile Search View ═══ */
-        <div className="flex-1 flex flex-col min-h-0 px-3 pt-2 pb-20">
+        <div className="flex-1 flex flex-col min-h-0 px-3 pt-2 pb-32">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -1175,7 +1175,7 @@ export default function POSPage() {
         </div>
       ) : (
         /* ═══ Mobile Cart View ═══ */
-        <div className="flex-1 flex flex-col min-h-0 pb-[180px]">
+        <div className="flex-1 flex flex-col min-h-0 pb-[240px]">
           {/* Header */}
           <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-700/50">
             <button onClick={() => setMobileView('search')} className="text-sm text-emerald-400 flex items-center gap-1">
@@ -1241,7 +1241,7 @@ export default function POSPage() {
           </div>
 
           {/* Fixed bottom: totals + actions */}
-          <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 px-4 py-3 z-40 safe-area-bottom">
+          <div className="fixed bottom-14 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 px-4 py-3 z-30">
             <div className="flex justify-between text-sm mb-1">
               <span className="text-slate-400">Subtotal</span><span className="text-white">${subtotalUsd.toFixed(2)}</span>
             </div>
@@ -1287,7 +1287,7 @@ export default function POSPage() {
       {mobileView === 'search' && cart.length > 0 && (
         <button
           onClick={() => setMobileView('cart')}
-          className="fixed bottom-4 left-4 right-4 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base flex items-center justify-center gap-2 z-30 shadow-lg shadow-green-500/20 active:scale-[0.98] transition-transform safe-area-bottom"
+          className="fixed bottom-[72px] left-4 right-4 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base flex items-center justify-center gap-2 z-30 shadow-lg shadow-green-500/20 active:scale-[0.98] transition-transform"
         >
           <ShoppingCart size={18} />
           Ver carrito ({cart.reduce((s, i) => s + i.quantity, 0)} items) — ${totalUsd.toFixed(2)}
