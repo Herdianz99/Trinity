@@ -63,6 +63,9 @@ export default function MobileBottomNav({ role }: MobileBottomNavProps) {
   const pathname = usePathname();
   const navItems = ROLE_NAV[role] || DEFAULT_NAV;
 
+  // Hide bottom nav on POS page — POS has its own mobile navigation
+  if (pathname === '/sales/pos') return null;
+
   const isActive = (href: string) => {
     if (pathname === href) return true;
     if (href !== '/' && pathname.startsWith(href + '/')) return true;

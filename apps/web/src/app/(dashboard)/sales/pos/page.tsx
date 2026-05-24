@@ -1723,6 +1723,70 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Mobile Customer Search Modal — full-screen on mobile */}
+      {showCustomerSearch && isMobile && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-800 md:hidden">
+          <div className="px-4 py-3 border-b border-slate-700/50 flex items-center gap-3">
+            <button onClick={() => { setShowCustomerSearch(false); setCustomerSearch(''); setCustomerResults([]); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400">
+              <X size={18} />
+            </button>
+            <h2 className="text-lg font-bold text-white">Seleccionar Cliente</h2>
+          </div>
+          <div className="px-4 pt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, RIF..."
+                value={customerSearch}
+                onChange={e => setCustomerSearch(e.target.value)}
+                className="input-field pl-9 !py-3 text-base w-full"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-2">
+            {customerResults.length > 0 ? (
+              <div className="space-y-1">
+                {customerResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setCustomerId(c.id);
+                      setCustomerName(c.name);
+                      setCustomerSearch('');
+                      setCustomerResults([]);
+                      setShowCustomerSearch(false);
+                    }}
+                    className="w-full text-left px-4 py-3.5 rounded-xl hover:bg-slate-700/40 active:bg-slate-700/60 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-white">{c.name}</p>
+                    {c.rif && <p className="text-xs text-slate-500 mt-0.5">{c.documentType || 'V'}-{c.rif}</p>}
+                  </button>
+                ))}
+              </div>
+            ) : customerSearch.trim() ? (
+              <p className="text-center text-slate-500 text-sm py-8">No se encontraron clientes</p>
+            ) : (
+              <p className="text-center text-slate-500 text-sm py-8">Escribe para buscar clientes</p>
+            )}
+          </div>
+          <div className="px-4 py-3 border-t border-slate-700/50">
+            <button
+              onClick={() => {
+                setShowCustomerSearch(false);
+                setCustomerSearch('');
+                setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
+                setShowCreateClient(true);
+              }}
+              className="w-full py-3 rounded-xl border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium flex items-center justify-center gap-2 active:bg-green-500/20"
+            >
+              <Plus size={16} /> Crear nuevo cliente
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Pending Invoices Drawer — full-screen on mobile */}
       {pendingDrawerOpen && (
         <div className="fixed inset-0 z-50 flex">
