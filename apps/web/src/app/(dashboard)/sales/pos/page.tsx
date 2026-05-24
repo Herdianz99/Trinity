@@ -154,6 +154,7 @@ export default function POSPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileView, setMobileView] = useState<'search' | 'cart'>('search');
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
+  const [showSellerModal, setShowSellerModal] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -1314,8 +1315,11 @@ export default function POSPage() {
                 <Monitor size={18} className="text-green-400" /> Cambiar caja
               </button>
               {canSelectSeller && (
-                <button onClick={() => setMobileOptionsOpen(false)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                <button onClick={() => { setMobileOptionsOpen(false); setShowSellerModal(true); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
                   <User size={18} className="text-violet-400" /> Cambiar vendedor
+                  {selectedSellerId && sellers.length > 0 && (
+                    <span className="ml-auto text-xs text-slate-500">{sellers.find(s => s.id === selectedSellerId)?.name || ''}</span>
+                  )}
                 </button>
               )}
             </div>
@@ -1718,6 +1722,37 @@ export default function POSPage() {
                   {showEditClient ? 'Guardar cambios' : 'Guardar y seleccionar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Seller Selection Modal — full-screen on mobile */}
+      {showSellerModal && (
+        <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:px-4">
+          <div className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSellerModal(false)} />
+          <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-sm overflow-y-auto">
+            <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Seleccionar Vendedor</h2>
+              <button onClick={() => setShowSellerModal(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+            </div>
+            <div className="p-2 space-y-1">
+              <button
+                onClick={() => { setSelectedSellerId(null); setShowSellerModal(false); }}
+                className={`w-full text-left px-4 py-3.5 rounded-xl transition-colors ${!selectedSellerId ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'hover:bg-slate-700/40 active:bg-slate-700/60 text-slate-300'}`}
+              >
+                <p className="text-sm font-medium">Sin vendedor</p>
+              </button>
+              {sellers.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { setSelectedSellerId(s.id); setShowSellerModal(false); }}
+                  className={`w-full text-left px-4 py-3.5 rounded-xl transition-colors ${selectedSellerId === s.id ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'hover:bg-slate-700/40 active:bg-slate-700/60 text-slate-300'}`}
+                >
+                  <p className="text-sm font-medium">{s.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{s.code}</p>
+                </button>
+              ))}
             </div>
           </div>
         </div>
