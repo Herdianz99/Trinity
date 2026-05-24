@@ -613,6 +613,22 @@ model Payment {
 - Detalle con 3 tabs: Información, CxP, Notas Cr/Db
 - Libro de compras fiscal actualizado con campos precalculados
 
+#### Sesión 41 — Libro de Compras con entradas editables y filtro por rango de fechas
+**Backend:**
+- PurchaseBookModule: CRUD de entradas del libro de compras (modelo PurchaseBookEntry)
+  - GET /purchase-book?from&to — lista entradas filtradas por rango de fechas
+  - POST /purchase-book — crear entrada manual
+  - PATCH /purchase-book/:id — editar entrada (no afecta factura original)
+  - DELETE /purchase-book/:id — eliminar entrada (solo ADMIN)
+  - GET /purchase-book/pdf?from&to — datos para PDF con resumen fiscal
+- PurchaseOrdersService.process(): auto-crea PurchaseBookEntry al procesar factura fiscal
+- FiscalService.libroCompras(): lee desde PurchaseBookEntry
+
+**Frontend:**
+- Libro de compras rediseñado: date pickers desde/hasta, botones rápidos (este mes, quincena 1/2, mes anterior)
+- Tabla editable con badges AUTO/MANUAL, modal edición/creación, fila de totales
+- PDF con tabla + segunda página de resumen fiscal del período
+
 #### Sesión 5 — Ventas y POS
 **Backend:**
 - CustomersModule: CRUD con crédito

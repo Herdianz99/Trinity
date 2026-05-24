@@ -1,5 +1,39 @@
 # Trinity ERP — Progreso
 
+## Sesion 41 — Libro de Compras con entradas editables, filtro por rango de fechas y resumen fiscal PDF
+
+### Migracion de base de datos
+- `20260524100000_add_purchase_book_entries`: Crea tabla PurchaseBookEntry con campos id, purchaseOrderId (FK opcional a PurchaseOrder), entryDate, supplierControlNumber, supplierInvoiceNumber, supplierName, supplierRif, exemptAmountBs, taxableBaseBs, ivaAmountBs, retentionVoucherNumber, retentionAmountBs, totalBs, isManual, notes, createdById (FK a User), timestamps
+
+### Schema
+- PurchaseBookEntry: nuevo modelo — registros independientes del libro de compras, vinculados opcionalmente a PurchaseOrder
+- User: nueva relacion purchaseBookEntries
+- PurchaseOrder: nueva relacion purchaseBookEntries
+
+### Backend (NestJS)
+- **PurchaseBookModule**: Nuevo modulo con controller y service
+  - `GET /purchase-book?from&to`: Lista entradas del libro filtradas por rango de fechas en entryDate, ordenadas ASC, con totales agregados
+  - `POST /purchase-book`: Crear entrada manual (isManual=true) para facturas que el contador agrega directamente sin factura de compra
+  - `PATCH /purchase-book/:id`: Editar cualquier campo de una entrada, no afecta la factura de compra original
+  - `DELETE /purchase-book/:id`: Eliminar entrada (solo ADMIN)
+  - `GET /purchase-book/pdf?from&to`: Genera datos para PDF con tabla completa + resumen fiscal del periodo
+- **PurchaseOrdersService.process()**: Al procesar una factura de compra fiscal, crea automaticamente un PurchaseBookEntry con los datos de la factura convertidos a Bs usando la tasa de la factura. Incluye retencion IVA calculada de IvaRetention documents.
+- **FiscalService.libroCompras()**: Actualizado para leer desde PurchaseBookEntry en vez de PurchaseOrder directamente, manteniendo compatibilidad con el resumen fiscal existente
+
+### Frontend (Next.js)
+- **Libro de compras** (`/fiscal/libro-compras`): Rediseno completo
+  - Filtros: Date pickers "Desde" y "Hasta" reemplazan selector mes/ano
+  - Botones rapidos: "Este mes", "Quincena 1 (1-15)", "Quincena 2 (16-fin)", "Mes anterior"
+  - Tabla: columnas N°, Fecha, N° Control, N° Factura, Proveedor, RIF, Exento Bs, Base Imp. Bs, Cred. Fiscal Bs, N° Comp., Ret. IVA Bs, Total Bs, Acciones
+  - Badges: MANUAL (amarillo) para entradas creadas manualmente, AUTO (azul) para entradas desde facturas de compra
+  - Fila de totales al pie con sumas de cada columna numerica
+  - Boton editar (lapiz) por fila, abre modal de edicion con todos los campos
+  - Boton eliminar (basura) por fila con confirmacion
+  - Boton "+ Agregar entrada manual" abre modal vacio para crear entrada directa
+  - Modal con campos: fecha, N° control, N° factura, proveedor, RIF, exento Bs, base imponible Bs, credito fiscal Bs, N° comprobante retencion, retencion Bs, total Bs, notas
+  - Nota al pie del modal: "Los cambios en el libro no afectan la factura de compra original"
+  - Boton "Exportar PDF": genera PDF con tabla completa + segunda pagina con resumen fiscal del periodo (compras exentas, base imponible, credito fiscal, retenciones IVA, credito fiscal neto, total compras)
+
 ## Sesion 40 — Rediseno modulo de compras como Facturas de Compra
 
 ### Migracion de base de datos

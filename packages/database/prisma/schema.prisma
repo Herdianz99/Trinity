@@ -158,6 +158,7 @@ enum ReceiptItemType {
   DIFFERENTIAL
   CREDIT_NOTE
   DEBIT_NOTE
+  IVA_RETENTION
 }
 
 enum DynamicKeyPerm {
@@ -209,6 +210,7 @@ model CompanyConfig {
   allowNegativeStock     Boolean  @default(true)
   defaultCustomerId      String?
   logo                   String?  @db.Text
+  retentionNextNumber    Int      @default(1)
   updatedAt              DateTime @updatedAt
 }
 
@@ -253,6 +255,7 @@ model User {
   paymentSchedules    PaymentSchedule[]
   dynamicKeys         DynamicKey[]
   purchaseBills       PurchaseOrder[]  @relation("PurchaseBillResponsible")
+  purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -383,6 +386,7 @@ model Supplier {
   purchaseOrders   PurchaseOrder[]
   payables         Payable[]
   receipts         Receipt[]
+  ivaRetentions    IvaRetention[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -561,6 +565,8 @@ model PurchaseOrder {
   items                  PurchaseOrderItem[]
   payables               Payable[]
   creditDebitNotes       CreditDebitNote[]
+  ivaRetentions          IvaRetention[]
+  purchaseBookEntries    PurchaseBookEntry[]
   createdById            String
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
@@ -937,12 +943,33 @@ model ReceiptItem {
   payable              Payable?         @relation(fields: [payableId], references: [id])
   creditDebitNoteId    String?
   creditDebitNote      CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  ivaRetentionId       String?
+  ivaRetention         IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
   description          String
   amountUsd        Float           @default(0)
   amountBsHistoric Float           @default(0)
   amountBsToday    Float           @default(0)
   differentialBs   Float           @default(0)
   sign             Int             @default(1)
+}
+
+model IvaRetention {
+  id              String        @id @default(cuid())
+  number          String        @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  supplierId      String
+  supplier        Supplier      @relation(fields: [supplierId], references: [id])
+  ivaBaseUsd      Float
+  ivaBaseBs       Float         @default(0)
+  retentionPct    Float
+  retentionUsd    Float
+  retentionBs     Float         @default(0)
+  exchangeRate    Float
+  appliedAt       DateTime?
+  createdById     String
+  receiptItems    ReceiptItem[]
+  createdAt       DateTime      @default(now())
 }
 
 model ReceiptPayment {
@@ -1179,4 +1206,31 @@ model Expense {
   createdBy      User            @relation(fields: [createdById], references: [id])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+// ============================================
+// LIBRO DE COMPRAS
+// ============================================
+
+model PurchaseBookEntry {
+  id                     String         @id @default(cuid())
+  purchaseOrderId        String?
+  purchaseOrder          PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  entryDate              DateTime
+  supplierControlNumber  String?
+  supplierInvoiceNumber  String?
+  supplierName           String
+  supplierRif            String
+  exemptAmountBs         Float          @default(0)
+  taxableBaseBs          Float          @default(0)
+  ivaAmountBs            Float          @default(0)
+  retentionVoucherNumber String?
+  retentionAmountBs      Float          @default(0)
+  totalBs                Float          @default(0)
+  isManual               Boolean        @default(false)
+  notes                  String?
+  createdById            String
+  createdBy              User           @relation("PurchaseBookEntries", fields: [createdById], references: [id])
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 }

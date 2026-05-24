@@ -129,16 +129,12 @@ export class FiscalService {
     const toDate = new Date(to);
     toDate.setUTCHours(23, 59, 59, 999);
 
-    const orders = await this.prisma.purchaseOrder.findMany({
+    // Now reads from PurchaseBookEntry instead of PurchaseOrder directly
+    const entries = await this.prisma.purchaseBookEntry.findMany({
       where: {
-        status: 'PROCESSED',
-        invoiceDate: { gte: fromDate, lte: toDate },
+        entryDate: { gte: fromDate, lte: toDate },
       },
-      include: {
-        supplier: { select: { id: true, name: true, rif: true, isRetentionAgent: true } },
-        payables: { select: { retentionUsd: true } },
-      },
-      orderBy: { invoiceDate: 'asc' },
+      orderBy: { entryDate: 'asc' },
     });
 
     let totalExento = 0;
@@ -147,28 +143,26 @@ export class FiscalService {
     let totalRetentionIva = 0;
     let totalCompras = 0;
 
-    const rows = orders.map((order) => {
-      const retentionIva = order.payables.reduce((sum, p) => sum + p.retentionUsd, 0);
-
-      totalExento += order.exemptAmountUsd;
-      totalBaseImponible += order.taxableBaseUsd;
-      totalCreditoFiscal += order.totalIvaUsd;
-      totalRetentionIva += retentionIva;
-      totalCompras += order.totalUsd;
+    const rows = entries.map((entry, index) => {
+      totalExento += entry.exemptAmountBs;
+      totalBaseImponible += entry.taxableBaseBs;
+      totalCreditoFiscal += entry.ivaAmountBs;
+      totalRetentionIva += entry.retentionAmountBs;
+      totalCompras += entry.totalBs;
 
       return {
-        numero: order.purchaseNumber,
-        fecha: order.invoiceDate || order.createdAt,
-        numeroControl: order.supplierControlNumber || '',
-        numeroFactura: order.supplierInvoiceNumber || '',
-        nombreProveedor: order.supplier.name,
-        rifProveedor: order.supplier.rif || 'S/R',
-        comprasExentas: round2(order.exemptAmountUsd),
-        baseImponible: round2(order.taxableBaseUsd),
-        creditoFiscal: round2(order.totalIvaUsd),
-        comprobanteRetencion: order.retentionVoucherNumber || '',
-        retencionIva: round2(retentionIva),
-        total: round2(order.totalUsd),
+        numero: index + 1,
+        fecha: entry.entryDate,
+        numeroControl: entry.supplierControlNumber || '',
+        numeroFactura: entry.supplierInvoiceNumber || '',
+        nombreProveedor: entry.supplierName,
+        rifProveedor: entry.supplierRif || 'S/R',
+        comprasExentas: round2(entry.exemptAmountBs),
+        baseImponible: round2(entry.taxableBaseBs),
+        creditoFiscal: round2(entry.ivaAmountBs),
+        comprobanteRetencion: entry.retentionVoucherNumber || '',
+        retencionIva: round2(entry.retentionAmountBs),
+        total: round2(entry.totalBs),
       };
     });
 
@@ -176,7 +170,7 @@ export class FiscalService {
       periodo: { from: fromDate, to: toDate },
       rows,
       totales: {
-        totalOrdenes: orders.length,
+        totalOrdenes: entries.length,
         comprasExentas: round2(totalExento),
         baseImponible: round2(totalBaseImponible),
         creditoFiscal: round2(totalCreditoFiscal),

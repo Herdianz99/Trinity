@@ -53,7 +53,19 @@ export class PurchaseOrdersService {
     return rate?.rate || 0;
   }
 
-  private calculateItemValues(costUsd: number, quantity: number, discountPct: number, exchangeRate: number) {
+  private calculateItemValues(costInput: number, quantity: number, discountPct: number, exchangeRate: number, currency: 'USD' | 'BS' = 'USD') {
+    if (currency === 'BS') {
+      const costBs = costInput;
+      const costUsd = round2(costBs / exchangeRate);
+      const discountBs = round2(costBs * (discountPct / 100));
+      const discountUsd = round2(discountBs / exchangeRate);
+      const netCostBs = round2(costBs - discountBs);
+      const netCostUsd = round2(netCostBs / exchangeRate);
+      const totalBs = round2(netCostBs * quantity);
+      const totalUsd = round2(totalBs / exchangeRate);
+      return { costUsd, costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
+    }
+    const costUsd = costInput;
     const discountUsd = round2(costUsd * (discountPct / 100));
     const discountBs = round2(discountUsd * exchangeRate);
     const netCostUsd = round2(costUsd - discountUsd);
@@ -61,15 +73,16 @@ export class PurchaseOrdersService {
     const totalUsd = round2(netCostUsd * quantity);
     const totalBs = round2(totalUsd * exchangeRate);
     const costBs = round2(costUsd * exchangeRate);
-    return { costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
+    return { costUsd, costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
   }
 
   private async calculateFiscalTotals(
-    items: Array<{ productId: string; quantity: number; netCostUsd: number; totalUsd: number }>,
+    items: Array<{ productId: string; quantity: number; netCostUsd: number; totalUsd: number; totalBs: number }>,
     discountGlobalPct: number,
-    surchargeUsd: number,
+    surchargeInput: number,
     exchangeRate: number,
     prismaClient: any,
+    currency: 'USD' | 'BS' = 'USD',
   ) {
     const productIds = items.map((i) => i.productId);
     const products = await prismaClient.product.findMany({
@@ -78,6 +91,54 @@ export class PurchaseOrdersService {
     });
     const ivaMap = new Map<string, IvaType>(products.map((p: any) => [p.id, p.ivaType as IvaType]));
 
+    if (currency === 'BS') {
+      // Bs is source of truth
+      const surchargeUsd = round2(surchargeInput / exchangeRate);
+      const surchargeBs = surchargeInput;
+
+      const subtotalBs = round2(items.reduce((sum, i) => sum + i.totalBs, 0));
+      const discountGlobalBs = round2(subtotalBs * (discountGlobalPct / 100));
+      const subtotalAfterDiscountBs = round2(subtotalBs - discountGlobalBs);
+
+      let exemptAmountBs = 0;
+      let taxableBaseBs = 0;
+      let totalIvaBs = 0;
+
+      for (const item of items) {
+        const ivaType: IvaType = ivaMap.get(item.productId) || 'GENERAL';
+        const ivaRate = IVA_RATES[ivaType] || 0;
+        const proportion = subtotalBs > 0 ? item.totalBs / subtotalBs : 0;
+        const itemDiscountedTotal = round2(item.totalBs - discountGlobalBs * proportion);
+
+        if (ivaType === 'EXEMPT') {
+          exemptAmountBs += itemDiscountedTotal;
+        } else {
+          taxableBaseBs += itemDiscountedTotal;
+          totalIvaBs += round2(itemDiscountedTotal * ivaRate);
+        }
+      }
+
+      const totalBs = round2(subtotalAfterDiscountBs + totalIvaBs + surchargeBs);
+
+      return {
+        subtotalUsd: round2(subtotalBs / exchangeRate),
+        subtotalBs: round2(subtotalBs),
+        discountGlobalUsd: round2(discountGlobalBs / exchangeRate),
+        discountGlobalBs: round2(discountGlobalBs),
+        exemptAmountUsd: round2(exemptAmountBs / exchangeRate),
+        exemptAmountBs: round2(exemptAmountBs),
+        taxableBaseUsd: round2(taxableBaseBs / exchangeRate),
+        taxableBaseBs: round2(taxableBaseBs),
+        totalIvaUsd: round2(totalIvaBs / exchangeRate),
+        totalIvaBs: round2(totalIvaBs),
+        totalSurchargeUsd: round2(surchargeUsd),
+        totalSurchargeBs: round2(surchargeBs),
+        totalUsd: round2(totalBs / exchangeRate),
+        totalBs: round2(totalBs),
+      };
+    }
+
+    // USD is source of truth (original logic)
     const subtotalUsd = round2(items.reduce((sum, i) => sum + i.totalUsd, 0));
     const discountGlobalUsd = round2(subtotalUsd * (discountGlobalPct / 100));
     const subtotalAfterDiscountUsd = round2(subtotalUsd - discountGlobalUsd);
@@ -100,7 +161,7 @@ export class PurchaseOrdersService {
       }
     }
 
-    const totalSurchargeUsd = surchargeUsd;
+    const totalSurchargeUsd = surchargeInput;
     const totalUsd = round2(subtotalAfterDiscountUsd + totalIvaUsd + totalSurchargeUsd);
 
     return {
@@ -146,13 +207,12 @@ export class PurchaseOrdersService {
 
       // Build items with discount calculations
       const items = dto.items.map((item) => {
-        let costUsd = currency === 'BS' ? round2(item.costUsd / rate) : item.costUsd;
         const discountPct = item.discountPct || 0;
-        const calc = this.calculateItemValues(costUsd, item.quantity, discountPct, rate);
+        const calc = this.calculateItemValues(item.costUsd, item.quantity, discountPct, rate, currency as 'USD' | 'BS');
         return {
           productId: item.productId,
           quantity: item.quantity,
-          costUsd,
+          costUsd: calc.costUsd,
           costBs: calc.costBs,
           discountPct,
           discountUsd: calc.discountUsd,
@@ -172,30 +232,51 @@ export class PurchaseOrdersService {
         });
         const serviceIds = new Set(products.filter((p: any) => p.isService).map((p: any) => p.id));
         const nonServiceItems = items.filter((i) => !serviceIds.has(i.productId));
-        const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
 
-        for (const item of nonServiceItems) {
-          const share = surchargeDistribution === 'PROPORTIONAL'
-            ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
-            : surchargeUsd / nonServiceItems.length;
-          const perUnit = round2(share / item.quantity);
-          item.costUsd = round2(item.costUsd + perUnit);
-          item.costBs = round2(item.costUsd * rate);
-          const calc = this.calculateItemValues(item.costUsd, item.quantity, item.discountPct, rate);
-          item.netCostUsd = calc.netCostUsd;
-          item.netCostBs = calc.netCostBs;
-          item.totalUsd = calc.totalUsd;
-          item.totalBs = calc.totalBs;
+        if (currency === 'BS') {
+          // Surcharge input is in Bs
+          const totalNonServiceBs = nonServiceItems.reduce((sum, i) => sum + i.totalBs, 0);
+          for (const item of nonServiceItems) {
+            const share = surchargeDistribution === 'PROPORTIONAL'
+              ? totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeUsd : 0
+              : surchargeUsd / nonServiceItems.length;
+            const perUnit = round2(share / item.quantity);
+            const newCostBs = round2(item.costBs + perUnit);
+            const calc = this.calculateItemValues(newCostBs, item.quantity, item.discountPct, rate, 'BS');
+            item.costUsd = calc.costUsd;
+            item.costBs = calc.costBs;
+            item.netCostUsd = calc.netCostUsd;
+            item.netCostBs = calc.netCostBs;
+            item.totalUsd = calc.totalUsd;
+            item.totalBs = calc.totalBs;
+          }
+        } else {
+          const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
+          for (const item of nonServiceItems) {
+            const share = surchargeDistribution === 'PROPORTIONAL'
+              ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
+              : surchargeUsd / nonServiceItems.length;
+            const perUnit = round2(share / item.quantity);
+            const newCostUsd = round2(item.costUsd + perUnit);
+            const calc = this.calculateItemValues(newCostUsd, item.quantity, item.discountPct, rate, 'USD');
+            item.costUsd = calc.costUsd;
+            item.costBs = calc.costBs;
+            item.netCostUsd = calc.netCostUsd;
+            item.netCostBs = calc.netCostBs;
+            item.totalUsd = calc.totalUsd;
+            item.totalBs = calc.totalBs;
+          }
         }
       }
 
       // Calculate fiscal totals
       const fiscal = await this.calculateFiscalTotals(
-        items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd })),
+        items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd, totalBs: i.totalBs })),
         discountGlobalPct,
         surchargeUsd,
         rate,
         tx,
+        currency as 'USD' | 'BS',
       );
 
       // Calculate ISLR if applicable
@@ -222,6 +303,7 @@ export class PurchaseOrdersService {
           currency,
           exchangeRate: rate,
           warehouseId: dto.warehouseId || null,
+          isFiscal: dto.isFiscal !== undefined ? dto.isFiscal : true,
           isCredit: dto.isCredit || false,
           creditDays: dto.creditDays || 0,
           discountGlobalPct,
@@ -328,6 +410,7 @@ export class PurchaseOrdersService {
     if (dto.supplierControlNumber !== undefined) updateData.supplierControlNumber = dto.supplierControlNumber || null;
     if (dto.supplierSerialNumber !== undefined) updateData.supplierSerialNumber = dto.supplierSerialNumber || null;
     if (dto.supplierInvoiceNumber !== undefined) updateData.supplierInvoiceNumber = dto.supplierInvoiceNumber || null;
+    if (dto.isFiscal !== undefined) updateData.isFiscal = dto.isFiscal;
     if (dto.isCredit !== undefined) updateData.isCredit = dto.isCredit;
     if (dto.creditDays !== undefined) updateData.creditDays = dto.creditDays;
     if (dto.invoiceDate !== undefined) updateData.invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : null;
@@ -349,14 +432,13 @@ export class PurchaseOrdersService {
       await this.prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
 
       const items = dto.items.map((item) => {
-        const costUsd = currency === 'BS' ? round2(item.costUsd / rate) : item.costUsd;
         const discountPct = item.discountPct || 0;
-        const calc = this.calculateItemValues(costUsd, item.quantity, discountPct, rate);
+        const calc = this.calculateItemValues(item.costUsd, item.quantity, discountPct, rate, currency as 'USD' | 'BS');
         return {
           purchaseOrderId: id,
           productId: item.productId,
           quantity: item.quantity,
-          costUsd,
+          costUsd: calc.costUsd,
           costBs: calc.costBs,
           discountPct,
           discountUsd: calc.discountUsd,
@@ -376,31 +458,51 @@ export class PurchaseOrdersService {
         });
         const serviceIds = new Set(products.filter((p) => p.isService).map((p) => p.id));
         const nonServiceItems = items.filter((i) => !serviceIds.has(i.productId));
-        const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
 
-        for (const item of nonServiceItems) {
-          const share = surchargeDistribution === 'PROPORTIONAL'
-            ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
-            : surchargeUsd / nonServiceItems.length;
-          const perUnit = round2(share / item.quantity);
-          item.costUsd = round2(item.costUsd + perUnit);
-          item.costBs = round2(item.costUsd * rate);
-          const calc = this.calculateItemValues(item.costUsd, item.quantity, item.discountPct, rate);
-          item.netCostUsd = calc.netCostUsd;
-          item.netCostBs = calc.netCostBs;
-          item.totalUsd = calc.totalUsd;
-          item.totalBs = calc.totalBs;
+        if (currency === 'BS') {
+          const totalNonServiceBs = nonServiceItems.reduce((sum, i) => sum + i.totalBs, 0);
+          for (const item of nonServiceItems) {
+            const share = surchargeDistribution === 'PROPORTIONAL'
+              ? totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeUsd : 0
+              : surchargeUsd / nonServiceItems.length;
+            const perUnit = round2(share / item.quantity);
+            const newCostBs = round2(item.costBs + perUnit);
+            const calc = this.calculateItemValues(newCostBs, item.quantity, item.discountPct, rate, 'BS');
+            item.costUsd = calc.costUsd;
+            item.costBs = calc.costBs;
+            item.netCostUsd = calc.netCostUsd;
+            item.netCostBs = calc.netCostBs;
+            item.totalUsd = calc.totalUsd;
+            item.totalBs = calc.totalBs;
+          }
+        } else {
+          const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
+          for (const item of nonServiceItems) {
+            const share = surchargeDistribution === 'PROPORTIONAL'
+              ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
+              : surchargeUsd / nonServiceItems.length;
+            const perUnit = round2(share / item.quantity);
+            const newCostUsd = round2(item.costUsd + perUnit);
+            const calc = this.calculateItemValues(newCostUsd, item.quantity, item.discountPct, rate, 'USD');
+            item.costUsd = calc.costUsd;
+            item.costBs = calc.costBs;
+            item.netCostUsd = calc.netCostUsd;
+            item.netCostBs = calc.netCostBs;
+            item.totalUsd = calc.totalUsd;
+            item.totalBs = calc.totalBs;
+          }
         }
       }
 
       await this.prisma.purchaseOrderItem.createMany({ data: items });
 
       const fiscal = await this.calculateFiscalTotals(
-        items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd })),
+        items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd, totalBs: i.totalBs })),
         discountGlobalPct,
         surchargeUsd,
         rate,
         this.prisma,
+        currency as 'USD' | 'BS',
       );
 
       Object.assign(updateData, {
@@ -550,15 +652,9 @@ export class PurchaseOrdersService {
         const amountUsd = order.totalUsd;
         const amountBs = round2(amountUsd * exchangeRate);
 
-        let retentionUsd = 0;
-        let retentionBs = 0;
-
-        // Calculate IVA retention if supplier is retention agent
-        if (order.supplier.isRetentionAgent) {
-          const ivaRetentionPct = config?.ivaRetentionPct || 75;
-          retentionUsd = round2(order.totalIvaUsd * (ivaRetentionPct / 100));
-          retentionBs = round2(retentionUsd * exchangeRate);
-        }
+        // IVA retention is now a separate document (IvaRetention), not embedded in Payable
+        const retentionUsd = 0;
+        const retentionBs = 0;
 
         let islrRetUsd = 0;
         if (order.islrRetentionPct && order.islrRetentionPct > 0) {
@@ -570,7 +666,7 @@ export class PurchaseOrdersService {
           });
         }
 
-        const netPayableUsd = round2(amountUsd - retentionUsd - islrRetUsd);
+        const netPayableUsd = round2(amountUsd - islrRetUsd);
         const netPayableBs = round2(netPayableUsd * exchangeRate);
 
         const dueDate = new Date();
@@ -589,6 +685,70 @@ export class PurchaseOrdersService {
             netPayableBs,
             dueDate: order.creditDays > 0 ? dueDate : null,
             notes: `CxP generada de factura ${order.number}`,
+          },
+        });
+      }
+
+      // Create IvaRetention document if applicable
+      if (config?.isIGTFContributor && order.isFiscal && order.totalIvaUsd > 0) {
+        const exchangeRate = order.exchangeRate;
+        const ivaRetPct = config.ivaRetentionPct || 75;
+        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
+        const retBs = round2(retUsd * exchangeRate);
+
+        // Generate number: YYYYMM + 8-digit sequence
+        const now = new Date();
+        const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const seq = config.retentionNextNumber || 1;
+        const number = `${prefix}${String(seq).padStart(8, '0')}`;
+
+        await tx.ivaRetention.create({
+          data: {
+            number,
+            purchaseOrderId: order.id,
+            supplierId: order.supplierId,
+            ivaBaseUsd: order.totalIvaUsd,
+            ivaBaseBs: order.totalIvaBs,
+            retentionPct: ivaRetPct,
+            retentionUsd: retUsd,
+            retentionBs: retBs,
+            exchangeRate,
+            createdById: userId,
+          },
+        });
+
+        // Increment sequence
+        await tx.companyConfig.update({
+          where: { id: 'singleton' },
+          data: { retentionNextNumber: seq + 1 },
+        });
+      }
+
+      // Create PurchaseBookEntry automatically
+      if (order.isFiscal) {
+        // Calculate retention from IvaRetention documents created above
+        const ivaRetentions = await tx.ivaRetention.findMany({
+          where: { purchaseOrderId: order.id },
+        });
+        const retentionAmountBs = ivaRetentions.reduce((sum, r) => sum + r.retentionBs, 0);
+        const retentionVoucher = ivaRetentions.length > 0 ? ivaRetentions[0].number : (order.retentionVoucherNumber || null);
+
+        await tx.purchaseBookEntry.create({
+          data: {
+            purchaseOrderId: order.id,
+            entryDate: order.invoiceDate || processedAt,
+            supplierControlNumber: order.supplierControlNumber || null,
+            supplierInvoiceNumber: order.supplierInvoiceNumber || null,
+            supplierName: order.supplier.name,
+            supplierRif: order.supplier.rif || 'S/R',
+            exemptAmountBs: order.exemptAmountBs,
+            taxableBaseBs: order.taxableBaseBs,
+            ivaAmountBs: order.totalIvaBs,
+            retentionVoucherNumber: retentionVoucher,
+            retentionAmountBs: round2(retentionAmountBs),
+            totalBs: order.totalBs,
+            isManual: false,
+            createdById: userId,
           },
         });
       }
