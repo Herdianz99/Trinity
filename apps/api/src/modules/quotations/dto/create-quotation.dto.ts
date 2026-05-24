@@ -16,6 +16,11 @@ export class QuotationItemDto {
   @IsOptional()
   @IsNumber()
   unitPrice?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  discountPct?: number;
 }
 
 export class CreateQuotationDto {

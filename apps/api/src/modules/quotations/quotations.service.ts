@@ -107,7 +107,8 @@ export class QuotationsService {
       const priceWithIva = item.unitPrice ?? product.priceDetal;
       const ivaRate = IVA_RATES[product.ivaType] || 0;
       const baseUnitPrice = priceWithIva / (1 + ivaRate);
-      const lineSubtotal = baseUnitPrice * item.quantity;
+      const discountMult = 1 - ((item.discountPct || 0) / 100);
+      const lineSubtotal = baseUnitPrice * item.quantity * discountMult;
       const ivaAmount = lineSubtotal * ivaRate;
       const lineTotalUsd = lineSubtotal + ivaAmount;
 
