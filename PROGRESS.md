@@ -1,5 +1,27 @@
 # Trinity ERP — Progreso
 
+## Sesion 44 — Dashboard del Vendedor mobile-first
+
+### Backend (NestJS)
+- **DashboardService.getVendedor()**: Nuevo metodo que retorna datos exclusivos del vendedor actual
+  - `GET /dashboard/vendedor?from&to`: Busca Seller vinculado al userId del JWT, retorna 404 si no tiene
+  - Datos: sales (con vsLastPeriod), pendingInvoices (pre-facturas sin cobrar), returns (NCVs del vendedor), topProducts (5 mas vendidos), salesTimeline (por hora/dia), receivables (CxC de facturas del vendedor)
+  - Todas las queries filtradas por sellerId
+  - Receivables se filtran via relacion Invoice.sellerId
+
+### Frontend (Next.js)
+- **Dashboard del Vendedor** (`/dashboard/seller`): Pagina mobile-first nueva
+  - Header con saludo personalizado (Buenos dias/tardes/noches + nombre) y fecha actual
+  - Selector de periodo compacto: Hoy / Semana / Mes (pills)
+  - 2 tarjetas KPI: Mis Ventas (con gradiente esmeralda y vsLastPeriod), Facturas (con ticket promedio)
+  - 2 tarjetas info: Pendientes (pre-facturas), Devoluciones (NCVs)
+  - Grafico de area (recharts) ventas por hora/dia, altura 200px en movil
+  - Tarjeta CxC con alerta de vencidas y boton "Ver detalle" a /receivables
+  - Top 5 productos como lista con barras de progreso (sin grafico complejo en movil)
+  - Responsive: columna unica en movil, max-w-3xl centrado
+- **Dashboard Gerencial** (`/dashboard`): Agregada redireccion automatica
+  - Si usuario es SELLER, redirige a /dashboard/seller via fetch /api/auth/me
+
 ## Sesion 43 — Dashboard Gerencial con KPIs, graficos y selector de periodo
 
 ### Backend (NestJS)

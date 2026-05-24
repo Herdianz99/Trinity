@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DollarSign, FileText, RotateCcw, Target, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package,
@@ -105,6 +106,7 @@ const PRODUCT_BAR_COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const router = useRouter();
   const now = new Date();
   const today = toLocalDateStr(now);
 
@@ -116,6 +118,14 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
 
   useEffect(() => { document.title = 'Dashboard | Trinity ERP'; }, []);
+
+  // Redirect SELLER users to their own dashboard
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(user => {
+      if (user?.role === 'SELLER') router.replace('/dashboard/seller');
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Calculate from/to based on period selection
   useEffect(() => {

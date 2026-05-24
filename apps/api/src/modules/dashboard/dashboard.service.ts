@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 function round2(n: number): number {
@@ -89,6 +89,247 @@ export class DashboardService {
       receivables,
       payables,
       salesTimeline: salesByHourOrDay,
+    };
+  }
+
+  // ── Seller Dashboard ─────────────────────────────────────────────────────
+
+  async getVendedor(userId: string, fromStr?: string, toStr?: string) {
+    // Find seller linked to this user
+    const seller = await this.prisma.seller.findUnique({
+      where: { userId },
+      select: { id: true, name: true, code: true },
+    });
+    if (!seller) {
+      throw new NotFoundException('Este usuario no tiene vendedor asignado');
+    }
+
+    // Date range
+    const now = new Date();
+    const from = fromStr ? new Date(fromStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const to = toStr ? new Date(toStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    from.setUTCHours(0, 0, 0, 0);
+    to.setUTCHours(23, 59, 59, 999);
+
+    // Previous period for comparison
+    const durationMs = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 1);
+    prevTo.setUTCHours(23, 59, 59, 999);
+    const prevFrom = new Date(prevTo.getTime() - durationMs);
+    prevFrom.setUTCHours(0, 0, 0, 0);
+
+    const dateRange = { gte: from, lte: to };
+    const prevDateRange = { gte: prevFrom, lte: prevTo };
+    const sellerId = seller.id;
+
+    const [
+      sales,
+      prevSales,
+      pendingInvoices,
+      returns,
+      topProducts,
+      salesTimeline,
+      receivables,
+    ] = await Promise.all([
+      this.getSellerSales(sellerId, dateRange),
+      this.getSellerSales(sellerId, prevDateRange),
+      this.getSellerPendingInvoices(sellerId),
+      this.getSellerReturns(sellerId, dateRange),
+      this.getSellerTopProducts(sellerId, dateRange),
+      this.getSellerTimeline(sellerId, from, to),
+      this.getSellerReceivables(sellerId),
+    ]);
+
+    return {
+      period: { from: from.toISOString(), to: to.toISOString() },
+      seller: { name: seller.name, code: seller.code },
+      sales: {
+        totalUsd: sales.totalUsd,
+        totalBs: sales.totalBs,
+        invoiceCount: sales.count,
+        avgTicketUsd: sales.count > 0 ? round2(sales.totalUsd / sales.count) : 0,
+        vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd),
+      },
+      pendingInvoices,
+      returns,
+      topProducts,
+      salesTimeline,
+      receivables,
+    };
+  }
+
+  // ── Seller-specific queries ─────────────────────────────────────────────
+
+  private async getSellerSales(sellerId: string, dateRange: { gte: Date; lte: Date }) {
+    const result = await this.prisma.invoice.aggregate({
+      where: {
+        sellerId,
+        status: { in: ['PAID', 'PARTIAL_RETURN'] },
+        paidAt: dateRange,
+      },
+      _sum: { totalUsd: true, totalBs: true },
+      _count: { id: true },
+    });
+    return {
+      totalUsd: round2(result._sum.totalUsd || 0),
+      totalBs: round2(result._sum.totalBs || 0),
+      count: result._count.id || 0,
+    };
+  }
+
+  private async getSellerPendingInvoices(sellerId: string) {
+    const result = await this.prisma.invoice.aggregate({
+      where: { sellerId, status: 'PENDING' },
+      _sum: { totalUsd: true },
+      _count: { id: true },
+    });
+    return {
+      count: result._count.id || 0,
+      totalUsd: round2(result._sum.totalUsd || 0),
+    };
+  }
+
+  private async getSellerReturns(sellerId: string, dateRange: { gte: Date; lte: Date }) {
+    const result = await this.prisma.creditDebitNote.aggregate({
+      where: {
+        type: 'NCV',
+        status: 'POSTED',
+        appliedAt: dateRange,
+        invoice: { sellerId },
+      },
+      _sum: { totalUsd: true },
+      _count: { id: true },
+    });
+    return {
+      totalUsd: round2(result._sum.totalUsd || 0),
+      count: result._count.id || 0,
+    };
+  }
+
+  private async getSellerTopProducts(sellerId: string, dateRange: { gte: Date; lte: Date }) {
+    const items = await this.prisma.invoiceItem.findMany({
+      where: {
+        invoice: {
+          sellerId,
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          paidAt: dateRange,
+        },
+      },
+    });
+
+    const map = new Map<string, { productName: string; productCode: string; unitsSold: number; totalUsd: number }>();
+    for (const item of items) {
+      const existing = map.get(item.productId);
+      if (existing) {
+        existing.unitsSold += item.quantity;
+        existing.totalUsd += item.totalUsd;
+      } else {
+        map.set(item.productId, {
+          productName: item.productName,
+          productCode: '',
+          unitsSold: item.quantity,
+          totalUsd: item.totalUsd,
+        });
+      }
+    }
+
+    const topIds = Array.from(map.entries())
+      .sort((a, b) => b[1].totalUsd - a[1].totalUsd)
+      .slice(0, 5)
+      .map(([id]) => id);
+
+    if (topIds.length > 0) {
+      const products = await this.prisma.product.findMany({
+        where: { id: { in: topIds } },
+        select: { id: true, code: true },
+      });
+      for (const p of products) {
+        const entry = map.get(p.id);
+        if (entry) entry.productCode = p.code;
+      }
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => b.totalUsd - a.totalUsd)
+      .slice(0, 5)
+      .map(p => ({ ...p, totalUsd: round2(p.totalUsd) }));
+  }
+
+  private async getSellerTimeline(sellerId: string, from: Date, to: Date) {
+    const diffDays = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+    const isSingleDay = diffDays <= 1;
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        sellerId,
+        status: { in: ['PAID', 'PARTIAL_RETURN'] },
+        paidAt: { gte: from, lte: to },
+      },
+      select: { paidAt: true, totalUsd: true },
+    });
+
+    if (isSingleDay) {
+      const hours = Array.from({ length: 24 }, (_, i) => ({
+        label: `${String(i).padStart(2, '0')}:00`,
+        totalUsd: 0,
+        count: 0,
+      }));
+      for (const inv of invoices) {
+        if (!inv.paidAt) continue;
+        const h = new Date(inv.paidAt).getHours();
+        hours[h].totalUsd += inv.totalUsd;
+        hours[h].count += 1;
+      }
+      return hours.slice(7, 22).map(h => ({ ...h, totalUsd: round2(h.totalUsd) }));
+    } else {
+      const dayMap = new Map<string, { label: string; totalUsd: number; count: number }>();
+      const cursor = new Date(from);
+      while (cursor <= to) {
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        const d = cursor.getDate();
+        const m = cursor.getMonth();
+        const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        dayMap.set(key, { label: `${d} ${months[m]}`, totalUsd: 0, count: 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      for (const inv of invoices) {
+        if (!inv.paidAt) continue;
+        const d = new Date(inv.paidAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const entry = dayMap.get(key);
+        if (entry) {
+          entry.totalUsd += inv.totalUsd;
+          entry.count += 1;
+        }
+      }
+      return Array.from(dayMap.values()).map(d => ({ ...d, totalUsd: round2(d.totalUsd) }));
+    }
+  }
+
+  private async getSellerReceivables(sellerId: string) {
+    const all = await this.prisma.receivable.findMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+        invoice: { sellerId },
+      },
+      select: { amountUsd: true, paidAmountUsd: true, status: true },
+    });
+
+    let totalPendingUsd = 0;
+    let totalOverdueUsd = 0;
+
+    for (const r of all) {
+      const balance = r.amountUsd - r.paidAmountUsd;
+      totalPendingUsd += balance;
+      if (r.status === 'OVERDUE') {
+        totalOverdueUsd += balance;
+      }
+    }
+
+    return {
+      totalPendingUsd: round2(totalPendingUsd),
+      totalOverdueUsd: round2(totalOverdueUsd),
+      count: all.length,
     };
   }
 

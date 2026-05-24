@@ -613,6 +613,15 @@ model Payment {
 - Detalle con 3 tabs: Información, CxP, Notas Cr/Db
 - Libro de compras fiscal actualizado con campos precalculados
 
+#### Sesión 44 — Dashboard del Vendedor
+**Backend:**
+- GET /dashboard/vendedor?from&to — datos exclusivos del vendedor actual (ventas, pendientes, devoluciones, top productos, timeline, CxC)
+- Busca Seller vinculado al userId del JWT, retorna 404 si no tiene vendedor asignado
+
+**Frontend:**
+- Dashboard vendedor (/dashboard/seller): mobile-first, saludo personalizado, selector periodo, 4 tarjetas KPI, gráfico ventas, CxC, top 5 productos
+- Redirección automática: SELLER → /dashboard/seller
+
 #### Sesión 43 — Dashboard Gerencial
 **Backend:**
 - DashboardModule: Endpoint GET /dashboard/gerencial?from&to con datos agregados
