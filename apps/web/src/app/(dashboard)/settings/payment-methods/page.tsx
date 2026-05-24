@@ -54,6 +54,8 @@ export default function PaymentMethodsPage() {
     setLoading(false);
   }, []);
 
+  useEffect(() => { document.title = 'Metodos de Pago | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchMethods();
   }, [fetchMethods]);

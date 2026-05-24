@@ -76,6 +76,8 @@ export default function CommissionsReportPage() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => { document.title = 'Comisiones | Trinity ERP'; }, []);
+
   /* Fetch sellers on mount */
   useEffect(() => {
     (async () => {

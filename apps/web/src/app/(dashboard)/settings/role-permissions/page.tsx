@@ -100,6 +100,8 @@ export default function RolePermissionsPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Permisos por Rol | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchPermissions();
   }, [fetchPermissions]);

@@ -110,10 +110,11 @@ export class ReceiptsService {
 
     // Build items
     const items: Array<{
-      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION';
       receivableId?: string;
       payableId?: string;
       creditDebitNoteId?: string;
+      ivaRetentionId?: string;
       description: string;
       amountUsd: number;
       amountBsHistoric: number;
@@ -196,6 +197,24 @@ export class ReceiptsService {
           differentialBs: 0,
           sign: item.sign,
         });
+      } else if (item.ivaRetentionId) {
+        const retention = await this.prisma.ivaRetention.findUnique({
+          where: { id: item.ivaRetentionId },
+          include: { purchaseOrder: { select: { number: true } } },
+        });
+        if (!retention) throw new BadRequestException(`Retencion ${item.ivaRetentionId} no encontrada`);
+        if (retention.appliedAt) throw new BadRequestException(`Retencion ${retention.number} ya fue aplicada`);
+
+        items.push({
+          itemType: 'IVA_RETENTION',
+          ivaRetentionId: item.ivaRetentionId,
+          description: `Ret. IVA ${retention.number} (${retention.purchaseOrder?.number || ''})`,
+          amountUsd: retention.retentionUsd,
+          amountBsHistoric: retention.retentionBs,
+          amountBsToday: this.round2(retention.retentionUsd * rate.rate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
       }
     }
 
@@ -267,6 +286,7 @@ export class ReceiptsService {
               receivableId: item.receivableId || null,
               payableId: item.payableId || null,
               creditDebitNoteId: item.creditDebitNoteId || null,
+              ivaRetentionId: item.ivaRetentionId || null,
               description: item.description,
               amountUsd: item.amountUsd,
               amountBsHistoric: item.amountBsHistoric,
@@ -395,6 +415,12 @@ export class ReceiptsService {
           // Mark note as applied
           await tx.creditDebitNote.update({
             where: { id: item.creditDebitNoteId },
+            data: { appliedAt: new Date() },
+          });
+        } else if (item.itemType === 'IVA_RETENTION' && item.ivaRetentionId) {
+          // Mark IVA retention as applied
+          await tx.ivaRetention.update({
+            where: { id: item.ivaRetentionId },
             data: { appliedAt: new Date() },
           });
         }
@@ -527,7 +553,33 @@ export class ReceiptsService {
         sign: n.type === 'NCC' ? -1 : 1, // NCC reduces payable, NDC adds
       })).filter((n) => n.balanceUsd > 0.01);
 
-      return [...payableDocs, ...noteDocs];
+      // Fetch pending IVA retentions for this supplier
+      const ivaRetentions = await this.prisma.ivaRetention.findMany({
+        where: {
+          supplierId: query.entityId,
+          appliedAt: null,
+        },
+        include: {
+          purchaseOrder: { select: { number: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const retentionDocs = ivaRetentions.map((r) => ({
+        id: r.id,
+        documentType: 'IVA_RETENTION',
+        ivaRetentionId: r.id,
+        description: `Ret. IVA ${r.number} (${r.purchaseOrder?.number || ''})`,
+        date: r.createdAt,
+        amountUsd: r.retentionUsd,
+        amountBsHistoric: r.retentionBs,
+        exchangeRate: r.exchangeRate,
+        balanceUsd: r.retentionUsd,
+        status: 'POSTED',
+        sign: -1,
+      }));
+
+      return [...payableDocs, ...noteDocs, ...retentionDocs];
     }
 
     // Collection mode: by customer or platform

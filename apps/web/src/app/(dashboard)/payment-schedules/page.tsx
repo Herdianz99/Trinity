@@ -75,6 +75,7 @@ export default function PaymentSchedulesPage() {
     }
   }, [page, status, search]);
 
+  useEffect(() => { document.title = 'Programacion de Pagos | Trinity ERP'; }, []);
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {

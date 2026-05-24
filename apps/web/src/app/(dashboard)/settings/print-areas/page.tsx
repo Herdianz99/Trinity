@@ -35,6 +35,7 @@ export default function PrintAreasPage() {
     }
   }
 
+  useEffect(() => { document.title = 'Areas de Impresion | Trinity ERP'; }, []);
   useEffect(() => { fetchAreas(); }, []);
 
   useEffect(() => {

@@ -43,6 +43,8 @@ export default function PendingPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Pre-facturas Pendientes | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchPending();
     const interval = setInterval(fetchPending, 30000);

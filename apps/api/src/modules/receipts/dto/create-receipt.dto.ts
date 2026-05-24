@@ -14,6 +14,10 @@ class ReceiptItemDto {
   @IsString()
   creditDebitNoteId?: string;
 
+  @IsOptional()
+  @IsString()
+  ivaRetentionId?: string;
+
   @IsNumber()
   @IsIn([1, -1])
   sign: number;

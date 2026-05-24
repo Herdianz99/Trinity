@@ -59,6 +59,10 @@ export class CreatePurchaseOrderDto {
 
   @IsOptional()
   @IsBoolean()
+  isFiscal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isCredit?: boolean;
 
   @IsOptional()

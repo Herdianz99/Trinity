@@ -149,6 +149,7 @@ export default function ReceivablesPage() {
     } catch {}
   }, []);
 
+  useEffect(() => { document.title = 'Cuentas por Cobrar | Trinity ERP'; }, []);
   useEffect(() => { fetchReceivables(); }, [fetchReceivables]);
   useEffect(() => { fetchSummary(); fetchConfig(); fetchRate(); }, [fetchSummary, fetchConfig, fetchRate]);
 

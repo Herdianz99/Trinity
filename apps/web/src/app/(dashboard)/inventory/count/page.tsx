@@ -70,6 +70,7 @@ export default function InventoryCountPage() {
     if (meRes.ok) { const u = await meRes.json(); setUserRole(u.role); }
   }, []);
 
+  useEffect(() => { document.title = 'Conteos de Inventario | Trinity ERP'; }, []);
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 

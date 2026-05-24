@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Upload, FileJson, Copy, Check, AlertTriangle, Loader2,
   ChevronDown, ChevronUp, Package, Layers, Tag, Truck
@@ -59,6 +59,8 @@ export default function ImportPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { document.title = 'Importar Datos | Trinity ERP'; }, []);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(EXAMPLE_JSON);

@@ -48,6 +48,7 @@ export default function CashPage() {
     setLoading(false);
   }
 
+  useEffect(() => { document.title = 'Cajas | Trinity ERP'; }, []);
   useEffect(() => { fetchRegisters(); }, []);
 
   async function handleOpenSession() {

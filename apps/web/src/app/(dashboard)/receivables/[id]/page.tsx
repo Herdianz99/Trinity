@@ -99,6 +99,10 @@ export default function ReceivableDetailPage() {
   useEffect(() => { fetchReceivable(); }, [fetchReceivable]);
 
   useEffect(() => {
+    if (receivable) document.title = `CxC - ${receivable.invoice.number} | Trinity ERP`;
+  }, [receivable]);
+
+  useEffect(() => {
     fetch('/api/proxy/payment-methods/flat')
       .then(r => r.json())
       .then(data => setPaymentMethods(Array.isArray(data) ? data : []))

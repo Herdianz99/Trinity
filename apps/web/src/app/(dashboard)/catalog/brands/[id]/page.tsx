@@ -70,6 +70,10 @@ export default function BrandDetailPage() {
   useEffect(() => { fetchBrand(); }, [fetchBrand]);
 
   useEffect(() => {
+    if (brand) document.title = `${brand.name} | Trinity ERP`;
+  }, [brand]);
+
+  useEffect(() => {
     if (activeTab === 'products') fetchProducts();
   }, [activeTab, prodPage, fetchProducts]);
 

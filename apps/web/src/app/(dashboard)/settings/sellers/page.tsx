@@ -63,6 +63,8 @@ export default function SellersPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Vendedores | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchSellers();
   }, [fetchSellers]);

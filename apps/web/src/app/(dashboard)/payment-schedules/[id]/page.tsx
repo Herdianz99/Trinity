@@ -153,6 +153,10 @@ export default function PaymentScheduleDetailPage() {
   useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
 
   useEffect(() => {
+    if (schedule) document.title = `${schedule.number} - ${schedule.title} | Trinity ERP`;
+  }, [schedule]);
+
+  useEffect(() => {
     fetch('/api/proxy/suppliers?limit=500')
       .then((r) => r.json())
       .then((data) => setSuppliers(Array.isArray(data) ? data : (data.data || [])))

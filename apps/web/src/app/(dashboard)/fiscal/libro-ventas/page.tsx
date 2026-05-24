@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Loader2, FileDown, Search } from 'lucide-react';
 
 interface VentaRow {
@@ -53,6 +53,8 @@ export default function LibroVentasPage() {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => { document.title = 'Libro de Ventas | Trinity ERP'; }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

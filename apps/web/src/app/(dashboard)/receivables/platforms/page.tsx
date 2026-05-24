@@ -111,6 +111,8 @@ export default function PlatformsPage() {
     } catch {}
   }, []);
 
+  useEffect(() => { document.title = 'Plataformas | Trinity ERP'; }, []);
+
   useEffect(() => {
     try { fetch('/api/proxy/exchange-rate/today').then(r => r.text()).then(t => { if (t) { try { setTodayRate(JSON.parse(t)?.rate || 0); } catch {} } }); } catch {}
     fetch('/api/proxy/payment-methods/flat').then(r => r.json()).then(data => { if (Array.isArray(data)) setPaymentMethodsList(data); }).catch(() => {});

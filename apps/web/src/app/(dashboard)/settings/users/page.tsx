@@ -97,6 +97,8 @@ export default function UsersPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Usuarios | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);

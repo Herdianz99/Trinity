@@ -112,6 +112,7 @@ export default function MovementsPage() {
     if (res.ok) setWarehouses(await res.json());
   }, []);
 
+  useEffect(() => { document.title = 'Movimientos de Stock | Trinity ERP'; }, []);
   useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
   useEffect(() => { fetchMovements(); }, [fetchMovements]);
 

@@ -21,6 +21,8 @@ export default function NewPaymentSchedulePage() {
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
+  useEffect(() => { document.title = 'Nueva Programacion de Pago | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetch('/api/proxy/exchange-rate/today')
       .then((r) => r.json())

@@ -88,6 +88,8 @@ export default function PriceAdjustmentPage() {
     return cat?.children || [];
   }, [filterCategory, categories]);
 
+  useEffect(() => { document.title = 'Ajuste de Precios | Trinity ERP'; }, []);
+
   // Fetch metadata
   useEffect(() => {
     async function fetchMeta() {

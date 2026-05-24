@@ -16,6 +16,8 @@ export default function CashSessionsPage() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
 
+  useEffect(() => { document.title = 'Sesiones de Caja | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetch('/api/proxy/cash-registers')
       .then(r => r.json())

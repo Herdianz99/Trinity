@@ -29,6 +29,12 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Siempre hacer push a GitHub después del commit
 - Siempre actualizar PROGRESS.md y PROJECT.md al terminar
 
+## Titulos de pestaña del navegador
+- Toda página nueva debe tener `document.title` con el patrón `'Título | Trinity ERP'`
+- Páginas de listado/formulario: título estático (ej: `document.title = 'Clientes | Trinity ERP'`)
+- Páginas de detalle con datos dinámicos: título con datos del registro (ej: `document.title = \`${product.code} - ${product.name} | Trinity ERP\``)
+- Usar un `useEffect` para setear el título: estático con `[]`, dinámico con `[entity]`
+
 ## Fechas y timezone
 - Siempre usar setUTCHours para rangos de fecha en queries de backend
 - Para fechas locales en frontend usar getFullYear()/getMonth()/getDate() nunca toISOString()

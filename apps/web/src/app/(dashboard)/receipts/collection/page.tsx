@@ -62,6 +62,7 @@ export default function ReceiptsCollectionPage() {
     setLoading(false);
   }, [page, status, from, to]);
 
+  useEffect(() => { document.title = 'Recibos de Cobro | Trinity ERP'; }, []);
   useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

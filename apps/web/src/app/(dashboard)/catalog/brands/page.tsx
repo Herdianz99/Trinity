@@ -32,6 +32,7 @@ export default function BrandsPage() {
     }
   }
 
+  useEffect(() => { document.title = 'Marcas | Trinity ERP'; }, []);
   useEffect(() => { fetchBrands(); }, []);
 
   async function handleAdd() {

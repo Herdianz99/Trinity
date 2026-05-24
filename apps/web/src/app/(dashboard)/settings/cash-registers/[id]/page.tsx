@@ -76,6 +76,10 @@ export default function CashRegisterDetailPage() {
     fetchRegister();
   }, [fetchRegister]);
 
+  useEffect(() => {
+    if (register) document.title = `${register.name} | Trinity ERP`;
+  }, [register]);
+
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
     if (e) e.preventDefault();
     setSaving(true);

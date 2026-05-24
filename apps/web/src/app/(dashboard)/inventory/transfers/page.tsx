@@ -59,6 +59,7 @@ export default function TransfersPage() {
     if (meRes.ok) { const u = await meRes.json(); setUserRole(u.role); }
   }, []);
 
+  useEffect(() => { document.title = 'Transferencias | Trinity ERP'; }, []);
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
   useEffect(() => { fetchTransfers(); }, [fetchTransfers]);
 

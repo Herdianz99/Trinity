@@ -8,7 +8,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Trinity ERP',
+  title: {
+    default: 'Trinity ERP',
+    template: '%s | Trinity ERP',
+  },
   description: 'ERP para ferreterias venezolanas',
 };
 

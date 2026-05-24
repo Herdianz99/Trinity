@@ -25,6 +25,7 @@ export default function SuppliersPage() {
     } catch { /* ignore */ } finally { setLoading(false); }
   }
 
+  useEffect(() => { document.title = 'Proveedores | Trinity ERP'; }, []);
   useEffect(() => { fetchSuppliers(); }, []);
 
   async function handleDelete(id: string) {

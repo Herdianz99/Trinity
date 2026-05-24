@@ -59,6 +59,8 @@ export default function CashRegistersPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Cajas Registradoras | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchRegisters();
   }, [fetchRegisters]);

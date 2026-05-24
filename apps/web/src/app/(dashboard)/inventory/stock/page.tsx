@@ -101,6 +101,7 @@ export default function StockPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Inventario | Trinity ERP'; }, []);
   useEffect(() => { fetchWarehouses(); fetchConfig(); }, [fetchWarehouses, fetchConfig]);
   useEffect(() => { fetchStock(); }, [fetchStock]);
 

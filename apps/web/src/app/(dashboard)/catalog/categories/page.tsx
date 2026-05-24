@@ -68,6 +68,7 @@ export default function CategoriesPage() {
     } catch { /* ignore */ }
   }
 
+  useEffect(() => { document.title = 'Categorias | Trinity ERP'; }, []);
   useEffect(() => { fetchCategories(); fetchPrintAreas(); }, []);
 
   function toggleExpand(id: string) {

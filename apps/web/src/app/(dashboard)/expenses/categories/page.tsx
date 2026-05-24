@@ -32,6 +32,8 @@ export default function ExpenseCategoriesPage() {
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [userRole, setUserRole] = useState('');
 
+  useEffect(() => { document.title = 'Categorias de Gastos | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetch('/api/proxy/auth/me').then(r => r.json()).then(data => {
       setUserRole(data.role || '');

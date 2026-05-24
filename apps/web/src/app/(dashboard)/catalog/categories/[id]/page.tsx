@@ -72,6 +72,10 @@ export default function CategoryDetailPage() {
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
 
+  useEffect(() => {
+    if (category) document.title = `${category.name} | Trinity ERP`;
+  }, [category]);
+
   const fetchPrintAreas = useCallback(async () => {
     try {
       const res = await fetch('/api/proxy/print-areas');

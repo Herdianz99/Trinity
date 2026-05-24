@@ -118,6 +118,10 @@ export default function ReceiptDetailPage() {
     setLoading(false);
   }, [id]);
 
+  useEffect(() => {
+    if (receipt) document.title = `${receipt.number} - ${TYPE_LABELS[receipt.type] || receipt.type} | Trinity ERP`;
+  }, [receipt]);
+
   useEffect(() => { fetchReceipt(); }, [fetchReceipt]);
 
   // Fetch rate and methods for processing

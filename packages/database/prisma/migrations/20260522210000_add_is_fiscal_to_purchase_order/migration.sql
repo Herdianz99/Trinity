@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "isFiscal" BOOLEAN NOT NULL DEFAULT true;

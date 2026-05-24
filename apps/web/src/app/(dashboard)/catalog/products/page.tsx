@@ -88,6 +88,7 @@ export default function ProductsPage() {
     }
   }, []);
 
+  useEffect(() => { document.title = 'Productos | Trinity ERP'; }, []);
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 

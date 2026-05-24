@@ -21,6 +21,8 @@ export default function WarehousesPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  useEffect(() => { document.title = 'Almacenes | Trinity ERP'; }, []);
+
   const fetchWarehouses = useCallback(async () => {
     setLoading(true);
     try {

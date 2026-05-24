@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Truck, Loader2 } from 'lucide-react';
 
@@ -14,6 +14,8 @@ export default function NewSupplierPage() {
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => { document.title = 'Nuevo Proveedor | Trinity ERP'; }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();

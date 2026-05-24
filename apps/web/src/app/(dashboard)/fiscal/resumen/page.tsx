@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BarChart3, Loader2, Search, TrendingUp, TrendingDown, Scale, Shield } from 'lucide-react';
 
 interface ResumenData {
@@ -42,6 +42,8 @@ export default function ResumenFiscalPage() {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => { document.title = 'Resumen Fiscal | Trinity ERP'; }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -12,6 +12,7 @@ interface PendingDoc {
   receivableId?: string;
   payableId?: string;
   creditDebitNoteId?: string;
+  ivaRetentionId?: string;
   description: string;
   reference?: string | null;
   date: string;
@@ -112,6 +113,8 @@ export default function NewReceiptPage() {
   const [processing, setProcessing] = useState(false);
 
   const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  useEffect(() => { document.title = `Nuevo Recibo de ${isCollection ? 'Cobro' : 'Pago'} | Trinity ERP`; }, [isCollection]);
 
   // Fetch today's rate
   useEffect(() => {
@@ -298,6 +301,7 @@ export default function NewReceiptPage() {
           receivableId: d.receivableId,
           payableId: d.payableId,
           creditDebitNoteId: d.creditDebitNoteId,
+          ivaRetentionId: d.ivaRetentionId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -338,6 +342,7 @@ export default function NewReceiptPage() {
           receivableId: d.receivableId,
           payableId: d.payableId,
           creditDebitNoteId: d.creditDebitNoteId,
+          ivaRetentionId: d.ivaRetentionId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -695,16 +700,20 @@ export default function NewReceiptPage() {
                       <tr
                         key={doc.id}
                         className={`border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors ${
-                          doc.documentType === 'CxC' ? 'bg-green-500/5' : 'bg-red-500/5'
+                          doc.documentType === 'CxC' ? 'bg-green-500/5'
+                          : doc.documentType === 'IVA_RETENTION' ? 'bg-purple-500/5'
+                          : 'bg-red-500/5'
                         }`}
                       >
                         <td className="px-3 py-2">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             doc.documentType === 'CxC'
                               ? 'bg-green-500/20 text-green-400'
+                              : doc.documentType === 'IVA_RETENTION'
+                              ? 'bg-purple-500/20 text-purple-400'
                               : 'bg-red-500/20 text-red-400'
                           }`}>
-                            {doc.documentType}
+                            {doc.documentType === 'IVA_RETENTION' ? 'Ret. IVA' : doc.documentType}
                           </span>
                         </td>
                         <td className="px-3 py-2">
