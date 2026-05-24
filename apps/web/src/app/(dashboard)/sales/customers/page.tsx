@@ -36,6 +36,7 @@ export default function CustomersPage() {
     } catch { setMessage({ type: 'error', text: 'Error al cargar clientes' }); } finally { setLoading(false); }
   }, [page, search]);
 
+  useEffect(() => { document.title = 'Clientes | Trinity ERP'; }, []);
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
   async function handleDelete(id: string) {
@@ -77,7 +78,41 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-green-500" size={28} /></div>
+        ) : customers.length === 0 ? (
+          <p className="text-center py-12 text-slate-500 text-sm">No se encontraron clientes</p>
+        ) : customers.map(c => (
+          <Link key={c.id} href={`/sales/customers/${c.id}`} className="card p-4 block active:scale-[0.98] transition-transform">
+            <div className="flex items-start justify-between mb-1">
+              <span className="text-sm font-medium text-white">{c.name}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.isActive ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'}`}>
+                {c.isActive ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">{c.documentType || 'V'}-{c.rif || 'Sin RIF'}</p>
+            {c.phone && <p className="text-xs text-slate-500 mt-0.5">{c.phone}</p>}
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-slate-500">Credito: ${c.creditLimit.toFixed(2)}</span>
+              <Edit2 size={14} className="text-slate-600" />
+            </div>
+          </Link>
+        ))}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-1 py-2">
+            <span className="text-sm text-slate-400">Pag. {page} de {totalPages}</span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={18} /></button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={18} /></button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Table (desktop only) */}
+      <div className="hidden md:block card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -855,6 +855,13 @@ model QuotationItem {
 - Chatbot WhatsApp
 - CRM
 
+#### Sesión 46 — POS Mobile-first y vistas responsive ✅
+- POS mobile con dos vistas (busqueda/carrito) en mismo URL, deteccion <768px
+- Bottom navigation mobile con links por rol (SELLER/CASHIER/ADMIN/SUPERVISOR)
+- Listas de facturas, cotizaciones y clientes con cards en mobile
+- Modales full-screen en mobile, centrados en desktop
+- Layout responsive con padding adaptativo
+
 ### FASE 6 — Integraciones de Hardware y POS Avanzado
 - **POS Electron + Máquina Fiscal:** Migrar el POS a Electron para acceso nativo a puertos COM. El agente Electron se comunica con la máquina fiscal por puerto COM, recibe el número fiscal y lo guarda en Invoice.fiscalNumber. También habilita modo offline con sincronización posterior
 - **Agente local COM (fase previa a Electron):** Pequeño programa instalado en cada PC de caja que actúa como puente WebSocket entre el navegador y el puerto COM de la máquina fiscal

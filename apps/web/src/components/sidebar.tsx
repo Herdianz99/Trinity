@@ -262,6 +262,13 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
     } catch {}
   }, [collapsed]);
 
+  // Listen for mobile bottom-nav "Mas" button
+  useEffect(() => {
+    const handler = () => setMobileOpen(true);
+    window.addEventListener('trinity-open-sidebar', handler);
+    return () => window.removeEventListener('trinity-open-sidebar', handler);
+  }, []);
+
   function toggleSection(key: string) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -449,9 +456,9 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile menu button */}
+      {/* Mobile menu button — hidden on small screens where bottom nav exists */}
       <button
-        className="lg:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300"
+        className="hidden md:block lg:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X size={20} /> : <Menu size={20} />}

@@ -1,5 +1,41 @@
 # Trinity ERP — Progreso
 
+## Sesion 46 — POS Mobile-first y vistas responsive
+
+### Frontend (Next.js)
+- **POS Mobile** (`/sales/pos`): Vista mobile completa detectada automaticamente en <768px
+  - Vista Busqueda: header compacto con boton opciones, barra de busqueda prominente, grid 2 columnas de productos con stock check, boton flotante "Ver carrito" con conteo de items
+  - Vista Carrito: seccion de cliente, items con controles [-/+] y eliminar, totales fijos en footer, boton "Cobrar $XX.XX" (o solo "Guardar pre-factura" para SELLER)
+  - Bottom sheet de opciones: cliente, facturas en espera, cotizacion, caja, vendedor (solo ADMIN/SUPERVISOR)
+  - Modales compartidos (renderSharedModals): Payment, Credit, Client, Pending Drawer, SeniatModal — todos full-screen en mobile, centrados en desktop
+  - Deteccion via useState + resize listener, threshold 768px
+  - NO crea URL separada — mismo /sales/pos renderiza version correcta
+
+- **Bottom Navigation Mobile**: Barra de navegacion inferior para pantallas <768px
+  - SELLER: POS, Facturas, Cotizaciones, Clientes, Mas
+  - CASHIER: POS, Facturas, Pendientes, Caja, Mas
+  - ADMIN/SUPERVISOR: Dashboard, POS, Facturas, Inventario, Mas
+  - "Mas" abre el sidebar como drawer via CustomEvent
+  - Boton hamburguesa oculto en mobile (reemplazado por bottom nav)
+  - Integrado en dashboard layout, padding bottom ajustado
+
+- **Listas mobile-friendly**: Invoices, Quotations, Customers
+  - Cards en lugar de tabla en <768px con info clave (numero, cliente, total, estado, fecha)
+  - Tabla original oculta con `hidden md:block`
+  - Modales de detalle full-screen en mobile
+  - Paginacion incluida en vista cards
+
+- **Layout responsive**: Padding reducido en mobile (p-4 vs p-6/p-8), pb-20 para no ocultar contenido tras bottom nav
+
+### Archivos modificados
+- `apps/web/src/app/(dashboard)/sales/pos/page.tsx` — Mobile POS + shared modals
+- `apps/web/src/components/mobile-bottom-nav.tsx` — NUEVO: bottom navigation mobile
+- `apps/web/src/components/sidebar.tsx` — Escucha evento para abrir drawer, hamburguesa oculta en mobile
+- `apps/web/src/app/(dashboard)/layout.tsx` — Bottom nav + padding responsive
+- `apps/web/src/app/(dashboard)/sales/invoices/page.tsx` — Cards mobile + modal fullscreen
+- `apps/web/src/app/(dashboard)/quotations/page.tsx` — Cards mobile + modal fullscreen
+- `apps/web/src/app/(dashboard)/sales/customers/page.tsx` — Cards mobile
+
 ## Sesion 45 — Pagina de inicio para roles secundarios con accesos directos
 
 ### Backend (NestJS)

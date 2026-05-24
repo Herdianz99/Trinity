@@ -78,6 +78,8 @@ export default function QuotationsPage() {
     }
   }, [page, status, from, to]);
 
+  useEffect(() => { document.title = 'Cotizaciones | Trinity ERP'; }, []);
+
   useEffect(() => {
     fetchQuotations();
   }, [fetchQuotations]);
@@ -212,8 +214,41 @@ export default function QuotationsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-green-500" size={28} /></div>
+        ) : quotations.length === 0 ? (
+          <p className="text-center py-12 text-slate-500 text-sm">No se encontraron cotizaciones</p>
+        ) : quotations.map(q => (
+          <button key={q.id} onClick={() => openDetail(q.id)} className="card p-4 w-full text-left active:scale-[0.98] transition-transform">
+            <div className="flex items-start justify-between mb-2">
+              <span className="font-mono text-green-400 text-sm font-bold">{q.number}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STATUS_COLORS[q.status] || ''}`}>
+                {STATUS_LABELS[q.status] || q.status}
+              </span>
+            </div>
+            <p className="text-sm text-slate-300 mb-1">{q.customer?.name || 'Sin cliente'}</p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">{new Date(q.createdAt).toLocaleDateString('es-VE')}</span>
+              <span className="text-base font-bold text-white">${q.totalUsd.toFixed(2)}</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">{q._count.items} items</p>
+          </button>
+        ))}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-1 py-2">
+            <span className="text-sm text-slate-400">Pag. {page} de {totalPages}</span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronLeft size={18} /></button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 disabled:opacity-30"><ChevronRight size={18} /></button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Table (desktop only) */}
+      <div className="hidden md:block card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -300,9 +335,9 @@ export default function QuotationsPage() {
 
       {/* Detail Modal */}
       {detailOpen && detail && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 px-4">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailOpen(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex md:items-start md:justify-center md:pt-8 md:px-4">
+          <div className="hidden md:block fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailOpen(false)} />
+          <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-3xl md:max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
               <div className="flex items-center gap-3">
                 <div>

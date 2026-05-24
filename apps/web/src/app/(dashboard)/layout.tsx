@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import ExchangeRateBanner from '@/components/exchange-rate-banner';
 import PrintMonitor from '@/components/print-monitor';
+import MobileBottomNav from '@/components/mobile-bottom-nav';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -41,10 +42,11 @@ export default async function DashboardLayout({
       />
       <main className="flex-1 overflow-y-auto">
         <ExchangeRateBanner />
-        <div className="p-6 lg:p-8">
+        <div className="p-4 md:p-6 lg:p-8 pb-20 md:pb-6 lg:pb-8">
           {children}
         </div>
       </main>
+      {user && <MobileBottomNav role={user.role} />}
       <PrintMonitor />
     </div>
   );

@@ -150,6 +150,18 @@ export default function POSPage() {
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileView, setMobileView] = useState<'search' | 'cart'>('search');
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   useEffect(() => { document.title = 'POS | Trinity ERP'; }, []);
 
   // Fetch exchange rate and user info on load
@@ -1072,6 +1084,759 @@ export default function POSPage() {
     );
   }
 
+  // ── Mobile POS Render ────────────────────────────────────────────────────
+  const renderMobileLayout = () => (
+    <div className="h-[calc(100vh-64px)] flex flex-col relative">
+      {message && (
+        <div className={`mx-3 mt-2 px-3 py-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+          {message.text}
+        </div>
+      )}
+
+      {mobileView === 'search' ? (
+        /* ═══ Mobile Search View ═══ */
+        <div className="flex-1 flex flex-col min-h-0 px-3 pt-2 pb-20">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-white">POS</h1>
+              {selectedCashRegister && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 border border-slate-600 text-slate-400">{selectedCashRegister.name}</span>
+              )}
+            </div>
+            <button
+              onClick={() => setMobileOptionsOpen(true)}
+              className="p-2 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-400"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex gap-2 mb-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                value={searchQuery}
+                onChange={e => handleProductSearch(e.target.value)}
+                className="input-field pl-9 !py-3 text-base w-full"
+                autoFocus
+              />
+              {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" size={16} />}
+            </div>
+            <button onClick={toggleScanner} className={`p-3 rounded-lg border ${scannerActive ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-slate-700/50 border-slate-600 text-slate-400'}`}>
+              <Camera size={20} />
+            </button>
+          </div>
+
+          {scannerActive && (
+            <div className="mb-2 rounded-lg overflow-hidden border border-slate-700">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-32 object-cover" />
+            </div>
+          )}
+
+          {/* Product results grid */}
+          <div className="flex-1 overflow-y-auto">
+            {searchResults.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {searchResults.map(product => {
+                  const prodStock = product.stock?.[0]?.quantity || 0;
+                  const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+                  return (
+                    <button
+                      key={product.id}
+                      onClick={() => addToCart(product)}
+                      disabled={blockNoStock}
+                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${blockNoStock ? 'opacity-40 border-slate-700/30' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center mb-2">
+                        <ShoppingCart size={16} className="text-slate-500" />
+                      </div>
+                      <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{product.code}</p>
+                      <p className="text-sm font-semibold text-green-400 mt-1">${product.priceDetal?.toFixed(2)}</p>
+                      {blockNoStock && <p className="text-[10px] text-red-400 mt-0.5">Sin stock</p>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                <div className="text-center">
+                  <ShoppingCart className="mx-auto text-slate-700 mb-2" size={40} />
+                  <p className="text-slate-500 text-sm">Busca un producto</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ═══ Mobile Cart View ═══ */
+        <div className="flex-1 flex flex-col min-h-0 pb-[180px]">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-700/50">
+            <button onClick={() => setMobileView('search')} className="text-sm text-emerald-400 flex items-center gap-1">
+              ← Agregar
+            </button>
+            <h2 className="text-lg font-bold text-white flex-1">Mi carrito</h2>
+            <span className="text-xs text-slate-400">{cart.length} items</span>
+          </div>
+
+          {/* Customer section */}
+          <div className="px-3 py-2 border-b border-slate-700/30">
+            {customerId ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User size={14} className="text-green-400" />
+                  <span className="text-sm text-white">{customerName}</span>
+                </div>
+                <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-xs text-red-400">Quitar</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCustomerSearch(true)}
+                className="text-sm text-slate-400 flex items-center gap-1.5 py-1"
+              >
+                <Plus size={14} /> Agregar cliente
+              </button>
+            )}
+          </div>
+
+          {/* Cart items */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+            {cart.length === 0 ? (
+              <p className="text-center text-slate-500 text-sm py-8">Carrito vacio</p>
+            ) : cart.map(item => {
+              const discountMult = 1 - (item.discountPct || 0) / 100;
+              const lineTotal = item.unitPrice * item.quantity * discountMult;
+              return (
+                <div key={item.productId} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0 mr-2">
+                      <p className="text-sm font-medium text-white truncate">{item.name}</p>
+                      <p className="text-xs text-slate-500">${item.unitPrice.toFixed(2)} c/u</p>
+                    </div>
+                    <button onClick={() => removeItem(item.productId)} className="p-1 text-red-400">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => updateQuantity(item.productId, -1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                        <Minus size={14} />
+                      </button>
+                      <span className="text-sm font-semibold text-white w-8 text-center">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.productId, 1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <span className="text-sm font-bold text-green-400">${lineTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Fixed bottom: totals + actions */}
+          <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 px-4 py-3 z-40 safe-area-bottom">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-slate-400">Subtotal</span><span className="text-white">${subtotalUsd.toFixed(2)}</span>
+            </div>
+            {Object.entries(ivaByType).filter(([, v]) => v > 0).map(([type, amount]) => (
+              <div key={type} className="flex justify-between text-xs">
+                <span className="text-slate-500">IVA {IVA_LABELS[type]}</span><span className="text-slate-400">${(amount as number).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between text-lg font-bold mt-1 mb-3">
+              <span className="text-white">Total</span><span className="text-green-400">${totalUsd.toFixed(2)}</span>
+            </div>
+            {userRole === 'SELLER' ? (
+              <button
+                onClick={handleSaveInvoice}
+                disabled={cart.length === 0 || processing}
+                className="w-full py-3.5 rounded-xl bg-green-500 text-white font-bold text-base disabled:opacity-50 active:scale-[0.98] transition-transform"
+              >
+                {processing ? 'Guardando...' : 'Guardar pre-factura'}
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveInvoice}
+                  disabled={cart.length === 0 || processing}
+                  className="py-3.5 px-4 rounded-xl border border-slate-600 text-slate-300 text-sm disabled:opacity-50"
+                >
+                  <Clock size={16} />
+                </button>
+                <button
+                  onClick={() => { setPayments([]); setChangeMethodId(null); setPayModalOpen(true); }}
+                  disabled={cart.length === 0 || processing}
+                  className="flex-1 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base disabled:opacity-50 active:scale-[0.98] transition-transform"
+                >
+                  Cobrar ${totalUsd.toFixed(2)}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating cart badge (search view only) */}
+      {mobileView === 'search' && cart.length > 0 && (
+        <button
+          onClick={() => setMobileView('cart')}
+          className="fixed bottom-4 left-4 right-4 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base flex items-center justify-center gap-2 z-30 shadow-lg shadow-green-500/20 active:scale-[0.98] transition-transform safe-area-bottom"
+        >
+          <ShoppingCart size={18} />
+          Ver carrito ({cart.reduce((s, i) => s + i.quantity, 0)} items) — ${totalUsd.toFixed(2)}
+        </button>
+      )}
+
+      {/* Mobile options bottom sheet */}
+      {mobileOptionsOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setMobileOptionsOpen(false)} />
+          <div className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 rounded-t-2xl p-4 pb-8 z-50 animate-in slide-in-from-bottom safe-area-bottom">
+            <div className="w-10 h-1 rounded-full bg-slate-600 mx-auto mb-4" />
+            <div className="space-y-1">
+              <button onClick={() => { setMobileOptionsOpen(false); setShowCustomerSearch(true); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                <User size={18} className="text-blue-400" /> Seleccionar cliente
+              </button>
+              <button onClick={() => { setMobileOptionsOpen(false); fetchPending(); setPendingDrawerOpen(true); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                <Clock size={18} className="text-amber-400" /> Facturas en espera
+                {pendingCount > 0 && <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-black">{pendingCount}</span>}
+              </button>
+              <button onClick={() => { setMobileOptionsOpen(false); handleSaveQuotation(); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                <FileCheck size={18} className="text-cyan-400" /> Guardar cotizacion
+              </button>
+              <button onClick={() => { setMobileOptionsOpen(false); fetchCashRegisters(); setShowCashModal(true); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                <Monitor size={18} className="text-green-400" /> Cambiar caja
+              </button>
+              {canSelectSeller && (
+                <button onClick={() => setMobileOptionsOpen(false)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-slate-200 hover:bg-slate-700/50 active:bg-slate-700/70">
+                  <User size={18} className="text-violet-400" /> Cambiar vendedor
+                </button>
+              )}
+            </div>
+            <button onClick={() => setMobileOptionsOpen(false)} className="w-full mt-3 py-3 rounded-xl border border-slate-600 text-slate-400 text-sm">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Shared Modals (rendered in both mobile & desktop) ─────────────────
+  const renderSharedModals = () => (
+    <>
+      {/* Payment Modal — full-screen on mobile */}
+      {payModalOpen && (
+        <div className="fixed inset-0 z-50 flex md:items-start md:justify-center md:pt-4 md:px-4">
+          <div className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPayModalOpen(false)} />
+          <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-2xl md:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-4 md:px-6 py-4 flex items-center justify-between md:rounded-t-2xl z-10">
+              <div>
+                <h2 className="text-lg font-bold text-white">Cobrar Factura</h2>
+                <div className="flex gap-4 mt-1">
+                  <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
+                  <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
+                  <span className="text-xs text-slate-500">Tasa: {exchangeRate.toFixed(2)}</span>
+                </div>
+              </div>
+              <button onClick={() => setPayModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+            </div>
+
+            <div className="p-4 md:p-6 space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {paymentMethods.filter(pm => pm.isActive && pm.id !== 'pm_saldo_favor').map(pm => (
+                    pm.children && pm.children.filter(c => c.isActive).length > 0 ? (
+                      <div key={pm.id} className="relative">
+                        <button
+                          onClick={() => setExpandedGroup(expandedGroup === pm.id ? null : pm.id)}
+                          className={`w-full px-3 py-3 md:py-2 rounded-lg border text-xs transition-colors ${expandedGroup === pm.id ? 'border-green-500/40 bg-green-500/10 text-white' : 'border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-slate-300 hover:text-white'}`}
+                        >
+                          {pm.name} ▾
+                        </button>
+                        {expandedGroup === pm.id && (
+                          <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                            {pm.children.filter(c => c.isActive).map(child => (
+                              <button
+                                key={child.id}
+                                onClick={() => addPayment(child)}
+                                className="w-full px-3 py-3 md:py-2 text-xs text-slate-300 hover:bg-green-500/10 hover:text-white text-left transition-colors"
+                              >
+                                {child.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        key={pm.id}
+                        onClick={() => addPayment(pm)}
+                        className="px-3 py-3 md:py-2 rounded-lg border border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        {pm.name}
+                      </button>
+                    )
+                  ))}
+                </div>
+              </div>
+
+              {/* Credit balance banner */}
+              {creditBalance?.hasBalance && remaining > 0.01 && !payments.some(p => p.methodId === 'pm_saldo_favor') && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div>
+                    <span className="text-sm text-green-300 font-medium">Saldo a favor del cliente</span>
+                    <div className="text-xs text-green-400/70 mt-0.5">
+                      ${creditBalance.totalUsd.toFixed(2)} USD / Bs {creditBalance.totalBs.toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const useAmount = Math.min(creditBalance.totalUsd, remaining);
+                      setPayments(prev => [...prev, {
+                        methodId: 'pm_saldo_favor',
+                        methodName: 'Saldo a Favor',
+                        isDivisa: true,
+                        amountUsd: Math.round(useAmount * 100) / 100,
+                        amountBs: Math.round(useAmount * exchangeRate * 100) / 100,
+                        reference: '',
+                      }]);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-medium hover:bg-green-500/30 transition-colors"
+                  >
+                    Usar saldo
+                  </button>
+                </div>
+              )}
+
+              {payments.length > 0 && (
+                <div className="space-y-3">
+                  {payments.map((p, idx) => (
+                    <div key={idx} className="card p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-white font-medium">{p.methodName}</span>
+                        <button onClick={() => removePayment(idx)} className="text-slate-500 hover:text-red-400"><X size={14} /></button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500">USD</label>
+                          <input
+                            type="number"
+                            value={p.amountUsd}
+                            onChange={e => updatePayment(idx, 'amountUsd', Number(e.target.value))}
+                            className="input-field !py-2.5 md:!py-1.5 text-sm"
+                            step="0.01"
+                            min="0"
+                            max={p.methodId === 'pm_saldo_favor' && creditBalance ? creditBalance.totalUsd : undefined}
+                            readOnly={!p.isDivisa}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500">Bs</label>
+                          <input
+                            type="number"
+                            value={p.amountBs}
+                            onChange={e => updatePayment(idx, 'amountBs', Number(e.target.value))}
+                            className="input-field !py-2.5 md:!py-1.5 text-sm"
+                            step="0.01"
+                            min="0"
+                            readOnly={p.isDivisa}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500">Referencia</label>
+                          <input
+                            type="text"
+                            value={p.reference}
+                            onChange={e => updatePayment(idx, 'reference', e.target.value)}
+                            className="input-field !py-2.5 md:!py-1.5 text-sm"
+                            placeholder="Opcional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Invoice Summary */}
+              <div className="card p-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Subtotal</span>
+                  <div className="text-right">
+                    <span className="text-white">${subtotalUsd.toFixed(2)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {(subtotalUsd * exchangeRate).toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">IVA</span>
+                  <div className="text-right">
+                    <span className="text-white">${totalIva.toFixed(2)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {(totalIva * exchangeRate).toFixed(2)}</span>
+                  </div>
+                </div>
+                {igtfUsd > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-400">IGTF ({companyConfig?.igtfPct || 3}%)</span>
+                    <div className="text-right">
+                      <span className="text-amber-400">${igtfUsd.toFixed(2)}</span>
+                      <span className="text-amber-400/60 text-xs ml-2">Bs {igtfBs.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold border-t border-slate-700/50 pt-1">
+                  <span className="text-slate-300">Total</span>
+                  <div className="text-right">
+                    <span className="text-green-400">${grandTotalUsd.toFixed(2)}</span>
+                    <span className="text-slate-400 text-xs ml-2">Bs {grandTotalBs.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pendiente / Vuelto */}
+              {!hasChange ? (
+                <div className="card p-3 flex items-center justify-between">
+                  <span className="text-sm text-slate-400">Pendiente por cobrar</span>
+                  <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
+                    ${Math.max(0, remaining).toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto</span>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
+                      <span className="text-slate-400 mx-2">×</span>
+                      <span className="text-sm text-slate-400">{exchangeRate.toFixed(2)} Bs/$</span>
+                      <span className="text-slate-400 mx-2">=</span>
+                      <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Metodo de vuelto</label>
+                    <select
+                      value={changeMethodId || ''}
+                      onChange={e => setChangeMethodId(e.target.value || null)}
+                      className="input-field !py-2 text-sm w-full"
+                    >
+                      <option value="">Seleccionar metodo...</option>
+                      {paymentMethods
+                        .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
+                        .filter(pm => !pm.isDivisa && pm.isActive)
+                        .map(pm => (
+                          <option key={pm.id} value={pm.id}>{pm.name}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
+                <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
+                <button
+                  onClick={handleConfirmPayment}
+                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId)}
+                  className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 w-full md:w-auto justify-center"
+                >
+                  {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}
+                  Confirmar cobro
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Modal — full-screen on mobile */}
+      {creditModalOpen && (
+        <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:px-4">
+          <div className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCreditModalOpen(false)} />
+          <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-md overflow-y-auto">
+            <div className="px-4 md:px-6 pt-5 pb-4">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <CreditCard size={20} className="text-blue-400" />
+                    Factura a Credito
+                  </h2>
+                  <div className="flex gap-4 mt-1">
+                    <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
+                    <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
+                  </div>
+                </div>
+                <button onClick={() => setCreditModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {!customerId && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">
+                  Debe asignar un cliente para facturar a credito. No se puede facturar a credito como consumidor final.
+                </div>
+              )}
+
+              {customerId && (
+                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm mb-4">
+                  Cliente: <span className="font-medium text-white">{customerName}</span>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-slate-300 mb-1.5 block flex items-center gap-1.5">
+                    <Lock size={14} /> Clave de autorizacion
+                  </label>
+                  <input
+                    type="password"
+                    value={creditAuthPassword}
+                    onChange={e => setCreditAuthPassword(e.target.value)}
+                    className="input-field !py-3 md:!py-2"
+                    placeholder="Ingrese la clave de autorizacion"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito</label>
+                  <input
+                    type="number"
+                    value={creditDays}
+                    onChange={e => setCreditDays(Number(e.target.value))}
+                    className="input-field !py-3 md:!py-2"
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
+                <button onClick={() => setCreditModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
+                <button
+                  onClick={handleConfirmCredit}
+                  disabled={processing || !customerId || !creditAuthPassword}
+                  className="!py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 transition-colors"
+                >
+                  {processing ? <Loader2 className="animate-spin" size={16} /> : <CreditCard size={16} />}
+                  Confirmar credito
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Client Modal — full-screen on mobile */}
+      {(showCreateClient || showEditClient) && (
+        <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:px-4">
+          <div className="hidden md:block fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} />
+          <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-md overflow-y-auto">
+            <div className="px-4 md:px-6 pt-5 pb-4">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white">{showEditClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
+                <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+              </div>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <div className="w-20">
+                    <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
+                    <select
+                      value={clientForm.documentType}
+                      onChange={e => setClientForm(f => ({ ...f, documentType: e.target.value }))}
+                      className="input-field !py-3 md:!py-2 text-sm"
+                    >
+                      {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-500 mb-1 block">RIF / Documento</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={clientForm.rif}
+                        onChange={e => setClientForm(f => ({ ...f, rif: e.target.value }))}
+                        className="input-field !py-3 md:!py-2 text-sm flex-1"
+                        placeholder="12345678"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSeniatOpen(true)}
+                        className="btn-secondary !py-2 text-xs flex items-center gap-1 whitespace-nowrap"
+                        title="Consultar SENIAT"
+                      >
+                        <Search size={13} />
+                        SENIAT
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Nombre completo</label>
+                  <input
+                    type="text"
+                    value={clientForm.name}
+                    onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+                    className="input-field !py-3 md:!py-2 text-sm"
+                    placeholder="Nombre del cliente"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Direccion</label>
+                  <input
+                    type="text"
+                    value={clientForm.address}
+                    onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
+                    className="input-field !py-3 md:!py-2 text-sm"
+                    placeholder="Direccion"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Telefono</label>
+                  <input
+                    type="text"
+                    value={clientForm.phone}
+                    onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
+                    className="input-field !py-3 md:!py-2 text-sm"
+                    placeholder="0414-1234567"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
+                <button
+                  onClick={() => handleSaveClient(showEditClient)}
+                  disabled={savingClient || !clientForm.name.trim()}
+                  className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
+                >
+                  {savingClient && <Loader2 className="animate-spin" size={14} />}
+                  {showEditClient ? 'Guardar cambios' : 'Guardar y seleccionar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Invoices Drawer — full-screen on mobile */}
+      {pendingDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="hidden md:block flex-1 bg-black/50" onClick={() => setPendingDrawerOpen(false)} />
+          <div className="w-full md:max-w-md bg-slate-800 md:border-l md:border-slate-700 flex flex-col shadow-2xl">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PanelRightOpen size={18} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-white">Facturas en espera</h2>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400">{pendingInvoices.length}</span>
+              </div>
+              <button onClick={() => setPendingDrawerOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {pendingInvoices.length === 0 ? (
+                <div className="text-center py-12 text-slate-600 text-sm">No hay facturas en espera</div>
+              ) : pendingInvoices.map(inv => {
+                const lockedByOther = inv.lockedById && inv.lockedById !== userId;
+                const lockedByMe = inv.lockedById && inv.lockedById === userId;
+                return (
+                <div key={inv.id} className={`card p-4 space-y-2 ${lockedByOther ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-mono text-green-400">{inv.number || 'Sin numero'}</span>
+                    <span className="text-xs text-slate-500">{timeAgo(inv.createdAt)}</span>
+                  </div>
+                  {(lockedByOther || lockedByMe) && (
+                    <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${lockedByOther ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                      <Lock size={11} />
+                      {lockedByOther ? `Editando: ${inv.lockedByName || 'otro usuario'}` : 'Editando por ti'}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <User size={12} className="text-slate-500" />
+                    <span className="text-sm text-slate-300">{inv.customer?.name || 'Sin cliente'}</span>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {inv.items?.slice(0, 2).map((it: any, i: number) => (
+                      <span key={i}>{it.productName} x{it.quantity}{i < 1 && inv.items.length > 1 ? ', ' : ''}</span>
+                    ))}
+                    {(inv.totalItems || inv.items?.length || 0) > 2 && (
+                      <span className="text-slate-600"> y {(inv.totalItems || inv.items?.length || 0) - 2} mas</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-700/30">
+                    <span className="text-sm font-bold text-white">${inv.totalUsd?.toFixed(2)}</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (cart.length > 0) { setConfirmRetake(inv.id); } else { retakeInvoice(inv); }
+                        }}
+                        disabled={!!lockedByOther}
+                        className="px-3 py-2 md:py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-500/10"
+                      >
+                        Retomar
+                      </button>
+                      <button
+                        onClick={() => setConfirmCancel(inv.id)}
+                        disabled={!!lockedByOther}
+                        className="px-3 py-2 md:py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500/10"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Confirm retake */}
+                  {confirmRetake === inv.id && (
+                    <div className="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-xs text-amber-300 mb-2">Descartar la venta actual y retomar esta factura?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => retakeInvoice(inv)} className="px-3 py-1 rounded text-xs font-medium bg-amber-500 text-black hover:bg-amber-400">Si, retomar</button>
+                        <button onClick={() => setConfirmRetake(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confirm delete */}
+                  {confirmCancel === inv.id && (
+                    <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <p className="text-xs text-red-300 mb-2">Eliminar esta factura?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => deletePendingInvoice(inv.id)} className="px-3 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-400">Si, eliminar</button>
+                        <button onClick={() => setConfirmCancel(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SeniatModal
+        isOpen={seniatOpen}
+        onClose={() => setSeniatOpen(false)}
+        onResult={handleSeniatResult}
+        initialRif={clientForm.rif ? `${clientForm.documentType}${clientForm.rif.replace(/\D/g, '')}` : ''}
+      />
+    </>
+  );
+
+  // ── Unified return with modals ──────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <>
+        {renderMobileLayout()}
+        {renderSharedModals()}
+      </>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col lg:flex-row gap-4 p-4">
       {/* LEFT: Product catalog */}
@@ -1433,495 +2198,7 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {payModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 px-4">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPayModalOpen(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-              <div>
-                <h2 className="text-lg font-bold text-white">Cobrar Factura</h2>
-                <div className="flex gap-4 mt-1">
-                  <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
-                  <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
-                  <span className="text-xs text-slate-500">Tasa: {exchangeRate.toFixed(2)}</span>
-                </div>
-              </div>
-              <button onClick={() => setPayModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {paymentMethods.filter(pm => pm.isActive && pm.id !== 'pm_saldo_favor').map(pm => (
-                    pm.children && pm.children.filter(c => c.isActive).length > 0 ? (
-                      <div key={pm.id} className="relative">
-                        <button
-                          onClick={() => setExpandedGroup(expandedGroup === pm.id ? null : pm.id)}
-                          className={`w-full px-3 py-2 rounded-lg border text-xs transition-colors ${expandedGroup === pm.id ? 'border-green-500/40 bg-green-500/10 text-white' : 'border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-slate-300 hover:text-white'}`}
-                        >
-                          {pm.name} ▾
-                        </button>
-                        {expandedGroup === pm.id && (
-                          <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
-                            {pm.children.filter(c => c.isActive).map(child => (
-                              <button
-                                key={child.id}
-                                onClick={() => addPayment(child)}
-                                className="w-full px-3 py-2 text-xs text-slate-300 hover:bg-green-500/10 hover:text-white text-left transition-colors"
-                              >
-                                {child.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        key={pm.id}
-                        onClick={() => addPayment(pm)}
-                        className="px-3 py-2 rounded-lg border border-slate-600 hover:border-green-500/40 hover:bg-green-500/5 text-xs text-slate-300 hover:text-white transition-colors"
-                      >
-                        {pm.name}
-                      </button>
-                    )
-                  ))}
-                </div>
-              </div>
-
-              {/* Credit balance banner */}
-              {creditBalance?.hasBalance && remaining > 0.01 && !payments.some(p => p.methodId === 'pm_saldo_favor') && (
-                <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <div>
-                    <span className="text-sm text-green-300 font-medium">Saldo a favor del cliente</span>
-                    <div className="text-xs text-green-400/70 mt-0.5">
-                      ${creditBalance.totalUsd.toFixed(2)} USD / Bs {creditBalance.totalBs.toFixed(2)}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const useAmount = Math.min(creditBalance.totalUsd, remaining);
-                      setPayments(prev => [...prev, {
-                        methodId: 'pm_saldo_favor',
-                        methodName: 'Saldo a Favor',
-                        isDivisa: true,
-                        amountUsd: Math.round(useAmount * 100) / 100,
-                        amountBs: Math.round(useAmount * exchangeRate * 100) / 100,
-                        reference: '',
-                      }]);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 text-xs font-medium hover:bg-green-500/30 transition-colors"
-                  >
-                    Usar saldo
-                  </button>
-                </div>
-              )}
-
-              {payments.length > 0 && (
-                <div className="space-y-3">
-                  {payments.map((p, idx) => (
-                    <div key={idx} className="card p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-white font-medium">{p.methodName}</span>
-                        <button onClick={() => removePayment(idx)} className="text-slate-500 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-xs text-slate-500">USD</label>
-                          <input
-                            type="number"
-                            value={p.amountUsd}
-                            onChange={e => updatePayment(idx, 'amountUsd', Number(e.target.value))}
-                            className="input-field !py-1.5 text-sm"
-                            step="0.01"
-                            min="0"
-                            max={p.methodId === 'pm_saldo_favor' && creditBalance ? creditBalance.totalUsd : undefined}
-                            readOnly={!p.isDivisa}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500">Bs</label>
-                          <input
-                            type="number"
-                            value={p.amountBs}
-                            onChange={e => updatePayment(idx, 'amountBs', Number(e.target.value))}
-                            className="input-field !py-1.5 text-sm"
-                            step="0.01"
-                            min="0"
-                            readOnly={p.isDivisa}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-500">Referencia</label>
-                          <input
-                            type="text"
-                            value={p.reference}
-                            onChange={e => updatePayment(idx, 'reference', e.target.value)}
-                            className="input-field !py-1.5 text-sm"
-                            placeholder="Opcional"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Invoice Summary */}
-              <div className="card p-3 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Subtotal</span>
-                  <div className="text-right">
-                    <span className="text-white">${subtotalUsd.toFixed(2)}</span>
-                    <span className="text-slate-500 text-xs ml-2">Bs {(subtotalUsd * exchangeRate).toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">IVA</span>
-                  <div className="text-right">
-                    <span className="text-white">${totalIva.toFixed(2)}</span>
-                    <span className="text-slate-500 text-xs ml-2">Bs {(totalIva * exchangeRate).toFixed(2)}</span>
-                  </div>
-                </div>
-                {igtfUsd > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-amber-400">IGTF ({companyConfig?.igtfPct || 3}%)</span>
-                    <div className="text-right">
-                      <span className="text-amber-400">${igtfUsd.toFixed(2)}</span>
-                      <span className="text-amber-400/60 text-xs ml-2">Bs {igtfBs.toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold border-t border-slate-700/50 pt-1">
-                  <span className="text-slate-300">Total</span>
-                  <div className="text-right">
-                    <span className="text-green-400">${grandTotalUsd.toFixed(2)}</span>
-                    <span className="text-slate-400 text-xs ml-2">Bs {grandTotalBs.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pendiente / Vuelto */}
-              {!hasChange ? (
-                <div className="card p-3 flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Pendiente por cobrar</span>
-                  <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
-                    ${Math.max(0, remaining).toFixed(2)}
-                  </span>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto</span>
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
-                      <span className="text-slate-400 mx-2">×</span>
-                      <span className="text-sm text-slate-400">{exchangeRate.toFixed(2)} Bs/$</span>
-                      <span className="text-slate-400 mx-2">=</span>
-                      <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Metodo de vuelto</label>
-                    <select
-                      value={changeMethodId || ''}
-                      onChange={e => setChangeMethodId(e.target.value || null)}
-                      className="input-field !py-2 text-sm w-full"
-                    >
-                      <option value="">Seleccionar metodo...</option>
-                      {paymentMethods
-                        .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
-                        .filter(pm => !pm.isDivisa && pm.isActive)
-                        .map(pm => (
-                          <option key={pm.id} value={pm.id}>{pm.name}</option>
-                        ))
-                      }
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
-                <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
-                <button
-                  onClick={handleConfirmPayment}
-                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId)}
-                  className="btn-primary !py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
-                >
-                  {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}
-                  Confirmar cobro
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Credit Modal */}
-      {creditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCreditModalOpen(false)} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <CreditCard size={20} className="text-blue-400" />
-                  Factura a Credito
-                </h2>
-                <div className="flex gap-4 mt-1">
-                  <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
-                  <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
-                </div>
-              </div>
-              <button onClick={() => setCreditModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400">
-                <X size={18} />
-              </button>
-            </div>
-
-            {!customerId && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm mb-4">
-                Debe asignar un cliente para facturar a credito. No se puede facturar a credito como consumidor final.
-              </div>
-            )}
-
-            {customerId && (
-              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm mb-4">
-                Cliente: <span className="font-medium text-white">{customerName}</span>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-slate-300 mb-1.5 block flex items-center gap-1.5">
-                  <Lock size={14} /> Clave de autorizacion
-                </label>
-                <input
-                  type="password"
-                  value={creditAuthPassword}
-                  onChange={e => setCreditAuthPassword(e.target.value)}
-                  className="input-field"
-                  placeholder="Ingrese la clave de autorizacion"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito</label>
-                <input
-                  type="number"
-                  value={creditDays}
-                  onChange={e => setCreditDays(Number(e.target.value))}
-                  className="input-field"
-                  min="1"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
-              <button onClick={() => setCreditModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
-              <button
-                onClick={handleConfirmCredit}
-                disabled={processing || !customerId || !creditAuthPassword}
-                className="!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 transition-colors"
-              >
-                {processing ? <Loader2 className="animate-spin" size={16} /> : <CreditCard size={16} />}
-                Confirmar credito
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Client Modal */}
-      {(showCreateClient || showEditClient) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} />
-          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-white">{showEditClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-              <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-            </div>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <div className="w-20">
-                  <label className="text-xs text-slate-500 mb-1 block">Tipo</label>
-                  <select
-                    value={clientForm.documentType}
-                    onChange={e => setClientForm(f => ({ ...f, documentType: e.target.value }))}
-                    className="input-field !py-2 text-sm"
-                  >
-                    {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-slate-500 mb-1 block">RIF / Documento</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={clientForm.rif}
-                      onChange={e => setClientForm(f => ({ ...f, rif: e.target.value }))}
-                      className="input-field !py-2 text-sm flex-1"
-                      placeholder="12345678"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSeniatOpen(true)}
-                      className="btn-secondary !py-2 text-xs flex items-center gap-1 whitespace-nowrap"
-                      title="Consultar SENIAT"
-                    >
-                      <Search size={13} />
-                      SENIAT
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Nombre completo</label>
-                <input
-                  type="text"
-                  value={clientForm.name}
-                  onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
-                  className="input-field !py-2 text-sm"
-                  placeholder="Nombre del cliente"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Direccion</label>
-                <input
-                  type="text"
-                  value={clientForm.address}
-                  onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
-                  className="input-field !py-2 text-sm"
-                  placeholder="Direccion"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">Telefono</label>
-                <input
-                  type="text"
-                  value={clientForm.phone}
-                  onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
-                  className="input-field !py-2 text-sm"
-                  placeholder="0414-1234567"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
-              <button
-                onClick={() => handleSaveClient(showEditClient)}
-                disabled={savingClient || !clientForm.name.trim()}
-                className="btn-primary !py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
-              >
-                {savingClient && <Loader2 className="animate-spin" size={14} />}
-                {showEditClient ? 'Guardar cambios' : 'Guardar y seleccionar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Pending Invoices Drawer */}
-      {pendingDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="flex-1 bg-black/50" onClick={() => setPendingDrawerOpen(false)} />
-          <div className="w-full max-w-md bg-slate-800 border-l border-slate-700 flex flex-col shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-700/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <PanelRightOpen size={18} className="text-amber-400" />
-                <h2 className="text-lg font-bold text-white">Facturas en espera</h2>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400">{pendingInvoices.length}</span>
-              </div>
-              <button onClick={() => setPendingDrawerOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {pendingInvoices.length === 0 ? (
-                <div className="text-center py-12 text-slate-600 text-sm">No hay facturas en espera</div>
-              ) : pendingInvoices.map(inv => {
-                const lockedByOther = inv.lockedById && inv.lockedById !== userId;
-                const lockedByMe = inv.lockedById && inv.lockedById === userId;
-                return (
-                <div key={inv.id} className={`card p-4 space-y-2 ${lockedByOther ? 'opacity-60' : ''}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-mono text-green-400">{inv.number || 'Sin numero'}</span>
-                    <span className="text-xs text-slate-500">{timeAgo(inv.createdAt)}</span>
-                  </div>
-                  {(lockedByOther || lockedByMe) && (
-                    <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${lockedByOther ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
-                      <Lock size={11} />
-                      {lockedByOther ? `Editando: ${inv.lockedByName || 'otro usuario'}` : 'Editando por ti'}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <User size={12} className="text-slate-500" />
-                    <span className="text-sm text-slate-300">{inv.customer?.name || 'Sin cliente'}</span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {inv.items?.slice(0, 2).map((it: any, i: number) => (
-                      <span key={i}>{it.productName} x{it.quantity}{i < 1 && inv.items.length > 1 ? ', ' : ''}</span>
-                    ))}
-                    {(inv.totalItems || inv.items?.length || 0) > 2 && (
-                      <span className="text-slate-600"> y {(inv.totalItems || inv.items?.length || 0) - 2} mas</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-700/30">
-                    <span className="text-sm font-bold text-white">${inv.totalUsd?.toFixed(2)}</span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          if (cart.length > 0) { setConfirmRetake(inv.id); } else { retakeInvoice(inv); }
-                        }}
-                        disabled={!!lockedByOther}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-500/10"
-                      >
-                        Retomar
-                      </button>
-                      <button
-                        onClick={() => setConfirmCancel(inv.id)}
-                        disabled={!!lockedByOther}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-500/10"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Confirm retake */}
-                  {confirmRetake === inv.id && (
-                    <div className="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <p className="text-xs text-amber-300 mb-2">Descartar la venta actual y retomar esta factura?</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => retakeInvoice(inv)} className="px-3 py-1 rounded text-xs font-medium bg-amber-500 text-black hover:bg-amber-400">Si, retomar</button>
-                        <button onClick={() => setConfirmRetake(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Confirm delete */}
-                  {confirmCancel === inv.id && (
-                    <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                      <p className="text-xs text-red-300 mb-2">Eliminar esta factura?</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => deletePendingInvoice(inv.id)} className="px-3 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-400">Si, eliminar</button>
-                        <button onClick={() => setConfirmCancel(null)} className="px-3 py-1 rounded text-xs text-slate-400 hover:text-white">No</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <SeniatModal
-        isOpen={seniatOpen}
-        onClose={() => setSeniatOpen(false)}
-        onResult={handleSeniatResult}
-        initialRif={clientForm.rif ? `${clientForm.documentType}${clientForm.rif.replace(/\D/g, '')}` : ''}
-      />
+      {renderSharedModals()}
     </div>
   );
 }
