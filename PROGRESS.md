@@ -1,5 +1,35 @@
 # Trinity ERP — Progreso
 
+## Sesion 43 — Dashboard Gerencial con KPIs, graficos y selector de periodo
+
+### Backend (NestJS)
+- **DashboardModule**: Nuevo modulo con controller y service
+  - `GET /dashboard/gerencial?from&to`: Endpoint unico que retorna datos agregados del periodo
+  - Comparacion automatica con periodo anterior de igual duracion (vsLastPeriod)
+  - Queries en paralelo con Promise.all para performance
+  - Secciones: sales, returns, salesBySeller, topProducts, cashSummary, expenses, receivables, payables, salesTimeline
+  - Timeline inteligente: agrupa por hora (dia unico) o por dia (multiples dias)
+  - CxC y CxP siempre retorna datos actuales, independiente del periodo seleccionado
+
+### Frontend (Next.js)
+- **Dashboard Gerencial** (`/dashboard`): Pagina completa reescrita
+  - Selector de periodo: Hoy, Esta semana, Este mes, Personalizado (con date pickers)
+  - 4 tarjetas KPI principales: Ventas USD, Facturas, Devoluciones, Ticket Promedio
+  - Flechas de comparacion vs periodo anterior (verde arriba / rojo abajo)
+  - Tarjetas CxC y CxP con badge "TIEMPO REAL" y alertas de vencidos
+  - Grafico de ventas (AreaChart recharts): por hora o por dia segun periodo
+  - Tabla de vendedores con barras de progreso y porcentaje de participacion
+  - Top 5 productos (BarChart horizontal) con colores por producto
+  - Resumen de caja: Ingresos, Egresos, Neto con desglose por metodo de pago
+  - Seccion de gastos con barras por categoria y grafico comparativo Ingresos vs Gastos
+  - Estados de carga (skeleton) y error con boton de reintento
+
+### Correccion formato correlativo retenciones
+- Cambiado de `RET-XXXX` a formato `YYYYMM` + 8 digitos secuenciales globales
+- Ejemplo: `20260500000001`, `20260500000002`, etc.
+- Secuencia global continua desde `CompanyConfig.retentionNextNumber`
+- El prefijo YYYYMM cambia con el mes pero el correlativo nunca se reinicia
+
 ## Sesion 42 — Modulo de Comprobantes de Retencion IVA con integracion al Libro de Compras
 
 ### Migracion de base de datos

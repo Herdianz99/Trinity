@@ -156,15 +156,12 @@ export class RetentionVouchersService {
     return voucher;
   }
 
-  // Generate next retention number RET-XXXX with SELECT FOR UPDATE
-  async generateNumber(tx: any): Promise<string> {
-    const result = await tx.$queryRaw`
-      SELECT COALESCE(
-        (SELECT MAX(CAST(SUBSTRING("number" FROM 5) AS INTEGER)) FROM "RetentionVoucher"),
-        0
-      ) as max_num
-    `;
-    const next = (result as any[])[0].max_num + 1;
-    return `RET-${String(next).padStart(4, '0')}`;
+  // Generate next retention number YYYYMM + 8-digit global sequence
+  async generateNumber(tx: any): Promise<{ number: string; nextSeq: number }> {
+    const now = new Date();
+    const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+    const seq = config?.retentionNextNumber || 1;
+    return { number: `${prefix}${String(seq).padStart(8, '0')}`, nextSeq: seq + 1 };
   }
 }

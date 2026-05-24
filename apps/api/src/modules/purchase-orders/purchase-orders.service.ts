@@ -732,15 +732,12 @@ export class PurchaseOrdersService {
         const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
         const retBs = round2(retUsd * exchangeRate);
 
-        // Generate RET-XXXX number
-        const maxResult = await tx.$queryRaw`
-          SELECT COALESCE(
-            (SELECT MAX(CAST(SUBSTRING("number" FROM 5) AS INTEGER)) FROM "RetentionVoucher"),
-            0
-          ) as max_num
-        `;
-        const nextNum = (maxResult as any[])[0].max_num + 1;
-        const retNumber = `RET-${String(nextNum).padStart(4, '0')}`;
+        // Generate YYYYMM + 8-digit global sequence from CompanyConfig.retentionNextNumber
+        const now = new Date();
+        const retPrefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const cfgRow = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+        const retSeq = cfgRow?.retentionNextNumber || 1;
+        const retNumber = `${retPrefix}${String(retSeq).padStart(8, '0')}`;
 
         await tx.retentionVoucher.create({
           data: {
@@ -752,6 +749,12 @@ export class PurchaseOrdersService {
             exchangeRate,
             createdById: userId,
           },
+        });
+
+        // Increment global retention sequence
+        await tx.companyConfig.update({
+          where: { id: 'singleton' },
+          data: { retentionNextNumber: retSeq + 1 },
         });
       }
 

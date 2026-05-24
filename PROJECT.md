@@ -613,6 +613,20 @@ model Payment {
 - Detalle con 3 tabs: Información, CxP, Notas Cr/Db
 - Libro de compras fiscal actualizado con campos precalculados
 
+#### Sesión 43 — Dashboard Gerencial
+**Backend:**
+- DashboardModule: Endpoint GET /dashboard/gerencial?from&to con datos agregados
+  - Ventas, devoluciones, ventas por vendedor, top 5 productos, resumen de caja, gastos, CxC, CxP
+  - Comparación automática vs período anterior (vsLastPeriod)
+  - Timeline inteligente: por hora (día único) o por día (rango)
+  - CxC/CxP siempre retorna datos actuales independiente del período
+
+**Frontend:**
+- Dashboard gerencial (/dashboard): selector de período, 4 KPIs con comparación, CxC/CxP tiempo real
+- Gráficos recharts: AreaChart ventas, BarChart top productos, BarChart comparativo ingresos/gastos
+- Tabla vendedores con barras de progreso, resumen de caja con desglose por método
+- Skeleton loading, estado de error con reintento
+
 #### Sesión 42 — Comprobantes de Retención IVA
 **Backend:**
 - RetentionVouchersModule: Gestión de comprobantes de retención IVA (modelo RetentionVoucher)
@@ -793,7 +807,7 @@ model QuotationItem {
 #### Sesión 8 — CxP (Cuentas por Pagar) ✅
 #### Sesión 9 — Documentos Fiscales Venezolanos ✅
 #### Sesión 10 — Despachos
-#### Sesión 11 — Dashboard Directivos
+#### Sesión 11 — Dashboard Directivos ✅ (Sesión 43)
 #### Sesión 12 — Gestión de Usuarios y Menú Colapsable ✅
 #### Sesión 12b — Permisos por Rol Configurables desde UI con Redis Cache ✅
 

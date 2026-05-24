@@ -40,6 +40,7 @@ import { InventoryAnalysisModule } from './modules/inventory-analysis/inventory-
 import { IvaRetentionModule } from './modules/iva-retention/iva-retention.module';
 import { PurchaseBookModule } from './modules/purchase-book/purchase-book.module';
 import { RetentionVouchersModule } from './modules/retention-vouchers/retention-vouchers.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -86,6 +87,7 @@ import { HealthModule } from './modules/health/health.module';
     IvaRetentionModule,
     PurchaseBookModule,
     RetentionVouchersModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
