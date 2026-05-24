@@ -1,5 +1,33 @@
 # Trinity ERP — Progreso
 
+## Sesion 45 — Pagina de inicio para roles secundarios con accesos directos
+
+### Backend (NestJS)
+- **DashboardService.getHome()**: Nuevo metodo que retorna info rapida segun rol del usuario
+  - `GET /dashboard/home`: Retorna tasa BCV del dia + datos especificos del rol
+  - CASHIER: cajas abiertas (nombre, quien abrio, hora)
+  - WAREHOUSE: top 5 productos bajo stock minimo, cantidad de transferencias pendientes
+  - BUYER: total CxP vencidas con monto, pagos por vencer esta semana
+  - ACCOUNTANT: totales CxC y CxP pendientes con conteo
+  - AUDITOR: top 5 productos bajo stock minimo, ultimos 5 ajustes de inventario
+  - Query raw SQL para low stock con HAVING para eficiencia
+
+### Frontend (Next.js)
+- **Pagina de inicio** (`/dashboard/home`): Nueva pagina para roles secundarios
+  - Header con saludo personalizado, fecha actual, badge de rol coloreado, tasa BCV
+  - Grid de 4 tarjetas de acceso rapido por rol con iconos, titulos, descripciones
+    - CASHIER: POS, Facturas de hoy, Cajas, CxC
+    - WAREHOUSE: Stock, Movimientos, Transferencias, Conteo fisico
+    - BUYER: Facturas de compra, CxP, Programacion de pagos, Proveedores
+    - ACCOUNTANT: CxC, CxP, Libro de ventas, Libro de compras
+    - AUDITOR: Stock, Movimientos, Analisis ABC, Conteo fisico
+  - Seccion inferior con info relevante por rol
+  - Hover con efecto de escala, gradientes por rol, responsive grid
+- **Dashboard principal** (`/dashboard`): Redireccion actualizada
+  - ADMIN/SUPERVISOR → /dashboard (gerencial)
+  - SELLER → /dashboard/seller
+  - CASHIER, WAREHOUSE, BUYER, ACCOUNTANT, AUDITOR → /dashboard/home
+
 ## Sesion 44 — Dashboard del Vendedor mobile-first
 
 ### Backend (NestJS)

@@ -333,6 +333,138 @@ export class DashboardService {
     };
   }
 
+  // ── Home Dashboard (secondary roles) ─────────────────────────────────────
+
+  async getHome(role: string) {
+    const result: Record<string, any> = {};
+
+    // Exchange rate (all roles)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    result.exchangeRate = rate ? rate.rate : null;
+
+    if (role === 'CASHIER') {
+      // Open cash sessions
+      const sessions = await this.prisma.cashSession.findMany({
+        where: { status: 'OPEN' },
+        select: {
+          id: true,
+          openedAt: true,
+          cashRegister: { select: { name: true } },
+          openedBy: { select: { name: true } },
+        },
+        orderBy: { openedAt: 'desc' },
+        take: 10,
+      });
+      result.openSessions = sessions.map(s => ({
+        registerName: s.cashRegister.name,
+        openedBy: s.openedBy.name,
+        openedAt: s.openedAt.toISOString(),
+      }));
+    }
+
+    if (role === 'WAREHOUSE' || role === 'AUDITOR') {
+      // Low stock products (top 5)
+      const stocks = await this.prisma.$queryRaw<Array<{ productId: string; code: string; name: string; minStock: number; totalStock: number }>>`
+        SELECT p.id AS "productId", p.code, p.name, p."minStock",
+               COALESCE(SUM(s.quantity), 0)::float AS "totalStock"
+        FROM "Product" p
+        LEFT JOIN "Stock" s ON s."productId" = p.id
+        WHERE p."isActive" = true AND p."minStock" > 0
+        GROUP BY p.id, p.code, p.name, p."minStock"
+        HAVING COALESCE(SUM(s.quantity), 0) <= p."minStock"
+        ORDER BY COALESCE(SUM(s.quantity), 0) / NULLIF(p."minStock", 0) ASC
+        LIMIT 5
+      `;
+      result.lowStock = stocks.map(s => ({
+        productCode: s.code,
+        productName: s.name,
+        currentStock: s.totalStock,
+        minStock: s.minStock,
+      }));
+    }
+
+    if (role === 'WAREHOUSE') {
+      // Pending transfers count
+      const pendingTransfers = await this.prisma.transfer.count({
+        where: { status: 'PENDING' },
+      });
+      result.pendingTransfers = pendingTransfers;
+    }
+
+    if (role === 'AUDITOR') {
+      // Recent inventory adjustments (last 5)
+      const adjustments = await this.prisma.stockMovement.findMany({
+        where: { type: { in: ['ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'COUNT_ADJUST'] } },
+        select: {
+          type: true,
+          quantity: true,
+          reason: true,
+          createdAt: true,
+          product: { select: { code: true, name: true } },
+          warehouse: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+      result.recentAdjustments = adjustments.map(a => ({
+        type: a.type,
+        quantity: a.quantity,
+        reason: a.reason,
+        productCode: a.product.code,
+        productName: a.product.name,
+        warehouseName: a.warehouse.name,
+        createdAt: a.createdAt.toISOString(),
+      }));
+    }
+
+    if (role === 'BUYER') {
+      // Overdue payables
+      const overdue = await this.prisma.payable.findMany({
+        where: { status: 'OVERDUE' },
+        select: { netPayableUsd: true, paidAmountUsd: true },
+      });
+      let overdueTotal = 0;
+      for (const p of overdue) overdueTotal += p.netPayableUsd - p.paidAmountUsd;
+      result.overduePayables = { count: overdue.length, totalUsd: round2(overdueTotal) };
+
+      // Due this week
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      weekEnd.setUTCHours(23, 59, 59, 999);
+      const upcoming = await this.prisma.payable.count({
+        where: {
+          status: { in: ['PENDING', 'PARTIAL'] },
+          dueDate: { gte: today, lte: weekEnd },
+        },
+      });
+      result.upcomingPayables = upcoming;
+    }
+
+    if (role === 'ACCOUNTANT') {
+      // CxC totals
+      const cxc = await this.prisma.receivable.findMany({
+        where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { amountUsd: true, paidAmountUsd: true },
+      });
+      let cxcTotal = 0;
+      for (const r of cxc) cxcTotal += r.amountUsd - r.paidAmountUsd;
+      result.receivables = { count: cxc.length, totalUsd: round2(cxcTotal) };
+
+      // CxP totals
+      const cxp = await this.prisma.payable.findMany({
+        where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { netPayableUsd: true, paidAmountUsd: true },
+      });
+      let cxpTotal = 0;
+      for (const p of cxp) cxpTotal += p.netPayableUsd - p.paidAmountUsd;
+      result.payables = { count: cxp.length, totalUsd: round2(cxpTotal) };
+    }
+
+    return result;
+  }
+
   // ── Sales (Invoices PAID in period) ───────────────────────────────────────
 
   private async getSales(dateRange: { gte: Date; lte: Date }) {

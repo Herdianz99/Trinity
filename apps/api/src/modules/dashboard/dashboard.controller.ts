@@ -24,4 +24,9 @@ export class DashboardController {
   ) {
     return this.service.getVendedor(user.id, from, to);
   }
+
+  @Get('home')
+  getHome(@CurrentUser() user: { id: string; role: string }) {
+    return this.service.getHome(user.role);
+  }
 }

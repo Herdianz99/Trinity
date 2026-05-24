@@ -119,10 +119,12 @@ export default function DashboardPage() {
 
   useEffect(() => { document.title = 'Dashboard | Trinity ERP'; }, []);
 
-  // Redirect SELLER users to their own dashboard
+  // Redirect non-admin users to their own dashboard
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(user => {
-      if (user?.role === 'SELLER') router.replace('/dashboard/seller');
+      if (!user) return;
+      if (user.role === 'SELLER') router.replace('/dashboard/seller');
+      else if (!['ADMIN', 'SUPERVISOR'].includes(user.role)) router.replace('/dashboard/home');
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

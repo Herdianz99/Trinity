@@ -613,6 +613,14 @@ model Payment {
 - Detalle con 3 tabs: Información, CxP, Notas Cr/Db
 - Libro de compras fiscal actualizado con campos precalculados
 
+#### Sesión 45 — Página de Inicio Roles Secundarios
+**Backend:**
+- GET /dashboard/home — info rápida por rol: tasa BCV, cajas abiertas (CASHIER), low stock (WAREHOUSE/AUDITOR), CxP vencidas (BUYER), CxC/CxP totales (ACCOUNTANT)
+
+**Frontend:**
+- Página de inicio (/dashboard/home): saludo, badge de rol, tasa BCV, grid de 4 accesos directos por rol, info rápida por rol
+- Redirección completa: ADMIN/SUPERVISOR → gerencial, SELLER → vendedor, resto → home
+
 #### Sesión 44 — Dashboard del Vendedor
 **Backend:**
 - GET /dashboard/vendedor?from&to — datos exclusivos del vendedor actual (ventas, pendientes, devoluciones, top productos, timeline, CxC)
