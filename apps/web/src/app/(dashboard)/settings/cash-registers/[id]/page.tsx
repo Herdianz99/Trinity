@@ -19,9 +19,7 @@ interface CashRegister {
   name: string;
   isShared: boolean;
   isActive: boolean;
-  comPort: string | null;
-  fiscalMachineSerial: string | null;
-  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean; comPort: string | null; fiscalMachineSerial: string | null } | null;
 }
 
 export default function CashRegisterDetailPage() {
@@ -33,7 +31,7 @@ export default function CashRegisterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', isShared: false, comPort: '' });
+  const [form, setForm] = useState({ name: '', isShared: false });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -62,7 +60,6 @@ export default function CashRegisterDetailPage() {
       setForm({
         name: data.name,
         isShared: data.isShared || false,
-        comPort: data.comPort || '',
       });
     } catch (err: any) {
       setError(err.message);
@@ -88,7 +85,6 @@ export default function CashRegisterDetailPage() {
         name: form.name,
         code: register?.code,
         isShared: form.isShared,
-        comPort: form.comPort || undefined,
       };
       const res = await fetch(`/api/proxy/cash-registers/${id}`, {
         method: 'PATCH',
@@ -274,32 +270,21 @@ export default function CashRegisterDetailPage() {
               </div>
             ) : (
               <>
-                {/* Puerto COM */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Puerto COM
-                  </label>
-                  <input
-                    type="text"
-                    value={form.comPort}
-                    onChange={(e) => setForm((f) => ({ ...f, comPort: e.target.value }))}
-                    className="input-field !py-2 text-sm max-w-xs"
-                    placeholder="COM3"
-                  />
-                  <p className="text-xs text-slate-500 mt-1.5">
-                    Puerto COM donde esta conectada la impresora fiscal (ej: COM1, COM3)
+                {/* Fiscal config from serie */}
+                <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30 space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracion de la serie</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <span className="text-slate-400">Serie:</span>
+                    <span className="text-white">{register.serie?.name}</span>
+                    <span className="text-slate-400">Puerto COM:</span>
+                    <span className="text-white font-mono">{register.serie?.comPort || <span className="text-amber-400">No configurado</span>}</span>
+                    <span className="text-slate-400">Serial maquina:</span>
+                    <span className="text-white font-mono">{register.serie?.fiscalMachineSerial || <span className="text-slate-500">No detectado</span>}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Estos valores se configuran en <button type="button" onClick={() => window.location.href = '/settings/series'} className="text-indigo-400 hover:text-indigo-300 underline">Series</button>
                   </p>
                 </div>
-
-                {/* Serial guardado */}
-                {register.fiscalMachineSerial && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/40 border border-slate-600/30">
-                    <CheckCircle2 size={16} className="text-green-400 shrink-0" />
-                    <span className="text-sm text-slate-300">
-                      Serial registrado: <span className="font-mono text-white">{register.fiscalMachineSerial}</span>
-                    </span>
-                  </div>
-                )}
 
                 {/* ── Comprobar impresora ── */}
                 <div className="border-t border-slate-700/50 pt-4">
@@ -322,14 +307,12 @@ export default function CashRegisterDetailPage() {
                       try {
                         const result = await readPrinterStatus();
                         setPrinterInfo(result);
-                        // Save serial to DB if different
-                        if (result.status.machineSerial && result.status.machineSerial !== register.fiscalMachineSerial) {
-                          await fetch(`/api/proxy/cash-registers/${id}`, {
+                        // Save serial to serie if different
+                        if (result.status.machineSerial && register.serie && result.status.machineSerial !== register.serie.fiscalMachineSerial) {
+                          await fetch(`/api/proxy/series/${register.serie.id}`, {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                              code: register.code,
-                              name: register.name,
                               fiscalMachineSerial: result.status.machineSerial,
                             }),
                           });
@@ -619,27 +602,6 @@ export default function CashRegisterDetailPage() {
                   </p>
                 </div>
 
-                {/* Guardar */}
-                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={handleSaveAndExit}
-                    className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
-                  >
-                    {saving ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
-                    Guardar y salir
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSave()}
-                    className="btn-primary !py-2.5 text-sm flex items-center gap-2"
-                  >
-                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                    Guardar cambios
-                  </button>
-                </div>
               </>
             )}
           </div>

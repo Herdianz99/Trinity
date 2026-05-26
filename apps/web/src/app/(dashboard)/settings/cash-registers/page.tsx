@@ -17,6 +17,14 @@ interface CashRegisterSession {
   status: string;
 }
 
+interface Serie {
+  id: string;
+  name: string;
+  prefix: string;
+  isFiscal: boolean;
+  cashRegister: { id: string } | null;
+}
+
 interface CashRegister {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ interface CashRegister {
 export default function CashRegistersPage() {
   const router = useRouter();
   const [registers, setRegisters] = useState<CashRegister[]>([]);
+  const [allSeries, setAllSeries] = useState<Serie[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal state
@@ -41,15 +50,22 @@ export default function CashRegistersPage() {
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
   const [formIsShared, setFormIsShared] = useState(false);
+  const [formSerieId, setFormSerieId] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchRegisters = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/cash-registers');
-      if (res.ok) {
-        const data = await res.json();
+      const [regRes, seriesRes] = await Promise.all([
+        fetch('/api/proxy/cash-registers'),
+        fetch('/api/proxy/series'),
+      ]);
+      if (regRes.ok) {
+        const data = await regRes.json();
         setRegisters(data);
+      }
+      if (seriesRes.ok) {
+        setAllSeries(await seriesRes.json());
       }
     } catch {
       /* ignore */
@@ -64,11 +80,17 @@ export default function CashRegistersPage() {
     fetchRegisters();
   }, [fetchRegisters]);
 
+  // Series available for linking: not linked to another register (or linked to the current one being edited)
+  const availableSeries = allSeries.filter(
+    (s) => !s.cashRegister || (editingRegister && s.cashRegister.id === editingRegister.id),
+  );
+
   function openCreate() {
     setEditingRegister(null);
     setFormName('');
     setFormCode('');
     setFormIsShared(false);
+    setFormSerieId('');
     setFormError('');
     setModalOpen(true);
   }
@@ -78,6 +100,7 @@ export default function CashRegistersPage() {
     setFormName(register.name);
     setFormCode(register.code);
     setFormIsShared(register.isShared);
+    setFormSerieId(register.serie?.id || '');
     setFormError('');
     setModalOpen(true);
   }
@@ -106,6 +129,29 @@ export default function CashRegistersPage() {
       if (!res.ok) {
         const msg = Array.isArray(data.message) ? data.message[0] : data.message;
         throw new Error(msg || 'Error al guardar');
+      }
+
+      const registerId = editingRegister?.id || data.id;
+
+      // Update serie linkage: unlink old serie if changed, link new serie
+      const oldSerieId = editingRegister?.serie?.id || '';
+      if (oldSerieId !== formSerieId) {
+        // Unlink old serie
+        if (oldSerieId) {
+          await fetch(`/api/proxy/series/${oldSerieId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cashRegisterId: null }),
+          });
+        }
+        // Link new serie
+        if (formSerieId) {
+          await fetch(`/api/proxy/series/${formSerieId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cashRegisterId: registerId }),
+          });
+        }
       }
 
       setModalOpen(false);
@@ -346,6 +392,24 @@ export default function CashRegistersPage() {
                 maxLength={2}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                Serie vinculada
+              </label>
+              <select
+                value={formSerieId}
+                onChange={(e) => setFormSerieId(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500"
+              >
+                <option value="">Sin serie</option>
+                {availableSeries.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.prefix}) {s.isFiscal ? '— Fiscal' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-3">

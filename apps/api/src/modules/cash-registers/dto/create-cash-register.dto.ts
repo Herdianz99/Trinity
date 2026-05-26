@@ -14,14 +14,4 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsBoolean()
   isShared?: boolean;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  comPort?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  fiscalMachineSerial?: string;
 }

@@ -50,6 +50,8 @@ export class SeriesService {
         isFiscal: dto.isFiscal ?? false,
         isVatExempt: dto.isVatExempt ?? false,
         cashRegisterId: dto.cashRegisterId || null,
+        comPort: dto.comPort || null,
+        fiscalMachineSerial: dto.fiscalMachineSerial || null,
       },
       include: {
         cashRegister: { select: { id: true, code: true, name: true } },
@@ -87,6 +89,8 @@ export class SeriesService {
         isFiscal: dto.isFiscal,
         isVatExempt: dto.isVatExempt,
         cashRegisterId: dto.cashRegisterId !== undefined ? (dto.cashRegisterId || null) : undefined,
+        comPort: dto.comPort !== undefined ? (dto.comPort || null) : undefined,
+        fiscalMachineSerial: dto.fiscalMachineSerial !== undefined ? (dto.fiscalMachineSerial || null) : undefined,
       },
       include: {
         cashRegister: { select: { id: true, code: true, name: true } },

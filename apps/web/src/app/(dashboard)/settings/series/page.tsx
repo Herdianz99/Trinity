@@ -25,6 +25,8 @@ interface Serie {
   isVatExempt: boolean;
   lastNumber: number;
   isActive: boolean;
+  comPort: string | null;
+  fiscalMachineSerial: string | null;
   cashRegister: CashRegister | null;
   createdAt: string;
 }
@@ -44,6 +46,8 @@ export default function SeriesPage() {
   const [formIsFiscal, setFormIsFiscal] = useState(false);
   const [formIsVatExempt, setFormIsVatExempt] = useState(false);
   const [formCashRegisterId, setFormCashRegisterId] = useState('');
+  const [formComPort, setFormComPort] = useState('');
+  const [formFiscalSerial, setFormFiscalSerial] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -80,6 +84,8 @@ export default function SeriesPage() {
     setFormIsFiscal(false);
     setFormIsVatExempt(false);
     setFormCashRegisterId('');
+    setFormComPort('');
+    setFormFiscalSerial('');
     setFormError('');
     setModalOpen(true);
   };
@@ -91,6 +97,8 @@ export default function SeriesPage() {
     setFormIsFiscal(serie.isFiscal);
     setFormIsVatExempt(serie.isVatExempt);
     setFormCashRegisterId(serie.cashRegister?.id || '');
+    setFormComPort(serie.comPort || '');
+    setFormFiscalSerial(serie.fiscalMachineSerial || '');
     setFormError('');
     setModalOpen(true);
   };
@@ -105,13 +113,20 @@ export default function SeriesPage() {
     setFormError('');
 
     try {
-      const body = {
+      const body: any = {
         name: formName.trim(),
         prefix: formPrefix.trim().toUpperCase(),
         isFiscal: formIsFiscal,
         isVatExempt: formIsVatExempt,
         cashRegisterId: formCashRegisterId || null,
       };
+      if (formIsFiscal) {
+        body.comPort = formComPort.trim() || null;
+        body.fiscalMachineSerial = formFiscalSerial.trim() || null;
+      } else {
+        body.comPort = null;
+        body.fiscalMachineSerial = null;
+      }
 
       const url = editingSerie
         ? `/api/proxy/series/${editingSerie.id}`
@@ -359,6 +374,34 @@ export default function SeriesPage() {
                   <span className="text-sm text-slate-300">Exenta de IVA</span>
                 </label>
               </div>
+
+              {formIsFiscal && (
+                <div className="space-y-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracion de maquina fiscal</p>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Puerto COM</label>
+                    <input
+                      type="text"
+                      value={formComPort}
+                      onChange={(e) => setFormComPort(e.target.value)}
+                      placeholder="Ej: COM3"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Puerto donde esta conectada la impresora fiscal</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Serial de maquina fiscal</label>
+                    <input
+                      type="text"
+                      value={formFiscalSerial}
+                      onChange={(e) => setFormFiscalSerial(e.target.value)}
+                      placeholder="Ej: ABC12345678"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Se detecta automaticamente al comprobar la impresora</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">

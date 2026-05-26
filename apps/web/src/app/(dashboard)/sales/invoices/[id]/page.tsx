@@ -31,8 +31,8 @@ interface InvoiceDetail {
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
-  cashRegister: { id: string; code: string; name: string; comPort?: string; fiscalMachineSerial?: string } | null;
-  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
+  cashRegister: { id: string; code: string; name: string } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean; comPort?: string } | null;
   seller: { id: string; code: string; name: string } | null;
   cashier: { id: string; name: string } | null;
   items: InvoiceItem[];
@@ -194,7 +194,7 @@ export default function InvoiceDetailPage() {
     try {
       const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
       const commands = buildFiscalCommands(invoice, companyConfig || {});
-      const fiscal = await sendToFiscalPrinter(commands, invoice.cashRegister?.comPort, true);
+      const fiscal = await sendToFiscalPrinter(commands, invoice.serie?.comPort, true);
       if (fiscal) {
         await fetch(`/api/proxy/invoices/${id}/fiscal-info`, {
           method: 'PATCH',
@@ -227,7 +227,7 @@ export default function InvoiceDetailPage() {
       const raw = invoice.fiscalNumber.replace(/\D/g, '');
       const num7 = raw.slice(-7).padStart(7, '0');
       const rfCommand = `RF${num7}${num7}`;
-      await sendToFiscalPrinter([rfCommand], invoice.cashRegister?.comPort, false);
+      await sendToFiscalPrinter([rfCommand], invoice.serie?.comPort, false);
       setMessage({ type: 'success', text: `Reimpresion fiscal enviada (${rfCommand})` });
     } catch (err: any) {
       setMessage({ type: 'error', text: `Error al reimprimir: ${err.message}` });

@@ -79,7 +79,7 @@ export class InvoicesService {
           customer: { select: { id: true, name: true, rif: true } },
           seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
-          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -152,7 +152,7 @@ export class InvoicesService {
       include: {
         customer: true,
         cashRegister: true,
-        serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         items: true,
         payments: { include: { method: true, changeMethod: true } },
         receivables: true,
@@ -373,7 +373,7 @@ export class InvoicesService {
           customer: true,
           seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
-          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         },
       });
     });
@@ -746,7 +746,7 @@ export class InvoicesService {
           seller: { select: { id: true, code: true, name: true } },
           cashier: { select: { id: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
-          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         },
       });
 

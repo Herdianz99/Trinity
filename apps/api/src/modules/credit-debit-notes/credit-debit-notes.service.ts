@@ -89,13 +89,13 @@ export class CreditDebitNotesService {
             id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true, createdAt: true,
             totalUsd: true, totalBs: true, exchangeRate: true, igtfUsd: true,
             customer: { select: { id: true, name: true, rif: true, documentType: true, address: true, phone: true } },
-            cashRegister: { select: { id: true, code: true, name: true, comPort: true } },
+            cashRegister: { select: { id: true, code: true, name: true } },
             payments: { select: { amountUsd: true, amountBs: true, method: { select: { fiscalCode: true } } } },
           },
         },
-        serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         cashRegister: {
-          select: { id: true, code: true, name: true, comPort: true },
+          select: { id: true, code: true, name: true },
         },
         purchaseOrder: {
           select: {

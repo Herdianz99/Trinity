@@ -677,20 +677,22 @@ model PaymentMethod {
 // ============================================
 
 model Serie {
-  id              String            @id @default(cuid())
-  name            String            @unique
-  prefix          String
-  isFiscal        Boolean           @default(false)
-  isVatExempt     Boolean           @default(false)
-  lastNumber      Int               @default(0)
-  isActive        Boolean           @default(true)
-  cashRegisterId  String?           @unique
-  cashRegister    CashRegister?     @relation(fields: [cashRegisterId], references: [id])
-  invoices        Invoice[]
-  creditDebitNotes CreditDebitNote[]
-  retentionVouchers RetentionVoucher[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                  String            @id @default(cuid())
+  name                String            @unique
+  prefix              String
+  isFiscal            Boolean           @default(false)
+  isVatExempt         Boolean           @default(false)
+  lastNumber          Int               @default(0)
+  isActive            Boolean           @default(true)
+  comPort             String?
+  fiscalMachineSerial String?
+  cashRegisterId      String?           @unique
+  cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
+  invoices            Invoice[]
+  creditDebitNotes    CreditDebitNote[]
+  retentionVouchers   RetentionVoucher[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 }
 
 // ============================================
@@ -703,8 +705,6 @@ model CashRegister {
   name                 String
   isShared             Boolean       @default(false)
   isActive             Boolean       @default(true)
-  comPort              String?
-  fiscalMachineSerial  String?
   serie                Serie?
   sessions             CashSession[]
   invoices             Invoice[]

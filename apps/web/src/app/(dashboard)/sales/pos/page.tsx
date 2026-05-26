@@ -664,6 +664,10 @@ export default function POSPage() {
 
       // Fiscal register: generate fiscal commands; otherwise print thermal receipt
       if (selectedCashRegister?.serie?.isFiscal) {
+        if (!selectedCashRegister?.serie?.comPort) {
+          setMessage({ type: 'error', text: 'Configura el puerto COM en la serie de esta caja antes de imprimir fiscalmente' });
+          return;
+        }
         try {
           const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
           const cartCodeMap = new Map(cart.map(c => [c.productId, c.code]));
@@ -676,7 +680,7 @@ export default function POSPage() {
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           console.log('[FISCAL-CREDITO] Comandos:', JSON.stringify(commands));
-          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
+          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.serie?.comPort, true);
 
           if (fiscal) {
             try {
@@ -795,6 +799,10 @@ export default function POSPage() {
 
       // Fiscal register: generate fiscal commands; otherwise print thermal receipt
       if (selectedCashRegister?.serie?.isFiscal) {
+        if (!selectedCashRegister?.serie?.comPort) {
+          setMessage({ type: 'error', text: 'Configura el puerto COM en la serie de esta caja antes de imprimir fiscalmente' });
+          return;
+        }
         try {
           const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
           // Enrich invoice items with product codes from cart
@@ -808,7 +816,7 @@ export default function POSPage() {
           };
           const commands = buildFiscalCommands(enrichedResult, companyConfig || {});
           console.log('[FISCAL-CONTADO] Comandos:', JSON.stringify(commands));
-          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.comPort, true);
+          const fiscal = await sendToFiscalPrinter(commands, selectedCashRegister?.serie?.comPort, true);
 
           if (fiscal) {
             try {

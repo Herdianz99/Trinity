@@ -36,10 +36,10 @@ interface NoteDetail {
     id: string; number: string; fiscalNumber: string | null; fiscalMachineSerial: string | null; createdAt: string;
     totalUsd: number; totalBs: number;
     customer: { id: string; name: string; rif: string | null; documentType: string | null; address: string | null; phone: string | null } | null;
-    cashRegister: { code: string; name: string; comPort: string | null } | null;
+    cashRegister: { code: string; name: string } | null;
   } | null;
-  cashRegister: { code: string; name: string; comPort: string | null } | null;
-  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
+  cashRegister: { code: string; name: string } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean; comPort?: string } | null;
   purchaseOrder: { id: string; number: string; totalUsd: number; totalBs: number; supplier: { id: string; name: string; rif: string | null } | null } | null;
   items: NoteItem[];
 }
@@ -149,7 +149,7 @@ export default function CreditDebitNoteDetailPage() {
             posted.invoice.customer,
             companyConfig,
           );
-          const fiscal = await sendToFiscalPrinter(commands, posted.invoice.cashRegister.comPort, true);
+          const fiscal = await sendToFiscalPrinter(commands, posted.serie?.comPort || undefined, true);
 
           // Save fiscal status obtained directly from serial port
           try {
@@ -194,7 +194,7 @@ export default function CreditDebitNoteDetailPage() {
         note.invoice.customer,
         companyConfig,
       );
-      const fiscal = await sendToFiscalPrinter(commands, note.invoice.cashRegister?.comPort || undefined, true);
+      const fiscal = await sendToFiscalPrinter(commands, note.serie?.comPort || undefined, true);
 
       // Save fiscal status obtained directly from serial port
       try {
