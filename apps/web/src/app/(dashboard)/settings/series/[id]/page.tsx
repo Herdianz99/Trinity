@@ -54,6 +54,9 @@ export default function SerieDetailPage() {
   const [programResult, setProgramResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [configuringContrib, setConfiguringContrib] = useState(false);
   const [contribResult, setContribResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [resettingFlags, setResettingFlags] = useState(false);
+  const [resetFlagsProgress, setResetFlagsProgress] = useState('');
+  const [resetFlagsResult, setResetFlagsResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchSerie = useCallback(async () => {
     setLoading(true);
@@ -488,6 +491,70 @@ export default function SerieDetailPage() {
                         ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
                         : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
                       {contribResult.text}
+                    </div>
+                  )}
+                </div>
+
+                {/* Resetear todos los flags a 00 */}
+                <div className="border-t border-slate-700/50 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-orange-400" />
+                    Resetear todos los flags a 00
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                    Envia los 63 comandos PJ para colocar todos los flags en 00. Util para limpiar configuraciones
+                    previas de otros sistemas. Formato del comando: <span className="font-mono text-slate-400">PJ</span> + flag (2 digitos) + valor (2 digitos),
+                    ej: <span className="font-mono text-slate-400">PJ5001</span> = Flag 50, valor 01.
+                    Luego usar &quot;Configurar contribuyente&quot; para activar solo los flags necesarios (50 y 63).
+                  </p>
+                  <button
+                    type="button"
+                    disabled={resettingFlags}
+                    onClick={async () => {
+                      const support = isFiscalPrinterSupported();
+                      if (!support.supported) {
+                        setResetFlagsResult({ type: 'error', text: support.reason || 'Web Serial API no disponible.' });
+                        return;
+                      }
+                      setResettingFlags(true);
+                      setResetFlagsResult(null);
+                      setResetFlagsProgress('Conectando...');
+                      try {
+                        const commands: string[] = [];
+                        for (let i = 1; i <= 63; i++) {
+                          commands.push(`PJ${String(i).padStart(2, '0')}00`);
+                        }
+                        const result = await sendMultipleFiscalCommands(commands, (sent, total) => {
+                          setResetFlagsProgress(`${sent}/${total} enviados`);
+                        });
+                        if (result.success) {
+                          setResetFlagsResult({ type: 'success', text: `${result.sent} flags reseteados a 00 correctamente` });
+                        } else {
+                          setResetFlagsResult({ type: 'error', text: result.error || 'Error desconocido' });
+                        }
+                      } catch (err: any) {
+                        setResetFlagsResult({ type: 'error', text: err.message });
+                      } finally {
+                        setResettingFlags(false);
+                        setResetFlagsProgress('');
+                      }
+                    }}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                  >
+                    {resettingFlags ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                    {resettingFlags ? resetFlagsProgress : 'Resetear todos los flags a 00'}
+                  </button>
+
+                  {resetFlagsResult && (
+                    <div className={`mt-3 p-3 rounded-lg border text-sm flex items-start gap-2 ${
+                      resetFlagsResult.type === 'success'
+                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                    }`}>
+                      {resetFlagsResult.type === 'success'
+                        ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+                        : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                      {resetFlagsResult.text}
                     </div>
                   )}
                 </div>
