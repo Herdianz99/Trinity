@@ -413,19 +413,34 @@ model Customer {
   updatedAt    DateTime  @updatedAt
 }
 
+model Serie {
+  id              String            @id @default(cuid())
+  name            String            @unique  // "Serie VTA", "Serie NE"
+  prefix          String            // "VTA", "NE", "VF"
+  isFiscal        Boolean           @default(false)
+  isVatExempt     Boolean           @default(false)  // fuerza IVA 0% en todos los documentos
+  lastNumber      Int               @default(0)      // correlativo de numeracion
+  isActive        Boolean           @default(true)
+  cashRegisterId  String?           @unique          // relacion 1:1 con caja
+  cashRegister    CashRegister?     @relation(...)
+  invoices        Invoice[]
+  creditDebitNotes CreditDebitNote[]
+  retentionVouchers RetentionVoucher[]
+}
+
 model CashRegister {
-  id                String        @id @default(cuid())
-  code              String        @unique  // "01", "02", etc.
-  name              String
-  isFiscal          Boolean       @default(false)
-  isShared          Boolean       @default(false)  // cajas compartidas visibles para todos
-  isActive          Boolean       @default(true)
-  lastInvoiceNumber Int           @default(0)
-  comPort           String?       // puerto COM para maquina fiscal
-  sessions          CashSession[]
-  invoices          Invoice[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  code                 String        @unique  // "01", "02", etc.
+  name                 String
+  isShared             Boolean       @default(false)  // cajas compartidas visibles para todos
+  isActive             Boolean       @default(true)
+  comPort              String?       // puerto COM para maquina fiscal
+  fiscalMachineSerial  String?       // serial de la maquina fiscal
+  serie                Serie?        // serie vinculada (fiscal, correlativo, prefix)
+  sessions             CashSession[]
+  invoices             Invoice[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 }
 
 model CashSession {
@@ -898,14 +913,21 @@ model QuotationItem {
 
 **Fechas:** Siempre `setUTCHours` para rangos de fecha en queries.
 
-**Numeración de facturas por caja:** Formato `FAC-01-26-00000001`:
-- `FAC` = prefijo configurable en CompanyConfig
-- `01` = código de 2 dígitos de la caja (`CashRegister.code`)
+**Numeración de documentos por Serie:** Formato `VTA-26-00000001`:
+- `VTA` = prefijo de la Serie (configurable por serie: VTA, NE, VF, etc.)
 - `26` = año de emisión (2 dígitos, solo informativo)
-- `00000001` = correlativo de 8 dígitos en `CashRegister.lastInvoiceNumber`, nunca reinicia, continuo de por vida de la caja
+- `00000001` = correlativo de 8 dígitos en `Serie.lastNumber`, nunca reinicia, continuo de por vida de la serie
 - El incremento usa `SELECT FOR UPDATE` en transacción Prisma para evitar duplicados en concurrencia
-- Cada caja tiene su secuencia independiente
+- Cada serie tiene su secuencia independiente
+- Las notas de crédito/débito de venta heredan la serie de la factura padre
 - Campo `fiscalNumber` separado en Invoice para el número de impresora fiscal
+
+**Serie:** Centraliza la configuración de documentos fiscales:
+- `isFiscal`: determina si los documentos se imprimen por la máquina fiscal y van al libro de ventas
+- `isVatExempt`: si es true, fuerza IVA 0% en todos los items del documento independientemente de la configuración del producto
+- `lastNumber`: correlativo compartido por todos los documentos de esa serie
+- Relación 1:1 con CashRegister — una caja solo puede tener una serie
+- Series actuales: Serie NE (no fiscal, Caja Notas), Serie VTA (fiscal, Fiscal 1), Serie VF (fiscal, Fiscal 2)
 
 **PDF:** @react-pdf/renderer para facturas A4 y formato 80mm.
 
@@ -913,6 +935,8 @@ model QuotationItem {
 - Cualquier usuario puede abrir sesion en cualquier caja activa que no tenga sesion abierta
 - Una caja solo puede tener UNA sesion OPEN a la vez
 - Cajas con `isShared: true` aparecen disponibles para todos los usuarios en el POS
+- Una caja debe tener una Serie vinculada para poder crear facturas
+- La configuracion fiscal (isFiscal) se obtiene de la Serie, no de la caja directamente
 - Cajas con `isShared: false` (exclusivas) solo aparecen para quien abrio la sesion
 - En el POS: GET /cash-registers/available retorna cajas donde el usuario tiene sesion + cajas compartidas abiertas
 - SELLER no ve selector de caja ni boton cobrar en POS, solo puede guardar pre-facturas

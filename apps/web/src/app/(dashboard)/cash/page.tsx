@@ -16,8 +16,8 @@ interface CashRegister {
   id: string;
   code: string;
   name: string;
-  isFiscal: boolean;
   isShared: boolean;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   isActive: boolean;
   sessions: {
     id: string;
@@ -137,7 +137,7 @@ export default function CashPage() {
                     <span className="font-mono text-slate-300">{cr.code}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {cr.isFiscal ? (
+                    {cr.serie?.isFiscal ? (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>
                     ) : (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">Normal</span>

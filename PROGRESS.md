@@ -1,5 +1,82 @@
 # Trinity ERP — Progreso
 
+## Sesion 48 — Modelo Serie para configuracion de documentos fiscales
+
+### Base de datos
+- **Modelo Serie**: Nuevo modelo que centraliza la configuracion fiscal de documentos
+  - `name` (unique), `prefix`, `isFiscal`, `isVatExempt`, `lastNumber`, `isActive`
+  - Relacion 1:1 con CashRegister via `cashRegisterId` (unique)
+  - Relaciones con Invoice, CreditDebitNote, RetentionVoucher
+- **CashRegister**: Eliminados campos `isFiscal` y `lastInvoiceNumber` — ahora viven en Serie
+- **Invoice**: Agregado `serieId` con relacion a Serie
+- **CreditDebitNote**: Agregado `serieId` con relacion a Serie
+- **RetentionVoucher**: Agregado `serieId` con relacion a Serie
+- **Migracion**: `20260526000000_add_serie_model` con IF NOT EXISTS para seguridad
+- **Limpieza**: Script SQL para limpiar datos de prueba y resetear correlativos
+
+### Backend (NestJS)
+- **SeriesModule**: Nuevo modulo con CRUD completo
+  - `GET /series` — lista todas las series con caja vinculada
+  - `GET /series/:id` — detalle
+  - `POST /series` — crear (solo ADMIN)
+  - `PATCH /series/:id` — editar (solo ADMIN)
+  - `PATCH /series/:id/toggle-active` — activar/desactivar
+- **InvoicesService**: Correlativos ahora usan Serie
+  - Obtiene serie de la caja seleccionada, error si no tiene serie
+  - Numero de factura: `{prefix}-{year2}-{correlativo8}` (ej: VTA-26-00000001)
+  - SELECT FOR UPDATE en Serie para incrementar lastNumber
+  - Si serie.isVatExempt = true, fuerza IVA 0% en todos los items
+- **CreditDebitNotesService**: Hereda serieId de la factura origen
+  - Notas de venta usan la serie de la factura padre para generar numero
+  - Notas de compra mantienen numeracion secuencial por tipo
+- **QuotationsService**: Conversion cotizacion->factura usa serie de la caja
+- **FiscalService**: Libro de ventas solo incluye facturas con serie fiscal
+- **CashRegistersService**: Eliminado isFiscal del create/update, incluye serie en queries
+
+### Frontend (Next.js)
+- **Nueva pagina `/settings/series`**: Tabla con nombre, prefijo, fiscal (badge), exenta IVA (badge), caja vinculada, ultimo numero, estado. Modal crear/editar con nombre, prefijo, caja, checkboxes fiscal y exenta IVA
+- **Sidebar**: Agregado "Series" bajo CONFIGURACION con icono Layers
+- **POS**: `selectedCashRegister?.serie?.isFiscal` reemplaza `selectedCashRegister?.isFiscal`. Badge "Sin serie" para cajas sin serie
+- **Invoices list/detail**: Muestra serie con badge Fiscal/No Fiscal
+- **Credit/Debit notes**: Muestra serie heredada con badge fiscal
+- **Cash register pages**: isFiscal removido, ahora muestra info de serie
+- **fiscal-printer.ts**: NO modificado (verificado)
+
+### Series iniciales (seed)
+- Serie NE: prefix NE, no fiscal, vinculada a Caja Notas
+- Serie VTA: prefix VTA, fiscal, vinculada a Fiscal 1
+- Serie VF: prefix VF, fiscal, vinculada a Fiscal 2
+
+### Archivos creados
+- `apps/api/src/modules/series/series.module.ts`
+- `apps/api/src/modules/series/series.controller.ts`
+- `apps/api/src/modules/series/series.service.ts`
+- `apps/api/src/modules/series/dto/create-serie.dto.ts`
+- `apps/web/src/app/(dashboard)/settings/series/page.tsx`
+- `packages/database/prisma/migrations/20260526000000_add_serie_model/migration.sql`
+- `scripts/clean-test-data.sql`
+
+### Archivos modificados
+- `packages/database/prisma/schema.prisma` — Serie model, serieId en Invoice/CreditDebitNote/RetentionVoucher, CashRegister sin isFiscal/lastInvoiceNumber
+- `packages/database/prisma/seed.ts` — Series iniciales, cajas sin isFiscal
+- `apps/api/src/app.module.ts` — Registro de SeriesModule
+- `apps/api/src/modules/invoices/invoices.service.ts` — Correlativos con Serie, VAT exempt
+- `apps/api/src/modules/credit-debit-notes/credit-debit-notes.service.ts` — Herencia de serieId, includes
+- `apps/api/src/modules/quotations/quotations.service.ts` — Conversion con Serie
+- `apps/api/src/modules/fiscal/fiscal.service.ts` — Filtro serie fiscal en libro de ventas
+- `apps/api/src/modules/cash-registers/cash-registers.service.ts` — Sin isFiscal, include serie
+- `apps/api/src/modules/cash-registers/dto/create-cash-register.dto.ts` — Sin isFiscal
+- `apps/web/src/components/sidebar.tsx` — Series en CONFIGURACION
+- `apps/web/src/app/(dashboard)/sales/pos/page.tsx` — serie.isFiscal
+- `apps/web/src/app/(dashboard)/sales/invoices/page.tsx` — serie.isFiscal
+- `apps/web/src/app/(dashboard)/sales/invoices/[id]/page.tsx` — serie info y badge
+- `apps/web/src/app/(dashboard)/credit-debit-notes/page.tsx` — serie.isFiscal
+- `apps/web/src/app/(dashboard)/credit-debit-notes/[id]/page.tsx` — serie info y badge
+- `apps/web/src/app/(dashboard)/cash/page.tsx` — serie.isFiscal
+- `apps/web/src/app/(dashboard)/cash/[id]/page.tsx` — serie.isFiscal
+- `apps/web/src/app/(dashboard)/settings/cash-registers/page.tsx` — serie info
+- `apps/web/src/app/(dashboard)/settings/cash-registers/[id]/page.tsx` — serie info
+
 ## Sesion 47 — Modulo completo de reportes de ventas con PDF
 
 ### Backend (NestJS)

@@ -28,7 +28,8 @@ interface Invoice {
   customer: { id: string; name: string; rif: string | null } | null;
   seller: { id: string; code: string; name: string } | null;
   fiscalPrinted: boolean;
-  cashRegister: { id: string; code: string; name: string; isFiscal?: boolean } | null;
+  cashRegister: { id: string; code: string; name: string } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   _count: { items: number };
 }
 
@@ -305,7 +306,7 @@ export default function InvoicesPage() {
                           {PAYMENT_TYPE_LABELS[inv.paymentType] || inv.paymentType}
                         </span>
                       )}
-                      {inv.cashRegister?.isFiscal && !inv.fiscalPrinted && inv.status !== 'PENDING' && inv.status !== 'CANCELLED' && (
+                      {inv.serie?.isFiscal && !inv.fiscalPrinted && inv.status !== 'PENDING' && inv.status !== 'CANCELLED' && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-0.5" title="Pendiente de impresion fiscal">
                           <AlertTriangle size={10} /> Fiscal
                         </span>

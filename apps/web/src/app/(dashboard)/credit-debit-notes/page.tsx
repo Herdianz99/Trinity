@@ -19,9 +19,9 @@ interface Note {
   appliedAt: string | null;
   fiscalPrinted: boolean;
   createdAt: string;
-  invoice: { id: string; number: string; customer: { name: string } | null; cashRegister?: { isFiscal: boolean } | null } | null;
+  invoice: { id: string; number: string; customer: { name: string } | null } | null;
   purchaseOrder: { id: string; number: string; supplier: { name: string } | null } | null;
-  cashRegister?: { isFiscal: boolean } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -201,7 +201,7 @@ export default function CreditDebitNotesPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[note.status]}`}>
                         {STATUS_LABELS[note.status]}
                       </span>
-                      {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && !note.fiscalPrinted && note.status === 'POSTED' && (
+                      {note.serie?.isFiscal && !note.fiscalPrinted && note.status === 'POSTED' && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-0.5" title="Pendiente de impresion fiscal">
                           <AlertTriangle size={10} /> Fiscal
                         </span>

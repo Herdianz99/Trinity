@@ -43,6 +43,7 @@ import { RetentionVouchersModule } from './modules/retention-vouchers/retention-
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthModule } from './modules/health/health.module';
+import { SeriesModule } from './modules/series/series.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { HealthModule } from './modules/health/health.module';
     RetentionVouchersModule,
     DashboardModule,
     ReportsModule,
+    SeriesModule,
   ],
 })
 export class AppModule {}

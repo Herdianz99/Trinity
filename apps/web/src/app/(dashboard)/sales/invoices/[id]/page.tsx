@@ -31,7 +31,8 @@ interface InvoiceDetail {
   isCredit: boolean;
   createdAt: string;
   customer: { id: string; name: string; documentType: string; rif: string | null; phone: string | null } | null;
-  cashRegister: { id: string; code: string; name: string; isFiscal?: boolean; comPort?: string; fiscalMachineSerial?: string } | null;
+  cashRegister: { id: string; code: string; name: string; comPort?: string; fiscalMachineSerial?: string } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   seller: { id: string; code: string; name: string } | null;
   cashier: { id: string; name: string } | null;
   items: InvoiceItem[];
@@ -187,7 +188,7 @@ export default function InvoiceDetailPage() {
 
   // Print fiscal invoice (for pending fiscal print)
   const handleFiscalPrint = async () => {
-    if (!invoice || !invoice.cashRegister?.isFiscal) return;
+    if (!invoice || !invoice.serie?.isFiscal) return;
     setFiscalLoading(true);
     setMessage(null);
     try {
@@ -217,7 +218,7 @@ export default function InvoiceDetailPage() {
 
   // Reprint fiscal invoice (RF command)
   const handleFiscalReprint = async () => {
-    if (!invoice?.fiscalNumber || !invoice.cashRegister?.isFiscal) return;
+    if (!invoice?.fiscalNumber || !invoice.serie?.isFiscal) return;
     setReprintLoading(true);
     setMessage(null);
     try {
@@ -313,7 +314,7 @@ export default function InvoiceDetailPage() {
               {PAYMENT_TYPE_LABELS[invoice.paymentType] || invoice.paymentType}
             </span>
           )}
-          {invoice.cashRegister?.isFiscal && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && !invoice.fiscalPrinted && (
+          {invoice.serie?.isFiscal && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && !invoice.fiscalPrinted && (
             <span className="text-xs px-2.5 py-1 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-1">
               <AlertTriangle size={12} /> Por Imprimir
             </span>
@@ -321,13 +322,13 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Fiscal: Imprimir (pending fiscal print) */}
-          {invoice.cashRegister?.isFiscal && !invoice.fiscalPrinted && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
+          {invoice.serie?.isFiscal && !invoice.fiscalPrinted && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
             <button onClick={handleFiscalPrint} disabled={fiscalLoading} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50">
               {fiscalLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir Fiscal
             </button>
           )}
           {/* Fiscal: Reimprimir (already printed) */}
-          {invoice.cashRegister?.isFiscal && invoice.fiscalPrinted && invoice.fiscalNumber && (
+          {invoice.serie?.isFiscal && invoice.fiscalPrinted && invoice.fiscalNumber && (
             <button onClick={handleFiscalReprint} disabled={reprintLoading} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors disabled:opacity-50">
               {reprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} Reimprimir Fiscal
             </button>
@@ -398,8 +399,21 @@ export default function InvoiceDetailPage() {
               )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Caja</p>
-                <p className="text-white">{invoice.cashRegister?.code || '—'}{invoice.cashRegister?.isFiscal ? ' (Fiscal)' : ''}</p>
+                <p className="text-white">{invoice.cashRegister?.code || '—'}</p>
               </div>
+              {invoice.serie && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Serie</p>
+                  <p className="text-white flex items-center gap-1.5">
+                    {invoice.serie.name}
+                    {invoice.serie.isFiscal ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20">Fiscal</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/20">No Fiscal</span>
+                    )}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 uppercase">Fecha</p>
                 <p className="text-white font-mono">{fmtDate(invoice.createdAt)}</p>
@@ -411,7 +425,7 @@ export default function InvoiceDetailPage() {
             </div>
 
             {/* Datos fiscales */}
-            {invoice.cashRegister?.isFiscal && (
+            {invoice.serie?.isFiscal && (
               <div className={`rounded-lg p-4 mb-6 border ${invoice.fiscalPrinted ? 'bg-slate-900/50 border-slate-700/50' : 'bg-orange-500/5 border-orange-500/30'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs text-slate-500 uppercase flex items-center gap-2">

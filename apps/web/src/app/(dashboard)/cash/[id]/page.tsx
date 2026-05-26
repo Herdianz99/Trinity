@@ -300,7 +300,7 @@ export default function CashDetailPage() {
           ) : (
             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-500">Cerrada</span>
           )}
-          {register.isFiscal ? (
+          {register.serie?.isFiscal ? (
             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>
           ) : (
             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">Normal</span>
@@ -591,7 +591,7 @@ export default function CashDetailPage() {
 
           {/* Action buttons at bottom */}
           <div className="flex justify-end gap-3 mt-4">
-            {register.isFiscal && (
+            {register.serie?.isFiscal && (
               <>
                 <button
                   onClick={() => handleFiscalReport('X')}

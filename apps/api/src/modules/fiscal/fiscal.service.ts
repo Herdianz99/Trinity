@@ -23,9 +23,11 @@ export class FiscalService {
       where: {
         status: 'PAID',
         createdAt: { gte: fromDate, lte: toDate },
+        serie: { isFiscal: true },
       },
       include: {
         customer: { select: { id: true, name: true, rif: true, documentType: true } },
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         items: true,
       },
       orderBy: { createdAt: 'asc' },

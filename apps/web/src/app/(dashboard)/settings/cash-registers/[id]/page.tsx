@@ -17,11 +17,11 @@ interface CashRegister {
   id: string;
   code: string;
   name: string;
-  isFiscal: boolean;
   isShared: boolean;
   isActive: boolean;
   comPort: string | null;
   fiscalMachineSerial: string | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
 }
 
 export default function CashRegisterDetailPage() {
@@ -33,7 +33,7 @@ export default function CashRegisterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', isFiscal: false, isShared: false, comPort: '' });
+  const [form, setForm] = useState({ name: '', isShared: false, comPort: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -61,7 +61,6 @@ export default function CashRegisterDetailPage() {
       setRegister(data);
       setForm({
         name: data.name,
-        isFiscal: data.isFiscal,
         isShared: data.isShared || false,
         comPort: data.comPort || '',
       });
@@ -88,7 +87,6 @@ export default function CashRegisterDetailPage() {
       const body = {
         name: form.name,
         code: register?.code,
-        isFiscal: form.isFiscal,
         isShared: form.isShared,
         comPort: form.comPort || undefined,
       };
@@ -209,19 +207,19 @@ export default function CashRegisterDetailPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-slate-300">Es fiscal:</label>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, isFiscal: !f.isFiscal }))}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  form.isFiscal
-                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                    : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
-                }`}
-              >
-                {form.isFiscal ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                {form.isFiscal ? 'Si' : 'No'}
-              </button>
+              <label className="text-sm font-medium text-slate-300">Serie:</label>
+              {register.serie ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white">{register.serie.name}</span>
+                  {register.serie.isFiscal ? (
+                    <span className="bg-blue-500/15 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-xs">Fiscal</span>
+                  ) : (
+                    <span className="bg-slate-500/15 text-slate-400 border border-slate-500/30 px-2 py-0.5 rounded-full text-xs">No Fiscal</span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-sm text-amber-400">Sin serie configurada</span>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -266,12 +264,12 @@ export default function CashRegisterDetailPage() {
         {/* ═══ TAB: Maquina Fiscal ═══ */}
         <TabsContent value="fiscal">
           <div className="card p-6 space-y-6">
-            {!form.isFiscal ? (
+            {!register.serie?.isFiscal ? (
               <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
                 <Info size={20} className="text-amber-400 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-300">
-                  Esta caja no esta configurada como fiscal. Active la opcion
-                  &quot;Es fiscal&quot; en la pestana Informacion General.
+                  Esta caja no tiene una serie fiscal asignada. Configure una serie fiscal
+                  en la seccion de Series del sistema.
                 </p>
               </div>
             ) : (

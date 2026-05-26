@@ -36,9 +36,10 @@ interface NoteDetail {
     id: string; number: string; fiscalNumber: string | null; fiscalMachineSerial: string | null; createdAt: string;
     totalUsd: number; totalBs: number;
     customer: { id: string; name: string; rif: string | null; documentType: string | null; address: string | null; phone: string | null } | null;
-    cashRegister: { code: string; name: string; isFiscal: boolean; comPort: string | null } | null;
+    cashRegister: { code: string; name: string; comPort: string | null } | null;
   } | null;
-  cashRegister: { code: string; name: string; isFiscal: boolean; comPort: string | null } | null;
+  cashRegister: { code: string; name: string; comPort: string | null } | null;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   purchaseOrder: { id: string; number: string; totalUsd: number; totalBs: number; supplier: { id: string; name: string; rif: string | null } | null } | null;
   items: NoteItem[];
 }
@@ -137,7 +138,7 @@ export default function CreditDebitNoteDetailPage() {
       const posted = await res.json();
 
       // Fiscal printing for NCV if invoice's cash register is fiscal
-      if (posted.type === 'NCV' && posted.invoice?.cashRegister?.isFiscal) {
+      if (posted.type === 'NCV' && posted.serie?.isFiscal) {
         try {
           const { buildFiscalCreditNoteCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
           const configRes = await fetch('/api/proxy/config');
@@ -288,7 +289,7 @@ export default function CreditDebitNoteDetailPage() {
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[note.status]}`}>
             {STATUS_LABELS[note.status]}
           </span>
-          {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && note.status === 'POSTED' && !note.fiscalPrinted && (
+          {note.serie?.isFiscal && note.status === 'POSTED' && !note.fiscalPrinted && (
             <span className="text-xs px-2.5 py-1 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-1">
               <AlertTriangle size={12} /> Por Imprimir
             </span>
@@ -297,7 +298,7 @@ export default function CreditDebitNoteDetailPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {note.status === 'POSTED' && (
             <>
-              {note.type === 'NCV' && note.invoice?.cashRegister?.isFiscal && !note.fiscalPrinted && (
+              {note.type === 'NCV' && note.serie?.isFiscal && !note.fiscalPrinted && (
                 <button onClick={handleFiscalPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors">
                   <Printer size={14} /> Imprimir Fiscal
                 </button>
@@ -353,10 +354,23 @@ export default function CreditDebitNoteDetailPage() {
                 <p className="text-xs text-slate-500 uppercase">Tasa</p>
                 <p className="text-white font-mono">Bs {fmt(note.exchangeRate)}</p>
               </div>
+              {note.serie && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Serie</p>
+                  <p className="text-white flex items-center gap-1.5">
+                    {note.serie.name}
+                    {note.serie.isFiscal ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20">Fiscal</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/20">No Fiscal</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Datos fiscales — visible cuando la caja es fiscal */}
-            {(note.invoice?.cashRegister?.isFiscal || note.cashRegister?.isFiscal) && (
+            {/* Datos fiscales — visible cuando la serie es fiscal */}
+            {note.serie?.isFiscal && (
               <div className={`rounded-lg p-4 mb-6 border ${note.fiscalPrinted ? 'bg-slate-900/50 border-slate-700/50' : 'bg-orange-500/5 border-orange-500/30'}`}>
                 <h3 className="text-xs text-slate-500 uppercase mb-2 flex items-center gap-2">
                   Datos Fiscales

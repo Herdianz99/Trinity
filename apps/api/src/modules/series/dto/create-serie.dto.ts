@@ -1,27 +1,27 @@
 import { IsString, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateCashRegisterDto {
+export class CreateSerieDto {
   @ApiProperty()
   @IsString()
   name: string;
 
   @ApiProperty()
   @IsString()
-  code: string;
+  prefix: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsBoolean()
-  isShared?: boolean;
+  isFiscal?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  isVatExempt?: boolean;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  comPort?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  fiscalMachineSerial?: string;
+  cashRegisterId?: string;
 }

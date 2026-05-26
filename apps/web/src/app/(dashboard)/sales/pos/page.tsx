@@ -444,7 +444,7 @@ export default function POSPage() {
 
   // IGTF: se calcula una sola vez sobre el primer pago en divisas (solo en caja fiscal)
   const firstForeignPayment = payments.find(p => p.isDivisa);
-  const isIGTFApplicable = companyConfig?.isIGTFContributor && selectedCashRegister?.isFiscal && firstForeignPayment && firstForeignPayment.amountUsd > 0;
+  const isIGTFApplicable = companyConfig?.isIGTFContributor && selectedCashRegister?.serie?.isFiscal && firstForeignPayment && firstForeignPayment.amountUsd > 0;
   const igtfUsd = isIGTFApplicable
     ? Math.round(firstForeignPayment.amountUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
     : 0;
@@ -663,7 +663,7 @@ export default function POSPage() {
       const result = await payRes.json();
 
       // Fiscal register: generate fiscal commands; otherwise print thermal receipt
-      if (selectedCashRegister?.isFiscal) {
+      if (selectedCashRegister?.serie?.isFiscal) {
         try {
           const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
           const cartCodeMap = new Map(cart.map(c => [c.productId, c.code]));
@@ -794,7 +794,7 @@ export default function POSPage() {
       const result = await payRes.json();
 
       // Fiscal register: generate fiscal commands; otherwise print thermal receipt
-      if (selectedCashRegister?.isFiscal) {
+      if (selectedCashRegister?.serie?.isFiscal) {
         try {
           const { buildFiscalCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
           // Enrich invoice items with product codes from cart
@@ -1060,7 +1060,8 @@ export default function POSPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-white">{cr.name}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
-                        {cr.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
+                        {cr.serie?.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
+                        {!cr.serie && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">Sin serie</span>}
                         {cr.isShared && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400">Compartida</span>}
                       </div>
                       <p className="text-xs text-slate-400 mt-1">

@@ -314,25 +314,33 @@ export class QuotationsService {
 
     const totalBs = quotation.totalUsd * rate.rate;
 
+    // Get serie from cash register
+    const serie = await this.prisma.serie.findUnique({
+      where: { cashRegisterId },
+    });
+    if (!serie) {
+      throw new BadRequestException('Esta caja no tiene serie configurada');
+    }
+
     // Create invoice in transaction
     const invoice = await this.prisma.$transaction(async (tx) => {
-      const registers = await tx.$queryRaw<any[]>`
-        SELECT "lastInvoiceNumber", "code" FROM "CashRegister"
-        WHERE id = ${cashRegisterId} FOR UPDATE
+      // Lock the serie row for correlative increment
+      const series = await tx.$queryRaw<any[]>`
+        SELECT "id", "lastNumber", "prefix" FROM "Serie"
+        WHERE id = ${serie.id} FOR UPDATE
       `;
-      const reg = registers[0];
-      const nextNumber = reg.lastInvoiceNumber + 1;
+      const s = series[0];
+      const nextNumber = s.lastNumber + 1;
 
-      await tx.cashRegister.update({
-        where: { id: cashRegisterId },
-        data: { lastInvoiceNumber: nextNumber },
+      await tx.serie.update({
+        where: { id: serie.id },
+        data: { lastNumber: nextNumber },
       });
 
       const config = await tx.companyConfig.findFirst();
-      const prefix = config?.invoicePrefix || 'FAC';
       const year = new Date().getFullYear().toString().slice(-2);
       const correlativo = nextNumber.toString().padStart(8, '0');
-      const invoiceNumber = `${prefix}-${reg.code}-${year}-${correlativo}`;
+      const invoiceNumber = `${s.prefix}-${year}-${correlativo}`;
 
       const isSeller = user.role === 'SELLER';
 
@@ -351,6 +359,7 @@ export class QuotationsService {
       const created = await tx.invoice.create({
         data: {
           number: invoiceNumber,
+          serieId: serie.id,
           cashRegisterId,
           customerId: quotation.customerId,
           status: 'PENDING',

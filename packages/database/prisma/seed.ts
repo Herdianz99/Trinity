@@ -526,10 +526,24 @@ async function main() {
   // ============================================
   // CASH REGISTERS
   // ============================================
-  await prisma.cashRegister.create({ data: { code: '01', name: 'Caja Notas', isFiscal: false } });
-  await prisma.cashRegister.create({ data: { code: '02', name: 'Fiscal 1', isFiscal: true } });
-  await prisma.cashRegister.create({ data: { code: '03', name: 'Fiscal 2', isFiscal: true } });
+  const cajNotas = await prisma.cashRegister.create({ data: { code: '01', name: 'Caja Notas' } });
+  const cajFiscal1 = await prisma.cashRegister.create({ data: { code: '02', name: 'Fiscal 1' } });
+  const cajFiscal2 = await prisma.cashRegister.create({ data: { code: '03', name: 'Fiscal 2' } });
   console.log('3 Cajas registradoras creadas');
+
+  // ============================================
+  // SERIES
+  // ============================================
+  await prisma.serie.create({
+    data: { name: 'Serie NE', prefix: 'NE', isFiscal: false, isVatExempt: false, cashRegisterId: cajNotas.id },
+  });
+  await prisma.serie.create({
+    data: { name: 'Serie VTA', prefix: 'VTA', isFiscal: true, isVatExempt: false, cashRegisterId: cajFiscal1.id },
+  });
+  await prisma.serie.create({
+    data: { name: 'Serie VF', prefix: 'VF', isFiscal: true, isVatExempt: false, cashRegisterId: cajFiscal2.id },
+  });
+  console.log('3 Series creadas (NE, VTA, VF)');
 
   // ============================================
   // SELLERS

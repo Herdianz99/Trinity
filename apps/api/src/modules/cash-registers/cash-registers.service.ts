@@ -12,6 +12,7 @@ export class CashRegistersService {
   async findAll() {
     return this.prisma.cashRegister.findMany({
       include: {
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true, isVatExempt: true } },
         sessions: {
           where: { status: 'OPEN' },
           include: { openedBy: { select: { id: true, name: true } } },
@@ -35,6 +36,7 @@ export class CashRegistersService {
         ],
       },
       include: {
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true, isVatExempt: true } },
         sessions: {
           where: { status: 'OPEN' },
           include: { openedBy: { select: { id: true, name: true } } },
@@ -74,7 +76,6 @@ export class CashRegistersService {
       data: {
         code: dto.code,
         name: dto.name,
-        isFiscal: dto.isFiscal ?? false,
         isShared: dto.isShared ?? false,
         comPort: dto.comPort,
         fiscalMachineSerial: dto.fiscalMachineSerial,
@@ -101,7 +102,6 @@ export class CashRegistersService {
       data: {
         name: dto.name,
         code: dto.code,
-        isFiscal: dto.isFiscal,
         isShared: dto.isShared,
         comPort: dto.comPort,
         fiscalMachineSerial: dto.fiscalMachineSerial,

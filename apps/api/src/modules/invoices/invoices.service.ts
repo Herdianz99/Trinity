@@ -78,7 +78,8 @@ export class InvoicesService {
         include: {
           customer: { select: { id: true, name: true, rif: true } },
           seller: { select: { id: true, code: true, name: true } },
-          cashRegister: { select: { id: true, code: true, name: true, isFiscal: true } },
+          cashRegister: { select: { id: true, code: true, name: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -151,6 +152,7 @@ export class InvoicesService {
       include: {
         customer: true,
         cashRegister: true,
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         items: true,
         payments: { include: { method: true, changeMethod: true } },
         receivables: true,
@@ -238,6 +240,17 @@ export class InvoicesService {
       }
     }
 
+    // Get serie from cash register
+    const serie = await this.prisma.serie.findUnique({
+      where: { cashRegisterId: cashRegisterId },
+    });
+    if (!serie) {
+      throw new BadRequestException('Esta caja no tiene serie configurada');
+    }
+    if (!serie.isActive) {
+      throw new BadRequestException('La serie de esta caja está desactivada');
+    }
+
     // Fetch products and calculate totals
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
@@ -258,7 +271,9 @@ export class InvoicesService {
 
       // priceDetal already includes IVA — extract base price
       const priceWithIva = item.unitPrice ?? product.priceDetal;
-      const ivaRate = IVA_RATES[product.ivaType] || 0;
+      // If serie is VAT exempt, force IVA to 0% regardless of product config
+      const effectiveIvaType = serie.isVatExempt ? 'EXEMPT' : product.ivaType;
+      const ivaRate = IVA_RATES[effectiveIvaType] || 0;
       const ivaMultiplier = 1 + ivaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
 
@@ -315,29 +330,29 @@ export class InvoicesService {
     // All invoices start as PENDING
     const status = 'PENDING';
 
-    // Generate invoice number with SELECT FOR UPDATE
+    // Generate invoice number with SELECT FOR UPDATE on Serie
     const invoice = await this.prisma.$transaction(async (tx) => {
-      // Lock the cash register row for correlative increment
-      const registers = await tx.$queryRaw<any[]>`
-        SELECT "lastInvoiceNumber", "code" FROM "CashRegister"
-        WHERE id = ${cashRegisterId} FOR UPDATE
+      // Lock the serie row for correlative increment
+      const series = await tx.$queryRaw<any[]>`
+        SELECT "id", "lastNumber", "prefix" FROM "Serie"
+        WHERE id = ${serie.id} FOR UPDATE
       `;
-      const reg = registers[0];
-      const nextNumber = reg.lastInvoiceNumber + 1;
+      const s = series[0];
+      const nextNumber = s.lastNumber + 1;
 
-      await tx.cashRegister.update({
-        where: { id: cashRegisterId },
-        data: { lastInvoiceNumber: nextNumber },
+      await tx.serie.update({
+        where: { id: serie.id },
+        data: { lastNumber: nextNumber },
       });
 
-      const prefix = config?.invoicePrefix || 'FAC';
       const year = new Date().getFullYear().toString().slice(-2);
       const correlativo = nextNumber.toString().padStart(8, '0');
-      const invoiceNumber = `${prefix}-${reg.code}-${year}-${correlativo}`;
+      const invoiceNumber = `${s.prefix}-${year}-${correlativo}`;
 
       return tx.invoice.create({
         data: {
           number: invoiceNumber,
+          serieId: serie.id,
           cashRegisterId,
           customerId,
           status,
@@ -358,6 +373,7 @@ export class InvoicesService {
           customer: true,
           seller: { select: { id: true, code: true, name: true } },
           cashRegister: { select: { id: true, code: true, name: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         },
       });
     });
@@ -372,7 +388,7 @@ export class InvoicesService {
   ) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: { items: true, customer: true, cashRegister: true },
+      include: { items: true, customer: true, cashRegister: true, serie: true },
     });
 
     if (!invoice) throw new NotFoundException('Factura no encontrada');
@@ -481,7 +497,7 @@ export class InvoicesService {
     // Solo aplica si la caja es fiscal
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;
-    const isCajaFiscal = invoice.cashRegister?.isFiscal || false;
+    const isCajaFiscal = invoice.serie?.isFiscal || false;
     let invoiceIgtfUsd = 0;
     let invoiceIgtfBs = 0;
 
@@ -729,7 +745,8 @@ export class InvoicesService {
           receivables: true,
           seller: { select: { id: true, code: true, name: true } },
           cashier: { select: { id: true, name: true } },
-          cashRegister: { select: { id: true, code: true, name: true, isFiscal: true } },
+          cashRegister: { select: { id: true, code: true, name: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         },
       });
 
@@ -829,6 +846,11 @@ export class InvoicesService {
     const config = await this.prisma.companyConfig.findFirst();
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
 
+    // Get serie for VAT exempt check
+    const invoiceSerie = await this.prisma.serie.findUnique({
+      where: { cashRegisterId: invoice.cashRegisterId },
+    });
+
     // Fetch products and calculate totals
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
@@ -848,7 +870,8 @@ export class InvoicesService {
 
       // priceDetal already includes IVA — extract base price
       const priceWithIva = item.unitPrice ?? product.priceDetal;
-      const ivaRate = IVA_RATES[product.ivaType] || 0;
+      const effectiveIvaType = invoiceSerie?.isVatExempt ? 'EXEMPT' : product.ivaType;
+      const ivaRate = IVA_RATES[effectiveIvaType] || 0;
       const ivaMultiplier = 1 + ivaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
 
@@ -874,14 +897,14 @@ export class InvoicesService {
       subtotalUsd += lineSubtotal;
       subtotalBsAccum += lineSubtotalBs;
       ivaBsAccum += lineIvaBs;
-      ivaBreakdown[product.ivaType] = (ivaBreakdown[product.ivaType] || 0) + ivaAmount;
+      ivaBreakdown[effectiveIvaType] = (ivaBreakdown[effectiveIvaType] || 0) + ivaAmount;
 
       itemsData.push({
         productId: product.id,
         productName: product.name,
         quantity: item.quantity,
         unitPrice: baseUnitPrice,
-        ivaType: product.ivaType,
+        ivaType: effectiveIvaType,
         ivaAmount,
         totalUsd: lineSubtotal + ivaAmount,
         unitPriceBs: Math.round(baseUnitPrice * rate.rate * 100) / 100,

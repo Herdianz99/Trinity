@@ -21,10 +21,10 @@ interface CashRegister {
   id: string;
   name: string;
   code: string;
-  isFiscal: boolean;
   isShared: boolean;
   isActive: boolean;
   sessions: CashRegisterSession[];
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   createdAt: string;
 }
 
@@ -40,7 +40,6 @@ export default function CashRegistersPage() {
   // Form state
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
-  const [formIsFiscal, setFormIsFiscal] = useState(false);
   const [formIsShared, setFormIsShared] = useState(false);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -69,7 +68,6 @@ export default function CashRegistersPage() {
     setEditingRegister(null);
     setFormName('');
     setFormCode('');
-    setFormIsFiscal(false);
     setFormIsShared(false);
     setFormError('');
     setModalOpen(true);
@@ -79,7 +77,6 @@ export default function CashRegistersPage() {
     setEditingRegister(register);
     setFormName(register.name);
     setFormCode(register.code);
-    setFormIsFiscal(register.isFiscal);
     setFormIsShared(register.isShared);
     setFormError('');
     setModalOpen(true);
@@ -91,7 +88,7 @@ export default function CashRegistersPage() {
     setSaving(true);
 
     try {
-      const body = { name: formName, code: formCode, isFiscal: formIsFiscal, isShared: formIsShared };
+      const body = { name: formName, code: formCode, isShared: formIsShared };
 
       const url = editingRegister
         ? `/api/proxy/cash-registers/${editingRegister.id}`
@@ -222,13 +219,22 @@ export default function CashRegistersPage() {
                         </button>
                       </td>
                       <td className="px-4 py-3">
-                        {register.isFiscal ? (
-                          <span className="bg-blue-500/15 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-xs">
-                            Fiscal
-                          </span>
+                        {register.serie ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-300">{register.serie.name}</span>
+                            {register.serie.isFiscal ? (
+                              <span className="bg-blue-500/15 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-xs">
+                                Fiscal
+                              </span>
+                            ) : (
+                              <span className="bg-slate-500/15 text-slate-400 border border-slate-500/30 px-2 py-0.5 rounded-full text-xs">
+                                Normal
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="bg-slate-500/15 text-slate-400 border border-slate-500/30 px-2 py-0.5 rounded-full text-xs">
-                            Normal
+                          <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs">
+                            Sin serie
                           </span>
                         )}
                       </td>
@@ -340,22 +346,6 @@ export default function CashRegistersPage() {
                 maxLength={2}
                 required
               />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-slate-300">Es fiscal:</label>
-              <button
-                type="button"
-                onClick={() => setFormIsFiscal(!formIsFiscal)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  formIsFiscal
-                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                    : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
-                }`}
-              >
-                {formIsFiscal ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                {formIsFiscal ? 'Si' : 'No'}
-              </button>
             </div>
 
             <div className="flex items-center gap-3">

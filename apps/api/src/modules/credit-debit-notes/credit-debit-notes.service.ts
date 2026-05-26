@@ -68,11 +68,10 @@ export class CreditDebitNotesService {
             select: {
               id: true, number: true,
               customer: { select: { id: true, name: true } },
-              cashRegister: { select: { isFiscal: true } },
             },
           },
           purchaseOrder: { select: { id: true, number: true, supplier: { select: { id: true, name: true } } } },
-          cashRegister: { select: { isFiscal: true } },
+          serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         },
       }),
       this.prisma.creditDebitNote.count({ where }),
@@ -90,12 +89,13 @@ export class CreditDebitNotesService {
             id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true, createdAt: true,
             totalUsd: true, totalBs: true, exchangeRate: true, igtfUsd: true,
             customer: { select: { id: true, name: true, rif: true, documentType: true, address: true, phone: true } },
-            cashRegister: { select: { id: true, code: true, name: true, isFiscal: true, comPort: true } },
+            cashRegister: { select: { id: true, code: true, name: true, comPort: true } },
             payments: { select: { amountUsd: true, amountBs: true, method: { select: { fiscalCode: true } } } },
           },
         },
+        serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
         cashRegister: {
-          select: { id: true, code: true, name: true, isFiscal: true, comPort: true },
+          select: { id: true, code: true, name: true, comPort: true },
         },
         purchaseOrder: {
           select: {
@@ -374,19 +374,68 @@ export class CreditDebitNotesService {
       }
     }
 
-    // Generate sequential number
-    const prefix = dto.type; // NCV, NDV, NCC, NDC
-    const lastNote = await this.prisma.creditDebitNote.findFirst({
-      where: { type: dto.type as any },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    let seq = 1;
-    if (lastNote) {
-      const parts = lastNote.number.split('-');
-      seq = parseInt(parts[1] || '0', 10) + 1;
+    // Inherit serie from parent document (invoice or purchase order)
+    let serieId: string | null = null;
+    if (dto.invoiceId) {
+      const parentInvoice = await this.prisma.invoice.findUnique({
+        where: { id: dto.invoiceId },
+        select: { serieId: true },
+      });
+      serieId = parentInvoice?.serieId || null;
     }
-    const number = `${prefix}-${String(seq).padStart(4, '0')}`;
+
+    // Generate number using serie if available, otherwise fallback to sequential
+    let number: string;
+    if (serieId) {
+      const serie = await this.prisma.serie.findUnique({ where: { id: serieId } });
+      if (serie) {
+        // Use transaction with SELECT FOR UPDATE to increment serie correlative
+        const result = await this.prisma.$transaction(async (tx) => {
+          const series = await tx.$queryRaw<any[]>`
+            SELECT "id", "lastNumber", "prefix" FROM "Serie"
+            WHERE id = ${serieId} FOR UPDATE
+          `;
+          const s = series[0];
+          const nextNumber = s.lastNumber + 1;
+          await tx.serie.update({
+            where: { id: serieId! },
+            data: { lastNumber: nextNumber },
+          });
+          const year = new Date().getFullYear().toString().slice(-2);
+          const correlativo = nextNumber.toString().padStart(8, '0');
+          return `${s.prefix}-${year}-${correlativo}`;
+        });
+        number = result;
+      } else {
+        // Fallback
+        const prefix = dto.type;
+        const lastNote = await this.prisma.creditDebitNote.findFirst({
+          where: { type: dto.type as any },
+          orderBy: { number: 'desc' },
+          select: { number: true },
+        });
+        let seq = 1;
+        if (lastNote) {
+          const parts = lastNote.number.split('-');
+          seq = parseInt(parts[parts.length - 1] || '0', 10) + 1;
+        }
+        number = `${prefix}-${String(seq).padStart(4, '0')}`;
+      }
+    } else {
+      // No serie (purchase notes) — use type-based sequential numbering
+      const prefix = dto.type;
+      const lastNote = await this.prisma.creditDebitNote.findFirst({
+        where: { type: dto.type as any },
+        orderBy: { number: 'desc' },
+        select: { number: true },
+      });
+      let seq = 1;
+      if (lastNote) {
+        const parts = lastNote.number.split('-');
+        seq = parseInt(parts[parts.length - 1] || '0', 10) + 1;
+      }
+      number = `${prefix}-${String(seq).padStart(4, '0')}`;
+    }
 
     const note = await this.prisma.creditDebitNote.create({
       data: {
@@ -395,6 +444,7 @@ export class CreditDebitNotesService {
         origin: dto.origin as any,
         status: 'DRAFT',
         invoiceId: dto.invoiceId || null,
+        serieId,
         purchaseOrderId: dto.purchaseOrderId || null,
         cashRegisterId: dto.cashRegisterId || null,
         subtotalUsd: this.round2(subtotalUsd),
@@ -412,7 +462,7 @@ export class CreditDebitNotesService {
         createdById: userId,
         items: noteItems.length > 0 ? { create: noteItems } : undefined,
       },
-      include: { items: true },
+      include: { items: true, serie: { select: { id: true, name: true, prefix: true, isFiscal: true } } },
     });
 
     return note;

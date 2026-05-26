@@ -673,24 +673,44 @@ model PaymentMethod {
 }
 
 // ============================================
+// SERIES (configuración de documentos fiscales)
+// ============================================
+
+model Serie {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  prefix          String
+  isFiscal        Boolean           @default(false)
+  isVatExempt     Boolean           @default(false)
+  lastNumber      Int               @default(0)
+  isActive        Boolean           @default(true)
+  cashRegisterId  String?           @unique
+  cashRegister    CashRegister?     @relation(fields: [cashRegisterId], references: [id])
+  invoices        Invoice[]
+  creditDebitNotes CreditDebitNote[]
+  retentionVouchers RetentionVoucher[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+// ============================================
 // CAJAS
 // ============================================
 
 model CashRegister {
-  id                String        @id @default(cuid())
-  code              String        @unique
-  name              String
-  isFiscal          Boolean       @default(false)
-  isShared          Boolean       @default(false)
-  isActive          Boolean          @default(true)
-  lastInvoiceNumber Int              @default(0)
+  id                   String        @id @default(cuid())
+  code                 String        @unique
+  name                 String
+  isShared             Boolean       @default(false)
+  isActive             Boolean       @default(true)
   comPort              String?
   fiscalMachineSerial  String?
+  serie                Serie?
   sessions             CashSession[]
-  invoices          Invoice[]
-  creditDebitNotes  CreditDebitNote[]
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  invoices             Invoice[]
+  creditDebitNotes     CreditDebitNote[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 }
 
 model CashSession {
@@ -743,6 +763,8 @@ model Invoice {
   controlNumber       String?
   fiscalMachineSerial String?
   fiscalPrinted       Boolean       @default(false)
+  serieId             String?
+  serie               Serie?        @relation(fields: [serieId], references: [id])
   cashRegisterId      String
   cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
   customerId     String?
@@ -1092,6 +1114,8 @@ model CreditDebitNote {
   status          NoteStatus          @default(DRAFT)
   invoiceId       String?
   invoice         Invoice?            @relation(fields: [invoiceId], references: [id])
+  serieId         String?
+  serie           Serie?              @relation(fields: [serieId], references: [id])
   cashRegisterId  String?
   cashRegister    CashRegister?       @relation(fields: [cashRegisterId], references: [id])
   fiscalNumber    String?
@@ -1255,6 +1279,8 @@ model RetentionVoucher {
   number              String              @unique
   purchaseOrderId     String              @unique
   purchaseOrder       PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
+  serieId             String?
+  serie               Serie?              @relation(fields: [serieId], references: [id])
   status              RetentionStatus     @default(PENDING)
   issueDate           DateTime?
   retentionAmountUsd  Float               @default(0)
