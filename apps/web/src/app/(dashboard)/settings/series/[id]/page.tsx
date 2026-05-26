@@ -241,34 +241,6 @@ export default function SerieDetailPage() {
               </label>
             </div>
 
-            {form.isFiscal && (
-              <div className="space-y-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracion de maquina fiscal</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Puerto COM</label>
-                    <input
-                      type="text"
-                      value={form.comPort}
-                      onChange={(e) => setForm((f) => ({ ...f, comPort: e.target.value }))}
-                      placeholder="Ej: COM3"
-                      className="input-field !py-2 text-sm font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Serial de maquina fiscal</label>
-                    <input
-                      type="text"
-                      value={form.fiscalMachineSerial}
-                      onChange={(e) => setForm((f) => ({ ...f, fiscalMachineSerial: e.target.value }))}
-                      placeholder="Ej: ABC12345678"
-                      className="input-field !py-2 text-sm font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
               <button
                 type="button"
@@ -295,16 +267,42 @@ export default function SerieDetailPage() {
         {serie.isFiscal && (
         <TabsContent value="fiscal">
           <div className="card p-6 space-y-6">
-                {/* Fiscal config from serie */}
-                <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30 space-y-2">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracion de la serie</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                    <span className="text-slate-400">Serie:</span>
-                    <span className="text-white">{serie.name}</span>
-                    <span className="text-slate-400">Puerto COM:</span>
-                    <span className="text-white font-mono">{serie.comPort || <span className="text-amber-400">No configurado</span>}</span>
-                    <span className="text-slate-400">Serial maquina:</span>
-                    <span className="text-white font-mono">{serie.fiscalMachineSerial || <span className="text-slate-500">No detectado</span>}</span>
+                {/* Configuracion de maquina fiscal */}
+                <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30 space-y-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configuracion de maquina fiscal</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Puerto COM</label>
+                      <input
+                        type="text"
+                        value={form.comPort}
+                        onChange={(e) => setForm((f) => ({ ...f, comPort: e.target.value }))}
+                        placeholder="Ej: COM3"
+                        className="input-field !py-2 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Serial de maquina fiscal</label>
+                      <input
+                        type="text"
+                        value={form.fiscalMachineSerial}
+                        onChange={(e) => setForm((f) => ({ ...f, fiscalMachineSerial: e.target.value }))}
+                        placeholder="Ej: ABC12345678"
+                        className="input-field !py-2 text-sm font-mono"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Se detecta automaticamente al comprobar la impresora</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSave()}
+                      className="btn-primary !py-2 text-sm flex items-center gap-2"
+                    >
+                      {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                      Guardar
+                    </button>
                   </div>
                 </div>
 
