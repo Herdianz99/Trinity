@@ -221,24 +221,36 @@ export default function SerieDetailPage() {
             </div>
 
             <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isFiscal}
-                  onChange={(e) => setForm((f) => ({ ...f, isFiscal: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-indigo-500 focus:ring-indigo-500"
-                />
-                <span className="text-sm text-slate-300">Fiscal</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isVatExempt}
-                  onChange={(e) => setForm((f) => ({ ...f, isVatExempt: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-indigo-500 focus:ring-indigo-500"
-                />
-                <span className="text-sm text-slate-300">Exenta de IVA</span>
-              </label>
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-slate-300">Fiscal:</label>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, isFiscal: !f.isFiscal }))}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    form.isFiscal
+                      ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                      : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                  }`}
+                >
+                  {form.isFiscal ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                  {form.isFiscal ? 'Si' : 'No'}
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-slate-300">Exenta de IVA:</label>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, isVatExempt: !f.isVatExempt }))}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    form.isVatExempt
+                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                      : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                  }`}
+                >
+                  {form.isVatExempt ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                  {form.isVatExempt ? 'Si' : 'No'}
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
