@@ -205,69 +205,97 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   const payments: any[] = invoice.payments || [];
   const customer = invoice.customer;
   const seller = invoice.seller;
+  const cashier = invoice.cashier;
+  const cashRegister = invoice.cashRegister;
   const exchangeRate = invoice.exchangeRate || 0;
   const isCredit = invoice.isCredit || false;
   const igtfUsd = invoice.igtfUsd || 0;
 
   let subtotalUsd = 0;
+  const ivaGroups: Record<string, number> = {};
   for (const item of items) {
-    subtotalUsd += item.quantity * item.unitPrice;
+    const lineTotal = item.quantity * item.unitPrice;
+    subtotalUsd += lineTotal;
+    const ivaType = item.ivaType || 'GENERAL';
+    const rate = IVA_RATES[ivaType] || 0;
+    if (rate > 0) {
+      ivaGroups[ivaType] = (ivaGroups[ivaType] || 0) + lineTotal * rate;
+    }
   }
-  const totalIva = Object.entries(IVA_RATES).reduce((sum, [type, rate]) => {
-    const groupTotal = items
-      .filter((i: any) => (i.ivaType || 'GENERAL') === type)
-      .reduce((s: number, i: any) => s + i.quantity * i.unitPrice * rate, 0);
-    return sum + groupTotal;
-  }, 0);
+  const totalIva = Object.values(ivaGroups).reduce((s, v) => s + v, 0);
   const totalUsd = invoice.totalUsd ?? subtotalUsd + totalIva + igtfUsd;
   const totalBs = invoice.totalBs ?? totalUsd * exchangeRate;
 
   const w = 42;
-  const sep = '-'.repeat(w);
   const lines: string[] = [];
 
-  const center = (s: string) => s.substring(0, w).padStart(Math.floor((w + s.length) / 2));
+  const pad = (label: string, value: string) => {
+    const space = Math.max(1, w - label.length - value.length);
+    return `${label}${' '.repeat(space)}${value}`;
+  };
 
-  lines.push(center(company.companyName || 'EMPRESA'));
-  if (company.rif) lines.push(center(`RIF: ${company.rif}`));
-  if (company.address) lines.push(center(company.address));
-  if (company.phone) lines.push(center(`Telf: ${company.phone}`));
-  lines.push(sep);
-  lines.push(center(`FACTURA: ${invoice.number || 'S/N'}`));
-  lines.push(center(fmtDate(invoice.paidAt || invoice.createdAt)));
-  lines.push(sep);
+  // Header
+  lines.push(`{{CENTER}}{{BIG}}${company.companyName || 'EMPRESA'}{{/BIG}}{{/CENTER}}`);
+  if (company.rif) lines.push(`{{CENTER}}RIF: ${company.rif}{{/CENTER}}`);
+  if (company.address) lines.push(`{{CENTER}}${company.address}{{/CENTER}}`);
+  if (company.phone) lines.push(`{{CENTER}}Telf: ${company.phone}{{/CENTER}}`);
+  lines.push('{{LINE}}');
 
+  // Invoice info
+  lines.push(`{{CENTER}}{{BOLD}}FACTURA: ${invoice.number || 'S/N'}{{/BOLD}}{{/CENTER}}`);
+  lines.push(`{{CENTER}}${fmtDate(invoice.paidAt || invoice.createdAt)}{{/CENTER}}`);
+  if (cashRegister) lines.push(`{{CENTER}}Caja: ${cashRegister.name || cashRegister.code}{{/CENTER}}`);
+  lines.push('{{LINE}}');
+
+  // Seller / Cashier / Customer
   if (seller) lines.push(`Vendedor: ${seller.name}`);
+  if (cashier) lines.push(`Cajero: ${cashier.name}`);
   if (customer) {
     lines.push(`Cliente: ${customer.name}`);
     if (customer.rif) lines.push(`RIF: ${customer.documentType ? customer.documentType + '-' : ''}${customer.rif}`);
   } else {
     lines.push('Cliente: Consumidor Final');
   }
-  lines.push(sep);
+  lines.push('{{LINE}}');
 
+  // Items header
+  lines.push(`{{BOLD}}${pad('ARTICULO', 'TOTAL')}{{/BOLD}}`);
+
+  // Items
   for (const item of items) {
     const ivaType = item.ivaType || 'GENERAL';
     const rate = IVA_RATES[ivaType] || 0;
     const unitPriceWithIva = item.unitPrice * (1 + rate);
     const lineTotal = item.quantity * unitPriceWithIva;
-    lines.push(item.productName || item.name || 'Producto');
+    const name = item.productName || item.name || 'Producto';
+    lines.push(`{{BOLD}}${name}{{/BOLD}}`);
     lines.push(`  ${item.quantity} x ${fmt(unitPriceWithIva)}${' '.repeat(Math.max(1, w - 4 - String(item.quantity).length - fmt(unitPriceWithIva).length - fmt(lineTotal).length - 3))}${fmt(lineTotal)}`);
   }
-  lines.push(sep);
+  lines.push('{{LINE}}');
 
-  lines.push(`TOTAL USD:${' '.repeat(w - 10 - fmt(totalUsd).length)}${fmt(totalUsd)}`);
-  lines.push(`TOTAL Bs: ${' '.repeat(w - 10 - fmt(totalBs).length)}${fmt(totalBs)}`);
-  if (exchangeRate > 0) lines.push(center(`Tasa: ${fmt(exchangeRate)} Bs/USD`));
-  lines.push(sep);
+  // Subtotal / IVA / IGTF / Totals
+  lines.push(pad('Subtotal:', `$${fmt(subtotalUsd)}`));
+  for (const [type, amount] of Object.entries(ivaGroups)) {
+    if (amount > 0) {
+      lines.push(pad(`${IVA_LABELS[type] || type}:`, `$${fmt(amount)}`));
+    }
+  }
+  if (igtfUsd > 0) {
+    lines.push(pad('IGTF:', `$${fmt(igtfUsd)}`));
+  }
+  lines.push(`{{BOLD}}${pad('TOTAL USD:', `$${fmt(totalUsd)}`)}{{/BOLD}}`);
+  lines.push(`{{BOLD}}${pad('TOTAL Bs:', `Bs ${fmt(totalBs)}`)}{{/BOLD}}`);
+  if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmt(exchangeRate)} Bs/USD{{/CENTER}}`);
+  lines.push('{{LINE}}');
 
+  // Payments
   if (payments.length > 0) {
-    lines.push('Forma de pago:');
+    lines.push('{{BOLD}}Forma de pago:{{/BOLD}}');
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
       const isBs = !(p.method?.isDivisa ?? true);
-      const amount = isBs ? `${fmt(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
-      lines.push(`  ${label}: ${amount}`);
+      const amount = isBs ? `${fmt(p.amountBs)} Bs` : `$${fmt(p.amountUsd)}`;
+      lines.push(pad(`  ${label}:`, amount));
       if (p.reference) lines.push(`    Ref: ${p.reference}`);
     }
   }
@@ -276,22 +304,25 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   if (invoice.changeBs > 0) {
     const changeUsd = exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0;
     const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
-    lines.push(sep);
-    const vueltoBs = fmt(invoice.changeBs);
-    lines.push(`Vuelto:${' '.repeat(w - 7 - vueltoBs.length - 3)}${vueltoBs} Bs`);
-    lines.push(`  ${fmt(changeUsd)} USD x ${fmt(exchangeRate)} = ${vueltoBs} Bs`);
-    lines.push(`  Metodo: ${changeMethodName}`);
+    lines.push('{{LINE}}');
+    lines.push(pad('Total recibido USD:', `$${fmt(totalUsd + changeUsd)}`));
+    lines.push(`{{BOLD}}${pad('Vuelto:', `Bs ${fmt(invoice.changeBs)}`)}{{/BOLD}}`);
+    lines.push(pad('Metodo vuelto:', changeMethodName));
   }
 
+  // Credit badge
   if (isCredit) {
-    lines.push(sep);
-    lines.push(center('*** VENTA A CREDITO ***'));
-    if (invoice.creditDays) lines.push(center(`Plazo: ${invoice.creditDays} dias`));
+    lines.push('{{LINE}}');
+    lines.push('{{CENTER}}{{BIG}}*** CREDITO ***{{/BIG}}{{/CENTER}}');
+    if (invoice.creditDays) lines.push(`{{CENTER}}Plazo: ${invoice.creditDays} dias{{/CENTER}}`);
+    if (invoice.dueDate) lines.push(`{{CENTER}}Vence: ${fmtDate(invoice.dueDate)}{{/CENTER}}`);
   }
 
-  lines.push(sep);
-  lines.push(center('Gracias por su compra'));
-  lines.push(center('*** No constituye factura fiscal ***'));
+  lines.push('{{LINE}}');
+  lines.push('{{CENTER}}No constituye factura fiscal{{/CENTER}}');
+  lines.push('{{CENTER}}Gracias por su compra!{{/CENTER}}');
+  lines.push('{{FEED:3}}');
+  lines.push('{{CUT}}');
 
   return lines.join('\n');
 }
