@@ -11,12 +11,6 @@ import {
   Loader2,
 } from 'lucide-react';
 
-interface CashRegister {
-  id: string;
-  code: string;
-  name: string;
-}
-
 interface Serie {
   id: string;
   name: string;
@@ -27,13 +21,11 @@ interface Serie {
   isActive: boolean;
   comPort: string | null;
   fiscalMachineSerial: string | null;
-  cashRegister: CashRegister | null;
   createdAt: string;
 }
 
 export default function SeriesPage() {
   const [series, setSeries] = useState<Serie[]>([]);
-  const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal state
@@ -45,7 +37,6 @@ export default function SeriesPage() {
   const [formPrefix, setFormPrefix] = useState('');
   const [formIsFiscal, setFormIsFiscal] = useState(false);
   const [formIsVatExempt, setFormIsVatExempt] = useState(false);
-  const [formCashRegisterId, setFormCashRegisterId] = useState('');
   const [formComPort, setFormComPort] = useState('');
   const [formFiscalSerial, setFormFiscalSerial] = useState('');
   const [formError, setFormError] = useState('');
@@ -57,15 +48,8 @@ export default function SeriesPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [seriesRes, registersRes] = await Promise.all([
-        fetch('/api/proxy/series'),
-        fetch('/api/proxy/cash-registers'),
-      ]);
-      if (seriesRes.ok) setSeries(await seriesRes.json());
-      if (registersRes.ok) {
-        const regs = await registersRes.json();
-        setRegisters(regs.map((r: any) => ({ id: r.id, code: r.code, name: r.name })));
-      }
+      const res = await fetch('/api/proxy/series');
+      if (res.ok) setSeries(await res.json());
     } catch {
       // ignore
     } finally {
@@ -83,7 +67,6 @@ export default function SeriesPage() {
     setFormPrefix('');
     setFormIsFiscal(false);
     setFormIsVatExempt(false);
-    setFormCashRegisterId('');
     setFormComPort('');
     setFormFiscalSerial('');
     setFormError('');
@@ -96,7 +79,6 @@ export default function SeriesPage() {
     setFormPrefix(serie.prefix);
     setFormIsFiscal(serie.isFiscal);
     setFormIsVatExempt(serie.isVatExempt);
-    setFormCashRegisterId(serie.cashRegister?.id || '');
     setFormComPort(serie.comPort || '');
     setFormFiscalSerial(serie.fiscalMachineSerial || '');
     setFormError('');
@@ -118,7 +100,6 @@ export default function SeriesPage() {
         prefix: formPrefix.trim().toUpperCase(),
         isFiscal: formIsFiscal,
         isVatExempt: formIsVatExempt,
-        cashRegisterId: formCashRegisterId || null,
       };
       if (formIsFiscal) {
         body.comPort = formComPort.trim() || null;
@@ -162,13 +143,6 @@ export default function SeriesPage() {
     }
   };
 
-  // Cash registers already linked to another serie (exclude current editing)
-  const linkedRegisterIds = series
-    .filter((s) => s.cashRegister && (!editingSerie || s.id !== editingSerie.id))
-    .map((s) => s.cashRegister!.id);
-
-  const availableRegisters = registers.filter((r) => !linkedRegisterIds.includes(r.id));
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -201,7 +175,6 @@ export default function SeriesPage() {
               <th className="text-left px-4 py-3 font-medium">Prefijo</th>
               <th className="text-center px-4 py-3 font-medium">Fiscal</th>
               <th className="text-center px-4 py-3 font-medium">Exenta IVA</th>
-              <th className="text-left px-4 py-3 font-medium">Caja vinculada</th>
               <th className="text-right px-4 py-3 font-medium">Ultimo No.</th>
               <th className="text-center px-4 py-3 font-medium">Estado</th>
               <th className="text-center px-4 py-3 font-medium">Acciones</th>
@@ -239,11 +212,6 @@ export default function SeriesPage() {
                     <span className="text-slate-500 text-xs">-</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-slate-300">
-                  {serie.cashRegister
-                    ? `${serie.cashRegister.name} (${serie.cashRegister.code})`
-                    : <span className="text-slate-500">Sin vincular</span>}
-                </td>
                 <td className="px-4 py-3 text-right text-slate-300 font-mono">
                   {serie.lastNumber}
                 </td>
@@ -280,7 +248,7 @@ export default function SeriesPage() {
             ))}
             {series.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-slate-500">
+                <td colSpan={7} className="text-center py-8 text-slate-500">
                   No hay series configuradas
                 </td>
               </tr>
@@ -335,22 +303,6 @@ export default function SeriesPage() {
                 <p className="text-xs text-slate-500 mt-1">
                   Formato de numero: {formPrefix || 'XXX'}-26-00000001
                 </p>
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Caja vinculada</label>
-                <select
-                  value={formCashRegisterId}
-                  onChange={(e) => setFormCashRegisterId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="">Sin vincular</option>
-                  {availableRegisters.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({r.code})
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="flex items-center gap-6">
