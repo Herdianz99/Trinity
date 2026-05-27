@@ -186,6 +186,7 @@ export class PurchaseOrdersService {
     supplier: true,
     responsible: { select: { id: true, name: true } },
     warehouse: { select: { id: true, name: true } },
+    serie: { select: { id: true, name: true, prefix: true, isFiscal: true } },
     items: {
       include: {
         product: {
@@ -305,6 +306,7 @@ export class PurchaseOrdersService {
           exchangeRate: rate,
           warehouseId: dto.warehouseId || null,
           isFiscal: dto.isFiscal !== undefined ? dto.isFiscal : true,
+          serieId: dto.serieId || null,
           isCredit: dto.isCredit || false,
           creditDays: dto.creditDays || 0,
           discountGlobalPct,
@@ -412,6 +414,7 @@ export class PurchaseOrdersService {
     if (dto.supplierSerialNumber !== undefined) updateData.supplierSerialNumber = dto.supplierSerialNumber || null;
     if (dto.supplierInvoiceNumber !== undefined) updateData.supplierInvoiceNumber = dto.supplierInvoiceNumber || null;
     if (dto.isFiscal !== undefined) updateData.isFiscal = dto.isFiscal;
+    if (dto.serieId !== undefined) updateData.serieId = dto.serieId || null;
     if (dto.isCredit !== undefined) updateData.isCredit = dto.isCredit;
     if (dto.creditDays !== undefined) updateData.creditDays = dto.creditDays;
     if (dto.invoiceDate !== undefined) updateData.invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : null;
@@ -726,7 +729,7 @@ export class PurchaseOrdersService {
       }
 
       // Create RetentionVoucher if supplier is retention agent
-      if (order.supplier.isRetentionAgent && order.isFiscal && order.totalIvaUsd > 0) {
+      if (order.supplier.isRetentionAgent && order.serie?.isFiscal && order.totalIvaUsd > 0) {
         const exchangeRate = order.exchangeRate;
         const ivaRetPct = config?.ivaRetentionPct || 75;
         const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
@@ -743,6 +746,7 @@ export class PurchaseOrdersService {
           data: {
             number: retNumber,
             purchaseOrderId: order.id,
+            serieId: order.serieId,
             status: 'PENDING',
             retentionAmountUsd: retUsd,
             retentionAmountBs: retBs,
@@ -759,7 +763,7 @@ export class PurchaseOrdersService {
       }
 
       // Create PurchaseBookEntry automatically (invoice line — without retention, retention comes separately when issued)
-      if (order.isFiscal) {
+      if (order.serie?.isFiscal) {
         await tx.purchaseBookEntry.create({
           data: {
             purchaseOrderId: order.id,

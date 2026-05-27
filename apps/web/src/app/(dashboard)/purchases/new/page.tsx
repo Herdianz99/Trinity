@@ -129,6 +129,7 @@ export default function NewPurchaseBillPage() {
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean }[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -145,6 +146,7 @@ export default function NewPurchaseBillPage() {
   const [supplierControlNumber, setSupplierControlNumber] = useState('');
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
   const [isFiscal, setIsFiscal] = useState(true);
+  const [serieId, setSerieId] = useState('');
   const [isCredit, setIsCredit] = useState(false);
   const [creditDays, setCreditDays] = useState<number>(30);
 
@@ -186,11 +188,12 @@ export default function NewPurchaseBillPage() {
   const loadBootstrap = useCallback(async () => {
     setLoading(true);
     try {
-      const [supRes, whRes, rateRes, profileRes] = await Promise.all([
+      const [supRes, whRes, rateRes, profileRes, seriesRes] = await Promise.all([
         fetch('/api/proxy/suppliers?isActive=true'),
         fetch('/api/proxy/warehouses?isActive=true'),
         fetch('/api/proxy/exchange-rate/today'),
         fetch('/api/auth/me'),
+        fetch('/api/proxy/series'),
       ]);
 
       if (supRes.ok) {
@@ -218,6 +221,17 @@ export default function NewPurchaseBillPage() {
       if (profileRes.ok) {
         const data = await profileRes.json();
         setUser(data);
+      }
+
+      if (seriesRes.ok) {
+        const data = await seriesRes.json();
+        const list = Array.isArray(data) ? data : data.data || [];
+        setSeries(list.filter((s: any) => s.isActive));
+        const fiscal = list.find((s: any) => s.isFiscal && s.isActive);
+        if (fiscal) {
+          setSerieId(fiscal.id);
+          setIsFiscal(true);
+        }
       }
     } catch { /* ignore */ } finally {
       setLoading(false);
@@ -462,6 +476,7 @@ export default function NewPurchaseBillPage() {
       exchangeRate: Number(exchangeRate),
       warehouseId,
       isFiscal,
+      serieId: serieId || undefined,
       isCredit,
       creditDays: isCredit ? Number(creditDays) : 0,
       discountGlobalPct: Number(discountGlobalPct),
@@ -933,20 +948,25 @@ export default function NewPurchaseBillPage() {
             </div>
             <div>
               <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Fiscal
+                Serie
               </label>
-              <div className="flex items-center gap-2 h-[30px]">
-                <button
-                  type="button"
-                  onClick={() => setIsFiscal(!isFiscal)}
-                  className="flex items-center gap-2 select-none"
-                >
-                  <div className={`relative w-9 h-5 rounded-full transition-colors ${isFiscal ? 'bg-green-600' : 'bg-slate-600'}`}>
-                    <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform absolute top-0.5 ${isFiscal ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                  </div>
-                  <span className="text-sm text-slate-300">{isFiscal ? 'Si' : 'No'}</span>
-                </button>
-              </div>
+              <select
+                value={serieId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSerieId(id);
+                  const s = series.find((x) => x.id === id);
+                  setIsFiscal(s?.isFiscal ?? false);
+                }}
+                className="input-field !py-1 text-sm"
+              >
+                <option value="">Sin serie</option>
+                {series.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.isFiscal ? '(Fiscal)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

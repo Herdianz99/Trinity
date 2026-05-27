@@ -76,6 +76,7 @@ interface PurchaseBill {
   currency: string;
   exchangeRate: number;
   isFiscal: boolean;
+  serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
   isCredit: boolean;
   creditDays: number;
   supplierSerialNumber: string | null;
@@ -751,8 +752,19 @@ export default function PurchaseBillDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase mb-1">Fiscal</p>
-                  <p className="text-white">{bill.isFiscal ? 'Si' : 'No'}</p>
+                  <p className="text-xs text-slate-500 uppercase mb-1">Serie</p>
+                  {bill.serie ? (
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-white">{bill.serie.name}</p>
+                      {bill.serie.isFiscal ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">Fiscal</span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">No Fiscal</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400">Sin serie</p>
+                  )}
                 </div>
               </div>
             </div>

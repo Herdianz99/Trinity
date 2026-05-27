@@ -562,6 +562,8 @@ model PurchaseOrder {
   surchargeDistribution  String              @default("PROPORTIONAL")
   totalWithSurchargeUsd  Float               @default(0)
   isFiscal               Boolean             @default(true)
+  serieId                String?
+  serie                  Serie?              @relation(fields: [serieId], references: [id])
   isCredit               Boolean             @default(false)
   creditDays             Int                 @default(0)
   supplierControlNumber  String?
@@ -690,6 +692,7 @@ model Serie {
   cashRegisterId      String?           @unique
   cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
   invoices            Invoice[]
+  purchaseOrders      PurchaseOrder[]
   creditDebitNotes    CreditDebitNote[]
   retentionVouchers   RetentionVoucher[]
   createdAt           DateTime          @default(now())

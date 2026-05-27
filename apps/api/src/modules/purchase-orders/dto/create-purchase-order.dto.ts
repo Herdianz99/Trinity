@@ -62,6 +62,10 @@ export class CreatePurchaseOrderDto {
   isFiscal?: boolean;
 
   @IsOptional()
+  @IsString()
+  serieId?: string;
+
+  @IsOptional()
   @IsBoolean()
   isCredit?: boolean;
 
