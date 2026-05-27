@@ -95,6 +95,11 @@ enum PermissionKey {
   MANAGE_EXPENSES
 }
 
+enum SerieType {
+  SALES
+  PURCHASES
+}
+
 enum SessionStatus {
   OPEN
   CLOSED
@@ -683,6 +688,7 @@ model Serie {
   id                  String            @id @default(cuid())
   name                String            @unique
   prefix              String
+  type                SerieType         @default(SALES)
   isFiscal            Boolean           @default(false)
   isVatExempt         Boolean           @default(false)
   lastNumber          Int               @default(0)
@@ -762,7 +768,7 @@ model CashMovement {
 
 model Invoice {
   id             String        @id @default(cuid())
-  number         String        @unique
+  number         String?       @unique
   fiscalNumber        String?
   controlNumber       String?
   fiscalMachineSerial String?
@@ -882,6 +888,8 @@ model ReceivablePayment {
   id            String        @id @default(cuid())
   receivableId  String
   receivable    Receivable    @relation(fields: [receivableId], references: [id])
+  receiptId     String?
+  receipt       Receipt?      @relation(fields: [receiptId], references: [id])
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
@@ -928,6 +936,8 @@ model PayablePayment {
   id           String        @id @default(cuid())
   payableId    String
   payable      Payable       @relation(fields: [payableId], references: [id])
+  receiptId    String?
+  receipt      Receipt?      @relation(fields: [receiptId], references: [id])
   amountUsd    Float
   amountBs     Float
   exchangeRate Float
@@ -958,13 +968,15 @@ model Receipt {
   exchangeRate    Float           @default(0)
   differentialBs  Float           @default(0)
   hasDifferential Boolean         @default(false)
-  notes           String?
-  items           ReceiptItem[]
-  payments        ReceiptPayment[]
-  cashSessionId   String?
-  createdById     String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  notes               String?
+  items               ReceiptItem[]
+  payments            ReceiptPayment[]
+  receivablePayments  ReceivablePayment[]
+  payablePayments     PayablePayment[]
+  cashSessionId       String?
+  createdById         String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }
 
 model ReceiptItem {

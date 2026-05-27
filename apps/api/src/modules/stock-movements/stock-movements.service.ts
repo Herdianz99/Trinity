@@ -82,38 +82,44 @@ export class StockMovementsService {
       where: { productId },
     });
 
-    // To compute the running balance for the current page, we need
-    // the sum of all quantities BEFORE the current page's first row.
-    // All movements ordered by createdAt ASC.
-    let balanceBefore = 0;
+    // Total balance = sum of ALL movements for this product
+    const totalAgg = await this.prisma.stockMovement.aggregate({
+      where: { productId },
+      _sum: { quantity: true },
+    });
+    const totalBalance = totalAgg._sum.quantity || 0;
+
+    // Sum of skipped (more recent) movements for pagination
+    let sumOfSkipped = 0;
     if (skip > 0) {
-      const preceding = await this.prisma.stockMovement.findMany({
+      const skipped = await this.prisma.stockMovement.findMany({
         where: { productId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: skip,
         select: { quantity: true },
       });
-      balanceBefore = preceding.reduce((sum, m) => sum + m.quantity, 0);
+      sumOfSkipped = skipped.reduce((sum, m) => sum + m.quantity, 0);
     }
 
-    // Fetch the page's movements
+    // Fetch the page's movements (newest first)
     const movements = await this.prisma.stockMovement.findMany({
       where: { productId },
       include: {
         warehouse: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
     });
 
-    // Compute running balance for each row
-    let runningBalance = balanceBefore;
+    // Compute running balance for each row (descending order)
+    let runningBalance = totalBalance - sumOfSkipped;
     const data = movements.map((m) => {
-      runningBalance += m.quantity;
+      const stockAfter = runningBalance;
+      runningBalance -= m.quantity;
       return {
         ...m,
-        stockAfter: runningBalance,
+        stockAfter,
       };
     });
 
@@ -132,7 +138,7 @@ export class StockMovementsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-        balanceBefore,
+        balanceBefore: totalBalance - sumOfSkipped,
         totalEntries,
         totalExits,
       },

@@ -323,7 +323,7 @@ export default function CustomerDetailPage() {
                       <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin facturas registradas</td></tr>
                     ) : invoices.map((inv: any) => (
                       <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
-                        <td className="px-4 py-3 font-mono text-green-400">{inv.number}</td>
+                        <td className="px-4 py-3 font-mono text-green-400">{inv.number || 'Sin numero'}</td>
                         <td className="px-4 py-3 text-slate-300">{fmtDate(inv.createdAt)}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${inv.totalUsd?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-300 hidden md:table-cell">{inv.totalBs ? `Bs ${inv.totalBs.toFixed(2)}` : '—'}</td>
@@ -393,7 +393,7 @@ export default function CustomerDetailPage() {
                       <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin cuentas pendientes</td></tr>
                     ) : pagedCxc.map(r => (
                       <tr key={r.id} className="border-b border-slate-700/30">
-                        <td className="px-4 py-3 font-mono text-green-400 text-xs">{r.invoice.number}</td>
+                        <td className="px-4 py-3 font-mono text-green-400 text-xs">{r.invoice?.number || 'Sin numero'}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${r.amountUsd.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-amber-400">${r.balanceUsd.toFixed(2)}</td>
                         <td className="px-4 py-3 text-slate-300 hidden md:table-cell">{r.dueDate ? fmtDate(r.dueDate) : '—'}</td>

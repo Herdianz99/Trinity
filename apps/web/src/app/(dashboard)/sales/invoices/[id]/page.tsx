@@ -70,6 +70,16 @@ interface Payment {
   createdAt: string;
 }
 
+interface ReceivablePaymentLink {
+  id: string;
+  amountUsd: number;
+  amountBs: number;
+  exchangeRate: number;
+  method: { name: string } | null;
+  receipt: { id: string; number: string } | null;
+  createdAt: string;
+}
+
 interface ReceivableLink {
   id: string;
   type: string;
@@ -77,6 +87,7 @@ interface ReceivableLink {
   paidAmountUsd: number;
   balanceUsd?: number;
   status: string;
+  payments?: ReceivablePaymentLink[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -161,7 +172,7 @@ export default function InvoiceDetailPage() {
   useEffect(() => { fetchInvoice(); }, [fetchInvoice]);
 
   useEffect(() => {
-    if (invoice) document.title = `${invoice.number} - ${invoice.customer?.name || 'Sin cliente'} | Trinity ERP`;
+    if (invoice) document.title = `${invoice.number || 'Pre-factura'} - ${invoice.customer?.name || 'Sin cliente'} | Trinity ERP`;
   }, [invoice]);
 
   useEffect(() => {
@@ -299,7 +310,7 @@ export default function InvoiceDetailPage() {
             <FileText className="text-green-400" size={22} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white font-mono">{invoice.number}</h1>
+            <h1 className="text-2xl font-bold text-white font-mono">{invoice.number || 'Sin numero'}</h1>
             <p className="text-slate-400 text-sm">
               {invoice.customer
                 ? <>{invoice.customer.documentType}-{invoice.customer.rif || '—'} · {invoice.customer.name}{invoice.customer.phone ? ` · ${invoice.customer.phone}` : ''}</>
@@ -648,39 +659,98 @@ export default function InvoiceDetailPage() {
         {/* TAB: CxC vinculada */}
         {hasReceivables && (
           <TabsContent value="cxc">
-            <div className="card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700/50">
-                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
-                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto USD</th>
-                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Pagado USD</th>
-                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo USD</th>
-                    <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
-                    <th className="text-center px-4 py-3 text-slate-400 font-medium w-24"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoice.receivables.map(r => (
-                    <tr key={r.id} className="border-b border-slate-700/30">
-                      <td className="px-4 py-3 text-slate-300">{TYPE_LABELS[r.type] || r.type}</td>
-                      <td className="px-4 py-3 text-right font-mono text-white">${(r.amountUsd ?? 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-300">${(r.paidAmountUsd ?? 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-amber-400">${((r.balanceUsd != null ? r.balanceUsd : r.amountUsd - r.paidAmountUsd) ?? 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-center">
+            <div className="space-y-4">
+              {invoice.receivables.map(r => {
+                const balance = r.balanceUsd != null ? r.balanceUsd : r.amountUsd - r.paidAmountUsd;
+                return (
+                  <div key={r.id} className="card overflow-hidden">
+                    {/* Resumen de CxC */}
+                    <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-300 text-sm">{TYPE_LABELS[r.type] || r.type}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${REC_STATUS_COLORS[r.status] || ''}`}>
                           {REC_STATUS_LABELS[r.status] || r.status}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button onClick={() => router.push(`/receivables/${r.id}`)} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto">
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {r.status !== 'PAID' && (
+                          <button
+                            onClick={() => router.push(`/receipts/new?type=COLLECTION&receivableId=${r.id}`)}
+                            className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 px-2 py-1 rounded border border-green-500/30 hover:bg-green-500/10 transition-colors"
+                          >
+                            <DollarSign size={12} />
+                            Cobrar
+                          </button>
+                        )}
+                        <button onClick={() => router.push(`/receivables/${r.id}`)} className="text-xs text-slate-400 hover:text-green-300 flex items-center gap-1">
                           Ver CxC <ExternalLink size={10} />
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    {/* Montos */}
+                    <div className="px-4 py-3 grid grid-cols-3 gap-4 text-sm border-b border-slate-700/30">
+                      <div>
+                        <span className="text-slate-500 text-xs block">Monto</span>
+                        <span className="text-white font-mono">${(r.amountUsd ?? 0).toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-xs block">Cobrado</span>
+                        <span className="text-slate-300 font-mono">${(r.paidAmountUsd ?? 0).toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-xs block">Saldo</span>
+                        <span className="text-amber-400 font-mono font-medium">${(balance ?? 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Historial de abonos */}
+                    {r.payments && r.payments.length > 0 ? (
+                      <div>
+                        <div className="px-4 py-2 bg-slate-900/30">
+                          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historial de abonos</span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-700/50">
+                              <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">Fecha</th>
+                              <th className="text-right px-4 py-2 text-slate-500 font-medium text-xs">USD</th>
+                              <th className="text-right px-4 py-2 text-slate-500 font-medium text-xs">Bs</th>
+                              <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">Metodo</th>
+                              <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">Recibo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.payments.map(p => (
+                              <tr key={p.id} className="border-b border-slate-700/20">
+                                <td className="px-4 py-2 text-slate-300 text-xs">{new Date(p.createdAt).toLocaleDateString('es-VE')}</td>
+                                <td className="px-4 py-2 text-right text-white font-mono text-xs">${p.amountUsd.toFixed(2)}</td>
+                                <td className="px-4 py-2 text-right text-slate-300 font-mono text-xs">{p.amountBs.toFixed(2)} Bs</td>
+                                <td className="px-4 py-2 text-slate-300 text-xs">{p.method?.name || '-'}</td>
+                                <td className="px-4 py-2">
+                                  {p.receipt ? (
+                                    <button
+                                      onClick={() => router.push(`/receipts/${p.receipt!.id}`)}
+                                      className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 text-xs"
+                                    >
+                                      <FileText size={11} />
+                                      {p.receipt.number}
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-500 text-xs">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="px-4 py-3 text-xs text-slate-500">Sin abonos registrados</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </TabsContent>
         )}

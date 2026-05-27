@@ -133,7 +133,7 @@ export default function QuotationsPage() {
       }
       const invoice = await res.json();
       setDetailOpen(false);
-      setMessage({ type: 'success', text: `Factura ${invoice.number} creada exitosamente` });
+      setMessage({ type: 'success', text: 'Pre-factura creada exitosamente' });
       fetchQuotations();
       // Navigate to POS with the created invoice
       router.push(`/sales/pos?invoiceId=${invoice.id}`);

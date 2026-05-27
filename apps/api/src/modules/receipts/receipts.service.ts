@@ -361,6 +361,7 @@ export class ReceiptsService {
           await tx.receivablePayment.create({
             data: {
               receivableId: item.receivableId,
+              receiptId: receipt.id,
               amountUsd: payAmount,
               amountBs,
               exchangeRate: rate.rate,
@@ -392,6 +393,7 @@ export class ReceiptsService {
           await tx.payablePayment.create({
             data: {
               payableId: item.payableId,
+              receiptId: receipt.id,
               amountUsd: payAmount,
               amountBs,
               exchangeRate: rate.rate,

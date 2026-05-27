@@ -67,7 +67,7 @@ export class InvoicePdfService {
       doc.fontSize(12).font('Helvetica-Bold').text('FACTURA', rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
       ry += 18;
       doc.fontSize(9).font('Helvetica');
-      doc.text(`No: ${invoice.number}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
+      doc.text(`No: ${invoice.number || 'S/N'}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
       if (invoice.controlNumber) { doc.text(`Control: ${invoice.controlNumber}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12; }
       doc.text(`Fecha: ${new Date(invoice.createdAt).toLocaleDateString('es-VE')}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
       doc.text(`Tasa: Bs ${invoice.exchangeRate.toFixed(2)}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;

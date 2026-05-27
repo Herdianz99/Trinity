@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Receipt,
   Loader2,
@@ -13,6 +14,7 @@ import {
   X,
   Users,
   Shield,
+  FileText,
 } from 'lucide-react';
 
 interface Payable {
@@ -33,7 +35,7 @@ interface Payable {
   paidAt: string | null;
   notes: string | null;
   balanceUsd: number;
-  payments: { id: string; amountUsd: number; createdAt: string; method: { id: string; name: string } | null; methodId: string | null }[];
+  payments: { id: string; amountUsd: number; createdAt: string; receiptId?: string | null; receipt?: { id: string; number: string } | null; method: { id: string; name: string } | null; methodId: string | null }[];
   createdAt: string;
 }
 
@@ -46,11 +48,6 @@ interface Summary {
 }
 
 interface SupplierOption {
-  id: string;
-  name: string;
-}
-
-interface PaymentMethodOption {
   id: string;
   name: string;
 }
@@ -70,6 +67,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function PayablesPage() {
+  const router = useRouter();
   const [payables, setPayables] = useState<Payable[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -84,17 +82,9 @@ export default function PayablesPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
-  // Modal states
-  const [payModalOpen, setPayModalOpen] = useState(false);
+  // Detail modal states
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedPayable, setSelectedPayable] = useState<any>(null);
-  const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('');
-  const [payReference, setPayReference] = useState('');
-  const [payNotes, setPayNotes] = useState('');
-  const [todayRate, setTodayRate] = useState<number>(0);
-  const [processing, setProcessing] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
 
   const fetchPayables = useCallback(async () => {
     setLoading(true);
@@ -135,25 +125,9 @@ export default function PayablesPage() {
     } catch {}
   }, []);
 
-  const fetchRate = useCallback(async () => {
-    try {
-      const res = await fetch('/api/proxy/exchange-rate/today');
-      const text = await res.text();
-      if (text) { try { setTodayRate(JSON.parse(text)?.rate || 0); } catch {} }
-    } catch {}
-  }, []);
-
-  const fetchPaymentMethods = useCallback(async () => {
-    try {
-      const res = await fetch('/api/proxy/payment-methods/flat');
-      const data = await res.json();
-      setPaymentMethods(Array.isArray(data) ? data : data.data || []);
-    } catch {}
-  }, []);
-
   useEffect(() => { document.title = 'Cuentas por Pagar | Trinity ERP'; }, []);
   useEffect(() => { fetchPayables(); }, [fetchPayables]);
-  useEffect(() => { fetchSummary(); fetchSuppliers(); fetchRate(); fetchPaymentMethods(); }, [fetchSummary, fetchSuppliers, fetchRate, fetchPaymentMethods]);
+  useEffect(() => { fetchSummary(); fetchSuppliers(); }, [fetchSummary, fetchSuppliers]);
 
   function isNearDue(dueDate: string | null, s: string) {
     if (!dueDate || s === 'PAID') return false;
@@ -169,21 +143,6 @@ export default function PayablesPage() {
     return new Date(dueDate) < new Date();
   }
 
-  async function openPayModal(payable: Payable) {
-    try {
-      const res = await fetch(`/api/proxy/payables/${payable.id}`);
-      const data = await res.json();
-      setSelectedPayable(data);
-      setPayAmount(data.balanceUsd.toFixed(2));
-      setPayMethod('');
-      setPayReference('');
-      setPayNotes('');
-      setPayModalOpen(true);
-    } catch {
-      setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
-  }
-
   async function openDetailModal(payable: Payable) {
     try {
       const res = await fetch(`/api/proxy/payables/${payable.id}`);
@@ -192,36 +151,6 @@ export default function PayablesPage() {
       setDetailModalOpen(true);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
-  }
-
-  async function handlePay() {
-    if (!selectedPayable) return;
-    setProcessing(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/proxy/payables/${selectedPayable.id}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amountUsd: parseFloat(payAmount),
-          methodId: payMethod,
-          reference: payReference || undefined,
-          notes: payNotes || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al registrar pago');
-      }
-      setPayModalOpen(false);
-      setMessage({ type: 'success', text: 'Pago registrado exitosamente' });
-      fetchPayables();
-      fetchSummary();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setProcessing(false);
     }
   }
 
@@ -381,8 +310,9 @@ export default function PayablesPage() {
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {p.status !== 'PAID' && (
-                          <button onClick={() => openPayModal(p)}
-                            className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/10 transition-colors" title="Registrar pago">
+                          <button
+                            onClick={() => router.push(`/receipts/new?type=PAYMENT&payableId=${p.id}`)}
+                            className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/10 transition-colors" title="Pagar via recibo">
                             <DollarSign size={16} />
                           </button>
                         )}
@@ -417,100 +347,6 @@ export default function PayablesPage() {
           </div>
         )}
       </div>
-
-      {/* Pay Modal */}
-      {payModalOpen && selectedPayable && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPayModalOpen(false)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
-              <h2 className="text-lg font-semibold text-slate-100">Registrar Pago</h2>
-              <button onClick={() => setPayModalOpen(false)} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Info */}
-              <div className="bg-slate-900/50 rounded-lg p-3 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Proveedor</span>
-                  <span className="text-slate-200">{selectedPayable.supplier?.name}</span>
-                </div>
-                {selectedPayable.purchaseOrder && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Factura de compra</span>
-                    <span className="text-slate-200 font-mono">{selectedPayable.purchaseOrder.number}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Monto total</span>
-                  <span className="text-slate-200">${selectedPayable.amountUsd.toFixed(2)}</span>
-                </div>
-                {selectedPayable.retentionUsd > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Retencion IVA</span>
-                    <span className="text-orange-400">-${selectedPayable.retentionUsd.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Neto a pagar</span>
-                  <span className="text-slate-200">${selectedPayable.netPayableUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Ya pagado</span>
-                  <span className="text-slate-200">${selectedPayable.paidAmountUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-semibold">
-                  <span className="text-slate-300">Saldo pendiente</span>
-                  <span className="text-red-400">${selectedPayable.balanceUsd.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Monto a pagar (USD)</label>
-                <input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
-                {todayRate > 0 && payAmount && (
-                  <p className="text-xs text-slate-500 mt-1">= Bs {(parseFloat(payAmount) * todayRate).toFixed(2)} (tasa: {todayRate})</p>
-                )}
-              </div>
-
-              {/* Method */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Metodo de pago</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  <option value="">Seleccionar metodo</option>
-                  {paymentMethods.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Reference */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Referencia (opcional)</label>
-                <input type="text" value={payReference} onChange={e => setPayReference(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" placeholder="Numero de referencia" />
-              </div>
-
-              {/* Rate */}
-              {todayRate > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Tasa del dia</span>
-                    <span className="text-slate-200">Bs {todayRate.toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
-
-              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0 || !payMethod}
-                className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-                {processing ? <Loader2 className="animate-spin" size={18} /> : <DollarSign size={18} />}
-                Confirmar pago
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Detail Modal */}
       {detailModalOpen && selectedPayable && (
@@ -597,6 +433,20 @@ export default function PayablesPage() {
                 </div>
               </div>
 
+              {/* Action button */}
+              {selectedPayable.status !== 'PAID' && (
+                <button
+                  onClick={() => {
+                    setDetailModalOpen(false);
+                    router.push(`/receipts/new?type=PAYMENT&payableId=${selectedPayable.id}`);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center justify-center gap-2 transition-colors"
+                >
+                  <DollarSign size={18} />
+                  Pagar via recibo
+                </button>
+              )}
+
               {/* Payments history */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-2">Historial de Pagos</h3>
@@ -609,7 +459,7 @@ export default function PayablesPage() {
                           <th className="text-right px-3 py-2 text-slate-400">USD</th>
                           <th className="text-right px-3 py-2 text-slate-400">Bs</th>
                           <th className="text-left px-3 py-2 text-slate-400">Metodo</th>
-                          <th className="text-left px-3 py-2 text-slate-400">Ref</th>
+                          <th className="text-left px-3 py-2 text-slate-400">Recibo</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -619,7 +469,20 @@ export default function PayablesPage() {
                             <td className="px-3 py-2 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
                             <td className="px-3 py-2 text-right text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
                             <td className="px-3 py-2 text-slate-300">{p.method?.name || 'Metodo'}</td>
-                            <td className="px-3 py-2 text-slate-400 text-xs">{p.reference || '-'}</td>
+                            <td className="px-3 py-2">
+                              {p.receipt ? (
+                                <Link
+                                  href={`/receipts/${p.receipt.id}`}
+                                  className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FileText size={12} />
+                                  {p.receipt.number}
+                                </Link>
+                              ) : (
+                                <span className="text-slate-500 text-xs">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

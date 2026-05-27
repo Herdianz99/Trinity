@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   HandCoins,
-  Search,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   X,
   CreditCard,
+  FileText,
 } from 'lucide-react';
 
 interface Receivable {
@@ -33,7 +34,7 @@ interface Receivable {
   paidAt: string | null;
   notes: string | null;
   balanceUsd: number;
-  payments: { id: string; amountUsd: number; createdAt: string; method: { id: string; name: string } | null }[];
+  payments: { id: string; amountUsd: number; createdAt: string; receiptId?: string | null; receipt?: { id: string; number: string } | null; method: { id: string; name: string } | null }[];
   createdAt: string;
 }
 
@@ -68,12 +69,8 @@ const TYPE_COLORS: Record<string, string> = {
   FINANCING_PLATFORM: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
 };
 
-interface PaymentMethod {
-  id: string;
-  name: string;
-}
-
 export default function ReceivablesPage() {
+  const router = useRouter();
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [config, setConfig] = useState<{ overdueWarningDays: number }>({ overdueWarningDays: 3 });
@@ -89,17 +86,9 @@ export default function ReceivablesPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
-  // Modal states
-  const [payModalOpen, setPayModalOpen] = useState(false);
+  // Detail modal states
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
-  const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('');
-  const [payReference, setPayReference] = useState('');
-  const [payNotes, setPayNotes] = useState('');
-  const [todayRate, setTodayRate] = useState<number>(0);
-  const [processing, setProcessing] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   const fetchReceivables = useCallback(async () => {
     setLoading(true);
@@ -141,24 +130,9 @@ export default function ReceivablesPage() {
     } catch {}
   }, []);
 
-  const fetchRate = useCallback(async () => {
-    try {
-      const res = await fetch('/api/proxy/exchange-rate/today');
-      const text = await res.text();
-      if (text) { try { setTodayRate(JSON.parse(text)?.rate || 0); } catch {} }
-    } catch {}
-  }, []);
-
   useEffect(() => { document.title = 'Cuentas por Cobrar | Trinity ERP'; }, []);
   useEffect(() => { fetchReceivables(); }, [fetchReceivables]);
-  useEffect(() => { fetchSummary(); fetchConfig(); fetchRate(); }, [fetchSummary, fetchConfig, fetchRate]);
-
-  useEffect(() => {
-    fetch('/api/proxy/payment-methods/flat')
-      .then(r => r.json())
-      .then(data => setPaymentMethods(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, []);
+  useEffect(() => { fetchSummary(); fetchConfig(); }, [fetchSummary, fetchConfig]);
 
   function isNearDue(dueDate: string | null) {
     if (!dueDate) return false;
@@ -174,21 +148,6 @@ export default function ReceivablesPage() {
     return new Date(dueDate) < new Date();
   }
 
-  async function openPayModal(receivable: Receivable) {
-    try {
-      const res = await fetch(`/api/proxy/receivables/${receivable.id}`);
-      const data = await res.json();
-      setSelectedReceivable(data);
-      setPayAmount(data.balanceUsd.toFixed(2));
-      setPayMethod('');
-      setPayReference('');
-      setPayNotes('');
-      setPayModalOpen(true);
-    } catch {
-      setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
-  }
-
   async function openDetailModal(receivable: Receivable) {
     try {
       const res = await fetch(`/api/proxy/receivables/${receivable.id}`);
@@ -197,36 +156,6 @@ export default function ReceivablesPage() {
       setDetailModalOpen(true);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
-  }
-
-  async function handlePay() {
-    if (!selectedReceivable) return;
-    setProcessing(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/proxy/receivables/${selectedReceivable.id}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amountUsd: parseFloat(payAmount),
-          methodId: payMethod,
-          reference: payReference || undefined,
-          notes: payNotes || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al registrar cobro');
-      }
-      setPayModalOpen(false);
-      setMessage({ type: 'success', text: 'Cobro registrado exitosamente' });
-      fetchReceivables();
-      fetchSummary();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setProcessing(false);
     }
   }
 
@@ -402,8 +331,9 @@ export default function ReceivablesPage() {
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {r.status !== 'PAID' && (
-                          <button onClick={() => openPayModal(r)}
-                            className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/10 transition-colors" title="Registrar cobro">
+                          <button
+                            onClick={() => router.push(`/receipts/new?type=COLLECTION&receivableId=${r.id}`)}
+                            className="p-1.5 rounded-lg text-green-400 hover:bg-green-500/10 transition-colors" title="Cobrar via recibo">
                             <DollarSign size={16} />
                           </button>
                         )}
@@ -438,88 +368,6 @@ export default function ReceivablesPage() {
           </div>
         )}
       </div>
-
-      {/* Pay Modal */}
-      {payModalOpen && selectedReceivable && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPayModalOpen(false)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
-              <h2 className="text-lg font-semibold text-slate-100">Registrar Cobro</h2>
-              <button onClick={() => setPayModalOpen(false)} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Info */}
-              <div className="bg-slate-900/50 rounded-lg p-3 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">{selectedReceivable.customer ? 'Cliente' : 'Plataforma'}</span>
-                  <span className="text-slate-200">{selectedReceivable.customer?.name || selectedReceivable.platformName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Factura</span>
-                  <span className="text-slate-200 font-mono">{selectedReceivable.invoice.number}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Monto total</span>
-                  <span className="text-slate-200">${selectedReceivable.amountUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Ya cobrado</span>
-                  <span className="text-slate-200">${selectedReceivable.paidAmountUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-semibold">
-                  <span className="text-slate-300">Saldo pendiente</span>
-                  <span className="text-green-400">${selectedReceivable.balanceUsd.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Monto a cobrar (USD)</label>
-                <input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
-                {todayRate > 0 && payAmount && (
-                  <p className="text-xs text-slate-500 mt-1">= Bs {(parseFloat(payAmount) * todayRate).toFixed(2)} (tasa: {todayRate})</p>
-                )}
-              </div>
-
-              {/* Method */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Metodo de pago</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
-                  <option value="">-- Seleccionar --</option>
-                  {paymentMethods.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Reference */}
-              <div>
-                <label className="text-sm text-slate-400 mb-1 block">Referencia (opcional)</label>
-                <input type="text" value={payReference} onChange={e => setPayReference(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" placeholder="Numero de referencia" />
-              </div>
-
-              {/* Rate display */}
-              {todayRate > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Tasa del dia</span>
-                    <span className="text-slate-200">Bs {todayRate.toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
-
-              <button onClick={handlePay} disabled={processing || !payAmount || parseFloat(payAmount) <= 0 || !payMethod}
-                className="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-                {processing ? <Loader2 className="animate-spin" size={18} /> : <DollarSign size={18} />}
-                Confirmar cobro
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Detail Modal */}
       {detailModalOpen && selectedReceivable && (
@@ -600,6 +448,20 @@ export default function ReceivablesPage() {
                 </div>
               </div>
 
+              {/* Action button */}
+              {selectedReceivable.status !== 'PAID' && (
+                <button
+                  onClick={() => {
+                    setDetailModalOpen(false);
+                    router.push(`/receipts/new?type=COLLECTION&receivableId=${selectedReceivable.id}`);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium flex items-center justify-center gap-2 transition-colors"
+                >
+                  <DollarSign size={18} />
+                  Cobrar via recibo
+                </button>
+              )}
+
               {/* Payments history */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-2">Historial de Pagos</h3>
@@ -612,7 +474,7 @@ export default function ReceivablesPage() {
                           <th className="text-right px-3 py-2 text-slate-400">USD</th>
                           <th className="text-right px-3 py-2 text-slate-400">Bs</th>
                           <th className="text-left px-3 py-2 text-slate-400">Metodo</th>
-                          <th className="text-left px-3 py-2 text-slate-400">Ref</th>
+                          <th className="text-left px-3 py-2 text-slate-400">Recibo</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -622,7 +484,20 @@ export default function ReceivablesPage() {
                             <td className="px-3 py-2 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
                             <td className="px-3 py-2 text-right text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
                             <td className="px-3 py-2 text-slate-300">{p.method?.name || 'Metodo'}</td>
-                            <td className="px-3 py-2 text-slate-400 text-xs">{p.reference || '-'}</td>
+                            <td className="px-3 py-2">
+                              {p.receipt ? (
+                                <Link
+                                  href={`/receipts/${p.receipt.id}`}
+                                  className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FileText size={12} />
+                                  {p.receipt.number}
+                                </Link>
+                              ) : (
+                                <span className="text-slate-500 text-xs">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

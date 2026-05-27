@@ -292,18 +292,29 @@ export default function POSPage() {
       .then(data => {
         if (data?.items) {
           setExistingInvoiceId(data.id);
-          setCart(data.items.map((item: any) => ({
-            productId: item.productId,
-            code: '',
-            name: item.productName,
-            unitPrice: item.unitPrice,
-            originalPrice: item.unitPrice,
-            quantity: item.quantity,
-            ivaType: item.ivaType,
-            stock: 999,
-            priceOverridden: false,
-            discountPct: item.discountPct || 0,
-          })));
+          setCart(data.items.map((item: any) => {
+            // Use product's current priceDetal (with IVA) if available,
+            // otherwise reconstruct from stored base price
+            let priceWithIva: number;
+            if (item.priceDetal != null && !item.priceOverridden) {
+              priceWithIva = item.priceDetal;
+            } else {
+              const ivaRate = IVA_RATES[item.ivaType] || 0;
+              priceWithIva = Math.round(item.unitPrice * (1 + ivaRate) * 100) / 100;
+            }
+            return {
+              productId: item.productId,
+              code: '',
+              name: item.productName,
+              unitPrice: priceWithIva,
+              originalPrice: priceWithIva,
+              quantity: item.quantity,
+              ivaType: item.ivaType,
+              stock: 999,
+              priceOverridden: item.priceOverridden || false,
+              discountPct: item.discountPct || 0,
+            };
+          }));
           if (data.customer) {
             setCustomerId(data.customer.id);
             setCustomerName(data.customer.name);
@@ -420,21 +431,25 @@ export default function POSPage() {
   }
 
   // Calculate totals — priceDetal includes IVA, extract base for proper breakdown
+  const serieIsVatExempt = selectedCashRegister?.serie?.isVatExempt === true;
   const ivaByType: Record<string, number> = {};
   let subtotalUsd = 0;
   let subtotalBsAccum = 0;
   let ivaBsAccum = 0;
   cart.forEach(i => {
-    const rate = IVA_RATES[i.ivaType] || 0;
+    const originalRate = IVA_RATES[i.ivaType] || 0;
+    const effectiveRate = serieIsVatExempt ? 0 : originalRate;
     const discountMultiplier = 1 - (i.discountPct || 0) / 100;
-    const basePrice = (i.unitPrice / (1 + rate)) * discountMultiplier;
+    // Always extract base using original product IVA rate (priceDetal includes IVA)
+    const basePrice = (i.unitPrice / (1 + originalRate)) * discountMultiplier;
     const lineSubtotal = basePrice * i.quantity;
-    const iva = lineSubtotal * rate;
+    const iva = lineSubtotal * effectiveRate;
     subtotalUsd += lineSubtotal;
-    ivaByType[i.ivaType] = (ivaByType[i.ivaType] || 0) + iva;
+    const effectiveIvaType = serieIsVatExempt ? 'EXEMPT' : i.ivaType;
+    ivaByType[effectiveIvaType] = (ivaByType[effectiveIvaType] || 0) + iva;
     // Bs driven: calculate from rounded Bs subtotal to match fiscal printer
     const lineSubtotalBs = Math.round(lineSubtotal * exchangeRate * 100) / 100;
-    const lineIvaBs = Math.round(lineSubtotalBs * rate * 100) / 100;
+    const lineIvaBs = Math.round(lineSubtotalBs * effectiveRate * 100) / 100;
     subtotalBsAccum += lineSubtotalBs;
     ivaBsAccum += lineIvaBs;
   });
@@ -562,7 +577,7 @@ export default function POSPage() {
       setCustomerId(null);
       setCustomerName('');
       setExistingInvoiceId(null);
-      setMessage({ type: 'success', text: `Factura ${data.number} guardada en espera` });
+      setMessage({ type: 'success', text: 'Factura guardada en espera' });
       fetchPending();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -918,18 +933,29 @@ export default function POSPage() {
         throw new Error(err.message || 'No se pudo retomar la factura');
       }
       const fullInvoice = await res.json();
-      setCart(fullInvoice.items.map((item: any) => ({
-        productId: item.productId,
-        code: '',
-        name: item.productName,
-        unitPrice: item.unitPrice,
-        originalPrice: item.unitPrice,
-        quantity: item.quantity,
-        ivaType: item.ivaType || 'GENERAL',
-        stock: 999,
-        priceOverridden: false,
-        discountPct: item.discountPct || 0,
-      })));
+      setCart(fullInvoice.items.map((item: any) => {
+        // Use product's current priceDetal (with IVA) if available,
+        // otherwise reconstruct from stored base price
+        let priceWithIva: number;
+        if (item.priceDetal != null && !item.priceOverridden) {
+          priceWithIva = item.priceDetal;
+        } else {
+          const ivaRate = IVA_RATES[item.ivaType] || 0;
+          priceWithIva = Math.round(item.unitPrice * (1 + ivaRate) * 100) / 100;
+        }
+        return {
+          productId: item.productId,
+          code: '',
+          name: item.productName,
+          unitPrice: priceWithIva,
+          originalPrice: priceWithIva,
+          quantity: item.quantity,
+          ivaType: item.ivaType || 'GENERAL',
+          stock: 999,
+          priceOverridden: item.priceOverridden || false,
+          discountPct: item.discountPct || 0,
+        };
+      }));
       if (fullInvoice.customer) {
         setCustomerId(fullInvoice.customer.id);
         setCustomerName(fullInvoice.customer.name);

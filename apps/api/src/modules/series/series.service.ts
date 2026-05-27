@@ -6,8 +6,9 @@ import { CreateSerieDto } from './dto/create-serie.dto';
 export class SeriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(type?: 'SALES' | 'PURCHASES') {
     return this.prisma.serie.findMany({
+      where: type ? { type } : undefined,
       include: {
         cashRegister: { select: { id: true, code: true, name: true } },
       },
@@ -47,6 +48,7 @@ export class SeriesService {
       data: {
         name: dto.name,
         prefix: dto.prefix.toUpperCase(),
+        type: dto.type || 'SALES',
         isFiscal: dto.isFiscal ?? false,
         isVatExempt: dto.isVatExempt ?? false,
         cashRegisterId: dto.cashRegisterId || null,
@@ -86,6 +88,7 @@ export class SeriesService {
       data: {
         name: dto.name,
         prefix: dto.prefix?.toUpperCase(),
+        type: dto.type,
         isFiscal: dto.isFiscal,
         isVatExempt: dto.isVatExempt,
         cashRegisterId: dto.cashRegisterId !== undefined ? (dto.cashRegisterId || null) : undefined,

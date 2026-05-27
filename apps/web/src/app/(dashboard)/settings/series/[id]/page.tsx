@@ -17,6 +17,7 @@ interface Serie {
   id: string;
   name: string;
   prefix: string;
+  type: 'SALES' | 'PURCHASES';
   isFiscal: boolean;
   isVatExempt: boolean;
   lastNumber: number;
@@ -36,7 +37,7 @@ export default function SerieDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', prefix: '', isFiscal: false, isVatExempt: false, comPort: '', fiscalMachineSerial: '' });
+  const [form, setForm] = useState({ name: '', prefix: '', type: 'SALES' as 'SALES' | 'PURCHASES', isFiscal: false, isVatExempt: false, comPort: '', fiscalMachineSerial: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -68,6 +69,7 @@ export default function SerieDetailPage() {
       setForm({
         name: data.name,
         prefix: data.prefix,
+        type: data.type || 'SALES',
         isFiscal: data.isFiscal,
         isVatExempt: data.isVatExempt,
         comPort: data.comPort || '',
@@ -96,6 +98,7 @@ export default function SerieDetailPage() {
       const body: any = {
         name: form.name,
         prefix: form.prefix.toUpperCase(),
+        type: form.type,
         isFiscal: form.isFiscal,
         isVatExempt: form.isVatExempt,
       };
@@ -196,7 +199,7 @@ export default function SerieDetailPage() {
         {/* TAB: Info General */}
         <TabsContent value="info">
           <form onSubmit={handleSave} className="card p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">
                   Nombre *
@@ -220,6 +223,19 @@ export default function SerieDetailPage() {
                   className="input-field !py-2 text-sm font-mono"
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Tipo
+                </label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'SALES' | 'PURCHASES' }))}
+                  className="input-field !py-2 text-sm"
+                >
+                  <option value="SALES">Ventas</option>
+                  <option value="PURCHASES">Compras</option>
+                </select>
               </div>
             </div>
 

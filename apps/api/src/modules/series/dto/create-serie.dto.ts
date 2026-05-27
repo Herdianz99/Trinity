@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateSerieDto {
@@ -11,6 +11,11 @@ export class CreateSerieDto {
   @IsOptional()
   @IsString()
   prefix: string;
+
+  @ApiProperty({ required: false, enum: ['SALES', 'PURCHASES'] })
+  @IsOptional()
+  @IsIn(['SALES', 'PURCHASES'])
+  type?: 'SALES' | 'PURCHASES';
 
   @ApiProperty({ required: false })
   @IsOptional()

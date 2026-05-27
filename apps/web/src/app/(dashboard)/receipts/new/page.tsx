@@ -69,6 +69,8 @@ export default function NewReceiptPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const type = (searchParams.get('type') || 'COLLECTION') as 'COLLECTION' | 'PAYMENT';
+  const preselectedReceivableId = searchParams.get('receivableId') || '';
+  const preselectedPayableId = searchParams.get('payableId') || '';
   const isCollection = type === 'COLLECTION';
 
   // Source tab for COLLECTION type
@@ -111,6 +113,10 @@ export default function NewReceiptPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
   const [processing, setProcessing] = useState(false);
+
+  // Cash session
+  const [openSessions, setOpenSessions] = useState<{ id: string; cashRegister: { name: string }; openedBy: { name: string } }[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState('');
 
   const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -183,6 +189,21 @@ export default function NewReceiptPage() {
     })();
   }, []);
 
+  // Fetch open cash sessions
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/proxy/cash-sessions?status=OPEN');
+        const json = await res.json();
+        const sessions = Array.isArray(json) ? json : json.data || [];
+        setOpenSessions(sessions);
+        if (sessions.length === 1) {
+          setSelectedSessionId(sessions[0].id);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // Fetch platform methods (for COLLECTION tab)
   useEffect(() => {
     if (!isCollection) return;
@@ -195,6 +216,86 @@ export default function NewReceiptPage() {
       } catch { /* ignore */ }
     })();
   }, [isCollection]);
+
+  // Auto-fetch preselected receivable/payable from query params
+  const [preselectionDone, setPreselectionDone] = useState(false);
+  useEffect(() => {
+    if (preselectionDone || (!preselectedReceivableId && !preselectedPayableId)) return;
+    if (!todayRate || rateLoading) return;
+
+    (async () => {
+      try {
+        if (preselectedReceivableId && isCollection) {
+          const res = await fetch(`/api/proxy/receivables/${preselectedReceivableId}`);
+          if (!res.ok) return;
+          const receivable = await res.json();
+          // Set entity (customer)
+          if (receivable.customer) {
+            setEntityId(receivable.customer.id);
+            setEntityName(receivable.customer.name);
+            setComboQuery(receivable.customer.name);
+          } else if (receivable.platformName) {
+            setSourceTab('platform');
+            setSelectedPlatform(receivable.platformName);
+          }
+          // Auto-add document to selected
+          const doc: PendingDoc = {
+            id: `recv-${receivable.id}`,
+            documentType: 'CxC',
+            receivableId: receivable.id,
+            description: `Factura ${receivable.invoice?.number || '-'}`,
+            reference: receivable.reference,
+            date: receivable.createdAt,
+            amountUsd: receivable.amountUsd,
+            amountBsHistoric: receivable.amountBs,
+            exchangeRate: receivable.exchangeRate,
+            balanceUsd: receivable.balanceUsd,
+            status: receivable.status,
+          };
+          const sign = 1;
+          const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
+          setSelectedDocs([{
+            ...doc,
+            sign,
+            amountBsToday,
+            selectedAmountUsd: doc.balanceUsd,
+          }]);
+        } else if (preselectedPayableId && !isCollection) {
+          const res = await fetch(`/api/proxy/payables/${preselectedPayableId}`);
+          if (!res.ok) return;
+          const payable = await res.json();
+          // Set entity (supplier)
+          if (payable.supplier) {
+            setEntityId(payable.supplier.id);
+            setEntityName(payable.supplier.name);
+            setComboQuery(payable.supplier.name);
+          }
+          // Auto-add document to selected
+          const doc: PendingDoc = {
+            id: `pay-${payable.id}`,
+            documentType: 'CxP',
+            payableId: payable.id,
+            description: `Orden ${payable.purchaseOrder?.number || '-'}`,
+            date: payable.createdAt,
+            amountUsd: payable.netPayableUsd,
+            amountBsHistoric: payable.amountBs,
+            exchangeRate: payable.exchangeRate,
+            balanceUsd: payable.balanceUsd,
+            status: payable.status,
+          };
+          const sign = 1;
+          const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
+          setSelectedDocs([{
+            ...doc,
+            sign,
+            amountBsToday,
+            selectedAmountUsd: doc.balanceUsd,
+          }]);
+        }
+      } catch { /* ignore */ }
+      setPreselectionDone(true);
+    })();
+  }, [preselectedReceivableId, preselectedPayableId, isCollection, todayRate, rateLoading, preselectionDone]);
 
   // Fetch pending documents when entity/platform/search changes
   const fetchPendingDocs = useCallback(async (search?: string) => {
@@ -269,12 +370,10 @@ export default function NewReceiptPage() {
     setSelectedDocs((prev) => prev.map((d) => {
       if (d.id !== docId) return d;
       const clamped = Math.min(amount, d.balanceUsd);
-      const proportion = d.amountUsd > 0 ? clamped / d.amountUsd : 0;
       return {
         ...d,
         selectedAmountUsd: clamped,
         amountBsToday: Math.round(clamped * todayRate * 100) / 100,
-        amountBsHistoric: Math.round(d.amountBsHistoric * proportion * 100) / 100,
       };
     }));
   };
@@ -405,6 +504,7 @@ export default function NewReceiptPage() {
             amountBs: l.amountBs,
             reference: l.reference || undefined,
           })),
+          cashSessionId: selectedSessionId || undefined,
         }),
       });
       const json = await res.json();
@@ -936,6 +1036,23 @@ export default function NewReceiptPage() {
                   <span className="text-slate-300">{fmt(todayRate)} Bs/$</span>
                 </div>
               </div>
+
+              {/* Cash session selector */}
+              {openSessions.length > 0 && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Sesion de caja</label>
+                  <select
+                    value={selectedSessionId}
+                    onChange={(e) => setSelectedSessionId(e.target.value)}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">-- Sin caja --</option>
+                    {openSessions.map((s) => (
+                      <option key={s.id} value={s.id}>{s.cashRegister.name} — {s.openedBy.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Payment lines */}
               {paymentLines.map((line, idx) => (

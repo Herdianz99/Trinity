@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -20,8 +21,10 @@ export class SeriesController {
   constructor(private readonly seriesService: SeriesService) {}
 
   @Get()
-  findAll() {
-    return this.seriesService.findAll();
+  findAll(@Query('type') type?: string) {
+    const validTypes = ['SALES', 'PURCHASES'] as const;
+    const t = validTypes.includes(type as any) ? (type as 'SALES' | 'PURCHASES') : undefined;
+    return this.seriesService.findAll(t);
   }
 
   @Get(':id')

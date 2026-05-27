@@ -193,7 +193,7 @@ export default function NewPurchaseBillPage() {
         fetch('/api/proxy/warehouses?isActive=true'),
         fetch('/api/proxy/exchange-rate/today'),
         fetch('/api/auth/me'),
-        fetch('/api/proxy/series'),
+        fetch('/api/proxy/series?type=PURCHASES'),
       ]);
 
       if (supRes.ok) {
@@ -884,9 +884,68 @@ export default function NewPurchaseBillPage() {
               <input
                 type="date"
                 value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setInvoiceDate(newDate);
+                  if (newDate) {
+                    fetch(`/api/proxy/exchange-rate/by-date?date=${newDate}`)
+                      .then((r) => r.ok ? r.json() : null)
+                      .then((data) => { if (data?.rate) setExchangeRate(data.rate); })
+                      .catch(() => {});
+                  }
+                }}
                 className="input-field !py-1 text-sm"
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Serie
+              </label>
+              <select
+                value={serieId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSerieId(id);
+                  const s = series.find((x) => x.id === id);
+                  setIsFiscal(s?.isFiscal ?? false);
+                }}
+                className="input-field !py-1 text-sm"
+              >
+                <option value="">Sin serie</option>
+                {series.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.isFiscal ? '(Fiscal)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Col 4: Factor cambiario + Fecha recepcion + Forma de pago (stacked) */}
+          <div className="space-y-1.5">
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Factor cambiario
+              </label>
+              <input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={exchangeRate || ''}
+                onChange={(e) => setExchangeRate(Number(e.target.value))}
+                className="input-field !py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
+                Fecha recepcion
+              </label>
+              <input
+                type="date"
+                value={receivedDate}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                className="input-field !py-1 text-sm"
               />
             </div>
             <div>
@@ -917,56 +976,6 @@ export default function NewPurchaseBillPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Col 4: Factor cambiario + Fecha recepcion + Fiscal (stacked) */}
-          <div className="space-y-1.5">
-            <div>
-              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Factor cambiario
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                min="0"
-                value={exchangeRate || ''}
-                onChange={(e) => setExchangeRate(Number(e.target.value))}
-                className="input-field !py-1 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Fecha recepcion
-              </label>
-              <input
-                type="date"
-                value={receivedDate}
-                onChange={(e) => setReceivedDate(e.target.value)}
-                className="input-field !py-1 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Serie
-              </label>
-              <select
-                value={serieId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setSerieId(id);
-                  const s = series.find((x) => x.id === id);
-                  setIsFiscal(s?.isFiscal ?? false);
-                }}
-                className="input-field !py-1 text-sm"
-              >
-                <option value="">Sin serie</option>
-                {series.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} {s.isFiscal ? '(Fiscal)' : ''}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </div>

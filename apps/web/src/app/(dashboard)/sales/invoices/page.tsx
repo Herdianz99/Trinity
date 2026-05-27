@@ -17,7 +17,7 @@ import {
 
 interface Invoice {
   id: string;
-  number: string;
+  number: string | null;
   status: string;
   paymentType: string;
   totalUsd: number;
@@ -231,7 +231,7 @@ export default function InvoicesPage() {
         ) : invoices.map(inv => (
           <Link key={inv.id} href={`/sales/invoices/${inv.id}`} className="card p-4 block active:scale-[0.98] transition-transform">
             <div className="flex items-start justify-between mb-2">
-              <span className="font-mono text-green-400 text-sm font-bold">{inv.number}</span>
+              <span className="font-mono text-green-400 text-sm font-bold">{inv.number || 'Sin numero'}</span>
               <div className="flex items-center gap-1 flex-wrap justify-end">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STATUS_COLORS[inv.status] || ''}`}>
                   {STATUS_LABELS[inv.status] || inv.status}
@@ -291,7 +291,7 @@ export default function InvoicesPage() {
                 <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40">
                   <td className="px-4 py-3 font-mono text-xs">
                     <Link href={`/sales/invoices/${inv.id}`} className="text-green-400 hover:text-green-300 hover:underline">
-                      {inv.number}
+                      {inv.number || 'Sin numero'}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{inv.customer?.name || 'Sin cliente'}</td>
@@ -361,7 +361,7 @@ export default function InvoicesPage() {
           <div className="relative bg-slate-800 w-full h-full md:h-auto md:border md:border-slate-700 md:rounded-2xl md:shadow-2xl md:max-w-3xl md:max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700/50 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
               <div>
-                <h2 className="text-lg font-bold text-white font-mono">{detail.number}</h2>
+                <h2 className="text-lg font-bold text-white font-mono">{detail.number || 'Sin numero'}</h2>
                 <div className="flex items-center gap-1 mt-1">
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[detail.status] || ''}`}>{STATUS_LABELS[detail.status] || detail.status}</span>
                   {detail.paymentType && detail.status !== 'PENDING' && detail.status !== 'CANCELLED' && (

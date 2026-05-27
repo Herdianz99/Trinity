@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Layers,
   Plus,
@@ -15,6 +16,7 @@ interface Serie {
   id: string;
   name: string;
   prefix: string;
+  type: 'SALES' | 'PURCHASES';
   isFiscal: boolean;
   isVatExempt: boolean;
   lastNumber: number;
@@ -25,6 +27,7 @@ interface Serie {
 }
 
 export default function SeriesPage() {
+  const router = useRouter();
   const [series, setSeries] = useState<Serie[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,7 @@ export default function SeriesPage() {
   // Form state
   const [formName, setFormName] = useState('');
   const [formPrefix, setFormPrefix] = useState('');
+  const [formType, setFormType] = useState<'SALES' | 'PURCHASES'>('SALES');
   const [formIsFiscal, setFormIsFiscal] = useState(false);
   const [formIsVatExempt, setFormIsVatExempt] = useState(false);
   const [formComPort, setFormComPort] = useState('');
@@ -65,6 +69,7 @@ export default function SeriesPage() {
     setEditingSerie(null);
     setFormName('');
     setFormPrefix('');
+    setFormType('SALES');
     setFormIsFiscal(false);
     setFormIsVatExempt(false);
     setFormComPort('');
@@ -77,6 +82,7 @@ export default function SeriesPage() {
     setEditingSerie(serie);
     setFormName(serie.name);
     setFormPrefix(serie.prefix);
+    setFormType(serie.type || 'SALES');
     setFormIsFiscal(serie.isFiscal);
     setFormIsVatExempt(serie.isVatExempt);
     setFormComPort(serie.comPort || '');
@@ -98,6 +104,7 @@ export default function SeriesPage() {
       const body: any = {
         name: formName.trim(),
         prefix: formPrefix.trim().toUpperCase(),
+        type: formType,
         isFiscal: formIsFiscal,
         isVatExempt: formIsVatExempt,
       };
@@ -173,6 +180,7 @@ export default function SeriesPage() {
             <tr className="border-b border-slate-700 text-slate-400">
               <th className="text-left px-4 py-3 font-medium">Nombre</th>
               <th className="text-left px-4 py-3 font-medium">Prefijo</th>
+              <th className="text-center px-4 py-3 font-medium">Tipo</th>
               <th className="text-center px-4 py-3 font-medium">Fiscal</th>
               <th className="text-center px-4 py-3 font-medium">Exenta IVA</th>
               <th className="text-right px-4 py-3 font-medium">Ultimo No.</th>
@@ -191,6 +199,17 @@ export default function SeriesPage() {
                   <span className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-xs font-mono">
                     {serie.prefix}
                   </span>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  {serie.type === 'PURCHASES' ? (
+                    <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs font-medium">
+                      COMPRAS
+                    </span>
+                  ) : (
+                    <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium">
+                      VENTAS
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-center">
                   {serie.isFiscal ? (
@@ -229,7 +248,7 @@ export default function SeriesPage() {
                 <td className="px-4 py-3 text-center">
                   <div className="flex items-center justify-center gap-1">
                     <button
-                      onClick={() => openEditModal(serie)}
+                      onClick={() => router.push(`/settings/series/${serie.id}`)}
                       className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"
                       title="Editar"
                     >
@@ -248,7 +267,7 @@ export default function SeriesPage() {
             ))}
             {series.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-slate-500">
+                <td colSpan={8} className="text-center py-8 text-slate-500">
                   No hay series configuradas
                 </td>
               </tr>
@@ -303,6 +322,18 @@ export default function SeriesPage() {
                 <p className="text-xs text-slate-500 mt-1">
                   Formato de numero: {formPrefix || 'XXX'}-26-00000001
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Tipo</label>
+                <select
+                  value={formType}
+                  onChange={(e) => setFormType(e.target.value as 'SALES' | 'PURCHASES')}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="SALES">Ventas</option>
+                  <option value="PURCHASES">Compras</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-6">

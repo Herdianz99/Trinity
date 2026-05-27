@@ -384,7 +384,7 @@ export class CashRegistersService {
         // Track change outflows
         if ((p as any).changeAmountBs > 0) {
           changeOutflows.push({
-            invoiceNumber: inv.number,
+            invoiceNumber: inv.number || 'S/N',
             changeBs: (p as any).changeAmountBs,
             changeMethodName: (p as any).changeMethod?.name || 'Efectivo Bs',
           });

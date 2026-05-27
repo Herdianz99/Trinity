@@ -155,7 +155,17 @@ export class InvoicesService {
         serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         items: true,
         payments: { include: { method: true, changeMethod: true } },
-        receivables: true,
+        receivables: {
+          include: {
+            payments: {
+              orderBy: { createdAt: 'desc' },
+              include: {
+                method: true,
+                receipt: { select: { id: true, number: true } },
+              },
+            },
+          },
+        },
         seller: { select: { id: true, code: true, name: true } },
         cashier: { select: { id: true, name: true } },
       },
@@ -167,16 +177,18 @@ export class InvoicesService {
     const products = productIds.length > 0
       ? await this.prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, code: true },
+          select: { id: true, code: true, priceDetal: true },
         })
       : [];
     const codeMap = new Map(products.map(p => [p.id, p.code]));
+    const priceMap = new Map(products.map(p => [p.id, p.priceDetal]));
 
     return {
       ...invoice,
       items: invoice.items.map(item => ({
         ...item,
         productCode: codeMap.get(item.productId) || null,
+        priceDetal: priceMap.get(item.productId) ?? null,
       })),
       receivables: invoice.receivables.map(r => ({
         ...r,
@@ -240,17 +252,6 @@ export class InvoicesService {
       }
     }
 
-    // Get serie from cash register
-    const serie = await this.prisma.serie.findUnique({
-      where: { cashRegisterId: cashRegisterId },
-    });
-    if (!serie) {
-      throw new BadRequestException('Esta caja no tiene serie configurada');
-    }
-    if (!serie.isActive) {
-      throw new BadRequestException('La serie de esta caja está desactivada');
-    }
-
     // Fetch products and calculate totals
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
@@ -269,12 +270,14 @@ export class InvoicesService {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
 
-      // priceDetal already includes IVA — extract base price
+      // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;
-      // If serie is VAT exempt, force IVA to 0% regardless of product config
-      const effectiveIvaType = serie.isVatExempt ? 'EXEMPT' : product.ivaType;
+      const originalIvaRate = IVA_RATES[product.ivaType] || 0;
+      // At pre-invoice creation, use the product's original IVA type
+      // VAT exemption will be applied at payment time based on the cashier's serie
+      const effectiveIvaType = product.ivaType;
       const ivaRate = IVA_RATES[effectiveIvaType] || 0;
-      const ivaMultiplier = 1 + ivaRate;
+      const ivaMultiplier = 1 + originalIvaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
 
       // Apply line discount
@@ -327,55 +330,32 @@ export class InvoicesService {
     const totalIva = Object.values(ivaBreakdown).reduce((s, v) => s + v, 0);
     const totalUsd = subtotalUsd + totalIva;
 
-    // All invoices start as PENDING
-    const status = 'PENDING';
-
-    // Generate invoice number with SELECT FOR UPDATE on Serie
-    const invoice = await this.prisma.$transaction(async (tx) => {
-      // Lock the serie row for correlative increment
-      const series = await tx.$queryRaw<any[]>`
-        SELECT "id", "lastNumber", "prefix" FROM "Serie"
-        WHERE id = ${serie.id} FOR UPDATE
-      `;
-      const s = series[0];
-      const nextNumber = s.lastNumber + 1;
-
-      await tx.serie.update({
-        where: { id: serie.id },
-        data: { lastNumber: nextNumber },
-      });
-
-      const year = new Date().getFullYear().toString().slice(-2);
-      const correlativo = nextNumber.toString().padStart(8, '0');
-      const invoiceNumber = `${s.prefix}-${year}-${correlativo}`;
-
-      return tx.invoice.create({
-        data: {
-          number: invoiceNumber,
-          serieId: serie.id,
-          cashRegisterId,
-          customerId,
-          status,
-          subtotalUsd: Math.round(subtotalUsd * 100) / 100,
-          ivaUsd: Math.round(totalIva * 100) / 100,
-          totalUsd: Math.round(totalUsd * 100) / 100,
-          subtotalBs: Math.round(subtotalBsAccum * 100) / 100,
-          ivaBs: Math.round(ivaBsAccum * 100) / 100,
-          totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
-          exchangeRate: rate.rate,
-          notes: dto.notes,
-          createdById: user.id,
-          sellerId,
-          items: { create: itemsData },
-        },
-        include: {
-          items: true,
-          customer: true,
-          seller: { select: { id: true, code: true, name: true } },
-          cashRegister: { select: { id: true, code: true, name: true } },
-          serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
-        },
-      });
+    // All invoices start as PENDING without correlative number
+    // Number will be assigned at payment time to avoid gaps
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        number: null,
+        cashRegisterId,
+        customerId,
+        status: 'PENDING',
+        subtotalUsd: Math.round(subtotalUsd * 100) / 100,
+        ivaUsd: Math.round(totalIva * 100) / 100,
+        totalUsd: Math.round(totalUsd * 100) / 100,
+        subtotalBs: Math.round(subtotalBsAccum * 100) / 100,
+        ivaBs: Math.round(ivaBsAccum * 100) / 100,
+        totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
+        exchangeRate: rate.rate,
+        notes: dto.notes,
+        createdById: user.id,
+        sellerId,
+        items: { create: itemsData },
+      },
+      include: {
+        items: true,
+        customer: true,
+        seller: { select: { id: true, code: true, name: true } },
+        cashRegister: { select: { id: true, code: true, name: true } },
+      },
     });
 
     return invoice;
@@ -394,48 +374,6 @@ export class InvoicesService {
     if (!invoice) throw new NotFoundException('Factura no encontrada');
     if (invoice.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden cobrar facturas en estado PENDING');
-    }
-
-    // Validate payment total
-    const totalPaidUsd = dto.payments.reduce((s, p) => s + p.amountUsd, 0);
-
-    if (!dto.isCredit && totalPaidUsd < invoice.totalUsd - 0.01) {
-      throw new BadRequestException(
-        `El monto pagado ($${totalPaidUsd.toFixed(2)}) es menor al total ($${invoice.totalUsd.toFixed(2)})`,
-      );
-    }
-
-    // Credit validation
-    if (dto.isCredit) {
-      const config = await this.prisma.companyConfig.findFirst();
-      if (!config?.creditAuthPassword) {
-        throw new BadRequestException('No hay clave de autorización de crédito configurada');
-      }
-      if (!dto.creditAuthPassword) {
-        throw new BadRequestException('Se requiere la clave de autorización para crédito');
-      }
-      const isValid = await bcrypt.compare(dto.creditAuthPassword, config.creditAuthPassword);
-      if (!isValid) {
-        throw new ForbiddenException('Clave de autorización incorrecta');
-      }
-
-      // Check customer credit limit
-      if (invoice.customer) {
-        const pendingReceivables = await this.prisma.receivable.aggregate({
-          where: {
-            customerId: invoice.customerId,
-            status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-          },
-          _sum: { amountUsd: true },
-        });
-        const currentDebt = pendingReceivables._sum.amountUsd || 0;
-        const availableCredit = invoice.customer.creditLimit - currentDebt;
-        if (invoice.totalUsd > availableCredit + 0.01) {
-          throw new BadRequestException(
-            `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)}, Requerido: $${invoice.totalUsd.toFixed(2)}`,
-          );
-        }
-      }
     }
 
     // Get default warehouse and IGTF config
@@ -493,11 +431,88 @@ export class InvoicesService {
       }
     }
 
+    // Resolve serie from cashier's current cash session (not original invoice)
+    const cashierSession = await this.prisma.cashSession.findFirst({
+      where: { openedById: user.id, status: 'OPEN' },
+    });
+    const serieCashRegisterId = cashierSession?.cashRegisterId || invoice.cashRegisterId;
+    const paymentSerie = await this.prisma.serie.findUnique({
+      where: { cashRegisterId: serieCashRegisterId },
+    });
+    if (!paymentSerie) {
+      throw new BadRequestException('La caja del cajero no tiene serie configurada');
+    }
+    if (!paymentSerie.isActive) {
+      throw new BadRequestException('La serie de la caja del cajero está desactivada');
+    }
+
+    // If payment serie is VAT exempt, calculate effective totals without IVA
+    let effectiveTotalUsd = invoice.totalUsd;
+    let effectiveTotalBs = invoice.totalBs;
+    let effectiveSubtotalUsd = invoice.subtotalUsd;
+    let effectiveSubtotalBs = invoice.subtotalBs;
+    if (paymentSerie.isVatExempt) {
+      // Recalculate: sum base prices only (no IVA)
+      let subtotalUsd = 0;
+      let subtotalBsAccum = 0;
+      for (const item of invoice.items) {
+        const lineSubtotal = item.unitPrice * item.quantity;
+        const lineSubtotalBs = Math.round(lineSubtotal * invoice.exchangeRate * 100) / 100;
+        subtotalUsd += lineSubtotal;
+        subtotalBsAccum += lineSubtotalBs;
+      }
+      effectiveSubtotalUsd = Math.round(subtotalUsd * 100) / 100;
+      effectiveSubtotalBs = Math.round(subtotalBsAccum * 100) / 100;
+      effectiveTotalUsd = effectiveSubtotalUsd;
+      effectiveTotalBs = effectiveSubtotalBs;
+    }
+
+    // Validate payment total (using effective totals that account for VAT exemption)
+    const totalPaidUsd = dto.payments.reduce((s, p) => s + p.amountUsd, 0);
+
+    if (!dto.isCredit && totalPaidUsd < effectiveTotalUsd - 0.01) {
+      throw new BadRequestException(
+        `El monto pagado ($${totalPaidUsd.toFixed(2)}) es menor al total ($${effectiveTotalUsd.toFixed(2)})`,
+      );
+    }
+
+    // Credit validation
+    if (dto.isCredit) {
+      if (!config?.creditAuthPassword) {
+        throw new BadRequestException('No hay clave de autorización de crédito configurada');
+      }
+      if (!dto.creditAuthPassword) {
+        throw new BadRequestException('Se requiere la clave de autorización para crédito');
+      }
+      const isValid = await bcrypt.compare(dto.creditAuthPassword, config.creditAuthPassword);
+      if (!isValid) {
+        throw new ForbiddenException('Clave de autorización incorrecta');
+      }
+
+      // Check customer credit limit
+      if (invoice.customer) {
+        const pendingReceivables = await this.prisma.receivable.aggregate({
+          where: {
+            customerId: invoice.customerId,
+            status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+          },
+          _sum: { amountUsd: true },
+        });
+        const currentDebt = pendingReceivables._sum.amountUsd || 0;
+        const availableCredit = invoice.customer.creditLimit - currentDebt;
+        if (effectiveTotalUsd > availableCredit + 0.01) {
+          throw new BadRequestException(
+            `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)}, Requerido: $${effectiveTotalUsd.toFixed(2)}`,
+          );
+        }
+      }
+    }
+
     // IGTF: se calcula UNA sola vez por factura, sobre el primer pago en divisas
     // Solo aplica si la caja es fiscal
     const isIGTFContributor = config?.isIGTFContributor || false;
     const igtfPct = config?.igtfPct || 3;
-    const isCajaFiscal = invoice.serie?.isFiscal || false;
+    const isCajaFiscal = paymentSerie.isFiscal || false;
     let invoiceIgtfUsd = 0;
     let invoiceIgtfBs = 0;
 
@@ -513,11 +528,11 @@ export class InvoicesService {
     }
 
     const newTotalUsd = invoiceIgtfUsd > 0
-      ? Math.round((invoice.totalUsd + invoiceIgtfUsd) * 100) / 100
-      : invoice.totalUsd;
+      ? Math.round((effectiveTotalUsd + invoiceIgtfUsd) * 100) / 100
+      : effectiveTotalUsd;
     const newTotalBs = invoiceIgtfUsd > 0
-      ? Math.round((invoice.totalBs + invoiceIgtfBs) * 100) / 100
-      : invoice.totalBs;
+      ? Math.round((effectiveTotalBs + invoiceIgtfBs) * 100) / 100
+      : effectiveTotalBs;
 
     // Calculate total paid in USD from divisa methods
     const totalPaidDivisaUsd = dto.payments
@@ -559,6 +574,42 @@ export class InvoicesService {
 
     // Execute everything in transaction
     const result = await this.prisma.$transaction(async (tx) => {
+      // Generate correlative number with SELECT FOR UPDATE on Serie
+      const seriesRows = await tx.$queryRaw<any[]>`
+        SELECT "id", "lastNumber", "prefix" FROM "Serie"
+        WHERE id = ${paymentSerie.id} FOR UPDATE
+      `;
+      const s = seriesRows[0];
+      const nextNumber = s.lastNumber + 1;
+
+      await tx.serie.update({
+        where: { id: paymentSerie.id },
+        data: { lastNumber: nextNumber },
+      });
+
+      const year = new Date().getFullYear().toString().slice(-2);
+      const correlativo = nextNumber.toString().padStart(8, '0');
+      const invoiceNumber = `${s.prefix}-${year}-${correlativo}`;
+
+      // If the payment serie is VAT exempt, update item records to EXEMPT
+      if (paymentSerie.isVatExempt) {
+        for (const item of invoice.items) {
+          const lineSubtotal = item.unitPrice * item.quantity;
+          const lineTotalBs = Math.round(lineSubtotal * invoice.exchangeRate * 100) / 100;
+
+          await tx.invoiceItem.update({
+            where: { id: item.id },
+            data: {
+              ivaType: 'EXEMPT',
+              ivaAmount: 0,
+              totalUsd: lineSubtotal,
+              ivaAmountBs: 0,
+              totalBs: lineTotalBs,
+            },
+          });
+        }
+      }
+
       // Create payments
       let igtfAssigned = false;
       for (const payment of dto.payments) {
@@ -692,8 +743,8 @@ export class InvoicesService {
             warehouseId: warehouseId!,
             type: 'SALE',
             quantity: -item.quantity,
-            reason: `Venta factura ${invoice.number}`,
-            reference: invoice.number,
+            reason: `Venta factura ${invoiceNumber}`,
+            reference: invoiceNumber,
             createdById: user.id,
           },
         });
@@ -716,10 +767,13 @@ export class InvoicesService {
         }
       }
 
-      // Update invoice status, paymentType, IGTF, cashier, and release lock
+      // Update invoice: assign number, serie, status, IGTF, cashier, release lock
       const updatedInvoice = await tx.invoice.update({
         where: { id },
         data: {
+          number: invoiceNumber,
+          serieId: paymentSerie.id,
+          cashRegisterId: serieCashRegisterId,
           status: 'PAID',
           paymentType: dto.isCredit ? 'CREDIT' : 'CASH',
           isCredit: dto.isCredit || false,
@@ -733,6 +787,10 @@ export class InvoicesService {
           lockedAt: null,
           igtfUsd: invoiceIgtfUsd,
           igtfBs: invoiceIgtfBs,
+          subtotalUsd: effectiveSubtotalUsd,
+          subtotalBs: effectiveSubtotalBs,
+          ivaUsd: paymentSerie.isVatExempt ? 0 : invoice.ivaUsd,
+          ivaBs: paymentSerie.isVatExempt ? 0 : invoice.ivaBs,
           totalUsd: newTotalUsd,
           totalBs: newTotalBs,
           totalPaidUsd: hasOverpayment ? Math.round(totalPaidDivisaUsd * 100) / 100 : 0,
@@ -810,7 +868,7 @@ export class InvoicesService {
           data: {
             invoiceId: result.id,
             entryDate: result.paidAt || new Date(),
-            invoiceNumber: result.number,
+            invoiceNumber: result.number!,
             controlNumber: result.controlNumber || null,
             customerName: result.customer?.name || 'Cliente General',
             customerRif: result.customer?.rif
@@ -864,7 +922,22 @@ export class InvoicesService {
       data: { lockedById: user.id, lockedAt: new Date() },
     });
 
-    return invoice;
+    // Enrich items with product's current priceDetal so the POS can
+    // reconstruct the correct price regardless of the serie's VAT exemption
+    const productIds = invoice.items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, priceDetal: true },
+    });
+    const priceMap = new Map(products.map((p) => [p.id, p.priceDetal]));
+
+    return {
+      ...invoice,
+      items: invoice.items.map((item) => ({
+        ...item,
+        priceDetal: priceMap.get(item.productId) ?? null,
+      })),
+    };
   }
 
   async updateItems(
@@ -912,11 +985,12 @@ export class InvoicesService {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
 
-      // priceDetal already includes IVA — extract base price
+      // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;
+      const originalIvaRate = IVA_RATES[product.ivaType] || 0;
       const effectiveIvaType = invoiceSerie?.isVatExempt ? 'EXEMPT' : product.ivaType;
       const ivaRate = IVA_RATES[effectiveIvaType] || 0;
-      const ivaMultiplier = 1 + ivaRate;
+      const ivaMultiplier = 1 + originalIvaRate;
       const baseUnitPrice = priceWithIva / ivaMultiplier;
 
       // Apply line discount

@@ -1,11 +1,9 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryPayablesDto } from './dto/query-payables.dto';
-import { PayPayableDto } from './dto/pay-payable.dto';
 
 @Injectable()
 export class PayablesService {
@@ -55,7 +53,7 @@ export class PayablesService {
           purchaseOrder: { select: { id: true, number: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
-            select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },
+            select: { id: true, amountUsd: true, createdAt: true, receiptId: true, method: { select: { id: true, name: true } }, receipt: { select: { id: true, number: true } } },
           },
         },
       }),
@@ -80,7 +78,10 @@ export class PayablesService {
         },
         payments: {
           orderBy: { createdAt: 'desc' },
-          include: { method: true },
+          include: {
+            method: true,
+            receipt: { select: { id: true, number: true } },
+          },
         },
       },
     });
@@ -138,72 +139,6 @@ export class PayablesService {
         count: s.count,
       })),
     };
-  }
-
-  async pay(id: string, dto: PayPayableDto, userId: string) {
-    const payable = await this.prisma.payable.findUnique({
-      where: { id },
-      include: { supplier: true },
-    });
-    if (!payable) throw new NotFoundException('Cuenta por pagar no encontrada');
-    if (payable.status === 'PAID') {
-      throw new BadRequestException('Esta cuenta ya esta completamente pagada');
-    }
-
-    const balance = payable.netPayableUsd - payable.paidAmountUsd;
-    if (dto.amountUsd > balance + 0.01) {
-      throw new BadRequestException(
-        `El monto excede el saldo pendiente de $${balance.toFixed(2)}`,
-      );
-    }
-
-    // Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) {
-      throw new BadRequestException('No hay tasa BCV registrada para hoy');
-    }
-
-    const amountBs = Math.round(dto.amountUsd * rate.rate * 100) / 100;
-    const newPaidAmountUsd = Math.round((payable.paidAmountUsd + dto.amountUsd) * 100) / 100;
-    const newPaidAmountBs = Math.round((payable.paidAmountBs + amountBs) * 100) / 100;
-    const isPaidInFull = newPaidAmountUsd >= payable.netPayableUsd - 0.01;
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.payablePayment.create({
-        data: {
-          payableId: id,
-          amountUsd: dto.amountUsd,
-          amountBs,
-          exchangeRate: rate.rate,
-          methodId: dto.methodId,
-          reference: dto.reference,
-          notes: dto.notes,
-          createdById: userId,
-        },
-      });
-
-      const updated = await tx.payable.update({
-        where: { id },
-        data: {
-          paidAmountUsd: newPaidAmountUsd,
-          paidAmountBs: newPaidAmountBs,
-          status: isPaidInFull ? 'PAID' : 'PARTIAL',
-          paidAt: isPaidInFull ? new Date() : null,
-        },
-        include: {
-          supplier: true,
-          purchaseOrder: { select: { id: true, number: true } },
-          payments: { orderBy: { createdAt: 'desc' } },
-        },
-      });
-
-      return {
-        ...updated,
-        balanceUsd: Math.round((updated.netPayableUsd - updated.paidAmountUsd) * 100) / 100,
-      };
-    });
   }
 
   async findBySupplier(supplierId: string) {

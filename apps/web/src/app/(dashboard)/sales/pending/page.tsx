@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 interface PendingInvoice {
   id: string;
-  number: string;
+  number: string | null;
   status: string;
   totalUsd: number;
   totalBs: number;
@@ -81,7 +81,7 @@ export default function PendingPage() {
           {invoices.map(inv => (
             <div key={inv.id} className="card p-4 flex flex-col gap-3 hover:border-green-500/30 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-mono text-green-400">{inv.number}</span>
+                <span className="text-sm font-mono text-green-400">{inv.number || 'Sin numero'}</span>
                 <span className="text-xs text-slate-500">{timeAgo(inv.createdAt)}</span>
               </div>
 

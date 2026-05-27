@@ -742,7 +742,7 @@ export default function ProductDetailPage() {
                             <span className="text-red-400">-{movMeta.totalExits}</span>
                           </td>
                           <td colSpan={2} className="px-4 py-3 text-right font-mono text-white font-semibold">
-                            Saldo: {movements.length > 0 ? movements[movements.length - 1].stockAfter : 0}
+                            Saldo: {movements.length > 0 ? movements[0].stockAfter : 0}
                           </td>
                           <td colSpan={3}></td>
                         </tr>

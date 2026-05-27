@@ -52,7 +52,7 @@ export default function PrintMonitor() {
     const sep = '-'.repeat(w);
 
     lines.push(job.printArea.name.substring(0, w).padStart((w + job.printArea.name.length) / 2));
-    lines.push(`Factura: ${job.invoice.number}`.padStart((w + `Factura: ${job.invoice.number}`.length) / 2));
+    lines.push(`Factura: ${job.invoice.number || 'S/N'}`.padStart((w + `Factura: ${job.invoice.number || 'S/N'}`.length) / 2));
     lines.push(`${dateStr} ${timeStr}`.padStart((w + `${dateStr} ${timeStr}`.length) / 2));
     lines.push(sep);
     lines.push('Cod.   Ref.Prov   Descripcion         Cant');
@@ -212,7 +212,7 @@ export default function PrintMonitor() {
           {currentJob.printArea.name}
         </div>
         <div style={{ marginTop: '2px' }}>
-          Factura: {currentJob.invoice.number}
+          Factura: {currentJob.invoice.number || 'S/N'}
         </div>
         <div>
           {dateStr} {timeStr}
