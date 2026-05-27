@@ -173,6 +173,18 @@ export default function CreditDebitNoteDetailPage() {
         }
       }
 
+      // Non-fiscal return ticket for NCV MERCHANDISE
+      if (posted.type === 'NCV' && posted.origin === 'MERCHANDISE' && !posted.serie?.isFiscal) {
+        try {
+          const { printReturnReceipt } = await import('@/lib/print-receipt');
+          const configRes = await fetch('/api/proxy/config');
+          const companyConfig = configRes.ok ? await configRes.json() : {};
+          await printReturnReceipt(posted, posted.invoice, companyConfig);
+        } catch (printErr: any) {
+          console.error('Error printing return receipt:', printErr);
+        }
+      }
+
       setMessage({ type: 'success', text: 'Nota confirmada exitosamente' });
       fetchNote();
     } catch (err: any) {
@@ -216,6 +228,19 @@ export default function CreditDebitNoteDetailPage() {
       fetchNote();
     } catch (err: any) {
       setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
+    }
+  }
+
+  async function handleReturnTicketPrint() {
+    if (!note || !note.invoice) return;
+    try {
+      const { printReturnReceipt } = await import('@/lib/print-receipt');
+      const configRes = await fetch('/api/proxy/config');
+      const companyConfig = configRes.ok ? await configRes.json() : {};
+      await printReturnReceipt(note, note.invoice, companyConfig);
+      setMessage({ type: 'success', text: 'Ticket de devolución enviado a imprimir' });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Error al imprimir ticket: ${err.message}` });
     }
   }
 
@@ -301,6 +326,11 @@ export default function CreditDebitNoteDetailPage() {
               {note.type === 'NCV' && note.serie?.isFiscal && !note.fiscalPrinted && (
                 <button onClick={handleFiscalPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors">
                   <Printer size={14} /> Imprimir Fiscal
+                </button>
+              )}
+              {note.type === 'NCV' && note.origin === 'MERCHANDISE' && !note.serie?.isFiscal && (
+                <button onClick={handleReturnTicketPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors">
+                  <Printer size={14} /> Imprimir Ticket
                 </button>
               )}
               <button onClick={() => window.open(`/api/proxy/credit-debit-notes/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">

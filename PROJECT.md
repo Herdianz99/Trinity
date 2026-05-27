@@ -692,6 +692,24 @@ model Payment {
 - Tabla editable con badges AUTO/MANUAL, modal edición/creación, fila de totales
 - PDF con tabla + segunda página de resumen fiscal del período
 
+#### Sesión 49 — Libro de Ventas editable, ticket de devolución y correcciones fiscales
+**Backend:**
+- SalesBookModule: CRUD de entradas del libro de ventas (modelo SalesBookEntry)
+  - GET /sales-book?from&to — lista entradas filtradas por rango de fechas
+  - POST /sales-book — crear entrada manual
+  - PATCH /sales-book/:id — editar entrada (no afecta factura original)
+  - DELETE /sales-book/:id — eliminar entrada (solo ADMIN)
+  - GET /sales-book/pdf?from&to — datos para PDF con resumen fiscal
+- InvoicesService.pay(): auto-crea SalesBookEntry al pagar factura fiscal
+- print-receipt.ts: buildReturnReceiptText() + printReturnReceipt() para devoluciones no fiscales
+
+**Frontend:**
+- Libro de ventas rediseñado: date pickers desde/hasta, botones rápidos (este mes, quincena 1/2, mes anterior)
+- Tabla editable con badges AUTO/MANUAL, modal edición/creación, fila de totales, IGTF
+- PDF con tabla + segunda página de resumen fiscal del período
+- credit-debit-notes/[id]: ticket térmico para devoluciones no fiscales via Trinity Agent
+- Botón "Imprimir Ticket" para reimpresión manual de devoluciones no fiscales
+
 #### Sesión 5 — Ventas y POS
 **Backend:**
 - CustomersModule: CRUD con crédito

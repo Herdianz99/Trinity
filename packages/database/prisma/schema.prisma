@@ -262,6 +262,7 @@ model User {
   dynamicKeys         DynamicKey[]
   purchaseBills       PurchaseOrder[]  @relation("PurchaseBillResponsible")
   purchaseBookEntries  PurchaseBookEntry[]  @relation("PurchaseBookEntries")
+  salesBookEntries     SalesBookEntry[]     @relation("SalesBookEntries")
   retentionVouchers    RetentionVoucher[]   @relation("RetentionVoucherCreator")
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
@@ -793,6 +794,7 @@ model Invoice {
   receivables      Receivable[]
   printJobs        PrintJob[]
   creditDebitNotes CreditDebitNote[]
+  salesBookEntries SalesBookEntry[]
   createdById      String
   sellerId       String?
   seller         Seller?       @relation(fields: [sellerId], references: [id])
@@ -1268,6 +1270,33 @@ model PurchaseBookEntry {
   createdBy              User              @relation("PurchaseBookEntries", fields: [createdById], references: [id])
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
+}
+
+// ============================================
+// LIBRO DE VENTAS
+// ============================================
+
+model SalesBookEntry {
+  id                    String   @id @default(cuid())
+  invoiceId             String?
+  invoice               Invoice? @relation(fields: [invoiceId], references: [id])
+  entryDate             DateTime
+  invoiceNumber         String
+  controlNumber         String?
+  customerName          String
+  customerRif           String?
+  exemptAmountBs        Float    @default(0)
+  taxableBaseBs         Float    @default(0)
+  ivaAmountBs           Float    @default(0)
+  igtfAmountBs          Float    @default(0)
+  totalBs               Float    @default(0)
+  isManual              Boolean  @default(false)
+  isRetentionLine       Boolean  @default(false)
+  notes                 String?
+  createdById           String
+  createdBy             User     @relation("SalesBookEntries", fields: [createdById], references: [id])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 // ============================================

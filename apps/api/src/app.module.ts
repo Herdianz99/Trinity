@@ -39,6 +39,7 @@ import { CashMovementsModule } from './modules/cash-movements/cash-movements.mod
 import { InventoryAnalysisModule } from './modules/inventory-analysis/inventory-analysis.module';
 import { IvaRetentionModule } from './modules/iva-retention/iva-retention.module';
 import { PurchaseBookModule } from './modules/purchase-book/purchase-book.module';
+import { SalesBookModule } from './modules/sales-book/sales-book.module';
 import { RetentionVouchersModule } from './modules/retention-vouchers/retention-vouchers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -88,6 +89,7 @@ import { SeriesModule } from './modules/series/series.module';
     InventoryAnalysisModule,
     IvaRetentionModule,
     PurchaseBookModule,
+    SalesBookModule,
     RetentionVouchersModule,
     DashboardModule,
     ReportsModule,

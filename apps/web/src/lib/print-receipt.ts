@@ -327,6 +327,86 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   return lines.join('\n');
 }
 
+export function buildReturnReceiptText(note: any, invoice: any, company: CompanyInfo): string {
+  const items: any[] = note.items || [];
+  const exchangeRate = note.exchangeRate || 0;
+  const w = 42;
+
+  const pad = (label: string, value: string) => {
+    const space = Math.max(1, w - label.length - value.length);
+    return `${label}${' '.repeat(space)}${value}`;
+  };
+
+  const lines: string[] = [];
+
+  // Header
+  lines.push(`{{CENTER}}{{BIG}}${company.companyName || 'EMPRESA'}{{/BIG}}{{/CENTER}}`);
+  if (company.rif) lines.push(`{{CENTER}}RIF: ${company.rif}{{/CENTER}}`);
+  if (company.address) lines.push(`{{CENTER}}${company.address}{{/CENTER}}`);
+  if (company.phone) lines.push(`{{CENTER}}Telf: ${company.phone}{{/CENTER}}`);
+  lines.push('{{LINE}}');
+
+  // Note info
+  lines.push('{{CENTER}}{{BOLD}}NOTA DE DEVOLUCION{{/BOLD}}{{/CENTER}}');
+  lines.push(`{{CENTER}}${note.number || 'S/N'}{{/CENTER}}`);
+  lines.push(`Fecha: ${fmtDate(note.createdAt)}`);
+  if (invoice) {
+    lines.push(`Factura origen: ${invoice.number || 'S/N'}`);
+  }
+  lines.push('{{LINE}}');
+
+  // Customer
+  const customer = invoice?.customer || note.invoice?.customer;
+  if (customer) {
+    lines.push(`Cliente: ${customer.name}`);
+    if (customer.rif) lines.push(`RIF: ${customer.documentType ? customer.documentType + '-' : ''}${customer.rif}`);
+  }
+  lines.push('{{LINE}}');
+
+  // Items header
+  lines.push(`{{BOLD}}${pad('ARTICULO', 'TOTAL')}{{/BOLD}}`);
+
+  // Items
+  for (const item of items) {
+    const name = item.productName || item.name || 'Producto';
+    const total = item.totalUsd || (item.unitPriceUsd * item.quantity);
+    lines.push(`{{BOLD}}${name}{{/BOLD}}`);
+    lines.push(`  ${item.quantity} x $${fmt(item.unitPriceUsd)}${' '.repeat(Math.max(1, w - 4 - String(item.quantity).length - fmt(item.unitPriceUsd).length - fmt(total).length - 4))}$${fmt(total)}`);
+  }
+  lines.push('{{LINE}}');
+
+  // Totals
+  lines.push(`{{BOLD}}${pad('Total devuelto:', `$${fmt(note.totalUsd)}`)}{{/BOLD}}`);
+  if (exchangeRate > 0) {
+    const totalBs = note.totalBs || (note.totalUsd * exchangeRate);
+    lines.push(pad('Total Bs:', `Bs ${fmt(totalBs)}`));
+    lines.push(`{{CENTER}}Tasa: ${fmt(exchangeRate)} Bs/USD{{/CENTER}}`);
+  }
+  lines.push('{{LINE}}');
+
+  lines.push('{{CENTER}}Documento no fiscal{{/CENTER}}');
+  lines.push('{{CENTER}}Devolucion procesada{{/CENTER}}');
+  lines.push('{{FEED:3}}');
+  lines.push('{{CUT}}');
+
+  return lines.join('\n');
+}
+
+export async function printReturnReceipt(note: any, invoice: any, company: CompanyInfo): Promise<void> {
+  // Try Trinity Agent first
+  try {
+    const { isAgentRunning, printTicket } = await import('@/lib/trinity-agent');
+    const agentUp = await isAgentRunning();
+    if (agentUp) {
+      const text = buildReturnReceiptText(note, invoice, company);
+      const printed = await printTicket(text);
+      if (printed) return;
+    }
+  } catch {}
+
+  // Fallback: browser print not supported for return receipts (use PDF)
+}
+
 export async function printReceipt(invoice: any, company: CompanyInfo): Promise<void> {
   // Try Trinity Agent first
   try {

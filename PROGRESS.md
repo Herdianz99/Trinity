@@ -1,5 +1,63 @@
 # Trinity ERP — Progreso
 
+## Sesion 49 — Libro de ventas editable, ticket de devolucion y correcciones fiscales
+
+### Base de datos
+- **Modelo SalesBookEntry**: Nuevo modelo para registros editables del libro de ventas
+  - `invoiceId?`, `entryDate`, `invoiceNumber`, `controlNumber?`, `customerName`, `customerRif?`
+  - `exemptAmountBs`, `taxableBaseBs`, `ivaAmountBs`, `igtfAmountBs`, `totalBs`
+  - `isManual`, `isRetentionLine`, `notes?`, `createdById`
+  - Relaciones con Invoice y User
+- **Migracion**: `20260526020000_add_sales_book_entry` con IF NOT EXISTS
+
+### Backend (NestJS)
+- **SalesBookModule**: Nuevo modulo CRUD para el libro de ventas (patron identico a PurchaseBookModule)
+  - `GET /sales-book?from&to` — lista entradas por rango de fechas
+  - `GET /sales-book/pdf?from&to` — datos para PDF con resumen fiscal
+  - `POST /sales-book` — crear entrada manual
+  - `PATCH /sales-book/:id` — editar entrada
+  - `DELETE /sales-book/:id` — solo ADMIN
+- **InvoicesService.pay()**: Al pagar factura fiscal, crea automaticamente SalesBookEntry
+  - Calcula montos en Bs por tipo IVA (exento, base imponible, IVA, IGTF)
+  - No falla el pago si la creacion del entry falla (try/catch)
+- **DTOs**: create-sales-book-entry.dto.ts, update-sales-book-entry.dto.ts
+
+### Frontend (Next.js)
+- **Pagina `/fiscal/libro-ventas`**: Reescrita completamente
+  - Reemplaza selector mes/año por date pickers "Desde" y "Hasta"
+  - Botones rapidos: "Este mes", "Quincena 1 (1-15)", "Quincena 2 (16-fin)", "Mes anterior"
+  - Tabla editable con columnas: N° | Fecha | N° Control | N° Factura | Cliente | RIF | Exento Bs | Base Imp Bs | IVA Bs | IGTF Bs | Total Bs
+  - Cada fila con boton editar (lapiz) y eliminar
+  - Badges "MANUAL" (amber) y "AUTO" (sky) para distinguir origen
+  - Fila de totales al pie en negrita
+  - Modal editar/crear con todos los campos + nota "Los cambios no afectan la factura original"
+  - Boton "+ Agregar entrada manual"
+  - Exportar PDF con segunda pagina de resumen fiscal
+- **Pagina `/credit-debit-notes/[id]`**: Ticket de devolucion no fiscal
+  - Al confirmar NCV MERCHANDISE no fiscal, imprime ticket via Trinity Agent
+  - Nuevo boton "Imprimir Ticket" (verde) para reimpresion manual
+- **print-receipt.ts**: Nuevas funciones exportadas
+  - `buildReturnReceiptText(note, invoice, company)` — formato ESC/POS para devolucion
+  - `printReturnReceipt(note, invoice, company)` — envia ticket via Trinity Agent
+
+### Archivos creados
+- `apps/api/src/modules/sales-book/sales-book.module.ts`
+- `apps/api/src/modules/sales-book/sales-book.controller.ts`
+- `apps/api/src/modules/sales-book/sales-book.service.ts`
+- `apps/api/src/modules/sales-book/dto/create-sales-book-entry.dto.ts`
+- `apps/api/src/modules/sales-book/dto/update-sales-book-entry.dto.ts`
+- `packages/database/prisma/migrations/20260526020000_add_sales_book_entry/migration.sql`
+
+### Archivos modificados
+- `packages/database/prisma/schema.prisma` — SalesBookEntry model, relacion en Invoice y User
+- `apps/api/src/app.module.ts` — Registro de SalesBookModule
+- `apps/api/src/modules/invoices/invoices.service.ts` — Auto-crear SalesBookEntry al pagar
+- `apps/web/src/app/(dashboard)/fiscal/libro-ventas/page.tsx` — Reescrito con entradas editables
+- `apps/web/src/app/(dashboard)/credit-debit-notes/[id]/page.tsx` — Ticket no fiscal + boton reimprimir
+- `apps/web/src/lib/print-receipt.ts` — buildReturnReceiptText + printReturnReceipt
+
+---
+
 ## Sesion 48 — Modelo Serie para configuracion de documentos fiscales
 
 ### Base de datos

@@ -1,72 +1,145 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Loader2, FileDown, Search } from 'lucide-react';
+import {
+  BookOpen, Loader2, FileDown, Search, Plus, Pencil, Trash2, X, Save, Calendar,
+} from 'lucide-react';
 
-interface VentaRow {
-  numero: number;
-  fecha: string;
-  numeroFactura: string;
-  numeroControl: string;
-  rifCliente: string;
-  nombreCliente: string;
-  tipoPago: string;
-  baseImponibleExenta: number;
-  baseImponibleReducida: number;
-  baseImponibleGeneral: number;
-  baseImponibleEspecial: number;
-  ivaReducido: number;
-  ivaGeneral: number;
-  ivaEspecial: number;
-  igtf: number;
-  totalFactura: number;
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface SalesBookEntry {
+  id: string;
+  invoiceId: string | null;
+  invoice: { id: string; number: string } | null;
+  entryDate: string;
+  invoiceNumber: string;
+  controlNumber: string | null;
+  customerName: string;
+  customerRif: string | null;
+  exemptAmountBs: number;
+  taxableBaseBs: number;
+  ivaAmountBs: number;
+  igtfAmountBs: number;
+  totalBs: number;
+  isManual: boolean;
+  isRetentionLine: boolean;
+  notes: string | null;
+  createdBy: { id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Totales {
-  totalFacturas: number;
-  baseImponibleExenta: number;
-  baseImponibleReducida: number;
+  totalEntries: number;
+  exemptAmountBs: number;
+  taxableBaseBs: number;
+  ivaAmountBs: number;
+  igtfAmountBs: number;
+  totalBs: number;
+}
+
+interface PdfSummary {
+  ventasExentas: number;
   baseImponibleGeneral: number;
-  baseImponibleEspecial: number;
-  ivaReducido: number;
-  ivaGeneral: number;
-  ivaEspecial: number;
-  igtf: number;
+  debitoFiscalGeneral: number;
+  totalBaseImponible: number;
+  totalDebitoFiscal: number;
+  totalIgtf: number;
   totalVentas: number;
 }
 
-const MONTHS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatVe(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+// ── Entry form defaults ──────────────────────────────────────────────────────
+
+const EMPTY_FORM = {
+  entryDate: '',
+  invoiceNumber: '',
+  controlNumber: '',
+  customerName: '',
+  customerRif: '',
+  exemptAmountBs: 0,
+  taxableBaseBs: 0,
+  ivaAmountBs: 0,
+  igtfAmountBs: 0,
+  totalBs: 0,
+  notes: '',
+};
+
+type EntryForm = typeof EMPTY_FORM;
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export default function LibroVentasPage() {
   const now = new Date();
-  const [month, setMonth] = useState(now.getMonth());
-  const [year, setYear] = useState(now.getFullYear());
-  const [rows, setRows] = useState<VentaRow[]>([]);
+
+  // Date range state
+  const [fromDate, setFromDate] = useState(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [toDate, setToDate] = useState(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), lastDayOfMonth(now.getFullYear(), now.getMonth()))));
+
+  // Data state
+  const [entries, setEntries] = useState<SalesBookEntry[]>([]);
   const [totales, setTotales] = useState<Totales | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<EntryForm>({ ...EMPTY_FORM });
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => { document.title = 'Libro de Ventas | Trinity ERP'; }, []);
+
+  // ── Quick period buttons ─────────────────────────────────────────────────
+
+  function setThisMonth() {
+    setFromDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setToDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), lastDayOfMonth(now.getFullYear(), now.getMonth()))));
+  }
+
+  function setQuincena1() {
+    setFromDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setToDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 15)));
+  }
+
+  function setQuincena2() {
+    setFromDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 16)));
+    setToDate(toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), lastDayOfMonth(now.getFullYear(), now.getMonth()))));
+  }
+
+  function setLastMonth() {
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    setFromDate(toLocalDateStr(prev));
+    setToDate(toLocalDateStr(new Date(prev.getFullYear(), prev.getMonth(), lastDayOfMonth(prev.getFullYear(), prev.getMonth()))));
+  }
+
+  // ── Fetch data ───────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      const to = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-      const res = await fetch(`/api/proxy/fiscal/libro-ventas?from=${from}&to=${to}`);
+      const res = await fetch(`/api/proxy/sales-book?from=${fromDate}&to=${toDate}`);
       if (!res.ok) throw new Error('Error al cargar datos');
       const data = await res.json();
-      setRows(data.rows || []);
+      setEntries(data.entries || []);
       setTotales(data.totales || null);
       setLoaded(true);
     } catch (err: any) {
@@ -74,14 +147,98 @@ export default function LibroVentasPage() {
     } finally {
       setLoading(false);
     }
-  }, [month, year]);
+  }, [fromDate, toDate]);
+
+  // ── Modal handlers ───────────────────────────────────────────────────────
+
+  function openCreateModal() {
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM, entryDate: toLocalDateStr(now) });
+    setModalOpen(true);
+  }
+
+  function openEditModal(entry: SalesBookEntry) {
+    setEditingId(entry.id);
+    setForm({
+      entryDate: entry.entryDate ? entry.entryDate.substring(0, 10) : '',
+      invoiceNumber: entry.invoiceNumber,
+      controlNumber: entry.controlNumber || '',
+      customerName: entry.customerName,
+      customerRif: entry.customerRif || '',
+      exemptAmountBs: entry.exemptAmountBs,
+      taxableBaseBs: entry.taxableBaseBs,
+      ivaAmountBs: entry.ivaAmountBs,
+      igtfAmountBs: entry.igtfAmountBs,
+      totalBs: entry.totalBs,
+      notes: entry.notes || '',
+    });
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM });
+  }
+
+  function updateForm(field: keyof EntryForm, value: string | number) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        exemptAmountBs: Number(form.exemptAmountBs) || 0,
+        taxableBaseBs: Number(form.taxableBaseBs) || 0,
+        ivaAmountBs: Number(form.ivaAmountBs) || 0,
+        igtfAmountBs: Number(form.igtfAmountBs) || 0,
+        totalBs: Number(form.totalBs) || 0,
+      };
+
+      const url = editingId
+        ? `/api/proxy/sales-book/${editingId}`
+        : '/api/proxy/sales-book';
+      const method = editingId ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al guardar');
+      }
+
+      closeModal();
+      fetchData();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('¿Eliminar esta entrada del libro de ventas?')) return;
+    try {
+      const res = await fetch(`/api/proxy/sales-book/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al eliminar');
+      }
+      fetchData();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  // ── PDF Export ───────────────────────────────────────────────────────────
 
   async function exportPdf() {
-    const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const to = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-
-    // Fetch company config for header
     let companyName = 'Trinity ERP';
     let companyRif = '';
     try {
@@ -91,50 +248,75 @@ export default function LibroVentasPage() {
       companyRif = cfg.rif || '';
     } catch {}
 
-    // Open print-friendly window
+    let summary: PdfSummary | null = null;
+    try {
+      const pdfRes = await fetch(`/api/proxy/sales-book/pdf?from=${fromDate}&to=${toDate}`);
+      const pdfData = await pdfRes.json();
+      summary = pdfData.summary;
+    } catch {}
+
     const printWin = window.open('', '_blank');
     if (!printWin) return;
 
-    const tableRows = rows.map((r, i) => `
+    const from = new Date(fromDate + 'T00:00:00');
+    const to = new Date(toDate + 'T00:00:00');
+    const periodoStr = `${from.toLocaleDateString('es-VE')} al ${to.toLocaleDateString('es-VE')}`;
+
+    const tableRows = entries.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${new Date(r.fecha).toLocaleDateString('es-VE')}</td>
-        <td>${r.numeroFactura}</td>
-        <td>${r.numeroControl || ''}</td>
-        <td>${r.rifCliente}</td>
-        <td>${r.nombreCliente}</td>
-        <td>${r.tipoPago === 'CREDIT' ? 'Credito' : 'Contado'}</td>
-        <td class="num">${formatVe(r.baseImponibleExenta)}</td>
-        <td class="num">${formatVe(r.baseImponibleReducida)}</td>
-        <td class="num">${formatVe(r.baseImponibleGeneral)}</td>
-        <td class="num">${formatVe(r.baseImponibleEspecial)}</td>
-        <td class="num">${formatVe(r.ivaReducido)}</td>
-        <td class="num">${formatVe(r.ivaGeneral)}</td>
-        <td class="num">${formatVe(r.ivaEspecial)}</td>
-        <td class="num">${formatVe(r.igtf)}</td>
-        <td class="num total">${formatVe(r.totalFactura)}</td>
+        <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
+        <td>${r.controlNumber || ''}</td>
+        <td>${r.invoiceNumber}</td>
+        <td>${r.customerName}</td>
+        <td>${r.customerRif || 'S/R'}</td>
+        <td class="num">${formatVe(r.exemptAmountBs)}</td>
+        <td class="num">${formatVe(r.taxableBaseBs)}</td>
+        <td class="num">${formatVe(r.ivaAmountBs)}</td>
+        <td class="num">${formatVe(r.igtfAmountBs)}</td>
+        <td class="num total">${formatVe(r.totalBs)}</td>
       </tr>
     `).join('');
 
     const totalesRow = totales ? `
       <tr class="totales">
-        <td colspan="7"><strong>TOTALES</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleExenta)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleReducida)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleGeneral)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.baseImponibleEspecial)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaReducido)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaGeneral)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaEspecial)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.igtf)}</strong></td>
-        <td class="num total"><strong>${formatVe(totales.totalVentas)}</strong></td>
+        <td colspan="6"><strong>TOTALES</strong></td>
+        <td class="num"><strong>${formatVe(totales.exemptAmountBs)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.taxableBaseBs)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.ivaAmountBs)}</strong></td>
+        <td class="num"><strong>${formatVe(totales.igtfAmountBs)}</strong></td>
+        <td class="num total"><strong>${formatVe(totales.totalBs)}</strong></td>
       </tr>
+    ` : '';
+
+    const summaryPage = summary ? `
+      <div class="page-break"></div>
+      <div class="header">
+        <h1>${companyName}</h1>
+        ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
+        <h2>RESUMEN FISCAL DEL LIBRO DE VENTAS</h2>
+        <p>Per&iacute;odo: ${periodoStr}</p>
+      </div>
+      <div class="summary">
+        <table class="summary-table">
+          <tbody>
+            <tr><td class="label">Ventas internas exentas:</td><td class="value">Bs ${formatVe(summary.ventasExentas)}</td></tr>
+            <tr><td class="label">Base imponible general (16%):</td><td class="value">Bs ${formatVe(summary.baseImponibleGeneral)}</td></tr>
+            <tr><td class="label">D&eacute;bito fiscal (16%):</td><td class="value">Bs ${formatVe(summary.debitoFiscalGeneral)}</td></tr>
+            <tr class="separator"><td colspan="2"><hr/></td></tr>
+            <tr class="highlight"><td class="label">Total base imponible:</td><td class="value">Bs ${formatVe(summary.totalBaseImponible)}</td></tr>
+            <tr class="highlight"><td class="label">Total d&eacute;bito fiscal:</td><td class="value">Bs ${formatVe(summary.totalDebitoFiscal)}</td></tr>
+            <tr><td class="label">Total IGTF:</td><td class="value">Bs ${formatVe(summary.totalIgtf)}</td></tr>
+            <tr class="grand-total"><td class="label">Total ventas del per&iacute;odo:</td><td class="value">Bs ${formatVe(summary.totalVentas)}</td></tr>
+          </tbody>
+        </table>
+      </div>
     ` : '';
 
     printWin.document.write(`<!DOCTYPE html>
     <html>
     <head>
-      <title>Libro de Ventas - ${MONTHS[month]} ${year}</title>
+      <title>Libro de Ventas - ${periodoStr}</title>
       <style>
         @page { size: A4 landscape; margin: 10mm; }
         body { font-family: Arial, sans-serif; font-size: 8pt; color: #000; }
@@ -149,6 +331,16 @@ export default function LibroVentasPage() {
         .total { font-weight: bold; }
         .totales td { background: #f0f0f0; border-top: 2px solid #333; }
         .footer { text-align: center; margin-top: 8px; font-size: 7pt; color: #888; }
+        .page-break { page-break-before: always; margin-top: 20mm; }
+        .summary { max-width: 600px; margin: 30px auto; }
+        .summary-table { border: none; }
+        .summary-table td { border: none; padding: 6px 12px; font-size: 10pt; }
+        .summary-table .label { text-align: left; color: #333; }
+        .summary-table .value { text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .summary-table .separator td { padding: 2px; }
+        .summary-table .separator hr { border: 1px solid #666; margin: 0; }
+        .summary-table .highlight td { font-weight: bold; }
+        .summary-table .grand-total td { font-size: 12pt; font-weight: bold; border-top: 2px solid #333; padding-top: 10px; }
       </style>
     </head>
     <body>
@@ -156,15 +348,15 @@ export default function LibroVentasPage() {
         <h1>${companyName}</h1>
         ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
         <h2>LIBRO DE VENTAS</h2>
-        <p>Periodo: ${MONTHS[month].toUpperCase()} ${year}</p>
+        <p>Per&iacute;odo: ${periodoStr}</p>
       </div>
       <table>
         <thead>
           <tr>
-            <th>N&deg;</th><th>Fecha</th><th>N&deg; Factura</th><th>N&deg; Control</th>
-            <th>RIF Cliente</th><th>Cliente</th><th>Tipo</th>
-            <th>Base Exenta</th><th>Base Reducida</th><th>Base General</th><th>Base Especial</th>
-            <th>IVA 8%</th><th>IVA 16%</th><th>IVA 31%</th><th>IGTF</th><th>Total</th>
+            <th>N&deg;</th><th>Fecha</th><th>N&deg; Control</th><th>N&deg; Factura</th>
+            <th>Cliente</th><th>RIF</th>
+            <th>Exento Bs</th><th>Base Imponible Bs</th><th>IVA Bs</th>
+            <th>IGTF Bs</th><th>Total Bs</th>
           </tr>
         </thead>
         <tbody>
@@ -173,56 +365,96 @@ export default function LibroVentasPage() {
         </tbody>
       </table>
       <div class="footer">Generado el ${new Date().toLocaleString('es-VE')}</div>
+      ${summaryPage}
       <script>window.print();</script>
     </body>
     </html>`);
     printWin.document.close();
   }
 
-  const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-          <BookOpen className="text-emerald-400" size={24} />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Libro de Ventas</h1>
-          <p className="text-sm text-slate-400">Formato SENIAT - Registro de ventas del periodo</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <BookOpen className="text-emerald-400" size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Libro de Ventas</h1>
+            <p className="text-sm text-slate-400">Formato SENIAT - Registro de ventas con entradas editables</p>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="px-4 py-3 rounded-lg border bg-red-500/10 border-red-500/30 text-red-400">
-          {error}
+        <div className="px-4 py-3 rounded-lg border bg-red-500/10 border-red-500/30 text-red-400 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-300">
+            <X size={16} />
+          </button>
         </div>
       )}
 
       {/* Period Selector */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Mes</label>
-            <select value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
-              {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-            </select>
+            <label className="text-xs text-slate-400 mb-1 block">Desde</label>
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-2.5 text-slate-500" size={14} />
+              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-slate-200 w-[160px]" />
+            </div>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Ano</label>
-            <select value={year} onChange={e => setYear(Number(e.target.value))}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <label className="text-xs text-slate-400 mb-1 block">Hasta</label>
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-2.5 text-slate-500" size={14} />
+              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-slate-200 w-[160px]" />
+            </div>
           </div>
           <button onClick={fetchData} disabled={loading}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50">
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50 h-[38px]">
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
             Generar
           </button>
-          {loaded && rows.length > 0 && (
+        </div>
+
+        {/* Quick period buttons */}
+        <div className="flex flex-wrap gap-2">
+          <span className="text-xs text-slate-500 self-center mr-1">Rapido:</span>
+          <button onClick={setThisMonth}
+            className="px-3 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 text-xs transition-colors">
+            Este mes
+          </button>
+          <button onClick={setQuincena1}
+            className="px-3 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 text-xs transition-colors">
+            Quincena 1 (1-15)
+          </button>
+          <button onClick={setQuincena2}
+            className="px-3 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 text-xs transition-colors">
+            Quincena 2 (16-fin)
+          </button>
+          <button onClick={setLastMonth}
+            className="px-3 py-1 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 text-xs transition-colors">
+            Mes anterior
+          </button>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      {loaded && (
+        <div className="flex flex-wrap gap-2">
+          <button onClick={openCreateModal}
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2">
+            <Plus size={16} />
+            Agregar entrada manual
+          </button>
+          {entries.length > 0 && (
             <button onClick={exportPdf}
               className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
               <FileDown size={16} />
@@ -230,7 +462,7 @@ export default function LibroVentasPage() {
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {/* Table */}
       {loaded && (
@@ -239,72 +471,238 @@ export default function LibroVentasPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-700/50">
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">N&deg;</th>
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Fecha</th>
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">N&deg; Factura</th>
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">RIF Cliente</th>
-                  <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Cliente</th>
-                  <th className="text-center px-3 py-2.5 text-slate-400 font-medium">Tipo</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base Exenta</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base Reducida</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base General</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base Especial</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 8%</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 16%</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA 31%</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IGTF</th>
-                  <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Total</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium w-10">N&deg;</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Fecha</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Factura</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Cliente</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">RIF</th>
+                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Exento Bs</th>
+                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Imp. Bs</th>
+                  <th className="text-right px-2 py-2.5 text-emerald-400 font-medium">IVA Bs</th>
+                  <th className="text-right px-2 py-2.5 text-amber-400 font-medium">IGTF Bs</th>
+                  <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Total Bs</th>
+                  <th className="text-center px-2 py-2.5 text-slate-400 font-medium w-20">Acc.</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
-                  <tr><td colSpan={16} className="text-center py-8 text-slate-500">No hay facturas en este periodo</td></tr>
+                {entries.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} className="text-center py-10 text-slate-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <BookOpen size={32} className="text-slate-600" />
+                        <span>No hay entradas en este periodo</span>
+                        <button onClick={openCreateModal}
+                          className="mt-1 text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1">
+                          <Plus size={14} /> Agregar entrada manual
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ) : (
                   <>
-                    {rows.map(r => (
-                      <tr key={r.numero} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
-                        <td className="px-3 py-2 text-slate-300">{r.numero}</td>
-                        <td className="px-3 py-2 text-slate-300">{new Date(r.fecha).toLocaleDateString('es-VE')}</td>
-                        <td className="px-3 py-2 text-slate-200 font-mono">{r.numeroFactura}</td>
-                        <td className="px-3 py-2 text-slate-300">{r.numeroControl || '-'}</td>
-                        <td className="px-3 py-2 text-slate-300">{r.rifCliente}</td>
-                        <td className="px-3 py-2 text-slate-200">{r.nombreCliente}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.tipoPago === 'CREDIT' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' : 'text-blue-400 border-blue-500/30 bg-blue-500/10'}`}>
-                            {r.tipoPago === 'CREDIT' ? 'Credito' : 'Contado'}
-                          </span>
+                    {entries.map((entry, i) => (
+                      <tr key={entry.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group">
+                        <td className="px-2 py-2 text-slate-400">{i + 1}</td>
+                        <td className="px-2 py-2 text-slate-300">
+                          {entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleExenta)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleReducida)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleGeneral)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.baseImponibleEspecial)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaReducido)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaGeneral)}</td>
-                        <td className="px-3 py-2 text-right text-slate-300 tabular-nums">{formatVe(r.ivaEspecial)}</td>
-                        <td className="px-3 py-2 text-right text-amber-400/80 tabular-nums">{formatVe(r.igtf)}</td>
-                        <td className="px-3 py-2 text-right text-slate-100 font-semibold tabular-nums">{formatVe(r.totalFactura)}</td>
+                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
+                          {entry.controlNumber || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
+                          {entry.invoiceNumber}
+                        </td>
+                        <td className="px-2 py-2 text-slate-200">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate max-w-[160px]">{entry.customerName}</span>
+                            {entry.isManual ? (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">MANUAL</span>
+                            ) : (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">AUTO</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
+                          {entry.customerRif || 'S/R'}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
+                          {formatVe(entry.exemptAmountBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
+                          {formatVe(entry.taxableBaseBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-emerald-400 tabular-nums font-medium">
+                          {formatVe(entry.ivaAmountBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-amber-400 tabular-nums">
+                          {formatVe(entry.igtfAmountBs)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-100 font-semibold tabular-nums">
+                          {formatVe(entry.totalBs)}
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openEditModal(entry)}
+                              className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-blue-400 transition-colors"
+                              title="Editar">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDelete(entry.id)}
+                              className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-red-400 transition-colors"
+                              title="Eliminar">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {/* Totals row */}
                     {totales && (
                       <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                        <td colSpan={7} className="px-3 py-2.5 text-slate-100 font-bold">TOTALES ({totales.totalFacturas} facturas)</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleExenta)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleReducida)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleGeneral)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.baseImponibleEspecial)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaReducido)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaGeneral)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.ivaEspecial)}</td>
-                        <td className="px-3 py-2.5 text-right text-amber-400 font-bold tabular-nums">{formatVe(totales.igtf)}</td>
-                        <td className="px-3 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.totalVentas)}</td>
+                        <td colSpan={6} className="px-2 py-2.5 text-slate-100 font-bold">
+                          TOTALES ({totales.totalEntries} entradas)
+                        </td>
+                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.exemptAmountBs)}</td>
+                        <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.taxableBaseBs)}</td>
+                        <td className="px-2 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.ivaAmountBs)}</td>
+                        <td className="px-2 py-2.5 text-right text-amber-400 font-bold tabular-nums">{formatVe(totales.igtfAmountBs)}</td>
+                        <td className="px-2 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.totalBs)}</td>
+                        <td></td>
                       </tr>
                     )}
                   </>
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl mx-4 shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-slate-100">
+                {editingId ? 'Editar entrada' : 'Nueva entrada manual'}
+              </h2>
+              <button onClick={closeModal} className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Row 1: Fecha, Control, Factura */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha *</label>
+                  <input type="date" value={form.entryDate}
+                    onChange={e => updateForm('entryDate', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">N&deg; Control</label>
+                  <input type="text" value={form.controlNumber}
+                    onChange={e => updateForm('controlNumber', e.target.value)}
+                    placeholder="00-000000"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">N&deg; Factura *</label>
+                  <input type="text" value={form.invoiceNumber}
+                    onChange={e => updateForm('invoiceNumber', e.target.value)}
+                    placeholder="Numero de factura"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+              </div>
+
+              {/* Row 2: Cliente, RIF */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Cliente *</label>
+                  <input type="text" value={form.customerName}
+                    onChange={e => updateForm('customerName', e.target.value)}
+                    placeholder="Nombre del cliente"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">RIF</label>
+                  <input type="text" value={form.customerRif}
+                    onChange={e => updateForm('customerRif', e.target.value)}
+                    placeholder="V-12345678"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+              </div>
+
+              {/* Row 3: Montos fiscales */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Exento Bs</label>
+                  <input type="number" step="0.01" value={form.exemptAmountBs}
+                    onChange={e => updateForm('exemptAmountBs', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Base Imponible Bs</label>
+                  <input type="number" step="0.01" value={form.taxableBaseBs}
+                    onChange={e => updateForm('taxableBaseBs', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">IVA Bs</label>
+                  <input type="number" step="0.01" value={form.ivaAmountBs}
+                    onChange={e => updateForm('ivaAmountBs', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+              </div>
+
+              {/* Row 4: IGTF y total */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">IGTF Bs</label>
+                  <input type="number" step="0.01" value={form.igtfAmountBs}
+                    onChange={e => updateForm('igtfAmountBs', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Total Bs</label>
+                  <input type="number" step="0.01" value={form.totalBs}
+                    onChange={e => updateForm('totalBs', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Notas</label>
+                <textarea value={form.notes}
+                  onChange={e => updateForm('notes', e.target.value)}
+                  rows={2}
+                  placeholder="Observaciones opcionales"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none" />
+              </div>
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-700">
+              <p className="text-xs text-slate-500 italic max-w-xs">
+                Los cambios en el libro no afectan la factura original
+              </p>
+              <div className="flex gap-2">
+                <button onClick={closeModal}
+                  className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm">
+                  Cancelar
+                </button>
+                <button onClick={handleSave} disabled={saving || !form.entryDate || !form.invoiceNumber || !form.customerName}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50">
+                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                  Guardar cambios
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

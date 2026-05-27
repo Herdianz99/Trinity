@@ -787,6 +787,50 @@ export class InvoicesService {
       return updatedInvoice;
     });
 
+    // Auto-create SalesBookEntry for fiscal invoices
+    if (result.serie?.isFiscal) {
+      try {
+        const exchangeRate = result.exchangeRate || 1;
+        let exemptBs = 0;
+        let taxableBaseBs = 0;
+        let ivaBs = 0;
+
+        for (const item of result.items) {
+          const base = item.unitPrice * item.quantity;
+          const baseBs = base * exchangeRate;
+          if (item.ivaType === 'EXEMPT') {
+            exemptBs += baseBs;
+          } else {
+            taxableBaseBs += baseBs;
+            ivaBs += item.ivaAmountBs || (item.ivaAmount * exchangeRate);
+          }
+        }
+
+        await this.prisma.salesBookEntry.create({
+          data: {
+            invoiceId: result.id,
+            entryDate: result.paidAt || new Date(),
+            invoiceNumber: result.number,
+            controlNumber: result.controlNumber || null,
+            customerName: result.customer?.name || 'Cliente General',
+            customerRif: result.customer?.rif
+              ? `${result.customer.documentType || ''}${result.customer.documentType ? '-' : ''}${result.customer.rif}`
+              : null,
+            exemptAmountBs: Math.round(exemptBs * 100) / 100,
+            taxableBaseBs: Math.round(taxableBaseBs * 100) / 100,
+            ivaAmountBs: Math.round(ivaBs * 100) / 100,
+            igtfAmountBs: Math.round((result.igtfBs || 0) * 100) / 100,
+            totalBs: Math.round((result.totalBs || 0) * 100) / 100,
+            isManual: false,
+            createdById: user.id,
+          },
+        });
+      } catch (err) {
+        // Don't fail the payment if SalesBookEntry creation fails
+        console.error('[InvoicesService] Error creating SalesBookEntry:', err);
+      }
+    }
+
     return result;
   }
 
