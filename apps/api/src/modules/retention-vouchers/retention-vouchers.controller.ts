@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Param,
   Body,
@@ -10,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RetentionVouchersService } from './retention-vouchers.service';
+import { CreateRetentionVoucherDto } from './dto/create-retention-voucher.dto';
+import { UpdateRetentionVoucherDto } from './dto/update-retention-voucher.dto';
 import { IssueRetentionDto } from './dto/issue-retention.dto';
 
 @Controller('retention-vouchers')
@@ -32,9 +35,28 @@ export class RetentionVouchersController {
     return this.service.findAll(query);
   }
 
+  @Get('available-orders/:supplierId')
+  getAvailableOrders(@Param('supplierId') supplierId: string) {
+    return this.service.getAvailablePurchaseOrders(supplierId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateRetentionVoucherDto, @Request() req: any) {
+    return this.service.create(dto, req.user.id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateRetentionVoucherDto,
+    @Request() req: any,
+  ) {
+    return this.service.update(id, dto, req.user.id);
   }
 
   @Patch(':id/issue')

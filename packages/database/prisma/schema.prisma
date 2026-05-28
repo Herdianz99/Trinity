@@ -199,30 +199,30 @@ enum CashMovementType {
 // ============================================
 
 model CompanyConfig {
-  id                     String   @id @default("singleton")
-  companyName            String   @default("Trinity")
-  rif                    String?
-  address                String?
-  phone                  String?
-  email                  String?
-  bregaGlobalPct         Float    @default(0)
-  defaultGananciaPct     Float    @default(0)
-  defaultGananciaMayorPct Float   @default(0)
-  defaultWarehouseId     String?
-  invoicePrefix          String   @default("FAC")
-  creditAuthPassword     String?
-  quotationValidityDays  Int      @default(30)
-  overdueWarningDays     Int      @default(3)
-  ivaRetentionPct        Float    @default(75)
-  islrRetentionPct       Float    @default(0)
-  isIGTFContributor      Boolean  @default(false)
-  igtfPct                Float    @default(3)
-  fiscalCreditCode       String   @default("10")
-  allowNegativeStock     Boolean  @default(true)
-  defaultCustomerId      String?
-  logo                   String?  @db.Text
-  retentionNextNumber    Int      @default(1)
-  updatedAt              DateTime @updatedAt
+  id                      String   @id @default("singleton")
+  companyName             String   @default("Trinity")
+  rif                     String?
+  address                 String?
+  phone                   String?
+  email                   String?
+  bregaGlobalPct          Float    @default(0)
+  defaultGananciaPct      Float    @default(0)
+  defaultGananciaMayorPct Float    @default(0)
+  defaultWarehouseId      String?
+  invoicePrefix           String   @default("FAC")
+  creditAuthPassword      String?
+  quotationValidityDays   Int      @default(30)
+  overdueWarningDays      Int      @default(3)
+  ivaRetentionPct         Float    @default(75)
+  islrRetentionPct        Float    @default(0)
+  isIGTFContributor       Boolean  @default(false)
+  igtfPct                 Float    @default(3)
+  fiscalCreditCode        String   @default("10")
+  allowNegativeStock      Boolean  @default(true)
+  defaultCustomerId       String?
+  logo                    String?  @db.Text
+  retentionNextNumber     Int      @default(1)
+  updatedAt               DateTime @updatedAt
 }
 
 // ============================================
@@ -248,29 +248,29 @@ enum ExchangeRateSource {
 // ============================================
 
 model User {
-  id                  String           @id @default(cuid())
+  id                  String              @id @default(cuid())
   name                String
-  email               String           @unique
+  email               String              @unique
   password            String
   role                UserRole
-  isActive            Boolean          @default(true)
-  mustChangePassword  Boolean          @default(true)
+  isActive            Boolean             @default(true)
+  mustChangePassword  Boolean             @default(true)
   lastLoginAt         DateTime?
   permissions         UserPermission[]
-  sessionsOpened      CashSession[]    @relation("SessionOpenedBy")
-  sessionsClosed      CashSession[]    @relation("SessionClosedBy")
+  sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
+  sessionsClosed      CashSession[]       @relation("SessionClosedBy")
   seller              Seller?
-  invoicesAsCashier   Invoice[]        @relation("InvoiceCashier")
+  invoicesAsCashier   Invoice[]           @relation("InvoiceCashier")
   expenses            Expense[]
   cashMovements       CashMovement[]
   paymentSchedules    PaymentSchedule[]
   dynamicKeys         DynamicKey[]
-  purchaseBills       PurchaseOrder[]  @relation("PurchaseBillResponsible")
-  purchaseBookEntries  PurchaseBookEntry[]  @relation("PurchaseBookEntries")
-  salesBookEntries     SalesBookEntry[]     @relation("SalesBookEntries")
-  retentionVouchers    RetentionVoucher[]   @relation("RetentionVoucherCreator")
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  purchaseBills       PurchaseOrder[]     @relation("PurchaseBillResponsible")
+  purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
+  salesBookEntries    SalesBookEntry[]    @relation("SalesBookEntries")
+  retentionVouchers   RetentionVoucher[]  @relation("RetentionVoucherCreator")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 }
 
 model UserPermission {
@@ -295,16 +295,16 @@ model RolePermission {
 // ============================================
 
 model DynamicKey {
-  id          String                @id @default(cuid())
+  id          String                 @id @default(cuid())
   name        String
   keyHash     String
-  isActive    Boolean               @default(true)
+  isActive    Boolean                @default(true)
   permissions DynamicKeyPermission[]
   logs        DynamicKeyLog[]
   createdById String
-  createdBy   User                  @relation(fields: [createdById], references: [id])
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  createdBy   User                   @relation(fields: [createdById], references: [id])
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 }
 
 model DynamicKeyPermission {
@@ -386,22 +386,23 @@ model Brand {
 }
 
 model Supplier {
-  id               String          @id @default(cuid())
-  name             String
-  rif              String?
-  phone            String?
-  email            String?
-  address          String?
-  contactName      String?
-  isRetentionAgent Boolean         @default(false)
-  isActive         Boolean         @default(true)
-  products         Product[]
-  purchaseOrders   PurchaseOrder[]
-  payables         Payable[]
-  receipts         Receipt[]
-  ivaRetentions    IvaRetention[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                String             @id @default(cuid())
+  name              String
+  rif               String?
+  phone             String?
+  email             String?
+  address           String?
+  contactName       String?
+  isRetentionAgent  Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  products          Product[]
+  purchaseOrders    PurchaseOrder[]
+  payables          Payable[]
+  receipts          Receipt[]
+  ivaRetentions     IvaRetention[]
+  retentionVouchers RetentionVoucher[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 // ============================================
@@ -409,39 +410,39 @@ model Supplier {
 // ============================================
 
 model Product {
-  id               String              @id @default(cuid())
-  code             String              @unique
-  barcode          String?             @unique
+  id               String                   @id @default(cuid())
+  code             String                   @unique
+  barcode          String?                  @unique
   supplierRef      String?
   name             String
   description      String?
   categoryId       String?
-  category         Category?           @relation(fields: [categoryId], references: [id])
+  category         Category?                @relation(fields: [categoryId], references: [id])
   brandId          String?
-  brand            Brand?              @relation(fields: [brandId], references: [id])
+  brand            Brand?                   @relation(fields: [brandId], references: [id])
   supplierId       String?
-  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
-  isService        Boolean             @default(false)
-  purchaseUnit     String              @default("UNIT")
-  saleUnit         String              @default("UNIT")
-  conversionFactor Float               @default(1)
-  costUsd          Float               @default(0)
-  bregaApplies     Boolean             @default(true)
-  gananciaPct      Float               @default(0)
-  gananciaMayorPct Float               @default(0)
-  ivaType          IvaType             @default(GENERAL)
-  priceDetal       Float               @default(0)
-  priceMayor       Float               @default(0)
-  minStock         Float               @default(0)
-  isActive         Boolean             @default(true)
+  supplier         Supplier?                @relation(fields: [supplierId], references: [id])
+  isService        Boolean                  @default(false)
+  purchaseUnit     String                   @default("UNIT")
+  saleUnit         String                   @default("UNIT")
+  conversionFactor Float                    @default(1)
+  costUsd          Float                    @default(0)
+  bregaApplies     Boolean                  @default(true)
+  gananciaPct      Float                    @default(0)
+  gananciaMayorPct Float                    @default(0)
+  ivaType          IvaType                  @default(GENERAL)
+  priceDetal       Float                    @default(0)
+  priceMayor       Float                    @default(0)
+  minStock         Float                    @default(0)
+  isActive         Boolean                  @default(true)
   searchVector     Unsupported("tsvector")?
   stock            Stock[]
   movements        StockMovement[]
   purchaseItems    PurchaseOrderItem[]
   transferItems    TransferItem[]
   countItems       InventoryCountItem[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 }
 
 // ============================================
@@ -483,8 +484,8 @@ model StockMovement {
   warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
   type        MovementType
   quantity    Float
-  costUsd     Float         @default(0)
-  stockAfter  Float         @default(0)
+  costUsd     Float        @default(0)
+  stockAfter  Float        @default(0)
   reason      String?
   reference   String?
   createdById String
@@ -524,16 +525,16 @@ model TransferItem {
 // ============================================
 
 model InventoryCount {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   warehouseId  String
-  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id])
-  status       CountStatus         @default(DRAFT)
+  warehouse    Warehouse            @relation(fields: [warehouseId], references: [id])
+  status       CountStatus          @default(DRAFT)
   notes        String?
   items        InventoryCountItem[]
   createdById  String
   approvedById String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 }
 
 model InventoryCountItem {
@@ -552,64 +553,64 @@ model InventoryCountItem {
 // ============================================
 
 model PurchaseOrder {
-  id                     String              @id @default(cuid())
-  number                 String              @unique
-  supplierId             String
-  supplier               Supplier            @relation(fields: [supplierId], references: [id])
-  status                 PurchaseStatus      @default(PENDING)
-  invoiceDate            DateTime?
-  receivedDate           DateTime?
-  currency               String              @default("USD")
-  totalUsd               Float               @default(0)
-  totalBs                Float               @default(0)
-  exchangeRate           Float               @default(1)
-  surchargeUsd           Float               @default(0)
-  surchargeDistribution  String              @default("PROPORTIONAL")
-  totalWithSurchargeUsd  Float               @default(0)
-  isFiscal               Boolean             @default(true)
-  serieId                String?
-  serie                  Serie?              @relation(fields: [serieId], references: [id])
-  isCredit               Boolean             @default(false)
-  creditDays             Int                 @default(0)
-  supplierControlNumber  String?
-  islrRetentionPct       Float?
-  islrRetentionUsd       Float?
-  islrRetentionBs        Float?
-  notes                  String?
-  receivedAt             DateTime?
-  items                  PurchaseOrderItem[]
-  payables               Payable[]
-  creditDebitNotes       CreditDebitNote[]
-  ivaRetentions          IvaRetention[]
-  retentionVoucher       RetentionVoucher?
-  purchaseBookEntries    PurchaseBookEntry[]
-  createdById            String
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  id                    String                 @id @default(cuid())
+  number                String                 @unique
+  supplierId            String
+  supplier              Supplier               @relation(fields: [supplierId], references: [id])
+  status                PurchaseStatus         @default(PENDING)
+  invoiceDate           DateTime?
+  receivedDate          DateTime?
+  currency              String                 @default("USD")
+  totalUsd              Float                  @default(0)
+  totalBs               Float                  @default(0)
+  exchangeRate          Float                  @default(1)
+  surchargeUsd          Float                  @default(0)
+  surchargeDistribution String                 @default("PROPORTIONAL")
+  totalWithSurchargeUsd Float                  @default(0)
+  isFiscal              Boolean                @default(true)
+  serieId               String?
+  serie                 Serie?                 @relation(fields: [serieId], references: [id])
+  isCredit              Boolean                @default(false)
+  creditDays            Int                    @default(0)
+  supplierControlNumber String?
+  islrRetentionPct      Float?
+  islrRetentionUsd      Float?
+  islrRetentionBs       Float?
+  notes                 String?
+  receivedAt            DateTime?
+  items                 PurchaseOrderItem[]
+  payables              Payable[]
+  creditDebitNotes      CreditDebitNote[]
+  ivaRetentions         IvaRetention[]
+  retentionVoucherLines RetentionVoucherLine[]
+  purchaseBookEntries   PurchaseBookEntry[]
+  createdById           String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   // Purchase Bill fields
-  purchaseNumber         Int                 @default(0)
+  purchaseNumber         Int        @default(0)
   supplierSerialNumber   String?
   supplierInvoiceNumber  String?
-  discountGlobalPct      Float               @default(0)
-  discountGlobalUsd      Float               @default(0)
-  discountGlobalBs       Float               @default(0)
-  subtotalUsd            Float               @default(0)
-  subtotalBs             Float               @default(0)
-  exemptAmountUsd        Float               @default(0)
-  exemptAmountBs         Float               @default(0)
-  taxableBaseUsd         Float               @default(0)
-  taxableBaseBs          Float               @default(0)
-  totalIvaUsd            Float               @default(0)
-  totalIvaBs             Float               @default(0)
-  totalSurchargeUsd      Float               @default(0)
-  totalSurchargeBs       Float               @default(0)
+  discountGlobalPct      Float      @default(0)
+  discountGlobalUsd      Float      @default(0)
+  discountGlobalBs       Float      @default(0)
+  subtotalUsd            Float      @default(0)
+  subtotalBs             Float      @default(0)
+  exemptAmountUsd        Float      @default(0)
+  exemptAmountBs         Float      @default(0)
+  taxableBaseUsd         Float      @default(0)
+  taxableBaseBs          Float      @default(0)
+  totalIvaUsd            Float      @default(0)
+  totalIvaBs             Float      @default(0)
+  totalSurchargeUsd      Float      @default(0)
+  totalSurchargeBs       Float      @default(0)
   retentionVoucherNumber String?
   responsibleId          String?
-  responsible            User?               @relation("PurchaseBillResponsible", fields: [responsibleId], references: [id])
+  responsible            User?      @relation("PurchaseBillResponsible", fields: [responsibleId], references: [id])
   processedAt            DateTime?
   warehouseId            String?
-  warehouse              Warehouse?          @relation("PurchaseBillWarehouse", fields: [warehouseId], references: [id])
+  warehouse              Warehouse? @relation("PurchaseBillWarehouse", fields: [warehouseId], references: [id])
 }
 
 model PurchaseOrderItem {
@@ -660,24 +661,24 @@ model Customer {
 // ============================================
 
 model PaymentMethod {
-  id                 String            @id @default(cuid())
-  name               String            @unique
-  isDivisa           Boolean           @default(false)
-  createsReceivable  Boolean           @default(false)
-  isActive           Boolean           @default(true)
-  sortOrder          Int               @default(0)
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  isDivisa           Boolean             @default(false)
+  createsReceivable  Boolean             @default(false)
+  isActive           Boolean             @default(true)
+  sortOrder          Int                 @default(0)
   fiscalCode         String?
   parentId           String?
-  parent             PaymentMethod?    @relation("SubMethods", fields: [parentId], references: [id])
-  children           PaymentMethod[]   @relation("SubMethods")
+  parent             PaymentMethod?      @relation("SubMethods", fields: [parentId], references: [id])
+  children           PaymentMethod[]     @relation("SubMethods")
   payments           Payment[]
   receivablePayments ReceivablePayment[]
   payablePayments    PayablePayment[]
   receiptPayments    ReceiptPayment[]
-  changePayments     Payment[]         @relation("ChangeMethod")
+  changePayments     Payment[]           @relation("ChangeMethod")
   expenses           Expense[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 // ============================================
@@ -685,24 +686,24 @@ model PaymentMethod {
 // ============================================
 
 model Serie {
-  id                  String            @id @default(cuid())
-  name                String            @unique
+  id                  String             @id @default(cuid())
+  name                String             @unique
   prefix              String
-  type                SerieType         @default(SALES)
-  isFiscal            Boolean           @default(false)
-  isVatExempt         Boolean           @default(false)
-  lastNumber          Int               @default(0)
-  isActive            Boolean           @default(true)
+  type                SerieType          @default(SALES)
+  isFiscal            Boolean            @default(false)
+  isVatExempt         Boolean            @default(false)
+  lastNumber          Int                @default(0)
+  isActive            Boolean            @default(true)
   comPort             String?
   fiscalMachineSerial String?
-  cashRegisterId      String?           @unique
-  cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
+  cashRegisterId      String?            @unique
+  cashRegister        CashRegister?      @relation(fields: [cashRegisterId], references: [id])
   invoices            Invoice[]
   purchaseOrders      PurchaseOrder[]
   creditDebitNotes    CreditDebitNote[]
   retentionVouchers   RetentionVoucher[]
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 // ============================================
@@ -710,37 +711,37 @@ model Serie {
 // ============================================
 
 model CashRegister {
-  id                   String        @id @default(cuid())
-  code                 String        @unique
-  name                 String
-  isShared             Boolean       @default(false)
-  isActive             Boolean       @default(true)
-  serie                Serie?
-  sessions             CashSession[]
-  invoices             Invoice[]
-  creditDebitNotes     CreditDebitNote[]
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  isShared         Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  serie            Serie?
+  sessions         CashSession[]
+  invoices         Invoice[]
+  creditDebitNotes CreditDebitNote[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model CashSession {
-  id                String        @id @default(cuid())
+  id                String         @id @default(cuid())
   cashRegisterId    String
-  cashRegister      CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  cashRegister      CashRegister   @relation(fields: [cashRegisterId], references: [id])
   openedById        String
-  openedBy          User          @relation("SessionOpenedBy", fields: [openedById], references: [id])
+  openedBy          User           @relation("SessionOpenedBy", fields: [openedById], references: [id])
   closedById        String?
-  closedBy          User?         @relation("SessionClosedBy", fields: [closedById], references: [id])
-  openingBalanceUsd Float         @default(0)
-  openingBalanceBs  Float         @default(0)
+  closedBy          User?          @relation("SessionClosedBy", fields: [closedById], references: [id])
+  openingBalanceUsd Float          @default(0)
+  openingBalanceBs  Float          @default(0)
   closingBalanceUsd Float?
   closingBalanceBs  Float?
-  status            SessionStatus @default(OPEN)
+  status            SessionStatus  @default(OPEN)
   notes             String?
-  openedAt          DateTime      @default(now())
+  openedAt          DateTime       @default(now())
   closedAt          DateTime?
   cashMovements     CashMovement[]
-  expenses          Expense[]     @relation("ExpenseSession")
+  expenses          Expense[]      @relation("ExpenseSession")
 }
 
 model CashMovement {
@@ -751,7 +752,7 @@ model CashMovement {
   amountUsd     Float            @default(0)
   amountBs      Float            @default(0)
   exchangeRate  Float            @default(0)
-  currency      String           // "USD" o "BS"
+  currency      String // "USD" o "BS"
   reason        String
   isManual      Boolean          @default(true)
   expenseId     String?          @unique
@@ -767,52 +768,52 @@ model CashMovement {
 // ============================================
 
 model Invoice {
-  id             String        @id @default(cuid())
-  number         String?       @unique
+  id                  String             @id @default(cuid())
+  number              String?            @unique
   fiscalNumber        String?
   controlNumber       String?
   fiscalMachineSerial String?
-  fiscalPrinted       Boolean       @default(false)
+  fiscalPrinted       Boolean            @default(false)
   serieId             String?
-  serie               Serie?        @relation(fields: [serieId], references: [id])
+  serie               Serie?             @relation(fields: [serieId], references: [id])
   cashRegisterId      String
-  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
-  customerId     String?
-  customer       Customer?     @relation(fields: [customerId], references: [id])
-  status         InvoiceStatus      @default(PENDING)
-  paymentType    InvoicePaymentType @default(CASH)
-  type           InvoiceType        @default(SALE)
-  subtotalUsd    Float         @default(0)
-  ivaUsd         Float         @default(0)
-  totalUsd       Float         @default(0)
-  totalBs        Float         @default(0)
-  exchangeRate   Float         @default(0)
-  igtfUsd        Float         @default(0)
-  igtfBs         Float         @default(0)
-  subtotalBs     Float         @default(0)
-  ivaBs          Float         @default(0)
-  totalPaidUsd   Float         @default(0)
-  changeBs       Float         @default(0)
-  isCredit       Boolean       @default(false)
-  creditDays     Int           @default(0)
-  dueDate        DateTime?
-  paidAt         DateTime?
-  notes          String?
-  items            InvoiceItem[]
-  payments         Payment[]
-  receivables      Receivable[]
-  printJobs        PrintJob[]
-  creditDebitNotes CreditDebitNote[]
-  salesBookEntries SalesBookEntry[]
-  createdById      String
-  sellerId       String?
-  seller         Seller?       @relation(fields: [sellerId], references: [id])
-  cashierId      String?
-  cashier        User?         @relation("InvoiceCashier", fields: [cashierId], references: [id])
-  lockedById     String?
-  lockedAt       DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  cashRegister        CashRegister       @relation(fields: [cashRegisterId], references: [id])
+  customerId          String?
+  customer            Customer?          @relation(fields: [customerId], references: [id])
+  status              InvoiceStatus      @default(PENDING)
+  paymentType         InvoicePaymentType @default(CASH)
+  type                InvoiceType        @default(SALE)
+  subtotalUsd         Float              @default(0)
+  ivaUsd              Float              @default(0)
+  totalUsd            Float              @default(0)
+  totalBs             Float              @default(0)
+  exchangeRate        Float              @default(0)
+  igtfUsd             Float              @default(0)
+  igtfBs              Float              @default(0)
+  subtotalBs          Float              @default(0)
+  ivaBs               Float              @default(0)
+  totalPaidUsd        Float              @default(0)
+  changeBs            Float              @default(0)
+  isCredit            Boolean            @default(false)
+  creditDays          Int                @default(0)
+  dueDate             DateTime?
+  paidAt              DateTime?
+  notes               String?
+  items               InvoiceItem[]
+  payments            Payment[]
+  receivables         Receivable[]
+  printJobs           PrintJob[]
+  creditDebitNotes    CreditDebitNote[]
+  salesBookEntries    SalesBookEntry[]
+  createdById         String
+  sellerId            String?
+  seller              Seller?            @relation(fields: [sellerId], references: [id])
+  cashierId           String?
+  cashier             User?              @relation("InvoiceCashier", fields: [cashierId], references: [id])
+  lockedById          String?
+  lockedAt            DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 model InvoiceItem {
@@ -839,21 +840,21 @@ model InvoiceItem {
 }
 
 model Payment {
-  id           String        @id @default(cuid())
-  invoiceId    String
-  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
-  methodId     String
-  method       PaymentMethod @relation(fields: [methodId], references: [id])
-  amountUsd    Float
-  amountBs     Float
-  exchangeRate Float
-  reference    String?
-  igtfUsd         Float         @default(0)
-  igtfBs          Float         @default(0)
-  changeAmountBs  Float         @default(0)
-  changeMethodId  String?
-  changeMethod    PaymentMethod? @relation("ChangeMethod", fields: [changeMethodId], references: [id])
-  createdAt       DateTime      @default(now())
+  id             String         @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice        @relation(fields: [invoiceId], references: [id])
+  methodId       String
+  method         PaymentMethod  @relation(fields: [methodId], references: [id])
+  amountUsd      Float
+  amountBs       Float
+  exchangeRate   Float
+  reference      String?
+  igtfUsd        Float          @default(0)
+  igtfBs         Float          @default(0)
+  changeAmountBs Float          @default(0)
+  changeMethodId String?
+  changeMethod   PaymentMethod? @relation("ChangeMethod", fields: [changeMethodId], references: [id])
+  createdAt      DateTime       @default(now())
 }
 
 // ============================================
@@ -954,50 +955,50 @@ model PayablePayment {
 // ============================================
 
 model Receipt {
-  id              String          @id @default(cuid())
-  number          String          @unique
-  type            ReceiptType
-  customerId      String?
-  customer        Customer?       @relation(fields: [customerId], references: [id])
-  supplierId      String?
-  supplier        Supplier?       @relation(fields: [supplierId], references: [id])
-  status          ReceiptStatus   @default(DRAFT)
-  totalUsd        Float           @default(0)
-  totalBsHistoric Float           @default(0)
-  totalBsToday    Float           @default(0)
-  exchangeRate    Float           @default(0)
-  differentialBs  Float           @default(0)
-  hasDifferential Boolean         @default(false)
-  notes               String?
-  items               ReceiptItem[]
-  payments            ReceiptPayment[]
-  receivablePayments  ReceivablePayment[]
-  payablePayments     PayablePayment[]
-  cashSessionId       String?
-  createdById         String
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  id                 String              @id @default(cuid())
+  number             String              @unique
+  type               ReceiptType
+  customerId         String?
+  customer           Customer?           @relation(fields: [customerId], references: [id])
+  supplierId         String?
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  status             ReceiptStatus       @default(DRAFT)
+  totalUsd           Float               @default(0)
+  totalBsHistoric    Float               @default(0)
+  totalBsToday       Float               @default(0)
+  exchangeRate       Float               @default(0)
+  differentialBs     Float               @default(0)
+  hasDifferential    Boolean             @default(false)
+  notes              String?
+  items              ReceiptItem[]
+  payments           ReceiptPayment[]
+  receivablePayments ReceivablePayment[]
+  payablePayments    PayablePayment[]
+  cashSessionId      String?
+  createdById        String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model ReceiptItem {
-  id               String          @id @default(cuid())
-  receiptId        String
-  receipt          Receipt         @relation(fields: [receiptId], references: [id])
-  itemType             ReceiptItemType
-  receivableId         String?
-  receivable           Receivable?      @relation(fields: [receivableId], references: [id])
-  payableId            String?
-  payable              Payable?         @relation(fields: [payableId], references: [id])
-  creditDebitNoteId    String?
-  creditDebitNote      CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
-  ivaRetentionId       String?
-  ivaRetention         IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
-  description          String
-  amountUsd        Float           @default(0)
-  amountBsHistoric Float           @default(0)
-  amountBsToday    Float           @default(0)
-  differentialBs   Float           @default(0)
-  sign             Int             @default(1)
+  id                String           @id @default(cuid())
+  receiptId         String
+  receipt           Receipt          @relation(fields: [receiptId], references: [id])
+  itemType          ReceiptItemType
+  receivableId      String?
+  receivable        Receivable?      @relation(fields: [receivableId], references: [id])
+  payableId         String?
+  payable           Payable?         @relation(fields: [payableId], references: [id])
+  creditDebitNoteId String?
+  creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  ivaRetentionId    String?
+  ivaRetention      IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
+  description       String
+  amountUsd         Float            @default(0)
+  amountBsHistoric  Float            @default(0)
+  amountBsToday     Float            @default(0)
+  differentialBs    Float            @default(0)
+  sign              Int              @default(1)
 }
 
 model IvaRetention {
@@ -1081,25 +1082,25 @@ model PrintJob {
 // ============================================
 
 model Quotation {
-  id                    String          @id @default(cuid())
-  number                String          @unique
-  customerId            String?
-  customer              Customer?       @relation(fields: [customerId], references: [id])
-  status                QuotationStatus @default(DRAFT)
-  subtotalUsd           Float           @default(0)
-  subtotalBs            Float           @default(0)
-  ivaUsd                Float           @default(0)
-  ivaBs                 Float           @default(0)
-  totalUsd              Float           @default(0)
-  totalBs               Float           @default(0)
-  exchangeRate          Float           @default(0)
-  notes                 String?
-  expiresAt             DateTime?
-  convertedToInvoiceId  String?
-  items                 QuotationItem[]
-  createdById           String
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  id                   String          @id @default(cuid())
+  number               String          @unique
+  customerId           String?
+  customer             Customer?       @relation(fields: [customerId], references: [id])
+  status               QuotationStatus @default(DRAFT)
+  subtotalUsd          Float           @default(0)
+  subtotalBs           Float           @default(0)
+  ivaUsd               Float           @default(0)
+  ivaBs                Float           @default(0)
+  totalUsd             Float           @default(0)
+  totalBs              Float           @default(0)
+  exchangeRate         Float           @default(0)
+  notes                String?
+  expiresAt            DateTime?
+  convertedToInvoiceId String?
+  items                QuotationItem[]
+  createdById          String
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 }
 
 model QuotationItem {
@@ -1124,42 +1125,42 @@ model QuotationItem {
 // ============================================
 
 model CreditDebitNote {
-  id              String              @id @default(cuid())
-  number          String              @unique
-  type            NoteType
-  origin          NoteOrigin
-  status          NoteStatus          @default(DRAFT)
-  invoiceId       String?
-  invoice         Invoice?            @relation(fields: [invoiceId], references: [id])
-  serieId         String?
-  serie           Serie?              @relation(fields: [serieId], references: [id])
-  cashRegisterId  String?
-  cashRegister    CashRegister?       @relation(fields: [cashRegisterId], references: [id])
-  fiscalNumber    String?
-  machineSerial   String?
-  fiscalPrinted   Boolean             @default(false)
-  purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
-  subtotalUsd     Float               @default(0)
-  ivaUsd          Float               @default(0)
-  igtfUsd         Float               @default(0)
-  igtfBs          Float               @default(0)
-  totalUsd        Float               @default(0)
-  subtotalBs      Float               @default(0)
-  ivaBs           Float               @default(0)
-  totalBs         Float               @default(0)
-  exchangeRate    Float               @default(0)
-  manualAmountUsd Float?
-  manualPct       Float?
-  notes           String?
-  paidAmountUsd        Float               @default(0)
+  id                   String                @id @default(cuid())
+  number               String                @unique
+  type                 NoteType
+  origin               NoteOrigin
+  status               NoteStatus            @default(DRAFT)
+  invoiceId            String?
+  invoice              Invoice?              @relation(fields: [invoiceId], references: [id])
+  serieId              String?
+  serie                Serie?                @relation(fields: [serieId], references: [id])
+  cashRegisterId       String?
+  cashRegister         CashRegister?         @relation(fields: [cashRegisterId], references: [id])
+  fiscalNumber         String?
+  machineSerial        String?
+  fiscalPrinted        Boolean               @default(false)
+  purchaseOrderId      String?
+  purchaseOrder        PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  subtotalUsd          Float                 @default(0)
+  ivaUsd               Float                 @default(0)
+  igtfUsd              Float                 @default(0)
+  igtfBs               Float                 @default(0)
+  totalUsd             Float                 @default(0)
+  subtotalBs           Float                 @default(0)
+  ivaBs                Float                 @default(0)
+  totalBs              Float                 @default(0)
+  exchangeRate         Float                 @default(0)
+  manualAmountUsd      Float?
+  manualPct            Float?
+  notes                String?
+  paidAmountUsd        Float                 @default(0)
   appliedAt            DateTime?
   items                CreditDebitNoteItem[]
   receiptItems         ReceiptItem[]
   paymentScheduleItems PaymentScheduleItem[]
   createdById          String
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 }
 
 model CreditDebitNoteItem {
@@ -1184,22 +1185,22 @@ model CreditDebitNoteItem {
 // ============================================
 
 model PaymentSchedule {
-  id              String                @id @default(cuid())
-  number          String                @unique
-  title           String
-  status          PaymentScheduleStatus @default(DRAFT)
-  budgetUsd       Float?
-  budgetBs        Float?
-  budgetCurrency  String?               // "USD" o "Bs" — moneda elegida por el usuario
-  totalUsd        Float                 @default(0)
-  totalBs         Float                 @default(0)
-  exchangeRate    Float                 @default(0)
-  notes           String?
-  items           PaymentScheduleItem[]
-  createdById     String
-  createdBy       User                  @relation(fields: [createdById], references: [id])
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id             String                @id @default(cuid())
+  number         String                @unique
+  title          String
+  status         PaymentScheduleStatus @default(DRAFT)
+  budgetUsd      Float?
+  budgetBs       Float?
+  budgetCurrency String? // "USD" o "Bs" — moneda elegida por el usuario
+  totalUsd       Float                 @default(0)
+  totalBs        Float                 @default(0)
+  exchangeRate   Float                 @default(0)
+  notes          String?
+  items          PaymentScheduleItem[]
+  createdById    String
+  createdBy      User                  @relation(fields: [createdById], references: [id])
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 }
 
 model PaymentScheduleItem {
@@ -1236,25 +1237,25 @@ model ExpenseCategory {
 }
 
 model Expense {
-  id             String          @id @default(cuid())
-  categoryId     String
-  category       ExpenseCategory @relation(fields: [categoryId], references: [id])
-  description    String
-  reference      String?
-  amountUsd      Float
-  amountBs       Float
-  exchangeRate   Float
-  date           DateTime
-  notes          String?
-  cashSessionId  String?
-  cashSession    CashSession?    @relation("ExpenseSession", fields: [cashSessionId], references: [id])
-  methodId       String?
-  method         PaymentMethod?  @relation(fields: [methodId], references: [id])
-  cashMovement   CashMovement?
-  createdById    String
-  createdBy      User            @relation(fields: [createdById], references: [id])
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id            String          @id @default(cuid())
+  categoryId    String
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  description   String
+  reference     String?
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  date          DateTime
+  notes         String?
+  cashSessionId String?
+  cashSession   CashSession?    @relation("ExpenseSession", fields: [cashSessionId], references: [id])
+  methodId      String?
+  method        PaymentMethod?  @relation(fields: [methodId], references: [id])
+  cashMovement  CashMovement?
+  createdById   String
+  createdBy     User            @relation(fields: [createdById], references: [id])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 // ============================================
@@ -1292,26 +1293,26 @@ model PurchaseBookEntry {
 // ============================================
 
 model SalesBookEntry {
-  id                    String   @id @default(cuid())
-  invoiceId             String?
-  invoice               Invoice? @relation(fields: [invoiceId], references: [id])
-  entryDate             DateTime
-  invoiceNumber         String
-  controlNumber         String?
-  customerName          String
-  customerRif           String?
-  exemptAmountBs        Float    @default(0)
-  taxableBaseBs         Float    @default(0)
-  ivaAmountBs           Float    @default(0)
-  igtfAmountBs          Float    @default(0)
-  totalBs               Float    @default(0)
-  isManual              Boolean  @default(false)
-  isRetentionLine       Boolean  @default(false)
-  notes                 String?
-  createdById           String
-  createdBy             User     @relation("SalesBookEntries", fields: [createdById], references: [id])
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id              String   @id @default(cuid())
+  invoiceId       String?
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id])
+  entryDate       DateTime
+  invoiceNumber   String
+  controlNumber   String?
+  customerName    String
+  customerRif     String?
+  exemptAmountBs  Float    @default(0)
+  taxableBaseBs   Float    @default(0)
+  ivaAmountBs     Float    @default(0)
+  igtfAmountBs    Float    @default(0)
+  totalBs         Float    @default(0)
+  isManual        Boolean  @default(false)
+  isRetentionLine Boolean  @default(false)
+  notes           String?
+  createdById     String
+  createdBy       User     @relation("SalesBookEntries", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // ============================================
@@ -1319,21 +1320,46 @@ model SalesBookEntry {
 // ============================================
 
 model RetentionVoucher {
-  id                  String              @id @default(cuid())
-  number              String              @unique
-  purchaseOrderId     String              @unique
-  purchaseOrder       PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
-  serieId             String?
-  serie               Serie?              @relation(fields: [serieId], references: [id])
-  status              RetentionStatus     @default(PENDING)
-  issueDate           DateTime?
-  retentionAmountUsd  Float               @default(0)
-  retentionAmountBs   Float               @default(0)
-  exchangeRate        Float               @default(0)
-  notes               String?
-  bookEntries         PurchaseBookEntry[]
-  createdById         String
-  createdBy           User                @relation("RetentionVoucherCreator", fields: [createdById], references: [id])
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                 String                 @id @default(cuid())
+  number             String                 @unique
+  supplierId         String
+  supplier           Supplier               @relation(fields: [supplierId], references: [id])
+  serieId            String?
+  serie              Serie?                 @relation(fields: [serieId], references: [id])
+  status             RetentionStatus        @default(PENDING)
+  issueDate          DateTime?
+  retentionPct       Float                  @default(75)
+  retentionAmountUsd Float                  @default(0)
+  retentionAmountBs  Float                  @default(0)
+  exchangeRate       Float                  @default(0)
+  notes              String?
+  lines              RetentionVoucherLine[]
+  bookEntries        PurchaseBookEntry[]
+  createdById        String
+  createdBy          User                   @relation("RetentionVoucherCreator", fields: [createdById], references: [id])
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+}
+
+model RetentionVoucherLine {
+  id                    String           @id @default(cuid())
+  retentionVoucherId    String
+  retentionVoucher      RetentionVoucher @relation(fields: [retentionVoucherId], references: [id], onDelete: Cascade)
+  purchaseOrderId       String
+  purchaseOrder         PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
+  supplierInvoiceNumber String?
+  supplierControlNumber String?
+  invoiceDate           DateTime?
+  invoiceTotalUsd       Float            @default(0)
+  invoiceTotalBs        Float            @default(0)
+  taxableBaseUsd        Float            @default(0)
+  taxableBaseBs         Float            @default(0)
+  ivaAmountUsd          Float            @default(0)
+  ivaAmountBs           Float            @default(0)
+  retentionPct          Float            @default(75)
+  retentionAmountUsd    Float            @default(0)
+  retentionAmountBs     Float            @default(0)
+  exchangeRate          Float            @default(0)
+  isManual              Boolean          @default(false)
+  createdAt             DateTime         @default(now())
 }

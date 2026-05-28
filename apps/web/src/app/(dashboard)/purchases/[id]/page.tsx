@@ -106,7 +106,13 @@ interface PurchaseBill {
   retentionVoucherNumber: string | null;
   notes: string | null;
   items: PurchaseItem[];
-  retentionVoucher: RetentionVoucher | null;
+  retentionVoucherLines: {
+    id: string;
+    retentionAmountUsd: number;
+    retentionAmountBs: number;
+    retentionPct: number;
+    retentionVoucher: RetentionVoucherInfo;
+  }[];
   createdAt: string;
 }
 
@@ -162,12 +168,12 @@ interface CreditDebitNote {
   createdAt: string;
 }
 
-interface RetentionVoucher {
+interface RetentionVoucherInfo {
   id: string;
   number: string;
-  purchaseOrderId: string;
   status: 'PENDING' | 'ISSUED' | 'CANCELLED';
   issueDate: string | null;
+  retentionPct: number;
   retentionAmountUsd: number;
   retentionAmountBs: number;
   exchangeRate: number;
@@ -349,12 +355,17 @@ export default function PurchaseBillDetailPage() {
     if (activeTab === 'notas' && bill) fetchNotes();
   }, [activeTab, bill, fetchPayables, fetchNotes]);
 
-  // ---- Retention voucher actions ----
+  // ---- Retention voucher (derived from lines) ----
+  const retentionLine = bill?.retentionVoucherLines?.find(
+    (l) => l.retentionVoucher.status !== 'CANCELLED',
+  ) || bill?.retentionVoucherLines?.[0] || null;
+  const retentionVoucher = retentionLine?.retentionVoucher || null;
+
   async function handleIssueRetention() {
-    if (!bill?.retentionVoucher || !issueRetentionDate) return;
+    if (!retentionVoucher || !issueRetentionDate) return;
     setIssuingRetention(true);
     try {
-      const res = await fetch(`/api/proxy/retention-vouchers/${bill.retentionVoucher.id}/issue`, {
+      const res = await fetch(`/api/proxy/retention-vouchers/${retentionVoucher.id}/issue`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ issueDate: issueRetentionDate }),
@@ -374,10 +385,10 @@ export default function PurchaseBillDetailPage() {
   }
 
   async function handleCancelRetention() {
-    if (!bill?.retentionVoucher) return;
+    if (!retentionVoucher) return;
     if (!confirm('¿Anular este comprobante de retención?')) return;
     try {
-      const res = await fetch(`/api/proxy/retention-vouchers/${bill.retentionVoucher.id}/cancel`, {
+      const res = await fetch(`/api/proxy/retention-vouchers/${retentionVoucher.id}/cancel`, {
         method: 'PATCH',
       });
       if (!res.ok) {
@@ -920,7 +931,7 @@ export default function PurchaseBillDetailPage() {
             </div>
 
             {/* Retention Voucher */}
-            {bill.retentionVoucher && (
+            {retentionVoucher && (
               <div className="border-t border-purple-500/20 pt-4">
                 <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -931,7 +942,7 @@ export default function PurchaseBillDetailPage() {
                       </h4>
                     </div>
                     <div className="flex items-center gap-2">
-                      {bill.retentionVoucher.status === 'PENDING' && (
+                      {retentionVoucher.status === 'PENDING' && (
                         <button
                           onClick={() => {
                             setIssueRetentionDate(new Date().toISOString().substring(0, 10));
@@ -943,7 +954,7 @@ export default function PurchaseBillDetailPage() {
                           Emitir
                         </button>
                       )}
-                      {bill.retentionVoucher.status === 'ISSUED' && (
+                      {retentionVoucher.status === 'ISSUED' && (
                         <button
                           onClick={handleCancelRetention}
                           className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-medium flex items-center gap-1.5 transition-colors"
@@ -957,42 +968,43 @@ export default function PurchaseBillDetailPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                     <div>
                       <p className="text-xs text-slate-500 mb-1">N° Comprobante</p>
-                      <p className="text-white font-mono font-bold">
-                        {bill.retentionVoucher.number}
-                      </p>
+                      <a href={`/purchases/retentions/${retentionVoucher.id}`}
+                        className="text-white font-mono font-bold hover:text-purple-300 transition-colors">
+                        {retentionVoucher.number}
+                      </a>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Monto retenido $</p>
                       <p className="text-purple-400 font-mono font-bold">
-                        -${fmt(bill.retentionVoucher.retentionAmountUsd)}
+                        -${fmt(retentionLine!.retentionAmountUsd)}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Monto retenido Bs</p>
                       <p className="text-purple-400 font-mono">
-                        -Bs {fmt(bill.retentionVoucher.retentionAmountBs)}
+                        -Bs {fmt(retentionLine!.retentionAmountBs)}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Fecha emisión</p>
                       <p className="text-white font-mono text-sm">
-                        {bill.retentionVoucher.issueDate
-                          ? fmtDate(bill.retentionVoucher.issueDate)
+                        {retentionVoucher.issueDate
+                          ? fmtDate(retentionVoucher.issueDate)
                           : '--'}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Estado</p>
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                        bill.retentionVoucher.status === 'ISSUED'
+                        retentionVoucher.status === 'ISSUED'
                           ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                          : bill.retentionVoucher.status === 'CANCELLED'
+                          : retentionVoucher.status === 'CANCELLED'
                             ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                             : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                       }`}>
-                        {bill.retentionVoucher.status === 'ISSUED'
+                        {retentionVoucher.status === 'ISSUED'
                           ? 'Emitido'
-                          : bill.retentionVoucher.status === 'CANCELLED'
+                          : retentionVoucher.status === 'CANCELLED'
                             ? 'Anulado'
                             : 'Pendiente'}
                       </span>
@@ -1186,7 +1198,7 @@ export default function PurchaseBillDetailPage() {
       )}
 
       {/* ═══ Issue Retention Modal ═══ */}
-      {issueRetentionModal && bill?.retentionVoucher && (
+      {issueRetentionModal && retentionVoucher && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIssueRetentionModal(false)} />
           <div className="relative bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-5">
@@ -1198,15 +1210,15 @@ export default function PurchaseBillDetailPage() {
             <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Comprobante:</span>
-                <span className="text-white font-mono font-bold">{bill.retentionVoucher.number}</span>
+                <span className="text-white font-mono font-bold">{retentionVoucher.number}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Monto USD:</span>
-                <span className="text-purple-400 font-mono">${fmt(bill.retentionVoucher.retentionAmountUsd)}</span>
+                <span className="text-purple-400 font-mono">${fmt(retentionLine?.retentionAmountUsd || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Monto Bs:</span>
-                <span className="text-purple-400 font-mono">Bs {fmt(bill.retentionVoucher.retentionAmountBs)}</span>
+                <span className="text-purple-400 font-mono">Bs {fmt(retentionLine?.retentionAmountBs || 0)}</span>
               </div>
             </div>
 

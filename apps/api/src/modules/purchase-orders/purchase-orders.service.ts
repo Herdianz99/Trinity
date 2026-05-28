@@ -194,7 +194,24 @@ export class PurchaseOrdersService {
         },
       },
     },
-    retentionVoucher: true,
+    retentionVoucherLines: {
+      include: {
+        retentionVoucher: {
+          select: {
+            id: true,
+            number: true,
+            status: true,
+            issueDate: true,
+            retentionPct: true,
+            retentionAmountUsd: true,
+            retentionAmountBs: true,
+            exchangeRate: true,
+            notes: true,
+            createdAt: true,
+          },
+        },
+      },
+    },
   };
 
   async create(dto: CreatePurchaseOrderDto, userId: string) {
@@ -728,12 +745,14 @@ export class PurchaseOrdersService {
         });
       }
 
-      // Create RetentionVoucher if supplier is retention agent
+      // Create RetentionVoucher (header + line) if supplier is retention agent
       if (order.supplier.isRetentionAgent && order.serie?.isFiscal && order.totalIvaUsd > 0) {
         const exchangeRate = order.exchangeRate;
         const ivaRetPct = config?.ivaRetentionPct || 75;
         const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
         const retBs = round2(retUsd * exchangeRate);
+        const taxBaseUsd = round2(order.totalUsd - order.totalIvaUsd);
+        const taxBaseBs = round2(order.totalBs - order.totalIvaBs);
 
         // Generate YYYYMM + 8-digit global sequence from CompanyConfig.retentionNextNumber
         const now = new Date();
@@ -745,13 +764,32 @@ export class PurchaseOrdersService {
         await tx.retentionVoucher.create({
           data: {
             number: retNumber,
-            purchaseOrderId: order.id,
+            supplierId: order.supplierId,
             serieId: order.serieId,
             status: 'PENDING',
+            retentionPct: ivaRetPct,
             retentionAmountUsd: retUsd,
             retentionAmountBs: retBs,
             exchangeRate,
             createdById: userId,
+            lines: {
+              create: {
+                purchaseOrderId: order.id,
+                supplierInvoiceNumber: order.supplierInvoiceNumber,
+                supplierControlNumber: order.supplierControlNumber,
+                invoiceDate: order.invoiceDate,
+                invoiceTotalUsd: order.totalUsd,
+                invoiceTotalBs: order.totalBs,
+                taxableBaseUsd: taxBaseUsd,
+                taxableBaseBs: taxBaseBs,
+                ivaAmountUsd: order.totalIvaUsd,
+                ivaAmountBs: order.totalIvaBs,
+                retentionPct: ivaRetPct,
+                retentionAmountUsd: retUsd,
+                retentionAmountBs: retBs,
+                exchangeRate,
+              },
+            },
           },
         });
 
