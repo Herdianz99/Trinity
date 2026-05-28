@@ -103,17 +103,12 @@ export class RetentionVouchersService {
       );
     }
 
-    // Validate supplier exists and is retention agent
+    // Validate supplier exists
     const supplier = await this.prisma.supplier.findUnique({
       where: { id: dto.supplierId },
     });
     if (!supplier)
       throw new NotFoundException('Proveedor no encontrado');
-    if (!supplier.isRetentionAgent) {
-      throw new BadRequestException(
-        'El proveedor no es agente de retención',
-      );
-    }
 
     // Load default retention %
     const config = await this.prisma.companyConfig.findUnique({
@@ -494,7 +489,7 @@ export class RetentionVouchersService {
         supplierId,
         status: 'PROCESSED',
         totalIvaUsd: { gt: 0 },
-        id: { notIn: usedPoIds.length > 0 ? usedPoIds : ['__none__'] },
+        ...(usedPoIds.length > 0 ? { id: { notIn: usedPoIds } } : {}),
       },
       select: {
         id: true,

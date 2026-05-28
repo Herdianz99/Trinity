@@ -42,9 +42,23 @@ export class SuppliersService {
     return this.prisma.supplier.create({ data: dto });
   }
 
-  async findAll() {
+  async findAll(query?: { search?: string; isRetentionAgent?: string; limit?: string }) {
+    const where: any = {};
+
+    if (query?.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { rif: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query?.isRetentionAgent === 'true') where.isRetentionAgent = true;
+    if (query?.isRetentionAgent === 'false') where.isRetentionAgent = false;
+
     return this.prisma.supplier.findMany({
+      where,
       orderBy: { name: 'asc' },
+      take: query?.limit ? Number(query.limit) : undefined,
       include: { _count: { select: { products: true } } },
     });
   }

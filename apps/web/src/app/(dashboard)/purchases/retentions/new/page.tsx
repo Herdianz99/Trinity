@@ -77,10 +77,10 @@ export default function NewRetentionVoucherPage() {
     if (search.length < 2) { setSuppliers([]); return; }
     setLoadingSuppliers(true);
     try {
-      const res = await fetch(`/api/proxy/suppliers?search=${encodeURIComponent(search)}&limit=20&isRetentionAgent=true`);
+      const res = await fetch(`/api/proxy/suppliers?search=${encodeURIComponent(search)}&limit=20`);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setSuppliers((data.data || data).filter((s: Supplier) => s.isRetentionAgent));
+      setSuppliers(data.data || data);
     } catch {
       setSuppliers([]);
     } finally {
@@ -263,7 +263,12 @@ export default function NewRetentionVoucherPage() {
                 suppliers.map(s => (
                   <button key={s.id} onClick={() => selectSupplier(s)}
                     className="w-full text-left px-3 py-2 hover:bg-slate-700/50 transition-colors">
-                    <div className="text-sm text-slate-200">{s.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-200">{s.name}</span>
+                      {s.isRetentionAgent && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Agente ret.</span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-500 font-mono">{s.rif || 'S/R'}</div>
                   </button>
                 ))
