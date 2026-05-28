@@ -128,13 +128,48 @@ export class CustomersService {
     return { ...customer, pendingDebt, availableCredit };
   }
 
+  private normalizeRif(rif: string): string {
+    return rif.replace(/[-\s]/g, '').toUpperCase();
+  }
+
+  private async checkDuplicateRif(rif: string | undefined | null, documentType: string | undefined, excludeId?: string) {
+    if (!rif || !rif.trim()) return;
+    const normalized = this.normalizeRif(rif);
+    if (!normalized) return;
+
+    const where: any = {
+      isActive: true,
+      rif: { not: null },
+    };
+    if (excludeId) where.id = { not: excludeId };
+
+    const customers = await this.prisma.customer.findMany({
+      where,
+      select: { id: true, name: true, rif: true, documentType: true },
+    });
+
+    const match = customers.find(c => {
+      if (!c.rif) return false;
+      const cNorm = this.normalizeRif(c.rif);
+      const sameRif = cNorm === normalized;
+      const sameType = !documentType || c.documentType === documentType;
+      return sameRif && sameType;
+    });
+
+    if (match) {
+      throw new BadRequestException(`Ya existe un cliente activo con este documento: ${match.name} (${match.documentType}-${match.rif})`);
+    }
+  }
+
   async create(dto: CreateCustomerDto) {
+    await this.checkDuplicateRif(dto.rif, dto.documentType);
     return this.prisma.customer.create({ data: dto });
   }
 
   async update(id: string, dto: UpdateCustomerDto) {
     const exists = await this.prisma.customer.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Cliente no encontrado');
+    await this.checkDuplicateRif(dto.rif ?? exists.rif, dto.documentType ?? exists.documentType, id);
     return this.prisma.customer.update({ where: { id }, data: dto });
   }
 
@@ -353,22 +388,41 @@ export class CustomersService {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
-        invoices: {
-          where: { status: { in: ['PENDING', 'PAID', 'PARTIAL_RETURN'] } },
-          take: 1,
+        _count: {
+          select: {
+            invoices: true,
+            quotations: true,
+            receivables: true,
+            receipts: true,
+          },
         },
       },
     });
 
     if (!customer) throw new NotFoundException('Cliente no encontrado');
 
-    if (customer.invoices.length > 0) {
-      throw new BadRequestException('No se puede eliminar un cliente con facturas activas');
+    const totalDocs = customer._count.invoices + customer._count.quotations
+      + customer._count.receivables + customer._count.receipts;
+
+    if (totalDocs === 0) {
+      await this.prisma.customer.delete({ where: { id } });
+      return { deleted: true, message: 'Cliente eliminado permanentemente' };
     }
 
-    return this.prisma.customer.update({
+    // Has documents — only allow soft delete if no active invoices
+    if (customer._count.invoices > 0) {
+      const activeInvoices = await this.prisma.invoice.count({
+        where: { customerId: id, status: { in: ['PENDING', 'PAID', 'PARTIAL_RETURN'] } },
+      });
+      if (activeInvoices > 0) {
+        throw new BadRequestException('No se puede eliminar un cliente con facturas activas. Solo se puede desactivar.');
+      }
+    }
+
+    await this.prisma.customer.update({
       where: { id },
       data: { isActive: false },
     });
+    return { deleted: false, message: 'Cliente desactivado (tiene documentos asociados)' };
   }
 }

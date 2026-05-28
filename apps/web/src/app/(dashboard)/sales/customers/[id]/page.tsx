@@ -72,6 +72,9 @@ export default function CustomerDetailPage() {
   // SENIAT lookup
   const [seniatOpen, setSeniatOpen] = useState(false);
 
+  // Duplicate RIF warning
+  const [rifWarning, setRifWarning] = useState('');
+
   function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
     setForm((f: any) => ({
       ...f,
@@ -139,6 +142,24 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     if (activeTab === 'cxc') fetchCxc();
   }, [activeTab, fetchCxc]);
+
+  // Check for duplicate RIF on edit
+  useEffect(() => {
+    const rif = form.rif?.replace(/[-\s]/g, '') || '';
+    if (rif.length < 5) { setRifWarning(''); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=5&isActive=true`);
+        const data = await res.json();
+        const match = (data.data || []).find((c: any) =>
+          c.id !== id && c.rif && c.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase()
+          && c.documentType === (form.documentType || 'V')
+        );
+        setRifWarning(match ? `Ya existe otro cliente con este documento: ${match.name}` : '');
+      } catch { setRifWarning(''); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form.rif, form.documentType, id]);
 
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
     if (e) e.preventDefault();
@@ -258,6 +279,11 @@ export default function CustomerDetailPage() {
                 </select>
               </div>
             </div>
+            {rifWarning && (
+              <div className="p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400">
+                {rifWarning}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Telefono</label>

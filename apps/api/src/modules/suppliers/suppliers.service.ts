@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -7,7 +7,38 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 export class SuppliersService {
   constructor(private prisma: PrismaService) {}
 
+  private normalizeRif(rif: string): string {
+    return rif.replace(/[-\s]/g, '').toUpperCase();
+  }
+
+  private async checkDuplicateRif(rif: string | undefined | null, excludeId?: string) {
+    if (!rif || !rif.trim()) return;
+    const normalized = this.normalizeRif(rif);
+    if (!normalized) return;
+
+    const where: any = {
+      isActive: true,
+      rif: { not: null },
+    };
+    if (excludeId) where.id = { not: excludeId };
+
+    const suppliers = await this.prisma.supplier.findMany({
+      where,
+      select: { id: true, name: true, rif: true },
+    });
+
+    const match = suppliers.find(s => {
+      if (!s.rif) return false;
+      return this.normalizeRif(s.rif) === normalized;
+    });
+
+    if (match) {
+      throw new BadRequestException(`Ya existe un proveedor activo con este RIF: ${match.name} (${match.rif})`);
+    }
+  }
+
   async create(dto: CreateSupplierDto) {
+    await this.checkDuplicateRif(dto.rif);
     return this.prisma.supplier.create({ data: dto });
   }
 
@@ -28,7 +59,8 @@ export class SuppliersService {
   }
 
   async update(id: string, dto: UpdateSupplierDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    await this.checkDuplicateRif(dto.rif ?? existing.rif, id);
     return this.prisma.supplier.update({
       where: { id },
       data: dto,

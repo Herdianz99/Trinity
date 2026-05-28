@@ -16,6 +16,25 @@ export default function NewCustomerPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [seniatOpen, setSeniatOpen] = useState(false);
+  const [rifWarning, setRifWarning] = useState('');
+
+  // Check for duplicate RIF
+  useEffect(() => {
+    const rif = form.rif?.replace(/[-\s]/g, '') || '';
+    if (rif.length < 5) { setRifWarning(''); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=5&isActive=true`);
+        const data = await res.json();
+        const match = (data.data || []).find((c: any) =>
+          c.rif && c.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase()
+          && c.documentType === form.documentType
+        );
+        setRifWarning(match ? `Ya existe un cliente con este documento: ${match.name}` : '');
+      } catch { setRifWarning(''); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form.rif, form.documentType]);
 
   function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
     setForm(f => ({
@@ -97,6 +116,11 @@ export default function NewCustomerPage() {
             </select>
           </div>
         </div>
+        {rifWarning && (
+          <div className="p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400">
+            {rifWarning}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Telefono</label>

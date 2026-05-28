@@ -121,6 +121,7 @@ export default function POSPage() {
   const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
   const [savingClient, setSavingClient] = useState(false);
   const [seniatOpen, setSeniatOpen] = useState(false);
+  const [clientRifWarning, setClientRifWarning] = useState('');
 
   // Cash register selection
   const [selectedCashRegister, setSelectedCashRegister] = useState<any>(null);
@@ -365,13 +366,31 @@ export default function POSPage() {
     if (!customerSearch.trim()) { setCustomerResults([]); return; }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=5`);
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=5&isActive=true`);
         const data = await res.json();
         setCustomerResults(data.data || []);
       } catch {}
     }, 300);
     return () => clearTimeout(t);
   }, [customerSearch]);
+
+  // Check for duplicate RIF in client form
+  useEffect(() => {
+    const rif = clientForm.rif?.replace(/[-\s]/g, '') || '';
+    if (rif.length < 5) { setClientRifWarning(''); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=5&isActive=true`);
+        const data = await res.json();
+        const match = (data.data || []).find((c: any) =>
+          c.rif && c.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase()
+          && c.documentType === clientForm.documentType
+        );
+        setClientRifWarning(match ? `Ya existe un cliente con este documento: ${match.name}` : '');
+      } catch { setClientRifWarning(''); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [clientForm.rif, clientForm.documentType]);
 
   // Fetch credit balance when customer changes
   useEffect(() => {
@@ -1715,6 +1734,11 @@ export default function POSPage() {
                     </div>
                   </div>
                 </div>
+                {clientRifWarning && (
+                  <div className="p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400">
+                    {clientRifWarning}
+                  </div>
+                )}
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">Nombre completo</label>
                   <input

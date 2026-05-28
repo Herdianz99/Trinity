@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Truck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Truck, Loader2, Search } from 'lucide-react';
+import SeniatModal from '@/components/seniat-modal';
 
 const defaultForm = {
   name: '', rif: '', phone: '', email: '', address: '', contactName: '',
@@ -14,8 +15,37 @@ export default function NewSupplierPage() {
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [rifWarning, setRifWarning] = useState('');
+  const [seniatOpen, setSeniatOpen] = useState(false);
+
+  function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
+    setForm(f => ({
+      ...f,
+      name: data.name,
+      rif: data.documentNumber ? `${data.documentType || ''}${data.documentNumber}`.replace(/^-+/, '') : f.rif,
+    }));
+    setMessage({ type: 'success', text: 'Datos importados del SENIAT correctamente' });
+  }
 
   useEffect(() => { document.title = 'Nuevo Proveedor | Trinity ERP'; }, []);
+
+  // Check for duplicate RIF
+  useEffect(() => {
+    const rif = form.rif?.replace(/[-\s]/g, '') || '';
+    if (rif.length < 5) { setRifWarning(''); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/suppliers`);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.data || [];
+        const match = list.find((s: any) =>
+          s.rif && s.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase() && s.isActive !== false
+        );
+        setRifWarning(match ? `Ya existe un proveedor con este RIF: ${match.name}` : '');
+      } catch { setRifWarning(''); }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form.rif]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -69,8 +99,24 @@ export default function NewSupplierPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">RIF</label>
-            <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm" placeholder="J-12345678-9" />
+            <div className="flex gap-2">
+              <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" />
+              <button
+                type="button"
+                onClick={() => setSeniatOpen(true)}
+                className="btn-secondary !py-2 text-xs flex items-center gap-1.5 whitespace-nowrap"
+                title="Consultar SENIAT"
+              >
+                <Search size={14} />
+                SENIAT
+              </button>
+            </div>
           </div>
+          {rifWarning && (
+            <div className="md:col-span-2 p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400">
+              {rifWarning}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Telefono</label>
             <input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="input-field !py-2 text-sm" />
@@ -102,6 +148,13 @@ export default function NewSupplierPage() {
           </button>
         </div>
       </form>
+
+      <SeniatModal
+        isOpen={seniatOpen}
+        onClose={() => setSeniatOpen(false)}
+        onResult={handleSeniatResult}
+        initialRif={form.rif ? form.rif.replace(/\D/g, '') : ''}
+      />
     </div>
   );
 }

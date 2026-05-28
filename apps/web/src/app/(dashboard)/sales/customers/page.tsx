@@ -40,10 +40,17 @@ export default function CustomersPage() {
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
   async function handleDelete(id: string) {
-    if (!confirm('Desactivar este cliente?')) return;
+    if (!confirm('Eliminar este cliente? Si no tiene documentos asociados se eliminara permanentemente, de lo contrario se desactivara.')) return;
     try {
       const res = await fetch(`/api/proxy/customers/${id}`, { method: 'DELETE' });
-      if (res.ok) { fetchCustomers(); setMessage({ type: 'success', text: 'Cliente desactivado' }); }
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        fetchCustomers();
+        setMessage({ type: 'success', text: data.message || 'Cliente eliminado' });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMessage({ type: 'error', text: err.message || 'Error al eliminar cliente' });
+      }
     } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
   }
 
