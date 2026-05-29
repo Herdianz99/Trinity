@@ -89,14 +89,14 @@ function parseExcelToJson(workbook: XLSX.WorkBook): object {
 
     // Supplier
     const supplierRaw = String(row['Proveedor de articulo descripcion'] ?? '').trim();
-    if (supplierRaw && supplierRaw !== '0') {
+    if (supplierRaw && supplierRaw !== '0' && supplierRaw !== '-') {
       // Format: "RIF - NOMBRE" or just "NOMBRE"
       const dashIdx = supplierRaw.indexOf(' - ');
       if (dashIdx > 0) {
         const rif = supplierRaw.substring(0, dashIdx).trim();
         const name = supplierRaw.substring(dashIdx + 3).trim();
-        if (name) suppliersMap.set(name, rif);
-      } else {
+        if (name && name.length >= 2) suppliersMap.set(name, rif);
+      } else if (supplierRaw.length >= 2) {
         suppliersMap.set(supplierRaw, '');
       }
     }
@@ -123,11 +123,12 @@ function parseExcelToJson(workbook: XLSX.WorkBook): object {
     const productBrand = (brandName && brandName !== '0' && brandName.toLowerCase() !== 'undefined')
       ? brandName : undefined;
 
-    // Supplier for product
+    // Supplier for product (must match a valid supplier from the map)
     let productSupplier: string | undefined;
-    if (supplierRaw && supplierRaw !== '0') {
+    if (supplierRaw && supplierRaw !== '0' && supplierRaw !== '-') {
       const dashIdx = supplierRaw.indexOf(' - ');
-      productSupplier = dashIdx > 0 ? supplierRaw.substring(dashIdx + 3).trim() : supplierRaw;
+      const parsed = dashIdx > 0 ? supplierRaw.substring(dashIdx + 3).trim() : supplierRaw;
+      if (parsed.length >= 2) productSupplier = parsed;
     }
 
     // Grupo de articulo → bregaApplies
