@@ -590,13 +590,16 @@ export class ImportService {
 
   async resetData(): Promise<{ deleted: Record<string, number> }> {
     // Count before deleting for the report
-    const [products, stock, movements, categories, brands] = await Promise.all([
-      this.prisma.product.count(),
-      this.prisma.stock.count(),
-      this.prisma.stockMovement.count(),
-      this.prisma.category.count(),
-      this.prisma.brand.count(),
-    ]);
+    const [products, stock, movements, categories, brands, invoices, retentions] =
+      await Promise.all([
+        this.prisma.product.count(),
+        this.prisma.stock.count(),
+        this.prisma.stockMovement.count(),
+        this.prisma.category.count(),
+        this.prisma.brand.count(),
+        this.prisma.invoice.count(),
+        this.prisma.ivaRetention.count(),
+      ]);
 
     // Use raw SQL TRUNCATE CASCADE to handle all FK chains cleanly
     await this.prisma.$executeRawUnsafe(`
@@ -610,6 +613,20 @@ export class ImportService {
         "PurchaseOrderItem",
         "IvaRetention",
         "PurchaseOrder",
+        "Payment",
+        "InvoiceItem",
+        "Invoice",
+        "ReceiptItem",
+        "ReceiptPayment",
+        "Receipt",
+        "CreditDebitNoteItem",
+        "CreditDebitNote",
+        "ReceivablePayment",
+        "Receivable",
+        "PayablePayment",
+        "Payable",
+        "PaymentScheduleItem",
+        "PaymentSchedule",
         "Product",
         "Category",
         "Brand"
@@ -623,6 +640,8 @@ export class ImportService {
         stockMovements: movements,
         categories,
         brands,
+        invoices,
+        retentions,
       },
     };
   }
