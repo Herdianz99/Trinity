@@ -221,6 +221,8 @@ model CompanyConfig {
   allowNegativeStock      Boolean  @default(true)
   defaultCustomerId       String?
   logo                    String?  @db.Text
+  stampImage              String?  @db.Text
+  retentionProvidencia    String   @default("SNAT/2025/000054")
   retentionNextNumber     Int      @default(1)
   updatedAt               DateTime @updatedAt
 }

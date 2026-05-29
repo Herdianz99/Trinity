@@ -5,6 +5,7 @@ import {
   UserCheck, Plus, Search, Loader2, Edit2, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Customer {
   id: string; name: string; documentType: string; rif: string | null;
@@ -13,6 +14,7 @@ interface Customer {
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -139,7 +141,7 @@ export default function CustomersPage() {
               ) : customers.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-12 text-slate-500">No se encontraron clientes</td></tr>
               ) : customers.map(c => (
-                <tr key={c.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                <tr key={c.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/sales/customers/${c.id}`)}>
                   <td className="px-4 py-3">
                     <Link href={`/sales/customers/${c.id}`} className="text-white font-medium hover:text-green-400 transition-colors">
                       {c.name}
@@ -159,7 +161,7 @@ export default function CustomersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                       <Link href={`/sales/customers/${c.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Editar">
                         <Edit2 size={15} />
                       </Link>

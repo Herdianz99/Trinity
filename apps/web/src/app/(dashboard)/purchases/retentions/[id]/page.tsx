@@ -250,6 +250,10 @@ export default function RetentionVoucherDetailPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          <button onClick={() => window.open(`/api/proxy/retention-vouchers/${id}/pdf`, '_blank')}
+            className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2 transition-colors border border-slate-600">
+            <FileText size={16} /> PDF
+          </button>
           {voucher.status === 'PENDING' && (
             <button onClick={() => { setIssueModal(true); setIssueDate(toLocalDateStr(new Date())); }}
               className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center gap-2 transition-colors">

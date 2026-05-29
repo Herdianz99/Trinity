@@ -6,10 +6,13 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { PurchaseOrdersService } from './purchase-orders.service';
+import { PurchaseOrdersPdfService } from './purchase-orders-pdf.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -18,7 +21,10 @@ import { PurchaseStatus } from '@prisma/client';
 @Controller('purchases')
 @UseGuards(AuthGuard('jwt'))
 export class PurchaseOrdersController {
-  constructor(private readonly service: PurchaseOrdersService) {}
+  constructor(
+    private readonly service: PurchaseOrdersService,
+    private readonly pdfService: PurchaseOrdersPdfService,
+  ) {}
 
   @Post()
   create(
@@ -50,6 +56,17 @@ export class PurchaseOrdersController {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
     });
+  }
+
+  @Get(':id/pdf')
+  async getPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generatePdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="compra-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id')

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Shield, Loader2, Search, CheckCircle, Ban, Eye, X, Calendar,
-  Plus, ChevronLeft, ChevronRight,
+  Plus, ChevronLeft, ChevronRight, FileText,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -299,13 +299,13 @@ export default function RetentionsPage() {
                 </td></tr>
               ) : (
                 vouchers.map(v => (
-                  <tr key={v.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group">
+                  <tr key={v.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group cursor-pointer" onClick={() => router.push(`/purchases/retentions/${v.id}`)}>
                     <td className="px-3 py-2.5 text-purple-400 font-mono font-bold">{v.number}</td>
                     <td className="px-3 py-2.5 text-slate-200">
                       <div className="truncate max-w-[180px]">{v.supplier.name}</div>
                       <div className="text-xs text-slate-500 font-mono">{v.supplier.rif || 'S/R'}</div>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col gap-0.5">
                         {v.lines.slice(0, 3).map((line) => (
                           <a key={line.id} href={`/purchases/${line.purchaseOrder.id}`}
@@ -328,11 +328,16 @@ export default function RetentionsPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setDetailModal(v)}
                           className="p-1.5 rounded hover:bg-slate-600/60 text-slate-400 hover:text-blue-400 transition-colors"
                           title="Ver detalle">
                           <Eye size={15} />
+                        </button>
+                        <button onClick={() => window.open(`/api/proxy/retention-vouchers/${v.id}/pdf`, '_blank')}
+                          className="p-1.5 rounded hover:bg-slate-600/60 text-slate-400 hover:text-purple-400 transition-colors"
+                          title="Descargar PDF">
+                          <FileText size={15} />
                         </button>
                         {v.status === 'PENDING' && (
                           <button onClick={() => { setIssueModal(v); setIssueDate(toLocalDateStr(now)); }}

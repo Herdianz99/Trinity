@@ -1100,3 +1100,22 @@ model QuotationItem {
 - Admin: admin@trinity.com / Admin1234!
 - Vendedor: seller@trinity.com / Seller1234!
 - Cajero: cashier@trinity.com / Cashier1234!
+
+---
+
+## Backlog — Sesiones Futuras
+
+### PDFs / Reportes Fiscales Pendientes
+Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobación del contador antes de implementar. Usar como referencia los documentos de Wensoft que el usuario proporcionará.
+
+- [ ] **Nota de Crédito (Compras)** — PDF fiscal para notas de crédito de proveedores
+- [ ] **Nota de Débito (Compras)** — PDF fiscal para notas de débito de proveedores
+- [ ] **Nota de Crédito (Ventas)** — PDF fiscal para notas de crédito a clientes
+- [ ] **Nota de Débito (Ventas)** — PDF fiscal para notas de débito a clientes
+- [ ] **Retención ISLR** — Comprobante de retención de impuesto sobre la renta
+
+### Libros Fiscales
+- [ ] **Libro de Compras** — Reporte fiscal obligatorio con todas las compras del período
+- [ ] **Libro de Ventas** — Reporte fiscal obligatorio con todas las ventas del período
+  - Debe incluir **formato detallado** (desglose por factura)
+  - Debe incluir **Reportes Z** (resumen de ventas por caja/día)

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   FileText,
   Search,
@@ -66,6 +67,7 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function InvoicesPage() {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -288,7 +290,7 @@ export default function InvoicesPage() {
                   No se encontraron facturas
                 </td></tr>
               ) : invoices.map(inv => (
-                <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40">
+                <tr key={inv.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/sales/invoices/${inv.id}`)}>
                   <td className="px-4 py-3 font-mono text-xs">
                     <Link href={`/sales/invoices/${inv.id}`} className="text-green-400 hover:text-green-300 hover:underline">
                       {inv.number || 'Sin numero'}
@@ -317,7 +319,7 @@ export default function InvoicesPage() {
                   <td className="px-4 py-3 text-right text-slate-400 hidden lg:table-cell">Bs {inv.totalBs.toFixed(2)}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">{new Date(inv.createdAt).toLocaleDateString('es-VE')}</td>
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                       <Link href={`/sales/invoices/${inv.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 inline-flex" title="Ver detalle">
                         <Eye size={15} />
                       </Link>

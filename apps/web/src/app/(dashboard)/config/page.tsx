@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon, Search, UserCheck, X } from 'lucide-react';
+import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon, Search, UserCheck, X, Stamp } from 'lucide-react';
 
 interface CompanyConfig {
   companyName: string;
@@ -22,6 +22,7 @@ interface CompanyConfig {
   igtfPct: number;
   allowNegativeStock: boolean;
   defaultCustomerId: string;
+  retentionProvidencia: string;
 }
 
 interface CustomerOption {
@@ -51,6 +52,7 @@ export default function ConfigPage() {
     igtfPct: 3,
     allowNegativeStock: true,
     defaultCustomerId: '',
+    retentionProvidencia: 'SNAT/2025/000054',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +75,12 @@ export default function ConfigPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoChanged, setLogoChanged] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stamp state
+  const [stampImage, setStampImage] = useState<string | null>(null);
+  const [stampPreview, setStampPreview] = useState<string | null>(null);
+  const [stampChanged, setStampChanged] = useState(false);
+  const stampInputRef = useRef<HTMLInputElement>(null);
 
   // Print area state
   const [printAreas, setPrintAreas] = useState<{ id: string; name: string }[]>([]);
@@ -171,6 +179,7 @@ export default function ConfigPage() {
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
           defaultCustomerId: data.defaultCustomerId || '',
+          retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
         });
         if (data.defaultCustomerId) {
           try {
@@ -184,6 +193,10 @@ export default function ConfigPage() {
         if (data.logo) {
           setLogo(data.logo);
           setLogoPreview(data.logo);
+        }
+        if (data.stampImage) {
+          setStampImage(data.stampImage);
+          setStampPreview(data.stampImage);
         }
       }
     } catch {
@@ -236,8 +249,10 @@ export default function ConfigPage() {
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
           defaultCustomerId: config.defaultCustomerId || null,
+          retentionProvidencia: config.retentionProvidencia,
           ...(creditAuthPassword ? { creditAuthPassword } : {}),
           ...(logoChanged ? { logo } : {}),
+          ...(stampChanged ? { stampImage } : {}),
         }),
       });
 
@@ -322,6 +337,30 @@ export default function ConfigPage() {
     setLogoPreview(null);
     setLogoChanged(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleStampChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 500KB' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      setStampImage(dataUri);
+      setStampPreview(dataUri);
+      setStampChanged(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveStamp() {
+    setStampImage(null);
+    setStampPreview(null);
+    setStampChanged(true);
+    if (stampInputRef.current) stampInputRef.current.value = '';
   }
 
   function handleChange(field: keyof CompanyConfig, value: string | number | boolean) {
@@ -490,6 +529,68 @@ export default function ConfigPage() {
           </div>
         </div>
 
+        {/* Stamp Section */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Stamp size={20} className="text-purple-400" />
+            <h2 className="text-lg font-semibold text-white">Firma y Sello (Retenciones)</h2>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            Imagen de firma y sello que aparecera en los comprobantes de retencion IVA. Maximo 500KB.
+          </p>
+          <div className="flex items-start gap-6">
+            {stampPreview ? (
+              <div className="relative group">
+                <img
+                  src={stampPreview}
+                  alt="Firma y sello"
+                  className="h-24 w-auto max-w-[200px] object-contain rounded-lg border border-slate-700 bg-white p-2"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveStamp}
+                  className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Eliminar firma/sello"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="h-24 w-32 flex items-center justify-center rounded-lg border border-dashed border-slate-600 bg-slate-800/50">
+                <Stamp size={28} className="text-slate-600" />
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <input
+                ref={stampInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleStampChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => stampInputRef.current?.click()}
+                className="btn-secondary !py-2 text-sm flex items-center gap-2"
+              >
+                <Upload size={14} />
+                {stampPreview ? 'Cambiar imagen' : 'Subir firma/sello'}
+              </button>
+              {stampPreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveStamp}
+                  className="btn-secondary !py-2 text-sm flex items-center gap-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
+                >
+                  <Trash2 size={14} />
+                  Eliminar
+                </button>
+              )}
+              <p className="text-xs text-slate-500">PNG o JPG. Se guardara al presionar &quot;Guardar configuracion&quot;.</p>
+            </div>
+          </div>
+        </div>
+
         <form onSubmit={handleSave} className="space-y-6">
           {/* Company info */}
           <div className="card p-6">
@@ -627,6 +728,19 @@ export default function ConfigPage() {
                   className="input-field"
                 />
                 <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en facturas de compra</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Providencia administrativa (retenciones IVA)
+                </label>
+                <input
+                  type="text"
+                  value={config.retentionProvidencia}
+                  onChange={(e) => handleChange('retentionProvidencia', e.target.value)}
+                  className="input-field"
+                  placeholder="SNAT/2025/000054"
+                />
+                <p className="text-xs text-slate-500 mt-1">Numero de providencia que aparece en los comprobantes de retencion IVA</p>
               </div>
             </div>
           </div>

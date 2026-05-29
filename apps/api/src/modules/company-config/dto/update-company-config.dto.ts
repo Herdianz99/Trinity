@@ -103,4 +103,15 @@ export class UpdateCompanyConfigDto {
   @ValidateIf((_, value) => value !== null)
   @IsString()
   logo?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  stampImage?: string | null;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  retentionProvidencia?: string;
 }

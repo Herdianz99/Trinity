@@ -8,9 +8,12 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
 import { RetentionVouchersService } from './retention-vouchers.service';
+import { RetentionVouchersPdfService } from './retention-vouchers-pdf.service';
 import { CreateRetentionVoucherDto } from './dto/create-retention-voucher.dto';
 import { UpdateRetentionVoucherDto } from './dto/update-retention-voucher.dto';
 import { IssueRetentionDto } from './dto/issue-retention.dto';
@@ -18,7 +21,10 @@ import { IssueRetentionDto } from './dto/issue-retention.dto';
 @Controller('retention-vouchers')
 @UseGuards(AuthGuard('jwt'))
 export class RetentionVouchersController {
-  constructor(private readonly service: RetentionVouchersService) {}
+  constructor(
+    private readonly service: RetentionVouchersService,
+    private readonly pdfService: RetentionVouchersPdfService,
+  ) {}
 
   @Get()
   findAll(
@@ -74,7 +80,13 @@ export class RetentionVouchersController {
   }
 
   @Get(':id/pdf')
-  getPdf(@Param('id') id: string) {
-    return this.service.getPdfData(id);
+  async getPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generatePdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="retencion-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }

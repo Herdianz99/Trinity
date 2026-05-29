@@ -5,6 +5,7 @@ import {
   Truck, Plus, Edit2, Trash2, Loader2, Shield,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Supplier {
   id: string; name: string; rif: string | null; phone: string | null;
@@ -13,6 +14,7 @@ interface Supplier {
 }
 
 export default function SuppliersPage() {
+  const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -78,7 +80,7 @@ export default function SuppliersPage() {
               ) : suppliers.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-12 text-slate-500">No hay proveedores registrados</td></tr>
               ) : suppliers.map(s => (
-                <tr key={s.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                <tr key={s.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/catalog/suppliers/${s.id}`)}>
                   <td className="px-4 py-3">
                     <Link href={`/catalog/suppliers/${s.id}`} className="text-white font-medium hover:text-blue-400 transition-colors">
                       {s.name}
@@ -99,7 +101,7 @@ export default function SuppliersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                       <Link href={`/catalog/suppliers/${s.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="Editar">
                         <Edit2 size={14} />
                       </Link>

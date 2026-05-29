@@ -224,7 +224,7 @@ export default function ProductsPage() {
                 const totalStock = getTotalStock(product);
                 const isLow = totalStock < product.minStock;
                 return (
-                  <tr key={product.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                  <tr key={product.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/catalog/products/${product.code}`)}>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded">
                         {product.code}
@@ -262,7 +262,7 @@ export default function ProductsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                         <Link
                           href={`/catalog/products/${product.code}`}
                           className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"

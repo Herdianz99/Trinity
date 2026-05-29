@@ -210,9 +210,11 @@ export default function CreditDebitNotesPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{fmtDate(note.createdAt)}</td>
                   <td className="px-4 py-3 text-center">
-                    <button className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
-                      <Eye size={15} />
-                    </button>
+                    <div className="flex items-center justify-center" onClick={e => e.stopPropagation()}>
+                      <button className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                        <Eye size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

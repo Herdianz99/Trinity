@@ -192,7 +192,8 @@ export default function SeriesPage() {
             {series.map((serie) => (
               <tr
                 key={serie.id}
-                className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
+                className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors cursor-pointer"
+                onClick={() => router.push(`/settings/series/${serie.id}`)}
               >
                 <td className="px-4 py-3 text-white font-medium">{serie.name}</td>
                 <td className="px-4 py-3">
@@ -246,7 +247,7 @@ export default function SeriesPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <div className="flex items-center justify-center gap-1">
+                  <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => router.push(`/settings/series/${serie.id}`)}
                       className="p-1.5 rounded hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"

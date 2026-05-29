@@ -304,13 +304,16 @@ export default function NewPurchaseBillPage() {
       }
     } catch { /* use defaults */ }
 
+    // Si la moneda es BS, convertir el costo a Bs usando la tasa
+    const costValue = currency === 'BS' ? Math.round(costUsd * exchangeRate * 100) / 100 : costUsd;
+
     const newItems = [...items];
     newItems[rowIdx] = {
       productId: p.id,
       code: p.code,
       name: p.name,
       quantity: newItems[rowIdx]?.quantity || 1,
-      costUsd,
+      costUsd: costValue,
       discountPct: newItems[rowIdx]?.discountPct || 0,
       ivaType,
       isService: p.isService || false,

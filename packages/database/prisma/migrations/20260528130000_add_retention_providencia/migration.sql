@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "retentionProvidencia" TEXT NOT NULL DEFAULT 'SNAT/2025/000054';

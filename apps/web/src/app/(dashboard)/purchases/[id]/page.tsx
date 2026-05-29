@@ -14,6 +14,7 @@ import {
   BookOpen,
   Shield,
   Calendar,
+  FileText,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -647,6 +648,12 @@ export default function PurchaseBillDetailPage() {
               </button>
             </>
           )}
+          <button
+            onClick={() => window.open(`/api/proxy/purchases/${bill.id}/pdf`, '_blank')}
+            className="text-sm px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors flex items-center gap-1.5"
+          >
+            <FileText size={14} /> PDF
+          </button>
           {bill.status === 'PROCESSED' && (
             <Link
               href="/fiscal/libro-compras"
@@ -802,11 +809,17 @@ export default function PurchaseBillDetailPage() {
                     <th className="text-left px-3 py-3 text-slate-400 font-medium w-20">Ref. Art.</th>
                     <th className="text-left px-3 py-3 text-slate-400 font-medium min-w-[200px]">Articulo</th>
                     <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Cantidad</th>
-                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Precio USD</th>
+                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">
+                      {bill.currency === 'BS' ? 'Precio Bs' : 'Precio USD'}
+                    </th>
                     <th className="text-right px-3 py-3 text-slate-400 font-medium w-20">% Dto.</th>
-                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe USD</th>
+                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">
+                      {bill.currency === 'BS' ? 'Importe Bs' : 'Importe USD'}
+                    </th>
                     <th className="text-center px-3 py-3 text-slate-400 font-medium w-16">% IVA</th>
-                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe Bs</th>
+                    <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">
+                      {bill.currency === 'BS' ? 'Importe USD' : 'Importe Bs'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -831,13 +844,13 @@ export default function PurchaseBillDetailPage() {
                         {item.quantity}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-300">
-                        ${fmt(item.costUsd)}
+                        {bill.currency === 'BS' ? `Bs ${fmt(item.costBs)}` : `$${fmt(item.costUsd)}`}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-400">
                         {item.discountPct > 0 ? `${item.discountPct}%` : '--'}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-white">
-                        ${fmt(item.totalUsd)}
+                        {bill.currency === 'BS' ? `Bs ${fmt(item.totalBs)}` : `$${fmt(item.totalUsd)}`}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <span
@@ -855,7 +868,7 @@ export default function PurchaseBillDetailPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-400">
-                        {fmt(item.totalBs)}
+                        {bill.currency === 'BS' ? `$${fmt(item.totalUsd)}` : `Bs ${fmt(item.totalBs)}`}
                       </td>
                     </tr>
                   ))}
@@ -872,8 +885,12 @@ export default function PurchaseBillDetailPage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
-                <p className="text-xs text-slate-500 mb-1">Subtotal $</p>
-                <p className="text-white font-mono text-lg">${fmt(bill.subtotalUsd)}</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Subtotal {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
+                <p className="text-white font-mono text-lg">
+                  {bill.currency === 'BS' ? `Bs ${fmt(bill.subtotalBs)}` : `$${fmt(bill.subtotalUsd)}`}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">% Dto. global</p>
@@ -881,7 +898,9 @@ export default function PurchaseBillDetailPage() {
                   {bill.discountGlobalPct > 0 ? (
                     <span>
                       {bill.discountGlobalPct}%{' '}
-                      <span className="text-red-400">-${fmt(bill.discountGlobalUsd)}</span>
+                      <span className="text-red-400">
+                        -{bill.currency === 'BS' ? `Bs ${fmt(bill.discountGlobalBs)}` : `$${fmt(bill.discountGlobalUsd)}`}
+                      </span>
                     </span>
                   ) : (
                     '--'
@@ -889,42 +908,66 @@ export default function PurchaseBillDetailPage() {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Sub-Total c/Dto $</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Sub-Total c/Dto {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
                 <p className="text-white font-mono text-lg">
-                  ${fmt(bill.subtotalUsd - bill.discountGlobalUsd)}
+                  {bill.currency === 'BS'
+                    ? `Bs ${fmt(bill.subtotalBs - bill.discountGlobalBs)}`
+                    : `$${fmt(bill.subtotalUsd - bill.discountGlobalUsd)}`}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Monto Exento $</p>
-                <p className="text-slate-300 font-mono">${fmt(bill.exemptAmountUsd)}</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Monto Exento {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
+                <p className="text-slate-300 font-mono">
+                  {bill.currency === 'BS' ? `Bs ${fmt(bill.exemptAmountBs)}` : `$${fmt(bill.exemptAmountUsd)}`}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Base IVA $</p>
-                <p className="text-white font-mono">${fmt(bill.taxableBaseUsd)}</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Base IVA {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
+                <p className="text-white font-mono">
+                  {bill.currency === 'BS' ? `Bs ${fmt(bill.taxableBaseBs)}` : `$${fmt(bill.taxableBaseUsd)}`}
+                </p>
               </div>
             </div>
 
             <div className="border-t border-slate-700/50 pt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
-                <p className="text-xs text-slate-500 mb-1">Total IVA $</p>
-                <p className="text-amber-400 font-mono">${fmt(bill.totalIvaUsd)}</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Total IVA {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
+                <p className="text-amber-400 font-mono">
+                  {bill.currency === 'BS' ? `Bs ${fmt(bill.totalIvaBs)}` : `$${fmt(bill.totalIvaUsd)}`}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Recargo $</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Recargo {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
                 <p className="text-cyan-400 font-mono">
-                  {bill.totalSurchargeUsd > 0 ? `$${fmt(bill.totalSurchargeUsd)}` : '--'}
+                  {bill.currency === 'BS'
+                    ? (bill.totalSurchargeBs > 0 ? `Bs ${fmt(bill.totalSurchargeBs)}` : '--')
+                    : (bill.totalSurchargeUsd > 0 ? `$${fmt(bill.totalSurchargeUsd)}` : '--')}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Total $</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Total {bill.currency === 'BS' ? 'Bs' : '$'}
+                </p>
                 <p className="text-green-400 font-mono text-xl font-bold">
-                  ${fmt(bill.totalUsd)}
+                  {bill.currency === 'BS' ? `Bs ${fmt(bill.totalBs)}` : `$${fmt(bill.totalUsd)}`}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Total Bs</p>
+                <p className="text-xs text-slate-500 mb-1">
+                  Total {bill.currency === 'BS' ? '$' : 'Bs'}
+                </p>
                 <p className="text-blue-400 font-mono text-lg">
-                  Bs {fmt(bill.totalBs)}
+                  {bill.currency === 'BS' ? `$${fmt(bill.totalUsd)}` : `Bs ${fmt(bill.totalBs)}`}
                 </p>
               </div>
               <div></div>
