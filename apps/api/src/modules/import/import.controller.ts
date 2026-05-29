@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ImportService } from './import.service';
 import { BulkImportDto } from './dto/import.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Import')
 @ApiBearerAuth()
@@ -17,7 +18,15 @@ export class ImportController {
   }
 
   @Post()
-  executeImport(@Body() dto: BulkImportDto) {
-    return this.importService.executeImport(dto);
+  executeImport(
+    @Body() dto: BulkImportDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.importService.executeImport(dto, userId);
+  }
+
+  @Post('reset')
+  resetData() {
+    return this.importService.resetData();
   }
 }

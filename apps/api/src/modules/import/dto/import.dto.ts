@@ -172,6 +172,12 @@ export class ImportProductDto {
   @IsOptional()
   @IsBoolean()
   bregaApplies?: boolean;
+
+  @ApiProperty({ required: false, default: 0, description: 'Initial stock quantity' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  initialStock?: number;
 }
 
 // ─── Root payload ────────────────────────────────────────────────────

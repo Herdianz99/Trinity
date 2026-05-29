@@ -231,7 +231,7 @@ export class ImportService {
   // EXECUTE IMPORT (in a transaction)
   // ────────────────────────────────────────────────────────────────────
 
-  async executeImport(dto: BulkImportDto): Promise<ImportReport> {
+  async executeImport(dto: BulkImportDto, userId: string): Promise<ImportReport> {
     return this.prisma.$transaction(
       async (tx) => {
         const report: ImportReport = {
@@ -240,6 +240,11 @@ export class ImportService {
           suppliers: { created: [], skipped: [] },
           products: { created: [], skipped: [], errors: [] },
         };
+
+        // Find default warehouse for initial stock
+        const defaultWarehouse = await tx.warehouse.findFirst({
+          where: { isDefault: true },
+        });
 
         // ── 1. Categories ────────────────────────────────────────────
         const categoryMap = new Map<string, string>(); // name (lower) -> id
@@ -517,7 +522,7 @@ export class ImportService {
                 ) / 100;
 
               // Create the product
-              await tx.product.create({
+              const product = await tx.product.create({
                 data: {
                   code: productCode,
                   barcode: prodDto.barcode || null,
@@ -541,6 +546,30 @@ export class ImportService {
                 },
               });
 
+              // Create initial stock if provided
+              const initialStock = prodDto.initialStock ?? 0;
+              if (initialStock > 0 && defaultWarehouse) {
+                await tx.stock.create({
+                  data: {
+                    productId: product.id,
+                    warehouseId: defaultWarehouse.id,
+                    quantity: initialStock,
+                  },
+                });
+                await tx.stockMovement.create({
+                  data: {
+                    productId: product.id,
+                    warehouseId: defaultWarehouse.id,
+                    type: 'ADJUSTMENT_IN',
+                    quantity: initialStock,
+                    costUsd,
+                    stockAfter: initialStock,
+                    reason: 'Carga inicial desde Wensoft',
+                    createdById: userId,
+                  },
+                });
+              }
+
               report.products.created.push(prodDto.name);
             } catch (err: any) {
               this.logger.error(`Error importing product "${prodDto.name}": ${err.message}`);
@@ -551,7 +580,68 @@ export class ImportService {
 
         return report;
       },
-      { timeout: 60_000 },
+      { timeout: 120_000 },
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // RESET DATA (delete products, stock, categories, brands)
+  // ────────────────────────────────────────────────────────────────────
+
+  async resetData(): Promise<{ deleted: Record<string, number> }> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const deleted: Record<string, number> = {};
+
+        // 1. Delete stock movements
+        const movements = await tx.stockMovement.deleteMany({});
+        deleted.stockMovements = movements.count;
+
+        // 2. Delete stock
+        const stock = await tx.stock.deleteMany({});
+        deleted.stock = stock.count;
+
+        // 3. Delete inventory count items + counts
+        const countItems = await tx.inventoryCountItem.deleteMany({});
+        deleted.inventoryCountItems = countItems.count;
+
+        const counts = await tx.inventoryCount.deleteMany({});
+        deleted.inventoryCounts = counts.count;
+
+        // 4. Delete transfer items + transfers
+        const transferItems = await tx.transferItem.deleteMany({});
+        deleted.transferItems = transferItems.count;
+
+        const transfers = await tx.transfer.deleteMany({});
+        deleted.transfers = transfers.count;
+
+        // 5. Delete all purchase order items + purchase orders
+        const poItems = await tx.purchaseOrderItem.deleteMany({});
+        deleted.purchaseOrderItems = poItems.count;
+
+        const pos = await tx.purchaseOrder.deleteMany({});
+        deleted.purchaseOrders = pos.count;
+
+        // 6. Delete products
+        const products = await tx.product.deleteMany({});
+        deleted.products = products.count;
+
+        // 7. Delete categories (children first, then parents)
+        const childCats = await tx.category.deleteMany({
+          where: { parentId: { not: null } },
+        });
+        deleted.subcategories = childCats.count;
+
+        const parentCats = await tx.category.deleteMany({});
+        deleted.categories = parentCats.count;
+
+        // 8. Delete brands
+        const brands = await tx.brand.deleteMany({});
+        deleted.brands = brands.count;
+
+        return { deleted };
+      },
+      { timeout: 30_000 },
     );
   }
 }
