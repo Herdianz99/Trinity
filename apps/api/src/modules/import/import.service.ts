@@ -589,59 +589,41 @@ export class ImportService {
   // ────────────────────────────────────────────────────────────────────
 
   async resetData(): Promise<{ deleted: Record<string, number> }> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        const deleted: Record<string, number> = {};
+    // Count before deleting for the report
+    const [products, stock, movements, categories, brands] = await Promise.all([
+      this.prisma.product.count(),
+      this.prisma.stock.count(),
+      this.prisma.stockMovement.count(),
+      this.prisma.category.count(),
+      this.prisma.brand.count(),
+    ]);
 
-        // 1. Delete stock movements
-        const movements = await tx.stockMovement.deleteMany({});
-        deleted.stockMovements = movements.count;
+    // Use raw SQL TRUNCATE CASCADE to handle all FK chains cleanly
+    await this.prisma.$executeRawUnsafe(`
+      TRUNCATE TABLE
+        "StockMovement",
+        "Stock",
+        "InventoryCountItem",
+        "InventoryCount",
+        "TransferItem",
+        "Transfer",
+        "PurchaseOrderItem",
+        "IvaRetention",
+        "PurchaseOrder",
+        "Product",
+        "Category",
+        "Brand"
+      CASCADE
+    `);
 
-        // 2. Delete stock
-        const stock = await tx.stock.deleteMany({});
-        deleted.stock = stock.count;
-
-        // 3. Delete inventory count items + counts
-        const countItems = await tx.inventoryCountItem.deleteMany({});
-        deleted.inventoryCountItems = countItems.count;
-
-        const counts = await tx.inventoryCount.deleteMany({});
-        deleted.inventoryCounts = counts.count;
-
-        // 4. Delete transfer items + transfers
-        const transferItems = await tx.transferItem.deleteMany({});
-        deleted.transferItems = transferItems.count;
-
-        const transfers = await tx.transfer.deleteMany({});
-        deleted.transfers = transfers.count;
-
-        // 5. Delete all purchase order items + purchase orders
-        const poItems = await tx.purchaseOrderItem.deleteMany({});
-        deleted.purchaseOrderItems = poItems.count;
-
-        const pos = await tx.purchaseOrder.deleteMany({});
-        deleted.purchaseOrders = pos.count;
-
-        // 6. Delete products
-        const products = await tx.product.deleteMany({});
-        deleted.products = products.count;
-
-        // 7. Delete categories (children first, then parents)
-        const childCats = await tx.category.deleteMany({
-          where: { parentId: { not: null } },
-        });
-        deleted.subcategories = childCats.count;
-
-        const parentCats = await tx.category.deleteMany({});
-        deleted.categories = parentCats.count;
-
-        // 8. Delete brands
-        const brands = await tx.brand.deleteMany({});
-        deleted.brands = brands.count;
-
-        return { deleted };
+    return {
+      deleted: {
+        products,
+        stock,
+        stockMovements: movements,
+        categories,
+        brands,
       },
-      { timeout: 30_000 },
-    );
+    };
   }
 }
