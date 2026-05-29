@@ -54,6 +54,27 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Usar SELECT FOR UPDATE para correlativos (facturas, códigos de productos)
 - Todo campo monetario en USD debe tener su campo equivalente en Bs en el mismo modelo. Los montos en Bs se calculan y guardan al momento de crear/actualizar el registro usando la tasa del día. Nunca calcular Bs en tiempo de ejecución.
 
+## Importación de inventario desde Excel (Wensoft u otra empresa) — CHECKLIST
+
+Cuando el usuario pida analizar/importar un Excel de inventario de una nueva empresa, seguir estos pasos ANTES de importar:
+
+1. **Buscar productos duplicados por nombre**: Agrupar filas por `descripcion` y listar los que aparecen más de una vez
+2. **Comparar datos de duplicados**: Para cada grupo de duplicados, mostrar en tabla:
+   - Código (Referencia)
+   - Stock (Cantidad de inventario)
+   - Costo (Coste divisa)
+   - % Ganancia
+   - Precio de venta calculado
+3. **Generar reporte para el cliente**: Presentar la tabla de duplicados al encargado de la empresa para que:
+   - Confirme si el stock real es la suma de ambos registros
+   - Indique cuál es el costo y precio correcto
+   - Decida cuál registro desactivar en Wensoft
+4. **Buscar proveedores problemáticos**: Verificar proveedores con nombre vacío, muy corto, solo guiones, o duplicados con nombres ligeramente distintos (ej: con/sin punto final)
+5. **Buscar productos desactivados**: Filtrar `Desactivado = "Si"` y confirmar que se deben omitir
+6. **Re-exportar Excel corregido**: Una vez el cliente corrija los duplicados en Wensoft, pedir nuevo Excel y volver a importar
+
+Este flujo evita importar datos incorrectos y asegura que stocks, costos y precios sean los reales.
+
 ## Migraciones Prisma — CRITICO
 - NUNCA usar `prisma migrate resolve --applied` sin verificar que las columnas existen en la BD
 - Toda migración debe usar `IF NOT EXISTS` en ALTER TABLE y CREATE TABLE
