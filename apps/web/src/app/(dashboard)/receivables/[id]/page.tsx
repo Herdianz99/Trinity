@@ -9,12 +9,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface ReceivableDetail {
   id: string;
+  number: string | null;
   type: string;
   customerId: string | null;
   customer: { id: string; name: string; documentType: string; rif: string | null } | null;
   platformName: string | null;
-  invoiceId: string;
-  invoice: { id: string; number: string };
+  invoiceId: string | null;
+  invoice: { id: string; number: string } | null;
+  documentNumber: string | null;
+  description: string | null;
   amountUsd: number;
   amountBs: number;
   exchangeRate: number;
@@ -23,6 +26,31 @@ interface ReceivableDetail {
   paidAmountUsd: number;
   balanceUsd: number;
   notes: string | null;
+  serieId: string | null;
+  serie: { id: string; name: string; isFiscal: boolean } | null;
+  currency: string;
+  originalDate: string | null;
+  receptionDate: string | null;
+  paymentTerms: string | null;
+  exemptBaseUsd: number;
+  exemptBaseBs: number;
+  taxableBase8Usd: number;
+  taxableBase8Bs: number;
+  taxableBase16Usd: number;
+  taxableBase16Bs: number;
+  taxableBase31Usd: number;
+  taxableBase31Bs: number;
+  iva8Usd: number;
+  iva8Bs: number;
+  iva16Usd: number;
+  iva16Bs: number;
+  iva31Usd: number;
+  iva31Bs: number;
+  totalIvaUsd: number;
+  totalIvaBs: number;
+  igtfPct: number;
+  igtfUsd: number;
+  igtfBs: number;
   payments: ReceivablePayment[];
   createdAt: string;
 }
@@ -58,11 +86,13 @@ const STATUS_LABELS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   CUSTOMER_CREDIT: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
   FINANCING_PLATFORM: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+  MANUAL: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
 };
 
 const TYPE_LABELS: Record<string, string> = {
   CUSTOMER_CREDIT: 'Credito cliente',
   FINANCING_PLATFORM: 'Plataforma',
+  MANUAL: 'Manual',
 };
 
 export default function ReceivableDetailPage() {
@@ -99,7 +129,7 @@ export default function ReceivableDetailPage() {
   useEffect(() => { fetchReceivable(); }, [fetchReceivable]);
 
   useEffect(() => {
-    if (receivable) document.title = `CxC - ${receivable.invoice.number} | Trinity ERP`;
+    if (receivable) document.title = `CxC - ${receivable.invoice?.number || receivable.number || 'Manual'} | Trinity ERP`;
   }, [receivable]);
 
   useEffect(() => {
@@ -151,6 +181,8 @@ export default function ReceivableDetailPage() {
 
   const totalPaidUsd = receivable.payments.reduce((s, p) => s + p.amountUsd, 0);
   const totalPaidBs = receivable.payments.reduce((s, p) => s + p.amountBs, 0);
+  const isFiscal = receivable.serie?.isFiscal ?? false;
+  const hasFiscalData = isFiscal || (receivable.exemptBaseUsd || 0) > 0 || (receivable.taxableBase16Usd || 0) > 0 || (receivable.taxableBase8Usd || 0) > 0 || (receivable.taxableBase31Usd || 0) > 0;
 
   return (
     <div>
@@ -165,7 +197,7 @@ export default function ReceivableDetailPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Cuenta por Cobrar</h1>
-            <p className="text-slate-400 text-sm">Factura {receivable.invoice.number}</p>
+            <p className="text-slate-400 text-sm">Factura {receivable.invoice?.number || receivable.number || 'Manual'}</p>
           </div>
           <span className={`text-xs px-2.5 py-1 rounded-full border ${TYPE_COLORS[receivable.type]}`}>
             {receivable.platformName || TYPE_LABELS[receivable.type]}
@@ -173,11 +205,18 @@ export default function ReceivableDetailPage() {
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[receivable.status]}`}>
             {STATUS_LABELS[receivable.status]}
           </span>
+          {receivable.serie && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border ${isFiscal ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-slate-400 border-slate-500/30 bg-slate-500/10'}`}>
+              {receivable.serie.name}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => router.push(`/sales/invoices/${receivable.invoiceId}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-            <ExternalLink size={14} /> Ver factura origen
-          </button>
+          {receivable.invoiceId && (
+            <button onClick={() => router.push(`/sales/invoices/${receivable.invoiceId}`)} className="btn-secondary text-sm flex items-center gap-1.5">
+              <ExternalLink size={14} /> Ver factura origen
+            </button>
+          )}
           {receivable.status !== 'PAID' && (
             <button onClick={() => { setPayOpen(true); setPayAmount(receivable.balanceUsd.toFixed(2)); setPayMethod(''); setPayReference(''); }}
               className="btn-primary text-sm flex items-center gap-1.5">
@@ -196,6 +235,7 @@ export default function ReceivableDetailPage() {
       <Tabs defaultValue="info">
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
+          <TabsTrigger value="fiscal">Desglose Fiscal</TabsTrigger>
           <TabsTrigger value="cobros">Historial de cobros</TabsTrigger>
         </TabsList>
 
@@ -206,7 +246,7 @@ export default function ReceivableDetailPage() {
               {receivable.customer && (
                 <div className="flex justify-between">
                   <span className="text-slate-400">Cliente</span>
-                  <span className="text-white">{receivable.customer.name} ({receivable.customer.documentType}-{receivable.customer.rif || '—'})</span>
+                  <span className="text-white">{receivable.customer.name} ({receivable.customer.documentType}-{receivable.customer.rif || '-'})</span>
                 </div>
               )}
               {receivable.platformName && (
@@ -215,27 +255,76 @@ export default function ReceivableDetailPage() {
                   <span className="text-white">{receivable.platformName}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Factura</span>
-                <button onClick={() => router.push(`/sales/invoices/${receivable.invoiceId}`)} className="text-green-400 hover:text-green-300 font-mono flex items-center gap-1">
-                  {receivable.invoice.number} <ExternalLink size={10} />
-                </button>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Fecha creacion</span>
-                <span className="text-white">{fmtDate(receivable.createdAt)}</span>
-              </div>
-              {receivable.dueDate && (
+              {receivable.number && (
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Fecha vencimiento</span>
-                  <span className="text-white">{fmtDate(receivable.dueDate)}</span>
+                  <span className="text-slate-400">Correlativo</span>
+                  <span className="text-white font-mono">{receivable.number}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Tasa al crear</span>
-                <span className="text-white font-mono">Bs {receivable.exchangeRate?.toFixed(2)}</span>
+              {receivable.invoiceId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Factura origen</span>
+                  <button onClick={() => router.push(`/sales/invoices/${receivable.invoiceId}`)} className="text-green-400 hover:text-green-300 font-mono flex items-center gap-1">
+                    {receivable.invoice?.number || 'Ver'} <ExternalLink size={10} />
+                  </button>
+                </div>
+              )}
+              {receivable.serie && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Serie</span>
+                  <span className={isFiscal ? 'text-green-400' : 'text-slate-300'}>{receivable.serie.name} {isFiscal ? '(Fiscal)' : ''}</span>
+                </div>
+              )}
+              {receivable.currency && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Moneda</span>
+                  <span className="text-white">{receivable.currency}</span>
+                </div>
+              )}
+              {receivable.description && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Descripcion</span>
+                  <span className="text-white">{receivable.description}</span>
+                </div>
+              )}
+
+              {/* Fechas */}
+              <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
+                {receivable.originalDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha original</span>
+                    <span className="text-white">{fmtDate(receivable.originalDate)}</span>
+                  </div>
+                )}
+                {receivable.receptionDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha recepcion</span>
+                    <span className="text-white">{fmtDate(receivable.receptionDate)}</span>
+                  </div>
+                )}
+                {receivable.dueDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha vencimiento</span>
+                    <span className="text-white">{fmtDate(receivable.dueDate)}</span>
+                  </div>
+                )}
+                {receivable.paymentTerms && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Forma de pago</span>
+                    <span className="text-white">{receivable.paymentTerms.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Tasa al crear</span>
+                  <span className="text-white font-mono">Bs {receivable.exchangeRate?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Fecha creacion</span>
+                  <span className="text-white">{fmtDate(receivable.createdAt)}</span>
+                </div>
               </div>
 
+              {/* Montos */}
               <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Monto USD</span>
@@ -254,9 +343,132 @@ export default function ReceivableDetailPage() {
                   <span className="text-green-400 font-mono">${receivable.balanceUsd.toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Notas */}
+              {receivable.notes && (
+                <div className="border-t border-slate-700/50 pt-3 mt-3">
+                  <span className="text-slate-400 block mb-1">Notas</span>
+                  <p className="text-slate-300 whitespace-pre-wrap">{receivable.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
+
+        {/* TAB: Desglose Fiscal */}
+        <TabsContent value="fiscal">
+            <div className="card p-6">
+              <div className="space-y-3 text-sm">
+                {receivable.number && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Correlativo</span>
+                    <span className="text-white font-mono">{receivable.number}</span>
+                  </div>
+                )}
+                {receivable.serie && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Serie</span>
+                    <span className={isFiscal ? 'text-green-400' : 'text-slate-300'}>{receivable.serie.name} {isFiscal ? '(Fiscal)' : ''}</span>
+                  </div>
+                )}
+                {receivable.currency && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Moneda de entrada</span>
+                    <span className="text-white">{receivable.currency}</span>
+                  </div>
+                )}
+                {receivable.paymentTerms && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Forma de pago</span>
+                    <span className="text-white">{receivable.paymentTerms.replace('_', ' ')}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-700/50 pt-3 mt-3">
+                  <h4 className="text-slate-300 font-medium mb-2">Desglose por alicuota</h4>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left py-2 text-slate-400 font-medium">Concepto</th>
+                        <th className="text-right py-2 text-slate-400 font-medium">USD</th>
+                        <th className="text-right py-2 text-slate-400 font-medium">Bs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(receivable.exemptBaseUsd || 0) > 0 && (
+                        <tr className="border-b border-slate-700/30">
+                          <td className="py-2 text-slate-300">Base exenta</td>
+                          <td className="py-2 text-right font-mono text-white">${(receivable.exemptBaseUsd || 0).toFixed(2)}</td>
+                          <td className="py-2 text-right font-mono text-slate-300">Bs {(receivable.exemptBaseBs || 0).toFixed(2)}</td>
+                        </tr>
+                      )}
+                      {(receivable.taxableBase8Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 8%</td>
+                            <td className="py-2 text-right font-mono text-white">${(receivable.taxableBase8Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(receivable.taxableBase8Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 8%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(receivable.iva8Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(receivable.iva8Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                      {(receivable.taxableBase16Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 16%</td>
+                            <td className="py-2 text-right font-mono text-white">${(receivable.taxableBase16Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(receivable.taxableBase16Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 16%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(receivable.iva16Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(receivable.iva16Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                      {(receivable.taxableBase31Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 31%</td>
+                            <td className="py-2 text-right font-mono text-white">${(receivable.taxableBase31Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(receivable.taxableBase31Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 31%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(receivable.iva31Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(receivable.iva31Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-700/50">
+                        <td className="py-2 text-slate-300 font-medium">Total IVA</td>
+                        <td className="py-2 text-right font-mono font-bold text-cyan-400">${(receivable.totalIvaUsd || 0).toFixed(2)}</td>
+                        <td className="py-2 text-right font-mono font-bold text-cyan-300">Bs {(receivable.totalIvaBs || 0).toFixed(2)}</td>
+                      </tr>
+                      {(receivable.igtfUsd || 0) > 0 && (
+                        <tr>
+                          <td className="py-2 text-orange-400 font-medium">IGTF ({receivable.igtfPct || 0}%)</td>
+                          <td className="py-2 text-right font-mono font-bold text-orange-400">${(receivable.igtfUsd || 0).toFixed(2)}</td>
+                          <td className="py-2 text-right font-mono font-bold text-orange-300">Bs {(receivable.igtfBs || 0).toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="border-t border-slate-600">
+                        <td className="py-2 text-white font-semibold text-base">Total</td>
+                        <td className="py-2 text-right font-mono font-bold text-green-400 text-base">${receivable.amountUsd.toFixed(2)}</td>
+                        <td className="py-2 text-right font-mono font-bold text-slate-200 text-base">Bs {receivable.amountBs.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
 
         {/* TAB: Historial de cobros */}
         <TabsContent value="cobros">
@@ -281,7 +493,7 @@ export default function ReceivableDetailPage() {
                       <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
                       <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">{p.reference || '—'}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{p.reference || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

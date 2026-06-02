@@ -7,12 +7,28 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
+interface RetentionVoucherRef {
+  id: string;
+  number: string;
+  status: string;
+  retentionAmountUsd: number;
+  retentionAmountBs: number;
+}
+
+interface RetentionVoucherLineRef {
+  id: string;
+  retentionVoucher: RetentionVoucherRef;
+}
+
 interface PayableDetail {
   id: string;
+  number: string | null;
   supplierId: string;
-  supplier: { id: string; name: string };
+  supplier: { id: string; name: string; rif?: string | null };
   purchaseOrderId: string | null;
   purchaseOrder: { id: string; number: string } | null;
+  documentNumber: string | null;
+  description: string | null;
   amountUsd: number;
   amountBs: number;
   exchangeRate: number;
@@ -26,6 +42,33 @@ interface PayableDetail {
   paidAmountUsd: number;
   balanceUsd: number;
   notes: string | null;
+  serieId: string | null;
+  serie: { id: string; name: string; isFiscal: boolean } | null;
+  controlFiscal: string | null;
+  currency: string;
+  originalDate: string | null;
+  receptionDate: string | null;
+  paymentTerms: string | null;
+  exemptBaseUsd: number;
+  exemptBaseBs: number;
+  taxableBase8Usd: number;
+  taxableBase8Bs: number;
+  taxableBase16Usd: number;
+  taxableBase16Bs: number;
+  taxableBase31Usd: number;
+  taxableBase31Bs: number;
+  iva8Usd: number;
+  iva8Bs: number;
+  iva16Usd: number;
+  iva16Bs: number;
+  iva31Usd: number;
+  iva31Bs: number;
+  totalIvaUsd: number;
+  totalIvaBs: number;
+  igtfPct: number;
+  igtfUsd: number;
+  igtfBs: number;
+  retentionVoucherLines: RetentionVoucherLineRef[];
   payments: PayablePayment[];
   createdAt: string;
 }
@@ -146,6 +189,9 @@ export default function PayableDetailPage() {
 
   const totalPaidUsd = payable.payments.reduce((s, p) => s + p.amountUsd, 0);
   const totalPaidBs = payable.payments.reduce((s, p) => s + p.amountBs, 0);
+  const isFiscal = payable.serie?.isFiscal ?? false;
+  const hasFiscalData = isFiscal || (payable.exemptBaseUsd || 0) > 0 || (payable.taxableBase16Usd || 0) > 0 || (payable.taxableBase8Usd || 0) > 0 || (payable.taxableBase31Usd || 0) > 0;
+  const retentionVouchers = (payable.retentionVoucherLines || []).map(l => l.retentionVoucher).filter(Boolean);
 
   return (
     <div>
@@ -161,12 +207,17 @@ export default function PayableDetailPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">{payable.supplier.name}</h1>
             <p className="text-slate-400 text-sm">
-              {payable.purchaseOrder ? `Orden ${payable.purchaseOrder.number}` : 'Cuenta por pagar'}
+              {payable.purchaseOrder ? `Orden ${payable.purchaseOrder.number}` : payable.documentNumber ? `Doc. ${payable.documentNumber}` : 'Cuenta por pagar'}
             </p>
           </div>
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[payable.status]}`}>
             {STATUS_LABELS[payable.status]}
           </span>
+          {payable.serie && (
+            <span className={`text-xs px-2.5 py-1 rounded-full border ${isFiscal ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-slate-400 border-slate-500/30 bg-slate-500/10'}`}>
+              {payable.serie.name}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {payable.purchaseOrder && (
@@ -192,6 +243,7 @@ export default function PayableDetailPage() {
       <Tabs defaultValue="info">
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
+          <TabsTrigger value="fiscal">Desglose Fiscal</TabsTrigger>
           <TabsTrigger value="pagos">Historial de pagos</TabsTrigger>
         </TabsList>
 
@@ -201,8 +253,14 @@ export default function PayableDetailPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-400">Proveedor</span>
-                <span className="text-white">{payable.supplier.name}</span>
+                <span className="text-white">{payable.supplier.name} {payable.supplier.rif ? `(${payable.supplier.rif})` : ''}</span>
               </div>
+              {payable.number && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Correlativo</span>
+                  <span className="text-white font-mono">{payable.number}</span>
+                </div>
+              )}
               {payable.purchaseOrder && (
                 <div className="flex justify-between">
                   <span className="text-slate-400">Factura de compra</span>
@@ -211,21 +269,74 @@ export default function PayableDetailPage() {
                   </button>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Fecha creacion</span>
-                <span className="text-white">{fmtDate(payable.createdAt)}</span>
-              </div>
-              {payable.dueDate && (
+              {payable.documentNumber && (
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Fecha vencimiento</span>
-                  <span className="text-white">{fmtDate(payable.dueDate)}</span>
+                  <span className="text-slate-400">Nro. documento</span>
+                  <span className="text-white font-mono">{payable.documentNumber}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Tasa al crear</span>
-                <span className="text-white font-mono">Bs {payable.exchangeRate?.toFixed(2)}</span>
+              {payable.controlFiscal && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Control fiscal</span>
+                  <span className="text-white font-mono">{payable.controlFiscal}</span>
+                </div>
+              )}
+              {payable.serie && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Serie</span>
+                  <span className={isFiscal ? 'text-green-400' : 'text-slate-300'}>{payable.serie.name} {isFiscal ? '(Fiscal)' : ''}</span>
+                </div>
+              )}
+              {payable.currency && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Moneda</span>
+                  <span className="text-white">{payable.currency}</span>
+                </div>
+              )}
+              {payable.description && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Descripcion</span>
+                  <span className="text-white">{payable.description}</span>
+                </div>
+              )}
+
+              {/* Fechas */}
+              <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
+                {payable.originalDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha original</span>
+                    <span className="text-white">{fmtDate(payable.originalDate)}</span>
+                  </div>
+                )}
+                {payable.receptionDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha recepcion</span>
+                    <span className="text-white">{fmtDate(payable.receptionDate)}</span>
+                  </div>
+                )}
+                {payable.dueDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Fecha vencimiento</span>
+                    <span className="text-white">{fmtDate(payable.dueDate)}</span>
+                  </div>
+                )}
+                {payable.paymentTerms && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Forma de pago</span>
+                    <span className="text-white">{payable.paymentTerms.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Tasa al crear</span>
+                  <span className="text-white font-mono">Bs {payable.exchangeRate?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Fecha creacion</span>
+                  <span className="text-white">{fmtDate(payable.createdAt)}</span>
+                </div>
               </div>
 
+              {/* Montos */}
               <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Monto total USD</span>
@@ -238,7 +349,7 @@ export default function PayableDetailPage() {
               </div>
 
               {/* Retentions */}
-              {(payable.retentionUsd > 0 || payable.islrRetentionUsd > 0) && (
+              {(payable.retentionUsd > 0 || (payable.islrRetentionUsd || 0) > 0) && (
                 <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
                   <h4 className="text-orange-400 font-medium flex items-center gap-1">
                     <Shield size={14} /> Retenciones
@@ -255,7 +366,7 @@ export default function PayableDetailPage() {
                       </div>
                     </>
                   )}
-                  {payable.islrRetentionUsd > 0 && (
+                  {(payable.islrRetentionUsd || 0) > 0 && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Retencion ISLR USD</span>
@@ -266,6 +377,20 @@ export default function PayableDetailPage() {
                         <span className="text-purple-400 font-mono">-Bs {payable.islrRetentionBs.toFixed(2)}</span>
                       </div>
                     </>
+                  )}
+                  {retentionVouchers.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {retentionVouchers.map((rv) => (
+                        <button
+                          key={rv.id}
+                          onClick={() => router.push(`/purchases/retentions/${rv.id}`)}
+                          className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-xs"
+                        >
+                          <ExternalLink size={12} />
+                          Comprobante {rv.number} ({rv.status}) — ${rv.retentionAmountUsd.toFixed(2)}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -284,9 +409,138 @@ export default function PayableDetailPage() {
                   <span className="text-red-400 font-mono">${payable.balanceUsd.toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Notas */}
+              {payable.notes && (
+                <div className="border-t border-slate-700/50 pt-3 mt-3">
+                  <span className="text-slate-400 block mb-1">Notas</span>
+                  <p className="text-slate-300 whitespace-pre-wrap">{payable.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
+
+        {/* TAB: Desglose Fiscal */}
+        <TabsContent value="fiscal">
+            <div className="card p-6">
+              <div className="space-y-3 text-sm">
+                {payable.number && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Correlativo</span>
+                    <span className="text-white font-mono">{payable.number}</span>
+                  </div>
+                )}
+                {payable.controlFiscal && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Control fiscal</span>
+                    <span className="text-white font-mono">{payable.controlFiscal}</span>
+                  </div>
+                )}
+                {payable.serie && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Serie</span>
+                    <span className={isFiscal ? 'text-green-400' : 'text-slate-300'}>{payable.serie.name} {isFiscal ? '(Fiscal)' : ''}</span>
+                  </div>
+                )}
+                {payable.currency && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Moneda de entrada</span>
+                    <span className="text-white">{payable.currency}</span>
+                  </div>
+                )}
+                {payable.paymentTerms && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Forma de pago</span>
+                    <span className="text-white">{payable.paymentTerms.replace('_', ' ')}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-700/50 pt-3 mt-3">
+                  <h4 className="text-slate-300 font-medium mb-2">Desglose por alicuota</h4>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left py-2 text-slate-400 font-medium">Concepto</th>
+                        <th className="text-right py-2 text-slate-400 font-medium">USD</th>
+                        <th className="text-right py-2 text-slate-400 font-medium">Bs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(payable.exemptBaseUsd || 0) > 0 && (
+                        <tr className="border-b border-slate-700/30">
+                          <td className="py-2 text-slate-300">Base exenta</td>
+                          <td className="py-2 text-right font-mono text-white">${(payable.exemptBaseUsd || 0).toFixed(2)}</td>
+                          <td className="py-2 text-right font-mono text-slate-300">Bs {(payable.exemptBaseBs || 0).toFixed(2)}</td>
+                        </tr>
+                      )}
+                      {(payable.taxableBase8Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 8%</td>
+                            <td className="py-2 text-right font-mono text-white">${(payable.taxableBase8Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(payable.taxableBase8Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 8%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(payable.iva8Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(payable.iva8Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                      {(payable.taxableBase16Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 16%</td>
+                            <td className="py-2 text-right font-mono text-white">${(payable.taxableBase16Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(payable.taxableBase16Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 16%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(payable.iva16Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(payable.iva16Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                      {(payable.taxableBase31Usd || 0) > 0 && (
+                        <>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-slate-300">Base imponible 31%</td>
+                            <td className="py-2 text-right font-mono text-white">${(payable.taxableBase31Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-slate-300">Bs {(payable.taxableBase31Bs || 0).toFixed(2)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/30">
+                            <td className="py-2 text-cyan-400 pl-4">IVA 31%</td>
+                            <td className="py-2 text-right font-mono text-cyan-400">${(payable.iva31Usd || 0).toFixed(2)}</td>
+                            <td className="py-2 text-right font-mono text-cyan-300">Bs {(payable.iva31Bs || 0).toFixed(2)}</td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-700/50">
+                        <td className="py-2 text-slate-300 font-medium">Total IVA</td>
+                        <td className="py-2 text-right font-mono font-bold text-cyan-400">${(payable.totalIvaUsd || 0).toFixed(2)}</td>
+                        <td className="py-2 text-right font-mono font-bold text-cyan-300">Bs {(payable.totalIvaBs || 0).toFixed(2)}</td>
+                      </tr>
+                      {(payable.igtfUsd || 0) > 0 && (
+                        <tr>
+                          <td className="py-2 text-orange-400 font-medium">IGTF ({payable.igtfPct || 0}%)</td>
+                          <td className="py-2 text-right font-mono font-bold text-orange-400">${(payable.igtfUsd || 0).toFixed(2)}</td>
+                          <td className="py-2 text-right font-mono font-bold text-orange-300">Bs {(payable.igtfBs || 0).toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="border-t border-slate-600">
+                        <td className="py-2 text-white font-semibold text-base">Total</td>
+                        <td className="py-2 text-right font-mono font-bold text-red-400 text-base">${payable.amountUsd.toFixed(2)}</td>
+                        <td className="py-2 text-right font-mono font-bold text-slate-200 text-base">Bs {payable.amountBs.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
 
         {/* TAB: Historial de pagos */}
         <TabsContent value="pagos">
@@ -311,7 +565,7 @@ export default function PayableDetailPage() {
                       <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs.toFixed(2)}</td>
                       <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">{p.reference || '—'}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{p.reference || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

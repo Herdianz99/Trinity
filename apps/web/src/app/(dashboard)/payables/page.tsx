@@ -15,14 +15,19 @@ import {
   Users,
   Shield,
   FileText,
+  Plus,
+  Banknote,
 } from 'lucide-react';
 
 interface Payable {
   id: string;
+  number: string | null;
   supplierId: string;
   supplier: { id: string; name: string };
   purchaseOrderId: string | null;
   purchaseOrder: { id: string; number: string } | null;
+  documentNumber: string | null;
+  description: string | null;
   amountUsd: number;
   amountBs: number;
   exchangeRate: number;
@@ -52,6 +57,24 @@ interface SupplierOption {
   name: string;
 }
 
+interface SupplierAdvance {
+  id: string;
+  supplierId: string;
+  supplier: { id: string; name: string } | null;
+  amountUsd: number;
+  amountBs: number;
+  exchangeRate: number;
+  paidAmountUsd: number;
+  paidAmountBs: number;
+  remainingUsd: number;
+  remainingBs: number;
+  status: string;
+  reference: string | null;
+  notes: string | null;
+  method: { id: string; name: string } | null;
+  createdAt: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PARTIAL: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
@@ -66,8 +89,21 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
+const ADVANCE_STATUS_COLORS: Record<string, string> = {
+  AVAILABLE: 'text-green-400 border-green-500/30 bg-green-500/10',
+  PARTIAL: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+  CONSUMED: 'text-slate-400 border-slate-500/30 bg-slate-500/10',
+};
+
+const ADVANCE_STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: 'Disponible',
+  PARTIAL: 'Parcial',
+  CONSUMED: 'Consumido',
+};
+
 export default function PayablesPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'cxp' | 'advances'>('cxp');
   const [payables, setPayables] = useState<Payable[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -85,6 +121,22 @@ export default function PayablesPage() {
   // Detail modal states
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedPayable, setSelectedPayable] = useState<any>(null);
+
+  // Advances states
+  const [advances, setAdvances] = useState<SupplierAdvance[]>([]);
+  const [advancesTotal, setAdvancesTotal] = useState(0);
+  const [advancesPage, setAdvancesPage] = useState(1);
+  const [advancesTotalPages, setAdvancesTotalPages] = useState(1);
+  const [advancesLoading, setAdvancesLoading] = useState(false);
+  const [advancesStatus, setAdvancesStatus] = useState('');
+
+  // Advance modal states
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
+  const [savingAdvance, setSavingAdvance] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
+  const [openCashSessions, setOpenCashSessions] = useState<{ id: string; label: string }[]>([]);
+  const [exchangeRate, setExchangeRate] = useState(0);
 
   const fetchPayables = useCallback(async () => {
     setLoading(true);
@@ -112,8 +164,11 @@ export default function PayablesPage() {
   const fetchSummary = useCallback(async () => {
     try {
       const res = await fetch('/api/proxy/payables/summary');
+      if (!res.ok) return;
       const data = await res.json();
-      setSummary(data);
+      if (data && typeof data.totalPendingUsd === 'number') {
+        setSummary(data);
+      }
     } catch {}
   }, []);
 
@@ -125,9 +180,92 @@ export default function PayablesPage() {
     } catch {}
   }, []);
 
+  const fetchAdvances = useCallback(async () => {
+    setAdvancesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', advancesPage.toString());
+      params.set('limit', '20');
+      if (advancesStatus) params.set('status', advancesStatus);
+      const res = await fetch(`/api/proxy/supplier-advances?${params}`);
+      const data = await res.json();
+      setAdvances(data.data || []);
+      setAdvancesTotal(data.total || 0);
+      setAdvancesTotalPages(data.totalPages || 1);
+    } catch {
+      setMessage({ type: 'error', text: 'Error al cargar anticipos' });
+    } finally {
+      setAdvancesLoading(false);
+    }
+  }, [advancesPage, advancesStatus]);
+
+  const fetchExchangeRate = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/exchange-rate');
+      const data = await res.json();
+      setExchangeRate(data.rate || 0);
+    } catch {}
+  }, []);
+
+  const fetchPaymentMethods = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/payment-methods');
+      const data = await res.json();
+      setPaymentMethods(Array.isArray(data) ? data : data.data || []);
+    } catch {}
+  }, []);
+
+  const fetchOpenCashSessions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/proxy/cash-registers');
+      const data = await res.json();
+      const registers = Array.isArray(data) ? data : data.data || [];
+      const sessions: { id: string; label: string }[] = [];
+      for (const reg of registers) {
+        const openSessions = reg.sessions || [];
+        for (const s of openSessions) {
+          sessions.push({ id: s.id, label: reg.name || `Caja ${reg.code || reg.id.slice(-4)}` });
+        }
+      }
+      setOpenCashSessions(sessions);
+    } catch {}
+  }, []);
+
+  async function submitAdvance() {
+    if (!advanceForm.supplierId || !advanceForm.amountUsd || !advanceForm.methodId || !advanceForm.cashSessionId) return;
+    setSavingAdvance(true);
+    try {
+      const res = await fetch('/api/proxy/supplier-advances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplierId: advanceForm.supplierId,
+          amountUsd: Number(advanceForm.amountUsd),
+          methodId: advanceForm.methodId,
+          cashSessionId: advanceForm.cashSessionId,
+          reference: advanceForm.reference || undefined,
+          notes: advanceForm.notes || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Error al registrar anticipo');
+      }
+      setMessage({ type: 'success', text: 'Anticipo registrado exitosamente' });
+      setAdvanceModalOpen(false);
+      setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
+      fetchAdvances();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingAdvance(false);
+    }
+  }
+
   useEffect(() => { document.title = 'Cuentas por Pagar | Trinity ERP'; }, []);
   useEffect(() => { fetchPayables(); }, [fetchPayables]);
-  useEffect(() => { fetchSummary(); fetchSuppliers(); }, [fetchSummary, fetchSuppliers]);
+  useEffect(() => { fetchAdvances(); }, [fetchAdvances]);
+  useEffect(() => { fetchSummary(); fetchSuppliers(); fetchPaymentMethods(); fetchOpenCashSessions(); fetchExchangeRate(); }, [fetchSummary, fetchSuppliers, fetchPaymentMethods, fetchOpenCashSessions, fetchExchangeRate]);
 
   function isNearDue(dueDate: string | null, s: string) {
     if (!dueDate || s === 'PAID') return false;
@@ -157,13 +295,29 @@ export default function PayablesPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
-          <Receipt className="text-red-400" size={24} />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+            <Receipt className="text-red-400" size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Cuentas por Pagar</h1>
+            <p className="text-sm text-slate-400">Gestion de deudas con proveedores y retenciones IVA</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Cuentas por Pagar</h1>
-          <p className="text-sm text-slate-400">Gestion de deudas con proveedores y retenciones IVA</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+          >
+            <Banknote size={16} /> Registrar anticipo
+          </button>
+          <button
+            onClick={() => router.push('/payables/new')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors"
+          >
+            <Plus size={16} /> Registrar documento
+          </button>
         </div>
       </div>
 
@@ -174,6 +328,23 @@ export default function PayablesPage() {
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-800/50 border border-slate-700/50 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setActiveTab('cxp')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cxp' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          Cuentas por Pagar
+        </button>
+        <button
+          onClick={() => setActiveTab('advances')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'advances' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          Anticipos
+        </button>
+      </div>
+
+      {activeTab === 'cxp' && (<>
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -291,7 +462,7 @@ export default function PayablesPage() {
                         {p.supplier.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.purchaseOrder?.number || '-'}</td>
+                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.number || p.purchaseOrder?.number || p.documentNumber || '-'}</td>
                     <td className="px-4 py-3 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-orange-400">
                       {p.retentionUsd > 0 ? `$${p.retentionUsd.toFixed(2)}` : '-'}
@@ -316,7 +487,7 @@ export default function PayablesPage() {
                             <DollarSign size={16} />
                           </button>
                         )}
-                        <button onClick={() => openDetailModal(p)}
+                        <button onClick={() => router.push(`/payables/${p.id}`)}
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700/50 transition-colors" title="Ver detalle">
                           <Eye size={16} />
                         </button>
@@ -347,6 +518,90 @@ export default function PayablesPage() {
           </div>
         )}
       </div>
+
+      </>)}
+
+      {activeTab === 'advances' && (
+        <>
+          {/* Advances Filters */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Estado</label>
+                <select value={advancesStatus} onChange={e => { setAdvancesStatus(e.target.value); setAdvancesPage(1); }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Todos</option>
+                  <option value="AVAILABLE">Disponible</option>
+                  <option value="PARTIAL">Parcial</option>
+                  <option value="CONSUMED">Consumido</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Advances Table */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700/50">
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Proveedor</th>
+                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto USD</th>
+                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto Bs</th>
+                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Restante USD</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Estado</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Metodo</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Referencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {advancesLoading ? (
+                    <tr><td colSpan={8} className="text-center py-8">
+                      <Loader2 className="animate-spin mx-auto text-slate-400" size={24} />
+                    </td></tr>
+                  ) : advances.length === 0 ? (
+                    <tr><td colSpan={8} className="text-center py-8 text-slate-500">No hay anticipos registrados</td></tr>
+                  ) : advances.map(a => (
+                    <tr key={a.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
+                      <td className="px-4 py-3 text-slate-200">{a.supplier?.name || '-'}</td>
+                      <td className="px-4 py-3 text-right text-slate-200">${a.amountUsd.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-slate-300">Bs {a.amountBs.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-100">${a.remainingUsd.toFixed(2)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${ADVANCE_STATUS_COLORS[a.status] || ''}`}>
+                          {ADVANCE_STATUS_LABELS[a.status] || a.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">{a.method?.name || '-'}</td>
+                      <td className="px-4 py-3 text-slate-300 text-xs">{new Date(a.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs font-mono">{a.reference || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Advances Pagination */}
+            {advancesTotalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700/50">
+                <span className="text-sm text-slate-400">{advancesTotal} resultados</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setAdvancesPage(p => Math.max(1, p - 1))} disabled={advancesPage === 1}
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700/50 disabled:opacity-30">
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="text-sm text-slate-300">Pagina {advancesPage} de {advancesTotalPages}</span>
+                  <button onClick={() => setAdvancesPage(p => Math.min(advancesTotalPages, p + 1))} disabled={advancesPage === advancesTotalPages}
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700/50 disabled:opacity-30">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Detail Modal */}
       {detailModalOpen && selectedPayable && (
@@ -492,6 +747,91 @@ export default function PayablesPage() {
                   <p className="text-sm text-slate-500 bg-slate-900/50 rounded-lg p-3">Sin pagos registrados</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advance Modal */}
+      {advanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAdvanceModalOpen(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
+              <h2 className="text-lg font-semibold text-slate-100">Registrar Anticipo a Proveedor</h2>
+              <button onClick={() => setAdvanceModalOpen(false)} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {openCashSessions.length === 0 && (
+                <div className="px-4 py-3 rounded-lg border bg-red-500/10 border-red-500/30 text-red-400 text-sm">
+                  No hay cajas abiertas. Debe abrir una caja antes de registrar un anticipo.
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Caja *</label>
+                <select value={advanceForm.cashSessionId} onChange={e => setAdvanceForm(f => ({ ...f, cashSessionId: e.target.value }))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Seleccionar...</option>
+                  {openCashSessions.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Proveedor *</label>
+                <select value={advanceForm.supplierId} onChange={e => setAdvanceForm(f => ({ ...f, supplierId: e.target.value }))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Seleccionar...</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Monto USD *</label>
+                  <input type="number" value={advanceForm.amountUsd}
+                    onChange={e => {
+                      const usd = e.target.value;
+                      const bs = usd && exchangeRate ? (Number(usd) * exchangeRate).toFixed(2) : '';
+                      setAdvanceForm(f => ({ ...f, amountUsd: usd, amountBs: bs }));
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.01" min="0.01" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Monto Bs</label>
+                  <input type="number" value={advanceForm.amountBs}
+                    onChange={e => {
+                      const bs = e.target.value;
+                      const usd = bs && exchangeRate ? (Number(bs) / exchangeRate).toFixed(2) : '';
+                      setAdvanceForm(f => ({ ...f, amountBs: bs, amountUsd: usd }));
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.01" min="0.01" placeholder="0.00" />
+                </div>
+              </div>
+              {exchangeRate > 0 && (
+                <p className="text-xs text-slate-500">Tasa: Bs {exchangeRate.toFixed(2)} / USD</p>
+              )}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Metodo de pago *</label>
+                <select value={advanceForm.methodId} onChange={e => setAdvanceForm(f => ({ ...f, methodId: e.target.value }))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Seleccionar...</option>
+                  {paymentMethods.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Referencia</label>
+                <input type="text" value={advanceForm.reference} onChange={e => setAdvanceForm(f => ({ ...f, reference: e.target.value }))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="Nro. transferencia, etc." />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Notas</label>
+                <input type="text" value={advanceForm.notes} onChange={e => setAdvanceForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="Opcional" />
+              </div>
+              <button
+                onClick={submitAdvance}
+                disabled={!advanceForm.supplierId || !advanceForm.amountUsd || !advanceForm.methodId || !advanceForm.cashSessionId || savingAdvance}
+                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50 transition-colors"
+              >
+                {savingAdvance ? 'Guardando...' : 'Registrar Anticipo'}
+              </button>
             </div>
           </div>
         </div>
