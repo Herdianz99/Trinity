@@ -1,13 +1,165 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryReceivablesDto } from './dto/query-receivables.dto';
+import { CreateReceivableDto } from './dto/create-receivable.dto';
 
 @Injectable()
 export class ReceivablesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateReceivableDto, userId?: string) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+
+    // Resolve serie and fiscal status
+    let serie: any = null;
+    let isFiscal = false;
+    if (dto.serieId) {
+      serie = await this.prisma.serie.findUnique({ where: { id: dto.serieId } });
+      if (!serie) throw new BadRequestException('Serie no encontrada');
+      if (serie.type !== 'SALES') throw new BadRequestException('La serie debe ser de tipo VENTAS');
+      isFiscal = serie.isFiscal;
+    }
+
+    const currency = dto.currency || 'USD';
+    const r = rate.rate;
+
+    // Fiscal breakdown in input currency
+    const exemptBase = dto.exemptBase || 0;
+    const taxableBase8 = dto.taxableBase8 || 0;
+    const taxableBase16 = dto.taxableBase16 || 0;
+    const taxableBase31 = dto.taxableBase31 || 0;
+
+    // Auto-calculate IVA
+    const iva8 = Math.round(taxableBase8 * 0.08 * 100) / 100;
+    const iva16 = Math.round(taxableBase16 * 0.16 * 100) / 100;
+    const iva31 = Math.round(taxableBase31 * 0.31 * 100) / 100;
+    const totalIva = Math.round((iva8 + iva16 + iva31) * 100) / 100;
+
+    // IGTF
+    const igtfPct = dto.igtfPct || 0;
+    const subtotal = exemptBase + taxableBase8 + taxableBase16 + taxableBase31 + totalIva;
+    const igtf = Math.round(subtotal * (igtfPct / 100) * 100) / 100;
+    const total = Math.round((subtotal + igtf) * 100) / 100;
+
+    // Convert to both currencies
+    const toUsd = (val: number) => currency === 'USD' ? val : Math.round((val / r) * 100) / 100;
+    const toBs = (val: number) => currency === 'USD' ? Math.round((val * r) * 100) / 100 : val;
+
+    const amountUsd = toUsd(total);
+    const amountBs = toBs(total);
+
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const originalDate = dto.originalDate ? new Date(dto.originalDate) : null;
+    const receptionDate = dto.receptionDate ? new Date(dto.receptionDate) : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      // Generate correlative number
+      const config = await tx.companyConfig.findUnique({
+        where: { id: 'singleton' },
+      });
+      // @ts-ignore - field just added
+      const nextNum = config?.receivableNextNumber || 1;
+      const yearSuffix = new Date().getFullYear().toString().slice(-2);
+      const number = `CXC/${yearSuffix}-${nextNum.toString().padStart(6, '0')}`;
+
+      await tx.companyConfig.update({
+        where: { id: 'singleton' },
+        data: { receivableNextNumber: nextNum + 1 } as any,
+      });
+
+      const receivable = await tx.receivable.create({
+        data: {
+          number,
+          type: 'MANUAL',
+          customerId: dto.customerId,
+          invoiceId: null,
+          description: dto.description || null,
+          amountUsd,
+          amountBs,
+          exchangeRate: r,
+          dueDate,
+          notes: dto.notes || null,
+          serieId: dto.serieId || null,
+          currency,
+          originalDate,
+          receptionDate,
+          paymentTerms: dto.paymentTerms || null,
+          exemptBaseUsd: toUsd(exemptBase),
+          exemptBaseBs: toBs(exemptBase),
+          taxableBase8Usd: toUsd(taxableBase8),
+          taxableBase8Bs: toBs(taxableBase8),
+          taxableBase16Usd: toUsd(taxableBase16),
+          taxableBase16Bs: toBs(taxableBase16),
+          taxableBase31Usd: toUsd(taxableBase31),
+          taxableBase31Bs: toBs(taxableBase31),
+          iva8Usd: toUsd(iva8),
+          iva8Bs: toBs(iva8),
+          iva16Usd: toUsd(iva16),
+          iva16Bs: toBs(iva16),
+          iva31Usd: toUsd(iva31),
+          iva31Bs: toBs(iva31),
+          totalIvaUsd: toUsd(totalIva),
+          totalIvaBs: toBs(totalIva),
+          igtfPct,
+          igtfUsd: toUsd(igtf),
+          igtfBs: toBs(igtf),
+          createdById: userId || null,
+        },
+        include: {
+          customer: { select: { id: true, name: true, documentType: true, rif: true } },
+          serie: { select: { id: true, name: true, isFiscal: true } },
+        },
+      });
+
+      // If fiscal (determined by serie), create SalesBookEntry
+      if (isFiscal && userId) {
+        const totalBsForBook = toBs(total);
+        const exemptBs = toBs(exemptBase);
+        const taxableBs = toBs(taxableBase8 + taxableBase16 + taxableBase31);
+        const ivaBs = toBs(totalIva);
+        const igtfBs = toBs(igtf);
+
+        await tx.salesBookEntry.create({
+          data: {
+            receivableId: receivable.id,
+            entryDate: originalDate || new Date(),
+            invoiceNumber: number,
+            controlNumber: null,
+            customerName: customer.name,
+            customerRif: customer.rif || null,
+            exemptAmountBs: exemptBs,
+            taxableBaseBs: taxableBs,
+            ivaAmountBs: ivaBs,
+            igtfAmountBs: igtfBs,
+            totalBs: totalBsForBook,
+            isManual: true,
+            createdById: userId,
+          },
+        });
+      }
+
+      return receivable;
+    });
+  }
+
+  async getNextNumber() {
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const nextNum = (config as any)?.receivableNextNumber || 1;
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    return { nextNumber: `CXC/${yearSuffix}-${nextNum.toString().padStart(6, '0')}` };
+  }
 
   async findAll(query: QueryReceivablesDto) {
     const page = query.page || 1;
@@ -60,6 +212,7 @@ export class ReceivablesService {
         include: {
           customer: { select: { id: true, name: true, documentType: true, rif: true } },
           invoice: { select: { id: true, number: true } },
+          serie: { select: { id: true, name: true, isFiscal: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
             select: { id: true, amountUsd: true, createdAt: true, receiptId: true, method: { select: { id: true, name: true } }, receipt: { select: { id: true, number: true } } },
@@ -83,6 +236,7 @@ export class ReceivablesService {
       include: {
         customer: true,
         invoice: { select: { id: true, number: true, totalUsd: true, createdAt: true } },
+        serie: { select: { id: true, name: true, isFiscal: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
           include: {
@@ -171,6 +325,7 @@ export class ReceivablesService {
       orderBy: { createdAt: 'desc' },
       include: {
         invoice: { select: { id: true, number: true } },
+        serie: { select: { id: true, name: true, isFiscal: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
           select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },

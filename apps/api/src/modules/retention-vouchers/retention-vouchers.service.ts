@@ -482,7 +482,7 @@ export class RetentionVouchersService {
       },
       select: { purchaseOrderId: true },
     });
-    const usedPoIds = usedLines.map((l) => l.purchaseOrderId);
+    const usedPoIds = usedLines.map((l) => l.purchaseOrderId).filter((id): id is string => id !== null);
 
     return this.prisma.purchaseOrder.findMany({
       where: {

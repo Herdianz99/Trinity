@@ -131,6 +131,19 @@ ALTER TYPE "InvoiceType" ADD VALUE IF NOT EXISTS 'CREDIT_NOTE';
 -- ReceivableType
 ALTER TYPE "ReceivableType" ADD VALUE IF NOT EXISTS 'CUSTOMER_CREDIT';
 ALTER TYPE "ReceivableType" ADD VALUE IF NOT EXISTS 'FINANCING_PLATFORM';
+ALTER TYPE "ReceivableType" ADD VALUE IF NOT EXISTS 'MANUAL';
+
+-- CustomerAdvanceStatus
+DO $$ BEGIN CREATE TYPE "CustomerAdvanceStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "SupplierAdvanceStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE "CustomerAdvanceStatus" ADD VALUE IF NOT EXISTS 'AVAILABLE';
+ALTER TYPE "CustomerAdvanceStatus" ADD VALUE IF NOT EXISTS 'PARTIAL';
+ALTER TYPE "CustomerAdvanceStatus" ADD VALUE IF NOT EXISTS 'CONSUMED';
+
+-- SupplierAdvanceStatus
+ALTER TYPE "SupplierAdvanceStatus" ADD VALUE IF NOT EXISTS 'AVAILABLE';
+ALTER TYPE "SupplierAdvanceStatus" ADD VALUE IF NOT EXISTS 'PARTIAL';
+ALTER TYPE "SupplierAdvanceStatus" ADD VALUE IF NOT EXISTS 'CONSUMED';
 
 -- ReceivableStatus
 ALTER TYPE "ReceivableStatus" ADD VALUE IF NOT EXISTS 'PENDING';
@@ -1607,6 +1620,215 @@ DO $$ BEGIN
     ALTER TABLE "ReceiptItem" ADD CONSTRAINT "ReceiptItem_ivaRetentionId_fkey" FOREIGN KEY ("ivaRetentionId") REFERENCES "IvaRetention"("id") ON DELETE SET NULL ON UPDATE CASCADE;
   END IF;
 END $$;
+
+-- Receivable: make invoiceId nullable, add documentNumber and description
+ALTER TABLE "Receivable" ALTER COLUMN "invoiceId" DROP NOT NULL;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "documentNumber" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "description" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Payable: add documentNumber and description
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "documentNumber" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "description" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- CustomerAdvance table
+CREATE TABLE IF NOT EXISTS "CustomerAdvance" (
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "amountUsd" DOUBLE PRECISION NOT NULL,
+    "amountBs" DOUBLE PRECISION NOT NULL,
+    "exchangeRate" DOUBLE PRECISION NOT NULL,
+    "paidAmountUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "paidAmountBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" "CustomerAdvanceStatus" NOT NULL DEFAULT 'AVAILABLE',
+    "reference" TEXT,
+    "notes" TEXT,
+    "methodId" TEXT NOT NULL,
+    "cashSessionId" TEXT NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "CustomerAdvance_pkey" PRIMARY KEY ("id")
+);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'CustomerAdvance_customerId_fkey') THEN
+    ALTER TABLE "CustomerAdvance" ADD CONSTRAINT "CustomerAdvance_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'CustomerAdvance_methodId_fkey') THEN
+    ALTER TABLE "CustomerAdvance" ADD CONSTRAINT "CustomerAdvance_methodId_fkey" FOREIGN KEY ("methodId") REFERENCES "PaymentMethod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'CustomerAdvance_createdById_fkey') THEN
+    ALTER TABLE "CustomerAdvance" ADD CONSTRAINT "CustomerAdvance_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- SupplierAdvance table
+CREATE TABLE IF NOT EXISTS "SupplierAdvance" (
+    "id" TEXT NOT NULL,
+    "supplierId" TEXT NOT NULL,
+    "amountUsd" DOUBLE PRECISION NOT NULL,
+    "amountBs" DOUBLE PRECISION NOT NULL,
+    "exchangeRate" DOUBLE PRECISION NOT NULL,
+    "paidAmountUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "paidAmountBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" "SupplierAdvanceStatus" NOT NULL DEFAULT 'AVAILABLE',
+    "reference" TEXT,
+    "notes" TEXT,
+    "methodId" TEXT NOT NULL,
+    "cashSessionId" TEXT NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "SupplierAdvance_pkey" PRIMARY KEY ("id")
+);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SupplierAdvance_supplierId_fkey') THEN
+    ALTER TABLE "SupplierAdvance" ADD CONSTRAINT "SupplierAdvance_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SupplierAdvance_methodId_fkey') THEN
+    ALTER TABLE "SupplierAdvance" ADD CONSTRAINT "SupplierAdvance_methodId_fkey" FOREIGN KEY ("methodId") REFERENCES "PaymentMethod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SupplierAdvance_createdById_fkey') THEN
+    ALTER TABLE "SupplierAdvance" ADD CONSTRAINT "SupplierAdvance_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- =============================================================================
+-- SECTION: Fiscal fields for Receivable & Payable (2026-06-02)
+-- =============================================================================
+
+-- Receivable fiscal fields
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "number" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "isFiscal" BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "controlFiscal" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'USD'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "originalDate" TIMESTAMP(3); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "receptionDate" TIMESTAMP(3); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "paymentTerms" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "exemptBaseUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "exemptBaseBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase8Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase8Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase16Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase16Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase31Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "taxableBase31Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva8Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva8Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva16Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva16Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva31Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "iva31Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "totalIvaUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "totalIvaBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "igtfPct" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "igtfUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "igtfBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "createdById" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "Receivable_number_key" ON "Receivable"("number");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Receivable_createdById_fkey') THEN
+    ALTER TABLE "Receivable" ADD CONSTRAINT "Receivable_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Payable fiscal fields
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "number" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "isFiscal" BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "controlFiscal" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'USD'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "originalDate" TIMESTAMP(3); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "receptionDate" TIMESTAMP(3); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "paymentTerms" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "exemptBaseUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "exemptBaseBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase8Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase8Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase16Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase16Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase31Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "taxableBase31Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva8Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva8Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva16Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva16Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva31Usd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "iva31Bs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "totalIvaUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "totalIvaBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "igtfPct" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "igtfUsd" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "igtfBs" DOUBLE PRECISION NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "createdById" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "Payable_number_key" ON "Payable"("number");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Payable_createdById_fkey') THEN
+    ALTER TABLE "Payable" ADD CONSTRAINT "Payable_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- SalesBookEntry.receivableId FK
+DO $$ BEGIN ALTER TABLE "SalesBookEntry" ADD COLUMN "receivableId" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SalesBookEntry_receivableId_fkey') THEN
+    ALTER TABLE "SalesBookEntry" ADD CONSTRAINT "SalesBookEntry_receivableId_fkey" FOREIGN KEY ("receivableId") REFERENCES "Receivable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- PurchaseBookEntry.payableId FK
+DO $$ BEGIN ALTER TABLE "PurchaseBookEntry" ADD COLUMN "payableId" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PurchaseBookEntry_payableId_fkey') THEN
+    ALTER TABLE "PurchaseBookEntry" ADD CONSTRAINT "PurchaseBookEntry_payableId_fkey" FOREIGN KEY ("payableId") REFERENCES "Payable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Correlative counters in CompanyConfig
+DO $$ BEGIN ALTER TABLE "CompanyConfig" ADD COLUMN "receivableNextNumber" INTEGER NOT NULL DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "CompanyConfig" ADD COLUMN "payableNextNumber" INTEGER NOT NULL DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- =============================================================================
+-- SECTION: Serie-based fiscal for CxC/CxP (Session 31)
+-- =============================================================================
+
+-- Add serieId to Receivable
+DO $$ BEGIN ALTER TABLE "Receivable" ADD COLUMN "serieId" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Receivable_serieId_fkey') THEN
+    ALTER TABLE "Receivable" ADD CONSTRAINT "Receivable_serieId_fkey" FOREIGN KEY ("serieId") REFERENCES "Serie"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Add serieId to Payable
+DO $$ BEGIN ALTER TABLE "Payable" ADD COLUMN "serieId" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Payable_serieId_fkey') THEN
+    ALTER TABLE "Payable" ADD CONSTRAINT "Payable_serieId_fkey" FOREIGN KEY ("serieId") REFERENCES "Serie"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Add payableId to RetentionVoucherLine
+DO $$ BEGIN ALTER TABLE "RetentionVoucherLine" ADD COLUMN "payableId" TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'RetentionVoucherLine_payableId_fkey') THEN
+    ALTER TABLE "RetentionVoucherLine" ADD CONSTRAINT "RetentionVoucherLine_payableId_fkey" FOREIGN KEY ("payableId") REFERENCES "Payable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+-- Make purchaseOrderId nullable in RetentionVoucherLine
+ALTER TABLE "RetentionVoucherLine" ALTER COLUMN "purchaseOrderId" DROP NOT NULL;
+
+-- Drop obsolete columns
+ALTER TABLE "Receivable" DROP COLUMN IF EXISTS "isFiscal";
+ALTER TABLE "Receivable" DROP COLUMN IF EXISTS "controlFiscal";
+ALTER TABLE "Payable" DROP COLUMN IF EXISTS "isFiscal";
 
 -- =============================================================================
 -- DONE

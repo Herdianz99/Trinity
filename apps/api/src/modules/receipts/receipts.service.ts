@@ -130,7 +130,7 @@ export class ReceiptsService {
           include: { invoice: { select: { number: true } } },
         });
         if (!receivable) throw new BadRequestException(`CxC ${item.receivableId} no encontrada`);
-        if (receivable.status === 'PAID') throw new BadRequestException(`CxC ${receivable.invoice?.number || item.receivableId} ya está pagada`);
+        if (receivable.status === 'PAID') throw new BadRequestException(`CxC ${receivable.invoice?.number || receivable.documentNumber || item.receivableId} ya está pagada`);
 
         const balanceUsd = this.round2(receivable.amountUsd - receivable.paidAmountUsd);
         const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
@@ -142,7 +142,7 @@ export class ReceiptsService {
         items.push({
           itemType: 'RECEIVABLE',
           receivableId: item.receivableId,
-          description: receivable.invoice?.number || `CxC-${item.receivableId.slice(-6)}`,
+          description: receivable.invoice?.number || receivable.documentNumber || `CxC-${item.receivableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -155,7 +155,7 @@ export class ReceiptsService {
           include: { purchaseOrder: { select: { number: true } } },
         });
         if (!payable) throw new BadRequestException(`CxP ${item.payableId} no encontrada`);
-        if (payable.status === 'PAID') throw new BadRequestException(`CxP ${payable.purchaseOrder?.number || item.payableId} ya está pagada`);
+        if (payable.status === 'PAID') throw new BadRequestException(`CxP ${payable.purchaseOrder?.number || payable.documentNumber || item.payableId} ya está pagada`);
 
         const balanceUsd = this.round2(payable.netPayableUsd - payable.paidAmountUsd);
         const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
@@ -166,7 +166,7 @@ export class ReceiptsService {
         items.push({
           itemType: 'PAYABLE',
           payableId: item.payableId,
-          description: payable.purchaseOrder?.number || `CxP-${item.payableId.slice(-6)}`,
+          description: payable.purchaseOrder?.number || payable.documentNumber || `CxP-${item.payableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -532,7 +532,7 @@ export class ReceiptsService {
         id: p.id,
         documentType: 'CxP',
         payableId: p.id,
-        description: p.purchaseOrder?.number || `CxP-${p.id.slice(-6)}`,
+        description: p.purchaseOrder?.number || (p as any).documentNumber || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,
         amountUsd: p.netPayableUsd,
         amountBsHistoric: p.netPayableBs,
@@ -656,7 +656,7 @@ export class ReceiptsService {
         // Backward compat fields for existing frontend
         documentType: 'CxC',
         receivableId: r.id,
-        description: r.invoice?.number || `CxC-${r.id.slice(-6)}`,
+        description: r.invoice?.number || (r as any).documentNumber || `CxC-${r.id.slice(-6)}`,
         date: r.createdAt,
         amountBsHistoric: r.amountBs,
         exchangeRate: r.exchangeRate,

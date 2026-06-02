@@ -651,4 +651,161 @@ export class ImportService {
       },
     };
   }
+
+  // ────────────────────────────────────────────────────────────────────
+  // RESET FOR PRODUCTION — full wipe + re-seed essentials
+  // ────────────────────────────────────────────────────────────────────
+
+  async resetForProduction(): Promise<{ deleted: Record<string, number>; seeded: string[] }> {
+    this.logger.warn('=== RESET FOR PRODUCTION INITIATED ===');
+
+    // Count before deleting
+    const counts = await Promise.all([
+      this.prisma.product.count(),
+      this.prisma.stock.count(),
+      this.prisma.stockMovement.count(),
+      this.prisma.category.count(),
+      this.prisma.brand.count(),
+      this.prisma.invoice.count(),
+      this.prisma.customer.count(),
+      this.prisma.supplier.count(),
+      this.prisma.quotation.count(),
+      this.prisma.expense.count(),
+      this.prisma.cashSession.count(),
+    ]);
+
+    // Full TRUNCATE CASCADE — clears ALL transactional + catalog data
+    await this.prisma.$executeRawUnsafe(`
+      TRUNCATE TABLE
+        "DynamicKeyLog",
+        "PriceAdjustmentLog",
+        "PrintJob",
+        "ReceiptPayment",
+        "ReceiptItem",
+        "Receipt",
+        "ReceivablePayment",
+        "Receivable",
+        "PaymentScheduleItem",
+        "PaymentSchedule",
+        "PayablePayment",
+        "Payable",
+        "CreditDebitNoteItem",
+        "CreditDebitNote",
+        "IvaRetention",
+        "RetentionVoucherLine",
+        "RetentionVoucher",
+        "Payment",
+        "InvoiceItem",
+        "Invoice",
+        "QuotationItem",
+        "Quotation",
+        "CashMovement",
+        "CashSession",
+        "PurchaseOrderItem",
+        "PurchaseOrder",
+        "InventoryCountItem",
+        "InventoryCount",
+        "TransferItem",
+        "Transfer",
+        "StockMovement",
+        "Stock",
+        "Expense",
+        "Product",
+        "Category",
+        "Brand",
+        "Customer",
+        "Supplier"
+      CASCADE
+    `);
+
+    // Reset serie correlatives to 0
+    await this.prisma.serie.updateMany({ data: { lastNumber: 0 } });
+
+    // Reset retention number in config
+    await this.prisma.companyConfig.updateMany({ data: { retentionNextNumber: 1 } });
+
+    this.logger.log('All transactional and catalog data cleared');
+
+    // ── Re-seed essentials ──────────────────────────────────────────
+    const seeded: string[] = [];
+
+    // 1. Default customer
+    const defaultCustomer = await this.prisma.customer.create({
+      data: {
+        name: '***CLIENTE FINAL***',
+        documentType: 'V',
+        rif: '00000000',
+        isDefault: true,
+      },
+    });
+    await this.prisma.companyConfig.updateMany({
+      data: { defaultCustomerId: defaultCustomer.id },
+    });
+    seeded.push('Cliente por defecto (***CLIENTE FINAL***)');
+
+    // 2. Expense categories
+    const existingExpCats = await this.prisma.expenseCategory.count();
+    if (existingExpCats === 0) {
+      await this.prisma.expenseCategory.createMany({
+        data: [
+          { name: 'Servicios Publicos', description: 'Electricidad, agua, telefono, internet', isDefault: true },
+          { name: 'Alquiler', description: 'Alquiler del local comercial' },
+          { name: 'Nomina', description: 'Sueldos, salarios y prestaciones' },
+          { name: 'Transporte', description: 'Fletes, envios y combustible' },
+          { name: 'Mantenimiento', description: 'Reparaciones y mantenimiento del local' },
+          { name: 'Suministros de Oficina', description: 'Papeleria, toner, materiales de oficina' },
+          { name: 'Impuestos y Tasas', description: 'Impuestos municipales, patentes' },
+          { name: 'Varios', description: 'Gastos no clasificados' },
+        ],
+      });
+      seeded.push('8 categorias de gastos');
+    }
+
+    // 3. Dynamic key (master authorization) if none exists
+    const existingKeys = await this.prisma.dynamicKey.count();
+    if (existingKeys === 0) {
+      // Need an admin user to link the key
+      const adminUser = await this.prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      if (adminUser) {
+        const bcrypt = await import('bcrypt');
+        const keyHash = await bcrypt.hash('1234', 10);
+        await this.prisma.dynamicKey.create({
+          data: {
+            name: 'Clave Maestra',
+            keyHash,
+            createdById: adminUser.id,
+            permissions: {
+              create: [
+                { permission: 'MODIFY_PRODUCT_PRICE' },
+                { permission: 'GIVE_DISCOUNT' },
+                { permission: 'MANUAL_CASH_MOVEMENT' },
+                { permission: 'CANCEL_CASH_SESSION' },
+                { permission: 'MANUAL_STOCK_ADJUSTMENT' },
+              ],
+            },
+          },
+        });
+        seeded.push('Clave maestra (PIN: 1234)');
+      }
+    }
+
+    this.logger.log(`Seeded: ${seeded.join(', ')}`);
+
+    return {
+      deleted: {
+        products: counts[0],
+        stock: counts[1],
+        stockMovements: counts[2],
+        categories: counts[3],
+        brands: counts[4],
+        invoices: counts[5],
+        customers: counts[6],
+        suppliers: counts[7],
+        quotations: counts[8],
+        expenses: counts[9],
+        cashSessions: counts[10],
+      },
+      seeded,
+    };
+  }
 }

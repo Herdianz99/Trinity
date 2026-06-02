@@ -45,6 +45,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthModule } from './modules/health/health.module';
 import { SeriesModule } from './modules/series/series.module';
+import { CustomerAdvancesModule } from './modules/customer-advances/customer-advances.module';
+import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-advances.module';
 
 @Module({
   imports: [
@@ -94,6 +96,8 @@ import { SeriesModule } from './modules/series/series.module';
     DashboardModule,
     ReportsModule,
     SeriesModule,
+    CustomerAdvancesModule,
+    SupplierAdvancesModule,
   ],
 })
 export class AppModule {}

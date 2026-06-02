@@ -221,6 +221,19 @@ export class InvoicesService {
       customerId = config.defaultCustomerId;
     }
 
+    // Validate customer exists
+    if (customerId) {
+      const customerExists = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true },
+      });
+      if (!customerExists) {
+        throw new BadRequestException(
+          `Cliente con ID ${customerId} no existe. Verifique que el cliente no haya sido eliminado.`,
+        );
+      }
+    }
+
     // Determine cash register
     let cashRegisterId = dto.cashRegisterId;
     if (!cashRegisterId) {
@@ -651,8 +664,18 @@ export class InvoicesService {
           });
         }
 
-        // Handle SALDO_A_FAVOR: consume customer's unapplied NCV notes (partial support)
+        // Handle SALDO_A_FAVOR: consume advances first, then NCV notes
         if (payment.methodId === 'pm_saldo_favor' && invoice.customerId) {
+          // 1. Get available advances (FIFO by createdAt)
+          const advances = await tx.customerAdvance.findMany({
+            where: {
+              customerId: invoice.customerId,
+              status: { in: ['AVAILABLE', 'PARTIAL'] },
+            },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          // 2. Get available NCV credit notes
           const customerInvoices = await tx.invoice.findMany({
             where: { customerId: invoice.customerId },
             select: { id: true },
@@ -670,16 +693,45 @@ export class InvoicesService {
               orderBy: { createdAt: 'asc' },
             });
           }
-          const availableBalance = creditNotes.reduce(
-            (sum, n) => sum + (n.totalUsd - n.paidAmountUsd),
-            0,
+
+          // 3. Validate total balance
+          const advanceBalance = advances.reduce(
+            (sum, a) => sum + (a.amountUsd - a.paidAmountUsd), 0,
           );
+          const ncvBalance = creditNotes.reduce(
+            (sum, n) => sum + (n.totalUsd - n.paidAmountUsd), 0,
+          );
+          const availableBalance = advanceBalance + ncvBalance;
+
           if (payment.amountUsd > availableBalance + 0.01) {
             throw new BadRequestException(
               `El monto excede el saldo a favor disponible del cliente ($${availableBalance.toFixed(2)})`,
             );
           }
+
           let remaining = payment.amountUsd;
+
+          // 4. Consume advances first (FIFO)
+          for (const advance of advances) {
+            if (remaining <= 0) break;
+            const advRemaining = advance.amountUsd - advance.paidAmountUsd;
+            if (advRemaining <= 0) continue;
+            const used = Math.min(remaining, advRemaining);
+            remaining -= used;
+            const newPaidUsd = Math.round((advance.paidAmountUsd + used) * 100) / 100;
+            const newPaidBs = Math.round(newPaidUsd * advance.exchangeRate * 100) / 100;
+            const fullyConsumed = newPaidUsd >= advance.amountUsd - 0.01;
+            await tx.customerAdvance.update({
+              where: { id: advance.id },
+              data: {
+                paidAmountUsd: newPaidUsd,
+                paidAmountBs: newPaidBs,
+                status: fullyConsumed ? 'CONSUMED' : 'PARTIAL',
+              },
+            });
+          }
+
+          // 5. Then consume NCVs
           for (const note of creditNotes) {
             if (remaining <= 0) break;
             const noteRemaining = note.totalUsd - note.paidAmountUsd;

@@ -1,13 +1,265 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryPayablesDto } from './dto/query-payables.dto';
+import { CreatePayableDto } from './dto/create-payable.dto';
 
 @Injectable()
 export class PayablesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreatePayableDto, userId?: string) {
+    const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
+    if (!supplier) throw new NotFoundException('Proveedor no encontrado');
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+
+    // Resolve serie and fiscal status
+    let serie: any = null;
+    let isFiscal = false;
+    if (dto.serieId) {
+      serie = await this.prisma.serie.findUnique({ where: { id: dto.serieId } });
+      if (!serie) throw new BadRequestException('Serie no encontrada');
+      if (serie.type !== 'PURCHASES') throw new BadRequestException('La serie debe ser de tipo COMPRAS');
+      isFiscal = serie.isFiscal;
+    }
+
+    const currency = dto.currency || 'USD';
+    const r = rate.rate;
+
+    // Fiscal breakdown in input currency
+    const exemptBase = dto.exemptBase || 0;
+    const taxableBase8 = dto.taxableBase8 || 0;
+    const taxableBase16 = dto.taxableBase16 || 0;
+    const taxableBase31 = dto.taxableBase31 || 0;
+
+    // Auto-calculate IVA
+    const iva8 = Math.round(taxableBase8 * 0.08 * 100) / 100;
+    const iva16 = Math.round(taxableBase16 * 0.16 * 100) / 100;
+    const iva31 = Math.round(taxableBase31 * 0.31 * 100) / 100;
+    const totalIva = Math.round((iva8 + iva16 + iva31) * 100) / 100;
+
+    // IGTF
+    const igtfPct = dto.igtfPct || 0;
+    const subtotal = exemptBase + taxableBase8 + taxableBase16 + taxableBase31 + totalIva;
+    const igtf = Math.round(subtotal * (igtfPct / 100) * 100) / 100;
+    const total = Math.round((subtotal + igtf) * 100) / 100;
+
+    // Convert to both currencies
+    const toUsd = (val: number) => currency === 'USD' ? val : Math.round((val / r) * 100) / 100;
+    const toBs = (val: number) => currency === 'USD' ? Math.round((val * r) * 100) / 100 : val;
+
+    const amountUsd = toUsd(total);
+    const amountBs = toBs(total);
+
+    // For manual CxP, retention is handled as a separate document
+    const retentionUsd = 0;
+    const retentionBs = 0;
+    const netPayableUsd = amountUsd;
+    const netPayableBs = amountBs;
+
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const originalDate = dto.originalDate ? new Date(dto.originalDate) : null;
+    const receptionDate = dto.receptionDate ? new Date(dto.receptionDate) : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      // Generate correlative number
+      const config = await tx.companyConfig.findUnique({
+        where: { id: 'singleton' },
+      });
+      // @ts-ignore - field just added
+      const nextNum = config?.payableNextNumber || 1;
+      const yearSuffix = new Date().getFullYear().toString().slice(-2);
+      const number = `CXP/${yearSuffix}-${nextNum.toString().padStart(6, '0')}`;
+
+      await tx.companyConfig.update({
+        where: { id: 'singleton' },
+        data: { payableNextNumber: nextNum + 1 } as any,
+      });
+
+      const payable = await tx.payable.create({
+        data: {
+          number,
+          supplierId: dto.supplierId,
+          purchaseOrderId: null,
+          documentNumber: dto.documentNumber || null,
+          description: dto.description || null,
+          amountUsd,
+          amountBs,
+          exchangeRate: r,
+          retentionUsd,
+          retentionBs,
+          netPayableUsd,
+          netPayableBs,
+          dueDate,
+          notes: dto.notes || null,
+          serieId: dto.serieId || null,
+          controlFiscal: dto.controlFiscal || null,
+          currency,
+          originalDate,
+          receptionDate,
+          paymentTerms: dto.paymentTerms || null,
+          exemptBaseUsd: toUsd(exemptBase),
+          exemptBaseBs: toBs(exemptBase),
+          taxableBase8Usd: toUsd(taxableBase8),
+          taxableBase8Bs: toBs(taxableBase8),
+          taxableBase16Usd: toUsd(taxableBase16),
+          taxableBase16Bs: toBs(taxableBase16),
+          taxableBase31Usd: toUsd(taxableBase31),
+          taxableBase31Bs: toBs(taxableBase31),
+          iva8Usd: toUsd(iva8),
+          iva8Bs: toBs(iva8),
+          iva16Usd: toUsd(iva16),
+          iva16Bs: toBs(iva16),
+          iva31Usd: toUsd(iva31),
+          iva31Bs: toBs(iva31),
+          totalIvaUsd: toUsd(totalIva),
+          totalIvaBs: toBs(totalIva),
+          igtfPct,
+          igtfUsd: toUsd(igtf),
+          igtfBs: toBs(igtf),
+          createdById: userId || null,
+        },
+        include: {
+          supplier: { select: { id: true, name: true, rif: true } },
+          serie: { select: { id: true, name: true, isFiscal: true } },
+        },
+      });
+
+      // If fiscal (determined by serie), create PurchaseBookEntry
+      if (isFiscal && userId) {
+        const totalBsForBook = toBs(total);
+        const exemptBs = toBs(exemptBase);
+        const taxableBs = toBs(taxableBase8 + taxableBase16 + taxableBase31);
+        const ivaBs = toBs(totalIva);
+
+        await tx.purchaseBookEntry.create({
+          data: {
+            payableId: payable.id,
+            entryDate: originalDate || new Date(),
+            supplierControlNumber: dto.controlFiscal || null,
+            supplierInvoiceNumber: dto.documentNumber || number,
+            supplierName: supplier.name,
+            supplierRif: supplier.rif || '',
+            exemptAmountBs: exemptBs,
+            taxableBaseBs: taxableBs,
+            ivaAmountBs: ivaBs,
+            totalBs: totalBsForBook,
+            isManual: true,
+            createdById: userId,
+          },
+        });
+      }
+
+      // If createRetention requested and fiscal, create RetentionVoucher
+      if (dto.createRetention && isFiscal && userId && totalIva > 0) {
+        const retPct = dto.retentionPct ?? (config as any)?.ivaRetentionPct ?? 75;
+
+        // Calculate retention amounts
+        const totalIvaUsd = toUsd(totalIva);
+        const totalIvaBs = toBs(totalIva);
+        const retAmountUsd = Math.round(totalIvaUsd * (retPct / 100) * 100) / 100;
+        const retAmountBs = Math.round(totalIvaBs * (retPct / 100) * 100) / 100;
+
+        // Generate retention number: YYYYMM + padded seq
+        const retNextNum = (config as any)?.retentionNextNumber || 1;
+        const now = new Date();
+        const yyyymm = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+        const retNumber = `${yyyymm}${retNextNum.toString().padStart(8, '0')}`;
+
+        await tx.companyConfig.update({
+          where: { id: 'singleton' },
+          data: { retentionNextNumber: retNextNum + 1 } as any,
+        });
+
+        // Taxable base for retention line (sum of all taxable bases)
+        const taxableBaseTotalCurr = taxableBase8 + taxableBase16 + taxableBase31;
+
+        const retentionVoucher = await tx.retentionVoucher.create({
+          data: {
+            number: retNumber,
+            supplierId: dto.supplierId,
+            serieId: dto.serieId || null,
+            status: 'ISSUED',
+            issueDate: originalDate || new Date(),
+            retentionPct: retPct,
+            retentionAmountUsd: retAmountUsd,
+            retentionAmountBs: retAmountBs,
+            exchangeRate: r,
+            notes: `Retencion IVA ${retPct}% sobre CxP ${number}`,
+            createdById: userId,
+            lines: {
+              create: {
+                payableId: payable.id,
+                supplierInvoiceNumber: dto.documentNumber || null,
+                supplierControlNumber: dto.controlFiscal || null,
+                invoiceDate: originalDate || new Date(),
+                invoiceTotalUsd: amountUsd,
+                invoiceTotalBs: amountBs,
+                taxableBaseUsd: toUsd(taxableBaseTotalCurr),
+                taxableBaseBs: toBs(taxableBaseTotalCurr),
+                ivaAmountUsd: totalIvaUsd,
+                ivaAmountBs: totalIvaBs,
+                retentionPct: retPct,
+                retentionAmountUsd: retAmountUsd,
+                retentionAmountBs: retAmountBs,
+                exchangeRate: r,
+                isManual: true,
+              },
+            },
+          },
+        });
+
+        // Create PurchaseBookEntry for retention (negative line)
+        await tx.purchaseBookEntry.create({
+          data: {
+            retentionVoucherId: retentionVoucher.id,
+            payableId: payable.id,
+            entryDate: originalDate || new Date(),
+            supplierControlNumber: dto.controlFiscal || null,
+            supplierInvoiceNumber: dto.documentNumber || number,
+            supplierName: supplier.name,
+            supplierRif: supplier.rif || '',
+            exemptAmountBs: 0,
+            taxableBaseBs: 0,
+            ivaAmountBs: -retAmountBs,
+            totalBs: -retAmountBs,
+            isRetentionLine: true,
+            isManual: true,
+            createdById: userId,
+          },
+        });
+
+        // Update payable retention fields
+        await tx.payable.update({
+          where: { id: payable.id },
+          data: {
+            retentionUsd: retAmountUsd,
+            retentionBs: retAmountBs,
+            netPayableUsd: Math.round((amountUsd - retAmountUsd) * 100) / 100,
+            netPayableBs: Math.round((amountBs - retAmountBs) * 100) / 100,
+          },
+        });
+      }
+
+      return payable;
+    });
+  }
+
+  async getNextNumber() {
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const nextNum = (config as any)?.payableNextNumber || 1;
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    return { nextNumber: `CXP/${yearSuffix}-${nextNum.toString().padStart(6, '0')}` };
+  }
 
   async findAll(query: QueryPayablesDto) {
     const page = query.page || 1;
@@ -51,6 +303,7 @@ export class PayablesService {
         include: {
           supplier: { select: { id: true, name: true } },
           purchaseOrder: { select: { id: true, number: true } },
+          serie: { select: { id: true, name: true, isFiscal: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
             select: { id: true, amountUsd: true, createdAt: true, receiptId: true, method: { select: { id: true, name: true } }, receipt: { select: { id: true, number: true } } },
@@ -75,6 +328,12 @@ export class PayablesService {
         supplier: true,
         purchaseOrder: {
           select: { id: true, number: true, totalUsd: true, createdAt: true },
+        },
+        serie: { select: { id: true, name: true, isFiscal: true } },
+        retentionVoucherLines: {
+          include: {
+            retentionVoucher: { select: { id: true, number: true, status: true, retentionAmountUsd: true, retentionAmountBs: true } },
+          },
         },
         payments: {
           orderBy: { createdAt: 'desc' },
@@ -152,6 +411,7 @@ export class PayablesService {
       orderBy: { createdAt: 'desc' },
       include: {
         purchaseOrder: { select: { id: true, number: true } },
+        serie: { select: { id: true, name: true, isFiscal: true } },
         payments: {
           orderBy: { createdAt: 'desc' },
           select: { id: true, amountUsd: true, createdAt: true, method: { select: { id: true, name: true } } },

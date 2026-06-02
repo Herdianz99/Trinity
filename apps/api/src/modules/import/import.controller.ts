@@ -29,4 +29,9 @@ export class ImportController {
   resetData() {
     return this.importService.resetData();
   }
+
+  @Post('reset-production')
+  resetForProduction() {
+    return this.importService.resetForProduction();
+  }
 }

@@ -365,13 +365,35 @@ export class CustomersService {
       });
     }
 
-    const items = creditNotes.map((n) => ({
+    // Get available advances
+    const advances = await this.prisma.customerAdvance.findMany({
+      where: {
+        customerId: id,
+        status: { in: ['AVAILABLE', 'PARTIAL'] },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const advanceItems = advances.map((a) => ({
+      id: a.id,
+      type: 'ADVANCE' as const,
+      description: `Anticipo ${a.reference || new Date(a.createdAt).toLocaleDateString()}`,
+      amountUsd: a.amountUsd,
+      paidAmountUsd: a.paidAmountUsd,
+      remainingUsd: Math.round((a.amountUsd - a.paidAmountUsd) * 100) / 100,
+    })).filter((i) => i.remainingUsd > 0.01);
+
+    const ncvItems = creditNotes.map((n) => ({
       id: n.id,
+      type: 'NCV' as const,
       description: `${n.number} - Devolucion ${invoiceMap.get(n.invoiceId) || ''}`,
       amountUsd: n.totalUsd,
       paidAmountUsd: n.paidAmountUsd || 0,
       remainingUsd: Math.round((n.totalUsd - (n.paidAmountUsd || 0)) * 100) / 100,
     })).filter((i) => i.remainingUsd > 0.01);
+
+    // Advances first, then NCVs
+    const items = [...advanceItems, ...ncvItems];
 
     const totalUsd = items.reduce((sum, i) => sum + i.remainingUsd, 0);
     const totalBs = Math.round(totalUsd * todayRate * 100) / 100;

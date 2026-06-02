@@ -1,14 +1,18 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ReceivablesService } from './receivables.service';
 import { QueryReceivablesDto } from './dto/query-receivables.dto';
+import { CreateReceivableDto } from './dto/create-receivable.dto';
 
 @ApiTags('Receivables')
 @ApiBearerAuth()
@@ -16,6 +20,16 @@ import { QueryReceivablesDto } from './dto/query-receivables.dto';
 @Controller('receivables')
 export class ReceivablesController {
   constructor(private readonly receivablesService: ReceivablesService) {}
+
+  @Post()
+  create(@Body() dto: CreateReceivableDto, @Request() req: any) {
+    return this.receivablesService.create(dto, req.user?.id);
+  }
+
+  @Get('next-number')
+  getNextNumber() {
+    return this.receivablesService.getNextNumber();
+  }
 
   @Get()
   findAll(@Query() query: QueryReceivablesDto) {

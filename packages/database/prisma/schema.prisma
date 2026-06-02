@@ -129,6 +129,19 @@ enum InvoiceType {
 enum ReceivableType {
   CUSTOMER_CREDIT
   FINANCING_PLATFORM
+  MANUAL
+}
+
+enum CustomerAdvanceStatus {
+  AVAILABLE
+  PARTIAL
+  CONSUMED
+}
+
+enum SupplierAdvanceStatus {
+  AVAILABLE
+  PARTIAL
+  CONSUMED
 }
 
 enum ReceivableStatus {
@@ -224,6 +237,8 @@ model CompanyConfig {
   stampImage              String?  @db.Text
   retentionProvidencia    String   @default("SNAT/2025/000054")
   retentionNextNumber     Int      @default(1)
+  receivableNextNumber    Int      @default(1)
+  payableNextNumber       Int      @default(1)
   updatedAt               DateTime @updatedAt
 }
 
@@ -271,6 +286,10 @@ model User {
   purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
   salesBookEntries    SalesBookEntry[]    @relation("SalesBookEntries")
   retentionVouchers   RetentionVoucher[]  @relation("RetentionVoucherCreator")
+  customerAdvances    CustomerAdvance[]   @relation("AdvanceCreator")
+  supplierAdvances    SupplierAdvance[]   @relation("SupplierAdvanceCreator")
+  receivablesCreated  Receivable[]        @relation("ReceivableCreator")
+  payablesCreated     Payable[]           @relation("PayableCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -403,6 +422,7 @@ model Supplier {
   receipts          Receipt[]
   ivaRetentions     IvaRetention[]
   retentionVouchers RetentionVoucher[]
+  advances          SupplierAdvance[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -654,8 +674,51 @@ model Customer {
   quotations   Quotation[]
   receivables  Receivable[]
   receipts     Receipt[]
+  advances     CustomerAdvance[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+}
+
+model CustomerAdvance {
+  id            String                @id @default(cuid())
+  customerId    String
+  customer      Customer              @relation(fields: [customerId], references: [id])
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  paidAmountUsd Float                 @default(0)
+  paidAmountBs  Float                 @default(0)
+  status        CustomerAdvanceStatus @default(AVAILABLE)
+  reference     String?
+  notes         String?
+  methodId      String
+  method        PaymentMethod         @relation(fields: [methodId], references: [id])
+  cashSessionId String
+  createdById   String
+  createdBy     User                  @relation("AdvanceCreator", fields: [createdById], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+}
+
+model SupplierAdvance {
+  id            String                @id @default(cuid())
+  supplierId    String
+  supplier      Supplier              @relation(fields: [supplierId], references: [id])
+  amountUsd     Float
+  amountBs      Float
+  exchangeRate  Float
+  paidAmountUsd Float                 @default(0)
+  paidAmountBs  Float                 @default(0)
+  status        SupplierAdvanceStatus @default(AVAILABLE)
+  reference     String?
+  notes         String?
+  methodId      String
+  method        PaymentMethod         @relation(fields: [methodId], references: [id])
+  cashSessionId String
+  createdById   String
+  createdBy     User                  @relation("SupplierAdvanceCreator", fields: [createdById], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 }
 
 // ============================================
@@ -679,6 +742,8 @@ model PaymentMethod {
   receiptPayments    ReceiptPayment[]
   changePayments     Payment[]           @relation("ChangeMethod")
   expenses           Expense[]
+  customerAdvances   CustomerAdvance[]
+  supplierAdvances   SupplierAdvance[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -704,6 +769,8 @@ model Serie {
   purchaseOrders      PurchaseOrder[]
   creditDebitNotes    CreditDebitNote[]
   retentionVouchers   RetentionVoucher[]
+  receivables         Receivable[]       @relation("ReceivableSerie")
+  payables            Payable[]          @relation("PayableSerie")
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -864,27 +931,63 @@ model Payment {
 // ============================================
 
 model Receivable {
-  id            String              @id @default(cuid())
-  type          ReceivableType
-  customerId    String?
-  customer      Customer?           @relation(fields: [customerId], references: [id])
-  platformName  String?
-  reference     String?
-  invoiceId     String
-  invoice       Invoice             @relation(fields: [invoiceId], references: [id])
-  amountUsd     Float
-  amountBs      Float
-  exchangeRate  Float
-  dueDate       DateTime?
-  status        ReceivableStatus    @default(PENDING)
-  paidAmountUsd Float               @default(0)
-  paidAmountBs  Float               @default(0)
-  paidAt        DateTime?
-  notes         String?
-  payments      ReceivablePayment[]
-  receiptItems  ReceiptItem[]
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id               String              @id @default(cuid())
+  number           String?             @unique
+  type             ReceivableType
+  customerId       String?
+  customer         Customer?           @relation(fields: [customerId], references: [id])
+  platformName     String?
+  reference        String?
+  invoiceId        String?
+  invoice          Invoice?            @relation(fields: [invoiceId], references: [id])
+  documentNumber   String?
+  description      String?
+  amountUsd        Float
+  amountBs         Float
+  exchangeRate     Float
+  dueDate          DateTime?
+  status           ReceivableStatus    @default(PENDING)
+  paidAmountUsd    Float               @default(0)
+  paidAmountBs     Float               @default(0)
+  paidAt           DateTime?
+  notes            String?
+
+  // Fiscal fields
+  serieId          String?
+  serie            Serie?              @relation("ReceivableSerie", fields: [serieId], references: [id])
+  currency         String              @default("USD")
+  originalDate     DateTime?
+  receptionDate    DateTime?
+  paymentTerms     String?
+
+  // Tax breakdown (USD + Bs)
+  exemptBaseUsd    Float               @default(0)
+  exemptBaseBs     Float               @default(0)
+  taxableBase8Usd  Float               @default(0)
+  taxableBase8Bs   Float               @default(0)
+  taxableBase16Usd Float               @default(0)
+  taxableBase16Bs  Float               @default(0)
+  taxableBase31Usd Float               @default(0)
+  taxableBase31Bs  Float               @default(0)
+  iva8Usd          Float               @default(0)
+  iva8Bs           Float               @default(0)
+  iva16Usd         Float               @default(0)
+  iva16Bs          Float               @default(0)
+  iva31Usd         Float               @default(0)
+  iva31Bs          Float               @default(0)
+  totalIvaUsd      Float               @default(0)
+  totalIvaBs       Float               @default(0)
+  igtfPct          Float               @default(0)
+  igtfUsd          Float               @default(0)
+  igtfBs           Float               @default(0)
+
+  createdById      String?
+  createdBy        User?               @relation("ReceivableCreator", fields: [createdById], references: [id])
+  payments         ReceivablePayment[]
+  receiptItems     ReceiptItem[]
+  salesBookEntries SalesBookEntry[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 }
 
 model ReceivablePayment {
@@ -910,29 +1013,67 @@ model ReceivablePayment {
 // ============================================
 
 model Payable {
-  id                   String                @id @default(cuid())
-  supplierId           String
-  supplier             Supplier              @relation(fields: [supplierId], references: [id])
-  purchaseOrderId      String?
-  purchaseOrder        PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
-  amountUsd            Float
-  amountBs             Float
-  exchangeRate         Float
-  retentionUsd         Float                 @default(0)
-  retentionBs          Float                 @default(0)
-  netPayableUsd        Float
-  netPayableBs         Float                 @default(0)
-  dueDate              DateTime?
-  status               PayableStatus         @default(PENDING)
-  paidAmountUsd        Float                 @default(0)
-  paidAmountBs         Float                 @default(0)
-  paidAt               DateTime?
-  notes                String?
-  payments             PayablePayment[]
-  receiptItems         ReceiptItem[]
-  paymentScheduleItems PaymentScheduleItem[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                     String                @id @default(cuid())
+  number                 String?               @unique
+  supplierId             String
+  supplier               Supplier              @relation(fields: [supplierId], references: [id])
+  purchaseOrderId        String?
+  purchaseOrder          PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  documentNumber         String?
+  description            String?
+  amountUsd              Float
+  amountBs               Float
+  exchangeRate           Float
+  retentionUsd           Float                 @default(0)
+  retentionBs            Float                 @default(0)
+  netPayableUsd          Float
+  netPayableBs           Float                 @default(0)
+  dueDate                DateTime?
+  status                 PayableStatus         @default(PENDING)
+  paidAmountUsd          Float                 @default(0)
+  paidAmountBs           Float                 @default(0)
+  paidAt                 DateTime?
+  notes                  String?
+
+  // Fiscal fields
+  serieId                String?
+  serie                  Serie?                @relation("PayableSerie", fields: [serieId], references: [id])
+  controlFiscal          String?
+  currency               String                @default("USD")
+  originalDate           DateTime?
+  receptionDate          DateTime?
+  paymentTerms           String?
+
+  // Tax breakdown (USD + Bs)
+  exemptBaseUsd          Float                 @default(0)
+  exemptBaseBs           Float                 @default(0)
+  taxableBase8Usd        Float                 @default(0)
+  taxableBase8Bs         Float                 @default(0)
+  taxableBase16Usd       Float                 @default(0)
+  taxableBase16Bs        Float                 @default(0)
+  taxableBase31Usd       Float                 @default(0)
+  taxableBase31Bs        Float                 @default(0)
+  iva8Usd                Float                 @default(0)
+  iva8Bs                 Float                 @default(0)
+  iva16Usd               Float                 @default(0)
+  iva16Bs                Float                 @default(0)
+  iva31Usd               Float                 @default(0)
+  iva31Bs                Float                 @default(0)
+  totalIvaUsd            Float                 @default(0)
+  totalIvaBs             Float                 @default(0)
+  igtfPct                Float                 @default(0)
+  igtfUsd                Float                 @default(0)
+  igtfBs                 Float                 @default(0)
+
+  createdById            String?
+  createdBy              User?                 @relation("PayableCreator", fields: [createdById], references: [id])
+  payments               PayablePayment[]
+  receiptItems           ReceiptItem[]
+  paymentScheduleItems   PaymentScheduleItem[]
+  purchaseBookEntries    PurchaseBookEntry[]
+  retentionVoucherLines  RetentionVoucherLine[]
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 }
 
 model PayablePayment {
@@ -1268,6 +1409,8 @@ model PurchaseBookEntry {
   id                     String            @id @default(cuid())
   purchaseOrderId        String?
   purchaseOrder          PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
+  payableId              String?
+  payable                Payable?          @relation(fields: [payableId], references: [id])
   entryDate              DateTime
   supplierControlNumber  String?
   supplierInvoiceNumber  String?
@@ -1295,26 +1438,28 @@ model PurchaseBookEntry {
 // ============================================
 
 model SalesBookEntry {
-  id              String   @id @default(cuid())
+  id              String      @id @default(cuid())
   invoiceId       String?
-  invoice         Invoice? @relation(fields: [invoiceId], references: [id])
+  invoice         Invoice?    @relation(fields: [invoiceId], references: [id])
+  receivableId    String?
+  receivable      Receivable? @relation(fields: [receivableId], references: [id])
   entryDate       DateTime
   invoiceNumber   String
   controlNumber   String?
   customerName    String
   customerRif     String?
-  exemptAmountBs  Float    @default(0)
-  taxableBaseBs   Float    @default(0)
-  ivaAmountBs     Float    @default(0)
-  igtfAmountBs    Float    @default(0)
-  totalBs         Float    @default(0)
-  isManual        Boolean  @default(false)
-  isRetentionLine Boolean  @default(false)
+  exemptAmountBs  Float       @default(0)
+  taxableBaseBs   Float       @default(0)
+  ivaAmountBs     Float       @default(0)
+  igtfAmountBs    Float       @default(0)
+  totalBs         Float       @default(0)
+  isManual        Boolean     @default(false)
+  isRetentionLine Boolean     @default(false)
   notes           String?
   createdById     String
-  createdBy       User     @relation("SalesBookEntries", fields: [createdById], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdBy       User        @relation("SalesBookEntries", fields: [createdById], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 // ============================================
@@ -1347,8 +1492,10 @@ model RetentionVoucherLine {
   id                    String           @id @default(cuid())
   retentionVoucherId    String
   retentionVoucher      RetentionVoucher @relation(fields: [retentionVoucherId], references: [id], onDelete: Cascade)
-  purchaseOrderId       String
-  purchaseOrder         PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrderId       String?
+  purchaseOrder         PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  payableId             String?
+  payable               Payable?         @relation(fields: [payableId], references: [id])
   supplierInvoiceNumber String?
   supplierControlNumber String?
   invoiceDate           DateTime?

@@ -293,7 +293,7 @@ export class RetentionVouchersPdfService {
 
         doc.text(String(idx + 1), cols[0].x + 2, cellY, { width: cols[0].w - 4, align: 'center', lineBreak: false });
 
-        const invDate = line.invoiceDate ? fmtDate(line.invoiceDate) : fmtDate(line.purchaseOrder.invoiceDate);
+        const invDate = line.invoiceDate ? fmtDate(line.invoiceDate) : line.purchaseOrder?.invoiceDate ? fmtDate(line.purchaseOrder.invoiceDate) : '';
         doc.text(invDate, cols[1].x + 2, cellY, { width: cols[1].w - 4, align: 'center', lineBreak: false });
 
         doc.text(line.supplierInvoiceNumber || '', cols[2].x + 2, cellY, { width: cols[2].w - 4, align: 'center', lineBreak: false });
