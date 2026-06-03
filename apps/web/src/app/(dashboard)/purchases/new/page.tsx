@@ -111,7 +111,7 @@ export default function NewPurchaseBillPage() {
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean }[]>([]);
+  const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean; isVatExempt: boolean }[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -326,6 +326,8 @@ export default function NewPurchaseBillPage() {
   }
 
   // ---- Real-time calculations ----
+  const serieIsVatExempt = series.find(s => s.id === serieId)?.isVatExempt === true;
+
   const calculations = useMemo(() => {
     const isBs = currency === 'BS';
 
@@ -334,11 +336,12 @@ export default function NewPurchaseBillPage() {
       const lineBruto = item.costUsd * item.quantity;
       const lineDiscount = lineBruto * (item.discountPct / 100);
       const importePrimario = lineBruto - lineDiscount; // in the selected currency
-      const ivaRate = IVA_RATES[item.ivaType] || 0;
+      const effectiveIvaType = serieIsVatExempt ? 'EXEMPT' : item.ivaType;
+      const ivaRate = IVA_RATES[effectiveIvaType] || 0;
       // importeUsd / importeBs depending on currency
       const importeUsd = isBs ? importePrimario / exchangeRate : importePrimario;
       const importeBs = isBs ? importePrimario : importePrimario * exchangeRate;
-      return { ...item, lineBruto, lineDiscount, importeUsd, importeBs, importePrimario, ivaRate };
+      return { ...item, lineBruto, lineDiscount, importeUsd, importeBs, importePrimario, ivaRate, effectiveIvaType };
     });
 
     const subtotalPrimario = itemCalcs.reduce((sum, i) => sum + i.importePrimario, 0);
@@ -352,7 +355,7 @@ export default function NewPurchaseBillPage() {
 
     // Prorate global discount per item for exempt/taxable split
     const exemptPrimario = itemCalcs.reduce((sum, i) => {
-      if (i.ivaType !== 'EXEMPT') return sum;
+      if (i.effectiveIvaType !== 'EXEMPT') return sum;
       const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
       return sum + i.importePrimario - globalDiscountPrimario * proportion;
     }, 0);
@@ -365,7 +368,7 @@ export default function NewPurchaseBillPage() {
 
     // IVA per item (with global discount prorated)
     const totalIvaPrimario = itemCalcs.reduce((sum, i) => {
-      if (i.ivaType === 'EXEMPT') return sum;
+      if (i.effectiveIvaType === 'EXEMPT') return sum;
       const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
       const itemAfterGlobalDiscount = i.importePrimario - globalDiscountPrimario * proportion;
       return sum + itemAfterGlobalDiscount * i.ivaRate;
@@ -408,7 +411,7 @@ export default function NewPurchaseBillPage() {
       netPayableUsd,
       netPayableBs,
     };
-  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier, currency]);
+  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier, currency, serieIsVatExempt]);
 
   // ---- Validation ----
   function validate(): string | null {

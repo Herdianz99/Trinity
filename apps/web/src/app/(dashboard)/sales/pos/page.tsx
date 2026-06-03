@@ -148,6 +148,15 @@ export default function POSPage() {
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
   const [changeMethodId, setChangeMethodId] = useState<string | null>(null);
 
+  // Anticipo modal state
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [advanceAmountBs, setAdvanceAmountBs] = useState('');
+  const [advanceMethodId, setAdvanceMethodId] = useState('');
+  const [advanceReference, setAdvanceReference] = useState('');
+  const [advanceNotes, setAdvanceNotes] = useState('');
+  const [savingAdvance, setSavingAdvance] = useState(false);
+
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
 
@@ -393,13 +402,55 @@ export default function POSPage() {
   }, [clientForm.rif, clientForm.documentType]);
 
   // Fetch credit balance when customer changes
-  useEffect(() => {
+  const refreshCreditBalance = useCallback(() => {
     if (!customerId) { setCreditBalance(null); return; }
     fetch(`/api/proxy/customers/${customerId}/credit-balance`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setCreditBalance(data); })
       .catch(() => setCreditBalance(null));
   }, [customerId]);
+
+  useEffect(() => { refreshCreditBalance(); }, [refreshCreditBalance]);
+
+  async function submitAdvance() {
+    if (!customerId || !advanceAmount || !advanceMethodId) return;
+    const posSessionId = selectedCashRegister?.sessions?.[0]?.id;
+    if (!posSessionId) {
+      setMessage({ type: 'error', text: 'No hay sesion de caja abierta' });
+      return;
+    }
+    setSavingAdvance(true);
+    try {
+      const res = await fetch('/api/proxy/customer-advances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId,
+          amountUsd: Number(advanceAmount),
+          methodId: advanceMethodId,
+          cashSessionId: posSessionId,
+          reference: advanceReference || undefined,
+          notes: advanceNotes || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Error al registrar anticipo');
+      }
+      setMessage({ type: 'success', text: 'Anticipo registrado exitosamente' });
+      setAdvanceModalOpen(false);
+      setAdvanceAmount('');
+      setAdvanceAmountBs('');
+      setAdvanceMethodId('');
+      setAdvanceReference('');
+      setAdvanceNotes('');
+      refreshCreditBalance();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingAdvance(false);
+    }
+  }
 
   function addToCart(product: any) {
     const stockQty = product.stock?.[0]?.quantity || 0;
@@ -412,7 +463,7 @@ export default function POSPage() {
       if (existing) {
         return prev.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, {
+      return [{
         productId: product.id,
         code: product.code,
         name: product.name,
@@ -423,7 +474,7 @@ export default function POSPage() {
         stock: stockQty,
         priceOverridden: false,
         discountPct: 0,
-      }];
+      }, ...prev];
     });
     setSearchQuery('');
     setSearchResults([]);
@@ -432,7 +483,15 @@ export default function POSPage() {
   function updateQuantity(productId: string, delta: number) {
     setCart(prev => prev.map(i => {
       if (i.productId !== productId) return i;
-      const newQty = Math.max(1, i.quantity + delta);
+      const newQty = Math.max(0.01, Math.round((i.quantity + delta) * 100) / 100);
+      return { ...i, quantity: newQty };
+    }));
+  }
+
+  function setQuantity(productId: string, qty: number) {
+    setCart(prev => prev.map(i => {
+      if (i.productId !== productId) return i;
+      const newQty = Math.max(0.01, Math.round(qty * 100) / 100);
       return { ...i, quantity: newQty };
     }));
   }
@@ -1270,7 +1329,7 @@ export default function POSPage() {
                 <div key={item.productId} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0 mr-2">
-                      <p className="text-sm font-medium text-white truncate">{item.name}</p>
+                      <p className="text-sm font-medium text-white line-clamp-2 leading-tight" title={item.name}>{item.name}</p>
                       <p className="text-xs text-slate-500">${item.unitPrice.toFixed(2)} c/u</p>
                     </div>
                     <button onClick={() => removeItem(item.productId)} className="p-1 text-red-400">
@@ -1282,7 +1341,21 @@ export default function POSPage() {
                       <button onClick={() => updateQuantity(item.productId, -1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
                         <Minus size={14} />
                       </button>
-                      <span className="text-sm font-semibold text-white w-8 text-center">{item.quantity}</span>
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v) && v > 0) setQuantity(item.productId, v);
+                        }}
+                        onBlur={e => {
+                          const v = parseFloat(e.target.value);
+                          if (isNaN(v) || v <= 0) setQuantity(item.productId, 1);
+                        }}
+                        className="w-14 text-center text-sm font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-lg px-1 py-1 focus:outline-none focus:border-green-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        step="0.01"
+                        min="0.01"
+                      />
                       <button onClick={() => updateQuantity(item.productId, 1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
                         <Plus size={14} />
                       </button>
@@ -2134,6 +2207,15 @@ export default function POSPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {selectedCashRegister?.sessions?.[0] && (
+                      <button
+                        onClick={() => { setAdvanceMethodId(''); setAdvanceAmount(''); setAdvanceReference(''); setAdvanceNotes(''); setAdvanceModalOpen(true); }}
+                        className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+                        title="Registrar anticipo"
+                      >
+                        + Anticipo
+                      </button>
+                    )}
                     <button onClick={openEditClient} className="p-1 rounded hover:bg-slate-600 text-slate-400 hover:text-blue-400" title="Editar cliente">
                       <Pencil size={13} />
                     </button>
@@ -2191,7 +2273,7 @@ export default function POSPage() {
             ) : cart.map(item => (
               <div key={item.productId} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/20 border border-slate-700/30">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{item.name}</p>
+                  <p className="text-sm text-white line-clamp-2 leading-tight" title={item.name}>{item.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {editingPriceItemId === item.productId ? (
                       <input
@@ -2250,7 +2332,21 @@ export default function POSPage() {
                   <button onClick={() => updateQuantity(item.productId, -1)} className="p-1 rounded hover:bg-slate-600 text-slate-400">
                     <Minus size={14} />
                   </button>
-                  <span className="w-8 text-center text-sm text-white font-medium">{item.quantity}</span>
+                  <input
+                    type="number"
+                    value={item.quantity}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v) && v > 0) setQuantity(item.productId, v);
+                    }}
+                    onBlur={e => {
+                      const v = parseFloat(e.target.value);
+                      if (isNaN(v) || v <= 0) setQuantity(item.productId, 1);
+                    }}
+                    className="w-14 text-center text-sm text-white font-medium bg-slate-800 border border-slate-700 rounded px-1 py-0.5 focus:outline-none focus:border-green-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    step="0.01"
+                    min="0.01"
+                  />
                   <button onClick={() => updateQuantity(item.productId, 1)} className="p-1 rounded hover:bg-slate-600 text-slate-400">
                     <Plus size={14} />
                   </button>
@@ -2357,6 +2453,71 @@ export default function POSPage() {
       </div>
 
       {renderSharedModals()}
+
+      {/* Anticipo Modal */}
+      {advanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAdvanceModalOpen(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
+              <h2 className="text-lg font-semibold text-slate-100">Registrar Anticipo</h2>
+              <button onClick={() => setAdvanceModalOpen(false)} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="text-sm text-slate-400">
+                Cliente: <span className="text-white font-medium">{customerName}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Monto USD *</label>
+                  <input type="number" value={advanceAmount} onChange={e => {
+                    const usd = e.target.value;
+                    setAdvanceAmount(usd);
+                    setAdvanceAmountBs(usd && exchangeRate > 0 ? (Number(usd) * exchangeRate).toFixed(2) : '');
+                  }} step="0.01" min="0.01"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Monto Bs</label>
+                  <input type="number" value={advanceAmountBs} onChange={e => {
+                    const bs = e.target.value;
+                    setAdvanceAmountBs(bs);
+                    setAdvanceAmount(bs && exchangeRate > 0 ? (Number(bs) / exchangeRate).toFixed(2) : '');
+                  }} step="0.01" min="0.01"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="0.00" />
+                  {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1">Tasa: {exchangeRate.toFixed(2)} Bs/$</p>}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Metodo de pago *</label>
+                <select value={advanceMethodId} onChange={e => setAdvanceMethodId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Seleccionar...</option>
+                  {paymentMethods.filter(pm => pm.isActive && pm.id !== 'pm_saldo_favor').map(pm => (
+                    <option key={pm.id} value={pm.id}>{pm.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Referencia</label>
+                <input type="text" value={advanceReference} onChange={e => setAdvanceReference(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="Opcional" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Notas</label>
+                <input type="text" value={advanceNotes} onChange={e => setAdvanceNotes(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="Opcional" />
+              </div>
+              <button
+                onClick={submitAdvance}
+                disabled={!advanceAmount || Number(advanceAmount) <= 0 || !advanceMethodId || savingAdvance}
+                className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50 transition-colors"
+              >
+                {savingAdvance ? 'Guardando...' : 'Registrar Anticipo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

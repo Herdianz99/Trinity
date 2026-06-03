@@ -83,13 +83,14 @@ export class PurchaseOrdersService {
     exchangeRate: number,
     prismaClient: any,
     currency: 'USD' | 'BS' = 'USD',
+    serieIsVatExempt = false,
   ) {
     const productIds = items.map((i) => i.productId);
     const products = await prismaClient.product.findMany({
       where: { id: { in: productIds } },
       select: { id: true, ivaType: true },
     });
-    const ivaMap = new Map<string, IvaType>(products.map((p: any) => [p.id, p.ivaType as IvaType]));
+    const ivaMap = new Map<string, IvaType>(products.map((p: any) => [p.id, serieIsVatExempt ? ('EXEMPT' as IvaType) : (p.ivaType as IvaType)]));
 
     if (currency === 'BS') {
       // Bs is source of truth
@@ -316,6 +317,13 @@ export class PurchaseOrdersService {
         }
       }
 
+      // Check if serie is VAT exempt
+      let serieIsVatExempt = false;
+      if (dto.serieId) {
+        const serie = await tx.serie.findUnique({ where: { id: dto.serieId }, select: { isVatExempt: true } });
+        serieIsVatExempt = serie?.isVatExempt === true;
+      }
+
       // Calculate fiscal totals
       const fiscal = await this.calculateFiscalTotals(
         items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd, totalBs: i.totalBs })),
@@ -324,6 +332,7 @@ export class PurchaseOrdersService {
         rate,
         tx,
         currency as 'USD' | 'BS',
+        serieIsVatExempt,
       );
 
       // Calculate ISLR if applicable
@@ -545,6 +554,14 @@ export class PurchaseOrdersService {
 
       await this.prisma.purchaseOrderItem.createMany({ data: items });
 
+      // Check if serie is VAT exempt (use dto.serieId if provided, else existing order.serieId)
+      let updateSerieIsVatExempt = false;
+      const effectiveSerieId = dto.serieId !== undefined ? dto.serieId : order.serieId;
+      if (effectiveSerieId) {
+        const serie = await this.prisma.serie.findUnique({ where: { id: effectiveSerieId }, select: { isVatExempt: true } });
+        updateSerieIsVatExempt = serie?.isVatExempt === true;
+      }
+
       const fiscal = await this.calculateFiscalTotals(
         items.map((i) => ({ productId: i.productId, quantity: i.quantity, netCostUsd: i.netCostUsd, totalUsd: i.totalUsd, totalBs: i.totalBs })),
         discountGlobalPct,
@@ -552,6 +569,7 @@ export class PurchaseOrdersService {
         rate,
         this.prisma,
         currency as 'USD' | 'BS',
+        updateSerieIsVatExempt,
       );
 
       Object.assign(updateData, {
