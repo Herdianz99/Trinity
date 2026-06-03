@@ -1397,10 +1397,12 @@ export default function PurchaseBillDetailPage() {
                         <th className="text-left px-2 py-2 text-slate-400 font-medium text-xs">Producto</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo ant.</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo nuevo</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Actual Detal</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Detal</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Venta Detal</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Nuevo Detal</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Actual Mayor</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Mayor</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Venta Mayor</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Nuevo Mayor</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1429,6 +1431,9 @@ export default function PurchaseBillDetailPage() {
                             >
                               ${sp.newCostUsd.toFixed(2)}
                             </td>
+                            <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
+                              ${sp.currentPriceDetal.toFixed(2)}
+                            </td>
                             <td className="px-2 py-2 text-right">
                               <input
                                 type="number"
@@ -1440,7 +1445,9 @@ export default function PurchaseBillDetailPage() {
                                 className="input-field !py-0.5 text-xs w-16 text-right font-mono"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right">
+                            <td className={`px-2 py-2 text-right font-mono text-xs font-bold ${
+                              edits.priceDetal > sp.currentPriceDetal ? 'text-red-400' : edits.priceDetal < sp.currentPriceDetal ? 'text-green-400' : 'text-white'
+                            }`}>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1450,6 +1457,9 @@ export default function PurchaseBillDetailPage() {
                                 }
                                 className="input-field !py-0.5 text-xs w-20 text-right font-mono"
                               />
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
+                              ${sp.currentPriceMayor.toFixed(2)}
                             </td>
                             <td className="px-2 py-2 text-right">
                               <input
@@ -1462,7 +1472,9 @@ export default function PurchaseBillDetailPage() {
                                 className="input-field !py-0.5 text-xs w-16 text-right font-mono"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right">
+                            <td className={`px-2 py-2 text-right font-mono text-xs font-bold ${
+                              edits.priceMayor > sp.currentPriceMayor ? 'text-red-400' : edits.priceMayor < sp.currentPriceMayor ? 'text-green-400' : 'text-white'
+                            }`}>
                               <input
                                 type="number"
                                 step="0.01"
