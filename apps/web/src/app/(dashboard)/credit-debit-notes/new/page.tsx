@@ -398,19 +398,19 @@ export default function NewCreditDebitNotePage() {
                 const qty = selectedItems[item.id] || 0;
                 const lineTotal = item.costUsd * qty * (1 + getIvaRate(item.product.ivaType));
                 const summary = returnSummary.find((s) => s.itemId === item.id);
-                const availableQty = summary ? summary.availableQty : item.receivedQty;
+                const availableQty = summary ? summary.availableQty : item.quantity;
                 const returnedQty = summary ? summary.returnedQty : 0;
                 const isFullyReturned = availableQty <= 0;
                 const isPartial = returnedQty > 0 && !isFullyReturned;
                 return (
                   <tr key={item.id} className={`border-b border-slate-700/30 ${isFullyReturned ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3 text-white">{item.product.name}</td>
-                    <td className="px-4 py-3 text-right text-slate-300">{item.receivedQty}</td>
+                    <td className="px-4 py-3 text-right text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-center">
                       {isFullyReturned ? (
                         <span className="text-xs px-2 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400">Devuelto completamente</span>
                       ) : isPartial ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">Parcial ({returnedQty}/{item.receivedQty})</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">Parcial ({returnedQty}/{item.quantity})</span>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right">

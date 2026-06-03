@@ -283,7 +283,7 @@ export class CreditDebitNotesService {
             _sum: { quantity: true },
           });
           const returnedQty = alreadyReturned._sum.quantity || 0;
-          const availableQty = poItem.receivedQty - returnedQty;
+          const availableQty = poItem.quantity - returnedQty;
 
           if (availableQty <= 0) {
             throw new BadRequestException(`El producto '${poItem.product.name}' ya fue devuelto completamente`);
@@ -652,9 +652,9 @@ export class CreditDebitNotesService {
         itemId: item.id,
         productId: item.productId,
         productName: item.product.name,
-        originalQty: item.receivedQty,
+        originalQty: item.quantity,
         returnedQty,
-        availableQty: Math.max(0, item.receivedQty - returnedQty),
+        availableQty: Math.max(0, item.quantity - returnedQty),
       };
     });
   }
