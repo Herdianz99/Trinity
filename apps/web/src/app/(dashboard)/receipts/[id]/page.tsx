@@ -405,9 +405,17 @@ export default function ReceiptDetailPage() {
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                             item.itemType === 'RECEIVABLE' ? 'bg-green-500/20 text-green-400' :
                             item.itemType === 'PAYABLE' ? 'bg-red-500/20 text-red-400' :
+                            item.itemType === 'CREDIT_NOTE' ? 'bg-orange-500/20 text-orange-400' :
+                            item.itemType === 'DEBIT_NOTE' ? 'bg-purple-500/20 text-purple-400' :
+                            item.itemType === 'IVA_RETENTION' ? 'bg-indigo-500/20 text-indigo-400' :
                             'bg-amber-500/20 text-amber-400'
                           }`}>
-                            {item.itemType === 'RECEIVABLE' ? 'CxC' : item.itemType === 'PAYABLE' ? 'CxP' : 'Diferencial'}
+                            {item.itemType === 'RECEIVABLE' ? 'CxC' :
+                             item.itemType === 'PAYABLE' ? 'CxP' :
+                             item.itemType === 'CREDIT_NOTE' ? 'Nota Crédito' :
+                             item.itemType === 'DEBIT_NOTE' ? 'Nota Débito' :
+                             item.itemType === 'IVA_RETENTION' ? 'Ret. IVA' :
+                             'Diferencial'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-white font-mono">
