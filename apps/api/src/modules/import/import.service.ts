@@ -586,13 +586,14 @@ export class ImportService {
         });
         for (const cat of allCategories) {
           if (!cat.code) continue;
+          const prefix = cat.code;
           const maxResult = await tx.$queryRaw<{ max_num: number | null }[]>`
             SELECT MAX(
-              CAST(SUBSTRING(code FROM ${cat.code.length + 1}) AS INTEGER)
+              CAST(SUBSTRING(code FROM LENGTH(${prefix}) + 1) AS INTEGER)
             ) as max_num
             FROM "Product"
-            WHERE code LIKE ${cat.code + '%'}
-              AND SUBSTRING(code FROM ${cat.code.length + 1}) ~ '^[0-9]+$'
+            WHERE code LIKE ${prefix + '%'}
+              AND SUBSTRING(code FROM LENGTH(${prefix}) + 1) ~ '^[0-9]+$'
           `;
           const maxNum = maxResult[0]?.max_num || 0;
           if (maxNum > 0) {
@@ -623,13 +624,14 @@ export class ImportService {
 
     for (const cat of categories) {
       if (!cat.code) continue;
+      const prefix = cat.code;
       const maxResult = await this.prisma.$queryRaw<{ max_num: number | null }[]>`
         SELECT MAX(
-          CAST(SUBSTRING(code FROM ${cat.code.length + 1}) AS INTEGER)
+          CAST(SUBSTRING(code FROM LENGTH(${prefix}) + 1) AS INTEGER)
         ) as max_num
         FROM "Product"
-        WHERE code LIKE ${cat.code + '%'}
-          AND SUBSTRING(code FROM ${cat.code.length + 1}) ~ '^[0-9]+$'
+        WHERE code LIKE ${prefix + '%'}
+          AND SUBSTRING(code FROM LENGTH(${prefix}) + 1) ~ '^[0-9]+$'
       `;
       const maxNum = maxResult[0]?.max_num || 0;
       if (maxNum > cat.lastProductNumber) {
