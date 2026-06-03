@@ -169,6 +169,21 @@ interface CreditDebitNote {
   createdAt: string;
 }
 
+interface PaymentMethodOption {
+  id: string;
+  name: string;
+  isDivisa: boolean;
+  children?: PaymentMethodOption[];
+}
+
+interface PaymentLine {
+  methodId: string;
+  methodName: string;
+  amountUsd: number;
+  amountBs: number;
+  reference: string;
+}
+
 interface RetentionVoucherInfo {
   id: string;
   number: string;
@@ -289,6 +304,10 @@ export default function PurchaseBillDetailPage() {
   const [issuingRetention, setIssuingRetention] = useState(false);
   const [issueRetentionModal, setIssueRetentionModal] = useState(false);
   const [issueRetentionDate, setIssueRetentionDate] = useState('');
+
+  // Cash payment state
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
 
   // ---- Fetch bill ----
   const fetchBill = useCallback(async () => {
@@ -427,6 +446,22 @@ export default function PurchaseBillDetailPage() {
         setSuggestedPrices([]);
         setPriceEdits({});
       }
+
+      // Load payment methods if cash purchase
+      if (bill && !bill.isCredit) {
+        try {
+          const pmRes = await fetch('/api/proxy/payment-methods');
+          if (pmRes.ok) {
+            const pmData = await pmRes.json();
+            const methods = (Array.isArray(pmData) ? pmData : pmData.data || [])
+              .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor' && !m.children?.length);
+            setPaymentMethods(methods);
+          }
+        } catch { /* ignore */ }
+        // Initialize with one empty payment line
+        setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
+      }
+
       setProcessModal(true);
     } catch {
       setSuggestedPrices([]);
@@ -502,7 +537,77 @@ export default function PurchaseBillDetailPage() {
     }
   }
 
+  // ---- Cash payment helpers ----
+  function handlePaymentLineChange(
+    index: number,
+    field: keyof PaymentLine,
+    value: string | number,
+  ) {
+    setPaymentLines((prev) => {
+      const next = [...prev];
+      const line = { ...next[index] };
+      if (field === 'methodId') {
+        line.methodId = value as string;
+        line.methodName = paymentMethods.find((m) => m.id === value)?.name || '';
+      } else if (field === 'amountUsd') {
+        line.amountUsd = value as number;
+        line.amountBs = Math.round((value as number) * (bill?.exchangeRate || 1) * 100) / 100;
+      } else if (field === 'amountBs') {
+        line.amountBs = value as number;
+        line.amountUsd = Math.round((value as number) / (bill?.exchangeRate || 1) * 100) / 100;
+      } else if (field === 'reference') {
+        line.reference = value as string;
+      }
+      next[index] = line;
+      return next;
+    });
+  }
+
+  function addPaymentLine() {
+    setPaymentLines((prev) => [
+      ...prev,
+      { methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' },
+    ]);
+  }
+
+  function removePaymentLine(index: number) {
+    setPaymentLines((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function autoFillFirstPaymentLine() {
+    if (!bill || paymentLines.length === 0) return;
+    const totalUsd = bill.totalUsd;
+    const otherLinesTotal = paymentLines.slice(1).reduce((s, l) => s + l.amountUsd, 0);
+    const remaining = Math.round((totalUsd - otherLinesTotal) * 100) / 100;
+    setPaymentLines((prev) => {
+      const next = [...prev];
+      next[0] = {
+        ...next[0],
+        amountUsd: remaining > 0 ? remaining : 0,
+        amountBs: Math.round((remaining > 0 ? remaining : 0) * (bill.exchangeRate || 1) * 100) / 100,
+      };
+      return next;
+    });
+  }
+
   async function handleProcessWithPrices() {
+    // Validate payments for cash purchases
+    if (bill && !bill.isCredit) {
+      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
+      if (validPayments.length === 0) {
+        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
+        return;
+      }
+      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
+      if (totalPaid < bill.totalUsd - 0.01) {
+        setMessage({
+          type: 'error',
+          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${bill.totalUsd.toFixed(2)})`,
+        });
+        return;
+      }
+    }
+
     setProcessing(true);
     setMessage(null);
     try {
@@ -511,17 +616,28 @@ export default function PurchaseBillDetailPage() {
         gananciaPct: data.gananciaPct,
         gananciaMayorPct: data.gananciaMayorPct,
       }));
+      const body: Record<string, unknown> = { priceUpdates };
+      if (bill && !bill.isCredit) {
+        body.payments = paymentLines
+          .filter((l) => l.methodId && l.amountUsd > 0)
+          .map((l) => ({
+            methodId: l.methodId,
+            amountUsd: l.amountUsd,
+            amountBs: l.amountBs,
+            reference: l.reference || undefined,
+          }));
+      }
       const res = await fetch(`/api/proxy/purchases/${id}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceUpdates }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || 'Error al procesar');
       }
       setProcessModal(false);
-      setMessage({ type: 'success', text: 'Factura procesada exitosamente -- stock y precios actualizados' });
+      setMessage({ type: 'success', text: 'Factura procesada exitosamente' });
       // Reset lazy-loaded data so it refetches
       setPayablesFetched(false);
       setNotesFetched(false);
@@ -534,20 +650,48 @@ export default function PurchaseBillDetailPage() {
   }
 
   async function handleProcessWithoutPrices() {
+    // Validate payments for cash purchases
+    if (bill && !bill.isCredit) {
+      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
+      if (validPayments.length === 0) {
+        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
+        return;
+      }
+      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
+      if (totalPaid < bill.totalUsd - 0.01) {
+        setMessage({
+          type: 'error',
+          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${bill.totalUsd.toFixed(2)})`,
+        });
+        return;
+      }
+    }
+
     setProcessing(true);
     setMessage(null);
     try {
+      const body: Record<string, unknown> = {};
+      if (bill && !bill.isCredit) {
+        body.payments = paymentLines
+          .filter((l) => l.methodId && l.amountUsd > 0)
+          .map((l) => ({
+            methodId: l.methodId,
+            amountUsd: l.amountUsd,
+            amountBs: l.amountBs,
+            reference: l.reference || undefined,
+          }));
+      }
       const res = await fetch(`/api/proxy/purchases/${id}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || 'Error al procesar');
       }
       setProcessModal(false);
-      setMessage({ type: 'success', text: 'Factura procesada exitosamente -- stock actualizado' });
+      setMessage({ type: 'success', text: 'Factura procesada exitosamente' });
       setPayablesFetched(false);
       setNotesFetched(false);
       fetchBill();
@@ -661,6 +805,28 @@ export default function PurchaseBillDetailPage() {
             >
               <BookOpen size={14} /> Ver en libro de compras
             </Link>
+          )}
+          {bill.status === 'PROCESSED' && bill.isCredit && (
+            <>
+              <button
+                onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MERCHANDISE&purchaseOrderId=${bill.id}`)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-orange-500/20 text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center gap-1.5"
+              >
+                Devolver mercancía
+              </button>
+              <button
+                onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center gap-1.5"
+              >
+                NC Compra
+              </button>
+              <button
+                onClick={() => router.push(`/credit-debit-notes/new?type=NDC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-purple-500/20 text-purple-400 hover:bg-purple-500/10 transition-colors flex items-center gap-1.5"
+              >
+                ND Compra
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1203,6 +1369,126 @@ export default function PurchaseBillDetailPage() {
                 </div>
               )}
 
+              {/* Cash payment section */}
+              {bill && !bill.isCredit && (
+                <div className="mt-6 pt-6 border-t border-slate-700/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                      Pago de Contado
+                    </h3>
+                    <div className="text-sm">
+                      <span className="text-slate-400">Total a pagar: </span>
+                      <span className="text-green-400 font-mono font-bold">
+                        ${fmt(bill.totalUsd)}
+                      </span>
+                      <span className="text-slate-500 ml-2 font-mono text-xs">
+                        Bs {fmt(bill.totalBs)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {paymentLines.map((line, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_120px_120px_140px_32px] gap-2 items-end">
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Método</label>
+                          )}
+                          <select
+                            value={line.methodId}
+                            onChange={(e) => {
+                              handlePaymentLineChange(idx, 'methodId', e.target.value);
+                              if (idx === 0 && paymentLines.length === 1) {
+                                setTimeout(autoFillFirstPaymentLine, 0);
+                              }
+                            }}
+                            className="input-field !py-1.5 text-sm"
+                          >
+                            <option value="">Seleccionar...</option>
+                            {paymentMethods.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto $</label>
+                          )}
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={line.amountUsd || ''}
+                            onChange={(e) => handlePaymentLineChange(idx, 'amountUsd', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm text-right font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto Bs</label>
+                          )}
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={line.amountBs || ''}
+                            onChange={(e) => handlePaymentLineChange(idx, 'amountBs', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm text-right font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Referencia</label>
+                          )}
+                          <input
+                            type="text"
+                            value={line.reference}
+                            onChange={(e) => handlePaymentLineChange(idx, 'reference', e.target.value)}
+                            className="input-field !py-1.5 text-sm"
+                            placeholder="Ref..."
+                          />
+                        </div>
+                        <div>
+                          {idx > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => removePaymentLine(idx)}
+                              className="p-1.5 rounded hover:bg-red-500/20 text-red-400"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : (
+                            <div className="w-8" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <button
+                      type="button"
+                      onClick={addPaymentLine}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    >
+                      + Agregar método
+                    </button>
+                    <div className="text-sm">
+                      <span className="text-slate-400">Pagado: </span>
+                      <span
+                        className={`font-mono font-bold ${
+                          paymentLines.reduce((s, l) => s + l.amountUsd, 0) >= bill.totalUsd - 0.01
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }`}
+                      >
+                        ${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-slate-700/50">
                 <button
@@ -1316,16 +1602,12 @@ function PayableTab({
 }) {
   const router = useRouter();
 
-  if (!bill.isCredit || bill.status !== 'PROCESSED') {
+  if (bill.status !== 'PROCESSED') {
     return (
       <div className="card p-12 text-center text-slate-500">
         {bill.status === 'PENDING'
-          ? 'La cuenta por pagar se generara al procesar la factura'
-          : bill.status === 'CANCELLED'
-          ? 'Factura cancelada -- no hay cuenta por pagar'
-          : !bill.isCredit
-          ? 'Esta factura es de contado -- no genera cuenta por pagar'
-          : 'No hay cuenta por pagar vinculada'}
+          ? 'La cuenta por pagar se generará al procesar la factura'
+          : 'Factura cancelada -- no hay cuenta por pagar'}
       </div>
     );
   }

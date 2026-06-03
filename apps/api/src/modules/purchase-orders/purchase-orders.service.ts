@@ -212,6 +212,34 @@ export class PurchaseOrdersService {
         },
       },
     },
+    payables: {
+      select: {
+        id: true,
+        amountUsd: true,
+        amountBs: true,
+        exchangeRate: true,
+        retentionUsd: true,
+        retentionBs: true,
+        netPayableUsd: true,
+        netPayableBs: true,
+        paidAmountUsd: true,
+        paidAmountBs: true,
+        dueDate: true,
+        status: true,
+        notes: true,
+        payments: {
+          select: {
+            id: true,
+            amountUsd: true,
+            amountBs: true,
+            method: { select: { id: true, name: true } },
+            reference: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' as const },
+        },
+      },
+    },
   };
 
   async create(dto: CreatePurchaseOrderDto, userId: string) {
@@ -598,6 +626,36 @@ export class PurchaseOrdersService {
 
     const processedAt = new Date();
 
+    // Validate payments for cash purchases
+    if (!order.isCredit) {
+      if (!dto.payments || dto.payments.length === 0) {
+        throw new BadRequestException(
+          'Las compras de contado requieren al menos un método de pago',
+        );
+      }
+
+      // Validate payment methods exist
+      const methodIds = dto.payments.map((p) => p.methodId);
+      const methods = await this.prisma.paymentMethod.findMany({
+        where: { id: { in: methodIds } },
+      });
+      if (methods.length !== methodIds.length) {
+        const found = new Set(methods.map((m) => m.id));
+        const missing = methodIds.find((mid) => !found.has(mid));
+        throw new BadRequestException(
+          `Método de pago "${missing}" no encontrado`,
+        );
+      }
+
+      // Validate total paid >= invoice total
+      const totalPaidUsd = dto.payments.reduce((s, p) => s + p.amountUsd, 0);
+      if (totalPaidUsd < order.totalUsd - 0.01) {
+        throw new BadRequestException(
+          `El monto pagado ($${totalPaidUsd.toFixed(2)}) es menor al total de la factura ($${order.totalUsd.toFixed(2)})`,
+        );
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // Process inventory for non-service items
       for (const item of order.items) {
@@ -667,8 +725,8 @@ export class PurchaseOrdersService {
         }
       }
 
-      // Create Payable if credit
-      if (order.isCredit) {
+      // Create Payable — always create for accounting trail
+      {
         const exchangeRate = order.exchangeRate;
         const amountUsd = order.totalUsd;
         const amountBs = round2(amountUsd * exchangeRate);
@@ -691,9 +749,11 @@ export class PurchaseOrdersService {
         const netPayableBs = round2(netPayableUsd * exchangeRate);
 
         const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + (order.creditDays || 0));
+        if (order.isCredit && order.creditDays > 0) {
+          dueDate.setDate(dueDate.getDate() + order.creditDays);
+        }
 
-        await tx.payable.create({
+        const payable = await tx.payable.create({
           data: {
             supplierId: order.supplierId,
             purchaseOrderId: order.id,
@@ -704,10 +764,31 @@ export class PurchaseOrdersService {
             retentionBs,
             netPayableUsd,
             netPayableBs,
-            dueDate: order.creditDays > 0 ? dueDate : null,
+            dueDate: order.isCredit && order.creditDays > 0 ? dueDate : null,
+            status: order.isCredit ? 'PENDING' : 'PAID',
+            paidAmountUsd: order.isCredit ? 0 : netPayableUsd,
+            paidAmountBs: order.isCredit ? 0 : netPayableBs,
+            paidAt: order.isCredit ? null : processedAt,
             notes: `CxP generada de factura ${order.number}`,
           },
         });
+
+        // Record immediate payments for cash purchases
+        if (!order.isCredit && dto.payments && dto.payments.length > 0) {
+          for (const payment of dto.payments) {
+            await tx.payablePayment.create({
+              data: {
+                payableId: payable.id,
+                amountUsd: payment.amountUsd,
+                amountBs: payment.amountBs,
+                exchangeRate,
+                methodId: payment.methodId,
+                reference: payment.reference || null,
+                createdById: userId,
+              },
+            });
+          }
+        }
       }
 
       // Create IvaRetention document if applicable

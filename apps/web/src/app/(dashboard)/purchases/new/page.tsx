@@ -82,6 +82,21 @@ interface UserProfile {
   email: string;
 }
 
+interface PaymentMethodOption {
+  id: string;
+  name: string;
+  isDivisa: boolean;
+  children?: PaymentMethodOption[];
+}
+
+interface PaymentLine {
+  methodId: string;
+  methodName: string;
+  amountUsd: number;
+  amountBs: number;
+  reference: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -176,6 +191,10 @@ export default function NewPurchaseBillPage() {
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [processingPrices, setProcessingPrices] = useState(false);
 
+  // ---- Cash payment state ----
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
+
   // ---- Refs ----
   const supplierRef = useRef<HTMLDivElement>(null);
 
@@ -233,6 +252,16 @@ export default function NewPurchaseBillPage() {
           setIsFiscal(true);
         }
       }
+      // Load payment methods
+      try {
+        const pmRes = await fetch('/api/proxy/payment-methods');
+        if (pmRes.ok) {
+          const pmData = await pmRes.json();
+          const methods = (Array.isArray(pmData) ? pmData : pmData.data || [])
+            .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor' && !m.children?.length);
+          setPaymentMethods(methods);
+        }
+      } catch { /* ignore */ }
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -565,13 +594,30 @@ export default function NewPurchaseBillPage() {
             };
           }
           setPriceEdits(edits);
+          // Initialize payment lines for cash
+          if (!isCredit) {
+            setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
+          }
+          setPriceModal(true);
+        } else if (!isCredit) {
+          // No suggested prices but cash — still need payment modal
+          setSuggestedPrices([]);
+          setPriceEdits({});
+          setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
           setPriceModal(true);
         } else {
-          // No suggested prices, process without
+          // Credit, no suggested prices — process directly
           await processWithoutPrices(created.id);
         }
       } catch {
-        await processWithoutPrices(created.id);
+        if (!isCredit) {
+          setSuggestedPrices([]);
+          setPriceEdits({});
+          setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
+          setPriceModal(true);
+        } else {
+          await processWithoutPrices(created.id);
+        }
       }
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
@@ -580,11 +626,11 @@ export default function NewPurchaseBillPage() {
     }
   }
 
-  async function processWithoutPrices(id: string) {
+  async function processWithoutPrices(id: string, body: Record<string, unknown> = {}) {
     const res = await fetch(`/api/proxy/purchases/${id}/process`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -595,6 +641,24 @@ export default function NewPurchaseBillPage() {
 
   async function handleProcessWithPrices() {
     if (!createdId) return;
+
+    // Validate payments for cash
+    if (!isCredit) {
+      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
+      if (validPayments.length === 0) {
+        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
+        return;
+      }
+      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
+      if (totalPaid < calculations.totalUsd - 0.01) {
+        setMessage({
+          type: 'error',
+          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${calculations.totalUsd.toFixed(2)})`,
+        });
+        return;
+      }
+    }
+
     setProcessingPrices(true);
     try {
       const priceUpdates = Object.entries(priceEdits).map(([productId, data]) => ({
@@ -602,10 +666,21 @@ export default function NewPurchaseBillPage() {
         gananciaPct: data.gananciaPct,
         gananciaMayorPct: data.gananciaMayorPct,
       }));
+      const body: Record<string, unknown> = { priceUpdates };
+      if (!isCredit) {
+        body.payments = paymentLines
+          .filter((l) => l.methodId && l.amountUsd > 0)
+          .map((l) => ({
+            methodId: l.methodId,
+            amountUsd: l.amountUsd,
+            amountBs: l.amountBs,
+            reference: l.reference || undefined,
+          }));
+      }
       const res = await fetch(`/api/proxy/purchases/${createdId}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceUpdates }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -621,9 +696,38 @@ export default function NewPurchaseBillPage() {
 
   async function handleProcessWithoutPriceChanges() {
     if (!createdId) return;
+
+    // Validate payments for cash
+    if (!isCredit) {
+      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
+      if (validPayments.length === 0) {
+        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
+        return;
+      }
+      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
+      if (totalPaid < calculations.totalUsd - 0.01) {
+        setMessage({
+          type: 'error',
+          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${calculations.totalUsd.toFixed(2)})`,
+        });
+        return;
+      }
+    }
+
     setProcessingPrices(true);
     try {
-      await processWithoutPrices(createdId);
+      const body: Record<string, unknown> = {};
+      if (!isCredit) {
+        body.payments = paymentLines
+          .filter((l) => l.methodId && l.amountUsd > 0)
+          .map((l) => ({
+            methodId: l.methodId,
+            amountUsd: l.amountUsd,
+            amountBs: l.amountBs,
+            reference: l.reference || undefined,
+          }));
+      }
+      await processWithoutPrices(createdId, body);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally {
@@ -656,6 +760,43 @@ export default function NewPurchaseBillPage() {
         },
       });
     }
+  }
+
+  // ---- Cash payment helpers ----
+  function handlePaymentLineChange(
+    index: number,
+    field: keyof PaymentLine,
+    value: string | number,
+  ) {
+    setPaymentLines((prev) => {
+      const next = [...prev];
+      const line = { ...next[index] };
+      if (field === 'methodId') {
+        line.methodId = value as string;
+        line.methodName = paymentMethods.find((m) => m.id === value)?.name || '';
+      } else if (field === 'amountUsd') {
+        line.amountUsd = value as number;
+        line.amountBs = Math.round((value as number) * exchangeRate * 100) / 100;
+      } else if (field === 'amountBs') {
+        line.amountBs = value as number;
+        line.amountUsd = Math.round((value as number) / exchangeRate * 100) / 100;
+      } else if (field === 'reference') {
+        line.reference = value as string;
+      }
+      next[index] = line;
+      return next;
+    });
+  }
+
+  function addPaymentLine() {
+    setPaymentLines((prev) => [
+      ...prev,
+      { methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' },
+    ]);
+  }
+
+  function removePaymentLine(index: number) {
+    setPaymentLines((prev) => prev.filter((_, i) => i !== index));
   }
 
   // ---- Render ----
@@ -1536,6 +1677,132 @@ export default function NewPurchaseBillPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Cash payment section */}
+              {!isCredit && (
+                <div className="mt-6 pt-6 border-t border-slate-700/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                      Pago de Contado
+                    </h3>
+                    <div className="text-sm">
+                      <span className="text-slate-400">Total a pagar: </span>
+                      <span className="text-green-400 font-mono font-bold">
+                        ${fmt(calculations.totalUsd)}
+                      </span>
+                      <span className="text-slate-500 ml-2 font-mono text-xs">
+                        Bs {fmt(calculations.totalBs)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {paymentLines.map((line, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_120px_120px_140px_32px] gap-2 items-end">
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Método</label>
+                          )}
+                          <select
+                            value={line.methodId}
+                            onChange={(e) => {
+                              handlePaymentLineChange(idx, 'methodId', e.target.value);
+                              if (idx === 0 && paymentLines.length === 1 && e.target.value) {
+                                const total = calculations.totalUsd;
+                                const totalBs = calculations.totalBs;
+                                setPaymentLines((prev) => {
+                                  const next = [...prev];
+                                  next[0] = { ...next[0], methodId: e.target.value, methodName: paymentMethods.find((m) => m.id === e.target.value)?.name || '', amountUsd: Math.round(total * 100) / 100, amountBs: Math.round(totalBs * 100) / 100 };
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="input-field !py-1.5 text-sm"
+                          >
+                            <option value="">Seleccionar...</option>
+                            {paymentMethods.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto $</label>
+                          )}
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={line.amountUsd || ''}
+                            onChange={(e) => handlePaymentLineChange(idx, 'amountUsd', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm text-right font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto Bs</label>
+                          )}
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={line.amountBs || ''}
+                            onChange={(e) => handlePaymentLineChange(idx, 'amountBs', Number(e.target.value))}
+                            className="input-field !py-1.5 text-sm text-right font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          {idx === 0 && (
+                            <label className="block text-[10px] text-slate-400 mb-0.5">Referencia</label>
+                          )}
+                          <input
+                            type="text"
+                            value={line.reference}
+                            onChange={(e) => handlePaymentLineChange(idx, 'reference', e.target.value)}
+                            className="input-field !py-1.5 text-sm"
+                            placeholder="Ref..."
+                          />
+                        </div>
+                        <div>
+                          {idx > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => removePaymentLine(idx)}
+                              className="p-1.5 rounded hover:bg-red-500/20 text-red-400"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : (
+                            <div className="w-8" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <button
+                      type="button"
+                      onClick={addPaymentLine}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    >
+                      + Agregar método
+                    </button>
+                    <div className="text-sm">
+                      <span className="text-slate-400">Pagado: </span>
+                      <span
+                        className={`font-mono font-bold ${
+                          paymentLines.reduce((s, l) => s + l.amountUsd, 0) >= calculations.totalUsd - 0.01
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }`}
+                      >
+                        ${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
 
