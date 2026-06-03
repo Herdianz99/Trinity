@@ -15,6 +15,7 @@ import {
   Shield,
   Calendar,
   FileText,
+  Pencil,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -369,6 +370,24 @@ export default function PurchaseBillDetailPage() {
     }
   }, [bill]);
 
+  // ---- Load payment methods for PENDING cash purchases ----
+  useEffect(() => {
+    if (!bill || bill.status !== 'PENDING' || bill.isCredit) return;
+    (async () => {
+      try {
+        const pmRes = await fetch('/api/proxy/payment-methods');
+        if (pmRes.ok) {
+          const pmData = await pmRes.json();
+          const methods = (Array.isArray(pmData) ? pmData : pmData.data || [])
+            .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor' && !m.children?.length);
+          setPaymentMethods(methods);
+        }
+      } catch { /* ignore */ }
+      // Initialize with one empty payment line
+      setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
+    })();
+  }, [bill]);
+
   // ---- Lazy tab loading ----
   useEffect(() => {
     if (activeTab === 'cxp' && bill) fetchPayables();
@@ -425,6 +444,22 @@ export default function PurchaseBillDetailPage() {
   // ---- Process action ----
   async function handleOpenProcess() {
     if (!bill) return;
+    // Validate cash payments before opening process modal
+    if (!bill.isCredit) {
+      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
+      if (validPayments.length === 0) {
+        setMessage({ type: 'error', text: 'Agrega al menos un metodo de pago antes de procesar' });
+        return;
+      }
+      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
+      if (totalPaid < bill.totalUsd - 0.01) {
+        setMessage({
+          type: 'error',
+          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${bill.totalUsd.toFixed(2)})`,
+        });
+        return;
+      }
+    }
     setProcessing(true);
     setMessage(null);
     try {
@@ -445,21 +480,6 @@ export default function PurchaseBillDetailPage() {
       } else {
         setSuggestedPrices([]);
         setPriceEdits({});
-      }
-
-      // Load payment methods if cash purchase
-      if (bill && !bill.isCredit) {
-        try {
-          const pmRes = await fetch('/api/proxy/payment-methods');
-          if (pmRes.ok) {
-            const pmData = await pmRes.json();
-            const methods = (Array.isArray(pmData) ? pmData : pmData.data || [])
-              .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor' && !m.children?.length);
-            setPaymentMethods(methods);
-          }
-        } catch { /* ignore */ }
-        // Initialize with one empty payment line
-        setPaymentLines([{ methodId: '', methodName: '', amountUsd: 0, amountBs: 0, reference: '' }]);
       }
 
       setProcessModal(true);
@@ -591,23 +611,6 @@ export default function PurchaseBillDetailPage() {
   }
 
   async function handleProcessWithPrices() {
-    // Validate payments for cash purchases
-    if (bill && !bill.isCredit) {
-      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
-      if (validPayments.length === 0) {
-        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
-        return;
-      }
-      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
-      if (totalPaid < bill.totalUsd - 0.01) {
-        setMessage({
-          type: 'error',
-          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${bill.totalUsd.toFixed(2)})`,
-        });
-        return;
-      }
-    }
-
     setProcessing(true);
     setMessage(null);
     try {
@@ -650,23 +653,6 @@ export default function PurchaseBillDetailPage() {
   }
 
   async function handleProcessWithoutPrices() {
-    // Validate payments for cash purchases
-    if (bill && !bill.isCredit) {
-      const validPayments = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
-      if (validPayments.length === 0) {
-        setMessage({ type: 'error', text: 'Agrega al menos un método de pago' });
-        return;
-      }
-      const totalPaid = validPayments.reduce((s, l) => s + l.amountUsd, 0);
-      if (totalPaid < bill.totalUsd - 0.01) {
-        setMessage({
-          type: 'error',
-          text: `Monto pagado ($${totalPaid.toFixed(2)}) es menor al total ($${bill.totalUsd.toFixed(2)})`,
-        });
-        return;
-      }
-    }
-
     setProcessing(true);
     setMessage(null);
     try {
@@ -772,6 +758,12 @@ export default function PurchaseBillDetailPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {bill.status === 'PENDING' && (
             <>
+              <button
+                onClick={() => router.push(`/purchases/${id}/edit`)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center gap-1.5"
+              >
+                <Pencil size={14} /> Editar
+              </button>
               <button
                 onClick={handleOpenProcess}
                 disabled={processing}
@@ -1223,6 +1215,126 @@ export default function PurchaseBillDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Cash payment section for PENDING */}
+          {bill.status === 'PENDING' && !bill.isCredit && paymentMethods.length > 0 && (
+            <div className="card p-6 mt-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                  Pago de Contado
+                </h3>
+                <div className="text-sm">
+                  <span className="text-slate-400">Total a pagar: </span>
+                  <span className="text-green-400 font-mono font-bold">
+                    ${fmt(bill.totalUsd)}
+                  </span>
+                  <span className="text-slate-500 ml-2 font-mono text-xs">
+                    Bs {fmt(bill.totalBs)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {paymentLines.map((line, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_120px_120px_140px_32px] gap-2 items-end">
+                    <div>
+                      {idx === 0 && (
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Metodo</label>
+                      )}
+                      <select
+                        value={line.methodId}
+                        onChange={(e) => {
+                          handlePaymentLineChange(idx, 'methodId', e.target.value);
+                          if (idx === 0 && paymentLines.length === 1 && e.target.value) {
+                            autoFillFirstPaymentLine();
+                          }
+                        }}
+                        className="input-field !py-1.5 text-sm"
+                      >
+                        <option value="">Seleccionar...</option>
+                        {paymentMethods.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      {idx === 0 && (
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Monto $</label>
+                      )}
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={line.amountUsd || ''}
+                        onChange={(e) => handlePaymentLineChange(idx, 'amountUsd', Number(e.target.value))}
+                        className="input-field !py-1.5 text-sm text-right font-mono"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      {idx === 0 && (
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Monto Bs</label>
+                      )}
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={line.amountBs || ''}
+                        onChange={(e) => handlePaymentLineChange(idx, 'amountBs', Number(e.target.value))}
+                        className="input-field !py-1.5 text-sm text-right font-mono"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      {idx === 0 && (
+                        <label className="block text-[10px] text-slate-400 mb-0.5">Referencia</label>
+                      )}
+                      <input
+                        type="text"
+                        value={line.reference}
+                        onChange={(e) => handlePaymentLineChange(idx, 'reference', e.target.value)}
+                        className="input-field !py-1.5 text-sm"
+                        placeholder="Ref..."
+                      />
+                    </div>
+                    <div>
+                      {idx > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => removePaymentLine(idx)}
+                          className="p-1.5 rounded hover:bg-red-500/20 text-red-400"
+                        >
+                          <X size={14} />
+                        </button>
+                      ) : (
+                        <div className="w-8" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between mt-3">
+                <button
+                  type="button"
+                  onClick={addPaymentLine}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  + Agregar metodo
+                </button>
+                <div className="text-sm">
+                  <span className="text-slate-400">Pagado: </span>
+                  <span
+                    className={`font-mono font-bold ${
+                      paymentLines.reduce((s, l) => s + l.amountUsd, 0) >= bill.totalUsd - 0.01
+                        ? 'text-green-400'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    ${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════ */}
@@ -1366,126 +1478,6 @@ export default function PurchaseBillDetailPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
-              )}
-
-              {/* Cash payment section */}
-              {bill && !bill.isCredit && (
-                <div className="mt-6 pt-6 border-t border-slate-700/50">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
-                      Pago de Contado
-                    </h3>
-                    <div className="text-sm">
-                      <span className="text-slate-400">Total a pagar: </span>
-                      <span className="text-green-400 font-mono font-bold">
-                        ${fmt(bill.totalUsd)}
-                      </span>
-                      <span className="text-slate-500 ml-2 font-mono text-xs">
-                        Bs {fmt(bill.totalBs)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {paymentLines.map((line, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_120px_120px_140px_32px] gap-2 items-end">
-                        <div>
-                          {idx === 0 && (
-                            <label className="block text-[10px] text-slate-400 mb-0.5">Método</label>
-                          )}
-                          <select
-                            value={line.methodId}
-                            onChange={(e) => {
-                              handlePaymentLineChange(idx, 'methodId', e.target.value);
-                              if (idx === 0 && paymentLines.length === 1) {
-                                setTimeout(autoFillFirstPaymentLine, 0);
-                              }
-                            }}
-                            className="input-field !py-1.5 text-sm"
-                          >
-                            <option value="">Seleccionar...</option>
-                            {paymentMethods.map((m) => (
-                              <option key={m.id} value={m.id}>{m.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          {idx === 0 && (
-                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto $</label>
-                          )}
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={line.amountUsd || ''}
-                            onChange={(e) => handlePaymentLineChange(idx, 'amountUsd', Number(e.target.value))}
-                            className="input-field !py-1.5 text-sm text-right font-mono"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          {idx === 0 && (
-                            <label className="block text-[10px] text-slate-400 mb-0.5">Monto Bs</label>
-                          )}
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={line.amountBs || ''}
-                            onChange={(e) => handlePaymentLineChange(idx, 'amountBs', Number(e.target.value))}
-                            className="input-field !py-1.5 text-sm text-right font-mono"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          {idx === 0 && (
-                            <label className="block text-[10px] text-slate-400 mb-0.5">Referencia</label>
-                          )}
-                          <input
-                            type="text"
-                            value={line.reference}
-                            onChange={(e) => handlePaymentLineChange(idx, 'reference', e.target.value)}
-                            className="input-field !py-1.5 text-sm"
-                            placeholder="Ref..."
-                          />
-                        </div>
-                        <div>
-                          {idx > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => removePaymentLine(idx)}
-                              className="p-1.5 rounded hover:bg-red-500/20 text-red-400"
-                            >
-                              <X size={14} />
-                            </button>
-                          ) : (
-                            <div className="w-8" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between mt-3">
-                    <button
-                      type="button"
-                      onClick={addPaymentLine}
-                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                    >
-                      + Agregar método
-                    </button>
-                    <div className="text-sm">
-                      <span className="text-slate-400">Pagado: </span>
-                      <span
-                        className={`font-mono font-bold ${
-                          paymentLines.reduce((s, l) => s + l.amountUsd, 0) >= bill.totalUsd - 0.01
-                            ? 'text-green-400'
-                            : 'text-red-400'
-                        }`}
-                      >
-                        ${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               )}
 

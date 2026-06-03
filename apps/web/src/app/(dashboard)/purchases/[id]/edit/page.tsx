@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -94,6 +94,15 @@ function todayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
+function formatDateStr(iso: string | null): string {
+  if (!iso) return todayStr();
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function fmt(n: number): string {
   return n.toLocaleString('es-VE', {
     minimumFractionDigits: 2,
@@ -105,8 +114,10 @@ function fmt(n: number): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function NewPurchaseBillPage() {
+export default function EditPurchaseBillPage() {
   const router = useRouter();
+  const params = useParams();
+  const id = params.id as string;
 
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -114,6 +125,8 @@ export default function NewPurchaseBillPage() {
   const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean }[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingBill, setLoadingBill] = useState(true);
+  const [billNumber, setBillNumber] = useState('');
 
   // ---- Form header state ----
   const [supplierId, setSupplierId] = useState('');
@@ -156,8 +169,8 @@ export default function NewPurchaseBillPage() {
 
   // ---- Title ----
   useEffect(() => {
-    document.title = 'Nueva Factura de Compra | Trinity ERP';
-  }, []);
+    document.title = `Editar ${billNumber} | Trinity ERP`;
+  }, [billNumber]);
 
   // ---- Load bootstrap data ----
   const loadBootstrap = useCallback(async () => {
@@ -214,6 +227,69 @@ export default function NewPurchaseBillPage() {
   }, []);
 
   useEffect(() => { loadBootstrap(); }, [loadBootstrap]);
+
+  // ---- Load existing bill data ----
+  useEffect(() => {
+    if (loading) return;
+
+    async function loadBill() {
+      try {
+        const res = await fetch(`/api/proxy/purchases/${id}`);
+        if (!res.ok) {
+          router.push('/purchases');
+          return;
+        }
+        const bill = await res.json();
+
+        // Only allow editing PENDING bills
+        if (bill.status !== 'PENDING') {
+          router.push(`/purchases/${id}`);
+          return;
+        }
+
+        // Populate form state from loaded bill
+        setSupplierId(bill.supplierId);
+        setSupplierSerialNumber(bill.supplierSerialNumber || '');
+        setSupplierControlNumber(bill.supplierControlNumber || '');
+        setSupplierInvoiceNumber(bill.supplierInvoiceNumber || '');
+        setCurrency((bill.currency as 'USD' | 'BS') || 'USD');
+        setExchangeRate(bill.exchangeRate);
+        setWarehouseId(bill.warehouseId || '');
+        setInvoiceDate(formatDateStr(bill.invoiceDate));
+        setReceivedDate(formatDateStr(bill.receivedDate));
+        setIsFiscal(bill.isFiscal);
+        setSerieId(bill.serie?.id || '');
+        setIsCredit(bill.isCredit);
+        setCreditDays(bill.creditDays || 30);
+        setSurchargeUsd(bill.surchargeUsd || 0);
+        setSurchargeDistribution(bill.surchargeDistribution || 'PROPORTIONAL');
+        setDiscountGlobalPct(bill.discountGlobalPct || 0);
+        setRetentionVoucherNumber(bill.retentionVoucherNumber || '');
+        setNotes(bill.notes || '');
+        setBillNumber(bill.number);
+
+        // Map items
+        setItems(
+          bill.items.map((item: any) => ({
+            productId: item.productId,
+            code: item.product.code,
+            name: item.product.name,
+            quantity: item.quantity,
+            costUsd: bill.currency === 'BS' ? item.costBs : item.costUsd,
+            discountPct: item.discountPct,
+            ivaType: item.product.ivaType,
+            isService: item.product.isService,
+          }))
+        );
+      } catch {
+        router.push('/purchases');
+      } finally {
+        setLoadingBill(false);
+      }
+    }
+
+    loadBill();
+  }, [id, loading]);
 
   // ---- Close supplier dropdown on outside click ----
   useEffect(() => {
@@ -473,8 +549,8 @@ export default function NewPurchaseBillPage() {
     };
   }
 
-  // ---- Save as PENDING ----
-  async function handleSaveDraft() {
+  // ---- Save (PATCH) ----
+  async function handleSave() {
     const err = validate();
     if (err) {
       setMessage({ type: 'error', text: err });
@@ -483,8 +559,8 @@ export default function NewPurchaseBillPage() {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/proxy/purchases', {
-        method: 'POST',
+      const res = await fetch(`/api/proxy/purchases/${id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildPayload()),
       });
@@ -492,8 +568,7 @@ export default function NewPurchaseBillPage() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || 'Error al guardar');
       }
-      const created = await res.json();
-      router.push(`/purchases/${created.id}`);
+      router.push(`/purchases/${id}`);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally {
@@ -503,7 +578,7 @@ export default function NewPurchaseBillPage() {
 
   // ---- Render ----
 
-  if (loading) {
+  if (loading || loadingBill) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-green-500" size={32} />
@@ -513,10 +588,10 @@ export default function NewPurchaseBillPage() {
 
   return (
     <div className="space-y-6">
-      {/* ═══ Header ═══ */}
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push('/purchases')}
+          onClick={() => router.push(`/purchases/${id}`)}
           className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={20} />
@@ -525,12 +600,12 @@ export default function NewPurchaseBillPage() {
           <ShoppingCart className="text-green-400" size={22} />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">Nueva Factura de Compra</h1>
-          <p className="text-slate-400 text-sm">Registra una factura de compra al proveedor</p>
+          <h1 className="text-2xl font-bold text-white">Editar Factura {billNumber}</h1>
+          <p className="text-slate-400 text-sm">Modifica los datos de la factura de compra</p>
         </div>
       </div>
 
-      {/* ═══ Message ═══ */}
+      {/* Message */}
       {message && (
         <div
           className={`px-4 py-3 rounded-lg text-sm border ${
@@ -543,7 +618,7 @@ export default function NewPurchaseBillPage() {
         </div>
       )}
 
-      {/* ═══ Form Header ═══ */}
+      {/* Form Header */}
       <div className="card p-6 relative z-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:1fr_2fr_1fr_1fr] gap-4">
           {/* Col 1: Numeros del proveedor (stacked) */}
@@ -751,9 +826,9 @@ export default function NewPurchaseBillPage() {
               <select
                 value={serieId}
                 onChange={(e) => {
-                  const id = e.target.value;
-                  setSerieId(id);
-                  const s = series.find((x) => x.id === id);
+                  const sid = e.target.value;
+                  setSerieId(sid);
+                  const s = series.find((x) => x.id === sid);
                   setIsFiscal(s?.isFiscal ?? false);
                 }}
                 className="input-field !py-1 text-sm"
@@ -827,7 +902,7 @@ export default function NewPurchaseBillPage() {
         </div>
       </div>
 
-      {/* ═══ Items Table ═══ */}
+      {/* Items Table */}
       <div className="card relative z-10">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
@@ -1031,7 +1106,7 @@ export default function NewPurchaseBillPage() {
         </div>
       </div>
 
-      {/* ═══ Fiscal Totals Footer ═══ */}
+      {/* Fiscal Totals Footer */}
       {items.some((i) => i.productId) && (
         <div className="card p-6 space-y-4">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
@@ -1204,18 +1279,18 @@ export default function NewPurchaseBillPage() {
         </div>
       )}
 
-      {/* ═══ Action Buttons ═══ */}
+      {/* Action Buttons */}
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          onClick={() => router.push('/purchases')}
+          onClick={() => router.push(`/purchases/${id}`)}
           className="text-sm text-slate-400 hover:text-white transition-colors px-4 py-2.5"
         >
           Cancelar
         </button>
         <button
           type="button"
-          onClick={handleSaveDraft}
+          onClick={handleSave}
           disabled={saving}
           className="btn-primary !py-2.5 text-sm flex items-center gap-2"
         >
