@@ -34,4 +34,9 @@ export class ImportController {
   resetForProduction() {
     return this.importService.resetForProduction();
   }
+
+  @Post('sync-correlatives')
+  syncCorrelatives() {
+    return this.importService.syncCorrelatives();
+  }
 }

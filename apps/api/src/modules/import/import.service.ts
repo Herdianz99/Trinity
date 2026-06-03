@@ -578,10 +578,75 @@ export class ImportService {
           }
         }
 
+        // Sync category correlatives: set lastProductNumber to the max existing code number
+        // so new products created after import continue the sequence correctly
+        const allCategories = await tx.category.findMany({
+          where: { code: { not: null } },
+          select: { id: true, code: true },
+        });
+        for (const cat of allCategories) {
+          if (!cat.code) continue;
+          const maxResult = await tx.$queryRaw<{ max_num: number | null }[]>`
+            SELECT MAX(
+              CAST(SUBSTRING(code FROM ${cat.code.length + 1}) AS INTEGER)
+            ) as max_num
+            FROM "Product"
+            WHERE code LIKE ${cat.code + '%'}
+              AND SUBSTRING(code FROM ${cat.code.length + 1}) ~ '^[0-9]+$'
+          `;
+          const maxNum = maxResult[0]?.max_num || 0;
+          if (maxNum > 0) {
+            await tx.category.update({
+              where: { id: cat.id },
+              data: { lastProductNumber: maxNum },
+            });
+          }
+        }
+
         return report;
       },
       { timeout: 120_000 },
     );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // SYNC CORRELATIVES — update category counters to match existing codes
+  // ────────────────────────────────────────────────────────────────────
+
+  async syncCorrelatives(): Promise<{ updated: { category: string; code: string; oldValue: number; newValue: number }[] }> {
+    const categories = await this.prisma.category.findMany({
+      where: { code: { not: null } },
+      select: { id: true, code: true, name: true, lastProductNumber: true },
+    });
+
+    const updated: { category: string; code: string; oldValue: number; newValue: number }[] = [];
+
+    for (const cat of categories) {
+      if (!cat.code) continue;
+      const maxResult = await this.prisma.$queryRaw<{ max_num: number | null }[]>`
+        SELECT MAX(
+          CAST(SUBSTRING(code FROM ${cat.code.length + 1}) AS INTEGER)
+        ) as max_num
+        FROM "Product"
+        WHERE code LIKE ${cat.code + '%'}
+          AND SUBSTRING(code FROM ${cat.code.length + 1}) ~ '^[0-9]+$'
+      `;
+      const maxNum = maxResult[0]?.max_num || 0;
+      if (maxNum > cat.lastProductNumber) {
+        await this.prisma.category.update({
+          where: { id: cat.id },
+          data: { lastProductNumber: maxNum },
+        });
+        updated.push({
+          category: cat.name,
+          code: cat.code,
+          oldValue: cat.lastProductNumber,
+          newValue: maxNum,
+        });
+      }
+    }
+
+    return { updated };
   }
 
   // ────────────────────────────────────────────────────────────────────

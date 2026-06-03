@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Upload, FileJson, FileSpreadsheet, Copy, Check, AlertTriangle, Loader2,
-  ChevronDown, ChevronUp, Package, Layers, Tag, Truck, Trash2
+  ChevronDown, ChevronUp, Package, Layers, Tag, Truck, Trash2, RefreshCw
 } from 'lucide-react';
 
 type PageState = 'idle' | 'validating' | 'validated' | 'importing' | 'imported';
@@ -188,6 +188,8 @@ export default function ImportPage() {
   const [resetting, setResetting] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetResult, setResetResult] = useState<Record<string, number> | null>(null);
+  const [syncingCorrelatives, setSyncingCorrelatives] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ category: string; code: string; oldValue: number; newValue: number }[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
 
@@ -367,6 +369,28 @@ export default function ImportPage() {
     }
   }
 
+  async function handleSyncCorrelatives() {
+    setSyncingCorrelatives(true);
+    setSyncResult(null);
+    setError(null);
+    try {
+      const res = await fetch('/api/proxy/import/sync-correlatives', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult(data.updated);
+      } else {
+        setError(data.message || 'Error al sincronizar correlativos');
+      }
+    } catch {
+      setError('Error de conexion al sincronizar');
+    } finally {
+      setSyncingCorrelatives(false);
+    }
+  }
+
   function handleFormReset() {
     setState('idle');
     setJsonText('');
@@ -406,14 +430,25 @@ export default function ImportPage() {
           </div>
         </div>
 
-        {/* Reset button */}
-        <button
-          onClick={() => setResetConfirm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
-        >
-          <Trash2 size={16} />
-          Reset datos
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Sync correlatives button */}
+          <button
+            onClick={handleSyncCorrelatives}
+            disabled={syncingCorrelatives}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={syncingCorrelatives ? 'animate-spin' : ''} />
+            {syncingCorrelatives ? 'Sincronizando...' : 'Sincronizar correlativos'}
+          </button>
+          {/* Reset button */}
+          <button
+            onClick={() => setResetConfirm(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
+          >
+            <Trash2 size={16} />
+            Reset datos
+          </button>
+        </div>
       </div>
 
       {/* Reset confirmation dialog */}
@@ -460,6 +495,31 @@ export default function ImportPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Sync correlatives result */}
+      {syncResult && (
+        <div className="mb-4 p-4 rounded-lg border bg-blue-500/10 border-blue-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Check size={18} className="text-blue-400" />
+            <span className="text-blue-400 font-semibold text-sm">
+              {syncResult.length > 0 ? 'Correlativos sincronizados' : 'Todos los correlativos ya estaban al dia'}
+            </span>
+          </div>
+          {syncResult.length > 0 && (
+            <div className="space-y-1 text-sm">
+              {syncResult.map((r, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-slate-400">{r.category}</span>
+                  <span className="text-slate-600">({r.code})</span>
+                  <span className="text-slate-500">{r.oldValue}</span>
+                  <span className="text-slate-600">→</span>
+                  <span className="text-blue-300 font-mono">{r.newValue}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
