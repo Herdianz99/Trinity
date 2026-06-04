@@ -450,6 +450,7 @@ model Product {
   conversionFactor Float                    @default(1)
   costUsd          Float                    @default(0)
   bregaApplies     Boolean                  @default(true)
+  manualPrice      Boolean                  @default(false)
   gananciaPct      Float                    @default(0)
   gananciaMayorPct Float                    @default(0)
   ivaType          IvaType                  @default(GENERAL)

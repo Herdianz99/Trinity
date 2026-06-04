@@ -509,17 +509,27 @@ export class ImportService {
               const gananciaMayorPct = prodDto.gananciaMayorPct ?? 0;
               const ivaType = prodDto.ivaType ?? IvaType.GENERAL;
               const bregaApplies = prodDto.bregaApplies !== false;
-              const bregaPct = bregaApplies ? bregaGlobalPct : 0;
-              const ivaMultiplier = IVA_MULTIPLIERS[ivaType];
+              const isManualPrice = prodDto.manualPrice === true;
 
-              const priceDetal =
-                Math.round(
-                  costUsd * (1 + bregaPct / 100) * (1 + gananciaPct / 100) * ivaMultiplier * 100,
-                ) / 100;
-              const priceMayor =
-                Math.round(
-                  costUsd * (1 + bregaPct / 100) * (1 + gananciaMayorPct / 100) * ivaMultiplier * 100,
-                ) / 100;
+              let priceDetal: number;
+              let priceMayor: number;
+
+              if (isManualPrice) {
+                // Manual price: use provided prices directly (IVA included)
+                priceDetal = prodDto.priceDetal ?? 0;
+                priceMayor = prodDto.priceMayor ?? priceDetal;
+              } else {
+                const bregaPct = bregaApplies ? bregaGlobalPct : 0;
+                const ivaMultiplier = IVA_MULTIPLIERS[ivaType];
+                priceDetal =
+                  Math.round(
+                    costUsd * (1 + bregaPct / 100) * (1 + gananciaPct / 100) * ivaMultiplier * 100,
+                  ) / 100;
+                priceMayor =
+                  Math.round(
+                    costUsd * (1 + bregaPct / 100) * (1 + gananciaMayorPct / 100) * ivaMultiplier * 100,
+                  ) / 100;
+              }
 
               // Create the product
               const product = await tx.product.create({
@@ -537,6 +547,7 @@ export class ImportService {
                   conversionFactor: prodDto.conversionFactor ?? 1,
                   costUsd,
                   bregaApplies,
+                  manualPrice: isManualPrice,
                   gananciaPct,
                   gananciaMayorPct,
                   ivaType,

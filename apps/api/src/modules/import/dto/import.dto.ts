@@ -173,6 +173,23 @@ export class ImportProductDto {
   @IsBoolean()
   bregaApplies?: boolean;
 
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  manualPrice?: boolean;
+
+  @ApiProperty({ required: false, description: 'Direct sale price (used when manualPrice=true)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceDetal?: number;
+
+  @ApiProperty({ required: false, description: 'Direct wholesale price (used when manualPrice=true)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceMayor?: number;
+
   @ApiProperty({ required: false, default: 0, description: 'Initial stock quantity' })
   @IsOptional()
   @IsNumber()

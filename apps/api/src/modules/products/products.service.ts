@@ -76,13 +76,24 @@ export class ProductsService {
     const gananciaPct = dto.gananciaPct ?? config?.defaultGananciaPct ?? 0;
     const gananciaMayorPct = dto.gananciaMayorPct ?? config?.defaultGananciaMayorPct ?? 0;
 
-    const prices = await this.calculatePrices(
-      dto.costUsd || 0,
-      gananciaPct,
-      gananciaMayorPct,
-      dto.ivaType || IvaType.GENERAL,
-      dto.bregaApplies !== false,
-    );
+    let priceDetal: number;
+    let priceMayor: number;
+
+    if (dto.manualPrice) {
+      // Manual price: use the provided prices directly (IVA included)
+      priceDetal = dto.priceDetal ?? 0;
+      priceMayor = dto.priceMayor ?? priceDetal;
+    } else {
+      const prices = await this.calculatePrices(
+        dto.costUsd || 0,
+        gananciaPct,
+        gananciaMayorPct,
+        dto.ivaType || IvaType.GENERAL,
+        dto.bregaApplies !== false,
+      );
+      priceDetal = prices.priceDetal;
+      priceMayor = prices.priceMayor;
+    }
 
     return this.prisma.product.create({
       data: {
@@ -90,8 +101,8 @@ export class ProductsService {
         code,
         gananciaPct,
         gananciaMayorPct,
-        priceDetal: prices.priceDetal,
-        priceMayor: prices.priceMayor,
+        priceDetal,
+        priceMayor,
       },
       include: {
         category: true,
@@ -303,22 +314,33 @@ export class ProductsService {
     }
 
     // Recalculate prices
-    const costUsd = dto.costUsd ?? existing.costUsd;
-    const gananciaPct = dto.gananciaPct ?? existing.gananciaPct;
-    const gananciaMayorPct = dto.gananciaMayorPct ?? existing.gananciaMayorPct;
-    const ivaType = dto.ivaType ?? existing.ivaType;
-    const bregaApplies = dto.bregaApplies ?? existing.bregaApplies;
-
-    const prices = await this.calculatePrices(costUsd, gananciaPct, gananciaMayorPct, ivaType, bregaApplies);
-
+    const isManual = dto.manualPrice ?? existing.manualPrice;
     const { code, ...updateData } = dto;
+
+    let priceDetal: number;
+    let priceMayor: number;
+
+    if (isManual) {
+      // Manual price: use provided prices or keep existing
+      priceDetal = dto.priceDetal ?? existing.priceDetal;
+      priceMayor = dto.priceMayor ?? existing.priceMayor;
+    } else {
+      const costUsd = dto.costUsd ?? existing.costUsd;
+      const gananciaPct = dto.gananciaPct ?? existing.gananciaPct;
+      const gananciaMayorPct = dto.gananciaMayorPct ?? existing.gananciaMayorPct;
+      const ivaType = dto.ivaType ?? existing.ivaType;
+      const bregaApplies = dto.bregaApplies ?? existing.bregaApplies;
+      const prices = await this.calculatePrices(costUsd, gananciaPct, gananciaMayorPct, ivaType, bregaApplies);
+      priceDetal = prices.priceDetal;
+      priceMayor = prices.priceMayor;
+    }
 
     return this.prisma.product.update({
       where: { id },
       data: {
         ...updateData,
-        priceDetal: prices.priceDetal,
-        priceMayor: prices.priceMayor,
+        priceDetal,
+        priceMayor,
       },
       include: {
         category: true,

@@ -25,6 +25,7 @@ interface Product {
   conversionFactor: number;
   costUsd: number;
   bregaApplies: boolean;
+  manualPrice: boolean;
   gananciaPct: number;
   gananciaMayorPct: number;
   ivaType: string;
@@ -140,6 +141,9 @@ export default function ProductDetailPage() {
         conversionFactor: data.conversionFactor,
         costUsd: data.costUsd,
         bregaApplies: data.bregaApplies,
+        manualPrice: data.manualPrice ?? false,
+        priceDetal: data.priceDetal,
+        priceMayor: data.priceMayor,
         gananciaPct: data.gananciaPct,
         gananciaMayorPct: data.gananciaMayorPct,
         ivaType: data.ivaType,
@@ -258,12 +262,17 @@ export default function ProductDetailPage() {
         conversionFactor: Number(form.conversionFactor),
         costUsd: Number(form.costUsd),
         bregaApplies: form.bregaApplies,
+        manualPrice: form.manualPrice,
         gananciaPct: Number(form.gananciaPct),
         gananciaMayorPct: Number(form.gananciaMayorPct),
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
       };
+      if (form.manualPrice) {
+        body.priceDetal = Number(form.priceDetal);
+        body.priceMayor = Number(form.priceMayor);
+      }
       const res = await fetch(`/api/proxy/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -403,18 +412,28 @@ export default function ProductDetailPage() {
 
   const totalStock = product.stock?.reduce((s, st) => s + st.quantity, 0) || 0;
   const costUsd = Number(form.costUsd);
+
   const brecha = form.bregaApplies ? bregaGlobalPct : 0;
   const brechaAmt = costUsd * brecha / 100;
   const costConBrecha = costUsd + brechaAmt;
-  const gananciaDetal = costConBrecha * Number(form.gananciaPct) / 100;
-  const gananciaMayor = costConBrecha * Number(form.gananciaMayorPct) / 100;
   const ivaPct = IVA_PCTS[form.ivaType] ?? 16;
-  const subtotalDetal = costConBrecha + gananciaDetal;
-  const ivaDetal = subtotalDetal * ivaPct / 100;
-  const priceDetal = subtotalDetal + ivaDetal;
-  const subtotalMayor = costConBrecha + gananciaMayor;
-  const ivaMayor = subtotalMayor * ivaPct / 100;
-  const priceMayor = subtotalMayor + ivaMayor;
+
+  let priceDetal: number;
+  let priceMayor: number;
+
+  if (form.manualPrice) {
+    priceDetal = Number(form.priceDetal) || 0;
+    priceMayor = Number(form.priceMayor) || 0;
+  } else {
+    const gananciaDetal = costConBrecha * Number(form.gananciaPct) / 100;
+    const gananciaMayor = costConBrecha * Number(form.gananciaMayorPct) / 100;
+    const subtotalDetal = costConBrecha + gananciaDetal;
+    const ivaDetal = subtotalDetal * ivaPct / 100;
+    priceDetal = subtotalDetal + ivaDetal;
+    const subtotalMayor = costConBrecha + gananciaMayor;
+    const ivaMayor = subtotalMayor * ivaPct / 100;
+    priceMayor = subtotalMayor + ivaMayor;
+  }
 
   return (
     <div>
@@ -548,7 +567,7 @@ export default function ProductDetailPage() {
             {/* Pricing */}
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Precios</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">IVA</label>
                   <select value={form.ivaType || 'GENERAL'} onChange={e => setForm((f: any) => ({ ...f, ivaType: e.target.value }))} className="input-field !py-2 text-sm">
@@ -557,25 +576,49 @@ export default function ProductDetailPage() {
                 </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.bregaApplies ?? true} onChange={e => setForm((f: any) => ({ ...f, bregaApplies: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
+                    <input type="checkbox" checked={form.bregaApplies ?? true} onChange={e => setForm((f: any) => ({ ...f, bregaApplies: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" disabled={form.manualPrice} />
                     Aplica brecha ({bregaGlobalPct}%)
                   </label>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
-                  <input type="number" step="0.01" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
-                  <input type="number" step="0.01" value={form.gananciaPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
-                  <input type="number" step="0.01" value={form.gananciaMayorPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaMayorPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                    <input type="checkbox" checked={form.manualPrice ?? false} onChange={e => setForm((f: any) => ({ ...f, manualPrice: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40" />
+                    Precio manual
+                  </label>
                 </div>
               </div>
+
+              {form.manualPrice ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD <span className="text-slate-600">(opcional)</span></label>
+                    <input type="number" step="0.01" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Detal (final c/IVA)</label>
+                    <input type="number" step="0.01" value={form.priceDetal ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceDetal: Number(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Mayor (final c/IVA)</label>
+                    <input type="number" step="0.01" value={form.priceMayor ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceMayor: Number(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
+                    <input type="number" step="0.01" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
+                    <input type="number" step="0.01" value={form.gananciaPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
+                    <input type="number" step="0.01" value={form.gananciaMayorPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaMayorPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Stock minimum */}
@@ -843,100 +886,122 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {/* Base info (read-only) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
-              <div>
-                <span className="text-xs text-slate-500 uppercase">Costo USD</span>
-                <p className="font-mono text-white text-lg">${costUsd.toFixed(2)}</p>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 uppercase">Brecha</span>
-                <p className="font-mono text-white text-lg">{brecha}%{brecha > 0 ? ` (+$${brechaAmt.toFixed(2)})` : ''}</p>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 uppercase">IVA</span>
-                <p className="font-mono text-white text-lg">{ivaPct}%</p>
-              </div>
-            </div>
-
-            {/* Detal */}
-            <div>
-              <h3 className="text-sm font-semibold text-green-400 mb-3 uppercase tracking-wider">Precio Detal</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia detal (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(priceGananciaPct.toFixed(2))}
-                    onChange={e => handleDetalGananciaChange(Number(e.target.value))}
-                    className="input-field !py-2.5 text-sm font-mono"
-                  />
+            {product.manualPrice ? (
+              <>
+                <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <p className="text-sm text-amber-400">Este producto tiene precio manual. Los precios se establecen directamente desde la pestana Informacion General.</p>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(priceFinalDetal.toFixed(2))}
-                    onChange={e => handleDetalPriceChange(Number(e.target.value))}
-                    className="input-field !py-2.5 text-sm font-mono"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
+                    <span className="text-xs text-slate-500 uppercase">Precio Detal</span>
+                    <p className="font-mono text-green-400 text-2xl">${product.priceDetal.toFixed(2)}</p>
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 font-mono mt-1">= Bs {(product.priceDetal * exchangeRate).toFixed(2)}</p>}
+                  </div>
+                  <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
+                    <span className="text-xs text-slate-500 uppercase">Precio Mayor</span>
+                    <p className="font-mono text-blue-400 text-2xl">${product.priceMayor.toFixed(2)}</p>
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 font-mono mt-1">= Bs {(product.priceMayor * exchangeRate).toFixed(2)}</p>}
+                  </div>
                 </div>
-              </div>
-              {exchangeRate > 0 && (
-                <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalDetal * exchangeRate).toFixed(2)}</p>
-              )}
-            </div>
-
-            {/* Mayor */}
-            <div>
-              <h3 className="text-sm font-semibold text-blue-400 mb-3 uppercase tracking-wider">Precio Mayor</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia mayor (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(priceGananciaMayorPct.toFixed(2))}
-                    onChange={e => handleMayorGananciaChange(Number(e.target.value))}
-                    className="input-field !py-2.5 text-sm font-mono"
-                  />
+              </>
+            ) : (
+              <>
+                {/* Base info (read-only) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
+                  <div>
+                    <span className="text-xs text-slate-500 uppercase">Costo USD</span>
+                    <p className="font-mono text-white text-lg">${costUsd.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 uppercase">Brecha</span>
+                    <p className="font-mono text-white text-lg">{brecha}%{brecha > 0 ? ` (+$${brechaAmt.toFixed(2)})` : ''}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 uppercase">IVA</span>
+                    <p className="font-mono text-white text-lg">{ivaPct}%</p>
+                  </div>
                 </div>
+
+                {/* Detal */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(priceFinalMayor.toFixed(2))}
-                    onChange={e => handleMayorPriceChange(Number(e.target.value))}
-                    className="input-field !py-2.5 text-sm font-mono"
-                  />
+                  <h3 className="text-sm font-semibold text-green-400 mb-3 uppercase tracking-wider">Precio Detal</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia detal (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={Number(priceGananciaPct.toFixed(2))}
+                        onChange={e => handleDetalGananciaChange(Number(e.target.value))}
+                        className="input-field !py-2.5 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={Number(priceFinalDetal.toFixed(2))}
+                        onChange={e => handleDetalPriceChange(Number(e.target.value))}
+                        className="input-field !py-2.5 text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                  {exchangeRate > 0 && (
+                    <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalDetal * exchangeRate).toFixed(2)}</p>
+                  )}
                 </div>
-              </div>
-              {exchangeRate > 0 && (
-                <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalMayor * exchangeRate).toFixed(2)}</p>
-              )}
-            </div>
 
-            {/* Formula breakdown */}
-            <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700/30 text-xs font-mono text-slate-500 space-y-1">
-              <p>Formula: costo x (1 + brecha%) x (1 + ganancia%) x (1 + IVA%)</p>
-              <p>Detal: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalDetal.toFixed(2)}</p>
-              <p>Mayor: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaMayorPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalMayor.toFixed(2)}</p>
-            </div>
+                {/* Mayor */}
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-400 mb-3 uppercase tracking-wider">Precio Mayor</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia mayor (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={Number(priceGananciaMayorPct.toFixed(2))}
+                        onChange={e => handleMayorGananciaChange(Number(e.target.value))}
+                        className="input-field !py-2.5 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={Number(priceFinalMayor.toFixed(2))}
+                        onChange={e => handleMayorPriceChange(Number(e.target.value))}
+                        className="input-field !py-2.5 text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                  {exchangeRate > 0 && (
+                    <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalMayor * exchangeRate).toFixed(2)}</p>
+                  )}
+                </div>
 
-            {/* Save button */}
-            <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
-              <button
-                onClick={handleSavePrices}
-                disabled={savingPrices}
-                className="btn-primary !py-2.5 text-sm flex items-center gap-2"
-              >
-                {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                Guardar precios
-              </button>
-            </div>
+                {/* Formula breakdown */}
+                <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700/30 text-xs font-mono text-slate-500 space-y-1">
+                  <p>Formula: costo x (1 + brecha%) x (1 + ganancia%) x (1 + IVA%)</p>
+                  <p>Detal: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalDetal.toFixed(2)}</p>
+                  <p>Mayor: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaMayorPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalMayor.toFixed(2)}</p>
+                </div>
+
+                {/* Save button */}
+                <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
+                  <button
+                    onClick={handleSavePrices}
+                    disabled={savingPrices}
+                    className="btn-primary !py-2.5 text-sm flex items-center gap-2"
+                  >
+                    {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                    Guardar precios
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </TabsContent>
       </Tabs>

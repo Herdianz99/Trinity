@@ -70,6 +70,23 @@ export class CreateProductDto {
   @IsBoolean()
   bregaApplies?: boolean;
 
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  manualPrice?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceDetal?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priceMayor?: number;
+
   @ApiProperty({ required: false, default: 0 })
   @IsOptional()
   @IsNumber()
