@@ -444,11 +444,18 @@ export class InvoicesService {
       }
     }
 
-    // Resolve serie from cashier's current cash session (not original invoice)
-    const cashierSession = await this.prisma.cashSession.findFirst({
-      where: { openedById: user.id, status: 'OPEN' },
-    });
-    const serieCashRegisterId = cashierSession?.cashRegisterId || invoice.cashRegisterId;
+    // Resolve serie: prioritize the invoice's original cash register (set at POS creation)
+    // Only fall back to cashier's current session for pre-invoices without a register
+    let serieCashRegisterId: string = invoice.cashRegisterId;
+    if (!serieCashRegisterId) {
+      const cashierSession = await this.prisma.cashSession.findFirst({
+        where: { openedById: user.id, status: 'OPEN' },
+      });
+      if (!cashierSession) {
+        throw new BadRequestException('No hay caja asignada a esta factura ni sesión de caja abierta');
+      }
+      serieCashRegisterId = cashierSession.cashRegisterId;
+    }
     const paymentSerie = await this.prisma.serie.findUnique({
       where: { cashRegisterId: serieCashRegisterId },
     });
