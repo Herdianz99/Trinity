@@ -32,6 +32,10 @@ function fmt(n: number): string {
   return n.toFixed(2);
 }
 
+function fmtPct(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 function fmtDate(dateStr: string): string {
   const d = new Date(dateStr);
   const dd = String(d.getDate()).padStart(2, '0');
@@ -52,16 +56,18 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   const exchangeRate = invoice.exchangeRate || 0;
   const isCredit = invoice.isCredit || false;
 
-  // Calculate subtotal (sum of items without IVA)
+  // Calculate subtotal (sum of items without IVA, applying discounts)
   let subtotalUsd = 0;
   const ivaGroups: Record<string, number> = {};
 
   for (const item of items) {
     const lineTotal = item.quantity * item.unitPrice;
-    subtotalUsd += lineTotal;
+    const discountPct = item.discountPct || 0;
+    const discountedLine = lineTotal * (1 - discountPct / 100);
+    subtotalUsd += discountedLine;
     const ivaType = item.ivaType || 'GENERAL';
     const rate = IVA_RATES[ivaType] || 0;
-    const ivaAmount = lineTotal * rate;
+    const ivaAmount = discountedLine * rate;
     if (rate > 0) {
       ivaGroups[ivaType] = (ivaGroups[ivaType] || 0) + ivaAmount;
     }
@@ -144,11 +150,19 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
     const rate = IVA_RATES[ivaType] || 0;
     const unitPriceWithIva = item.unitPrice * (1 + rate);
     const lineTotal = item.quantity * unitPriceWithIva;
+    const discountPct = item.discountPct || 0;
     html += `<div class="item-name">${item.productName || item.name || 'Producto'}</div>`;
     html += `<div class="item-detail">
       <span>${item.quantity} x ${fmt(unitPriceWithIva)}</span>
       <span>${fmt(lineTotal)}</span>
     </div>`;
+    if (discountPct > 0) {
+      const discountAmount = lineTotal * discountPct / 100;
+      html += `<div class="item-detail" style="font-size:10px;">
+        <span>Desc. ${fmtPct(discountPct)}%</span>
+        <span>-${fmt(discountAmount)}</span>
+      </div>`;
+    }
   }
 
   html += `<div class="separator"></div>`;
@@ -212,14 +226,19 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   const igtfUsd = invoice.igtfUsd || 0;
 
   let subtotalUsd = 0;
+  let totalDiscountUsd = 0;
   const ivaGroups: Record<string, number> = {};
   for (const item of items) {
     const lineTotal = item.quantity * item.unitPrice;
-    subtotalUsd += lineTotal;
+    const discountPct = item.discountPct || 0;
+    const discountAmount = lineTotal * discountPct / 100;
+    totalDiscountUsd += discountAmount;
+    const discountedLine = lineTotal - discountAmount;
+    subtotalUsd += discountedLine;
     const ivaType = item.ivaType || 'GENERAL';
     const rate = IVA_RATES[ivaType] || 0;
     if (rate > 0) {
-      ivaGroups[ivaType] = (ivaGroups[ivaType] || 0) + lineTotal * rate;
+      ivaGroups[ivaType] = (ivaGroups[ivaType] || 0) + discountedLine * rate;
     }
   }
   const totalIva = Object.values(ivaGroups).reduce((s, v) => s + v, 0);
@@ -267,9 +286,14 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
     const rate = IVA_RATES[ivaType] || 0;
     const unitPriceWithIva = item.unitPrice * (1 + rate);
     const lineTotal = item.quantity * unitPriceWithIva;
+    const discountPct = item.discountPct || 0;
     const name = item.productName || item.name || 'Producto';
     lines.push(`{{BOLD}}${name}{{/BOLD}}`);
     lines.push(`  ${item.quantity} x ${fmt(unitPriceWithIva)}${' '.repeat(Math.max(1, w - 4 - String(item.quantity).length - fmt(unitPriceWithIva).length - fmt(lineTotal).length - 3))}${fmt(lineTotal)}`);
+    if (discountPct > 0) {
+      const discountAmount = lineTotal * discountPct / 100;
+      lines.push(pad(`  Desc. ${fmtPct(discountPct)}%`, `-${fmt(discountAmount)}`));
+    }
   }
   lines.push('{{LINE}}');
 

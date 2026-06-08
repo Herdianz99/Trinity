@@ -144,6 +144,13 @@ const IVA_TYPE_LABELS: Record<string, string> = {
   SPECIAL: 'Especial (31%)',
 };
 
+const IVA_RATES: Record<string, number> = {
+  EXEMPT: 0,
+  REDUCED: 0.08,
+  GENERAL: 0.16,
+  SPECIAL: 0.31,
+};
+
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -534,8 +541,8 @@ export default function InvoiceDetailPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-300">${item.unitPrice?.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">Bs {item.unitPriceBs?.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-300">${(item.unitPrice * (1 + (IVA_RATES[item.ivaType] || 0))).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">Bs {(item.unitPriceBs * (1 + (IVA_RATES[item.ivaType] || 0))).toFixed(2)}</td>
                     <td className="px-4 py-3 text-center text-slate-400 text-xs">{IVA_TYPE_LABELS[item.ivaType] || item.ivaType}</td>
                     <td className="px-4 py-3 text-right font-mono text-white">${item.totalUsd?.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono text-slate-300 hidden lg:table-cell">Bs {item.totalBs?.toFixed(2)}</td>
