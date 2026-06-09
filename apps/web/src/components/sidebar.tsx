@@ -45,6 +45,7 @@ import {
   Wallet,
   CalendarClock,
   KeyRound,
+  PackagePlus,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -97,6 +98,7 @@ const menuSections: MenuSection[] = [
       { label: 'Almacenes', href: '/inventory/warehouses', icon: <Building2 size={18} /> },
       { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={18} /> },
       { label: 'Conteo fisico', href: '/inventory/count', icon: <ClipboardCheck size={18} /> },
+      { label: 'Ajustes', href: '/inventory/adjustments', icon: <PackagePlus size={18} /> },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
     ],
   },

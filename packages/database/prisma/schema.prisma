@@ -105,6 +105,17 @@ enum SessionStatus {
   CLOSED
 }
 
+enum AdjustmentStatus {
+  DRAFT
+  PROCESSED
+  CANCELLED
+}
+
+enum AdjustmentType {
+  IN
+  OUT
+}
+
 enum InvoicePaymentType {
   CASH
   CREDIT
@@ -422,7 +433,8 @@ model Supplier {
   receipts          Receipt[]
   ivaRetentions     IvaRetention[]
   retentionVouchers RetentionVoucher[]
-  advances          SupplierAdvance[]
+  advances              SupplierAdvance[]
+  inventoryAdjustments  InventoryAdjustment[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -464,6 +476,7 @@ model Product {
   purchaseItems    PurchaseOrderItem[]
   transferItems    TransferItem[]
   countItems       InventoryCountItem[]
+  adjustmentItems  InventoryAdjustmentItem[]
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
 }
@@ -482,8 +495,9 @@ model Warehouse {
   movements       StockMovement[]
   transfersFrom   Transfer[]       @relation("TransferFrom")
   transfersTo     Transfer[]       @relation("TransferTo")
-  inventoryCounts InventoryCount[]
-  purchaseBills   PurchaseOrder[]  @relation("PurchaseBillWarehouse")
+  inventoryCounts      InventoryCount[]
+  inventoryAdjustments InventoryAdjustment[]
+  purchaseBills        PurchaseOrder[]  @relation("PurchaseBillWarehouse")
   createdAt       DateTime         @default(now())
 }
 
@@ -569,6 +583,38 @@ model InventoryCountItem {
   systemQuantity   Float
   countedQuantity  Float?
   difference       Float?
+
+  @@unique([inventoryCountId, productId])
+}
+
+model InventoryAdjustment {
+  id            String               @id @default(cuid())
+  warehouseId   String
+  warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
+  type          AdjustmentType
+  status        AdjustmentStatus     @default(DRAFT)
+  description   String?
+  customerId    String?
+  customer      Customer?            @relation(fields: [customerId], references: [id])
+  supplierId    String?
+  supplier      Supplier?            @relation(fields: [supplierId], references: [id])
+  items         InventoryAdjustmentItem[]
+  createdById   String
+  processedById String?
+  processedAt   DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model InventoryAdjustmentItem {
+  id                    String              @id @default(cuid())
+  inventoryAdjustmentId String
+  inventoryAdjustment   InventoryAdjustment @relation(fields: [inventoryAdjustmentId], references: [id])
+  productId             String
+  product               Product             @relation(fields: [productId], references: [id])
+  quantity              Float               @default(0)
+
+  @@unique([inventoryAdjustmentId, productId])
 }
 
 // ============================================
@@ -675,7 +721,8 @@ model Customer {
   quotations   Quotation[]
   receivables  Receivable[]
   receipts     Receipt[]
-  advances     CustomerAdvance[]
+  advances              CustomerAdvance[]
+  inventoryAdjustments  InventoryAdjustment[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }

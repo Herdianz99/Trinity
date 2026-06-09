@@ -1,0 +1,354 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.dto';
+import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
+import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
+import { RemoveItemsDto } from './dto/remove-items.dto';
+
+const INCLUDE_LIST = {
+  warehouse: true,
+  customer: { select: { id: true, name: true } },
+  supplier: { select: { id: true, name: true } },
+  _count: { select: { items: true } },
+} as const;
+
+const INCLUDE_DETAIL = {
+  items: {
+    include: {
+      product: {
+        include: {
+          category: true,
+          brand: true,
+        },
+      },
+    },
+    orderBy: { product: { name: 'asc' } } as const,
+  },
+  warehouse: true,
+  customer: { select: { id: true, name: true } },
+  supplier: { select: { id: true, name: true } },
+} as const;
+
+@Injectable()
+export class InventoryAdjustmentsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateInventoryAdjustmentDto, userId: string) {
+    return this.prisma.inventoryAdjustment.create({
+      data: {
+        warehouseId: dto.warehouseId,
+        type: dto.type,
+        description: dto.description,
+        customerId: dto.customerId || null,
+        supplierId: dto.supplierId || null,
+        status: 'DRAFT',
+        createdById: userId,
+      },
+      include: INCLUDE_LIST,
+    });
+  }
+
+  async findAll(filters?: {
+    status?: string;
+    warehouseId?: string;
+    type?: string;
+  }) {
+    const where: any = {};
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+    if (filters?.warehouseId) {
+      where.warehouseId = filters.warehouseId;
+    }
+    if (filters?.type) {
+      where.type = filters.type;
+    }
+
+    return this.prisma.inventoryAdjustment.findMany({
+      where,
+      include: INCLUDE_LIST,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+      include: INCLUDE_DETAIL,
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    return adjustment;
+  }
+
+  async addItemsByFilter(id: string, dto: AddItemsByFilterDto) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden agregar productos a ajustes en estado DRAFT',
+      );
+    }
+
+    const where: any = { isActive: true };
+
+    if (dto.categoryId) {
+      where.categoryId = dto.categoryId;
+    }
+    if (dto.brandId) {
+      where.brandId = dto.brandId;
+    }
+    if (dto.supplierId) {
+      where.supplierId = dto.supplierId;
+    }
+
+    if (dto.search) {
+      const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Product"
+        WHERE "isActive" = true
+        AND (
+          "searchVector" @@ plainto_tsquery('spanish', ${dto.search})
+          OR name ILIKE ${'%' + dto.search + '%'}
+          OR code ILIKE ${'%' + dto.search + '%'}
+        )
+      `;
+      const ids = searchResults.map((r) => r.id);
+      if (ids.length === 0) {
+        return { added: 0 };
+      }
+      where.id = { in: ids };
+    }
+
+    const products = await this.prisma.product.findMany({
+      where,
+      select: { id: true },
+    });
+
+    if (products.length === 0) {
+      return { added: 0 };
+    }
+
+    const result = await this.prisma.inventoryAdjustmentItem.createMany({
+      data: products.map((p) => ({
+        inventoryAdjustmentId: id,
+        productId: p.id,
+        quantity: 0,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { added: result.count };
+  }
+
+  async addItemsByIds(id: string, dto: AddItemsByIdsDto) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden agregar productos a ajustes en estado DRAFT',
+      );
+    }
+
+    const result = await this.prisma.inventoryAdjustmentItem.createMany({
+      data: dto.productIds.map((productId) => ({
+        inventoryAdjustmentId: id,
+        productId,
+        quantity: 0,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { added: result.count };
+  }
+
+  async removeItems(id: string, dto: RemoveItemsDto) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden eliminar productos de ajustes en estado DRAFT',
+      );
+    }
+
+    const result = await this.prisma.inventoryAdjustmentItem.deleteMany({
+      where: {
+        inventoryAdjustmentId: id,
+        productId: { in: dto.productIds },
+      },
+    });
+
+    return { removed: result.count };
+  }
+
+  async updateItems(id: string, dto: UpdateAdjustmentItemsDto) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden modificar items de ajustes en estado DRAFT',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      for (const item of dto.items) {
+        const existingItem = adjustment.items.find(
+          (i) => i.productId === item.productId,
+        );
+
+        if (!existingItem) {
+          throw new BadRequestException(
+            `Producto ${item.productId} no es parte de este ajuste`,
+          );
+        }
+
+        await tx.inventoryAdjustmentItem.update({
+          where: { id: existingItem.id },
+          data: { quantity: item.quantity },
+        });
+      }
+
+      return tx.inventoryAdjustment.findUnique({
+        where: { id },
+        include: INCLUDE_DETAIL,
+      });
+    });
+  }
+
+  async process(id: string, userId: string) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+      include: { items: { include: { product: true } } },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se pueden procesar ajustes en estado DRAFT');
+    }
+
+    if (adjustment.items.length === 0) {
+      throw new BadRequestException('El ajuste no tiene productos');
+    }
+
+    const itemsWithZero = adjustment.items.filter((i) => i.quantity <= 0);
+    if (itemsWithZero.length > 0) {
+      throw new BadRequestException(
+        'Todos los productos deben tener cantidad mayor a 0',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      for (const item of adjustment.items) {
+        const movementType =
+          adjustment.type === 'IN' ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT';
+        const quantityDelta =
+          adjustment.type === 'IN' ? item.quantity : -item.quantity;
+
+        await tx.stock.upsert({
+          where: {
+            productId_warehouseId: {
+              productId: item.productId,
+              warehouseId: adjustment.warehouseId,
+            },
+          },
+          update: {
+            quantity: { increment: quantityDelta },
+          },
+          create: {
+            productId: item.productId,
+            warehouseId: adjustment.warehouseId,
+            quantity: Math.max(0, quantityDelta),
+          },
+        });
+
+        const updatedStock = await tx.stock.findUnique({
+          where: {
+            productId_warehouseId: {
+              productId: item.productId,
+              warehouseId: adjustment.warehouseId,
+            },
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            productId: item.productId,
+            warehouseId: adjustment.warehouseId,
+            type: movementType,
+            quantity: quantityDelta,
+            costUsd: item.product.costUsd,
+            stockAfter: updatedStock?.quantity ?? 0,
+            reason: adjustment.description || `Ajuste de inventario #${adjustment.id.slice(0, 8)}`,
+            reference: `ADJ-${adjustment.id.slice(0, 8)}`,
+            createdById: userId,
+          },
+        });
+      }
+
+      return tx.inventoryAdjustment.update({
+        where: { id },
+        data: {
+          status: 'PROCESSED',
+          processedById: userId,
+          processedAt: new Date(),
+        },
+        include: INCLUDE_DETAIL,
+      });
+    });
+  }
+
+  async cancel(id: string) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status !== 'DRAFT') {
+      throw new BadRequestException('Solo se pueden cancelar ajustes en estado DRAFT');
+    }
+
+    return this.prisma.inventoryAdjustment.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+      include: INCLUDE_LIST,
+    });
+  }
+}

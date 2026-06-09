@@ -13,6 +13,7 @@ import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { StockModule } from './modules/stock/stock.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { InventoryCountsModule } from './modules/inventory-counts/inventory-counts.module';
+import { InventoryAdjustmentsModule } from './modules/inventory-adjustments/inventory-adjustments.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
@@ -66,6 +67,7 @@ import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-adv
     StockModule,
     TransfersModule,
     InventoryCountsModule,
+    InventoryAdjustmentsModule,
     StockMovementsModule,
     PurchaseOrdersModule,
     ExchangeRateModule,
