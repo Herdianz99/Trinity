@@ -41,6 +41,7 @@ import { InventoryAnalysisModule } from './modules/inventory-analysis/inventory-
 import { IvaRetentionModule } from './modules/iva-retention/iva-retention.module';
 import { PurchaseBookModule } from './modules/purchase-book/purchase-book.module';
 import { SalesBookModule } from './modules/sales-book/sales-book.module';
+import { ZReportsModule } from './modules/z-reports/z-reports.module';
 import { RetentionVouchersModule } from './modules/retention-vouchers/retention-vouchers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -94,6 +95,7 @@ import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-adv
     IvaRetentionModule,
     PurchaseBookModule,
     SalesBookModule,
+    ZReportsModule,
     RetentionVouchersModule,
     DashboardModule,
     ReportsModule,

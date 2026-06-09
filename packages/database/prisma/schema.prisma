@@ -301,6 +301,7 @@ model User {
   supplierAdvances    SupplierAdvance[]   @relation("SupplierAdvanceCreator")
   receivablesCreated  Receivable[]        @relation("ReceivableCreator")
   payablesCreated     Payable[]           @relation("PayableCreator")
+  zReports            ZReport[]           @relation("ZReportCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -837,6 +838,7 @@ model CashRegister {
   sessions         CashSession[]
   invoices         Invoice[]
   creditDebitNotes CreditDebitNote[]
+  zReports         ZReport[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -1559,4 +1561,79 @@ model RetentionVoucherLine {
   exchangeRate          Float            @default(0)
   isManual              Boolean          @default(false)
   createdAt             DateTime         @default(now())
+}
+
+// ============================================
+// REPORTES Z (CIERRES FISCALES)
+// ============================================
+
+model ZReport {
+  id                    String        @id @default(cuid())
+  zNumber               Int
+  reportDate            DateTime
+  machineSerial         String
+
+  cashRegisterId        String?
+  cashRegister          CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  // Ventas
+  salesExemptBs         Float         @default(0)
+  salesTaxBase1Bs       Float         @default(0)
+  salesTax1Bs           Float         @default(0)
+  salesTaxBase2Bs       Float         @default(0)
+  salesTax2Bs           Float         @default(0)
+  salesTaxBase3Bs       Float         @default(0)
+  salesTax3Bs           Float         @default(0)
+
+  // Notas de Crédito
+  ncExemptBs            Float         @default(0)
+  ncTaxBase1Bs          Float         @default(0)
+  ncTax1Bs              Float         @default(0)
+  ncTaxBase2Bs          Float         @default(0)
+  ncTax2Bs              Float         @default(0)
+  ncTaxBase3Bs          Float         @default(0)
+  ncTax3Bs              Float         @default(0)
+
+  // Notas de Débito (solo Family A)
+  ndExemptBs            Float         @default(0)
+  ndTaxBase1Bs          Float         @default(0)
+  ndTax1Bs              Float         @default(0)
+  ndTaxBase2Bs          Float         @default(0)
+  ndTax2Bs              Float         @default(0)
+  ndTaxBase3Bs          Float         @default(0)
+  ndTax3Bs              Float         @default(0)
+
+  // IGTF Ventas
+  igtfSalesBaseBs       Float         @default(0)
+  igtfSalesTaxBs        Float         @default(0)
+  // IGTF NC
+  igtfNcBaseBs          Float         @default(0)
+  igtfNcTaxBs           Float         @default(0)
+  // IGTF ND
+  igtfNdBaseBs          Float         @default(0)
+  igtfNdTaxBs           Float         @default(0)
+
+  // Rangos de documentos
+  lastInvoiceNumber     String?
+  firstInvoiceNumber    String?
+  invoiceCount          Int           @default(0)
+  lastCreditNoteNumber  String?
+  firstCreditNoteNumber String?
+  creditNoteCount       Int           @default(0)
+  lastDebitNoteNumber   String?
+  firstDebitNoteNumber  String?
+  debitNoteCount        Int           @default(0)
+
+  // Metadata
+  isManual              Boolean       @default(false)
+  printerFamily         String?
+  rawResponse           String?       @db.Text
+  notes                 String?
+
+  createdById           String
+  createdBy             User          @relation("ZReportCreator", fields: [createdById], references: [id])
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@unique([zNumber, machineSerial])
 }

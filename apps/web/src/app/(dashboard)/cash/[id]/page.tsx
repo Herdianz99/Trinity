@@ -20,7 +20,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
-import { sendToFiscalPrinter } from '@/lib/fiscal-printer';
+import { sendToFiscalPrinter, extractAndPrintZReport } from '@/lib/fiscal-printer';
 
 interface PaymentMethodOption {
   id: string;
@@ -253,9 +253,37 @@ export default function CashDetailPage() {
     setReportLoading(type);
     setMessage(null);
     try {
-      const command = type === 'X' ? 'I0X' : 'I0Z';
-      await sendToFiscalPrinter([command]);
-      setMessage({ type: 'success', text: `Reporte ${type} enviado correctamente` });
+      if (type === 'X') {
+        await sendToFiscalPrinter(['I0X']);
+        setMessage({ type: 'success', text: 'Reporte X enviado correctamente' });
+      } else {
+        // Z Report: extract data, print, and save to backend
+        const zData = await extractAndPrintZReport();
+        setMessage({ type: 'success', text: `Reporte Z #${zData.zNumber} impreso. Guardando datos...` });
+
+        try {
+          const res = await fetch('/api/proxy/z-reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...zData,
+              cashRegisterId: id,
+              isManual: false,
+            }),
+          });
+
+          if (res.status === 409) {
+            setMessage({ type: 'success', text: `Reporte Z #${zData.zNumber} impreso (ya existia en el sistema)` });
+          } else if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            setMessage({ type: 'error', text: `Z impreso pero error al guardar: ${err.message || 'Error desconocido'}` });
+          } else {
+            setMessage({ type: 'success', text: `Reporte Z #${zData.zNumber} impreso y guardado correctamente` });
+          }
+        } catch (saveErr: any) {
+          setMessage({ type: 'error', text: `Z impreso pero error al guardar: ${saveErr.message}` });
+        }
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || `Error al enviar Reporte ${type}` });
     } finally {

@@ -976,3 +976,239 @@ export async function sendMultipleFiscalCommands(
     return { success: false, sent: 0, total, error: err.message };
   }
 }
+
+// ─── Z Report Data Extraction ────────────────────────────────────
+
+export interface ZReportData {
+  zNumber: number;
+  reportDate: string;
+  machineSerial: string;
+  printerFamily: 'A' | 'B';
+
+  // Ventas
+  salesExemptBs: number;
+  salesTaxBase1Bs: number;
+  salesTax1Bs: number;
+  salesTaxBase2Bs: number;
+  salesTax2Bs: number;
+  salesTaxBase3Bs: number;
+  salesTax3Bs: number;
+
+  // NC
+  ncExemptBs: number;
+  ncTaxBase1Bs: number;
+  ncTax1Bs: number;
+  ncTaxBase2Bs: number;
+  ncTax2Bs: number;
+  ncTaxBase3Bs: number;
+  ncTax3Bs: number;
+
+  // ND (solo Family A)
+  ndExemptBs: number;
+  ndTaxBase1Bs: number;
+  ndTax1Bs: number;
+  ndTaxBase2Bs: number;
+  ndTax2Bs: number;
+  ndTaxBase3Bs: number;
+  ndTax3Bs: number;
+
+  // IGTF
+  igtfSalesBaseBs: number;
+  igtfSalesTaxBs: number;
+  igtfNcBaseBs: number;
+  igtfNcTaxBs: number;
+  igtfNdBaseBs: number;
+  igtfNdTaxBs: number;
+
+  // Rangos de documentos
+  lastInvoiceNumber: string;
+  lastCreditNoteNumber: string;
+  lastDebitNoteNumber: string;
+  invoiceCount: number;
+  creditNoteCount: number;
+  debitNoteCount: number;
+
+  rawResponse: string;
+}
+
+/**
+ * Helper: parse an integer from a field, default to 0.
+ */
+function pInt(s: string | undefined): number {
+  if (!s) return 0;
+  const n = parseInt(s.trim(), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Helper: parse a monetary value from The Factory protocol.
+ * Values come as integers representing cents (multiply by 100).
+ * E.g., "12345" = 123.45 Bs.
+ */
+function pMoney(s: string | undefined): number {
+  if (!s) return 0;
+  const n = parseInt(s.trim(), 10);
+  return isNaN(n) ? 0 : n / 100;
+}
+
+/**
+ * Extracts Z report data from the fiscal printer using U0X (read accumulators),
+ * then prints the Z report using I0Z (which also clears accumulators).
+ *
+ * Protocol flow:
+ *   1. Read S1 to get machineSerial
+ *   2. Send U0X (read command) → capture accumulated data WITHOUT clearing
+ *   3. Parse response fields based on printer family (A or B)
+ *   4. Send I0Z (simple command) → prints Z report and clears accumulators
+ *   5. Return parsed ZReportData
+ *
+ * Field layout (fields separated by \n, f[0] = command echo):
+ *
+ * Family A (~40 fields):
+ *   f[1]=nextZ, f[2]=fecha(DDMMYY), f[3]=cantFacturas, f[4]=ultFactura,
+ *   f[5]=cantND, f[6]=ultND(Family A only), f[7]=ultNC, f[8]=cantNC(Family A)
+ *   --- Nota: f[8] es cantND en Family A, f[7] es ultNC, etc.
+ *   f[10..16]=ventas(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[17..23]=ND(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[24..30]=NC(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[31..39]=IGTF(salesBase,salesTax,ncBase,ncTax,ndBase,ndTax,...)
+ *
+ * Family B (~21 fields):
+ *   f[1]=nextZ, f[2]=fecha, f[3]=ultFactura, f[4]=cantFacturas,
+ *   f[5]=cantNC, f[6..12]=ventas, f[13..19]=NC, f[20]=ultNC
+ *
+ * NOTE: Exact field indices require calibration with a real printer.
+ * rawResponse is saved for auditing and future adjustment.
+ */
+export async function extractAndPrintZReport(): Promise<ZReportData> {
+  return withFiscalPrinter(async (io, model) => {
+    // 1. Read S1 to get machine serial
+    const s1 = await readStatusS1(io, model.family);
+    const machineSerial = s1.machineSerial;
+
+    // 2. Send U0X to read Z accumulators without clearing
+    await waitForReady(io);
+    const rawResponse = await sendReadCommand(io, 'U0X');
+    const f = rawResponse.split('\n');
+
+    console.log(`[FISCAL] U0X response: ${f.length} fields, family ${model.family}`);
+    console.log('[FISCAL] Raw fields:', f.map((v, i) => `[${i}]=${v}`).join(', '));
+
+    let data: ZReportData;
+
+    if (model.family === 'A') {
+      // Family A: ~40 fields
+      data = {
+        zNumber: pInt(f[1]),
+        reportDate: new Date().toISOString(),
+        machineSerial,
+        printerFamily: 'A',
+
+        // Ventas: f[10..16]
+        salesExemptBs: pMoney(f[10]),
+        salesTaxBase1Bs: pMoney(f[11]),
+        salesTax1Bs: pMoney(f[12]),
+        salesTaxBase2Bs: pMoney(f[13]),
+        salesTax2Bs: pMoney(f[14]),
+        salesTaxBase3Bs: pMoney(f[15]),
+        salesTax3Bs: pMoney(f[16]),
+
+        // ND: f[17..23]
+        ndExemptBs: pMoney(f[17]),
+        ndTaxBase1Bs: pMoney(f[18]),
+        ndTax1Bs: pMoney(f[19]),
+        ndTaxBase2Bs: pMoney(f[20]),
+        ndTax2Bs: pMoney(f[21]),
+        ndTaxBase3Bs: pMoney(f[22]),
+        ndTax3Bs: pMoney(f[23]),
+
+        // NC: f[24..30]
+        ncExemptBs: pMoney(f[24]),
+        ncTaxBase1Bs: pMoney(f[25]),
+        ncTax1Bs: pMoney(f[26]),
+        ncTaxBase2Bs: pMoney(f[27]),
+        ncTax2Bs: pMoney(f[28]),
+        ncTaxBase3Bs: pMoney(f[29]),
+        ncTax3Bs: pMoney(f[30]),
+
+        // IGTF: f[31..36]
+        igtfSalesBaseBs: pMoney(f[31]),
+        igtfSalesTaxBs: pMoney(f[32]),
+        igtfNcBaseBs: pMoney(f[33]),
+        igtfNcTaxBs: pMoney(f[34]),
+        igtfNdBaseBs: pMoney(f[35]),
+        igtfNdTaxBs: pMoney(f[36]),
+
+        // Document ranges
+        lastInvoiceNumber: f[4]?.trim() || '',
+        lastCreditNoteNumber: f[7]?.trim() || '',
+        lastDebitNoteNumber: f[6]?.trim() || '',
+        invoiceCount: pInt(f[3]),
+        creditNoteCount: pInt(f[8]),
+        debitNoteCount: pInt(f[5]),
+
+        rawResponse,
+      };
+    } else {
+      // Family B: ~21 fields (no ND, no IGTF)
+      data = {
+        zNumber: pInt(f[1]),
+        reportDate: new Date().toISOString(),
+        machineSerial,
+        printerFamily: 'B',
+
+        // Ventas: f[6..12]
+        salesExemptBs: pMoney(f[6]),
+        salesTaxBase1Bs: pMoney(f[7]),
+        salesTax1Bs: pMoney(f[8]),
+        salesTaxBase2Bs: pMoney(f[9]),
+        salesTax2Bs: pMoney(f[10]),
+        salesTaxBase3Bs: pMoney(f[11]),
+        salesTax3Bs: pMoney(f[12]),
+
+        // NC: f[13..19]
+        ncExemptBs: pMoney(f[13]),
+        ncTaxBase1Bs: pMoney(f[14]),
+        ncTax1Bs: pMoney(f[15]),
+        ncTaxBase2Bs: pMoney(f[16]),
+        ncTax2Bs: pMoney(f[17]),
+        ncTaxBase3Bs: pMoney(f[18]),
+        ncTax3Bs: pMoney(f[19]),
+
+        // Family B: no ND
+        ndExemptBs: 0,
+        ndTaxBase1Bs: 0,
+        ndTax1Bs: 0,
+        ndTaxBase2Bs: 0,
+        ndTax2Bs: 0,
+        ndTaxBase3Bs: 0,
+        ndTax3Bs: 0,
+
+        // Family B: no IGTF
+        igtfSalesBaseBs: 0,
+        igtfSalesTaxBs: 0,
+        igtfNcBaseBs: 0,
+        igtfNcTaxBs: 0,
+        igtfNdBaseBs: 0,
+        igtfNdTaxBs: 0,
+
+        // Document ranges
+        lastInvoiceNumber: f[3]?.trim() || '',
+        lastCreditNoteNumber: f[20]?.trim() || '',
+        lastDebitNoteNumber: '',
+        invoiceCount: pInt(f[4]),
+        creditNoteCount: pInt(f[5]),
+        debitNoteCount: 0,
+
+        rawResponse,
+      };
+    }
+
+    // 3. Print Z report (clears accumulators)
+    await waitForReady(io, 10000);
+    await sendSimpleCommand(io, 'I0Z', 25000);
+
+    console.log(`[FISCAL] Z Report #${data.zNumber} extracted and printed`);
+    return data;
+  });
+}
