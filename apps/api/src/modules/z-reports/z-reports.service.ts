@@ -71,13 +71,14 @@ export class ZReportsService {
         zReportId: z.id,
       });
 
-      // Row de devoluciones (solo si hay montos NC > 0)
+      // Row de devoluciones (solo si hay montos NC != 0)
       const ncTotalBase = z.ncTaxBase1Bs + z.ncTaxBase2Bs + z.ncTaxBase3Bs;
       const ncTotalTax = z.ncTax1Bs + z.ncTax2Bs + z.ncTax3Bs;
       const ncTotalIgtf = z.igtfNcTaxBs;
       const ncTotal = z.ncExemptBs + ncTotalBase + ncTotalTax + ncTotalIgtf;
 
-      if (ncTotal > 0) {
+      if (Math.abs(ncTotal) > 0) {
+        // NC siempre se muestra negativo (resta), sin importar si el usuario guardó positivo o negativo
         displayRows.push({
           id: `${z.id}-nc`,
           type: 'devoluciones',
@@ -88,24 +89,24 @@ export class ZReportsService {
           fromDoc: z.firstCreditNoteNumber || '',
           toDoc: z.lastCreditNoteNumber || '',
           docCount: z.creditNoteCount,
-          exemptBs: round2(-z.ncExemptBs),
-          taxBaseBs: round2(-ncTotalBase),
-          taxBs: round2(-ncTotalTax),
-          igtfBs: round2(-ncTotalIgtf),
-          totalBs: round2(-ncTotal),
+          exemptBs: round2(-Math.abs(z.ncExemptBs)),
+          taxBaseBs: round2(-Math.abs(ncTotalBase)),
+          taxBs: round2(-Math.abs(ncTotalTax)),
+          igtfBs: round2(-Math.abs(ncTotalIgtf)),
+          totalBs: round2(-Math.abs(ncTotal)),
           isManual: z.isManual,
           createdBy: z.createdBy,
           zReportId: z.id,
         });
       }
 
-      // Row de ND (solo si hay montos ND > 0)
+      // Row de ND (solo si hay montos ND != 0)
       const ndTotalBase = z.ndTaxBase1Bs + z.ndTaxBase2Bs + z.ndTaxBase3Bs;
       const ndTotalTax = z.ndTax1Bs + z.ndTax2Bs + z.ndTax3Bs;
       const ndTotalIgtf = z.igtfNdTaxBs;
       const ndTotal = z.ndExemptBs + ndTotalBase + ndTotalTax + ndTotalIgtf;
 
-      if (ndTotal > 0) {
+      if (Math.abs(ndTotal) > 0) {
         displayRows.push({
           id: `${z.id}-nd`,
           type: 'debitos',
@@ -116,11 +117,11 @@ export class ZReportsService {
           fromDoc: z.firstDebitNoteNumber || '',
           toDoc: z.lastDebitNoteNumber || '',
           docCount: z.debitNoteCount,
-          exemptBs: round2(z.ndExemptBs),
-          taxBaseBs: round2(ndTotalBase),
-          taxBs: round2(ndTotalTax),
-          igtfBs: round2(ndTotalIgtf),
-          totalBs: round2(ndTotal),
+          exemptBs: round2(Math.abs(z.ndExemptBs)),
+          taxBaseBs: round2(Math.abs(ndTotalBase)),
+          taxBs: round2(Math.abs(ndTotalTax)),
+          igtfBs: round2(Math.abs(ndTotalIgtf)),
+          totalBs: round2(Math.abs(ndTotal)),
           isManual: z.isManual,
           createdBy: z.createdBy,
           zReportId: z.id,
