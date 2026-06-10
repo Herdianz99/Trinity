@@ -709,33 +709,9 @@ export default function LibroVentasPage() {
 
     const rows: UnifiedRow[] = [];
 
-    // Agregar entradas detalladas (facturas individuales, retenciones)
+    // Agregar solo retenciones de IVA (las facturas individuales ya están resumidas en los Z)
     for (const e of allEntries) {
-      // Retenciones se manejan aparte
-      if (e.isRetentionLine) {
-        rows.push({
-          date: e.entryDate,
-          rif: e.customerRif || '',
-          name: e.customerName || '',
-          machineSerial: '', zNumber: '',
-          compInicial: '', compFinal: '',
-          factura: e.invoiceNumber || '',
-          serie: '', fiscal: e.controlNumber || '',
-          numFactAfectada: '',
-          numND: '', numNC: '',
-          tipoTransac: '01 - reg',
-          totalVentas: 0,
-          ventasNoGravadas: 0,
-          baseImponible16: 0,
-          alicuota: '',
-          impuestoIva16: 0,
-          ivaRetenido: e.ivaAmountBs || 0,
-          compRetencion: e.notes || '',
-          ivaPercibido: 0,
-          cont: 'NO',
-        });
-        continue;
-      }
+      if (!e.isRetentionLine) continue;
       rows.push({
         date: e.entryDate,
         rif: e.customerRif || '',
@@ -747,13 +723,13 @@ export default function LibroVentasPage() {
         numFactAfectada: '',
         numND: '', numNC: '',
         tipoTransac: '01 - reg',
-        totalVentas: e.totalBs,
-        ventasNoGravadas: e.exemptAmountBs,
-        baseImponible16: e.taxableBaseBs,
-        alicuota: e.taxableBaseBs ? '16,00' : '',
-        impuestoIva16: e.ivaAmountBs,
-        ivaRetenido: 0,
-        compRetencion: '',
+        totalVentas: 0,
+        ventasNoGravadas: 0,
+        baseImponible16: 0,
+        alicuota: '',
+        impuestoIva16: 0,
+        ivaRetenido: e.ivaAmountBs || 0,
+        compRetencion: e.notes || '',
         ivaPercibido: 0,
         cont: 'NO',
       });
