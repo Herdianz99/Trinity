@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString, IsInt, IsBoolean } from 'class-validator';
 
 export class UpdateZReportDto {
   @IsOptional() @IsInt() zNumber?: number;
   @IsOptional() @IsDateString() reportDate?: string;
   @IsOptional() @IsString() machineSerial?: string;
+  @IsOptional() @IsString() cashRegisterId?: string;
 
   // Ventas
   @IsOptional() @IsNumber() salesExemptBs?: number;
@@ -51,5 +52,9 @@ export class UpdateZReportDto {
   @IsOptional() @IsString() firstDebitNoteNumber?: string;
   @IsOptional() @IsInt() debitNoteCount?: number;
 
+  // Metadata
+  @IsOptional() @IsBoolean() isManual?: boolean;
+  @IsOptional() @IsString() printerFamily?: string;
+  @IsOptional() @IsString() rawResponse?: string;
   @IsOptional() @IsString() notes?: string;
 }

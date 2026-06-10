@@ -352,6 +352,10 @@ export class ZReportsService {
     if (dto.firstDebitNoteNumber !== undefined) data.firstDebitNoteNumber = dto.firstDebitNoteNumber;
     if (dto.debitNoteCount !== undefined) data.debitNoteCount = dto.debitNoteCount;
 
+    if (dto.cashRegisterId !== undefined) data.cashRegisterId = dto.cashRegisterId;
+    if (dto.isManual !== undefined) data.isManual = dto.isManual;
+    if (dto.printerFamily !== undefined) data.printerFamily = dto.printerFamily;
+    if (dto.rawResponse !== undefined) data.rawResponse = dto.rawResponse;
     if (dto.notes !== undefined) data.notes = dto.notes;
 
     return this.prisma.zReport.update({
