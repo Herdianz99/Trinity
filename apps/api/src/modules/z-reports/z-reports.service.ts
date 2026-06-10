@@ -187,22 +187,6 @@ export class ZReportsService {
   }
 
   async create(dto: CreateZReportDto, userId: string) {
-    // Check unique constraint
-    const existing = await this.prisma.zReport.findUnique({
-      where: {
-        zNumber_machineSerial: {
-          zNumber: dto.zNumber,
-          machineSerial: dto.machineSerial,
-        },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException(
-        `Ya existe un Reporte Z #${dto.zNumber} para la máquina ${dto.machineSerial}`,
-      );
-    }
-
     // Auto-derive firstInvoiceNumber and firstCreditNoteNumber from previous Z
     let firstInvoiceNumber = dto.firstInvoiceNumber || null;
     let firstCreditNoteNumber = dto.firstCreditNoteNumber || null;
@@ -241,7 +225,7 @@ export class ZReportsService {
     return this.prisma.zReport.create({
       data: {
         zNumber: dto.zNumber,
-        reportDate: new Date(dto.reportDate),
+        reportDate: (() => { const d = new Date(dto.reportDate); d.setUTCHours(12, 0, 0, 0); return d; })(),
         machineSerial: dto.machineSerial,
         cashRegisterId: dto.cashRegisterId || null,
 
@@ -308,7 +292,7 @@ export class ZReportsService {
 
     const data: any = {};
     if (dto.zNumber !== undefined) data.zNumber = dto.zNumber;
-    if (dto.reportDate !== undefined) data.reportDate = new Date(dto.reportDate);
+    if (dto.reportDate !== undefined) { const d = new Date(dto.reportDate); d.setUTCHours(12, 0, 0, 0); data.reportDate = d; }
     if (dto.machineSerial !== undefined) data.machineSerial = dto.machineSerial;
 
     if (dto.salesExemptBs !== undefined) data.salesExemptBs = dto.salesExemptBs;
