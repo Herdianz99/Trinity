@@ -187,6 +187,60 @@ export class ZReportsService {
   }
 
   async create(dto: CreateZReportDto, userId: string) {
+    // Check if a Z report with same zNumber+machineSerial already exists
+    // If so, merge the new data into the existing record (e.g. adding NC data to existing sales)
+    const existing = await this.prisma.zReport.findFirst({
+      where: {
+        zNumber: dto.zNumber,
+        machineSerial: dto.machineSerial,
+      },
+    });
+
+    if (existing) {
+      const mergeData: any = {};
+      // Merge sales fields if they have values and existing ones are zero
+      if (dto.salesExemptBs && !existing.salesExemptBs) mergeData.salesExemptBs = dto.salesExemptBs;
+      if (dto.salesTaxBase1Bs && !existing.salesTaxBase1Bs) mergeData.salesTaxBase1Bs = dto.salesTaxBase1Bs;
+      if (dto.salesTax1Bs && !existing.salesTax1Bs) mergeData.salesTax1Bs = dto.salesTax1Bs;
+      if (dto.igtfSalesTaxBs && !existing.igtfSalesTaxBs) mergeData.igtfSalesTaxBs = dto.igtfSalesTaxBs;
+      if (dto.lastInvoiceNumber && !existing.lastInvoiceNumber) mergeData.lastInvoiceNumber = dto.lastInvoiceNumber;
+      if (dto.firstInvoiceNumber && !existing.firstInvoiceNumber) mergeData.firstInvoiceNumber = dto.firstInvoiceNumber;
+      if (dto.invoiceCount && !existing.invoiceCount) mergeData.invoiceCount = dto.invoiceCount;
+      // Merge NC fields
+      if (dto.ncExemptBs && !existing.ncExemptBs) mergeData.ncExemptBs = dto.ncExemptBs;
+      if (dto.ncTaxBase1Bs && !existing.ncTaxBase1Bs) mergeData.ncTaxBase1Bs = dto.ncTaxBase1Bs;
+      if (dto.ncTax1Bs && !existing.ncTax1Bs) mergeData.ncTax1Bs = dto.ncTax1Bs;
+      if (dto.igtfNcTaxBs && !existing.igtfNcTaxBs) mergeData.igtfNcTaxBs = dto.igtfNcTaxBs;
+      if (dto.lastCreditNoteNumber && !existing.lastCreditNoteNumber) mergeData.lastCreditNoteNumber = dto.lastCreditNoteNumber;
+      if (dto.firstCreditNoteNumber && !existing.firstCreditNoteNumber) mergeData.firstCreditNoteNumber = dto.firstCreditNoteNumber;
+      if (dto.creditNoteCount && !existing.creditNoteCount) mergeData.creditNoteCount = dto.creditNoteCount;
+      // Merge ND fields
+      if (dto.ndExemptBs && !existing.ndExemptBs) mergeData.ndExemptBs = dto.ndExemptBs;
+      if (dto.ndTaxBase1Bs && !existing.ndTaxBase1Bs) mergeData.ndTaxBase1Bs = dto.ndTaxBase1Bs;
+      if (dto.ndTax1Bs && !existing.ndTax1Bs) mergeData.ndTax1Bs = dto.ndTax1Bs;
+      if (dto.igtfNdTaxBs && !existing.igtfNdTaxBs) mergeData.igtfNdTaxBs = dto.igtfNdTaxBs;
+      if (dto.lastDebitNoteNumber && !existing.lastDebitNoteNumber) mergeData.lastDebitNoteNumber = dto.lastDebitNoteNumber;
+      if (dto.firstDebitNoteNumber && !existing.firstDebitNoteNumber) mergeData.firstDebitNoteNumber = dto.firstDebitNoteNumber;
+      if (dto.debitNoteCount && !existing.debitNoteCount) mergeData.debitNoteCount = dto.debitNoteCount;
+      // Notes
+      if (dto.notes && !existing.notes) mergeData.notes = dto.notes;
+
+      if (Object.keys(mergeData).length === 0) {
+        throw new ConflictException(
+          `Ya existe un Reporte Z #${dto.zNumber} para la máquina ${dto.machineSerial} y no hay datos nuevos que agregar`,
+        );
+      }
+
+      return this.prisma.zReport.update({
+        where: { id: existing.id },
+        data: mergeData,
+        include: {
+          cashRegister: { select: { id: true, name: true, code: true } },
+          createdBy: { select: { id: true, name: true } },
+        },
+      });
+    }
+
     // Auto-derive firstInvoiceNumber and firstCreditNoteNumber from previous Z
     let firstInvoiceNumber = dto.firstInvoiceNumber || null;
     let firstCreditNoteNumber = dto.firstCreditNoteNumber || null;

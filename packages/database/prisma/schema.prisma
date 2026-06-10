@@ -1655,7 +1655,7 @@ model ZReport {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  @@index([zNumber, machineSerial])
+  @@unique([zNumber, machineSerial])
 }
 
 // ============================================

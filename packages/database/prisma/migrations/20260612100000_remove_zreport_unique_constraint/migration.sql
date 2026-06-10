@@ -1,5 +1,4 @@
--- DropIndex
-DROP INDEX IF EXISTS "ZReport_zNumber_machineSerial_key";
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "ZReport_zNumber_machineSerial_idx" ON "ZReport"("zNumber", "machineSerial");
+-- This migration was originally to remove the unique constraint,
+-- but we decided to keep it. This is now a no-op.
+-- The unique constraint @@unique([zNumber, machineSerial]) remains in place.
+SELECT 1;
