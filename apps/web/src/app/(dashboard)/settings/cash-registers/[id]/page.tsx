@@ -8,6 +8,14 @@ import {
   Printer, ArrowRight,
 } from 'lucide-react';
 
+interface Serie {
+  id: string;
+  name: string;
+  prefix: string;
+  isFiscal: boolean;
+  cashRegister: { id: string } | null;
+}
+
 interface CashRegister {
   id: string;
   code: string;
@@ -23,24 +31,32 @@ export default function CashRegisterDetailPage() {
   const id = params.id as string;
 
   const [register, setRegister] = useState<CashRegister | null>(null);
+  const [allSeries, setAllSeries] = useState<Serie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', isShared: false });
+  const [form, setForm] = useState({ name: '', isShared: false, serieId: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchRegister = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/proxy/cash-registers/${id}`);
-      if (!res.ok) throw new Error('Caja no encontrada');
-      const data = await res.json();
+      const [regRes, seriesRes] = await Promise.all([
+        fetch(`/api/proxy/cash-registers/${id}`),
+        fetch('/api/proxy/series'),
+      ]);
+      if (!regRes.ok) throw new Error('Caja no encontrada');
+      const data = await regRes.json();
       setRegister(data);
       setForm({
         name: data.name,
         isShared: data.isShared || false,
+        serieId: data.serie?.id || '',
       });
+      if (seriesRes.ok) {
+        setAllSeries(await seriesRes.json());
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -55,6 +71,11 @@ export default function CashRegisterDetailPage() {
   useEffect(() => {
     if (register) document.title = `${register.name} | Trinity ERP`;
   }, [register]);
+
+  // Series available: not linked to another register, or linked to the current one
+  const availableSeries = allSeries.filter(
+    (s) => !s.cashRegister || s.cashRegister.id === id,
+  );
 
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
     if (e) e.preventDefault();
@@ -71,15 +92,40 @@ export default function CashRegisterDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setSaveMsg({ type: 'success', text: 'Caja actualizada correctamente' });
-        fetchRegister();
-        return true;
-      } else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         const msg = Array.isArray(err.message) ? err.message[0] : err.message;
         throw new Error(msg || 'Error al guardar');
       }
+
+      // Update serie linkage if changed
+      const oldSerieId = register?.serie?.id || '';
+      if (oldSerieId !== form.serieId) {
+        // Unlink old serie
+        if (oldSerieId) {
+          await fetch(`/api/proxy/series/${oldSerieId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cashRegisterId: null }),
+          });
+        }
+        // Link new serie
+        if (form.serieId) {
+          const linkRes = await fetch(`/api/proxy/series/${form.serieId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cashRegisterId: id }),
+          });
+          if (!linkRes.ok) {
+            const err = await linkRes.json().catch(() => ({}));
+            throw new Error(err.message || 'Error al vincular serie');
+          }
+        }
+      }
+
+      setSaveMsg({ type: 'success', text: 'Caja actualizada correctamente' });
+      fetchRegister();
+      return true;
     } catch (err: any) {
       setSaveMsg({ type: 'error', text: err.message });
       return false;
@@ -174,20 +220,22 @@ export default function CashRegisterDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-slate-300">Serie:</label>
-          {register.serie ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-white">{register.serie.name}</span>
-              {register.serie.isFiscal ? (
-                <span className="bg-blue-500/15 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-xs">Fiscal</span>
-              ) : (
-                <span className="bg-slate-500/15 text-slate-400 border border-slate-500/30 px-2 py-0.5 rounded-full text-xs">No Fiscal</span>
-              )}
-            </div>
-          ) : (
-            <span className="text-sm text-amber-400">Sin serie configurada</span>
-          )}
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1">
+            Serie vinculada
+          </label>
+          <select
+            value={form.serieId}
+            onChange={(e) => setForm((f) => ({ ...f, serieId: e.target.value }))}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500"
+          >
+            <option value="">Sin serie</option>
+            {availableSeries.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.prefix}) {s.isFiscal ? '— Fiscal' : ''}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex items-center gap-3">
@@ -228,8 +276,8 @@ export default function CashRegisterDetailPage() {
         </div>
       </form>
 
-      {/* Maquina Fiscal — link to serie */}
-      {register.serie?.isFiscal ? (
+      {/* Maquina Fiscal — link to serie config */}
+      {register.serie?.isFiscal && (
         <div className="mt-4 card p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -249,15 +297,6 @@ export default function CashRegisterDetailPage() {
               Configurar maquina fiscal
               <ArrowRight size={14} />
             </Link>
-          </div>
-        </div>
-      ) : register.serie ? null : (
-        <div className="mt-4 card p-4">
-          <div className="flex items-start gap-3">
-            <Info size={18} className="text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-amber-300">
-              Esta caja no tiene una serie asignada. Asigne una serie desde la lista de cajas registradoras.
-            </p>
           </div>
         </div>
       )}

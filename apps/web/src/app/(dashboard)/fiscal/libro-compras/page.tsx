@@ -21,6 +21,9 @@ interface PurchaseBookEntry {
   ivaAmountBs: number;
   retentionVoucherNumber: string | null;
   retentionAmountBs: number;
+  islrRetentionAmountBs: number;
+  islrRetentionVoucherNumber: string | null;
+  isIslrRetentionLine: boolean;
   totalBs: number;
   isManual: boolean;
   isRetentionLine: boolean;
@@ -36,6 +39,7 @@ interface Totales {
   taxableBaseBs: number;
   ivaAmountBs: number;
   retentionAmountBs: number;
+  islrRetentionAmountBs: number;
   totalBs: number;
 }
 
@@ -273,23 +277,30 @@ export default function LibroComprasPage() {
 
     let rowNum = 0;
     const tableRows = entries.map((r) => {
-      if (!r.isRetentionLine) rowNum++;
-      return r.isRetentionLine
-        ? `<tr class="retention-line">
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+      if (!r.isRetentionLine && !r.isIslrRetentionLine) rowNum++;
+      if (r.isRetentionLine) {
+        return `<tr class="retention-line">
+            <td></td><td></td><td></td><td></td>
             <td style="padding-left:16px;font-style:italic;color:#8b5cf6;font-size:7pt;">↳ Retención IVA</td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td></td><td></td><td></td><td></td>
             <td style="color:#8b5cf6;font-weight:bold;">${r.retentionVoucherNumber || ''}</td>
             <td class="num" style="color:#8b5cf6;">${formatVe(r.retentionAmountBs)}</td>
+            <td></td>
             <td class="num" style="color:#8b5cf6;">${formatVe(r.totalBs)}</td>
-          </tr>`
-        : `<tr>
+          </tr>`;
+      }
+      if (r.isIslrRetentionLine) {
+        return `<tr class="retention-line">
+            <td></td><td></td><td></td><td></td>
+            <td style="padding-left:16px;font-style:italic;color:#d97706;font-size:7pt;">↳ Retención ISLR</td>
+            <td></td><td></td><td></td><td></td>
+            <td>${r.islrRetentionVoucherNumber || ''}</td>
+            <td></td>
+            <td class="num" style="color:#d97706;">${formatVe(r.islrRetentionAmountBs)}</td>
+            <td class="num" style="color:#d97706;">${formatVe(r.totalBs)}</td>
+          </tr>`;
+      }
+      return `<tr>
             <td>${rowNum}</td>
             <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
             <td>${r.supplierControlNumber || ''}</td>
@@ -301,6 +312,7 @@ export default function LibroComprasPage() {
             <td class="num">${formatVe(r.ivaAmountBs)}</td>
             <td>${r.retentionVoucherNumber || ''}</td>
             <td class="num">${formatVe(r.retentionAmountBs)}</td>
+            <td class="num">${formatVe(r.islrRetentionAmountBs)}</td>
             <td class="num total">${formatVe(r.totalBs)}</td>
           </tr>`;
     }).join('');
@@ -313,6 +325,7 @@ export default function LibroComprasPage() {
         <td class="num"><strong>${formatVe(totales.ivaAmountBs)}</strong></td>
         <td></td>
         <td class="num"><strong>${formatVe(totales.retentionAmountBs)}</strong></td>
+        <td class="num"><strong>${totales.islrRetentionAmountBs > 0 ? formatVe(totales.islrRetentionAmountBs) : ''}</strong></td>
         <td class="num total"><strong>${formatVe(totales.totalBs)}</strong></td>
       </tr>
     ` : '';
@@ -385,7 +398,7 @@ export default function LibroComprasPage() {
             <th>N&deg;</th><th>Fecha</th><th>N&deg; Control</th><th>N&deg; Factura</th>
             <th>Proveedor</th><th>RIF</th>
             <th>Exento Bs</th><th>Base Imponible Bs</th><th>Cr&eacute;dito Fiscal Bs</th>
-            <th>N&deg; Comprobante</th><th>Ret. IVA Bs</th><th>Total Bs</th>
+            <th>N&deg; Comprobante</th><th>Ret. IVA Bs</th><th>Ret. ISLR Bs</th><th>Total Bs</th>
           </tr>
         </thead>
         <tbody>
@@ -511,6 +524,7 @@ export default function LibroComprasPage() {
                   <th className="text-right px-2 py-2.5 text-blue-400 font-medium">Cred. Fiscal Bs</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Comp.</th>
                   <th className="text-right px-2 py-2.5 text-orange-400 font-medium">Ret. IVA Bs</th>
+                  <th className="text-right px-2 py-2.5 text-amber-400 font-medium">Ret. ISLR Bs</th>
                   <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Total Bs</th>
                   <th className="text-center px-2 py-2.5 text-slate-400 font-medium w-20">Acc.</th>
                 </tr>
@@ -518,7 +532,7 @@ export default function LibroComprasPage() {
               <tbody>
                 {entries.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="text-center py-10 text-slate-500">
+                    <td colSpan={14} className="text-center py-10 text-slate-500">
                       <div className="flex flex-col items-center gap-2">
                         <BookOpen size={32} className="text-slate-600" />
                         <span>No hay entradas en este periodo</span>
@@ -533,23 +547,25 @@ export default function LibroComprasPage() {
                   <>
                     {entries.map((entry, i) => (
                       <tr key={entry.id} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group ${
-                        entry.isRetentionLine ? 'bg-purple-500/5' : ''
+                        entry.isRetentionLine ? 'bg-purple-500/5' : entry.isIslrRetentionLine ? 'bg-amber-500/5' : ''
                       }`}>
                         <td className="px-2 py-2 text-slate-400">
-                          {entry.isRetentionLine ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine).length}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine || e.isIslrRetentionLine).length}
                         </td>
-                        <td className="px-2 py-2 text-slate-300" style={entry.isRetentionLine ? { fontSize: '10px' } : {}}>
-                          {entry.isRetentionLine ? '' : entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                        <td className="px-2 py-2 text-slate-300" style={(entry.isRetentionLine || entry.isIslrRetentionLine) ? { fontSize: '10px' } : {}}>
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
                         </td>
                         <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
-                          {entry.isRetentionLine ? '' : entry.supplierControlNumber || '-'}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierControlNumber || '-'}
                         </td>
                         <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
-                          {entry.isRetentionLine ? '' : entry.supplierInvoiceNumber || '-'}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierInvoiceNumber || '-'}
                         </td>
                         <td className="px-2 py-2 text-slate-200">
                           {entry.isRetentionLine ? (
                             <span className="text-[10px] text-purple-400 italic pl-4">↳ Retención IVA</span>
+                          ) : entry.isIslrRetentionLine ? (
+                            <span className="text-[10px] text-amber-400 italic pl-4">↳ Retención ISLR</span>
                           ) : (
                             <div className="flex items-center gap-1.5">
                               <span className="truncate max-w-[160px]">{entry.supplierName}</span>
@@ -562,16 +578,16 @@ export default function LibroComprasPage() {
                           )}
                         </td>
                         <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
-                          {entry.isRetentionLine ? '' : entry.supplierRif}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierRif}
                         </td>
                         <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
-                          {entry.isRetentionLine ? '' : formatVe(entry.exemptAmountBs)}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : formatVe(entry.exemptAmountBs)}
                         </td>
                         <td className="px-2 py-2 text-right text-slate-300 tabular-nums">
-                          {entry.isRetentionLine ? '' : formatVe(entry.taxableBaseBs)}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : formatVe(entry.taxableBaseBs)}
                         </td>
                         <td className="px-2 py-2 text-right text-blue-400 tabular-nums font-medium">
-                          {entry.isRetentionLine ? '' : formatVe(entry.ivaAmountBs)}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : formatVe(entry.ivaAmountBs)}
                         </td>
                         <td className="px-2 py-2 text-purple-400 font-mono text-[11px] font-medium">
                           {entry.retentionVoucherNumber || '-'}
@@ -581,13 +597,18 @@ export default function LibroComprasPage() {
                             ? formatVe(entry.retentionAmountBs)
                             : formatVe(entry.retentionAmountBs)}
                         </td>
+                        <td className="px-2 py-2 text-right text-amber-400 tabular-nums">
+                          {entry.isIslrRetentionLine
+                            ? formatVe(entry.islrRetentionAmountBs)
+                            : (entry.islrRetentionAmountBs > 0 ? formatVe(entry.islrRetentionAmountBs) : '')}
+                        </td>
                         <td className={`px-2 py-2 text-right tabular-nums ${
-                          entry.isRetentionLine ? 'text-purple-400 font-medium' : 'text-slate-100 font-semibold'
+                          entry.isRetentionLine || entry.isIslrRetentionLine ? 'text-purple-400 font-medium' : 'text-slate-100 font-semibold'
                         }`}>
                           {formatVe(entry.totalBs)}
                         </td>
                         <td className="px-2 py-2">
-                          {!entry.isRetentionLine && (
+                          {!entry.isRetentionLine && !entry.isIslrRetentionLine && (
                             <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button onClick={() => openEditModal(entry)}
                                 className="p-1 rounded hover:bg-slate-600/60 text-slate-400 hover:text-blue-400 transition-colors"
@@ -615,6 +636,7 @@ export default function LibroComprasPage() {
                         <td className="px-2 py-2.5 text-right text-blue-400 font-bold tabular-nums">{formatVe(totales.ivaAmountBs)}</td>
                         <td className="px-2 py-2.5"></td>
                         <td className="px-2 py-2.5 text-right text-orange-400 font-bold tabular-nums">{formatVe(totales.retentionAmountBs)}</td>
+                        <td className="px-2 py-2.5 text-right text-amber-400 font-bold tabular-nums">{totales.islrRetentionAmountBs > 0 ? formatVe(totales.islrRetentionAmountBs) : ''}</td>
                         <td className="px-2 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.totalBs)}</td>
                         <td></td>
                       </tr>

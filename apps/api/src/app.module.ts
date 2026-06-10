@@ -49,6 +49,8 @@ import { HealthModule } from './modules/health/health.module';
 import { SeriesModule } from './modules/series/series.module';
 import { CustomerAdvancesModule } from './modules/customer-advances/customer-advances.module';
 import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-advances.module';
+import { IslrRetentionTypesModule } from './modules/islr-retention-types/islr-retention-types.module';
+import { IslrRetentionVouchersModule } from './modules/islr-retention-vouchers/islr-retention-vouchers.module';
 
 @Module({
   imports: [
@@ -102,6 +104,8 @@ import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-adv
     SeriesModule,
     CustomerAdvancesModule,
     SupplierAdvancesModule,
+    IslrRetentionTypesModule,
+    IslrRetentionVouchersModule,
   ],
 })
 export class AppModule {}

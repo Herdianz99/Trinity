@@ -110,6 +110,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Facturas de compra', href: '/purchases', icon: <ShoppingCart size={18} /> },
       { label: 'Retenciones IVA', href: '/purchases/retentions', icon: <Shield size={18} /> },
+      { label: 'Retenciones ISLR', href: '/purchases/islr-retentions', icon: <FileCheck size={18} /> },
       { label: 'Analisis ABC', href: '/purchases/analysis', icon: <BarChart3 size={18} /> },
       { label: 'Sugerencias reorden', href: '/purchases/reorder', icon: <AlertTriangle size={18} /> },
       { label: 'Proveedores', href: '/catalog/suppliers', icon: <Truck size={18} /> },
@@ -201,6 +202,7 @@ const menuSections: MenuSection[] = [
       { label: 'Cajas', href: '/settings/cash-registers', icon: <Monitor size={18} /> },
       { label: 'Areas de impresion', href: '/settings/print-areas', icon: <Printer size={18} /> },
       { label: 'Claves de autorizacion', href: '/settings/dynamic-keys', icon: <KeyRound size={18} /> },
+      { label: 'Tipos ret. ISLR', href: '/settings/islr-retention-types', icon: <FileText size={18} /> },
       { label: 'Importacion masiva', href: '/import', icon: <Upload size={18} /> },
     ],
   },

@@ -34,6 +34,7 @@ export class PurchaseBookService {
     let totalTaxableBase = 0;
     let totalIva = 0;
     let totalRetention = 0;
+    let totalIslrRetention = 0;
     let totalAmount = 0;
 
     for (const entry of entries) {
@@ -41,6 +42,7 @@ export class PurchaseBookService {
       totalTaxableBase += entry.taxableBaseBs;
       totalIva += entry.ivaAmountBs;
       totalRetention += entry.retentionAmountBs;
+      totalIslrRetention += entry.islrRetentionAmountBs;
       totalAmount += entry.totalBs;
     }
 
@@ -53,6 +55,7 @@ export class PurchaseBookService {
         taxableBaseBs: round2(totalTaxableBase),
         ivaAmountBs: round2(totalIva),
         retentionAmountBs: round2(totalRetention),
+        islrRetentionAmountBs: round2(totalIslrRetention),
         totalBs: round2(totalAmount),
       },
     };

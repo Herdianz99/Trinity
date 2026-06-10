@@ -143,6 +143,7 @@ export class FiscalService {
     let totalBaseImponible = 0;
     let totalCreditoFiscal = 0;
     let totalRetentionIva = 0;
+    let totalRetentionIslr = 0;
     let totalCompras = 0;
 
     const rows = entries.map((entry, index) => {
@@ -150,6 +151,7 @@ export class FiscalService {
       totalBaseImponible += entry.taxableBaseBs;
       totalCreditoFiscal += entry.ivaAmountBs;
       totalRetentionIva += entry.retentionAmountBs;
+      totalRetentionIslr += entry.islrRetentionAmountBs;
       totalCompras += entry.totalBs;
 
       return {
@@ -164,6 +166,8 @@ export class FiscalService {
         creditoFiscal: round2(entry.ivaAmountBs),
         comprobanteRetencion: entry.retentionVoucherNumber || '',
         retencionIva: round2(entry.retentionAmountBs),
+        comprobanteIslr: entry.islrRetentionVoucherNumber || '',
+        retencionIslr: round2(entry.islrRetentionAmountBs),
         total: round2(entry.totalBs),
       };
     });
@@ -177,6 +181,7 @@ export class FiscalService {
         baseImponible: round2(totalBaseImponible),
         creditoFiscal: round2(totalCreditoFiscal),
         retencionIva: round2(totalRetentionIva),
+        retencionIslr: round2(totalRetentionIslr),
         totalCompras: round2(totalCompras),
       },
     };
@@ -212,6 +217,7 @@ export class FiscalService {
         ),
         ivaTotal: round2(ivaCreditoFiscal),
         retencionesIva: comprasTotales.retencionIva,
+        retencionesIslr: comprasTotales.retencionIslr,
         totalCompras: comprasTotales.totalCompras,
       },
       balance: {

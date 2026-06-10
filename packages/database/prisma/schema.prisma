@@ -116,6 +116,12 @@ enum AdjustmentType {
   OUT
 }
 
+enum SupplierType {
+  JURIDICA
+  NATURAL_RESIDENTE
+  NATURAL_NO_RESIDENTE
+}
+
 enum InvoicePaymentType {
   CASH
   CREDIT
@@ -248,6 +254,8 @@ model CompanyConfig {
   stampImage              String?  @db.Text
   retentionProvidencia    String   @default("SNAT/2025/000054")
   retentionNextNumber     Int      @default(1)
+  islrRetentionNextNumber Int      @default(1)
+  unidadTributaria        Float    @default(43)
   receivableNextNumber    Int      @default(1)
   payableNextNumber       Int      @default(1)
   updatedAt               DateTime @updatedAt
@@ -296,7 +304,8 @@ model User {
   purchaseBills       PurchaseOrder[]     @relation("PurchaseBillResponsible")
   purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
   salesBookEntries    SalesBookEntry[]    @relation("SalesBookEntries")
-  retentionVouchers   RetentionVoucher[]  @relation("RetentionVoucherCreator")
+  retentionVouchers       RetentionVoucher[]      @relation("RetentionVoucherCreator")
+  islrRetentionVouchers   IslrRetentionVoucher[]  @relation("IslrRetentionVoucherCreator")
   customerAdvances    CustomerAdvance[]   @relation("AdvanceCreator")
   supplierAdvances    SupplierAdvance[]   @relation("SupplierAdvanceCreator")
   receivablesCreated  Receivable[]        @relation("ReceivableCreator")
@@ -427,6 +436,9 @@ model Supplier {
   address           String?
   contactName       String?
   isRetentionAgent  Boolean            @default(false)
+  supplierType      SupplierType?
+  islrConceptId     String?
+  islrConcept       IslrRetentionType? @relation("SupplierIslrConcept", fields: [islrConceptId], references: [id])
   isActive          Boolean            @default(true)
   products          Product[]
   purchaseOrders    PurchaseOrder[]
@@ -434,6 +446,7 @@ model Supplier {
   receipts          Receipt[]
   ivaRetentions     IvaRetention[]
   retentionVouchers RetentionVoucher[]
+  islrRetentionVouchers IslrRetentionVoucher[]
   advances              SupplierAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
   createdAt         DateTime           @default(now())
@@ -652,8 +665,9 @@ model PurchaseOrder {
   payables              Payable[]
   creditDebitNotes      CreditDebitNote[]
   ivaRetentions         IvaRetention[]
-  retentionVoucherLines RetentionVoucherLine[]
-  purchaseBookEntries   PurchaseBookEntry[]
+  retentionVoucherLines     RetentionVoucherLine[]
+  islrRetentionVoucherLines IslrRetentionVoucherLine[]
+  purchaseBookEntries       PurchaseBookEntry[]
   createdById           String
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
@@ -817,7 +831,8 @@ model Serie {
   invoices            Invoice[]
   purchaseOrders      PurchaseOrder[]
   creditDebitNotes    CreditDebitNote[]
-  retentionVouchers   RetentionVoucher[]
+  retentionVouchers       RetentionVoucher[]
+  islrRetentionVouchers   IslrRetentionVoucher[]
   receivables         Receivable[]       @relation("ReceivableSerie")
   payables            Payable[]          @relation("PayableSerie")
   createdAt           DateTime           @default(now())
@@ -1473,14 +1488,19 @@ model PurchaseBookEntry {
   retentionAmountBs      Float             @default(0)
   totalBs                Float             @default(0)
   isManual               Boolean           @default(false)
-  isRetentionLine        Boolean           @default(false)
-  retentionVoucherId     String?
-  retentionVoucher       RetentionVoucher? @relation(fields: [retentionVoucherId], references: [id])
-  notes                  String?
-  createdById            String
-  createdBy              User              @relation("PurchaseBookEntries", fields: [createdById], references: [id])
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  isRetentionLine            Boolean                @default(false)
+  retentionVoucherId         String?
+  retentionVoucher           RetentionVoucher?      @relation(fields: [retentionVoucherId], references: [id])
+  isIslrRetentionLine        Boolean                @default(false)
+  islrRetentionAmountBs      Float                  @default(0)
+  islrRetentionVoucherId     String?
+  islrRetentionVoucher       IslrRetentionVoucher?  @relation(fields: [islrRetentionVoucherId], references: [id])
+  islrRetentionVoucherNumber String?
+  notes                      String?
+  createdById                String
+  createdBy                  User              @relation("PurchaseBookEntries", fields: [createdById], references: [id])
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
 }
 
 // ============================================
@@ -1636,4 +1656,76 @@ model ZReport {
   updatedAt             DateTime      @updatedAt
 
   @@unique([zNumber, machineSerial])
+}
+
+// ============================================
+// TIPOS DE RETENCION ISLR (Decreto 1808)
+// ============================================
+
+model IslrRetentionType {
+  id                  String                    @id @default(cuid())
+  codigo              Int                       @unique
+  descripcion         String
+  baseImponiblePct    Float                     @default(100)
+  retentionPct        Float
+  sustraendoUt        Float                     @default(0)
+  forPersonaJuridica  Boolean                   @default(false)
+  forPersonaResidente Boolean                   @default(false)
+  isActive            Boolean                   @default(true)
+  voucherLines        IslrRetentionVoucherLine[]
+  suppliers           Supplier[]                @relation("SupplierIslrConcept")
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}
+
+// ============================================
+// COMPROBANTES DE RETENCION ISLR
+// ============================================
+
+model IslrRetentionVoucher {
+  id                 String                       @id @default(cuid())
+  number             String                       @unique
+  supplierId         String
+  supplier           Supplier                     @relation(fields: [supplierId], references: [id])
+  serieId            String?
+  serie              Serie?                       @relation(fields: [serieId], references: [id])
+  status             RetentionStatus              @default(PENDING)
+  issueDate          DateTime?
+  retentionAmountUsd Float                        @default(0)
+  retentionAmountBs  Float                        @default(0)
+  exchangeRate       Float                        @default(0)
+  unidadTributaria   Float                        @default(43)
+  notes              String?
+  lines              IslrRetentionVoucherLine[]
+  bookEntries        PurchaseBookEntry[]
+  createdById        String
+  createdBy          User                         @relation("IslrRetentionVoucherCreator", fields: [createdById], references: [id])
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+}
+
+model IslrRetentionVoucherLine {
+  id                       String               @id @default(cuid())
+  islrRetentionVoucherId   String
+  islrRetentionVoucher     IslrRetentionVoucher  @relation(fields: [islrRetentionVoucherId], references: [id], onDelete: Cascade)
+  purchaseOrderId          String?
+  purchaseOrder            PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  islrRetentionTypeId      String
+  islrRetentionType        IslrRetentionType     @relation(fields: [islrRetentionTypeId], references: [id])
+  supplierInvoiceNumber    String?
+  supplierControlNumber    String?
+  invoiceDate              DateTime?
+  invoiceTotalUsd          Float                 @default(0)
+  invoiceTotalBs           Float                 @default(0)
+  taxableBaseUsd           Float                 @default(0)
+  taxableBaseBs            Float                 @default(0)
+  baseImponiblePct         Float                 @default(100)
+  retentionPct             Float                 @default(0)
+  sustraendoUt             Float                 @default(0)
+  sustraendoBs             Float                 @default(0)
+  retentionAmountUsd       Float                 @default(0)
+  retentionAmountBs        Float                 @default(0)
+  exchangeRate             Float                 @default(0)
+  isManual                 Boolean               @default(false)
+  createdAt                DateTime              @default(now())
 }

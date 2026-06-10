@@ -10,7 +10,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 interface Supplier {
   id: string; name: string; rif: string | null; phone: string | null;
   email: string | null; address: string | null; contactName: string | null;
-  isRetentionAgent: boolean; isActive: boolean;
+  isRetentionAgent: boolean; isActive: boolean; supplierType: string | null;
+  islrConceptId: string | null;
+  islrConcept: { id: string; codigo: number; descripcion: string } | null;
+}
+interface IslrType {
+  id: string; codigo: number; descripcion: string;
 }
 interface PO {
   id: string; number: string; totalUsd: number; status: string; createdAt: string;
@@ -48,6 +53,9 @@ export default function SupplierDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // ISLR types for concept dropdown
+  const [islrTypes, setIslrTypes] = useState<IslrType[]>([]);
+
   // Active tab + lazy loading
   const [activeTab, setActiveTab] = useState('info');
 
@@ -78,6 +86,8 @@ export default function SupplierDetailPage() {
         email: data.email || '', address: data.address || '',
         contactName: data.contactName || '',
         isRetentionAgent: data.isRetentionAgent, isActive: data.isActive,
+        supplierType: data.supplierType || '',
+        islrConceptId: data.islrConceptId || '',
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -106,6 +116,14 @@ export default function SupplierDetailPage() {
 
   useEffect(() => { fetchSupplier(); }, [fetchSupplier]);
 
+  // Load ISLR types for concept dropdown
+  useEffect(() => {
+    fetch('/api/proxy/islr-retention-types?active=true')
+      .then(r => r.json())
+      .then(data => setIslrTypes(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
   // Lazy load: purchases when compras tab is active
   useEffect(() => {
     if (activeTab === 'compras') fetchPurchases();
@@ -125,6 +143,8 @@ export default function SupplierDetailPage() {
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
+        supplierType: form.supplierType || null,
+        islrConceptId: form.islrConceptId || null,
       };
       const res = await fetch(`/api/proxy/suppliers/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -218,6 +238,24 @@ export default function SupplierDetailPage() {
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-slate-400 mb-1">Direccion</label>
                 <input type="text" value={form.address || ''} onChange={e => setForm((f: any) => ({ ...f, address: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de proveedor (ISLR)</label>
+                <select value={form.supplierType || ''} onChange={e => setForm((f: any) => ({ ...f, supplierType: e.target.value }))} className="input-field !py-2 text-sm">
+                  <option value="">Sin clasificar</option>
+                  <option value="JURIDICA">Persona Jurídica</option>
+                  <option value="NATURAL_RESIDENTE">P.N. Residente</option>
+                  <option value="NATURAL_NO_RESIDENTE">P.N. No Residente</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Concepto ISLR por defecto</label>
+                <select value={form.islrConceptId || ''} onChange={e => setForm((f: any) => ({ ...f, islrConceptId: e.target.value }))} className="input-field !py-2 text-sm">
+                  <option value="">Sin concepto</option>
+                  {islrTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.codigo} - {t.descripcion}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex items-center gap-6">

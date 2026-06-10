@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsBoolean, IsEmail, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsEmail, MinLength, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { SupplierType } from '@prisma/client';
 
 export class CreateSupplierDto {
   @ApiProperty()
@@ -36,6 +37,16 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsBoolean()
   isRetentionAgent?: boolean;
+
+  @ApiProperty({ required: false, enum: SupplierType })
+  @IsOptional()
+  @IsEnum(SupplierType)
+  supplierType?: SupplierType;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  islrConceptId?: string;
 
   @ApiProperty({ required: false, default: true })
   @IsOptional()

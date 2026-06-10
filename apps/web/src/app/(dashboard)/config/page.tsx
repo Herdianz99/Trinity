@@ -18,6 +18,7 @@ interface CompanyConfig {
   overdueWarningDays: number;
   ivaRetentionPct: number;
   islrRetentionPct: number;
+  unidadTributaria: number;
   isIGTFContributor: boolean;
   igtfPct: number;
   allowNegativeStock: boolean;
@@ -48,6 +49,7 @@ export default function ConfigPage() {
     overdueWarningDays: 3,
     ivaRetentionPct: 75,
     islrRetentionPct: 0,
+    unidadTributaria: 43,
     isIGTFContributor: false,
     igtfPct: 3,
     allowNegativeStock: true,
@@ -728,6 +730,20 @@ export default function ConfigPage() {
                   className="input-field"
                 />
                 <p className="text-xs text-slate-500 mt-1">Porcentaje de retencion ISLR por defecto en facturas de compra</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Unidad Tributaria (Bs)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={config.unidadTributaria}
+                  onChange={(e) => handleChange('unidadTributaria', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">Valor actual de la Unidad Tributaria en Bs (para cálculo de sustraendo ISLR)</p>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">

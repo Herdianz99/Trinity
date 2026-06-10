@@ -6,35 +6,24 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { UpdateCountItemsDto } from './dto/update-count-items.dto';
+import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
+import { RemoveItemsDto } from './dto/remove-items.dto';
 
 @Injectable()
 export class InventoryCountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateInventoryCountDto, userId: string) {
-    const stocks = await this.prisma.stock.findMany({
-      where: { warehouseId: dto.warehouseId },
-      include: { product: true },
-    });
-
     return this.prisma.inventoryCount.create({
       data: {
         warehouseId: dto.warehouseId,
         notes: dto.notes,
         status: 'DRAFT',
         createdById: userId,
-        items: {
-          create: stocks.map((stock) => ({
-            productId: stock.productId,
-            systemQuantity: stock.quantity,
-            countedQuantity: null,
-            difference: null,
-          })),
-        },
       },
       include: {
-        items: { include: { product: true } },
         warehouse: true,
+        _count: { select: { items: true } },
       },
     });
   }
@@ -64,7 +53,15 @@ export class InventoryCountsService {
       where: { id },
       include: {
         items: {
-          include: { product: true },
+          include: {
+            product: {
+              include: {
+                category: true,
+                brand: true,
+              },
+            },
+          },
+          orderBy: { product: { name: 'asc' } },
         },
         warehouse: true,
       },
@@ -86,6 +83,147 @@ export class InventoryCountsService {
       ...count,
       items: itemsWithDifference,
     };
+  }
+
+  async addItemsByFilter(id: string, dto: AddItemsByFilterDto) {
+    const count = await this.prisma.inventoryCount.findUnique({
+      where: { id },
+    });
+
+    if (!count) {
+      throw new NotFoundException(`Conteo con id ${id} no encontrado`);
+    }
+
+    if (count.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden agregar productos a conteos en estado DRAFT',
+      );
+    }
+
+    // Build product filter
+    const where: any = { isActive: true };
+
+    if (dto.categoryId) {
+      where.categoryId = dto.categoryId;
+    }
+    if (dto.brandId) {
+      where.brandId = dto.brandId;
+    }
+    if (dto.supplierId) {
+      where.supplierId = dto.supplierId;
+    }
+
+    // Full-text search + ILIKE fallback
+    if (dto.search) {
+      const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Product"
+        WHERE "isActive" = true
+        AND (
+          "searchVector" @@ plainto_tsquery('spanish', ${dto.search})
+          OR name ILIKE ${'%' + dto.search + '%'}
+          OR code ILIKE ${'%' + dto.search + '%'}
+        )
+      `;
+      const ids = searchResults.map((r) => r.id);
+      if (ids.length === 0) {
+        return { added: 0 };
+      }
+      where.id = { in: ids };
+    }
+
+    const products = await this.prisma.product.findMany({
+      where,
+      select: { id: true },
+    });
+
+    if (products.length === 0) {
+      return { added: 0 };
+    }
+
+    // Get current stock for these products in this warehouse
+    const stocks = await this.prisma.stock.findMany({
+      where: {
+        warehouseId: count.warehouseId,
+        productId: { in: products.map((p) => p.id) },
+      },
+    });
+    const stockMap = new Map(stocks.map((s) => [s.productId, s.quantity]));
+
+    const result = await this.prisma.inventoryCountItem.createMany({
+      data: products.map((p) => ({
+        inventoryCountId: id,
+        productId: p.id,
+        systemQuantity: stockMap.get(p.id) ?? 0,
+        countedQuantity: null,
+        difference: null,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { added: result.count };
+  }
+
+  async addItemsByIds(id: string, dto: AddItemsByIdsDto) {
+    const count = await this.prisma.inventoryCount.findUnique({
+      where: { id },
+    });
+
+    if (!count) {
+      throw new NotFoundException(`Conteo con id ${id} no encontrado`);
+    }
+
+    if (count.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden agregar productos a conteos en estado DRAFT',
+      );
+    }
+
+    // Get current stock for these products
+    const stocks = await this.prisma.stock.findMany({
+      where: {
+        warehouseId: count.warehouseId,
+        productId: { in: dto.productIds },
+      },
+    });
+    const stockMap = new Map(stocks.map((s) => [s.productId, s.quantity]));
+
+    const result = await this.prisma.inventoryCountItem.createMany({
+      data: dto.productIds.map((productId) => ({
+        inventoryCountId: id,
+        productId,
+        systemQuantity: stockMap.get(productId) ?? 0,
+        countedQuantity: null,
+        difference: null,
+      })),
+      skipDuplicates: true,
+    });
+
+    return { added: result.count };
+  }
+
+  async removeItems(id: string, dto: RemoveItemsDto) {
+    const count = await this.prisma.inventoryCount.findUnique({
+      where: { id },
+    });
+
+    if (!count) {
+      throw new NotFoundException(`Conteo con id ${id} no encontrado`);
+    }
+
+    if (count.status !== 'DRAFT') {
+      throw new BadRequestException(
+        'Solo se pueden eliminar productos de conteos en estado DRAFT',
+      );
+    }
+
+    const result = await this.prisma.inventoryCountItem.deleteMany({
+      where: {
+        inventoryCountId: id,
+        productId: { in: dto.productIds },
+      },
+    });
+
+    return { removed: result.count };
   }
 
   async updateItems(id: string, dto: UpdateCountItemsDto) {
@@ -129,7 +267,17 @@ export class InventoryCountsService {
         where: { id },
         data: { status: 'IN_PROGRESS' },
         include: {
-          items: { include: { product: true } },
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: true,
+                  brand: true,
+                },
+              },
+            },
+            orderBy: { product: { name: 'asc' } },
+          },
           warehouse: true,
         },
       });
@@ -164,14 +312,19 @@ export class InventoryCountsService {
             },
           });
 
-          await tx.stock.update({
+          await tx.stock.upsert({
             where: {
               productId_warehouseId: {
                 productId: item.productId,
                 warehouseId: count.warehouseId,
               },
             },
-            data: {
+            update: {
+              quantity: item.countedQuantity!,
+            },
+            create: {
+              productId: item.productId,
+              warehouseId: count.warehouseId,
               quantity: item.countedQuantity!,
             },
           });
@@ -185,7 +338,17 @@ export class InventoryCountsService {
           approvedById: userId,
         },
         include: {
-          items: { include: { product: true } },
+          items: {
+            include: {
+              product: {
+                include: {
+                  category: true,
+                  brand: true,
+                },
+              },
+            },
+            orderBy: { product: { name: 'asc' } },
+          },
           warehouse: true,
         },
       });

@@ -28,16 +28,21 @@ export class InventoryAnalysisService {
         productName: true,
         quantity: true,
         totalUsd: true,
+        ivaAmount: true,
         returnedQty: true,
+        invoice: { select: { serie: { select: { isFiscal: true } } } },
       },
     });
 
     // Aggregate by product (using effective quantity = quantity - returnedQty)
+    // Rule: if serie is fiscal, IVA goes to SENIAT (subtract from revenue). If non-fiscal, IVA is profit.
     const productMap = new Map<string, { productId: string; productName: string; totalSalesUsd: number; totalUnitsSold: number }>();
     for (const item of items) {
       const effectiveQty = item.quantity - (item.returnedQty || 0);
       if (effectiveQty <= 0) continue;
-      const effectiveRevenue = item.totalUsd * (effectiveQty / item.quantity);
+      const isFiscal = item.invoice?.serie?.isFiscal ?? false;
+      const baseAmount = isFiscal ? item.totalUsd - (item.ivaAmount || 0) : item.totalUsd;
+      const effectiveRevenue = baseAmount * (effectiveQty / item.quantity);
       const existing = productMap.get(item.productId);
       if (existing) {
         existing.totalSalesUsd += effectiveRevenue;
@@ -201,17 +206,22 @@ export class InventoryAnalysisService {
         productName: true,
         quantity: true,
         totalUsd: true,
+        ivaAmount: true,
         costUsd: true,
         returnedQty: true,
+        invoice: { select: { serie: { select: { isFiscal: true } } } },
       },
     });
 
     // Aggregate by product (using effective quantity = quantity - returnedQty)
+    // Rule: if serie is fiscal, IVA goes to SENIAT (subtract from revenue). If non-fiscal, IVA is profit.
     const productMap = new Map<string, { productId: string; productName: string; revenue: number; cost: number; unitsSold: number }>();
     for (const item of items) {
       const effectiveQty = item.quantity - (item.returnedQty || 0);
       if (effectiveQty <= 0) continue;
-      const effectiveRevenue = item.totalUsd * (effectiveQty / item.quantity);
+      const isFiscal = item.invoice?.serie?.isFiscal ?? false;
+      const baseAmount = isFiscal ? item.totalUsd - (item.ivaAmount || 0) : item.totalUsd;
+      const effectiveRevenue = baseAmount * (effectiveQty / item.quantity);
       const effectiveCost = item.costUsd * effectiveQty;
       const existing = productMap.get(item.productId);
       if (existing) {

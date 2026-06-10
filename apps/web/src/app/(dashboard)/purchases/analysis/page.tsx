@@ -333,7 +333,7 @@ export default function InventoryAnalysisPage() {
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">% total</th>
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">% acum.</th>
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">Stock</th>
-                        <th className="text-right px-3 py-3 text-slate-400 font-medium">Margen%</th>
+                        <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Basado en precio y costo actual del producto">Margen teórico</th>
                       </tr>
                     </thead>
                     <tbody>

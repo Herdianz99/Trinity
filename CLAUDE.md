@@ -49,6 +49,14 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - PM2 procesos: `trinity-api` (puerto 4000), `trinity-web` (puerto 3000)
 - Prisma en servidor usa v5: `npx prisma@5.22.0`
 
+### Pre-deploy checklist — CRITICO
+ANTES de hacer deploy o decirle al usuario que haga deploy, ejecutar SIEMPRE:
+1. `git status` — verificar que NO haya archivos modificados (`M`) o sin trackear (`??`) que sean necesarios para el código desplegado
+2. Si el frontend usa endpoints nuevos del API, verificar que los archivos del backend (controller, service, DTO, module) estén **commiteados y pusheados**, no solo escritos localmente
+3. Si hay cambios de schema Prisma, verificar que la migración correspondiente esté commiteada
+4. Si `app.module.ts` importa módulos nuevos, verificar que esos módulos estén commiteados
+5. NUNCA asumir que "funciona en local" = "funcionará en producción". El servidor solo tiene lo que está en git
+
 ## Base de datos
 - Siempre usar transacciones Prisma para operaciones que afecten múltiples tablas
 - Usar SELECT FOR UPDATE para correlativos (facturas, códigos de productos)
@@ -74,6 +82,11 @@ Cuando el usuario pida analizar/importar un Excel de inventario de una nueva emp
 6. **Re-exportar Excel corregido**: Una vez el cliente corrija los duplicados en Wensoft, pedir nuevo Excel y volver a importar
 
 Este flujo evita importar datos incorrectos y asegura que stocks, costos y precios sean los reales.
+
+## Cálculo de ganancias y márgenes — REGLAS DE NEGOCIO
+- Si la serie de factura **NO es fiscal**, el IVA se cuenta como parte de la ganancia (no descontar IVA del precio para calcular margen). Si la serie **es fiscal**, el IVA NO es ganancia (se debe al SENIAT)
+- Si el producto lleva **brecha**, la brecha se suma al costo (reduce el margen real). Ejemplo: si costo es $0.50 y brecha es 10%, costo efectivo = $0.50 + brecha
+- Estas reglas aplican en cualquier pantalla donde se calculen márgenes o rentabilidad (análisis de inventario, reportes, etc.)
 
 ## Migraciones Prisma — CRITICO
 - NUNCA usar `prisma migrate resolve --applied` sin verificar que las columnas existen en la BD

@@ -114,4 +114,9 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsString()
   retentionProvidencia?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  unidadTributaria?: number;
 }

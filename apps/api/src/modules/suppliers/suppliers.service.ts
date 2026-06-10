@@ -66,7 +66,10 @@ export class SuppliersService {
   async findOne(id: string) {
     const supplier = await this.prisma.supplier.findUnique({
       where: { id },
-      include: { _count: { select: { products: true, purchaseOrders: true } } },
+      include: {
+        islrConcept: { select: { id: true, codigo: true, descripcion: true } },
+        _count: { select: { products: true, purchaseOrders: true } },
+      },
     });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
     return supplier;

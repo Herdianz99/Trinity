@@ -6,17 +6,22 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import { Response } from 'express';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { InventoryCountsService } from './inventory-counts.service';
+import { InventoryCountsPdfService } from './inventory-counts-pdf.service';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { UpdateCountItemsDto } from './dto/update-count-items.dto';
+import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
+import { RemoveItemsDto } from './dto/remove-items.dto';
 
 @ApiTags('Inventory Counts')
 @ApiBearerAuth()
@@ -25,6 +30,7 @@ import { UpdateCountItemsDto } from './dto/update-count-items.dto';
 export class InventoryCountsController {
   constructor(
     private readonly inventoryCountsService: InventoryCountsService,
+    private readonly pdfService: InventoryCountsPdfService,
   ) {}
 
   @Post()
@@ -45,9 +51,49 @@ export class InventoryCountsController {
     return this.inventoryCountsService.findAll({ status, warehouseId });
   }
 
+  @Get(':id/pdf-count-sheet')
+  async getPdfCountSheet(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateCountSheet(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="conteo-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get(':id/pdf-differences')
+  async getPdfDifferences(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateDifferencesReport(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="diferencias-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryCountsService.findOne(id);
+  }
+
+  @Post(':id/items/by-filter')
+  addItemsByFilter(
+    @Param('id') id: string,
+    @Body() dto: AddItemsByFilterDto,
+  ) {
+    return this.inventoryCountsService.addItemsByFilter(id, dto);
+  }
+
+  @Post(':id/items/by-ids')
+  addItemsByIds(@Param('id') id: string, @Body() dto: AddItemsByIdsDto) {
+    return this.inventoryCountsService.addItemsByIds(id, dto);
+  }
+
+  @Post(':id/items/remove')
+  removeItems(@Param('id') id: string, @Body() dto: RemoveItemsDto) {
+    return this.inventoryCountsService.removeItems(id, dto);
   }
 
   @Patch(':id/items')
