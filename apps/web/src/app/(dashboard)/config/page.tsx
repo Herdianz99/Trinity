@@ -177,6 +177,7 @@ export default function ConfigPage() {
           overdueWarningDays: data.overdueWarningDays || 3,
           ivaRetentionPct: data.ivaRetentionPct ?? 75,
           islrRetentionPct: data.islrRetentionPct ?? 0,
+          unidadTributaria: data.unidadTributaria ?? 43,
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
