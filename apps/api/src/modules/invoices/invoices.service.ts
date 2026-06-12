@@ -775,6 +775,55 @@ export class InvoicesService {
             dueDate,
           },
         });
+
+        // Auto-crear retención de IVA si el cliente es contribuyente especial
+        // (solo serie fiscal, no exenta, con IVA > 0)
+        if (
+          invoice.customer?.isSpecialTaxpayer &&
+          paymentSerie.isFiscal &&
+          !paymentSerie.isVatExempt &&
+          (invoice.ivaBs || 0) > 0
+        ) {
+          const retPct = config?.ivaRetentionPct || 75;
+          const retBs = Math.round(invoice.ivaBs * (retPct / 100) * 100) / 100;
+          const retUsd = invoice.exchangeRate > 0
+            ? Math.round((retBs / invoice.exchangeRate) * 100) / 100
+            : 0;
+          let retBaseUsd = 0;
+          for (const item of invoice.items) {
+            if (item.ivaType !== 'EXEMPT') retBaseUsd += item.unitPrice * item.quantity;
+          }
+          retBaseUsd = Math.round(retBaseUsd * 100) / 100;
+
+          const lastRet = await tx.customerIvaRetention.findFirst({
+            where: { number: { startsWith: 'RVC-' } },
+            orderBy: { createdAt: 'desc' },
+            select: { number: true },
+          });
+          let nextRetNum = 1;
+          if (lastRet) {
+            const n = parseInt(lastRet.number.split('-')[1], 10);
+            if (!isNaN(n)) nextRetNum = n + 1;
+          }
+
+          await tx.customerIvaRetention.create({
+            data: {
+              number: `RVC-${String(nextRetNum).padStart(4, '0')}`,
+              invoiceId: id,
+              customerId: invoice.customerId,
+              taxableBaseUsd: retBaseUsd,
+              taxableBaseBs: Math.round(retBaseUsd * invoice.exchangeRate * 100) / 100,
+              ivaAmountUsd: invoice.ivaUsd || 0,
+              ivaAmountBs: invoice.ivaBs || 0,
+              retentionPct: retPct,
+              retentionUsd: retUsd,
+              retentionBs: retBs,
+              exchangeRate: invoice.exchangeRate,
+              notes: 'Generada automáticamente (cliente contribuyente especial)',
+              createdById: user.id,
+            },
+          });
+        }
       }
 
       // Deduct stock and create movements
