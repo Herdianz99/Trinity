@@ -34,3 +34,15 @@ yarn-error.log*
 
 # Coverage
 coverage/
+
+# Datos sensibles / locales — NO subir a repo publico (contienen PII / datos de clientes)
+nueva_fac.txt
+comandas facturas.txt
+docs/ferre.xlsx
+docs/screenshots/
+
+# Artefactos de prueba / basura
+apps/agent/Microsoft Print to PDF
+
+# Binario grande de referencia (manual oficial, re-descargable) — descomenta para versionarlo
+\[VE\]Manual_de_Protocolos_y_Comandos_Venezuela_V0805R00_1.pdf
