@@ -1971,3 +1971,14 @@ DO $$ BEGIN ALTER TABLE "CustomerIvaRetention" ADD CONSTRAINT "CustomerIvaRetent
 DO $$ BEGIN ALTER TABLE "CustomerIvaRetention" ADD CONSTRAINT "CustomerIvaRetention_salesBookEntryId_fkey" FOREIGN KEY ("salesBookEntryId") REFERENCES "SalesBookEntry"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "CustomerIvaRetention" ADD CONSTRAINT "CustomerIvaRetention_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "ReceiptItem" ADD CONSTRAINT "ReceiptItem_customerIvaRetentionId_fkey" FOREIGN KEY ("customerIvaRetentionId") REFERENCES "CustomerIvaRetention"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =============================================================================
+-- BOOK DOCUMENT TYPES (tipo de documento y columnas de retencion en libros)
+-- =============================================================================
+
+ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "documentType" TEXT NOT NULL DEFAULT 'FACTURA';
+ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "affectedDocNumber" TEXT;
+ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "retentionAmountBs" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "retentionVoucherNumber" TEXT;
+ALTER TABLE "PurchaseBookEntry" ADD COLUMN IF NOT EXISTS "documentType" TEXT NOT NULL DEFAULT 'FACTURA';
+ALTER TABLE "PurchaseBookEntry" ADD COLUMN IF NOT EXISTS "affectedDocNumber" TEXT;

@@ -1495,6 +1495,8 @@ model PurchaseBookEntry {
   retentionAmountBs      Float             @default(0)
   totalBs                Float             @default(0)
   isManual               Boolean           @default(false)
+  documentType           String            @default("FACTURA")
+  affectedDocNumber      String?
   isRetentionLine            Boolean                @default(false)
   retentionVoucherId         String?
   retentionVoucher           RetentionVoucher?      @relation(fields: [retentionVoucherId], references: [id])
@@ -1532,6 +1534,10 @@ model SalesBookEntry {
   totalBs         Float       @default(0)
   isManual        Boolean     @default(false)
   isRetentionLine Boolean     @default(false)
+  documentType         String @default("FACTURA")
+  affectedDocNumber    String?
+  retentionAmountBs    Float  @default(0)
+  retentionVoucherNumber String?
   customerIvaRetention CustomerIvaRetention?
   notes           String?
   createdById     String
