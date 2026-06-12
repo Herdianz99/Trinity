@@ -27,6 +27,8 @@ interface PurchaseBookEntry {
   totalBs: number;
   isManual: boolean;
   isRetentionLine: boolean;
+  documentType: string;
+  affectedDocNumber: string | null;
   notes: string | null;
   createdBy: { id: string; name: string };
   createdAt: string;
@@ -60,6 +62,17 @@ const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+
+const PURCHASE_DOC_LABEL: Record<string, string> = {
+  FACTURA: 'Factura',
+  NCC: 'N. Crédito',
+  NDC: 'N. Débito',
+  RETENCION_IVA: 'Ret. IVA',
+  RETENCION_ISLR: 'Ret. ISLR',
+};
+function purchaseDocLabel(t: string): string {
+  return PURCHASE_DOC_LABEL[t] || t;
+}
 
 function formatVe(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -559,7 +572,19 @@ export default function LibroComprasPage() {
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierControlNumber || '-'}
                         </td>
                         <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
-                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierInvoiceNumber || '-'}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : (
+                            <div className="flex items-center gap-1">
+                              <span>{entry.supplierInvoiceNumber || '-'}</span>
+                              {entry.documentType && entry.documentType !== 'FACTURA' && (
+                                <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-slate-600/40 text-slate-300 border border-slate-500/30 whitespace-nowrap">
+                                  {purchaseDocLabel(entry.documentType)}
+                                </span>
+                              )}
+                              {entry.affectedDocNumber && (
+                                <span className="text-[9px] text-slate-500">→ {entry.affectedDocNumber}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-2 text-slate-200">
                           {entry.isRetentionLine ? (

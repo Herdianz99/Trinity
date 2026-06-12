@@ -90,6 +90,17 @@ function formatVe(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const DOC_TYPE_LABEL: Record<string, string> = {
+  FACTURA: 'Factura',
+  NCV: 'N. Crédito',
+  NDV: 'N. Débito',
+  RETENCION: 'Retención',
+  CXC: 'CxC',
+};
+function docTypeLabel(t: string): string {
+  return DOC_TYPE_LABEL[t] || t;
+}
+
 function toLocalDateStr(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -1154,13 +1165,17 @@ export default function LibroVentasPage() {
                     <tr className="border-b border-slate-700/50">
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium w-10">N&deg;</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Fecha</th>
+                      <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Tipo</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
-                      <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Factura</th>
+                      <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Doc.</th>
+                      <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Doc. Afect.</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Cliente</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">RIF</th>
                       <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Exento Bs</th>
                       <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Base Imp. Bs</th>
                       <th className="text-right px-2 py-2.5 text-emerald-400 font-medium">IVA Bs</th>
+                      <th className="text-right px-2 py-2.5 text-purple-400 font-medium">IVA Ret. Bs</th>
+                      <th className="text-left px-2 py-2.5 text-purple-400 font-medium">Comprob.</th>
                       <th className="text-right px-2 py-2.5 text-amber-400 font-medium">IGTF Bs</th>
                       <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Total Bs</th>
                       <th className="text-center px-2 py-2.5 text-slate-400 font-medium w-20">Acc.</th>
@@ -1169,7 +1184,7 @@ export default function LibroVentasPage() {
                   <tbody>
                     {entries.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="text-center py-10 text-slate-500">
+                        <td colSpan={16} className="text-center py-10 text-slate-500">
                           <div className="flex flex-col items-center gap-2">
                             <BookOpen size={32} className="text-slate-600" />
                             <span>No hay entradas en este periodo</span>
@@ -1183,10 +1198,15 @@ export default function LibroVentasPage() {
                     ) : (
                       <>
                         {entries.map((entry, i) => (
-                          <tr key={entry.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group">
+                          <tr key={entry.id} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group ${entry.isRetentionLine ? 'bg-purple-500/5' : ''}`}>
                             <td className="px-2 py-2 text-slate-400">{i + 1}</td>
                             <td className="px-2 py-2 text-slate-300">
                               {entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                            </td>
+                            <td className="px-2 py-2">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-600/40 text-slate-300 border border-slate-500/30 whitespace-nowrap">
+                                {docTypeLabel(entry.documentType)}
+                              </span>
                             </td>
                             <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
                               {entry.controlNumber || '-'}
@@ -1194,13 +1214,14 @@ export default function LibroVentasPage() {
                             <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
                               {entry.invoiceNumber}
                             </td>
+                            <td className="px-2 py-2 text-slate-400 font-mono text-[11px]">
+                              {entry.affectedDocNumber || '-'}
+                            </td>
                             <td className="px-2 py-2 text-slate-200">
                               <div className="flex items-center gap-1.5">
-                                <span className="truncate max-w-[160px]">{entry.customerName}</span>
-                                {entry.isManual ? (
+                                <span className="truncate max-w-[150px]">{entry.customerName}</span>
+                                {entry.isManual && entry.documentType !== 'RETENCION' && (
                                   <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">MANUAL</span>
-                                ) : (
-                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">AUTO</span>
                                 )}
                               </div>
                             </td>
@@ -1215,6 +1236,12 @@ export default function LibroVentasPage() {
                             </td>
                             <td className="px-2 py-2 text-right text-emerald-400 tabular-nums font-medium">
                               {formatVe(entry.ivaAmountBs)}
+                            </td>
+                            <td className="px-2 py-2 text-right text-purple-400 tabular-nums">
+                              {entry.retentionAmountBs ? formatVe(entry.retentionAmountBs) : '-'}
+                            </td>
+                            <td className="px-2 py-2 text-purple-400 font-mono text-[10px]">
+                              {entry.retentionVoucherNumber || '-'}
                             </td>
                             <td className="px-2 py-2 text-right text-amber-400 tabular-nums">
                               {formatVe(entry.igtfAmountBs)}
@@ -1241,12 +1268,14 @@ export default function LibroVentasPage() {
                         {/* Totals row */}
                         {totales && (
                           <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                            <td colSpan={6} className="px-2 py-2.5 text-slate-100 font-bold">
+                            <td colSpan={8} className="px-2 py-2.5 text-slate-100 font-bold">
                               TOTALES ({totales.totalEntries} entradas)
                             </td>
                             <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.exemptAmountBs)}</td>
                             <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.taxableBaseBs)}</td>
                             <td className="px-2 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.ivaAmountBs)}</td>
+                            <td className="px-2 py-2.5 text-right text-purple-400 font-bold tabular-nums">{formatVe(totales.retentionAmountBs)}</td>
+                            <td></td>
                             <td className="px-2 py-2.5 text-right text-amber-400 font-bold tabular-nums">{formatVe(totales.igtfAmountBs)}</td>
                             <td className="px-2 py-2.5 text-right text-emerald-400 font-bold tabular-nums">{formatVe(totales.totalBs)}</td>
                             <td></td>
