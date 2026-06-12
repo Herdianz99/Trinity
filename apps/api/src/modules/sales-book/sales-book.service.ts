@@ -37,6 +37,7 @@ export class SalesBookService {
     let totalAmount = 0;
 
     for (const entry of entries) {
+      if (entry.isRetentionLine) continue; // el IVA retenido no es débito fiscal
       totalExempt += entry.exemptAmountBs;
       totalTaxableBase += entry.taxableBaseBs;
       totalIva += entry.ivaAmountBs;
