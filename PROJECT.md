@@ -710,6 +710,26 @@ model Payment {
 - credit-debit-notes/[id]: ticket térmico para devoluciones no fiscales via Trinity Agent
 - Botón "Imprimir Ticket" para reimpresión manual de devoluciones no fiscales
 
+#### Sesión 50 — Retenciones de IVA en ventas (retenciones sufridas de clientes)
+**Backend:**
+- CustomerIvaRetentionsModule: retenciones de IVA que clientes contribuyentes especiales aplican a facturas de venta (modelo CustomerIvaRetention, correlativo RVC-XXXX)
+  - POST /customer-iva-retentions — crear contra factura (valida serie fiscal, IVA > 0, tolerancia ±1 Bs vs % teórico, suma ≤ IVA de la factura); acepta comprobante inline para reintegros
+  - GET /customer-iva-retentions?status&search&from&to — listado con filtros
+  - GET /customer-iva-retentions/pending-count — contador para alertas
+  - PATCH /:id/voucher — registra comprobante de 14 dígitos y crea la línea del libro de ventas (isRetentionLine, comprobante en notes)
+  - PATCH /:id/cancel — anulación (solo ADMIN, solo no aplicadas; borra la línea del libro)
+- Customer.isSpecialTaxpayer: marca clientes que retienen IVA
+- InvoicesService.pay(): auto-crea la retención al facturar a crédito a cliente especial (serie fiscal, IVA > 0, % de CompanyConfig.ivaRetentionPct)
+- ReceiptsService: retenciones de clientes como documento cruzable en recibos de cobro (sign -1, itemType SALES_IVA_RETENTION); al postear se marca appliedAt; recibo de cobro con total negativo + sesión de caja genera CashMovement EXPENSE (reintegro)
+- SalesBookService: las líneas de retención no suman a los totales del libro (no son débito fiscal)
+
+**Frontend:**
+- POS: toggle "Contribuyente especial" junto al cliente (persistente, oculto para el cliente default)
+- Recibos de cobro: retenciones cruzables (moradas, signo −), aviso de reintegro cuando el total es negativo
+- Página /sales/customer-retentions: tabs por estado, alerta de comprobantes pendientes con días transcurridos (rojo > 7), registro de comprobante con tolerancia, creación manual para reintegros, anulación
+
+**Flujos:** (1) crédito: retención auto-creada se cruza con la CxC en el recibo y se cobra el neto; (2) reintegro: cliente pagó completo, trae comprobante, se crea la retención y un recibo negativo saca el dinero de caja; (3) alerta para exigir comprobantes no entregados
+
 #### Sesión 5 — Ventas y POS
 **Backend:**
 - CustomersModule: CRUD con crédito

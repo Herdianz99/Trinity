@@ -1,5 +1,51 @@
 # Trinity ERP — Progreso
 
+## Sesion 50 — Retenciones de IVA en ventas (retenciones sufridas de clientes)
+
+### Base de datos
+- **Modelo CustomerIvaRetention**: Retenciones de IVA que clientes contribuyentes especiales aplican a facturas de venta
+  - `number` (unique, correlativo `RVC-0001`), `invoiceId`, `customerId`
+  - `taxableBase/ivaAmount/retention` en USD y Bs + `retentionPct` (75/100) + `exchangeRate`
+  - Comprobante del cliente: `voucherNumber` (14 dígitos), `voucherDate`, `voucherReceivedAt`
+  - Ciclo de vida: `appliedAt` (cruzada en recibo), `cancelledAt`, `salesBookEntryId?` (unique, línea del libro)
+- **Customer.isSpecialTaxpayer**: flag de contribuyente especial (default false)
+- **ReceiptItemType**: nuevo valor `SALES_IVA_RETENTION` + FK `customerIvaRetentionId` en ReceiptItem
+- **Migracion**: `20260612000000_add_customer_iva_retentions` con IF NOT EXISTS (replicada en deploy/fix-schema.sql)
+
+### Backend (NestJS)
+- **CustomerIvaRetentionsModule**: nuevo modulo
+  - `POST /customer-iva-retentions` — crear contra factura (valida serie fiscal, IVA > 0, suma de retenciones ≤ IVA, tolerancia ±1 Bs vs % teorico); acepta comprobante inline (caso reintegro)
+  - `GET /customer-iva-retentions?status=pending-voucher|voucher-received|cancelled&search&from&to`
+  - `GET /customer-iva-retentions/pending-count` — para alertas
+  - `PATCH /:id/voucher` — registra comprobante (14 dígitos) + crea SalesBookEntry con isRetentionLine=true y numero de comprobante en notes (fecha del comprobante como entryDate)
+  - `PATCH /:id/cancel` — solo ADMIN, solo si no aplicada; elimina la linea del libro si existia
+- **InvoicesService.pay()**: al facturar a credito a cliente con isSpecialTaxpayer + serie fiscal + IVA > 0, auto-crea la retencion (75% del IVA o ivaRetentionPct de config) dentro de la transaccion
+- **ReceiptsService**:
+  - `getPendingDocuments` (modo cobro) devuelve array `retentions` con sign -1 (appliedAt null, no anuladas)
+  - `create()` acepta `customerIvaRetentionId` en itemIds (valida no aplicada/no anulada)
+  - `post()` marca `appliedAt`; si el recibo de cobro queda con total negativo y tiene cashSessionId, crea CashMovement tipo EXPENSE "Reintegro recibo RCB-XXXX" (salida de caja justificada)
+- **SalesBookService.findAll()**: excluye lineas isRetentionLine de los totales (el IVA retenido no es debito fiscal)
+
+### Frontend (Next.js)
+- **POS**: toggle "Contribuyente especial" junto al cliente seleccionado (desktop y movil); PATCH directo al cliente; oculto para el cliente default de factura
+- **Recibos de cobro** (`/receipts/new`): retenciones del cliente aparecen como documentos cruzables (moradas, sign -1); nota de reintegro cuando el total es negativo; detalle del recibo muestra "Ret. IVA Cliente"
+- **Nueva pagina `/sales/customer-retentions`** (sidebar VENTAS → "Retenciones clientes"):
+  - Tabs: Pendientes de comprobante / Con comprobante / Anuladas / Todas
+  - Alerta ambar con contador de retenciones sin comprobante; columna de dias transcurridos (rojo > 7 dias)
+  - Modal "Registrar comprobante": 14 dígitos + fecha + monto ajustable (tolerancia ±1 Bs)
+  - Modal "Nueva retencion (reintegro)": busca factura pagada fiscal con IVA, % 75/100, comprobante opcional inline
+  - Anulacion con confirmacion (solo no aplicadas)
+
+### Flujos de negocio cubiertos
+1. **Cliente conocido / credito**: factura a credito → retencion auto-creada → recibo de cobro cruza CxC (+) y retencion (−) → cobra neto → comprobante llega despues → se registra → linea en libro de ventas
+2. **Cliente pago completo (reintegro)**: trae comprobante → "Nueva retencion" con comprobante → recibo de cobro solo con la retencion (total negativo) → salida de dinero registrada en sesion de caja
+3. **Alerta**: retenciones descontadas sin comprobante visibles con dias transcurridos para exigirlo al cliente
+
+### Verificacion E2E (local)
+- Creacion con validaciones (serie no fiscal rechazada, monto fuera de tolerancia rechazado), correlativo RVC-0001, 75% del IVA correcto
+- Recibo de cobro con total negativo posteado OK; retencion marcada aplicada y fuera de pendientes
+- Comprobante registrado con ajuste de monto (120 → 120.50 dentro de tolerancia); SalesBookEntry creada con numero en notes; totales del libro la excluyen
+
 ## Sesion 49 — Libro de ventas editable, ticket de devolucion y correcciones fiscales
 
 ### Base de datos
