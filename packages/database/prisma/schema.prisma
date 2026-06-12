@@ -200,6 +200,7 @@ enum ReceiptItemType {
   CREDIT_NOTE
   DEBIT_NOTE
   IVA_RETENTION
+  SALES_IVA_RETENTION
 }
 
 enum DynamicKeyPerm {
@@ -311,6 +312,7 @@ model User {
   receivablesCreated  Receivable[]        @relation("ReceivableCreator")
   payablesCreated     Payable[]           @relation("PayableCreator")
   zReports            ZReport[]           @relation("ZReportCreator")
+  customerIvaRetentions   CustomerIvaRetention[] @relation("CustomerIvaRetentionCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -732,12 +734,14 @@ model Customer {
   creditDays   Int          @default(0)
   isDefault    Boolean      @default(false)
   isActive     Boolean      @default(true)
+  isSpecialTaxpayer Boolean @default(false)
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]
   receipts     Receipt[]
   advances              CustomerAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
+  ivaRetentions         CustomerIvaRetention[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -939,6 +943,7 @@ model Invoice {
   printJobs           PrintJob[]
   creditDebitNotes    CreditDebitNote[]
   salesBookEntries    SalesBookEntry[]
+  customerIvaRetentions CustomerIvaRetention[]
   createdById         String
   sellerId            String?
   seller              Seller?            @relation(fields: [sellerId], references: [id])
@@ -1201,6 +1206,8 @@ model ReceiptItem {
   creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
   ivaRetentionId    String?
   ivaRetention      IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
+  customerIvaRetentionId String?
+  customerIvaRetention   CustomerIvaRetention? @relation(fields: [customerIvaRetentionId], references: [id])
   description       String
   amountUsd         Float            @default(0)
   amountBsHistoric  Float            @default(0)
@@ -1525,6 +1532,7 @@ model SalesBookEntry {
   totalBs         Float       @default(0)
   isManual        Boolean     @default(false)
   isRetentionLine Boolean     @default(false)
+  customerIvaRetention CustomerIvaRetention?
   notes           String?
   createdById     String
   createdBy       User        @relation("SalesBookEntries", fields: [createdById], references: [id])
@@ -1581,6 +1589,40 @@ model RetentionVoucherLine {
   exchangeRate          Float            @default(0)
   isManual              Boolean          @default(false)
   createdAt             DateTime         @default(now())
+}
+
+// ============================================
+// RETENCIONES DE IVA SUFRIDAS (clientes contribuyentes especiales)
+// ============================================
+
+model CustomerIvaRetention {
+  id                String          @id @default(cuid())
+  number            String          @unique
+  invoiceId         String
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id])
+  customerId        String
+  customer          Customer        @relation(fields: [customerId], references: [id])
+  taxableBaseUsd    Float           @default(0)
+  taxableBaseBs     Float           @default(0)
+  ivaAmountUsd      Float           @default(0)
+  ivaAmountBs       Float           @default(0)
+  retentionPct      Float           @default(75)
+  retentionUsd      Float           @default(0)
+  retentionBs       Float           @default(0)
+  exchangeRate      Float           @default(0)
+  voucherNumber     String?
+  voucherDate       DateTime?
+  voucherReceivedAt DateTime?
+  appliedAt         DateTime?
+  cancelledAt       DateTime?
+  notes             String?
+  salesBookEntryId  String?         @unique
+  salesBookEntry    SalesBookEntry? @relation(fields: [salesBookEntryId], references: [id])
+  receiptItems      ReceiptItem[]
+  createdById       String
+  createdBy         User            @relation("CustomerIvaRetentionCreator", fields: [createdById], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }
 
 // ============================================
