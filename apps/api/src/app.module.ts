@@ -51,6 +51,7 @@ import { CustomerAdvancesModule } from './modules/customer-advances/customer-adv
 import { SupplierAdvancesModule } from './modules/supplier-advances/supplier-advances.module';
 import { IslrRetentionTypesModule } from './modules/islr-retention-types/islr-retention-types.module';
 import { IslrRetentionVouchersModule } from './modules/islr-retention-vouchers/islr-retention-vouchers.module';
+import { CustomerIvaRetentionsModule } from './modules/customer-iva-retentions/customer-iva-retentions.module';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { IslrRetentionVouchersModule } from './modules/islr-retention-vouchers/i
     SupplierAdvancesModule,
     IslrRetentionTypesModule,
     IslrRetentionVouchersModule,
+    CustomerIvaRetentionsModule,
   ],
 })
 export class AppModule {}
