@@ -35,8 +35,10 @@ export class SalesBookService {
     let totalIva = 0;
     let totalIgtf = 0;
     let totalAmount = 0;
+    let totalRetention = 0;
 
     for (const entry of entries) {
+      totalRetention += entry.retentionAmountBs;
       if (entry.isRetentionLine) continue; // el IVA retenido no es débito fiscal
       totalExempt += entry.exemptAmountBs;
       totalTaxableBase += entry.taxableBaseBs;
@@ -53,6 +55,7 @@ export class SalesBookService {
         exemptAmountBs: round2(totalExempt),
         taxableBaseBs: round2(totalTaxableBase),
         ivaAmountBs: round2(totalIva),
+        retentionAmountBs: round2(totalRetention),
         igtfAmountBs: round2(totalIgtf),
         totalBs: round2(totalAmount),
       },
@@ -140,6 +143,7 @@ export class SalesBookService {
       debitoFiscalGeneral: data.totales.ivaAmountBs,
       totalBaseImponible: data.totales.taxableBaseBs,
       totalDebitoFiscal: data.totales.ivaAmountBs,
+      totalRetencionesIva: data.totales.retentionAmountBs,
       totalIgtf: data.totales.igtfAmountBs,
       totalVentas: data.totales.totalBs,
     };

@@ -143,6 +143,7 @@ export class ReceivablesService {
             igtfAmountBs: igtfBs,
             totalBs: totalBsForBook,
             isManual: true,
+            documentType: 'CXC',
             createdById: userId,
           },
         });

@@ -915,6 +915,7 @@ export class PurchaseOrdersService {
             totalBs: order.totalBs,
             isManual: false,
             isRetentionLine: false,
+            documentType: 'FACTURA',
             createdById: userId,
           },
         });

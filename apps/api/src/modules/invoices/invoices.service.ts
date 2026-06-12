@@ -988,6 +988,7 @@ export class InvoicesService {
             igtfAmountBs: Math.round((result.igtfBs || 0) * 100) / 100,
             totalBs: Math.round((result.totalBs || 0) * 100) / 100,
             isManual: false,
+            documentType: 'FACTURA',
             createdById: user.id,
           },
         });

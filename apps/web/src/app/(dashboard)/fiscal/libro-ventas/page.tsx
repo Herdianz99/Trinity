@@ -23,6 +23,10 @@ interface SalesBookEntry {
   totalBs: number;
   isManual: boolean;
   isRetentionLine: boolean;
+  documentType: string;
+  affectedDocNumber: string | null;
+  retentionAmountBs: number;
+  retentionVoucherNumber: string | null;
   notes: string | null;
   createdBy: { id: string; name: string };
   createdAt: string;
@@ -34,6 +38,7 @@ interface Totales {
   exemptAmountBs: number;
   taxableBaseBs: number;
   ivaAmountBs: number;
+  retentionAmountBs: number;
   igtfAmountBs: number;
   totalBs: number;
 }
@@ -728,8 +733,8 @@ export default function LibroVentasPage() {
         baseImponible16: 0,
         alicuota: '',
         impuestoIva16: 0,
-        ivaRetenido: e.ivaAmountBs || 0,
-        compRetencion: e.notes || '',
+        ivaRetenido: e.retentionAmountBs || 0,
+        compRetencion: e.retentionVoucherNumber || e.notes || '',
         ivaPercibido: 0,
         cont: 'NO',
       });

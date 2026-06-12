@@ -164,12 +164,16 @@ export class CustomerIvaRetentionsService {
           : null,
         exemptAmountBs: 0,
         taxableBaseBs: 0,
-        ivaAmountBs: retentionBs,
+        ivaAmountBs: 0,
         igtfAmountBs: 0,
         totalBs: 0,
         isManual: false,
         isRetentionLine: true,
-        notes: dto.voucherNumber, // la columna "Comp. de Retención" del libro lee notes
+        documentType: 'RETENCION',
+        affectedDocNumber: retention.invoice?.number || null,
+        retentionAmountBs: retentionBs,
+        retentionVoucherNumber: dto.voucherNumber,
+        notes: dto.voucherNumber, // compat: algunos lectores aún leen notes
         createdById: userId,
       },
     });

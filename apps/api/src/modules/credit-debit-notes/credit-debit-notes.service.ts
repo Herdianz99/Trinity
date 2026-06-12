@@ -471,7 +471,12 @@ export class CreditDebitNotesService {
   async post(id: string, userId: string) {
     const note = await this.prisma.creditDebitNote.findUnique({
       where: { id },
-      include: { items: true },
+      include: {
+        items: true,
+        serie: { select: { isFiscal: true } },
+        invoice: { select: { number: true } },
+        purchaseOrder: { select: { number: true } },
+      },
     });
     if (!note) throw new NotFoundException('Nota no encontrada');
     if (note.status !== 'DRAFT') throw new BadRequestException('Solo se pueden confirmar notas en borrador');
@@ -575,6 +580,62 @@ export class CreditDebitNotesService {
             data: { quantity: { decrement: item.quantity } },
           });
         }
+      }
+
+      // Libro de ventas: NCV (resta) / NDV (suma) fiscales
+      if ((note.type === 'NCV' || note.type === 'NDV') && note.serie?.isFiscal) {
+        const sign = note.type === 'NCV' ? -1 : 1;
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        const inv = note.invoiceId
+          ? await tx.invoice.findUnique({ where: { id: note.invoiceId }, select: { customer: { select: { name: true, rif: true, documentType: true } } } })
+          : null;
+        await tx.salesBookEntry.create({
+          data: {
+            entryDate: new Date(),
+            invoiceNumber: note.number,
+            controlNumber: note.fiscalNumber || null,
+            customerName: inv?.customer?.name || 'Cliente General',
+            customerRif: inv?.customer?.rif
+              ? `${inv.customer.documentType || ''}${inv.customer.documentType ? '-' : ''}${inv.customer.rif}`
+              : null,
+            exemptAmountBs: 0,
+            taxableBaseBs: r2(sign * (note.subtotalBs || 0)),
+            ivaAmountBs: r2(sign * (note.ivaBs || 0)),
+            igtfAmountBs: r2(sign * (note.igtfBs || 0)),
+            totalBs: r2(sign * (note.totalBs || 0)),
+            isManual: false,
+            documentType: note.type,
+            affectedDocNumber: note.invoice?.number || null,
+            createdById: userId,
+          },
+        });
+      }
+
+      // Libro de compras: NCC (resta) / NDC (suma) fiscales
+      if ((note.type === 'NCC' || note.type === 'NDC') && note.serie?.isFiscal) {
+        const sign = note.type === 'NCC' ? -1 : 1;
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        const po = note.purchaseOrderId
+          ? await tx.purchaseOrder.findUnique({ where: { id: note.purchaseOrderId }, select: { supplier: { select: { name: true, rif: true } } } })
+          : null;
+        await tx.purchaseBookEntry.create({
+          data: {
+            entryDate: new Date(),
+            supplierControlNumber: note.fiscalNumber || null,
+            supplierInvoiceNumber: note.number,
+            supplierName: po?.supplier?.name || 'Proveedor',
+            supplierRif: po?.supplier?.rif || 'S/R',
+            exemptAmountBs: 0,
+            taxableBaseBs: r2(sign * (note.subtotalBs || 0)),
+            ivaAmountBs: r2(sign * (note.ivaBs || 0)),
+            totalBs: r2(sign * (note.totalBs || 0)),
+            isManual: false,
+            isRetentionLine: false,
+            documentType: note.type,
+            affectedDocNumber: note.purchaseOrder?.number || null,
+            createdById: userId,
+          },
+        });
       }
 
       // Update note status to POSTED (no CxC/CxP effects — applied via receipts)
