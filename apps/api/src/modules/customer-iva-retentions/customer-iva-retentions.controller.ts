@@ -15,8 +15,9 @@ export class CustomerIvaRetentionsController {
     @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('invoiceId') invoiceId?: string,
   ) {
-    return this.service.findAll({ status, search, from, to });
+    return this.service.findAll({ status, search, from, to, invoiceId });
   }
 
   @Get('pending-count')

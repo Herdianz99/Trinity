@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileText, Loader2, Printer, ExternalLink, DollarSign, X, FileX2,
-  AlertTriangle, RotateCcw, Save, Edit3, Copy,
+  AlertTriangle, RotateCcw, Save, Edit3, Copy, Shield,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -204,6 +204,81 @@ export default function InvoiceDetailPage() {
     fetch('/api/proxy/config').then(r => r.json()).then(setCompanyConfig).catch(() => {});
   }, []);
 
+  // ── Retención de IVA del cliente ───────────────────────────────────────────
+  const [existingRetention, setExistingRetention] = useState<any>(null);
+  const fetchRetention = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/proxy/customer-iva-retentions?invoiceId=${id}`);
+      const data = await res.json();
+      const active = (Array.isArray(data) ? data : []).find((r: any) => !r.cancelledAt);
+      setExistingRetention(active || null);
+    } catch { /* ignore */ }
+  }, [id]);
+  useEffect(() => { fetchRetention(); }, [fetchRetention]);
+
+  const [retModalOpen, setRetModalOpen] = useState(false);
+  const [retPct, setRetPct] = useState('75');
+  const [retAmountBs, setRetAmountBs] = useState('');
+  const [retVoucherNumber, setRetVoucherNumber] = useState('');
+  const [retVoucherDate, setRetVoucherDate] = useState('');
+  const [retSaving, setRetSaving] = useState(false);
+
+  const canRetain = !!(
+    invoice?.serie?.isFiscal &&
+    (invoice?.ivaBs || 0) > 0 &&
+    invoice?.customer &&
+    ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '') &&
+    !existingRetention
+  );
+
+  const openRetModal = () => {
+    if (!invoice) return;
+    const pct = 75;
+    setRetPct(String(pct));
+    setRetAmountBs((Math.round(invoice.ivaBs * (pct / 100) * 100) / 100).toFixed(2));
+    setRetVoucherNumber('');
+    const now = new Date();
+    setRetVoucherDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+    setRetModalOpen(true);
+  };
+
+  const onRetPctChange = (value: string) => {
+    setRetPct(value);
+    if (invoice) {
+      const pct = parseFloat(value) || 0;
+      setRetAmountBs((Math.round(invoice.ivaBs * (pct / 100) * 100) / 100).toFixed(2));
+    }
+  };
+
+  const submitRetention = async () => {
+    if (!invoice) return;
+    if (retVoucherNumber && !/^\d{14}$/.test(retVoucherNumber)) {
+      setMessage({ type: 'error', text: 'El número de comprobante debe tener 14 dígitos' });
+      return;
+    }
+    setRetSaving(true);
+    setMessage(null);
+    try {
+      const body: any = { invoiceId: invoice.id, retentionPct: parseFloat(retPct) || 75 };
+      const amount = parseFloat(retAmountBs);
+      if (!isNaN(amount)) body.retentionBs = amount;
+      if (retVoucherNumber) { body.voucherNumber = retVoucherNumber; body.voucherDate = retVoucherDate; }
+      const res = await fetch('/api/proxy/customer-iva-retentions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Error al crear retención');
+      setMessage({ type: 'success', text: `Retención ${json.number} creada` });
+      setRetModalOpen(false);
+      fetchRetention();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setRetSaving(false);
+  };
+
   // Print fiscal invoice (for pending fiscal print)
   const handleFiscalPrint = async () => {
     if (!invoice || !invoice.serie?.isFiscal) return;
@@ -376,12 +451,70 @@ export default function InvoiceDetailPage() {
               <FileX2 size={14} /> Nota de debito
             </button>
           )}
+          {canRetain && (
+            <button onClick={openRetModal} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition-colors">
+              <Shield size={14} /> Retención IVA
+            </button>
+          )}
+          {existingRetention && (
+            <button onClick={() => router.push('/sales/customer-retentions')} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-colors" title="Ver retenciones de clientes">
+              <Shield size={14} /> Ret. {existingRetention.number}{existingRetention.voucherNumber ? '' : ' (sin comprobante)'}
+            </button>
+          )}
         </div>
       </div>
 
       {message && (
         <div className={`mb-4 p-3 rounded-lg border text-sm ${message.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
           {message.text}
+        </div>
+      )}
+
+      {/* Modal: crear retención de IVA del cliente */}
+      {retModalOpen && invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2"><Shield size={18} className="text-purple-400" /> Retención de IVA — {invoice.number}</h3>
+              <button onClick={() => setRetModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-700/40 rounded-lg p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-slate-400">Cliente:</span><span className="text-white">{invoice.customer?.name}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">IVA de la factura:</span><span className="text-white font-mono">{invoice.ivaBs?.toFixed(2)} Bs</span></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">% Retención</label>
+                  <select value={retPct} onChange={(e) => onRetPctChange(e.target.value)} className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm">
+                    <option value="75">75%</option>
+                    <option value="100">100%</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Monto retenido Bs</label>
+                  <input type="number" step="0.01" value={retAmountBs} onChange={(e) => setRetAmountBs(e.target.value)} className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono" />
+                  <p className="text-[10px] text-slate-500 mt-1">Tolerancia ±1 Bs</p>
+                </div>
+              </div>
+              <div className="border-t border-slate-700/50 pt-4 space-y-3">
+                <p className="text-xs text-slate-400">Comprobante del cliente (opcional — si ya lo entregó)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Número (14 dígitos)</label>
+                    <input type="text" value={retVoucherNumber} onChange={(e) => setRetVoucherNumber(e.target.value.replace(/\D/g, '').slice(0, 14))} placeholder="AAAAMM00000000" maxLength={14} className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Fecha</label>
+                    <input type="date" value={retVoucherDate} onChange={(e) => setRetVoucherDate(e.target.value)} className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
+              </div>
+              <button onClick={submitRetention} disabled={retSaving || !retAmountBs || (retVoucherNumber.length > 0 && retVoucherNumber.length !== 14)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50">
+                {retSaving ? <Loader2 className="animate-spin" size={16} /> : <Shield size={16} />} Crear retención
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

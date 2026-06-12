@@ -48,12 +48,13 @@ export class CustomerIvaRetentionsService {
       throw new BadRequestException('La factura no tiene cliente asignado');
     }
 
-    // Suma de retenciones activas existentes sobre esta factura
-    const existing = await this.prisma.customerIvaRetention.aggregate({
+    // Una factura solo puede tener una retención activa (no anulada)
+    const existingCount = await this.prisma.customerIvaRetention.count({
       where: { invoiceId: invoice.id, cancelledAt: null },
-      _sum: { retentionBs: true },
     });
-    const alreadyRetainedBs = existing._sum.retentionBs || 0;
+    if (existingCount > 0) {
+      throw new BadRequestException('Esta factura ya tiene una retención de IVA registrada');
+    }
 
     const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
     const pct = dto.retentionPct || config?.ivaRetentionPct || 75;
@@ -63,11 +64,6 @@ export class CustomerIvaRetentionsService {
     if (Math.abs(retentionBs - calculatedBs) > TOLERANCE_BS) {
       throw new BadRequestException(
         `El monto (Bs ${retentionBs.toFixed(2)}) se desvía más de ${TOLERANCE_BS} Bs del cálculo teórico (Bs ${calculatedBs.toFixed(2)} = ${pct}% del IVA)`,
-      );
-    }
-    if (alreadyRetainedBs + retentionBs > invoice.ivaBs + TOLERANCE_BS) {
-      throw new BadRequestException(
-        `La factura ya tiene Bs ${alreadyRetainedBs.toFixed(2)} retenidos; con este monto se excede el IVA de la factura (Bs ${invoice.ivaBs.toFixed(2)})`,
       );
     }
 
@@ -196,8 +192,9 @@ export class CustomerIvaRetentionsService {
     return this.prisma.$transaction(async (tx) => this.applyVoucherInTx(tx, id, dto, userId));
   }
 
-  async findAll(filters: { status?: string; search?: string; from?: string; to?: string }) {
+  async findAll(filters: { status?: string; search?: string; from?: string; to?: string; invoiceId?: string }) {
     const where: any = {};
+    if (filters.invoiceId) where.invoiceId = filters.invoiceId;
     if (filters.status === 'pending-voucher') {
       where.voucherNumber = null;
       where.cancelledAt = null;

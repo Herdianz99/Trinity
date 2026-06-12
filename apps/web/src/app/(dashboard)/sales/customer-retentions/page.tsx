@@ -123,6 +123,7 @@ export default function CustomerRetentionsPage() {
   const [invoiceResults, setInvoiceResults] = useState<InvoiceResult[]>([]);
   const [searchingInvoices, setSearchingInvoices] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceResult | null>(null);
+  const [takenInvoiceIds, setTakenInvoiceIds] = useState<Set<string>>(new Set());
   const [newPct, setNewPct] = useState('75');
   const [newAmountBs, setNewAmountBs] = useState('');
   const [newVoucherNumber, setNewVoucherNumber] = useState('');
@@ -163,12 +164,14 @@ export default function CustomerRetentionsPage() {
       try {
         const res = await fetch(`/api/proxy/invoices?search=${encodeURIComponent(invoiceSearch)}&limit=8&status=PAID`);
         const data = await res.json();
-        setInvoiceResults((data.data || []).filter((inv: InvoiceResult) => inv.serie?.isFiscal && (inv.ivaBs || 0) > 0));
+        setInvoiceResults((data.data || []).filter((inv: InvoiceResult) =>
+          inv.serie?.isFiscal && (inv.ivaBs || 0) > 0 && !takenInvoiceIds.has(inv.id),
+        ));
       } catch { /* ignore */ }
       setSearchingInvoices(false);
     }, 300);
     return () => clearTimeout(t);
-  }, [newModal, invoiceSearch]);
+  }, [newModal, invoiceSearch, takenInvoiceIds]);
 
   const pendingCount = tab === 'pending-voucher' ? retentions.length : retentions.filter(r => !r.voucherNumber && !r.cancelledAt).length;
 
@@ -226,7 +229,7 @@ export default function CustomerRetentionsPage() {
     setCancelling(false);
   };
 
-  const openNewModal = () => {
+  const openNewModal = async () => {
     setNewModal(true);
     setInvoiceSearch('');
     setInvoiceResults([]);
@@ -235,6 +238,17 @@ export default function CustomerRetentionsPage() {
     setNewAmountBs('');
     setNewVoucherNumber('');
     setNewVoucherDate(toLocalDateStr(new Date()));
+    // Cargar facturas que ya tienen una retención activa para excluirlas del buscador
+    try {
+      const res = await fetch('/api/proxy/customer-iva-retentions');
+      const data = await res.json();
+      const ids = new Set<string>(
+        (Array.isArray(data) ? data : [])
+          .filter((r: CustomerRetention) => !r.cancelledAt && r.invoice?.id)
+          .map((r: CustomerRetention) => r.invoice.id),
+      );
+      setTakenInvoiceIds(ids);
+    } catch { /* ignore */ }
   };
 
   const selectInvoice = (inv: InvoiceResult) => {
@@ -557,12 +571,12 @@ export default function CustomerRetentionsPage() {
       {/* New retention modal */}
       {newModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
               <h3 className="text-lg font-semibold text-white">Nueva retención de cliente</h3>
               <button onClick={() => setNewModal(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-6 space-y-5 min-h-[460px]">
               <p className="text-xs text-slate-500">
                 Para el caso de reintegro: el cliente pagó la factura completa y luego trajo el comprobante de retención.
                 Si registras el comprobante aquí, la línea del libro de ventas se crea de inmediato; luego haz el
