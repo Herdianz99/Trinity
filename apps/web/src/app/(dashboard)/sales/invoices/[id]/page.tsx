@@ -4,9 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileText, Loader2, Printer, ExternalLink, DollarSign, X, FileX2,
-  AlertTriangle, RotateCcw, Save, Edit3, Copy, Shield,
+  AlertTriangle, RotateCcw, Save, Edit3, Copy, Shield, MoreHorizontal,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface InvoiceDetail {
   id: string;
@@ -231,6 +234,13 @@ export default function InvoiceDetailPage() {
     !existingRetention
   );
 
+  // Acciones secundarias (van al menú "Más acciones")
+  const isPaidish = ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '');
+  const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
+  const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
+  const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
+  const hasMenuActions = canReturnInvoice || canCreditNote || canDebitNote || canRetain;
+
   const openRetModal = () => {
     if (!invoice) return;
     const pct = 75;
@@ -431,35 +441,53 @@ export default function InvoiceDetailPage() {
               <Printer size={14} /> Imprimir PDF
             </button>
           )}
-          {['PAID', 'PARTIAL_RETURN'].includes(invoice.status) && invoice.paymentType === 'CASH' && hasPerm('RETURN_INVOICE') && (
-            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <FileX2 size={14} /> Devolver factura
-            </button>
-          )}
-          {['PAID', 'PARTIAL_RETURN'].includes(invoice.status) && invoice.paymentType === 'CREDIT' && hasPerm('RETURN_INVOICE') && (
-            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <FileX2 size={14} /> Devolver mercancia
-            </button>
-          )}
-          {invoice.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE') && (
-            <button onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <FileX2 size={14} /> Nota de credito
-            </button>
-          )}
-          {invoice.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE') && (
-            <button onClick={() => router.push(`/credit-debit-notes/new?type=NDV&origin=MANUAL&invoiceId=${id}`)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <FileX2 size={14} /> Nota de debito
-            </button>
-          )}
-          {canRetain && (
-            <button onClick={openRetModal} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition-colors">
-              <Shield size={14} /> Retención IVA
-            </button>
-          )}
           {existingRetention && (
             <button onClick={() => router.push('/sales/customer-retentions')} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-colors" title="Ver retenciones de clientes">
               <Shield size={14} /> Ret. {existingRetention.number}{existingRetention.voucherNumber ? '' : ' (sin comprobante)'}
             </button>
+          )}
+          {hasMenuActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="btn-secondary text-sm flex items-center gap-1.5">
+                  <MoreHorizontal size={16} /> Más acciones
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[210px]">
+                {canReturnInvoice && (
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <FileX2 size={14} /> {invoice.paymentType === 'CASH' ? 'Devolver factura' : 'Devolver mercancia'}
+                  </DropdownMenuItem>
+                )}
+                {canCreditNote && (
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MANUAL&invoiceId=${id}`)}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <FileX2 size={14} /> Nota de credito
+                  </DropdownMenuItem>
+                )}
+                {canDebitNote && (
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NDV&origin=MANUAL&invoiceId=${id}`)}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <FileX2 size={14} /> Nota de debito
+                  </DropdownMenuItem>
+                )}
+                {canRetain && (
+                  <DropdownMenuItem
+                    onClick={openRetModal}
+                    className="cursor-pointer text-purple-300 focus:bg-purple-500/15 focus:text-purple-200 gap-2"
+                  >
+                    <Shield size={14} /> Retención IVA
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
