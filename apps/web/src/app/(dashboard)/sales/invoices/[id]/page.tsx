@@ -236,10 +236,11 @@ export default function InvoiceDetailPage() {
 
   // Acciones secundarias (van al menú "Más acciones")
   const isPaidish = ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '');
+  const canPrintPdf = ['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice?.status || '');
   const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
   const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
   const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
-  const hasMenuActions = canReturnInvoice || canCreditNote || canDebitNote || canRetain;
+  const hasMenuActions = canPrintPdf || canReturnInvoice || canCreditNote || canDebitNote || canRetain;
 
   const openRetModal = () => {
     if (!invoice) return;
@@ -436,11 +437,6 @@ export default function InvoiceDetailPage() {
               {reprintLoading ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} Reimprimir Fiscal
             </button>
           )}
-          {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice.status) && (
-            <button onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
-              <Printer size={14} /> Imprimir PDF
-            </button>
-          )}
           {existingRetention && (
             <button onClick={() => router.push('/sales/customer-retentions')} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-colors" title="Ver retenciones de clientes">
               <Shield size={14} /> Ret. {existingRetention.number}{existingRetention.voucherNumber ? '' : ' (sin comprobante)'}
@@ -454,6 +450,14 @@ export default function InvoiceDetailPage() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[210px]">
+                {canPrintPdf && (
+                  <DropdownMenuItem
+                    onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <Printer size={14} /> Imprimir PDF
+                  </DropdownMenuItem>
+                )}
                 {canReturnInvoice && (
                   <DropdownMenuItem
                     onClick={() => router.push(`/credit-debit-notes/new?type=NCV&origin=MERCHANDISE&invoiceId=${id}`)}
