@@ -13,6 +13,7 @@ interface PendingDoc {
   payableId?: string;
   creditDebitNoteId?: string;
   ivaRetentionId?: string;
+  customerIvaRetentionId?: string;
   description: string;
   reference?: string | null;
   date: string;
@@ -326,7 +327,7 @@ export default function NewReceiptPage() {
         setPendingDocs(json);
       } else if (json.receivables) {
         // Merge receivables and notes (NCV/NDV) into a single list
-        const allDocs = [...json.receivables, ...(json.notes || [])];
+        const allDocs = [...json.receivables, ...(json.notes || []), ...(json.retentions || [])];
         setPendingDocs(allDocs);
       } else {
         setPendingDocs([]);
@@ -401,6 +402,7 @@ export default function NewReceiptPage() {
           payableId: d.payableId,
           creditDebitNoteId: d.creditDebitNoteId,
           ivaRetentionId: d.ivaRetentionId,
+          customerIvaRetentionId: d.customerIvaRetentionId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -442,6 +444,7 @@ export default function NewReceiptPage() {
           payableId: d.payableId,
           creditDebitNoteId: d.creditDebitNoteId,
           ivaRetentionId: d.ivaRetentionId,
+          customerIvaRetentionId: d.customerIvaRetentionId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -801,7 +804,7 @@ export default function NewReceiptPage() {
                         key={doc.id}
                         className={`border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors ${
                           doc.documentType === 'CxC' ? 'bg-green-500/5'
-                          : doc.documentType === 'IVA_RETENTION' ? 'bg-purple-500/5'
+                          : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION') ? 'bg-purple-500/5'
                           : 'bg-red-500/5'
                         }`}
                       >
@@ -809,11 +812,11 @@ export default function NewReceiptPage() {
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             doc.documentType === 'CxC'
                               ? 'bg-green-500/20 text-green-400'
-                              : doc.documentType === 'IVA_RETENTION'
+                              : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION')
                               ? 'bg-purple-500/20 text-purple-400'
                               : 'bg-red-500/20 text-red-400'
                           }`}>
-                            {doc.documentType === 'IVA_RETENTION' ? 'Ret. IVA' : doc.documentType}
+                            {(doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION') ? 'Ret. IVA' : doc.documentType}
                           </span>
                         </td>
                         <td className="px-3 py-2">
@@ -1036,6 +1039,13 @@ export default function NewReceiptPage() {
                   <span className="text-slate-300">{fmt(todayRate)} Bs/$</span>
                 </div>
               </div>
+
+              {isCollection && totalUsd < 0 && (
+                <p className="text-xs text-amber-400">
+                  Total negativo: este recibo registra una salida de dinero (reintegro al cliente).
+                  Los pagos indican cómo se devuelve el dinero; si seleccionas sesión de caja, se registrará el egreso.
+                </p>
+              )}
 
               {/* Cash session selector */}
               {openSessions.length > 0 && (
