@@ -1,18 +1,19 @@
 # Trinity ERP — Progreso
 
-## 🔍 EN PROGRESO — Auditoria libros fiscales (pendiente de verificar con el usuario)
+## 🔍 EN PROGRESO — Auditoria libros fiscales
 
-> Hallazgos de la auditoria de los libros de compras y ventas (sesion 50). NO son bugs confirmados:
-> Diego probara cada punto en el sistema real para ver si de verdad aplican a como trabajan antes de programar nada.
-> Marcar cada item como [CONFIRMADO] o [NO APLICA] tras la prueba.
+> Hallazgos de la auditoria de los libros de compras y ventas (sesion 50-51).
+> Marcar cada item como [RESUELTO] / [CONFIRMADO] / [NO APLICA] tras la prueba.
 
 ### 🔴 Prioridad alta
-- [ ] **NCC/NDC de compras no afectan el libro de compras**: al confirmar una nota de credito/debito de compra (NCC/NDC) NO se crea entrada en `PurchaseBookEntry`. Riesgo: el credito fiscal del periodo queda inflado (NCC deberia restarlo, NDC sumarlo). Solucion propuesta: mismo patron que retenciones — crear linea con monto +/- y referencia a la factura afectada al confirmar/aplicar la nota. (credit-debit-notes module)
-- [ ] **NCV/NDV sobre serie fiscal de forma libre no generan linea en libro de ventas**: las devoluciones por maquina fiscal ya estan cubiertas por el resumen NC del reporte Z. Pero una NCV/NDV sobre factura de forma libre (serie fiscal sin maquina) deberia salir como linea propia con la columna "N° Fact. Afectada". La columna existe en el reporte pero nada la alimenta. VERIFICAR si usan serie fiscal de forma libre — si todo sale por maquina, NO APLICA.
-- [ ] **Facturas anuladas no se reflejan en el libro de ventas**: anular/devolver factura no marca ni ajusta su `SalesBookEntry`. El reglamento pide que las anuladas aparezcan (monto 0 / marca "ANULADA") para no romper la numeracion ante fiscalizacion. Para maquina fiscal el Z lo absorbe; afecta al libro detallado de entradas individuales.
+- [x] **NCC/NDC de compras no afectan el libro de compras** — **[RESUELTO sesion 51]**: al confirmar (POST) una NCC/NDC fiscal se crea `PurchaseBookEntry` con monto negativo (NCC) / positivo (NDC) y `affectedDocNumber`. El credito fiscal del periodo ya se ajusta. (credit-debit-notes.service.post)
+- [x] **NCV/NDV no generaban linea en el libro de ventas detallado** — **[RESUELTO sesion 51]**: al confirmar una NCV/NDV fiscal se crea `SalesBookEntry` con `documentType` NCV/NDV, monto negativo/positivo y `affectedDocNumber`. (Nota: las devoluciones por maquina fiscal siguen resumiendose en el reporte Z; esto cubre el libro detallado de todas las series fiscales.)
+- [ ] **Facturas anuladas no se reflejan en el libro de ventas**: anular/devolver factura no marca ni ajusta su `SalesBookEntry`. El reglamento pide que las anuladas aparezcan (monto 0 / marca "ANULADA") para no romper la numeracion ante fiscalizacion. Para maquina fiscal el Z lo absorbe; afecta al libro detallado de entradas individuales. PENDIENTE.
 
 ### 🟡 Prioridad media
-- [ ] **Sin desglose por alicuota (8% / 16% / 16+15%)**: `SalesBookEntry` y `PurchaseBookEntry` aplanan todo en una sola base/IVA y los reportes rotulan "16%". Inconsistencia interna: `ZReport` tiene bases 1/2/3, `Receivable` tiene taxableBase8/16/31, `InvoiceItem.ivaType` soporta REDUCED/SPECIAL. Si solo manejan 16% + exentos, hoy no afecta. Deuda tecnica con disparador: el dia que vendan/compren a alicuota distinta.
+- [x] **Bug: la retencion mostraba su factura en el libro de reportes Z** — **[RESUELTO sesion 51]**: la fila de retencion en el Z ya no muestra la factura; muestra su comprobante. El detallado si muestra la factura afectada (correcto).
+- [x] **Columnas faltantes en el libro de ventas detallado** — **[RESUELTO sesion 51]**: se agregaron Tipo de documento, N° Doc. Afectado, IVA Retenido y N° Comprobante de Retencion (modelo + tabla + total separado). Falta replicar el formato exacto del PDF WenSoft (layout apaisado) si se desea — pendiente opcional.
+- [ ] **Sin desglose por alicuota (8% / 16% / 16+15%)**: `SalesBookEntry` y `PurchaseBookEntry` aplanan todo en una sola base/IVA y los reportes rotulan "16%". Confirmado con el PDF de referencia WenSoft: en la practica TODAS las filas son 16% (las columnas 8%/31% van vacias). Deuda tecnica con disparador: el dia que vendan/compren a alicuota distinta. PENDIENTE.
 - [ ] **TXT de retenciones para portal SENIAT**: si la empresa es contribuyente especial debe declarar quincenalmente las retenciones (de compras) en TXT con formato del portal. El modulo de comprobantes no lo genera. Complemento del modulo de retenciones en compras.
 
 ### 🟢 Prioridad baja
