@@ -87,6 +87,8 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
+  const [customerIsSpecial, setCustomerIsSpecial] = useState(false);
+  const [customerIsDefault, setCustomerIsDefault] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -411,6 +413,36 @@ export default function POSPage() {
   }, [customerId]);
 
   useEffect(() => { refreshCreditBalance(); }, [refreshCreditBalance]);
+
+  // Fetch contribuyente especial / cliente default flags when customer changes
+  useEffect(() => {
+    if (!customerId) { setCustomerIsSpecial(false); setCustomerIsDefault(false); return; }
+    fetch(`/api/proxy/customers/${customerId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setCustomerIsSpecial(!!data.isSpecialTaxpayer);
+          setCustomerIsDefault(!!data.isDefault);
+        }
+      })
+      .catch(() => { /* ignore */ });
+  }, [customerId]);
+
+  const toggleSpecialTaxpayer = async () => {
+    if (!customerId || customerIsDefault) return;
+    const newValue = !customerIsSpecial;
+    setCustomerIsSpecial(newValue); // optimista
+    try {
+      const res = await fetch(`/api/proxy/customers/${customerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isSpecialTaxpayer: newValue }),
+      });
+      if (!res.ok) setCustomerIsSpecial(!newValue); // revertir
+    } catch {
+      setCustomerIsSpecial(!newValue);
+    }
+  };
 
   async function submitAdvance() {
     if (!customerId || !advanceAmount || !advanceMethodId) return;
@@ -1302,9 +1334,22 @@ export default function POSPage() {
           <div className="px-3 py-2 border-b border-slate-700/30">
             {customerId ? (
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <User size={14} className="text-green-400" />
                   <span className="text-sm text-white">{customerName}</span>
+                  {!customerIsDefault && (
+                    <button
+                      onClick={toggleSpecialTaxpayer}
+                      title="Contribuyente especial: el sistema generará la retención de IVA al facturar a crédito"
+                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                        customerIsSpecial
+                          ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                          : 'bg-slate-700/40 border-slate-600 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {customerIsSpecial ? '✓ Contribuyente especial' : 'Contribuyente?'}
+                    </button>
+                  )}
                 </div>
                 <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-xs text-red-400">Quitar</button>
               </div>
@@ -2204,6 +2249,19 @@ export default function POSPage() {
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 border border-green-500/30">
                         Saldo: ${creditBalance.totalUsd.toFixed(2)}
                       </span>
+                    )}
+                    {!customerIsDefault && (
+                      <button
+                        onClick={toggleSpecialTaxpayer}
+                        title="Contribuyente especial: el sistema generará la retención de IVA al facturar a crédito"
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                          customerIsSpecial
+                            ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                            : 'bg-slate-700/40 border-slate-600 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {customerIsSpecial ? '✓ Especial' : 'Contrib.?'}
+                      </button>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
