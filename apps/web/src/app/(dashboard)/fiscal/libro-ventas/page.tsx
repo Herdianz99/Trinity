@@ -776,7 +776,7 @@ export default function LibroVentasPage() {
       tIvaPercibido += r.ivaPercibido;
     }
 
-    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('es-VE') : '';
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' }) : '';
     const fmtNum = (n: number) => n ? formatVe(n) : '';
 
     // Generar filas del tabla
