@@ -110,11 +110,12 @@ export class ReceiptsService {
 
     // Build items
     const items: Array<{
-      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION';
+      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION' | 'SALES_IVA_RETENTION';
       receivableId?: string;
       payableId?: string;
       creditDebitNoteId?: string;
       ivaRetentionId?: string;
+      customerIvaRetentionId?: string;
       description: string;
       amountUsd: number;
       amountBsHistoric: number;
@@ -215,6 +216,25 @@ export class ReceiptsService {
           differentialBs: 0,
           sign: item.sign,
         });
+      } else if (item.customerIvaRetentionId) {
+        const retention = await this.prisma.customerIvaRetention.findUnique({
+          where: { id: item.customerIvaRetentionId },
+          include: { invoice: { select: { number: true } } },
+        });
+        if (!retention) throw new BadRequestException(`Retención ${item.customerIvaRetentionId} no encontrada`);
+        if (retention.appliedAt) throw new BadRequestException(`Retención ${retention.number} ya fue aplicada`);
+        if (retention.cancelledAt) throw new BadRequestException(`Retención ${retention.number} está anulada`);
+
+        items.push({
+          itemType: 'SALES_IVA_RETENTION',
+          customerIvaRetentionId: item.customerIvaRetentionId,
+          description: `Ret. IVA ${retention.number} (${retention.invoice?.number || ''})`,
+          amountUsd: retention.retentionUsd,
+          amountBsHistoric: retention.retentionBs,
+          amountBsToday: this.round2(retention.retentionUsd * rate.rate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
       }
     }
 
@@ -287,6 +307,7 @@ export class ReceiptsService {
               payableId: item.payableId || null,
               creditDebitNoteId: item.creditDebitNoteId || null,
               ivaRetentionId: item.ivaRetentionId || null,
+              customerIvaRetentionId: item.customerIvaRetentionId || null,
               description: item.description,
               amountUsd: item.amountUsd,
               amountBsHistoric: item.amountBsHistoric,
@@ -425,6 +446,12 @@ export class ReceiptsService {
             where: { id: item.ivaRetentionId },
             data: { appliedAt: new Date() },
           });
+        } else if (item.itemType === 'SALES_IVA_RETENTION' && item.customerIvaRetentionId) {
+          // Mark customer IVA retention (sales side) as applied
+          await tx.customerIvaRetention.update({
+            where: { id: item.customerIvaRetentionId },
+            data: { appliedAt: new Date() },
+          });
         }
         // DIFFERENTIAL items don't generate CxC/CxP movements
       }
@@ -439,6 +466,23 @@ export class ReceiptsService {
             amountBs: payment.amountBs,
             exchangeRate: rate.rate,
             reference: payment.reference || null,
+          },
+        });
+      }
+
+      // Recibo de cobro con total negativo = salida de dinero (reintegro de retención, etc.)
+      if (receipt.type === 'COLLECTION' && receipt.totalUsd < -0.01 && dto.cashSessionId) {
+        await tx.cashMovement.create({
+          data: {
+            cashSessionId: dto.cashSessionId,
+            type: 'EXPENSE',
+            amountUsd: Math.abs(this.round2(receipt.totalUsd)),
+            amountBs: Math.abs(this.round2(receipt.totalUsd * rate.rate)),
+            exchangeRate: rate.rate,
+            currency: 'USD',
+            reason: `Reintegro recibo ${receipt.number}`,
+            isManual: false,
+            createdById: userId,
           },
         });
       }
@@ -640,6 +684,16 @@ export class ReceiptsService {
       }
     }
 
+    // Retenciones de IVA sufridas pendientes de cruzar (signo -1)
+    let salesRetentions: any[] = [];
+    if (customerId) {
+      salesRetentions = await this.prisma.customerIvaRetention.findMany({
+        where: { customerId, appliedAt: null, cancelledAt: null },
+        include: { invoice: { select: { number: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
     return {
       receivables: receivables.map((r) => ({
         id: r.id,
@@ -677,6 +731,19 @@ export class ReceiptsService {
         status: 'POSTED',
         sign: n.type === 'NCV' ? -1 : 1, // NCV reduces receivable, NDV adds
       })).filter((n) => n.balanceUsd > 0.01),
+      retentions: salesRetentions.map((r) => ({
+        id: r.id,
+        documentType: 'SALES_IVA_RETENTION',
+        customerIvaRetentionId: r.id,
+        description: `Ret. IVA ${r.number} (${r.invoice?.number || ''})${r.voucherNumber ? ` — Comp. ${r.voucherNumber}` : ''}`,
+        date: r.createdAt,
+        amountUsd: r.retentionUsd,
+        amountBsHistoric: r.retentionBs,
+        exchangeRate: r.exchangeRate,
+        balanceUsd: r.retentionUsd,
+        status: 'POSTED',
+        sign: -1,
+      })),
       payables: [],
     };
   }

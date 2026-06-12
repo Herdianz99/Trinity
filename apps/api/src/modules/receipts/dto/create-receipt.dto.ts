@@ -18,6 +18,10 @@ class ReceiptItemDto {
   @IsString()
   ivaRetentionId?: string;
 
+  @IsOptional()
+  @IsString()
+  customerIvaRetentionId?: string;
+
   @IsNumber()
   @IsIn([1, -1])
   sign: number;
