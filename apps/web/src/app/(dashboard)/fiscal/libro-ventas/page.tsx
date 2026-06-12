@@ -527,18 +527,13 @@ export default function LibroVentasPage() {
   async function exportPdf() {
     let companyName = 'Trinity ERP';
     let companyRif = '';
+    let companyAddress = '';
     try {
       const cfgRes = await fetch('/api/proxy/config');
       const cfg = await cfgRes.json();
       companyName = cfg.companyName || companyName;
       companyRif = cfg.rif || '';
-    } catch {}
-
-    let summary: PdfSummary | null = null;
-    try {
-      const pdfRes = await fetch(`/api/proxy/sales-book/pdf?from=${fromDate}&to=${toDate}`);
-      const pdfData = await pdfRes.json();
-      summary = pdfData.summary;
+      companyAddress = cfg.address || '';
     } catch {}
 
     const printWin = window.open('', '_blank');
@@ -546,103 +541,170 @@ export default function LibroVentasPage() {
 
     const from = new Date(fromDate + 'T00:00:00');
     const to = new Date(toDate + 'T00:00:00');
-    const periodoStr = `${from.toLocaleDateString('es-VE')} al ${to.toLocaleDateString('es-VE')}`;
 
-    const tableRows = entries.map((r, i) => `
+    const fromStr = from.toLocaleDateString('es-VE');
+    const toStr = to.toLocaleDateString('es-VE');
+    const fmtNum = (n: number) => n ? formatVe(n) : '';
+    const fmtDate2 = (d: string) => d ? new Date(d).toLocaleDateString('es-VE') : '';
+
+    // Mapear cada entrada del libro detallado a las columnas del formato SENIAT
+    const mapped = entries.map((e) => {
+      const isNCV = e.documentType === 'NCV';
+      const isNDV = e.documentType === 'NDV';
+      const isRet = e.documentType === 'RETENCION';
+      return {
+        fecha: fmtDate2(e.entryDate),
+        rif: e.customerRif || '',
+        nombre: e.customerName || '',
+        factura: e.invoiceNumber || '',
+        control: e.controlNumber || '',
+        factAfectada: !isRet ? (e.affectedDocNumber || '') : '',
+        notaDebito: isNDV ? (e.invoiceNumber || '') : '',
+        notaCredito: isNCV ? (e.invoiceNumber || '') : '',
+        tipoTran: '01 - reg',
+        total: isRet ? 0 : e.totalBs,
+        noGravadas: isRet ? 0 : e.exemptAmountBs,
+        base16: isRet ? 0 : e.taxableBaseBs,
+        alicuota: isRet ? '' : (e.taxableBaseBs ? '16,00' : ''),
+        imp16: isRet ? 0 : e.ivaAmountBs,
+        ivaRetenido: e.retentionAmountBs || 0,
+        compRetencion: e.retentionVoucherNumber || '',
+      };
+    });
+
+    let tTotal = 0, tNoGrav = 0, tBase16 = 0, tImp16 = 0, tRet = 0;
+    for (const m of mapped) {
+      tTotal += m.total; tNoGrav += m.noGravadas; tBase16 += m.base16; tImp16 += m.imp16; tRet += m.ivaRetenido;
+    }
+
+    const tableRows = mapped.map((m, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
-        <td>${r.controlNumber || ''}</td>
-        <td>${r.invoiceNumber}</td>
-        <td>${r.customerName}</td>
-        <td>${r.customerRif || 'S/R'}</td>
-        <td class="num">${formatVe(r.exemptAmountBs)}</td>
-        <td class="num">${formatVe(r.taxableBaseBs)}</td>
-        <td class="num">${formatVe(r.ivaAmountBs)}</td>
-        <td class="num">${formatVe(r.igtfAmountBs)}</td>
-        <td class="num total">${formatVe(r.totalBs)}</td>
+        <td class="nowrap">${m.fecha}</td>
+        <td>${m.rif}</td>
+        <td>${m.nombre}</td>
+        <td>${m.factura}</td>
+        <td>${m.control}</td>
+        <td>${m.factAfectada}</td>
+        <td>${m.notaDebito}</td>
+        <td>${m.notaCredito}</td>
+        <td class="nowrap">${m.tipoTran}</td>
+        <td class="num">${fmtNum(m.total)}</td>
+        <td class="num">${fmtNum(m.noGravadas)}</td>
+        <td class="num">${fmtNum(m.base16)}</td>
+        <td>${m.alicuota}</td>
+        <td class="num">${fmtNum(m.imp16)}</td>
+        <td class="num">${fmtNum(m.ivaRetenido)}</td>
+        <td>${m.compRetencion}</td>
       </tr>
     `).join('');
 
-    const totalesRow = totales ? `
+    const totalesRow = `
       <tr class="totales">
-        <td colspan="6"><strong>TOTALES</strong></td>
-        <td class="num"><strong>${formatVe(totales.exemptAmountBs)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.taxableBaseBs)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaAmountBs)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.igtfAmountBs)}</strong></td>
-        <td class="num total"><strong>${formatVe(totales.totalBs)}</strong></td>
+        <td colspan="10"></td>
+        <td class="num"><strong>${formatVe(tTotal)}</strong></td>
+        <td class="num"><strong>${formatVe(tNoGrav)}</strong></td>
+        <td class="num"><strong>${formatVe(tBase16)}</strong></td>
+        <td></td>
+        <td class="num"><strong>${formatVe(tImp16)}</strong></td>
+        <td class="num"><strong>${fmtNum(tRet)}</strong></td>
+        <td></td>
       </tr>
-    ` : '';
+    `;
 
-    const summaryPage = summary ? `
-      <div class="page-break"></div>
-      <div class="header">
-        <h1>${companyName}</h1>
-        ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
-        <h2>RESUMEN FISCAL DEL LIBRO DE VENTAS</h2>
-        <p>Per&iacute;odo: ${periodoStr}</p>
-      </div>
-      <div class="summary">
-        <table class="summary-table">
-          <tbody>
-            <tr><td class="label">Ventas internas exentas:</td><td class="value">Bs ${formatVe(summary.ventasExentas)}</td></tr>
-            <tr><td class="label">Base imponible general (16%):</td><td class="value">Bs ${formatVe(summary.baseImponibleGeneral)}</td></tr>
-            <tr><td class="label">D&eacute;bito fiscal (16%):</td><td class="value">Bs ${formatVe(summary.debitoFiscalGeneral)}</td></tr>
-            <tr class="separator"><td colspan="2"><hr/></td></tr>
-            <tr class="highlight"><td class="label">Total base imponible:</td><td class="value">Bs ${formatVe(summary.totalBaseImponible)}</td></tr>
-            <tr class="highlight"><td class="label">Total d&eacute;bito fiscal:</td><td class="value">Bs ${formatVe(summary.totalDebitoFiscal)}</td></tr>
-            <tr><td class="label">Total IGTF:</td><td class="value">Bs ${formatVe(summary.totalIgtf)}</td></tr>
-            <tr class="grand-total"><td class="label">Total ventas del per&iacute;odo:</td><td class="value">Bs ${formatVe(summary.totalVentas)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    ` : '';
+    const resumenSeniat = `
+      <table class="resumen" style="margin-top:20px;">
+        <tr>
+          <td colspan="2"></td>
+          <td class="lbl">Base Imponible</td>
+          <td class="lbl">D&eacute;bito Fiscal</td>
+          <td class="lbl">Iva retenido por<br/>el comprador</td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Total: Ventas internas no gravadas</td>
+          <td class="num">${formatVe(tNoGrav)}</td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las ventas internas afecta solo Alicuota General</td>
+          <td class="num">${formatVe(tBase16)}</td>
+          <td class="num">${formatVe(tImp16)}</td>
+          <td class="num">${fmtNum(tRet)}</td>
+        </tr>
+        <tr class="subtotal">
+          <td colspan="2"></td>
+          <td class="num"><strong>${formatVe(tBase16 + tNoGrav)}</strong></td>
+          <td class="num"><strong>${formatVe(tImp16)}</strong></td>
+          <td class="num"><strong>${fmtNum(tRet)}</strong></td>
+        </tr>
+      </table>
+    `;
 
     printWin.document.write(`<!DOCTYPE html>
     <html>
     <head>
-      <title>Libro de Ventas - ${periodoStr}</title>
+      <title>Libro de Ventas - ${fromStr} al ${toStr}</title>
       <style>
-        @page { size: A4 landscape; margin: 10mm; }
-        body { font-family: Arial, sans-serif; font-size: 8pt; color: #000; }
-        .header { text-align: center; margin-bottom: 10px; }
-        .header h1 { font-size: 12pt; margin: 2px 0; }
-        .header h2 { font-size: 10pt; margin: 2px 0; font-weight: normal; }
-        .header p { font-size: 8pt; margin: 2px 0; color: #555; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #999; padding: 3px 4px; text-align: left; }
-        th { background: #e0e0e0; font-size: 7pt; }
+        @page { size: legal landscape; margin: 8mm; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 6.5pt; color: #000; margin: 0; padding: 0; }
+        .header { text-align: center; margin-bottom: 6px; position: relative; }
+        .header h1 { font-size: 10pt; margin: 0; font-weight: bold; }
+        .header .rif { font-size: 8pt; margin: 1px 0; }
+        .header .address { font-size: 7pt; margin: 1px 0; }
+        .header h2 { font-size: 9pt; margin: 4px 0 2px; font-weight: bold; }
+        .header-right { position: absolute; top: 0; right: 0; text-align: right; font-size: 7pt; }
+        .header-right .label { font-weight: bold; display: inline-block; width: 50px; text-align: right; }
+        table.main { width: 100%; border-collapse: collapse; }
+        table.main th, table.main td { border: 0.5px solid #999; padding: 1px 2px; text-align: left; font-size: 6pt; }
+        table.main th { background: #f0f0f0; font-size: 5.5pt; text-align: center; vertical-align: bottom; }
+        table.main th.group { background: #e0e0e0; text-align: center; font-weight: bold; border-bottom: 1.5px solid #333; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
-        .total { font-weight: bold; }
-        .totales td { background: #f0f0f0; border-top: 2px solid #333; }
-        .footer { text-align: center; margin-top: 8px; font-size: 7pt; color: #888; }
-        .page-break { page-break-before: always; margin-top: 20mm; }
-        .summary { max-width: 600px; margin: 30px auto; }
-        .summary-table { border: none; }
-        .summary-table td { border: none; padding: 6px 12px; font-size: 10pt; }
-        .summary-table .label { text-align: left; color: #333; }
-        .summary-table .value { text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; }
-        .summary-table .separator td { padding: 2px; }
-        .summary-table .separator hr { border: 1px solid #666; margin: 0; }
-        .summary-table .highlight td { font-weight: bold; }
-        .summary-table .grand-total td { font-size: 12pt; font-weight: bold; border-top: 2px solid #333; padding-top: 10px; }
+        .nowrap { white-space: nowrap; }
+        .totales td { background: #f0f0f0; border-top: 1.5px solid #333; }
+        .footer { font-size: 6pt; color: #888; margin-top: 4px; }
+        table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; }
+        table.resumen td { border: 0.5px solid #999; padding: 2px 6px; font-size: 6.5pt; }
+        table.resumen .lbl { text-align: left; font-weight: normal; }
+        table.resumen .num { text-align: right; }
+        table.resumen .subtotal td { border-top: 1.5px solid #333; }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1>${companyName}</h1>
-        ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
-        <h2>LIBRO DE VENTAS</h2>
-        <p>Per&iacute;odo: ${periodoStr}</p>
+        <h1>${companyName.toUpperCase()}</h1>
+        ${companyRif ? `<div class="rif">RIF: ${companyRif}</div>` : ''}
+        ${companyAddress ? `<div class="address">${companyAddress.toUpperCase()}</div>` : ''}
+        <h2>LIBRO DE VENTAS (DETALLADO)</h2>
+        <div class="header-right">
+          <div><span class="label">Desde</span>&nbsp;&nbsp;${fromStr}</div>
+          <div><span class="label">Hasta</span>&nbsp;&nbsp;${toStr}</div>
+          <div><span class="label">Pagina</span>&nbsp;&nbsp;1</div>
+        </div>
       </div>
-      <table>
+
+      <table class="main">
         <thead>
           <tr>
-            <th>N&deg;</th><th>Fecha</th><th>N&deg; Control</th><th>N&deg; Factura</th>
-            <th>Cliente</th><th>RIF</th>
-            <th>Exento Bs</th><th>Base Imponible Bs</th><th>IVA Bs</th>
-            <th>IGTF Bs</th><th>Total Bs</th>
+            <th rowspan="2">Oper.<br/>Nro.</th>
+            <th rowspan="2">Fecha</th>
+            <th rowspan="2">N&deg; Rif</th>
+            <th rowspan="2">Nombre o Raz&oacute;n Social</th>
+            <th rowspan="2">Factura</th>
+            <th rowspan="2">N&uacute;mero<br/>Control</th>
+            <th rowspan="2">Numero de<br/>Factura<br/>Afectada</th>
+            <th rowspan="2">Numero<br/>Nota<br/>Debito</th>
+            <th rowspan="2">Numero<br/>Nota<br/>Credito</th>
+            <th rowspan="2">Tipo<br/>de<br/>Transac.</th>
+            <th rowspan="2">Total ventas<br/>Incluyendo<br/>el IVA</th>
+            <th rowspan="2">Ventas<br/>Internas<br/>No Gravadas</th>
+            <th class="group" colspan="3">VENTAS INTERNAS GRAVADAS<br/>ALICUOTA GENERAL</th>
+            <th rowspan="2">Iva Retenido<br/>(Por el<br/>Comprador)</th>
+            <th rowspan="2">Comp. de<br/>Retencion</th>
+          </tr>
+          <tr>
+            <th>Base<br/>imponible<br/>16%</th>
+            <th>%<br/>Alicuota</th>
+            <th>Impuesto<br/>iva 16%</th>
           </tr>
         </thead>
         <tbody>
@@ -650,8 +712,10 @@ export default function LibroVentasPage() {
           ${totalesRow}
         </tbody>
       </table>
-      <div class="footer">Generado el ${new Date().toLocaleString('es-VE')}</div>
-      ${summaryPage}
+
+      ${resumenSeniat}
+
+      <div class="footer">Documento emitido con Trinity ERP &mdash; Generado el ${new Date().toLocaleString('es-VE')}</div>
       <script>window.print();</script>
     </body>
     </html>`);
