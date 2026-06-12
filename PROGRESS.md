@@ -1,5 +1,38 @@
 # Trinity ERP — Progreso
 
+## 🧪 PARA PROBAR MAÑANA (sesiones 50-51 — todo en local, SIN deploy todavia)
+
+> Sistema local: Web http://localhost:3000 (login admin@trinity.com / Admin1234!) · API :4000
+> Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. Caja con sesion: Fiscal 2.
+> Checklist detallado de retenciones en `docs/PRUEBAS-retenciones-y-auditoria.md`.
+
+### A. Retenciones de IVA de clientes (sesion 50)
+- [ ] Toggle "Contribuyente especial" en el POS (persiste, oculto para cliente default)
+- [ ] Factura a credito a contribuyente especial → retencion auto-creada (RVC-xxxx, 75%)
+- [ ] Recibo de cobro: cruzar factura (+) y retencion (−) → cobrar neto
+- [ ] Registrar comprobante (14 digitos) → linea en libro de ventas
+- [ ] Caso reintegro: factura de contado pagada → nueva retencion con comprobante → recibo negativo saca dinero de caja (movimiento EXPENSE en la sesion)
+- [ ] Boton "Retencion IVA" en el detalle de la factura (dentro del menu "Mas acciones")
+- [ ] Una sola retencion por factura (la 2da se rechaza; no aparece en el buscador)
+- [ ] Menu "Mas acciones" en el detalle de factura agrupa todo (incl. Imprimir PDF)
+- [ ] Alerta de comprobantes pendientes (dias en rojo > 7)
+
+### B. Libros fiscales (sesion 51)
+- [ ] **Libro de ventas detallado (pantalla)**: columnas Tipo, Doc. Afect., IVA Ret., Comprob.
+- [ ] **Nota de credito de venta (NCV)** confirmada → aparece en el detallado en NEGATIVO con factura afectada; NO aparece en el tab Reportes Z
+- [ ] **Nota de debito de venta (NDV)** → aparece en positivo
+- [ ] **Retencion** en el detallado: tipo "Retencion", monto en IVA Ret., su comprobante
+- [ ] **Totales del detallado**: IVA Bs (debito fiscal) separado del IVA Retenido
+- [ ] **PDF del detallado** (boton Exportar PDF, tab Detallado): formato SENIAT apaisado con todas las columnas como WenSoft — VERIFICAR contra `docs/screenshots/libro_de_ventas_detallado1.pdf`
+- [ ] **Reportes Z**: la fila de retencion NO muestra la factura (muestra su comprobante) — bug reportado, ya corregido
+- [ ] **Libro de compras**: confirmar una NCC sobre factura de compra → aparece con chip "N. Credito" en negativo → el credito fiscal del periodo BAJA
+
+### C. Notas
+- El fix de login local (`apps/web/.env.local` con COOKIE_SECURE=false) es SOLO local, no se commitea, no afecta deploy.
+- DEPLOY pendiente: lo hace Diego con `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`. La migracion `20260612100000_book_document_types` corre sola (incluye backfill).
+
+---
+
 ## 🔍 EN PROGRESO — Auditoria libros fiscales
 
 > Hallazgos de la auditoria de los libros de compras y ventas (sesion 50-51).
@@ -12,7 +45,7 @@
 
 ### 🟡 Prioridad media
 - [x] **Bug: la retencion mostraba su factura en el libro de reportes Z** — **[RESUELTO sesion 51]**: la fila de retencion en el Z ya no muestra la factura; muestra su comprobante. El detallado si muestra la factura afectada (correcto).
-- [x] **Columnas faltantes en el libro de ventas detallado** — **[RESUELTO sesion 51]**: se agregaron Tipo de documento, N° Doc. Afectado, IVA Retenido y N° Comprobante de Retencion (modelo + tabla + total separado). Falta replicar el formato exacto del PDF WenSoft (layout apaisado) si se desea — pendiente opcional.
+- [x] **Columnas faltantes en el libro de ventas detallado** — **[RESUELTO sesion 51]**: se agregaron Tipo de documento, N° Doc. Afectado, IVA Retenido y N° Comprobante de Retencion (modelo + tabla en pantalla + total separado). El **PDF exportado del detallado** se reescribio al formato SENIAT (apaisado, como WenSoft): Factura, N° Control, Factura Afectada, Notas Db/Cr, Base/Impuesto 16%, IVA Retenido, Comp. Retencion + resumen. Sin desglose 8%/31% (siempre vacias en la practica).
 - [ ] **Sin desglose por alicuota (8% / 16% / 16+15%)**: `SalesBookEntry` y `PurchaseBookEntry` aplanan todo en una sola base/IVA y los reportes rotulan "16%". Confirmado con el PDF de referencia WenSoft: en la practica TODAS las filas son 16% (las columnas 8%/31% van vacias). Deuda tecnica con disparador: el dia que vendan/compren a alicuota distinta. PENDIENTE.
 - [ ] **TXT de retenciones para portal SENIAT**: si la empresa es contribuyente especial debe declarar quincenalmente las retenciones (de compras) en TXT con formato del portal. El modulo de comprobantes no lo genera. Complemento del modulo de retenciones en compras.
 
