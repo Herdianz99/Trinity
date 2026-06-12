@@ -73,6 +73,7 @@ const menuSections: MenuSection[] = [
       { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={18} /> },
       { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={18} /> },
       { label: 'Notas Cr/Db', href: '/credit-debit-notes', icon: <FileX2 size={18} /> },
+      { label: 'Retenciones clientes', href: '/sales/customer-retentions', icon: <Shield size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
     ],
   },
