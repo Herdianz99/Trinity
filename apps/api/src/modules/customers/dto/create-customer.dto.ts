@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsInt, IsIn, Min, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsInt, IsIn, IsBoolean, Min, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCustomerDto {
@@ -44,4 +44,9 @@ export class CreateCustomerDto {
   @IsInt()
   @Min(0)
   creditDays?: number;
+
+  @ApiProperty({ default: false, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isSpecialTaxpayer?: boolean;
 }
