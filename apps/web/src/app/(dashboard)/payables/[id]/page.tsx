@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Receipt, Loader2, ExternalLink, DollarSign, X, Shield,
+  ArrowLeft, Receipt, Loader2, ExternalLink, DollarSign, X, Trash2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface RetentionVoucherRef {
   id: string;
@@ -44,6 +45,7 @@ interface PayableDetail {
   notes: string | null;
   serieId: string | null;
   serie: { id: string; name: string; isFiscal: boolean } | null;
+  serieProveedor: string | null;
   controlFiscal: string | null;
   currency: string;
   originalDate: string | null;
@@ -102,6 +104,18 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
+function Field({ label, value, mono, accent, className }: { label: string; value: ReactNode; mono?: boolean; accent?: string; className?: string }) {
+  const empty = value === null || value === undefined || value === '';
+  return (
+    <div className={className}>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">{label}</div>
+      <div className={`text-sm ${mono ? 'font-mono' : ''} ${accent || 'text-slate-200'}`}>
+        {empty ? <span className="text-slate-600">—</span> : value}
+      </div>
+    </div>
+  );
+}
+
 export default function PayableDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -119,6 +133,23 @@ export default function PayableDetailPage() {
   const [payReference, setPayReference] = useState('');
   const [processing, setProcessing] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function executeDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/proxy/payables/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al eliminar');
+      }
+      router.push('/payables');
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+      setDeleting(false);
+    }
+  }
 
   const fetchPayable = useCallback(async () => {
     setLoading(true);
@@ -192,6 +223,9 @@ export default function PayableDetailPage() {
   const isFiscal = payable.serie?.isFiscal ?? false;
   const hasFiscalData = isFiscal || (payable.exemptBaseUsd || 0) > 0 || (payable.taxableBase16Usd || 0) > 0 || (payable.taxableBase8Usd || 0) > 0 || (payable.taxableBase31Usd || 0) > 0;
   const retentionVouchers = (payable.retentionVoucherLines || []).map(l => l.retentionVoucher).filter(Boolean);
+  // Solo CxP manual (sin factura de compra) y no cruzada/pagada
+  const canDelete = !payable.purchaseOrderId && payable.status !== 'PAID' && payable.status !== 'PARTIAL'
+    && (payable.paidAmountUsd || 0) === 0 && payable.payments.length === 0;
 
   return (
     <div>
@@ -231,6 +265,12 @@ export default function PayableDetailPage() {
               <DollarSign size={14} /> Registrar pago
             </button>
           )}
+          {canDelete && (
+            <button onClick={() => setAuthModalOpen(true)} disabled={deleting}
+              className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+              {deleting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar
+            </button>
+          )}
         </div>
       </div>
 
@@ -249,175 +289,81 @@ export default function PayableDetailPage() {
 
         {/* TAB: Informacion General */}
         <TabsContent value="info">
-          <div className="card p-6">
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Proveedor</span>
-                <span className="text-white">{payable.supplier.name} {payable.supplier.rif ? `(${payable.supplier.rif})` : ''}</span>
-              </div>
-              {payable.number && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Correlativo</span>
-                  <span className="text-white font-mono">{payable.number}</span>
-                </div>
-              )}
-              {payable.purchaseOrder && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Factura de compra</span>
-                  <button onClick={() => router.push(`/purchases/${payable.purchaseOrderId}`)} className="text-green-400 hover:text-green-300 font-mono flex items-center gap-1">
-                    {payable.purchaseOrder.number} <ExternalLink size={10} />
-                  </button>
-                </div>
-              )}
-              {payable.documentNumber && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Nro. documento</span>
-                  <span className="text-white font-mono">{payable.documentNumber}</span>
-                </div>
-              )}
-              {payable.controlFiscal && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Control fiscal</span>
-                  <span className="text-white font-mono">{payable.controlFiscal}</span>
-                </div>
-              )}
-              {payable.serie && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Serie</span>
-                  <span className={isFiscal ? 'text-green-400' : 'text-slate-300'}>{payable.serie.name} {isFiscal ? '(Fiscal)' : ''}</span>
-                </div>
-              )}
-              {payable.currency && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Moneda</span>
-                  <span className="text-white">{payable.currency}</span>
-                </div>
-              )}
-              {payable.description && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Descripcion</span>
-                  <span className="text-white">{payable.description}</span>
-                </div>
-              )}
-
-              {/* Fechas */}
-              <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
-                {payable.originalDate && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Fecha original</span>
-                    <span className="text-white">{fmtDate(payable.originalDate)}</span>
-                  </div>
+          <div className="card p-6 space-y-6">
+            {/* Datos del documento */}
+            <section>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 pb-2 border-b border-slate-700/50">Datos del documento</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                <Field label="Proveedor" value={payable.supplier.name} className="col-span-2 sm:col-span-1" />
+                <Field label="RIF" value={payable.supplier.rif} mono />
+                <Field label="Correlativo (CxP)" value={payable.number} mono />
+                <Field label="Nro. Documento" value={payable.documentNumber} mono />
+                <Field label="Control Fiscal" value={payable.controlFiscal} mono />
+                <Field label="Serie (factura proveedor)" value={payable.serieProveedor} mono />
+                <Field label="Serie fiscal"
+                  value={payable.serie ? `${payable.serie.name}${isFiscal ? ' (Fiscal)' : ''}` : null}
+                  accent={isFiscal ? 'text-green-400' : 'text-slate-200'} />
+                <Field label="Moneda" value={payable.currency} />
+                {payable.purchaseOrder && (
+                  <Field label="Factura de compra" value={
+                    <button onClick={() => router.push(`/purchases/${payable.purchaseOrderId}`)}
+                      className="text-green-400 hover:text-green-300 font-mono flex items-center gap-1">
+                      {payable.purchaseOrder.number} <ExternalLink size={10} />
+                    </button>
+                  } />
                 )}
-                {payable.receptionDate && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Fecha recepcion</span>
-                    <span className="text-white">{fmtDate(payable.receptionDate)}</span>
-                  </div>
+                {payable.description && (
+                  <Field label="Descripción" value={payable.description} className="col-span-2 sm:col-span-3" />
                 )}
-                {payable.dueDate && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Fecha vencimiento</span>
-                    <span className="text-white">{fmtDate(payable.dueDate)}</span>
-                  </div>
-                )}
-                {payable.paymentTerms && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Forma de pago</span>
-                    <span className="text-white">{payable.paymentTerms.replace(/_/g, ' ')}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tasa al crear</span>
-                  <span className="text-white font-mono">Bs {payable.exchangeRate?.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Fecha creacion</span>
-                  <span className="text-white">{fmtDate(payable.createdAt)}</span>
-                </div>
               </div>
+            </section>
 
-              {/* Montos */}
-              <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Monto total USD</span>
-                  <span className="text-white font-mono">${payable.amountUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Monto total Bs</span>
-                  <span className="text-slate-300 font-mono">Bs {payable.amountBs.toFixed(2)}</span>
-                </div>
+            {/* Fechas y forma de pago */}
+            <section>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 pb-2 border-b border-slate-700/50">Fechas y forma de pago</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                <Field label="Fecha original" value={payable.originalDate ? fmtDate(payable.originalDate) : null} />
+                <Field label="Fecha recepción" value={payable.receptionDate ? fmtDate(payable.receptionDate) : null} />
+                <Field label="Fecha vencimiento" value={payable.dueDate ? fmtDate(payable.dueDate) : null} />
+                <Field label="Forma de pago" value={payable.paymentTerms ? payable.paymentTerms.replace(/_/g, ' ') : null} />
+                <Field label="Tasa al crear" value={`Bs ${payable.exchangeRate?.toFixed(2)}`} mono />
+                <Field label="Fecha de creación" value={fmtDate(payable.createdAt)} />
               </div>
+            </section>
 
-              {/* Retentions */}
-              {(payable.retentionUsd > 0 || (payable.islrRetentionUsd || 0) > 0) && (
-                <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
-                  <h4 className="text-orange-400 font-medium flex items-center gap-1">
-                    <Shield size={14} /> Retenciones
-                  </h4>
-                  {payable.retentionUsd > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Retencion IVA USD</span>
-                        <span className="text-orange-400 font-mono">-${payable.retentionUsd.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Retencion IVA Bs</span>
-                        <span className="text-orange-400 font-mono">-Bs {payable.retentionBs.toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
-                  {(payable.islrRetentionUsd || 0) > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Retencion ISLR USD</span>
-                        <span className="text-purple-400 font-mono">-${payable.islrRetentionUsd.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Retencion ISLR Bs</span>
-                        <span className="text-purple-400 font-mono">-Bs {payable.islrRetentionBs.toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
-                  {retentionVouchers.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {retentionVouchers.map((rv) => (
-                        <button
-                          key={rv.id}
-                          onClick={() => router.push(`/purchases/retentions/${rv.id}`)}
-                          className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-xs"
-                        >
-                          <ExternalLink size={12} />
-                          Comprobante {rv.number} ({rv.status}) — ${rv.retentionAmountUsd.toFixed(2)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {/* Montos y retenciones */}
+            <section>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 pb-2 border-b border-slate-700/50">Montos</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                <Field label="Monto total USD" value={`$${payable.amountUsd.toFixed(2)}`} mono />
+                <Field label="Monto total Bs" value={`Bs ${payable.amountBs.toFixed(2)}`} mono accent="text-slate-300" />
+                {payable.retentionUsd > 0 && <Field label="Retención IVA USD" value={`-$${payable.retentionUsd.toFixed(2)}`} mono accent="text-orange-400" />}
+                {payable.retentionUsd > 0 && <Field label="Retención IVA Bs" value={`-Bs ${payable.retentionBs.toFixed(2)}`} mono accent="text-orange-400" />}
+                {(payable.islrRetentionUsd || 0) > 0 && <Field label="Retención ISLR USD" value={`-$${payable.islrRetentionUsd.toFixed(2)}`} mono accent="text-purple-400" />}
+                {(payable.islrRetentionUsd || 0) > 0 && <Field label="Retención ISLR Bs" value={`-Bs ${payable.islrRetentionBs.toFixed(2)}`} mono accent="text-purple-400" />}
+                <Field label="Neto a pagar" value={`$${payable.netPayableUsd.toFixed(2)}`} mono />
+                <Field label="Ya pagado" value={`$${payable.paidAmountUsd.toFixed(2)}`} mono accent="text-slate-300" />
+                <Field label="Saldo pendiente" value={`$${payable.balanceUsd.toFixed(2)}`} mono accent="text-red-400" />
+              </div>
+              {retentionVouchers.length > 0 && (
+                <div className="mt-4 space-y-1">
+                  {retentionVouchers.map((rv) => (
+                    <button key={rv.id} onClick={() => router.push(`/purchases/retentions/${rv.id}`)}
+                      className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-xs">
+                      <ExternalLink size={12} /> Comprobante {rv.number} ({rv.status}) — ${rv.retentionAmountUsd.toFixed(2)}
+                    </button>
+                  ))}
                 </div>
               )}
+            </section>
 
-              <div className="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Neto a pagar</span>
-                  <span className="text-white font-mono">${payable.netPayableUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Ya pagado</span>
-                  <span className="text-slate-300 font-mono">${payable.paidAmountUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-base">
-                  <span className="text-slate-300">Saldo pendiente</span>
-                  <span className="text-red-400 font-mono">${payable.balanceUsd.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Notas */}
-              {payable.notes && (
-                <div className="border-t border-slate-700/50 pt-3 mt-3">
-                  <span className="text-slate-400 block mb-1">Notas</span>
-                  <p className="text-slate-300 whitespace-pre-wrap">{payable.notes}</p>
-                </div>
-              )}
-            </div>
+            {/* Notas */}
+            {payable.notes && (
+              <section>
+                <h3 className="text-sm font-semibold text-slate-300 mb-2 pb-2 border-b border-slate-700/50">Notas</h3>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap">{payable.notes}</p>
+              </section>
+            )}
           </div>
         </TabsContent>
 
@@ -636,6 +582,16 @@ export default function PayableDetailPage() {
           </div>
         </div>
       )}
+
+      <DynamicKeyModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthorized={executeDelete}
+        permission="DELETE_PAYABLE"
+        entityType="Payable"
+        entityId={id}
+        action={`Eliminar CxP ${payable.number || ''}`}
+      />
     </div>
   );
 }

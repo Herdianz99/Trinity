@@ -536,69 +536,75 @@ export default function LibroVentasPage() {
 
   function exportExcel() {
     const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
-    const sum = (sel: (e: SalesBookEntry) => number) =>
-      r2(entries.reduce((a, e) => a + (Number(sel(e)) || 0), 0));
+    const nz = (n: number) => (n ? r2(n) : '');
+    const t = totales || { exemptAmountBs: 0, taxableBaseBs: 0, ivaAmountBs: 0, retentionAmountBs: 0, igtfAmountBs: 0, totalBs: 0 };
 
-    const rows: Record<string, string | number>[] = entries.map((e, i) => {
+    // Mismo orden de columnas que el PDF (formato SENIAT)
+    const aoa: (string | number)[][] = [[
+      'Oper. Nro.', 'Fecha', 'N° Rif', 'Nombre o Razón Social', 'Factura', 'N° Control', 'Máquina Fiscal',
+      'N° Factura Afectada', 'N° Nota Débito', 'N° Nota Crédito', 'Tipo Transac.',
+      'Total Ventas Bs', 'Ventas No Gravadas Bs', 'Base Imponible 16% Bs', '% Alícuota',
+      'Impuesto IVA 16% Bs', 'IGTF Bs', 'IVA Retenido Bs', 'Comp. Retención',
+    ]];
+
+    entries.forEach((e, i) => {
       const isNCV = e.documentType === 'NCV';
       const isNDV = e.documentType === 'NDV';
-      const isFactura = e.documentType === 'FACTURA';
-      return {
-        'N°': i + 1,
-        'Fecha': e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '',
-        'Tipo': docTypeLabel(e.documentType),
-        'N° Control': e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
-        'Máquina Fiscal': e.invoice?.fiscalMachineSerial || '',
-        'N° Factura': isFactura ? correlativo(e.invoiceNumber) : '',
-        'N° Factura Afectada': correlativo(e.affectedDocNumber),
-        'N° Nota Débito': isNDV ? correlativo(e.invoiceNumber) : '',
-        'N° Nota Crédito': isNCV ? correlativo(e.invoiceNumber) : '',
-        'Cliente': e.customerName || '',
-        'RIF': e.customerRif || '',
-        'Exento Bs': r2(e.exemptAmountBs),
-        'Base Imponible Bs': r2(e.taxableBaseBs),
-        'IVA Bs': r2(e.ivaAmountBs),
-        'IVA Retenido Bs': r2(e.retentionAmountBs),
-        'N° Comprobante Ret.': e.retentionVoucherNumber || '',
-        'IGTF Bs': r2(e.igtfAmountBs),
-        'Total Bs': r2(e.totalBs),
-      };
+      const isRet = e.documentType === 'RETENCION';
+      const isFactura = e.documentType === 'FACTURA' || e.documentType === 'CXC';
+      aoa.push([
+        i + 1,
+        e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '',
+        e.customerRif || '',
+        e.customerName || '',
+        isFactura ? correlativo(e.invoiceNumber) : '',
+        e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
+        e.invoice?.fiscalMachineSerial || '',
+        correlativo(e.affectedDocNumber),
+        isNDV ? correlativo(e.invoiceNumber) : '',
+        isNCV ? correlativo(e.invoiceNumber) : '',
+        '01 - reg',
+        isRet ? '' : nz(e.totalBs),
+        isRet ? '' : nz(e.exemptAmountBs),
+        isRet ? '' : nz(e.taxableBaseBs),
+        (!isRet && e.taxableBaseBs) ? '16,00' : '',
+        isRet ? '' : nz(e.ivaAmountBs),
+        isRet ? '' : nz(e.igtfAmountBs),
+        nz(e.retentionAmountBs),
+        e.retentionVoucherNumber || '',
+      ]);
     });
 
-    rows.push({
-      'N°': '', 'Fecha': '', 'Tipo': 'TOTALES', 'N° Control': '', 'Máquina Fiscal': '', 'N° Factura': '',
-      'N° Factura Afectada': '', 'N° Nota Débito': '', 'N° Nota Crédito': '',
-      'Cliente': '', 'RIF': '',
-      'Exento Bs': sum((e) => e.exemptAmountBs),
-      'Base Imponible Bs': sum((e) => e.taxableBaseBs),
-      'IVA Bs': sum((e) => e.ivaAmountBs),
-      'IVA Retenido Bs': sum((e) => e.retentionAmountBs),
-      'N° Comprobante Ret.': '',
-      'IGTF Bs': sum((e) => e.igtfAmountBs),
-      'Total Bs': sum((e) => e.totalBs),
-    });
+    // Fila de totales
+    aoa.push([
+      'TOTALES', '', '', '', '', '', '', '', '', '', '',
+      r2(t.totalBs), r2(t.exemptAmountBs), r2(t.taxableBaseBs), '',
+      r2(t.ivaAmountBs), r2(t.igtfAmountBs), r2(t.retentionAmountBs), '',
+    ]);
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    // Anchos ajustados al contenido: columnas de N° cortas, cliente/montos mas amplias
+    // Cuadro de totales (resumen SENIAT) — igual que el PDF
+    aoa.push([]);
+    aoa.push(['', '', 'Base Imponible', 'Débito Fiscal', 'Iva retenido por el comprador', 'Iva de ventas percibido']);
+    aoa.push(['Total ventas internas no gravadas', '', r2(t.exemptAmountBs)]);
+    aoa.push(['Suma de las ventas de exportación']);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota General', '', r2(t.taxableBaseBs), r2(t.ivaAmountBs), r2(t.retentionAmountBs)]);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota General + Adicional', '', 0, 0]);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota Reducida', '', 0, 0]);
+    aoa.push(['Total IGTF', '', r2(t.igtfAmountBs)]);
+    aoa.push(['SUBTOTAL', '', r2(t.taxableBaseBs + t.exemptAmountBs), r2(t.ivaAmountBs), r2(t.retentionAmountBs)]);
+    aoa.push([]);
+    aoa.push(['Ventas internas afectas solo alicuota general periodos anteriores']);
+    aoa.push(['Ventas internas afectas en alicuota Gral. + Adic. periodos anteriores']);
+    aoa.push(['Ventas internas afectas en alicuota reducida periodos anteriores']);
+    aoa.push([]);
+    aoa.push(['Contribuyente', '', r2(t.taxableBaseBs), r2(t.ivaAmountBs)]);
+    aoa.push(['No contribuyente']);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [
-      { wch: 5 },   // N°
-      { wch: 11 },  // Fecha
-      { wch: 13 },  // Tipo
-      { wch: 12 },  // N° Control
-      { wch: 14 },  // Máquina Fiscal
-      { wch: 10 },  // N° Factura
-      { wch: 10 },  // N° Factura Afectada
-      { wch: 10 },  // N° Nota Débito
-      { wch: 10 },  // N° Nota Crédito
-      { wch: 28 },  // Cliente
-      { wch: 13 },  // RIF
-      { wch: 15 },  // Exento Bs
-      { wch: 16 },  // Base Imponible Bs
-      { wch: 14 },  // IVA Bs
-      { wch: 15 },  // IVA Retenido Bs
-      { wch: 16 },  // N° Comprobante Ret.
-      { wch: 12 },  // IGTF Bs
-      { wch: 15 },  // Total Bs
+      { wch: 8 }, { wch: 11 }, { wch: 13 }, { wch: 30 }, { wch: 14 }, { wch: 13 }, { wch: 14 },
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 11 }, { wch: 16 }, { wch: 18 }, { wch: 18 },
+      { wch: 9 }, { wch: 16 }, { wch: 13 }, { wch: 15 }, { wch: 16 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Libro de Ventas');
@@ -639,7 +645,7 @@ export default function LibroVentasPage() {
         fecha: fmtDate2(e.entryDate),
         rif: e.customerRif || '',
         nombre: e.customerName || '',
-        factura: e.documentType === 'FACTURA' ? correlativo(e.invoiceNumber) : '',
+        factura: ['FACTURA', 'CXC'].includes(e.documentType) ? correlativo(e.invoiceNumber) : '',
         control: e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
         maquinaFiscal: e.invoice?.fiscalMachineSerial || '',
         factAfectada: correlativo(e.affectedDocNumber),
@@ -913,58 +919,61 @@ export default function LibroVentasPage() {
     }
     unified.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const rows: Record<string, string | number>[] = unified.map((u, i) => ({
-      'N°': i + 1,
-      'Fecha': fmtD(u.date),
-      'RIF': u.rif,
-      'Nombre o Razón Social': u.name,
-      'Serial Máquina Fiscal': u.machineSerial,
-      'N° Reporte Z': u.zNumber,
-      'Comprobante Inicial': u.compInicial,
-      'Comprobante Final': u.compFinal,
-      'Factura': u.factura,
-      'Serie': u.serie,
-      'Fiscal': u.fiscal,
-      'N° Factura Afectada': u.numFactAfectada,
-      'N° Nota Débito': u.numND,
-      'N° Nota Crédito': u.numNC,
-      'Tipo Transac.': u.tipoTransac,
-      'Total Ventas Bs': r2(u.totalVentas),
-      'Ventas No Gravadas Bs': r2(u.ventasNoGravadas),
-      'Base Imponible 16% Bs': r2(u.baseImponible16),
-      '% Alícuota': u.alicuota,
-      'Impuesto IVA 16% Bs': r2(u.impuestoIva16),
-      'IGTF Bs': r2(u.igtf),
-      'IVA Retenido Bs': r2(u.ivaRetenido),
-      'Comp. Retención': u.compRetencion,
-      'IVA Percibido Bs': r2(u.ivaPercibido),
-      'CONT': u.cont,
-    }));
-
-    const sum = (sel: (u: any) => number) => r2(unified.reduce((a, u) => a + (Number(sel(u)) || 0), 0));
-    rows.push({
-      'N°': '', 'Fecha': '', 'RIF': '', 'Nombre o Razón Social': '', 'Serial Máquina Fiscal': '',
-      'N° Reporte Z': '', 'Comprobante Inicial': '', 'Comprobante Final': '', 'Factura': '',
-      'Serie': '', 'Fiscal': '', 'N° Factura Afectada': '', 'N° Nota Débito': '', 'N° Nota Crédito': '',
-      'Tipo Transac.': 'TOTALES',
-      'Total Ventas Bs': sum((u) => u.totalVentas),
-      'Ventas No Gravadas Bs': sum((u) => u.ventasNoGravadas),
-      'Base Imponible 16% Bs': sum((u) => u.baseImponible16),
-      '% Alícuota': '',
-      'Impuesto IVA 16% Bs': sum((u) => u.impuestoIva16),
-      'IGTF Bs': sum((u) => u.igtf),
-      'IVA Retenido Bs': sum((u) => u.ivaRetenido),
-      'Comp. Retención': '',
-      'IVA Percibido Bs': sum((u) => u.ivaPercibido),
-      'CONT': '',
+    const nz = (n: number) => (n ? r2(n) : '');
+    // Mismo orden de columnas que el PDF del Reporte Z (formato SENIAT)
+    const aoa: (string | number)[][] = [[
+      'Oper. Nro.', 'Fecha', 'N° Rif', 'Nombre o Razón Social', 'Serial Máquina Fiscal', 'N° Reporte Z',
+      'Comprobante Inicial', 'Comprobante Final', 'Factura', 'Serie', 'Fiscal',
+      'N° Factura Afectada', 'N° Nota Débito', 'N° Nota Crédito', 'Tipo Transac.',
+      'Total Ventas Bs', 'Ventas No Gravadas Bs', 'Base Imponible 16% Bs', '% Alícuota',
+      'Impuesto IVA 16% Bs', 'IVA Retenido Bs', 'Comp. Retención', 'IVA Percibido Bs', 'CONT',
+    ]];
+    unified.forEach((u, i) => {
+      aoa.push([
+        i + 1, fmtD(u.date), u.rif, u.name, u.machineSerial, u.zNumber, u.compInicial, u.compFinal,
+        u.factura, u.serie, u.fiscal, u.numFactAfectada, u.numND, u.numNC, u.tipoTransac,
+        nz(u.totalVentas), nz(u.ventasNoGravadas), nz(u.baseImponible16), u.alicuota,
+        nz(u.impuestoIva16), nz(u.ivaRetenido), u.compRetencion, nz(u.ivaPercibido), u.cont,
+      ]);
     });
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const sum = (sel: (u: any) => number) => r2(unified.reduce((a, u) => a + (Number(sel(u)) || 0), 0));
+    const tNoGrav = sum((u) => u.ventasNoGravadas);
+    const tBase = sum((u) => u.baseImponible16);
+    const tIva = sum((u) => u.impuestoIva16);
+    const tIgtf = sum((u) => u.igtf);
+    const tRet = sum((u) => u.ivaRetenido);
+
+    // Fila de totales
+    aoa.push([
+      'TOTALES', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      sum((u) => u.totalVentas), tNoGrav, tBase, '', tIva, tRet, '', sum((u) => u.ivaPercibido), '',
+    ]);
+
+    // Cuadro de totales (resumen SENIAT) — igual que el PDF
+    aoa.push([]);
+    aoa.push(['', '', 'Base Imponible', 'Débito Fiscal', 'Iva retenido por el comprador', 'Iva de ventas percibido']);
+    aoa.push(['Total ventas internas no gravadas', '', tNoGrav]);
+    aoa.push(['Suma de las ventas de exportación']);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota General', '', tBase, tIva, tRet]);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota General + Adicional', '', 0, 0]);
+    aoa.push(['Suma de las ventas internas afecta solo Alicuota Reducida', '', 0, 0]);
+    aoa.push(['Total IGTF', '', tIgtf]);
+    aoa.push(['SUBTOTAL', '', r2(tBase + tNoGrav), tIva, tRet]);
+    aoa.push([]);
+    aoa.push(['Ventas internas afectas solo alicuota general periodos anteriores']);
+    aoa.push(['Ventas internas afectas en alicuota Gral. + Adic. periodos anteriores']);
+    aoa.push(['Ventas internas afectas en alicuota reducida periodos anteriores']);
+    aoa.push([]);
+    aoa.push(['Contribuyente', '', tBase, tIva]);
+    aoa.push(['No contribuyente']);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [
-      { wch: 5 }, { wch: 11 }, { wch: 13 }, { wch: 28 }, { wch: 16 }, { wch: 12 },
-      { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 },
-      { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 17 },
-      { wch: 9 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 6 },
+      { wch: 8 }, { wch: 11 }, { wch: 13 }, { wch: 28 }, { wch: 16 }, { wch: 12 },
+      { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 14 },
+      { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 16 }, { wch: 18 }, { wch: 18 },
+      { wch: 9 }, { wch: 16 }, { wch: 15 }, { wch: 16 }, { wch: 14 }, { wch: 6 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reporte Z');
@@ -1548,7 +1557,7 @@ export default function LibroVentasPage() {
                               {entry.invoice?.fiscalMachineSerial || '-'}
                             </td>
                             <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
-                              {entry.documentType === 'FACTURA' ? correlativo(entry.invoiceNumber) : ''}
+                              {['FACTURA', 'CXC'].includes(entry.documentType) ? correlativo(entry.invoiceNumber) : ''}
                             </td>
                             <td className="px-2 py-2 text-slate-400 font-mono text-[11px]">
                               {correlativo(entry.affectedDocNumber) || '-'}

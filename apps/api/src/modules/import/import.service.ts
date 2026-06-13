@@ -798,7 +798,7 @@ export class ImportService {
 
     // Reset serie correlatives to 0 (contador legacy + contadores por tipo)
     await this.prisma.serie.updateMany({
-      data: { lastNumber: 0, lastInvoiceNumber: 0, lastCreditNoteNumber: 0, lastDebitNoteNumber: 0 },
+      data: { lastNumber: 0, lastInvoiceNumber: 0, lastCreditNoteNumber: 0, lastDebitNoteNumber: 0, lastReceivableNumber: 0 },
     });
 
     // Reset retention number in config

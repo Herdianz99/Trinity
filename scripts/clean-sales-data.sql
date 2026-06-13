@@ -52,7 +52,7 @@ DELETE FROM "Invoice";
 DELETE FROM "StockMovement" WHERE type = 'SALE';
 
 -- 10. Reset de correlativos (legacy + por tipo de documento)
-UPDATE "Serie" SET "lastNumber" = 0, "lastInvoiceNumber" = 0, "lastCreditNoteNumber" = 0, "lastDebitNoteNumber" = 0;
+UPDATE "Serie" SET "lastNumber" = 0, "lastInvoiceNumber" = 0, "lastCreditNoteNumber" = 0, "lastDebitNoteNumber" = 0, "lastReceivableNumber" = 0;
 UPDATE "CompanyConfig" SET "retentionNextNumber" = 1;
 
 COMMIT;

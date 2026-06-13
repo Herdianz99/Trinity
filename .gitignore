@@ -46,3 +46,6 @@ apps/agent/Microsoft Print to PDF
 
 # Binario grande de referencia (manual oficial, re-descargable) — descomenta para versionarlo
 \[VE\]Manual_de_Protocolos_y_Comandos_Venezuela_V0805R00_1.pdf
+
+# TypeScript build info
+*.tsbuildinfo

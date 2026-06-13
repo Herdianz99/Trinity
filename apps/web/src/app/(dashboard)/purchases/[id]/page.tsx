@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -14,10 +13,15 @@ import {
   BookOpen,
   Shield,
   Calendar,
-  FileText,
   Pencil,
+  MoreHorizontal,
+  Printer,
+  FileX2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -784,42 +788,51 @@ export default function PurchaseBillDetailPage() {
               </button>
             </>
           )}
-          <button
-            onClick={() => window.open(`/api/proxy/purchases/${bill.id}/pdf`, '_blank')}
-            className="text-sm px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700/50 transition-colors flex items-center gap-1.5"
-          >
-            <FileText size={14} /> PDF
-          </button>
-          {bill.status === 'PROCESSED' && (
-            <Link
-              href="/fiscal/libro-compras"
-              className="btn-secondary text-sm flex items-center gap-1.5"
-            >
-              <BookOpen size={14} /> Ver en libro de compras
-            </Link>
-          )}
-          {bill.status === 'PROCESSED' && bill.isCredit && (
-            <>
-              <button
-                onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MERCHANDISE&purchaseOrderId=${bill.id}`)}
-                className="text-sm px-3 py-1.5 rounded-lg border border-orange-500/20 text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center gap-1.5"
-              >
-                Devolver mercancía
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="btn-secondary text-sm flex items-center gap-1.5">
+                <MoreHorizontal size={16} /> Más acciones
               </button>
-              <button
-                onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
-                className="text-sm px-3 py-1.5 rounded-lg border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center gap-1.5"
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[220px]">
+              <DropdownMenuItem
+                onClick={() => window.open(`/api/proxy/purchases/${bill.id}/pdf`, '_blank')}
+                className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
               >
-                NC Compra
-              </button>
-              <button
-                onClick={() => router.push(`/credit-debit-notes/new?type=NDC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
-                className="text-sm px-3 py-1.5 rounded-lg border border-purple-500/20 text-purple-400 hover:bg-purple-500/10 transition-colors flex items-center gap-1.5"
-              >
-                ND Compra
-              </button>
-            </>
-          )}
+                <Printer size={14} /> Imprimir PDF
+              </DropdownMenuItem>
+              {bill.status === 'PROCESSED' && (
+                <DropdownMenuItem
+                  onClick={() => router.push('/fiscal/libro-compras')}
+                  className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                >
+                  <BookOpen size={14} /> Ver en libro de compras
+                </DropdownMenuItem>
+              )}
+              {bill.status === 'PROCESSED' && bill.isCredit && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MERCHANDISE&purchaseOrderId=${bill.id}`)}
+                    className="cursor-pointer text-orange-300 focus:bg-orange-500/15 focus:text-orange-200 gap-2"
+                  >
+                    <FileX2 size={14} /> Devolver mercancía
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NCC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <FileX2 size={14} /> Nota de crédito (NC Compra)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => router.push(`/credit-debit-notes/new?type=NDC&origin=MANUAL&purchaseOrderId=${bill.id}`)}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <FileX2 size={14} /> Nota de débito (ND Compra)
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

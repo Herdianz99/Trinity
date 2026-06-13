@@ -29,6 +29,7 @@ export default function NewPayablePage() {
   const [serieId, setSerieId] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
   const [controlFiscal, setControlFiscal] = useState('');
+  const [serie, setSerie] = useState(''); // serie alfanumerica de la factura del proveedor (ej. "A")
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
 
   const [originalDate, setOriginalDate] = useState(localDateStr(new Date()));
@@ -138,6 +139,7 @@ export default function NewPayablePage() {
       if (serieId) body.serieId = serieId;
       if (documentNumber.trim()) body.documentNumber = documentNumber.trim();
       if (controlFiscal.trim()) body.controlFiscal = controlFiscal.trim();
+      if (serie.trim()) body.serie = serie.trim();
       if (originalDate) body.originalDate = originalDate;
       if (receptionDate) body.receptionDate = receptionDate;
       body.paymentTerms = pt;
@@ -250,15 +252,13 @@ export default function NewPayablePage() {
                     placeholder="00-12345678" className="input-field !py-1 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie</label>
-                  <select value={serieId} onChange={e => setSerieId(e.target.value)} className="input-field !py-1 text-sm">
-                    <option value="">Sin serie</option>
-                    {series.map(s => <option key={s.id} value={s.id}>{s.name} {s.isFiscal ? '(Fiscal)' : ''}</option>)}
-                  </select>
+                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie (factura proveedor)</label>
+                  <input type="text" value={serie} onChange={e => setSerie(e.target.value)}
+                    placeholder="A" maxLength={5} className="input-field !py-1 text-sm" />
                 </div>
               </div>
 
-              {/* Col 3: Responsable + Notas */}
+              {/* Col 3: Responsable + Notas + Serie fiscal */}
               <div className="space-y-1.5">
                 <div>
                   <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Responsable</label>
@@ -270,6 +270,13 @@ export default function NewPayablePage() {
                   <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
                     placeholder="Notas adicionales..."
                     className="input-field !py-1 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie fiscal</label>
+                  <select value={serieId} onChange={e => setSerieId(e.target.value)} className="input-field !py-1 text-sm">
+                    <option value="">Sin serie</option>
+                    {series.map(s => <option key={s.id} value={s.id}>{s.name} {s.isFiscal ? '(Fiscal)' : ''}</option>)}
+                  </select>
                 </div>
               </div>
             </div>

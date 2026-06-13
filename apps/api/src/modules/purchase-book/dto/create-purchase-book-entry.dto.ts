@@ -12,6 +12,10 @@ export class CreatePurchaseBookEntryDto {
   @IsString()
   supplierInvoiceNumber?: string;
 
+  @IsOptional()
+  @IsString()
+  supplierSerie?: string;
+
   @IsString()
   supplierName: string;
 

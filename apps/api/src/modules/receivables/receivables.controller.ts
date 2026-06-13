@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -49,5 +50,10 @@ export class ReceivablesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.receivablesService.findOne(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.receivablesService.remove(id);
   }
 }

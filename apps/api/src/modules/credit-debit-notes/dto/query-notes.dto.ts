@@ -6,6 +6,11 @@ export class QueryNotesDto {
   @IsIn(['NCV', 'NDV', 'NCC', 'NDC'])
   type?: string;
 
+  // sale = NCV/NDV ; purchase = NCC/NDC
+  @IsOptional()
+  @IsIn(['sale', 'purchase'])
+  scope?: string;
+
   @IsOptional()
   @IsIn(['DRAFT', 'POSTED', 'CANCELLED'])
   status?: string;

@@ -210,6 +210,8 @@ enum DynamicKeyPerm {
   DELETE_DEBIT_NOTE_PURCHASE
   DELETE_RECEIPT_COLLECTION
   DELETE_RECEIPT_PAYMENT
+  DELETE_RECEIVABLE
+  DELETE_PAYABLE
   DELETE_EXPENSE
   MODIFY_PRODUCT_PRICE
   CANCEL_CASH_SESSION
@@ -830,6 +832,7 @@ model Serie {
   lastInvoiceNumber    Int               @default(0)  // correlativo de facturas
   lastCreditNoteNumber Int               @default(0)  // correlativo de notas de credito (NCV/NCC)
   lastDebitNoteNumber  Int               @default(0)  // correlativo de notas de debito (NDV/NDC)
+  lastReceivableNumber Int               @default(0)  // correlativo de CxC (documento de cuenta por cobrar)
   isActive            Boolean            @default(true)
   comPort             String?
   fiscalMachineSerial String?
@@ -1111,6 +1114,7 @@ model Payable {
   // Fiscal fields
   serieId                String?
   serie                  Serie?                @relation("PayableSerie", fields: [serieId], references: [id])
+  serieProveedor         String?               // serie alfanumerica de la factura del proveedor (ej. "A")
   controlFiscal          String?
   currency               String                @default("USD")
   originalDate           DateTime?
@@ -1371,6 +1375,7 @@ model CreditDebitNote {
   manualAmountUsd      Float?
   manualPct            Float?
   documentDate         DateTime?
+  supplierDocNumber    String?   // N° de la nota que da el proveedor (NCC/NDC de compra, para el libro)
   notes                String?
   paidAmountUsd        Float                 @default(0)
   appliedAt            DateTime?
@@ -1490,6 +1495,7 @@ model PurchaseBookEntry {
   entryDate              DateTime
   supplierControlNumber  String?
   supplierInvoiceNumber  String?
+  supplierSerie          String?   // serie alfanumerica de la factura del proveedor (ej. "A")
   supplierName           String
   supplierRif            String
   exemptAmountBs         Float             @default(0)
@@ -1501,6 +1507,7 @@ model PurchaseBookEntry {
   isManual               Boolean           @default(false)
   documentType           String            @default("FACTURA")
   affectedDocNumber      String?
+  creditDebitNoteId      String?           // nota (NCC/NDC) que genero esta linea, para poder editarla luego
   isRetentionLine            Boolean                @default(false)
   retentionVoucherId         String?
   retentionVoucher           RetentionVoucher?      @relation(fields: [retentionVoucherId], references: [id])

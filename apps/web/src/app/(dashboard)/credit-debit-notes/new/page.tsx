@@ -84,6 +84,7 @@ export default function NewCreditDebitNotePage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
+  const [supplierDocNumber, setSupplierDocNumber] = useState('');
 
   const isSale = ['NCV', 'NDV'].includes(noteType);
 
@@ -220,6 +221,13 @@ export default function NewCreditDebitNotePage() {
   const currentTotal = origin === 'MERCHANDISE' ? merchandiseTotal.total : manualTotal;
 
   async function handleSubmit(andPost: boolean) {
+    // Recordatorio (no bloqueante) si es nota de compra y falta el N° del proveedor
+    if (!isSale && !supplierDocNumber.trim()) {
+      const ok = window.confirm(
+        'No has colocado el "N° de la nota del proveedor". Esa columna quedará vacía en el libro de compras.\n\n¿Seguro que deseas generar la nota sin ese número? Podrás agregarlo después desde el detalle de la nota.'
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -239,6 +247,7 @@ export default function NewCreditDebitNotePage() {
         manualPct: origin === 'MANUAL' && manualMode === 'pct' ? manualPct : undefined,
         notes: notes || undefined,
         date: noteDate || undefined,
+        supplierDocNumber: !isSale && supplierDocNumber.trim() ? supplierDocNumber.trim() : undefined,
       };
 
       const res = await fetch('/api/proxy/credit-debit-notes', {
@@ -512,6 +521,19 @@ export default function NewCreditDebitNotePage() {
           />
           <p className="text-[11px] text-slate-500 mt-1">Rige la fecha en el libro fiscal y la tasa de cambio aplicada.</p>
         </div>
+        {!isSale && (
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">N° de la nota del proveedor</label>
+            <input
+              type="text"
+              value={supplierDocNumber}
+              onChange={(e) => setSupplierDocNumber(e.target.value)}
+              className="input-field w-full sm:w-72"
+              placeholder="N° de la NC/ND que entregó el proveedor"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">Es el número que aparece en la nota del proveedor; va al libro de compras (columna Nota Déb./Créd.).</p>
+          </div>
+        )}
         <div>
           <label className="text-xs text-slate-500 block mb-1">Observaciones</label>
           <textarea

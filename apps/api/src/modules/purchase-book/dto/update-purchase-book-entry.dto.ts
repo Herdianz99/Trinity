@@ -15,6 +15,10 @@ export class UpdatePurchaseBookEntryDto {
 
   @IsOptional()
   @IsString()
+  supplierSerie?: string;
+
+  @IsOptional()
+  @IsString()
   supplierName?: string;
 
   @IsOptional()

@@ -72,7 +72,7 @@ const menuSections: MenuSection[] = [
       { label: 'POS', href: '/sales/pos', icon: <Monitor size={18} /> },
       { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={18} /> },
       { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={18} /> },
-      { label: 'Notas Cr/Db', href: '/credit-debit-notes', icon: <FileX2 size={18} /> },
+      { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=sale', icon: <FileX2 size={18} /> },
       { label: 'Retenciones clientes', href: '/sales/customer-retentions', icon: <Shield size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
     ],
@@ -110,6 +110,7 @@ const menuSections: MenuSection[] = [
     permission: 'purchases',
     items: [
       { label: 'Facturas de compra', href: '/purchases', icon: <ShoppingCart size={18} /> },
+      { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=purchase', icon: <FileX2 size={18} /> },
       { label: 'Retenciones IVA', href: '/purchases/retentions', icon: <Shield size={18} /> },
       { label: 'Retenciones ISLR', href: '/purchases/islr-retentions', icon: <FileCheck size={18} /> },
       { label: 'Analisis ABC', href: '/purchases/analysis', icon: <BarChart3 size={18} /> },

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -61,6 +62,19 @@ export class CreditDebitNotesController {
   @Patch(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.service.cancel(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
+  }
+
+  @Patch(':id/supplier-doc-number')
+  updateSupplierDocNumber(
+    @Param('id') id: string,
+    @Body() body: { supplierDocNumber: string },
+  ) {
+    return this.service.updateSupplierDocNumber(id, body.supplierDocNumber);
   }
 
   @Patch(':id/fiscal-printed')

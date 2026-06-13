@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileX2, Search, Loader2, ChevronLeft, ChevronRight, Eye, AlertTriangle,
 } from 'lucide-react';
@@ -52,6 +52,10 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function CreditDebitNotesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const scope = searchParams.get('scope') || ''; // 'sale' | 'purchase' | ''
+  const isPurchase = scope === 'purchase';
+  const scopeTitle = scope === 'sale' ? 'de Venta' : isPurchase ? 'de Compra' : '';
   const [notes, setNotes] = useState<Note[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -68,6 +72,7 @@ export default function CreditDebitNotesPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (type) params.set('type', type);
+      else if (scope) params.set('scope', scope);
       if (status) params.set('status', status);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
@@ -80,9 +85,11 @@ export default function CreditDebitNotesPage() {
       setTotalPages(json.totalPages || 1);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [page, type, status, from, to, search]);
+  }, [page, type, status, from, to, search, scope]);
 
-  useEffect(() => { document.title = 'Notas de Credito/Debito | Trinity ERP'; }, []);
+  useEffect(() => {
+    document.title = `Notas Cr/Db ${scopeTitle} | Trinity ERP`.replace('  ', ' ');
+  }, [scopeTitle]);
   useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -99,7 +106,7 @@ export default function CreditDebitNotesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
             <FileX2 className="text-green-400" size={28} />
-            Notas de Crédito / Débito
+            Notas de Crédito / Débito {scopeTitle}
           </h1>
           <p className="text-slate-400 mt-1">
             {total} nota{total !== 1 ? 's' : ''} encontrada{total !== 1 ? 's' : ''}
@@ -122,10 +129,10 @@ export default function CreditDebitNotesPage() {
           </div>
           <select value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} className="input-field">
             <option value="">Todos los tipos</option>
-            <option value="NCV">NC Venta</option>
-            <option value="NDV">ND Venta</option>
-            <option value="NCC">NC Compra</option>
-            <option value="NDC">ND Compra</option>
+            {scope !== 'purchase' && <option value="NCV">NC Venta</option>}
+            {scope !== 'purchase' && <option value="NDV">ND Venta</option>}
+            {scope !== 'sale' && <option value="NCC">NC Compra</option>}
+            {scope !== 'sale' && <option value="NDC">ND Compra</option>}
           </select>
           <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="input-field">
             <option value="">Todos los estados</option>
@@ -201,7 +208,7 @@ export default function CreditDebitNotesPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[note.status]}`}>
                         {STATUS_LABELS[note.status]}
                       </span>
-                      {note.serie?.isFiscal && !note.fiscalPrinted && note.status === 'POSTED' && (
+                      {['NCV', 'NDV'].includes(note.type) && note.serie?.isFiscal && !note.fiscalPrinted && note.status === 'POSTED' && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-0.5" title="Pendiente de impresion fiscal">
                           <AlertTriangle size={10} /> Fiscal
                         </span>

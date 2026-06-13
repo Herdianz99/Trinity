@@ -15,6 +15,7 @@ interface PurchaseBookEntry {
   entryDate: string;
   supplierControlNumber: string | null;
   supplierInvoiceNumber: string | null;
+  supplierSerie: string | null;
   supplierName: string;
   supplierRif: string;
   exemptAmountBs: number;
@@ -267,51 +268,76 @@ export default function LibroComprasPage() {
 
   function exportExcel() {
     const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
-    let n = 0;
-    const rows: Record<string, string | number>[] = entries.map((e) => {
-      const isRet = e.isRetentionLine || e.isIslrRetentionLine;
-      if (!isRet) n += 1;
-      const tipo = e.isRetentionLine ? 'Retención IVA'
-        : e.isIslrRetentionLine ? 'Retención ISLR'
-        : purchaseDocLabel(e.documentType);
-      return {
-        'N°': isRet ? '' : n,
-        'Fecha': isRet ? '' : (e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : ''),
-        'Tipo': tipo,
-        'N° Control': isRet ? '' : (e.supplierControlNumber || ''),
-        'N° Factura': isRet ? '' : (e.supplierInvoiceNumber || ''),
-        'N° Doc. Afectado': isRet ? '' : (e.affectedDocNumber || ''),
-        'Proveedor': isRet ? '' : e.supplierName,
-        'RIF': isRet ? '' : e.supplierRif,
-        'Exento Bs': isRet ? '' : r2(e.exemptAmountBs),
-        'Base Imponible Bs': isRet ? '' : r2(e.taxableBaseBs),
-        'Crédito Fiscal Bs': isRet ? '' : r2(e.ivaAmountBs),
-        'N° Comprobante Ret.': e.retentionVoucherNumber || e.islrRetentionVoucherNumber || '',
-        'Ret. IVA Bs': e.retentionAmountBs ? r2(e.retentionAmountBs) : '',
-        'Ret. ISLR Bs': e.islrRetentionAmountBs ? r2(e.islrRetentionAmountBs) : '',
-        'Total Bs': r2(e.totalBs),
-      };
-    });
+    const t = totales || { exemptAmountBs: 0, taxableBaseBs: 0, ivaAmountBs: 0, retentionAmountBs: 0, totalBs: 0 };
 
-    if (totales) {
-      rows.push({
-        'N°': '', 'Fecha': '', 'Tipo': 'TOTALES', 'N° Control': '', 'N° Factura': '',
-        'N° Doc. Afectado': '', 'Proveedor': '', 'RIF': '',
-        'Exento Bs': r2(totales.exemptAmountBs),
-        'Base Imponible Bs': r2(totales.taxableBaseBs),
-        'Crédito Fiscal Bs': r2(totales.ivaAmountBs),
-        'N° Comprobante Ret.': '',
-        'Ret. IVA Bs': r2(totales.retentionAmountBs),
-        'Ret. ISLR Bs': totales.islrRetentionAmountBs ? r2(totales.islrRetentionAmountBs) : '',
-        'Total Bs': r2(totales.totalBs),
-      });
+    // Mismo orden de columnas que el PDF (formato SENIAT)
+    const aoa: (string | number)[][] = [[
+      'Oper. Nro.', 'Fecha', 'N° Rif', 'Nombre o Razón Social', 'Factura', 'Serie', 'Fiscal',
+      'N° Factura Afectada', 'N° Nota Débito', 'N° Nota Crédito', 'Tipo Transac.',
+      'Total Compras Bs', 'Compras No Gravadas Bs', 'Base Imponible 16% Bs', '% Alícuota',
+      'Impuesto IVA 16% Bs', 'IVA Retenido Bs', 'Comp. Retención', 'IVA Percibido Bs',
+    ]];
+
+    let n = 0;
+    for (const e of entries) {
+      if (e.isIslrRetentionLine) continue; // ISLR fuera del libro por ahora
+      const fecha = e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '';
+      if (e.isRetentionLine) {
+        aoa.push([
+          '', fecha, e.supplierRif || '', e.supplierName || '', '', '', '',
+          e.supplierInvoiceNumber || '', '', '', '01 - reg',
+          '', '', '', '16,00', '', r2(e.retentionAmountBs), e.retentionVoucherNumber || '', '',
+        ]);
+        continue;
+      }
+      n += 1;
+      const isNCC = e.documentType === 'NCC';
+      const isNDC = e.documentType === 'NDC';
+      const isFactura = !isNCC && !isNDC;
+      aoa.push([
+        n, fecha, e.supplierRif || '', e.supplierName || '',
+        isFactura ? (e.supplierInvoiceNumber || '') : '',
+        e.supplierSerie || '', e.supplierControlNumber || '',
+        e.affectedDocNumber || '',
+        isNDC ? (e.supplierInvoiceNumber || '') : '',
+        isNCC ? (e.supplierInvoiceNumber || '') : '',
+        '01 - reg',
+        r2(e.totalBs), r2(e.exemptAmountBs), r2(e.taxableBaseBs),
+        e.taxableBaseBs ? '16,00' : '',
+        r2(e.ivaAmountBs), '', '', '',
+      ]);
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    // Fila de totales (alineada a las columnas)
+    aoa.push([
+      'TOTALES', '', '', '', '', '', '', '', '', '', '',
+      r2(t.totalBs), r2(t.exemptAmountBs), r2(t.taxableBaseBs), '',
+      r2(t.ivaAmountBs), r2(t.retentionAmountBs), '', '',
+    ]);
+
+    // Cuadro de totales (resumen SENIAT) — igual que el PDF
+    aoa.push([]);
+    aoa.push(['', '', 'Base Imponible', 'Crédito Fiscal', 'Iva retenido por el comprador']);
+    aoa.push(['Total compras internas no gravadas', '', r2(t.exemptAmountBs)]);
+    aoa.push(['Suma de las compras de importación']);
+    aoa.push(['Suma de las compras internas afecta solo Alicuota General', '', r2(t.taxableBaseBs), r2(t.ivaAmountBs), r2(t.retentionAmountBs)]);
+    aoa.push(['Suma de las compras internas afecta solo Alicuota General + Adicional', '', 0, 0]);
+    aoa.push(['Suma de las compras internas afecta solo Alicuota Reducida', '', 0, 0]);
+    aoa.push(['Total IGTF', '', 0, 0]);
+    aoa.push(['SUBTOTAL', '', r2(t.taxableBaseBs + t.exemptAmountBs), r2(t.ivaAmountBs), r2(t.retentionAmountBs)]);
+    aoa.push([]);
+    aoa.push(['Compras internas afectas solo alicuota general periodos anteriores']);
+    aoa.push(['Compras internas afectas en alicuota Gral. + Adic. periodos anteriores']);
+    aoa.push(['Compras internas afectas en alicuota reducida periodos anteriores']);
+    aoa.push([]);
+    aoa.push(['Contribuyente', '', r2(t.taxableBaseBs), r2(t.ivaAmountBs)]);
+    aoa.push(['No contribuyente']);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [
-      { wch: 5 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
-      { wch: 28 }, { wch: 14 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 20 },
-      { wch: 13 }, { wch: 13 }, { wch: 14 },
+      { wch: 8 }, { wch: 11 }, { wch: 13 }, { wch: 30 }, { wch: 14 }, { wch: 7 }, { wch: 14 },
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 11 }, { wch: 16 }, { wch: 18 }, { wch: 18 },
+      { wch: 9 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 14 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Libro de Compras');
@@ -323,18 +349,13 @@ export default function LibroComprasPage() {
   async function exportPdf() {
     let companyName = 'Trinity ERP';
     let companyRif = '';
+    let companyAddress = '';
     try {
       const cfgRes = await fetch('/api/proxy/config');
       const cfg = await cfgRes.json();
       companyName = cfg.companyName || companyName;
       companyRif = cfg.rif || '';
-    } catch {}
-
-    let summary: PdfSummary | null = null;
-    try {
-      const pdfRes = await fetch(`/api/proxy/purchase-book/pdf?from=${fromDate}&to=${toDate}`);
-      const pdfData = await pdfRes.json();
-      summary = pdfData.summary;
+      companyAddress = cfg.address || '';
     } catch {}
 
     const printWin = window.open('', '_blank');
@@ -344,130 +365,214 @@ export default function LibroComprasPage() {
     const to = new Date(toDate + 'T00:00:00');
     const periodoStr = `${from.toLocaleDateString('es-VE')} al ${to.toLocaleDateString('es-VE')}`;
 
+    const fmtNum = (n: number) => n ? formatVe(n) : '';
     let rowNum = 0;
     const tableRows = entries.map((r) => {
-      if (!r.isRetentionLine && !r.isIslrRetentionLine) rowNum++;
+      // ISLR fuera del libro por ahora (decision del usuario)
+      if (r.isIslrRetentionLine) return '';
+      const fecha = r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : '';
+
+      // Fila de retencion IVA: repite proveedor y factura, muestra retencion + comprobante
       if (r.isRetentionLine) {
-        return `<tr class="retention-line">
-            <td></td><td></td><td></td><td></td>
-            <td style="padding-left:16px;font-style:italic;color:#8b5cf6;font-size:7pt;">↳ Retención IVA</td>
-            <td></td><td></td><td></td><td></td>
-            <td style="color:#8b5cf6;font-weight:bold;">${r.retentionVoucherNumber || ''}</td>
-            <td class="num" style="color:#8b5cf6;">${formatVe(r.retentionAmountBs)}</td>
-            <td></td>
-            <td class="num" style="color:#8b5cf6;">${formatVe(r.totalBs)}</td>
-          </tr>`;
+        return `<tr>
+          <td class="fit"></td>
+          <td class="fit">${fecha}</td>
+          <td class="fit">${r.supplierRif || ''}</td>
+          <td>${r.supplierName || ''}</td>
+          <td class="fit"></td>
+          <td class="fit"></td>
+          <td class="fit"></td>
+          <td class="fit">${r.supplierInvoiceNumber || ''}</td>
+          <td class="fit"></td>
+          <td class="fit"></td>
+          <td class="fit">01 - reg</td>
+          <td class="num"></td>
+          <td class="num"></td>
+          <td class="num"></td>
+          <td class="fit">16,00</td>
+          <td class="num"></td>
+          <td class="num">${fmtNum(r.retentionAmountBs)}</td>
+          <td class="fit">${r.retentionVoucherNumber || ''}</td>
+          <td class="num"></td>
+        </tr>`;
       }
-      if (r.isIslrRetentionLine) {
-        return `<tr class="retention-line">
-            <td></td><td></td><td></td><td></td>
-            <td style="padding-left:16px;font-style:italic;color:#d97706;font-size:7pt;">↳ Retención ISLR</td>
-            <td></td><td></td><td></td><td></td>
-            <td>${r.islrRetentionVoucherNumber || ''}</td>
-            <td></td>
-            <td class="num" style="color:#d97706;">${formatVe(r.islrRetentionAmountBs)}</td>
-            <td class="num" style="color:#d97706;">${formatVe(r.totalBs)}</td>
-          </tr>`;
-      }
+
+      rowNum++;
+      const isNCC = r.documentType === 'NCC';
+      const isNDC = r.documentType === 'NDC';
+      const isFactura = !isNCC && !isNDC;
       return `<tr>
-            <td>${rowNum}</td>
-            <td>${r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : ''}</td>
-            <td>${r.supplierControlNumber || ''}</td>
-            <td>${r.supplierInvoiceNumber || ''}</td>
-            <td>${r.supplierName}</td>
-            <td>${r.supplierRif}</td>
-            <td class="num">${formatVe(r.exemptAmountBs)}</td>
-            <td class="num">${formatVe(r.taxableBaseBs)}</td>
-            <td class="num">${formatVe(r.ivaAmountBs)}</td>
-            <td>${r.retentionVoucherNumber || ''}</td>
-            <td class="num">${formatVe(r.retentionAmountBs)}</td>
-            <td class="num">${formatVe(r.islrRetentionAmountBs)}</td>
-            <td class="num total">${formatVe(r.totalBs)}</td>
-          </tr>`;
+        <td class="fit">${rowNum}</td>
+        <td class="fit">${fecha}</td>
+        <td class="fit">${r.supplierRif || ''}</td>
+        <td>${r.supplierName || ''}</td>
+        <td class="fit">${isFactura ? (r.supplierInvoiceNumber || '') : ''}</td>
+        <td class="fit">${r.supplierSerie || ''}</td>
+        <td class="fit">${r.supplierControlNumber || ''}</td>
+        <td class="fit">${r.affectedDocNumber || ''}</td>
+        <td class="fit">${isNDC ? (r.supplierInvoiceNumber || '') : ''}</td>
+        <td class="fit">${isNCC ? (r.supplierInvoiceNumber || '') : ''}</td>
+        <td class="fit">01 - reg</td>
+        <td class="num">${fmtNum(r.totalBs)}</td>
+        <td class="num">${fmtNum(r.exemptAmountBs)}</td>
+        <td class="num">${fmtNum(r.taxableBaseBs)}</td>
+        <td class="fit">${r.taxableBaseBs ? '16,00' : ''}</td>
+        <td class="num">${fmtNum(r.ivaAmountBs)}</td>
+        <td class="num"></td>
+        <td class="fit"></td>
+        <td class="num"></td>
+      </tr>`;
     }).join('');
 
+    const t = totales || { exemptAmountBs: 0, taxableBaseBs: 0, ivaAmountBs: 0, retentionAmountBs: 0, totalBs: 0 };
     const totalesRow = totales ? `
       <tr class="totales">
-        <td colspan="6"><strong>TOTALES</strong></td>
-        <td class="num"><strong>${formatVe(totales.exemptAmountBs)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.taxableBaseBs)}</strong></td>
-        <td class="num"><strong>${formatVe(totales.ivaAmountBs)}</strong></td>
+        <td colspan="11"></td>
+        <td class="num"><strong>${formatVe(t.totalBs)}</strong></td>
+        <td class="num"><strong>${formatVe(t.exemptAmountBs)}</strong></td>
+        <td class="num"><strong>${formatVe(t.taxableBaseBs)}</strong></td>
         <td></td>
-        <td class="num"><strong>${formatVe(totales.retentionAmountBs)}</strong></td>
-        <td class="num"><strong>${totales.islrRetentionAmountBs > 0 ? formatVe(totales.islrRetentionAmountBs) : ''}</strong></td>
-        <td class="num total"><strong>${formatVe(totales.totalBs)}</strong></td>
+        <td class="num"><strong>${formatVe(t.ivaAmountBs)}</strong></td>
+        <td class="num"><strong>${formatVe(t.retentionAmountBs)}</strong></td>
+        <td></td>
+        <td></td>
       </tr>
     ` : '';
 
-    const summaryPage = summary ? `
-      <div class="page-break"></div>
-      <div class="header">
-        <h1>${companyName}</h1>
-        ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
-        <h2>RESUMEN FISCAL DEL LIBRO DE COMPRAS</h2>
-        <p>Per&iacute;odo: ${periodoStr}</p>
-      </div>
-      <div class="summary">
-        <table class="summary-table">
-          <tbody>
-            <tr><td class="label">Compras internas exentas:</td><td class="value">Bs ${formatVe(summary.comprasExentas)}</td></tr>
-            <tr><td class="label">Base imponible general (16%):</td><td class="value">Bs ${formatVe(summary.baseImponibleGeneral)}</td></tr>
-            <tr><td class="label">Cr&eacute;dito fiscal (16%):</td><td class="value">Bs ${formatVe(summary.creditoFiscalGeneral)}</td></tr>
-            <tr class="separator"><td colspan="2"><hr/></td></tr>
-            <tr class="highlight"><td class="label">Total base imponible:</td><td class="value">Bs ${formatVe(summary.totalBaseImponible)}</td></tr>
-            <tr class="highlight"><td class="label">Total cr&eacute;dito fiscal:</td><td class="value">Bs ${formatVe(summary.totalCreditoFiscal)}</td></tr>
-            <tr><td class="label">Total retenciones IVA:</td><td class="value">Bs ${formatVe(summary.totalRetencionesIva)}</td></tr>
-            <tr class="highlight"><td class="label">Cr&eacute;dito fiscal neto (despu&eacute;s retenciones):</td><td class="value">Bs ${formatVe(summary.creditoFiscalNeto)}</td></tr>
-            <tr class="grand-total"><td class="label">Total compras del per&iacute;odo:</td><td class="value">Bs ${formatVe(summary.totalCompras)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    ` : '';
+    const summaryPage = `
+      <table class="resumen" style="margin-top:20px;">
+        <tr>
+          <td colspan="2"></td>
+          <td class="lbl">Base Imponible</td>
+          <td class="lbl">Cr&eacute;dito Fiscal</td>
+          <td class="lbl">Iva retenido por<br/>el comprador</td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Total compras internas no gravadas</td>
+          <td class="num">${formatVe(t.exemptAmountBs)}</td>
+          <td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las compras de importaci&oacute;n</td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las compras internas afecta solo Alicuota General</td>
+          <td class="num">${formatVe(t.taxableBaseBs)}</td>
+          <td class="num">${formatVe(t.ivaAmountBs)}</td>
+          <td class="num">${fmtNum(t.retentionAmountBs)}</td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las compras internas afecta solo Alicuota General + Adicional</td>
+          <td class="num">0,00</td><td class="num">0,00</td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las compras internas afecta solo Alicuota Reducida</td>
+          <td class="num">0,00</td><td class="num">0,00</td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Total IGTF</td>
+          <td class="num">0,00</td><td class="num">0,00</td><td></td>
+        </tr>
+        <tr class="subtotal">
+          <td colspan="2"></td>
+          <td class="num"><strong>${formatVe(t.taxableBaseBs + t.exemptAmountBs)}</strong></td>
+          <td class="num"><strong>${formatVe(t.ivaAmountBs)}</strong></td>
+          <td class="num"><strong>${fmtNum(t.retentionAmountBs)}</strong></td>
+        </tr>
+        <tr><td colspan="5" style="height:10px;border:none;"></td></tr>
+        <tr>
+          <td colspan="2" class="lbl">Compras internas afectas solo alicuota general periodos anteriores</td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Compras internas afectas en alicuota Gral. + Adic. periodos anteriores</td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Compras internas afectas en alicuota reducida periodos anteriores</td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr><td colspan="5" style="height:10px;border:none;"></td></tr>
+        <tr>
+          <td colspan="2" class="lbl">Contribuyente</td>
+          <td class="num">${formatVe(t.taxableBaseBs)}</td>
+          <td class="num">${formatVe(t.ivaAmountBs)}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">No contribuyente</td>
+          <td></td><td></td><td></td>
+        </tr>
+      </table>
+    `;
 
     printWin.document.write(`<!DOCTYPE html>
     <html>
     <head>
       <title>Libro de Compras - ${periodoStr}</title>
       <style>
-        @page { size: A4 landscape; margin: 10mm; }
-        body { font-family: Arial, sans-serif; font-size: 8pt; color: #000; }
-        .header { text-align: center; margin-bottom: 10px; }
-        .header h1 { font-size: 12pt; margin: 2px 0; }
-        .header h2 { font-size: 10pt; margin: 2px 0; font-weight: normal; }
-        .header p { font-size: 8pt; margin: 2px 0; color: #555; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #999; padding: 3px 4px; text-align: left; }
-        th { background: #e0e0e0; font-size: 7pt; }
+        @page { size: legal landscape; margin: 8mm; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 6.5pt; color: #000; margin: 0; padding: 0; }
+        .header { text-align: center; margin-bottom: 6px; position: relative; }
+        .header h1 { font-size: 10pt; margin: 0; font-weight: bold; }
+        .header .rif { font-size: 8pt; margin: 1px 0; }
+        .header .address { font-size: 7pt; margin: 1px 0; }
+        .header h2 { font-size: 9pt; margin: 4px 0 2px; font-weight: bold; }
+        .header-right { position: absolute; top: 0; right: 0; text-align: right; font-size: 7pt; }
+        .header-right .label { font-weight: bold; display: inline-block; width: 50px; text-align: right; }
+        table.main { width: 100%; border-collapse: collapse; }
+        table.main th, table.main td { border: 0.5px solid #999; padding: 1px 2px; text-align: left; font-size: 6pt; }
+        table.main th { background: #f0f0f0; font-size: 5.5pt; text-align: center; vertical-align: bottom; }
+        table.main th.group { background: #e0e0e0; text-align: center; font-weight: bold; border-bottom: 1.5px solid #333; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
-        .total { font-weight: bold; }
-        .totales td { background: #f0f0f0; border-top: 2px solid #333; }
-        .footer { text-align: center; margin-top: 8px; font-size: 7pt; color: #888; }
-        .page-break { page-break-before: always; margin-top: 20mm; }
-        .summary { max-width: 600px; margin: 30px auto; }
-        .summary-table { border: none; }
-        .summary-table td { border: none; padding: 6px 12px; font-size: 10pt; }
-        .summary-table .label { text-align: left; color: #333; }
-        .summary-table .value { text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; }
-        .summary-table .separator td { padding: 2px; }
-        .summary-table .separator hr { border: 1px solid #666; margin: 0; }
-        .summary-table .highlight td { font-weight: bold; }
-        .summary-table .grand-total td { font-size: 12pt; font-weight: bold; border-top: 2px solid #333; padding-top: 10px; }
+        table.main th.fit, table.main td.fit { width: 1px; white-space: nowrap; }
+        .totales td { background: #f0f0f0; border-top: 1.5px solid #333; }
+        .footer { font-size: 6pt; color: #888; margin-top: 4px; }
+        table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; }
+        table.resumen td { border: 0.5px solid #999; padding: 2px 6px; font-size: 6.5pt; }
+        table.resumen .lbl { text-align: left; font-weight: normal; }
+        table.resumen .num { text-align: right; }
+        table.resumen .subtotal td { border-top: 1.5px solid #333; }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1>${companyName}</h1>
-        ${companyRif ? `<p>RIF: ${companyRif}</p>` : ''}
+        <h1>${companyName.toUpperCase()}</h1>
+        ${companyRif ? `<div class="rif">RIF: ${companyRif}</div>` : ''}
+        ${companyAddress ? `<div class="address">${companyAddress.toUpperCase()}</div>` : ''}
         <h2>LIBRO DE COMPRAS</h2>
-        <p>Per&iacute;odo: ${periodoStr}</p>
+        <div class="header-right">
+          <div><span class="label">Desde</span>&nbsp;&nbsp;${from.toLocaleDateString('es-VE')}</div>
+          <div><span class="label">Hasta</span>&nbsp;&nbsp;${to.toLocaleDateString('es-VE')}</div>
+        </div>
       </div>
-      <table>
+      <table class="main">
         <thead>
           <tr>
-            <th>N&deg;</th><th>Fecha</th><th>N&deg; Control</th><th>N&deg; Factura</th>
-            <th>Proveedor</th><th>RIF</th>
-            <th>Exento Bs</th><th>Base Imponible Bs</th><th>Cr&eacute;dito Fiscal Bs</th>
-            <th>N&deg; Comprobante</th><th>Ret. IVA Bs</th><th>Ret. ISLR Bs</th><th>Total Bs</th>
+            <th rowspan="2" class="fit">Oper.<br/>Nro.</th>
+            <th rowspan="2" class="fit">Fecha<br/>documento</th>
+            <th rowspan="2" class="fit">N&deg; Rif</th>
+            <th rowspan="2">Nombre o Raz&oacute;n Social</th>
+            <th rowspan="2" class="fit">Factura</th>
+            <th rowspan="2" class="fit">Serie</th>
+            <th rowspan="2" class="fit">Fiscal</th>
+            <th rowspan="2" class="fit">Numero de<br/>Factura<br/>Afectada</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Debito</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Credito</th>
+            <th rowspan="2" class="fit">Tipo<br/>de<br/>Transac.</th>
+            <th rowspan="2">Total compras<br/>Incluyendo<br/>el IVA</th>
+            <th rowspan="2">Compras<br/>Internas<br/>No Gravadas</th>
+            <th class="group" colspan="3">COMPRAS INTERNAS O<br/>IMPORTACIONES GRAVADAS</th>
+            <th rowspan="2">Iva Retenido<br/>(Por el<br/>Comprador)</th>
+            <th rowspan="2" class="fit">Comp. de<br/>Retencion</th>
+            <th rowspan="2" class="fit">IVA<br/>Percibido</th>
+          </tr>
+          <tr>
+            <th>Base<br/>imponible<br/>16%</th>
+            <th>%<br/>Alicuota</th>
+            <th>Impuesto<br/>iva 16%</th>
           </tr>
         </thead>
         <tbody>
@@ -593,6 +698,7 @@ export default function LibroComprasPage() {
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Fecha</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Factura</th>
+                  <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Serie</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Proveedor</th>
                   <th className="text-left px-2 py-2.5 text-slate-400 font-medium">RIF</th>
                   <th className="text-right px-2 py-2.5 text-slate-400 font-medium">Exento Bs</th>
@@ -608,7 +714,7 @@ export default function LibroComprasPage() {
               <tbody>
                 {entries.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="text-center py-10 text-slate-500">
+                    <td colSpan={15} className="text-center py-10 text-slate-500">
                       <div className="flex flex-col items-center gap-2">
                         <BookOpen size={32} className="text-slate-600" />
                         <span>No hay entradas en este periodo</span>
@@ -648,6 +754,9 @@ export default function LibroComprasPage() {
                               )}
                             </div>
                           )}
+                        </td>
+                        <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : (entry.supplierSerie || '')}
                         </td>
                         <td className="px-2 py-2 text-slate-200">
                           {entry.isRetentionLine ? (
@@ -716,7 +825,7 @@ export default function LibroComprasPage() {
                     {/* Totals row */}
                     {totales && (
                       <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                        <td colSpan={6} className="px-2 py-2.5 text-slate-100 font-bold">
+                        <td colSpan={7} className="px-2 py-2.5 text-slate-100 font-bold">
                           TOTALES ({totales.totalEntries} entradas)
                         </td>
                         <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.exemptAmountBs)}</td>

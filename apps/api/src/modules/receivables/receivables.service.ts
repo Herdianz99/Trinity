@@ -11,6 +11,26 @@ import { CreateReceivableDto } from './dto/create-receivable.dto';
 export class ReceivablesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Eliminar una CxC manual (no proveniente de factura) si no fue cruzada/cobrada en un recibo.
+  async remove(id: string) {
+    const r = await this.prisma.receivable.findUnique({
+      where: { id },
+      include: { payments: true, receiptItems: true },
+    });
+    if (!r) throw new NotFoundException('Cuenta por cobrar no encontrada');
+    if (r.invoiceId || r.type !== 'MANUAL') {
+      throw new BadRequestException('Solo se pueden eliminar CxC manuales; las de una factura se gestionan con nota de credito');
+    }
+    if (r.status === 'PAID' || r.status === 'PARTIAL' || (r.paidAmountUsd || 0) > 0 || r.payments.length > 0 || r.receiptItems.length > 0) {
+      throw new BadRequestException('No se puede eliminar: la CxC ya fue cruzada o cobrada en un recibo');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.salesBookEntry.deleteMany({ where: { receivableId: id } });
+      await tx.receivable.delete({ where: { id } });
+    });
+    return { message: 'Cuenta por cobrar eliminada' };
+  }
+
   async create(dto: CreateReceivableDto, userId?: string) {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
     if (!customer) throw new NotFoundException('Cliente no encontrado');
@@ -64,18 +84,32 @@ export class ReceivablesService {
 
     return this.prisma.$transaction(async (tx) => {
       // Generate correlative number
-      const config = await tx.companyConfig.findUnique({
-        where: { id: 'singleton' },
-      });
-      // @ts-ignore - field just added
-      const nextNum = config?.receivableNextNumber || 1;
-      const yearSuffix = new Date().getFullYear().toString().slice(-2);
-      const number = `CXC/${yearSuffix}-${nextNum.toString().padStart(6, '0')}`;
-
-      await tx.companyConfig.update({
-        where: { id: 'singleton' },
-        data: { receivableNextNumber: nextNum + 1 } as any,
-      });
+      const yearSuffix = (originalDate || new Date()).getFullYear().toString().slice(-2);
+      let number: string;
+      if (serie) {
+        // Correlativo dirigido por la serie, con contador propio de CxC (como las notas).
+        // Formato: {prefijo}-CXC-{anio}-{correlativo8}  ej. VF-CXC-26-00000001
+        const rows = await tx.$queryRaw<any[]>`
+          SELECT "id", "prefix", "lastReceivableNumber" FROM "Serie"
+          WHERE id = ${serie.id} FOR UPDATE
+        `;
+        const s = rows[0];
+        const next = (s.lastReceivableNumber || 0) + 1;
+        await tx.serie.update({
+          where: { id: serie.id },
+          data: { lastReceivableNumber: next } as any,
+        });
+        number = `${s.prefix}-CXC-${yearSuffix}-${next.toString().padStart(8, '0')}`;
+      } else {
+        // Sin serie (no fiscal): correlativo global de respaldo
+        const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+        const nextNum = config?.receivableNextNumber || 1;
+        number = `CXC/${yearSuffix}-${nextNum.toString().padStart(6, '0')}`;
+        await tx.companyConfig.update({
+          where: { id: 'singleton' },
+          data: { receivableNextNumber: nextNum + 1 } as any,
+        });
+      }
 
       const receivable = await tx.receivable.create({
         data: {

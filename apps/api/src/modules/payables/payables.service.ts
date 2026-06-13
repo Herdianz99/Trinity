@@ -11,6 +11,29 @@ import { CreatePayableDto } from './dto/create-payable.dto';
 export class PayablesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Eliminar una CxP manual (no proveniente de factura de compra) si no fue cruzada/pagada.
+  async remove(id: string) {
+    const p = await this.prisma.payable.findUnique({
+      where: { id },
+      include: { payments: true, receiptItems: true, paymentScheduleItems: true },
+    });
+    if (!p) throw new NotFoundException('Cuenta por pagar no encontrada');
+    if (p.purchaseOrderId) {
+      throw new BadRequestException('Solo se pueden eliminar CxP manuales; las de una factura de compra se gestionan desde la factura');
+    }
+    if (p.status === 'PAID' || p.status === 'PARTIAL' || (p.paidAmountUsd || 0) > 0 || p.payments.length > 0 || p.receiptItems.length > 0) {
+      throw new BadRequestException('No se puede eliminar: la CxP ya fue cruzada o pagada en un recibo');
+    }
+    if (p.paymentScheduleItems.length > 0) {
+      throw new BadRequestException('No se puede eliminar: la CxP esta incluida en una programacion de pagos');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.purchaseBookEntry.deleteMany({ where: { payableId: id } });
+      await tx.payable.delete({ where: { id } });
+    });
+    return { message: 'Cuenta por pagar eliminada' };
+  }
+
   async create(dto: CreatePayableDto, userId?: string) {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
@@ -100,6 +123,7 @@ export class PayablesService {
           dueDate,
           notes: dto.notes || null,
           serieId: dto.serieId || null,
+          serieProveedor: dto.serie || null,
           controlFiscal: dto.controlFiscal || null,
           currency,
           originalDate,
@@ -145,6 +169,7 @@ export class PayablesService {
             entryDate: originalDate || new Date(),
             supplierControlNumber: dto.controlFiscal || null,
             supplierInvoiceNumber: dto.documentNumber || number,
+            supplierSerie: dto.serie || null,
             supplierName: supplier.name,
             supplierRif: supplier.rif || '',
             exemptAmountBs: exemptBs,

@@ -284,6 +284,20 @@ export class InventoryCountsService {
     });
   }
 
+  // Eliminar un conteo no aprobado (borrador/en progreso/cancelado). Borra sus items.
+  async remove(id: string) {
+    const count = await this.prisma.inventoryCount.findUnique({ where: { id } });
+    if (!count) throw new NotFoundException(`Conteo con id ${id} no encontrado`);
+    if (count.status === 'APPROVED') {
+      throw new BadRequestException('No se puede eliminar un conteo ya aprobado (ya ajusto el inventario)');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.inventoryCountItem.deleteMany({ where: { inventoryCountId: id } });
+      await tx.inventoryCount.delete({ where: { id } });
+    });
+    return { message: 'Conteo eliminado' };
+  }
+
   async approve(id: string, userId: string) {
     const count = await this.prisma.inventoryCount.findUnique({
       where: { id },

@@ -1,5 +1,53 @@
 # Trinity ERP — Progreso
 
+## 🧪 PARA PROBAR MAÑANA (sesion 53 — todo en local, SIN deploy todavia)
+
+> Sistema local: Web http://localhost:3000 (admin@trinity.com / Admin1234!) · API :4000
+> Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. Caja con sesion: Fiscal 2.
+> ⚠️ Para que el boton **Eliminar de CxC/CxP** funcione, primero un ADMIN debe crear/editar una **clave dinamica** en *Configuracion → Claves dinamicas* y activar **"Eliminar CxC"** y **"Eliminar CxP"**.
+
+### A. Libro de COMPRAS formato SENIAT (sesion 52-53)
+- [ ] PDF y Excel de compras en orden de columnas de WenSoft: Oper · Fecha · RIF · Nombre · Factura · **Serie** · Fiscal · Tipo Transac. · Factura Afectada · **Nota Deb · Nota Cred** · Total · No Gravadas · Base16 · %Alic · IVA16 · Iva Retenido · Comp. Retencion · IVA Percibido
+- [ ] **Cuadro de totales** del PDF y Excel (No gravadas, Importacion, Alicuota Gral/+Adic/Reducida, **Total IGTF**, subtotal, contribuyente) — con **Credito Fiscal** (no "Iva percibido")
+- [ ] Columna **Serie**: en facturas sale del campo "N° Serie proveedor"; en CxP del nuevo campo "Serie (factura proveedor)"
+- [ ] **Factura Afectada**: en retencion = N° factura proveedor; en NCC/NDC = N° factura proveedor de la compra afectada (no FC-XXXXX)
+- [ ] **Nota Deb/Cred**: muestra el **N° de la nota del proveedor** (no el del sistema)
+- [ ] Excel de los 3 libros (detallado, Reporte Z, compras) = identico al PDF (orden + cuadro de totales)
+
+### B. Notas de credito/debito (sesion 53)
+- [ ] Menu separado: **VENTAS → Notas Cr/Db** (solo NCV/NDV) y **COMPRAS → Notas Cr/Db** (solo NCC/NDC)
+- [ ] Al crear NCC/NDC: campo **"N° de la nota del proveedor"** + alerta no bloqueante si se deja vacio
+- [ ] Poder **agregar/editar** ese N° despues de creada (detalle de la nota)
+- [ ] En notas de **compra** NO aparece "Datos Fiscales" de maquina (solo en ventas)
+- [ ] **Eliminar** nota (con clave dinamica): bloquea si impresa fiscal o cruzada en recibo; revierte stock/estado/libros
+- [ ] Numeracion por tipo dentro de la serie (VF-NC-..., VF-ND-..., CMP-NC-...) y fecha editable
+
+### C. CxC / CxP (sesion 53)
+- [ ] Detalle de **CxP** rediseñado tipo formulario (secciones) + campo **Serie** del proveedor visible
+- [ ] **Eliminar CxC y CxP** (clave dinamica DELETE_RECEIVABLE / DELETE_PAYABLE): solo manuales, bloquea si cruzadas/cobradas/pagadas o en programacion de pagos
+- [ ] CxC con serie fiscal → correlativo `VF-CXC-...`, aparece en el libro de ventas detallado (columna Factura = correlativo)
+
+### D. Sesion y otros (sesion 53)
+- [ ] **No te saca sesion** mientras trabajas/facturas (renueva token cada 45 min + al volver a la pestaña); si la dejas inactiva mucho rato, expira sola (esperado)
+- [ ] **Eliminar conteo fisico** no aprobado (detalle, ADMIN/SUPERVISOR)
+- [ ] Boton **"Mas acciones"** en el detalle de factura de **compra** (PDF, ver en libro, NCC/NDC)
+
+### E. PENDIENTE (no implementado aun — para proximas sesiones)
+- [ ] **Punto 5 — Comandas automaticas**: al pagar en POS, el ticket 80mm ya imprime solo (via Trinity Agent si esta corriendo). FALTA que las **comandas por area de despacho** (PrintJob, que el backend ya crea) se manden solas al agente al pagar. Idealmente el agente debe manejar varias impresoras (una por area).
+- [ ] **Facturas anuladas en el libro de ventas** (mostrar con monto 0 / marca ANULADA)
+- [ ] **TXT de retenciones** para portal SENIAT (declaracion quincenal)
+- [ ] **Desglose por alicuota** 8%/31% en libros (hoy todo 16%) — deuda tecnica
+- [ ] **Punto 4 — Ventas automaticas** (post-produccion): catalogo web, chatbot WhatsApp/Instagram, tienda online, difusion de ofertas. Cuello de botella: pago + fiscal + delivery.
+- [ ] **Refresh deslizante en middleware** (opcional): cubrir el caso de reabrir tras >1h sin tener que re-login. Hoy solo cubierto el trabajo activo (suficiente).
+
+### F. Notas
+- DEPLOY pendiente (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`. Las migraciones corren solas; `fix-schema.sql` cubre las columnas/enum nuevos.
+- El fix de login local (`apps/web/.env.local`) es SOLO local, no se commitea.
+
+---
+
+## 🧪 PARA PROBAR (sesiones 50-51 — ya verificado en su mayoria)
+
 ## 🧪 PARA PROBAR MAÑANA (sesiones 50-51 — todo en local, SIN deploy todavia)
 
 > Sistema local: Web http://localhost:3000 (login admin@trinity.com / Admin1234!) · API :4000

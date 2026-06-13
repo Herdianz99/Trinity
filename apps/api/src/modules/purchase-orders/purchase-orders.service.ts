@@ -907,6 +907,7 @@ export class PurchaseOrdersService {
             entryDate: order.invoiceDate || processedAt,
             supplierControlNumber: order.supplierControlNumber || null,
             supplierInvoiceNumber: order.supplierInvoiceNumber || null,
+            supplierSerie: order.supplierSerialNumber || null,
             supplierName: order.supplier.name,
             supplierRif: order.supplier.rif || 'S/R',
             exemptAmountBs: order.exemptAmountBs,

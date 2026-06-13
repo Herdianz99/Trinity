@@ -337,6 +337,20 @@ export default function InventoryCountDetailPage() {
   }
 
   // ── Approve (auto-saves quantities first) ──────────
+  async function handleDeleteCount() {
+    if (!confirm('¿Eliminar este conteo? Esta accion no se puede deshacer.')) return;
+    try {
+      const res = await fetch(`/api/proxy/inventory-counts/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || 'Error al eliminar el conteo');
+      }
+      router.push('/inventory/count');
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  }
+
   async function handleApprove() {
     if (!confirm('Aprobar este conteo? Se ajustara el stock automaticamente.')) return;
     setSaving(true);
@@ -439,6 +453,12 @@ export default function InventoryCountDetailPage() {
             {count.notes && <span>— {count.notes}</span>}
           </div>
         </div>
+        {!isApproved && (
+          <button onClick={handleDeleteCount}
+            className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5 self-start">
+            <Trash2 size={14} /> Eliminar conteo
+          </button>
+        )}
       </div>
 
       {/* Messages */}

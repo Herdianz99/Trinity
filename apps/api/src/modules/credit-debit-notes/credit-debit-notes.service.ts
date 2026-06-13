@@ -35,6 +35,8 @@ export class CreditDebitNotesService {
 
     const where: any = {};
     if (query.type) where.type = query.type;
+    else if (query.scope === 'sale') where.type = { in: ['NCV', 'NDV'] };
+    else if (query.scope === 'purchase') where.type = { in: ['NCC', 'NDC'] };
     if (query.status) where.status = query.status;
     if (query.invoiceId) where.invoiceId = query.invoiceId;
     if (query.purchaseOrderId) where.purchaseOrderId = query.purchaseOrderId;
@@ -465,6 +467,7 @@ export class CreditDebitNotesService {
         manualAmountUsd: dto.manualAmountUsd || null,
         manualPct: dto.manualPct || null,
         documentDate: docDate,
+        supplierDocNumber: dto.supplierDocNumber || null,
         notes: dto.notes || null,
         createdById: userId,
         items: noteItems.length > 0 ? { create: noteItems } : undefined,
@@ -623,13 +626,14 @@ export class CreditDebitNotesService {
         const sign = note.type === 'NCC' ? -1 : 1;
         const r2 = (n: number) => Math.round(n * 100) / 100;
         const po = note.purchaseOrderId
-          ? await tx.purchaseOrder.findUnique({ where: { id: note.purchaseOrderId }, select: { supplier: { select: { name: true, rif: true } } } })
+          ? await tx.purchaseOrder.findUnique({ where: { id: note.purchaseOrderId }, select: { supplierInvoiceNumber: true, supplier: { select: { name: true, rif: true } } } })
           : null;
         await tx.purchaseBookEntry.create({
           data: {
             entryDate: note.documentDate || note.createdAt,
             supplierControlNumber: note.fiscalNumber || null,
-            supplierInvoiceNumber: note.number,
+            // N° de la nota del proveedor (cae al N° del sistema si no se capturo)
+            supplierInvoiceNumber: note.supplierDocNumber || note.number,
             supplierName: po?.supplier?.name || 'Proveedor',
             supplierRif: po?.supplier?.rif || 'S/R',
             exemptAmountBs: 0,
@@ -639,7 +643,9 @@ export class CreditDebitNotesService {
             isManual: false,
             isRetentionLine: false,
             documentType: note.type,
-            affectedDocNumber: note.purchaseOrder?.number || null,
+            creditDebitNoteId: note.id,
+            // En el libro de compras, "Factura Afectada" = N° de factura del proveedor (no el FC-XXXXX interno)
+            affectedDocNumber: po?.supplierInvoiceNumber || note.purchaseOrder?.number || null,
             createdById: userId,
           },
         });
@@ -738,6 +744,111 @@ export class CreditDebitNotesService {
     });
 
     return { message: 'Nota cancelada' };
+  }
+
+  // Eliminar una nota (borrador o confirmada) con resguardos:
+  // - NO si ya se imprimio por la maquina fiscal
+  // - NO si ya fue cruzada/aplicada en un recibo (appliedAt, pagos o ReceiptItem)
+  // Revierte stock (mercancia), estado/devoluciones de la factura y lineas del libro.
+  async remove(id: string) {
+    const note = await this.prisma.creditDebitNote.findUnique({
+      where: { id },
+      include: { items: true, serie: { select: { isFiscal: true } } },
+    });
+    if (!note) throw new NotFoundException('Nota no encontrada');
+    if (note.fiscalPrinted) {
+      throw new BadRequestException('No se puede eliminar: la nota ya fue impresa por la maquina fiscal');
+    }
+    if (note.appliedAt || (note.paidAmountUsd || 0) > 0) {
+      throw new BadRequestException('No se puede eliminar: la nota ya fue cruzada/aplicada en un recibo');
+    }
+    const inReceipt = await this.prisma.receiptItem.count({ where: { creditDebitNoteId: id } });
+    if (inReceipt > 0) {
+      throw new BadRequestException('No se puede eliminar: la nota esta cruzada en un recibo');
+    }
+
+    const config = await this.prisma.companyConfig.findFirst();
+    const defaultWarehouse = await this.prisma.warehouse.findFirst({ where: { isDefault: true } });
+    const warehouseId = config?.defaultWarehouseId || defaultWarehouse?.id;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (note.status === 'POSTED') {
+        // Revertir movimientos de stock de mercancia (RETURN_IN suma stock; RETURN_OUT lo resta)
+        if (note.origin === 'MERCHANDISE' && warehouseId) {
+          const movements = await tx.stockMovement.findMany({
+            where: { reference: note.number, type: { in: ['RETURN_IN', 'RETURN_OUT'] } },
+          });
+          for (const m of movements) {
+            const delta = m.type === 'RETURN_IN' ? -m.quantity : m.quantity;
+            await tx.stock.update({
+              where: { productId_warehouseId: { productId: m.productId, warehouseId: m.warehouseId } },
+              data: { quantity: { increment: delta } },
+            });
+          }
+          await tx.stockMovement.deleteMany({
+            where: { reference: note.number, type: { in: ['RETURN_IN', 'RETURN_OUT'] } },
+          });
+
+          // Recalcular devoluciones y estado de la factura (NCV de mercancia)
+          if (note.type === 'NCV' && note.invoiceId) {
+            const remaining = await tx.creditDebitNote.findMany({
+              where: { invoiceId: note.invoiceId, type: 'NCV', origin: 'MERCHANDISE', status: 'POSTED', id: { not: id } },
+              include: { items: true },
+            });
+            const byProduct: Record<string, number> = {};
+            for (const n of remaining) for (const it of n.items) if (it.productId) byProduct[it.productId] = (byProduct[it.productId] || 0) + it.quantity;
+            const invoice = await tx.invoice.findUnique({ where: { id: note.invoiceId }, include: { items: true } });
+            if (invoice) {
+              const anyRet = invoice.items.some((i) => (byProduct[i.productId] || 0) > 0);
+              const allRet = invoice.items.every((i) => (byProduct[i.productId] || 0) >= i.quantity);
+              await tx.invoice.update({
+                where: { id: note.invoiceId },
+                data: { status: allRet ? 'RETURNED' : anyRet ? 'PARTIAL_RETURN' : 'PAID' },
+              });
+              for (const invItem of invoice.items) {
+                await tx.invoiceItem.update({ where: { id: invItem.id }, data: { returnedQty: byProduct[invItem.productId] || 0 } });
+              }
+            }
+          }
+        }
+        // Borrar la(s) linea(s) del libro generadas por la nota
+        if (note.type === 'NCV' || note.type === 'NDV') {
+          await tx.salesBookEntry.deleteMany({ where: { invoiceNumber: note.number, documentType: note.type, isManual: false } });
+        } else {
+          await tx.purchaseBookEntry.deleteMany({ where: { creditDebitNoteId: id } });
+        }
+      }
+      await tx.creditDebitNoteItem.deleteMany({ where: { noteId: id } });
+      await tx.creditDebitNote.delete({ where: { id } });
+    });
+
+    return { message: 'Nota eliminada' };
+  }
+
+  // Permite colocar/corregir el N° de la nota del proveedor despues de creada (NCC/NDC).
+  // Si la nota ya esta confirmada, actualiza tambien su linea en el libro de compras.
+  async updateSupplierDocNumber(id: string, supplierDocNumber: string) {
+    const note = await this.prisma.creditDebitNote.findUnique({ where: { id } });
+    if (!note) throw new NotFoundException('Nota no encontrada');
+    if (note.type !== 'NCC' && note.type !== 'NDC') {
+      throw new BadRequestException('El N° del proveedor solo aplica a notas de compra (NCC/NDC)');
+    }
+    const value = (supplierDocNumber || '').trim() || null;
+
+    await this.prisma.creditDebitNote.update({
+      where: { id },
+      data: { supplierDocNumber: value },
+    });
+
+    // Si ya esta en el libro, actualizar la columna Nota Deb/Cred de esa linea
+    if (note.status === 'POSTED') {
+      await this.prisma.purchaseBookEntry.updateMany({
+        where: { creditDebitNoteId: id },
+        data: { supplierInvoiceNumber: value || note.number },
+      });
+    }
+
+    return { message: 'N° del proveedor actualizado', supplierDocNumber: value };
   }
 
   async markFiscalPrinted(

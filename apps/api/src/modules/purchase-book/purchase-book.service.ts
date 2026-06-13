@@ -30,6 +30,31 @@ export class PurchaseBookService {
       orderBy: { entryDate: 'asc' },
     });
 
+    // Reordenar al estilo SENIAT/WenSoft: cada factura seguida inmediatamente de su(s)
+    // linea(s) de retencion (IVA/ISLR), emparejadas por N° de factura del proveedor + RIF.
+    const retLines = entries.filter((e) => e.isRetentionLine || e.isIslrRetentionLine);
+    const usedRet = new Set<string>();
+    const ordered: typeof entries = [];
+    for (const e of entries) {
+      if (e.isRetentionLine || e.isIslrRetentionLine) continue;
+      ordered.push(e);
+      for (const r of retLines) {
+        if (usedRet.has(r.id)) continue;
+        if (
+          e.supplierInvoiceNumber &&
+          r.supplierInvoiceNumber === e.supplierInvoiceNumber &&
+          r.supplierRif === e.supplierRif
+        ) {
+          ordered.push(r);
+          usedRet.add(r.id);
+        }
+      }
+    }
+    // Retenciones sin factura emparejada (factura fuera del periodo) van al final
+    for (const r of retLines) {
+      if (!usedRet.has(r.id)) ordered.push(r);
+    }
+
     let totalExempt = 0;
     let totalTaxableBase = 0;
     let totalIva = 0;
@@ -48,7 +73,7 @@ export class PurchaseBookService {
 
     return {
       periodo: { from: fromDate, to: toDate },
-      entries,
+      entries: ordered,
       totales: {
         totalEntries: entries.length,
         exemptAmountBs: round2(totalExempt),
@@ -67,6 +92,7 @@ export class PurchaseBookService {
         entryDate: new Date(dto.entryDate),
         supplierControlNumber: dto.supplierControlNumber || null,
         supplierInvoiceNumber: dto.supplierInvoiceNumber || null,
+        supplierSerie: dto.supplierSerie || null,
         supplierName: dto.supplierName,
         supplierRif: dto.supplierRif,
         exemptAmountBs: dto.exemptAmountBs || 0,
@@ -98,6 +124,7 @@ export class PurchaseBookService {
     if (dto.entryDate !== undefined) data.entryDate = new Date(dto.entryDate);
     if (dto.supplierControlNumber !== undefined) data.supplierControlNumber = dto.supplierControlNumber;
     if (dto.supplierInvoiceNumber !== undefined) data.supplierInvoiceNumber = dto.supplierInvoiceNumber;
+    if (dto.supplierSerie !== undefined) data.supplierSerie = dto.supplierSerie;
     if (dto.supplierName !== undefined) data.supplierName = dto.supplierName;
     if (dto.supplierRif !== undefined) data.supplierRif = dto.supplierRif;
     if (dto.exemptAmountBs !== undefined) data.exemptAmountBs = dto.exemptAmountBs;

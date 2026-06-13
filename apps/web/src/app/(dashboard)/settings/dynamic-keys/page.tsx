@@ -33,6 +33,8 @@ const PERM_LABELS: Record<string, string> = {
   DELETE_DEBIT_NOTE_PURCHASE: 'Eliminar ND Compra',
   DELETE_RECEIPT_COLLECTION: 'Eliminar recibo cobro',
   DELETE_RECEIPT_PAYMENT: 'Eliminar recibo pago',
+  DELETE_RECEIVABLE: 'Eliminar CxC',
+  DELETE_PAYABLE: 'Eliminar CxP',
   DELETE_EXPENSE: 'Eliminar gasto',
   MODIFY_PRODUCT_PRICE: 'Modificar precio',
   CANCEL_CASH_SESSION: 'Anular sesion caja',

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -109,5 +110,12 @@ export class InventoryCountsController {
     @CurrentUser() user: { id: string; email: string; role: UserRole },
   ) {
     return this.inventoryCountsService.approve(id, user.id);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  remove(@Param('id') id: string) {
+    return this.inventoryCountsService.remove(id);
   }
 }

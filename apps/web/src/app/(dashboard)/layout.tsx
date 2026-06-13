@@ -4,6 +4,7 @@ import Sidebar from '@/components/sidebar';
 import ExchangeRateBanner from '@/components/exchange-rate-banner';
 import PrintMonitor from '@/components/print-monitor';
 import MobileBottomNav from '@/components/mobile-bottom-nav';
+import SessionKeeper from '@/components/session-keeper';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -48,6 +49,7 @@ export default async function DashboardLayout({
       </main>
       {user && <MobileBottomNav role={user.role} />}
       <PrintMonitor />
+      <SessionKeeper />
     </div>
   );
 }

@@ -60,4 +60,9 @@ export class CreateNoteDto {
   @IsOptional()
   @IsDateString()
   date?: string;
+
+  // N° de la nota que entrega el proveedor (NCC/NDC de compra)
+  @IsOptional()
+  @IsString()
+  supplierDocNumber?: string;
 }

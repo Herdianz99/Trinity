@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink, AlertTriangle,
+  ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink, AlertTriangle, Save,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -30,6 +30,7 @@ interface NoteDetail {
   fiscalPrinted: boolean;
   manualAmountUsd: number | null;
   manualPct: number | null;
+  supplierDocNumber: string | null;
   notes: string | null;
   createdAt: string;
   invoice: {
@@ -103,6 +104,8 @@ export default function CreditDebitNoteDetailPage() {
   const [posting, setPosting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [editSupplierDoc, setEditSupplierDoc] = useState('');
+  const [savingSupplierDoc, setSavingSupplierDoc] = useState(false);
 
   const fetchNote = useCallback(async () => {
     setLoading(true);
@@ -120,8 +123,33 @@ export default function CreditDebitNoteDetailPage() {
   useEffect(() => { fetchNote(); }, [fetchNote]);
 
   useEffect(() => {
-    if (note) document.title = `${note.number} - ${TYPE_LABELS[note.type] || note.type} | Trinity ERP`;
+    if (note) {
+      document.title = `${note.number} - ${TYPE_LABELS[note.type] || note.type} | Trinity ERP`;
+      setEditSupplierDoc(note.supplierDocNumber || '');
+    }
   }, [note]);
+
+  async function saveSupplierDoc() {
+    setSavingSupplierDoc(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/credit-debit-notes/${id}/supplier-doc-number`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierDocNumber: editSupplierDoc.trim() }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || 'Error al guardar');
+      }
+      setMessage({ type: 'success', text: 'N° de la nota del proveedor actualizado' });
+      fetchNote();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingSupplierDoc(false);
+    }
+  }
 
   async function handlePost() {
     if (!confirm('¿Confirmar esta nota? Se aplicarán los efectos contables e inventario.')) return;
@@ -244,31 +272,29 @@ export default function CreditDebitNoteDetailPage() {
     }
   }
 
-  function requestCancel() {
+  function requestDelete() {
     setAuthModalOpen(true);
   }
 
-  async function executeCancel() {
+  async function executeDelete() {
     setCancelling(true);
     try {
-      const res = await fetch(`/api/proxy/credit-debit-notes/${id}/cancel`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`/api/proxy/credit-debit-notes/${id}`, {
+        method: 'DELETE',
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al anular');
+        throw new Error(err.message || 'Error al eliminar');
       }
-      setMessage({ type: 'success', text: 'Nota anulada' });
-      fetchNote();
+      const sc = note && ['NCV', 'NDV'].includes(note.type) ? 'sale' : 'purchase';
+      router.push(`/credit-debit-notes?scope=${sc}`);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
-    } finally {
       setCancelling(false);
     }
   }
 
-  function getCancelPermission(): string {
+  function getDeletePermission(): string {
     if (!note) return '';
     const map: Record<string, string> = {
       NCV: 'DELETE_CREDIT_NOTE_SALE',
@@ -295,6 +321,8 @@ export default function CreditDebitNoteDetailPage() {
   );
 
   const isSale = ['NCV', 'NDV'].includes(note.type);
+  // Se puede eliminar si no fue impresa por la maquina fiscal ni cruzada/aplicada en un recibo
+  const canDelete = note.status !== 'CANCELLED' && !note.fiscalPrinted && !note.appliedAt && (note.paidAmountUsd || 0) === 0;
 
   return (
     <div>
@@ -314,7 +342,7 @@ export default function CreditDebitNoteDetailPage() {
           <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_COLORS[note.status]}`}>
             {STATUS_LABELS[note.status]}
           </span>
-          {note.serie?.isFiscal && note.status === 'POSTED' && !note.fiscalPrinted && (
+          {isSale && note.serie?.isFiscal && note.status === 'POSTED' && !note.fiscalPrinted && (
             <span className="text-xs px-2.5 py-1 rounded-full border text-orange-400 border-orange-500/30 bg-orange-500/10 flex items-center gap-1">
               <AlertTriangle size={12} /> Por Imprimir
             </span>
@@ -339,14 +367,14 @@ export default function CreditDebitNoteDetailPage() {
             </>
           )}
           {note.status === 'DRAFT' && (
-            <>
-              <button onClick={handlePost} disabled={posting} className="btn-primary text-sm flex items-center gap-1.5">
-                {posting ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />} Confirmar nota
-              </button>
-              <button onClick={requestCancel} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
-                {cancelling ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Anular
-              </button>
-            </>
+            <button onClick={handlePost} disabled={posting} className="btn-primary text-sm flex items-center gap-1.5">
+              {posting ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />} Confirmar nota
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={requestDelete} disabled={cancelling} className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+              {cancelling ? <Loader2 className="animate-spin" size={14} /> : <Ban size={14} />} Eliminar
+            </button>
           )}
         </div>
       </div>
@@ -399,8 +427,8 @@ export default function CreditDebitNoteDetailPage() {
               )}
             </div>
 
-            {/* Datos fiscales — visible cuando la serie es fiscal */}
-            {note.serie?.isFiscal && (
+            {/* Datos fiscales (maquina fiscal) — solo notas de venta; las de compra usan el N° del proveedor */}
+            {isSale && note.serie?.isFiscal && (
               <div className={`rounded-lg p-4 mb-6 border ${note.fiscalPrinted ? 'bg-slate-900/50 border-slate-700/50' : 'bg-orange-500/5 border-orange-500/30'}`}>
                 <h3 className="text-xs text-slate-500 uppercase mb-2 flex items-center gap-2">
                   Datos Fiscales
@@ -463,6 +491,29 @@ export default function CreditDebitNoteDetailPage() {
                     {note.invoice?.customer?.rif || note.purchaseOrder?.supplier?.rif || '—'}
                   </span>
                 </div>
+                {!isSale && note.status !== 'CANCELLED' && (
+                  <div className="sm:col-span-2 border-t border-slate-700/40 pt-3 mt-1">
+                    <span className="text-slate-400 block mb-1">N° de la nota del proveedor</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="text"
+                        value={editSupplierDoc}
+                        onChange={(e) => setEditSupplierDoc(e.target.value)}
+                        placeholder="N° de la NC/ND que entregó el proveedor"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-200 w-full sm:w-72"
+                      />
+                      <button onClick={saveSupplierDoc}
+                        disabled={savingSupplierDoc || editSupplierDoc.trim() === (note.supplierDocNumber || '')}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0">
+                        {savingSupplierDoc ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                        Guardar
+                      </button>
+                    </div>
+                    {!note.supplierDocNumber && (
+                      <p className="text-[11px] text-amber-400 mt-1">Pendiente — este número va al libro de compras (columna Nota Déb./Créd.)</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -660,11 +711,11 @@ export default function CreditDebitNoteDetailPage() {
       <DynamicKeyModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onAuthorized={executeCancel}
-        permission={getCancelPermission()}
+        onAuthorized={executeDelete}
+        permission={getDeletePermission()}
         entityType="CreditDebitNote"
         entityId={id}
-        action={`Anular ${note.type} ${note.number}`}
+        action={`Eliminar ${note.type} ${note.number}`}
       />
     </div>
   );

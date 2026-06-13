@@ -16,6 +16,11 @@ export class CreatePayableDto {
   @IsString()
   controlFiscal?: string;
 
+  // Serie alfanumerica de la factura del proveedor (ej. "A")
+  @IsOptional()
+  @IsString()
+  serie?: string;
+
   @IsOptional()
   @IsString()
   currency?: string; // 'USD' or 'BS'

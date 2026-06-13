@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, HandCoins, Loader2, ExternalLink, DollarSign, X,
+  ArrowLeft, HandCoins, Loader2, ExternalLink, DollarSign, X, Trash2,
 } from 'lucide-react';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface ReceivableDetail {
@@ -112,6 +113,23 @@ export default function ReceivableDetailPage() {
   const [payReference, setPayReference] = useState('');
   const [processing, setProcessing] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function executeDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/proxy/receivables/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al eliminar');
+      }
+      router.push('/receivables');
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+      setDeleting(false);
+    }
+  }
 
   const fetchReceivable = useCallback(async () => {
     setLoading(true);
@@ -183,6 +201,9 @@ export default function ReceivableDetailPage() {
   const totalPaidBs = receivable.payments.reduce((s, p) => s + p.amountBs, 0);
   const isFiscal = receivable.serie?.isFiscal ?? false;
   const hasFiscalData = isFiscal || (receivable.exemptBaseUsd || 0) > 0 || (receivable.taxableBase16Usd || 0) > 0 || (receivable.taxableBase8Usd || 0) > 0 || (receivable.taxableBase31Usd || 0) > 0;
+  // Solo CxC manual (sin factura) y no cruzada/cobrada
+  const canDelete = receivable.type === 'MANUAL' && !receivable.invoiceId && receivable.status !== 'PAID'
+    && receivable.status !== 'PARTIAL' && (receivable.paidAmountUsd || 0) === 0 && receivable.payments.length === 0;
 
   return (
     <div>
@@ -221,6 +242,12 @@ export default function ReceivableDetailPage() {
             <button onClick={() => { setPayOpen(true); setPayAmount(receivable.balanceUsd.toFixed(2)); setPayMethod(''); setPayReference(''); }}
               className="btn-primary text-sm flex items-center gap-1.5">
               <DollarSign size={14} /> Registrar cobro
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={() => setAuthModalOpen(true)} disabled={deleting}
+              className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+              {deleting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar
             </button>
           )}
         </div>
@@ -560,6 +587,16 @@ export default function ReceivableDetailPage() {
           </div>
         </div>
       )}
+
+      <DynamicKeyModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthorized={executeDelete}
+        permission="DELETE_RECEIVABLE"
+        entityType="Receivable"
+        entityId={id}
+        action={`Eliminar CxC ${receivable.number || ''}`}
+      />
     </div>
   );
 }
