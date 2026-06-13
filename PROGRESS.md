@@ -6,16 +6,16 @@
 > Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. Caja con sesion: Fiscal 2.
 > Checklist detallado de retenciones en `docs/PRUEBAS-retenciones-y-auditoria.md`.
 
-### A. Retenciones de IVA de clientes (sesion 50)
-- [ ] Toggle "Contribuyente especial" en el POS (persiste, oculto para cliente default)
-- [ ] Factura a credito a contribuyente especial → retencion auto-creada (RVC-xxxx, 75%)
-- [ ] Recibo de cobro: cruzar factura (+) y retencion (−) → cobrar neto
-- [ ] Registrar comprobante (14 digitos) → linea en libro de ventas
-- [ ] Caso reintegro: factura de contado pagada → nueva retencion con comprobante → recibo negativo saca dinero de caja (movimiento EXPENSE en la sesion)
-- [ ] Boton "Retencion IVA" en el detalle de la factura (dentro del menu "Mas acciones")
-- [ ] Una sola retencion por factura (la 2da se rechaza; no aparece en el buscador)
-- [ ] Menu "Mas acciones" en el detalle de factura agrupa todo (incl. Imprimir PDF)
-- [ ] Alerta de comprobantes pendientes (dias en rojo > 7)
+### A. Retenciones de IVA de clientes (sesion 50) — ✅ VERIFICADO 2026-06-13
+- [x] Toggle "Contribuyente especial" en el POS (persiste, oculto para cliente default)
+- [x] Factura a credito a contribuyente especial → retencion auto-creada (RVC-xxxx, 75%)
+- [x] Recibo de cobro: cruzar factura (+) y retencion (−) → cobrar neto
+- [x] Registrar comprobante (14 digitos) → linea en libro de ventas
+- [x] Caso reintegro: factura de contado pagada → nueva retencion con comprobante → recibo negativo saca dinero de caja (movimiento EXPENSE en la sesion)
+- [x] Boton "Retencion IVA" en el detalle de la factura (dentro del menu "Mas acciones")
+- [x] Una sola retencion por factura (la 2da se rechaza; no aparece en el buscador)
+- [x] Menu "Mas acciones" en el detalle de factura agrupa todo (incl. Imprimir PDF)
+- [x] Alerta de comprobantes pendientes (dias en rojo > 7)
 
 ### B. Libros fiscales (sesion 51)
 - [ ] **Libro de ventas detallado (pantalla)**: columnas Tipo, Doc. Afect., IVA Ret., Comprob.
@@ -39,7 +39,7 @@
 > Marcar cada item como [RESUELTO] / [CONFIRMADO] / [NO APLICA] tras la prueba.
 
 ### 🔴 Prioridad alta
-- [x] **NCC/NDC de compras no afectan el libro de compras** — **[RESUELTO sesion 51]**: al confirmar (POST) una NCC/NDC fiscal se crea `PurchaseBookEntry` con monto negativo (NCC) / positivo (NDC) y `affectedDocNumber`. El credito fiscal del periodo ya se ajusta. (credit-debit-notes.service.post)
+- [x] **NCC/NDC de compras no afectan el libro de compras** — **[RE-RESUELTO sesion 52]**: la sesion 51 lo marco resuelto pero estaba roto: la nota de compra NO heredaba serie (`serieId` quedaba null) y la creacion de `PurchaseBookEntry` exige `note.serie?.isFiscal`, asi que nunca entraba. **Fix (sesion 52)**: la NCC/NDC ahora hereda `serieId` de la orden de compra (igual que la NCV/NDV hereda de la factura). Verificado E2E: NCC sobre FC-00001 → `CMP-NC-26-00000001` → linea negativa en el libro de compras. (credit-debit-notes.service.create)
 - [x] **NCV/NDV no generaban linea en el libro de ventas detallado** — **[RESUELTO sesion 51]**: al confirmar una NCV/NDV fiscal se crea `SalesBookEntry` con `documentType` NCV/NDV, monto negativo/positivo y `affectedDocNumber`. (Nota: las devoluciones por maquina fiscal siguen resumiendose en el reporte Z; esto cubre el libro detallado de todas las series fiscales.)
 - [ ] **Facturas anuladas no se reflejan en el libro de ventas**: anular/devolver factura no marca ni ajusta su `SalesBookEntry`. El reglamento pide que las anuladas aparezcan (monto 0 / marca "ANULADA") para no romper la numeracion ante fiscalizacion. Para maquina fiscal el Z lo absorbe; afecta al libro detallado de entradas individuales. PENDIENTE.
 
@@ -53,6 +53,38 @@
 - [ ] **Importaciones**: libro de compras sin campos para DUA/planilla de importacion e IVA de aduana (columnas separadas de compras internas). Solo si importan directo.
 - [ ] **Compras sin derecho a credito fiscal**: el reglamento las pide como columna separada de las exentas. Hoy solo existe "exento".
 - [ ] **ISLR en libro de compras**: las lineas ISLR (informativas, ya excluidas de totales) no pertenecen al libro de IVA. Util un toggle para ocultarlas al exportar el libro "legal".
+
+---
+
+## Sesion 52 — Correlativo por tipo de documento + serie en notas de compra + fecha editable
+
+### Problema detectado
+- Las notas (NCV/NDV/NCC/NDC) compartian el contador `Serie.lastNumber` con las facturas: si la factura iba en 80, una nota salia 81 y la siguiente factura 82. Cada tipo debe tener su propio correlativo dentro de la serie.
+- Las NCC/NDC de compra no heredaban serie → nunca entraban al libro de compras (ver auditoria).
+- La fecha de las notas no era editable (siempre hoy).
+
+### Base de datos
+- **Serie**: nuevos contadores por tipo `lastInvoiceNumber`, `lastCreditNoteNumber`, `lastDebitNoteNumber` (el viejo `lastNumber` queda deprecado; backfill: `lastInvoiceNumber = lastNumber`).
+- **CreditDebitNote**: nuevo campo `documentDate` (fecha editable del documento).
+- **Migracion**: `20260613100000_per_type_serie_correlatives` (IF NOT EXISTS + backfill). Replicada en `deploy/fix-schema.sql`.
+
+### Backend
+- **credit-debit-notes.service.create()**:
+  - Hereda `serieId` de la factura (NCV/NDV) **o de la orden de compra** (NCC/NDC).
+  - Numeracion por tipo: `{prefijoSerie}-{NC|ND}-{año}-{correlativo8}` (ej. `VF-NC-26-00000001`). NC = credito (NCV/NCC), ND = debito (NDV/NDC). Cada tipo incrementa su propio contador con SELECT FOR UPDATE.
+  - `documentDate` editable (DTO `date`); rige la fecha del libro (`entryDate`) y la tasa de cambio aplicada.
+  - Fallback `nextSequentialNoteNumber()` (`TIPO-0001`) solo si el padre no tiene serie.
+- **invoices.service** y **quotations.service**: las facturas usan `lastInvoiceNumber`.
+- **import.service** y `scripts/clean-sales-data.sql`: reset de los 3 contadores.
+
+### Frontend
+- `/credit-debit-notes/new`: selector "Fecha del documento" (default hoy) enviado como `date`.
+
+### Verificado E2E (local)
+- NCV → `VF-NC-26-00000001`, NDV → `VF-ND-26-00000001`, contador de facturas intacto en 2.
+- NCC sobre compra fiscal (serie CMP) → `CMP-NC-26-00000001` → linea negativa en libro de compras.
+- Notas con fecha del documento reflejada en el libro.
+- **PENDIENTE DEPLOY** (lo hace Diego): la migracion corre sola con backfill. Serie de compra fiscal "CMP" creada en local para pruebas de UI.
 
 ---
 

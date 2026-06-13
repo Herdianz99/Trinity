@@ -595,16 +595,17 @@ export class InvoicesService {
     // Execute everything in transaction
     const result = await this.prisma.$transaction(async (tx) => {
       // Generate correlative number with SELECT FOR UPDATE on Serie
+      // Las facturas usan su propio contador (lastInvoiceNumber), independiente de las notas
       const seriesRows = await tx.$queryRaw<any[]>`
-        SELECT "id", "lastNumber", "prefix" FROM "Serie"
+        SELECT "id", "lastInvoiceNumber", "prefix" FROM "Serie"
         WHERE id = ${paymentSerie.id} FOR UPDATE
       `;
       const s = seriesRows[0];
-      const nextNumber = s.lastNumber + 1;
+      const nextNumber = s.lastInvoiceNumber + 1;
 
       await tx.serie.update({
         where: { id: paymentSerie.id },
-        data: { lastNumber: nextNumber },
+        data: { lastInvoiceNumber: nextNumber },
       });
 
       const year = new Date().getFullYear().toString().slice(-2);

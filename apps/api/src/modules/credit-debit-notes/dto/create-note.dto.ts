@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsArray,
   IsIn,
+  IsDateString,
   ValidateNested,
   Min,
 } from 'class-validator';
@@ -54,4 +55,9 @@ export class CreateNoteDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Fecha del documento (editable). Si no viene, se usa la fecha de hoy.
+  @IsOptional()
+  @IsDateString()
+  date?: string;
 }

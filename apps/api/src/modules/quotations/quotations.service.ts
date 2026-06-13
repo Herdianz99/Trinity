@@ -326,15 +326,15 @@ export class QuotationsService {
     const invoice = await this.prisma.$transaction(async (tx) => {
       // Lock the serie row for correlative increment
       const series = await tx.$queryRaw<any[]>`
-        SELECT "id", "lastNumber", "prefix" FROM "Serie"
+        SELECT "id", "lastInvoiceNumber", "prefix" FROM "Serie"
         WHERE id = ${serie.id} FOR UPDATE
       `;
       const s = series[0];
-      const nextNumber = s.lastNumber + 1;
+      const nextNumber = s.lastInvoiceNumber + 1;
 
       await tx.serie.update({
         where: { id: serie.id },
-        data: { lastNumber: nextNumber },
+        data: { lastInvoiceNumber: nextNumber },
       });
 
       const config = await tx.companyConfig.findFirst();

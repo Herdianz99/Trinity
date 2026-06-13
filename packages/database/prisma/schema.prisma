@@ -826,7 +826,10 @@ model Serie {
   type                SerieType          @default(SALES)
   isFiscal            Boolean            @default(false)
   isVatExempt         Boolean            @default(false)
-  lastNumber          Int                @default(0)
+  lastNumber          Int                @default(0)  // DEPRECADO: contador compartido (reemplazado por contadores por tipo)
+  lastInvoiceNumber    Int               @default(0)  // correlativo de facturas
+  lastCreditNoteNumber Int               @default(0)  // correlativo de notas de credito (NCV/NCC)
+  lastDebitNoteNumber  Int               @default(0)  // correlativo de notas de debito (NDV/NDC)
   isActive            Boolean            @default(true)
   comPort             String?
   fiscalMachineSerial String?
@@ -1367,6 +1370,7 @@ model CreditDebitNote {
   exchangeRate         Float                 @default(0)
   manualAmountUsd      Float?
   manualPct            Float?
+  documentDate         DateTime?
   notes                String?
   paidAmountUsd        Float                 @default(0)
   appliedAt            DateTime?

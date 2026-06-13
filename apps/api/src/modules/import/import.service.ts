@@ -796,8 +796,10 @@ export class ImportService {
       CASCADE
     `);
 
-    // Reset serie correlatives to 0
-    await this.prisma.serie.updateMany({ data: { lastNumber: 0 } });
+    // Reset serie correlatives to 0 (contador legacy + contadores por tipo)
+    await this.prisma.serie.updateMany({
+      data: { lastNumber: 0, lastInvoiceNumber: 0, lastCreditNoteNumber: 0, lastDebitNoteNumber: 0 },
+    });
 
     // Reset retention number in config
     await this.prisma.companyConfig.updateMany({ data: { retentionNextNumber: 1 } });

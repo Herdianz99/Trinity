@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  BookOpen, Loader2, FileDown, Search, Plus, Pencil, Trash2, X, Save, Calendar,
+  BookOpen, Loader2, FileDown, Search, Plus, Pencil, Trash2, X, Save, Calendar, FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface SalesBookEntry {
   id: string;
   invoiceId: string | null;
-  invoice: { id: string; number: string } | null;
+  invoice: { id: string; number: string; fiscalNumber: string | null; fiscalMachineSerial: string | null } | null;
+  affectedFiscalNumber: string | null;
   entryDate: string;
   invoiceNumber: string;
   controlNumber: string | null;
@@ -85,6 +87,14 @@ interface ZTotales {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Devuelve solo el correlativo de un numero de documento (ultimo segmento tras el guion).
+// "VF-26-00000001" -> "00000001" | "VF-NC-26-00000001" -> "00000001"
+function correlativo(num?: string | null): string {
+  if (!num) return '';
+  const parts = num.split('-');
+  return parts[parts.length - 1] || '';
+}
 
 function formatVe(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -522,6 +532,79 @@ export default function LibroVentasPage() {
     }
   }
 
+  // ── Excel Export (detallado tal cual, editable) ───────────────────────────
+
+  function exportExcel() {
+    const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    const sum = (sel: (e: SalesBookEntry) => number) =>
+      r2(entries.reduce((a, e) => a + (Number(sel(e)) || 0), 0));
+
+    const rows: Record<string, string | number>[] = entries.map((e, i) => {
+      const isNCV = e.documentType === 'NCV';
+      const isNDV = e.documentType === 'NDV';
+      const isFactura = e.documentType === 'FACTURA';
+      return {
+        'N°': i + 1,
+        'Fecha': e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '',
+        'Tipo': docTypeLabel(e.documentType),
+        'N° Control': e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
+        'Máquina Fiscal': e.invoice?.fiscalMachineSerial || '',
+        'N° Factura': isFactura ? correlativo(e.invoiceNumber) : '',
+        'N° Factura Afectada': correlativo(e.affectedDocNumber),
+        'N° Nota Débito': isNDV ? correlativo(e.invoiceNumber) : '',
+        'N° Nota Crédito': isNCV ? correlativo(e.invoiceNumber) : '',
+        'Cliente': e.customerName || '',
+        'RIF': e.customerRif || '',
+        'Exento Bs': r2(e.exemptAmountBs),
+        'Base Imponible Bs': r2(e.taxableBaseBs),
+        'IVA Bs': r2(e.ivaAmountBs),
+        'IVA Retenido Bs': r2(e.retentionAmountBs),
+        'N° Comprobante Ret.': e.retentionVoucherNumber || '',
+        'IGTF Bs': r2(e.igtfAmountBs),
+        'Total Bs': r2(e.totalBs),
+      };
+    });
+
+    rows.push({
+      'N°': '', 'Fecha': '', 'Tipo': 'TOTALES', 'N° Control': '', 'Máquina Fiscal': '', 'N° Factura': '',
+      'N° Factura Afectada': '', 'N° Nota Débito': '', 'N° Nota Crédito': '',
+      'Cliente': '', 'RIF': '',
+      'Exento Bs': sum((e) => e.exemptAmountBs),
+      'Base Imponible Bs': sum((e) => e.taxableBaseBs),
+      'IVA Bs': sum((e) => e.ivaAmountBs),
+      'IVA Retenido Bs': sum((e) => e.retentionAmountBs),
+      'N° Comprobante Ret.': '',
+      'IGTF Bs': sum((e) => e.igtfAmountBs),
+      'Total Bs': sum((e) => e.totalBs),
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Anchos ajustados al contenido: columnas de N° cortas, cliente/montos mas amplias
+    ws['!cols'] = [
+      { wch: 5 },   // N°
+      { wch: 11 },  // Fecha
+      { wch: 13 },  // Tipo
+      { wch: 12 },  // N° Control
+      { wch: 14 },  // Máquina Fiscal
+      { wch: 10 },  // N° Factura
+      { wch: 10 },  // N° Factura Afectada
+      { wch: 10 },  // N° Nota Débito
+      { wch: 10 },  // N° Nota Crédito
+      { wch: 28 },  // Cliente
+      { wch: 13 },  // RIF
+      { wch: 15 },  // Exento Bs
+      { wch: 16 },  // Base Imponible Bs
+      { wch: 14 },  // IVA Bs
+      { wch: 15 },  // IVA Retenido Bs
+      { wch: 16 },  // N° Comprobante Ret.
+      { wch: 12 },  // IGTF Bs
+      { wch: 15 },  // Total Bs
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Libro de Ventas');
+    XLSX.writeFile(wb, `libro-ventas-${fromDate}_${toDate}.xlsx`);
+  }
+
   // ── PDF Export (detallado) ────────────────────────────────────────────────
 
   async function exportPdf() {
@@ -556,57 +639,62 @@ export default function LibroVentasPage() {
         fecha: fmtDate2(e.entryDate),
         rif: e.customerRif || '',
         nombre: e.customerName || '',
-        factura: e.invoiceNumber || '',
-        control: e.controlNumber || '',
-        factAfectada: !isRet ? (e.affectedDocNumber || '') : '',
-        notaDebito: isNDV ? (e.invoiceNumber || '') : '',
-        notaCredito: isNCV ? (e.invoiceNumber || '') : '',
+        factura: e.documentType === 'FACTURA' ? correlativo(e.invoiceNumber) : '',
+        control: e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
+        maquinaFiscal: e.invoice?.fiscalMachineSerial || '',
+        factAfectada: correlativo(e.affectedDocNumber),
+        notaDebito: isNDV ? correlativo(e.invoiceNumber) : '',
+        notaCredito: isNCV ? correlativo(e.invoiceNumber) : '',
         tipoTran: '01 - reg',
         total: isRet ? 0 : e.totalBs,
         noGravadas: isRet ? 0 : e.exemptAmountBs,
         base16: isRet ? 0 : e.taxableBaseBs,
         alicuota: isRet ? '' : (e.taxableBaseBs ? '16,00' : ''),
         imp16: isRet ? 0 : e.ivaAmountBs,
+        igtf: isRet ? 0 : (e.igtfAmountBs || 0),
         ivaRetenido: e.retentionAmountBs || 0,
         compRetencion: e.retentionVoucherNumber || '',
       };
     });
 
-    let tTotal = 0, tNoGrav = 0, tBase16 = 0, tImp16 = 0, tRet = 0;
+    let tTotal = 0, tNoGrav = 0, tBase16 = 0, tImp16 = 0, tIgtf = 0, tRet = 0;
     for (const m of mapped) {
-      tTotal += m.total; tNoGrav += m.noGravadas; tBase16 += m.base16; tImp16 += m.imp16; tRet += m.ivaRetenido;
+      tTotal += m.total; tNoGrav += m.noGravadas; tBase16 += m.base16; tImp16 += m.imp16; tIgtf += m.igtf; tRet += m.ivaRetenido;
     }
 
     const tableRows = mapped.map((m, i) => `
       <tr>
-        <td>${i + 1}</td>
-        <td class="nowrap">${m.fecha}</td>
-        <td>${m.rif}</td>
+        <td class="fit">${i + 1}</td>
+        <td class="fit">${m.fecha}</td>
+        <td class="fit">${m.rif}</td>
         <td>${m.nombre}</td>
-        <td>${m.factura}</td>
-        <td>${m.control}</td>
-        <td>${m.factAfectada}</td>
-        <td>${m.notaDebito}</td>
-        <td>${m.notaCredito}</td>
-        <td class="nowrap">${m.tipoTran}</td>
+        <td class="fit">${m.factura}</td>
+        <td class="fit">${m.control}</td>
+        <td class="fit">${m.maquinaFiscal}</td>
+        <td class="fit">${m.factAfectada}</td>
+        <td class="fit">${m.notaDebito}</td>
+        <td class="fit">${m.notaCredito}</td>
+        <td class="fit">${m.tipoTran}</td>
         <td class="num">${fmtNum(m.total)}</td>
         <td class="num">${fmtNum(m.noGravadas)}</td>
         <td class="num">${fmtNum(m.base16)}</td>
         <td>${m.alicuota}</td>
         <td class="num">${fmtNum(m.imp16)}</td>
+        <td class="num">${fmtNum(m.igtf)}</td>
         <td class="num">${fmtNum(m.ivaRetenido)}</td>
-        <td>${m.compRetencion}</td>
+        <td class="fit">${m.compRetencion}</td>
       </tr>
     `).join('');
 
     const totalesRow = `
       <tr class="totales">
-        <td colspan="10"></td>
+        <td colspan="11"></td>
         <td class="num"><strong>${formatVe(tTotal)}</strong></td>
         <td class="num"><strong>${formatVe(tNoGrav)}</strong></td>
         <td class="num"><strong>${formatVe(tBase16)}</strong></td>
         <td></td>
         <td class="num"><strong>${formatVe(tImp16)}</strong></td>
+        <td class="num"><strong>${fmtNum(tIgtf)}</strong></td>
         <td class="num"><strong>${fmtNum(tRet)}</strong></td>
         <td></td>
       </tr>
@@ -619,22 +707,72 @@ export default function LibroVentasPage() {
           <td class="lbl">Base Imponible</td>
           <td class="lbl">D&eacute;bito Fiscal</td>
           <td class="lbl">Iva retenido por<br/>el comprador</td>
+          <td class="lbl">Iva de ventas<br/>percibido</td>
         </tr>
         <tr>
           <td colspan="2" class="lbl">Total: Ventas internas no gravadas</td>
-          <td class="num">${formatVe(tNoGrav)}</td><td></td><td></td>
+          <td class="num">${formatVe(tNoGrav)}</td>
+          <td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las ventas de exportaci&oacute;n</td>
+          <td></td><td></td><td></td><td></td>
         </tr>
         <tr>
           <td colspan="2" class="lbl">Suma de las ventas internas afecta solo Alicuota General</td>
           <td class="num">${formatVe(tBase16)}</td>
           <td class="num">${formatVe(tImp16)}</td>
           <td class="num">${fmtNum(tRet)}</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las ventas internas afecta solo Alicuota General + Adicional</td>
+          <td class="num">0,00</td>
+          <td class="num">0,00</td>
+          <td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Suma de las ventas internas afecta solo Alicuota Reducida</td>
+          <td class="num">0,00</td>
+          <td class="num">0,00</td>
+          <td></td>
+          <td>(+)</td>
         </tr>
         <tr class="subtotal">
           <td colspan="2"></td>
           <td class="num"><strong>${formatVe(tBase16 + tNoGrav)}</strong></td>
           <td class="num"><strong>${formatVe(tImp16)}</strong></td>
           <td class="num"><strong>${fmtNum(tRet)}</strong></td>
+          <td></td>
+        </tr>
+        <tr class="subtotal">
+          <td colspan="2" class="lbl"><strong>Total IGTF</strong></td>
+          <td class="num"><strong>${fmtNum(tIgtf)}</strong></td>
+          <td colspan="3"></td>
+        </tr>
+        <tr><td colspan="6" style="height:10px;border:none;"></td></tr>
+        <tr>
+          <td colspan="2" class="lbl">Ventas internas afectas solo alicuota general periodos anteriores</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Ventas internas afectas en alicuota Gral. + Adic. periodos anteriores</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">Ventas internas afectas en alicuota reducida periodos anteriores</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr><td colspan="6" style="height:10px;border:none;"></td></tr>
+        <tr>
+          <td colspan="2" class="lbl">Contribuyente</td>
+          <td class="num">${formatVe(tBase16)}</td>
+          <td class="num">${formatVe(tImp16)}</td>
+          <td></td><td></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="lbl">No contribuyente</td>
+          <td></td><td></td><td></td><td></td>
         </tr>
       </table>
     `;
@@ -660,6 +798,7 @@ export default function LibroVentasPage() {
         table.main th.group { background: #e0e0e0; text-align: center; font-weight: bold; border-bottom: 1.5px solid #333; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
         .nowrap { white-space: nowrap; }
+        table.main th.fit, table.main td.fit { width: 1px; white-space: nowrap; }
         .totales td { background: #f0f0f0; border-top: 1.5px solid #333; }
         .footer { font-size: 6pt; color: #888; margin-top: 4px; }
         table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; }
@@ -685,21 +824,23 @@ export default function LibroVentasPage() {
       <table class="main">
         <thead>
           <tr>
-            <th rowspan="2">Oper.<br/>Nro.</th>
-            <th rowspan="2">Fecha</th>
-            <th rowspan="2">N&deg; Rif</th>
+            <th rowspan="2" class="fit">Oper.<br/>Nro.</th>
+            <th rowspan="2" class="fit">Fecha</th>
+            <th rowspan="2" class="fit">N&deg; Rif</th>
             <th rowspan="2">Nombre o Raz&oacute;n Social</th>
-            <th rowspan="2">Factura</th>
-            <th rowspan="2">N&uacute;mero<br/>Control</th>
-            <th rowspan="2">Numero de<br/>Factura<br/>Afectada</th>
-            <th rowspan="2">Numero<br/>Nota<br/>Debito</th>
-            <th rowspan="2">Numero<br/>Nota<br/>Credito</th>
-            <th rowspan="2">Tipo<br/>de<br/>Transac.</th>
+            <th rowspan="2" class="fit">Factura</th>
+            <th rowspan="2" class="fit">N&uacute;mero<br/>Control</th>
+            <th rowspan="2" class="fit">Maquina<br/>Fiscal</th>
+            <th rowspan="2" class="fit">Numero de<br/>Factura<br/>Afectada</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Debito</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Credito</th>
+            <th rowspan="2" class="fit">Tipo<br/>de<br/>Transac.</th>
             <th rowspan="2">Total ventas<br/>Incluyendo<br/>el IVA</th>
             <th rowspan="2">Ventas<br/>Internas<br/>No Gravadas</th>
             <th class="group" colspan="3">VENTAS INTERNAS GRAVADAS<br/>ALICUOTA GENERAL</th>
+            <th rowspan="2" class="fit">IGTF</th>
             <th rowspan="2">Iva Retenido<br/>(Por el<br/>Comprador)</th>
-            <th rowspan="2">Comp. de<br/>Retencion</th>
+            <th rowspan="2" class="fit">Comp. de<br/>Retencion</th>
           </tr>
           <tr>
             <th>Base<br/>imponible<br/>16%</th>
@@ -720,6 +861,114 @@ export default function LibroVentasPage() {
     </body>
     </html>`);
     printWin.document.close();
+  }
+
+  // ── Excel Export (Reporte Z, tal cual) ────────────────────────────────────
+
+  async function exportZExcel() {
+    let allEntries: SalesBookEntry[] = entries;
+    let allZRows: ZDisplayRow[] = zRows;
+    try {
+      if (!entries.length) {
+        const res = await fetch(`/api/proxy/sales-book?from=${fromDate}&to=${toDate}`);
+        const data = await res.json();
+        allEntries = data.entries || [];
+      }
+      if (!zRows.length) {
+        const res = await fetch(`/api/proxy/z-reports?from=${fromDate}&to=${toDate}`);
+        const data = await res.json();
+        allZRows = data.rows || [];
+      }
+    } catch {}
+
+    const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    const fmtD = (d: string) => (d ? new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' }) : '');
+
+    const unified: any[] = [];
+    // Retenciones (una linea, con factura afectada y control fiscal heredado)
+    for (const e of allEntries) {
+      if (!e.isRetentionLine) continue;
+      unified.push({
+        date: e.entryDate, rif: e.customerRif || '', name: e.customerName || '',
+        machineSerial: '', zNumber: '', compInicial: '', compFinal: '',
+        factura: '', serie: '', fiscal: e.affectedFiscalNumber || '',
+        numFactAfectada: correlativo(e.affectedDocNumber), numND: '', numNC: '',
+        tipoTransac: '01 - reg', totalVentas: 0, ventasNoGravadas: 0, baseImponible16: 0,
+        alicuota: '16,00', impuestoIva16: 0, igtf: 0, ivaRetenido: e.retentionAmountBs || 0,
+        compRetencion: e.retentionVoucherNumber || e.notes || '', ivaPercibido: 0, cont: 'NO',
+      });
+    }
+    // Registros del Z (sin factura/serie/fiscal/afectada/ND/NC)
+    for (const z of allZRows) {
+      if (z.type === 'retencion') continue;
+      unified.push({
+        date: z.reportDate, rif: '', name: '',
+        machineSerial: z.machineSerial || '', zNumber: z.zNumber != null ? String(z.zNumber).padStart(8, '0') : '',
+        compInicial: z.fromDoc || '', compFinal: z.toDoc || '',
+        factura: '', serie: '', fiscal: '', numFactAfectada: '', numND: '', numNC: '',
+        tipoTransac: '01 - reg', totalVentas: z.totalBs, ventasNoGravadas: z.exemptBs,
+        baseImponible16: z.taxBaseBs, alicuota: '16,00', impuestoIva16: z.taxBs,
+        igtf: z.igtfBs || 0, ivaRetenido: 0, compRetencion: '', ivaPercibido: 0, cont: 'NO',
+      });
+    }
+    unified.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const rows: Record<string, string | number>[] = unified.map((u, i) => ({
+      'N°': i + 1,
+      'Fecha': fmtD(u.date),
+      'RIF': u.rif,
+      'Nombre o Razón Social': u.name,
+      'Serial Máquina Fiscal': u.machineSerial,
+      'N° Reporte Z': u.zNumber,
+      'Comprobante Inicial': u.compInicial,
+      'Comprobante Final': u.compFinal,
+      'Factura': u.factura,
+      'Serie': u.serie,
+      'Fiscal': u.fiscal,
+      'N° Factura Afectada': u.numFactAfectada,
+      'N° Nota Débito': u.numND,
+      'N° Nota Crédito': u.numNC,
+      'Tipo Transac.': u.tipoTransac,
+      'Total Ventas Bs': r2(u.totalVentas),
+      'Ventas No Gravadas Bs': r2(u.ventasNoGravadas),
+      'Base Imponible 16% Bs': r2(u.baseImponible16),
+      '% Alícuota': u.alicuota,
+      'Impuesto IVA 16% Bs': r2(u.impuestoIva16),
+      'IGTF Bs': r2(u.igtf),
+      'IVA Retenido Bs': r2(u.ivaRetenido),
+      'Comp. Retención': u.compRetencion,
+      'IVA Percibido Bs': r2(u.ivaPercibido),
+      'CONT': u.cont,
+    }));
+
+    const sum = (sel: (u: any) => number) => r2(unified.reduce((a, u) => a + (Number(sel(u)) || 0), 0));
+    rows.push({
+      'N°': '', 'Fecha': '', 'RIF': '', 'Nombre o Razón Social': '', 'Serial Máquina Fiscal': '',
+      'N° Reporte Z': '', 'Comprobante Inicial': '', 'Comprobante Final': '', 'Factura': '',
+      'Serie': '', 'Fiscal': '', 'N° Factura Afectada': '', 'N° Nota Débito': '', 'N° Nota Crédito': '',
+      'Tipo Transac.': 'TOTALES',
+      'Total Ventas Bs': sum((u) => u.totalVentas),
+      'Ventas No Gravadas Bs': sum((u) => u.ventasNoGravadas),
+      'Base Imponible 16% Bs': sum((u) => u.baseImponible16),
+      '% Alícuota': '',
+      'Impuesto IVA 16% Bs': sum((u) => u.impuestoIva16),
+      'IGTF Bs': sum((u) => u.igtf),
+      'IVA Retenido Bs': sum((u) => u.ivaRetenido),
+      'Comp. Retención': '',
+      'IVA Percibido Bs': sum((u) => u.ivaPercibido),
+      'CONT': '',
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 5 }, { wch: 11 }, { wch: 13 }, { wch: 28 }, { wch: 16 }, { wch: 12 },
+      { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 },
+      { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 17 },
+      { wch: 9 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 6 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte Z');
+    XLSX.writeFile(wb, `libro-ventas-reporte-z-${fromDate}_${toDate}.xlsx`);
   }
 
   // ── PDF Export (Libro de Ventas - Formato SENIAT) ─────────────────────────
@@ -781,6 +1030,7 @@ export default function LibroVentasPage() {
       baseImponible16: number;
       alicuota: string;
       impuestoIva16: number;
+      igtf: number;
       ivaRetenido: number;
       compRetencion: string;
       ivaPercibido: number;
@@ -789,7 +1039,8 @@ export default function LibroVentasPage() {
 
     const rows: UnifiedRow[] = [];
 
-    // Agregar solo retenciones de IVA (las facturas individuales ya están resumidas en los Z)
+    // Agregar solo retenciones de IVA (las facturas individuales ya están resumidas en los Z).
+    // Una sola linea por retencion, con la factura afectada y su control fiscal (heredado de la factura).
     for (const e of allEntries) {
       if (!e.isRetentionLine) continue;
       rows.push({
@@ -799,15 +1050,16 @@ export default function LibroVentasPage() {
         machineSerial: '', zNumber: '',
         compInicial: '', compFinal: '',
         factura: '',
-        serie: '', fiscal: '',
-        numFactAfectada: '',
+        serie: '', fiscal: e.affectedFiscalNumber || '',
+        numFactAfectada: correlativo(e.affectedDocNumber),
         numND: '', numNC: '',
         tipoTransac: '01 - reg',
         totalVentas: 0,
         ventasNoGravadas: 0,
         baseImponible16: 0,
-        alicuota: '',
+        alicuota: '16,00',
         impuestoIva16: 0,
+        igtf: 0,
         ivaRetenido: e.retentionAmountBs || 0,
         compRetencion: e.retentionVoucherNumber || e.notes || '',
         ivaPercibido: 0,
@@ -815,9 +1067,9 @@ export default function LibroVentasPage() {
       });
     }
 
-    // Agregar Z rows
+    // Agregar Z rows (las retenciones ya se agregaron arriba desde el detallado; evitar duplicado)
     for (const z of allZRows) {
-      const isNC = z.type === 'devoluciones';
+      if (z.type === 'retencion') continue;
       rows.push({
         date: z.reportDate,
         rif: '', name: '',
@@ -825,16 +1077,18 @@ export default function LibroVentasPage() {
         zNumber: z.zNumber != null ? String(z.zNumber).padStart(8, '0') : '',
         compInicial: z.fromDoc || '',
         compFinal: z.toDoc || '',
+        // Los registros del Z no llenan estas columnas (la info va en Comp. Inicial/Final)
         factura: '', serie: '', fiscal: '',
         numFactAfectada: '',
-        numND: z.type === 'debitos' ? z.toDoc || '' : '',
-        numNC: isNC ? z.toDoc || '' : '',
+        numND: '',
+        numNC: '',
         tipoTransac: '01 - reg',
         totalVentas: z.totalBs,
         ventasNoGravadas: z.exemptBs,
         baseImponible16: z.taxBaseBs,
         alicuota: '16,00',
         impuestoIva16: z.taxBs,
+        igtf: z.igtfBs || 0,
         ivaRetenido: 0,
         compRetencion: '',
         ivaPercibido: 0,
@@ -846,12 +1100,13 @@ export default function LibroVentasPage() {
     rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Calcular totales
-    let tTotalVentas = 0, tNoGravadas = 0, tBase16 = 0, tIva16 = 0, tIvaRetenido = 0, tIvaPercibido = 0;
+    let tTotalVentas = 0, tNoGravadas = 0, tBase16 = 0, tIva16 = 0, tIgtf = 0, tIvaRetenido = 0, tIvaPercibido = 0;
     for (const r of rows) {
       tTotalVentas += r.totalVentas;
       tNoGravadas += r.ventasNoGravadas;
       tBase16 += r.baseImponible16;
       tIva16 += r.impuestoIva16;
+      tIgtf += r.igtf;
       tIvaRetenido += r.ivaRetenido;
       tIvaPercibido += r.ivaPercibido;
     }
@@ -862,30 +1117,30 @@ export default function LibroVentasPage() {
     // Generar filas del tabla
     const tableRows = rows.map((r, i) => `
       <tr>
-        <td>${i + 1}</td>
-        <td class="nowrap">${fmtDate(r.date)}</td>
-        <td>${r.rif}</td>
+        <td class="fit">${i + 1}</td>
+        <td class="fit">${fmtDate(r.date)}</td>
+        <td class="fit">${r.rif}</td>
         <td>${r.name}</td>
-        <td>${r.machineSerial}</td>
-        <td>${r.zNumber}</td>
-        <td>${r.compInicial}</td>
-        <td>${r.compFinal}</td>
-        <td>${r.factura}</td>
-        <td>${r.serie}</td>
-        <td>${r.fiscal}</td>
-        <td>${r.numFactAfectada}</td>
-        <td>${r.numND}</td>
-        <td>${r.numNC}</td>
-        <td class="nowrap">${r.tipoTransac}</td>
+        <td class="fit">${r.machineSerial}</td>
+        <td class="fit">${r.zNumber}</td>
+        <td class="fit">${r.compInicial}</td>
+        <td class="fit">${r.compFinal}</td>
+        <td class="fit">${r.factura}</td>
+        <td class="fit">${r.serie}</td>
+        <td class="fit">${r.fiscal}</td>
+        <td class="fit">${r.numFactAfectada}</td>
+        <td class="fit">${r.numND}</td>
+        <td class="fit">${r.numNC}</td>
+        <td class="fit">${r.tipoTransac}</td>
         <td class="num">${fmtNum(r.totalVentas)}</td>
         <td class="num">${fmtNum(r.ventasNoGravadas)}</td>
         <td class="num">${fmtNum(r.baseImponible16)}</td>
-        <td>${r.alicuota}</td>
+        <td class="fit">${r.alicuota}</td>
         <td class="num">${fmtNum(r.impuestoIva16)}</td>
         <td class="num">${fmtNum(r.ivaRetenido)}</td>
-        <td>${r.compRetencion}</td>
+        <td class="fit">${r.compRetencion}</td>
         <td class="num">${fmtNum(r.ivaPercibido)}</td>
-        <td>${r.cont}</td>
+        <td class="fit">${r.cont}</td>
       </tr>
     `).join('');
 
@@ -928,7 +1183,7 @@ export default function LibroVentasPage() {
           <td colspan="2" class="lbl">Suma de las ventas internas afecta solo Alicuota General</td>
           <td class="num">${formatVe(tBase16)}</td>
           <td class="num">${formatVe(tIva16)}</td>
-          <td></td>
+          <td class="num">${fmtNum(tIvaRetenido)}</td>
           <td class="num">${fmtNum(tIvaPercibido)}</td>
         </tr>
         <tr>
@@ -948,8 +1203,13 @@ export default function LibroVentasPage() {
           <td colspan="2"></td>
           <td class="num"><strong>${formatVe(tBase16 + tNoGravadas)}</strong></td>
           <td class="num"><strong>${formatVe(tIva16)}</strong></td>
-          <td></td>
+          <td class="num"><strong>${fmtNum(tIvaRetenido)}</strong></td>
           <td class="num"><strong>${fmtNum(tIvaPercibido)}</strong></td>
+        </tr>
+        <tr class="subtotal">
+          <td colspan="2" class="lbl"><strong>Total IGTF</strong></td>
+          <td class="num"><strong>${fmtNum(tIgtf)}</strong></td>
+          <td colspan="3"></td>
         </tr>
         <tr><td colspan="6" style="height:10px;border:none;"></td></tr>
         <tr>
@@ -1003,6 +1263,7 @@ export default function LibroVentasPage() {
         table.main th.group { background: #e0e0e0; text-align: center; font-weight: bold; border-bottom: 1.5px solid #333; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
         .nowrap { white-space: nowrap; }
+        table.main th.fit, table.main td.fit { width: 1px; white-space: nowrap; }
         .totales td { background: #f0f0f0; border-top: 1.5px solid #333; }
         .footer { font-size: 6pt; color: #888; margin-top: 4px; }
         table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; }
@@ -1028,28 +1289,28 @@ export default function LibroVentasPage() {
       <table class="main">
         <thead>
           <tr>
-            <th rowspan="2">Oper.<br/>Nro.</th>
-            <th rowspan="2">Fecha<br/>documento</th>
-            <th rowspan="2">N&deg; Rif</th>
+            <th rowspan="2" class="fit">Oper.<br/>Nro.</th>
+            <th rowspan="2" class="fit">Fecha<br/>documento</th>
+            <th rowspan="2" class="fit">N&deg; Rif</th>
             <th rowspan="2">Nombre o Raz&oacute;n Social</th>
-            <th rowspan="2">Serial Maquina<br/>Fiscal</th>
-            <th rowspan="2">N&uacute;mero<br/>Reporte Z</th>
-            <th rowspan="2">Comprobante<br/>Inicial</th>
-            <th rowspan="2">Comprobante<br/>Final</th>
-            <th rowspan="2">Factura</th>
-            <th rowspan="2">Serie</th>
-            <th rowspan="2">Fiscal</th>
-            <th rowspan="2">Numero de<br/>Factura<br/>Afectada</th>
-            <th rowspan="2">Numero<br/>Nota<br/>Debito</th>
-            <th rowspan="2">Numero<br/>Nota<br/>Credito</th>
-            <th rowspan="2">Tipo<br/>de<br/>Transac.</th>
+            <th rowspan="2" class="fit">Serial Maquina<br/>Fiscal</th>
+            <th rowspan="2" class="fit">N&uacute;mero<br/>Reporte Z</th>
+            <th rowspan="2" class="fit">Comprobante<br/>Inicial</th>
+            <th rowspan="2" class="fit">Comprobante<br/>Final</th>
+            <th rowspan="2" class="fit">Factura</th>
+            <th rowspan="2" class="fit">Serie</th>
+            <th rowspan="2" class="fit">Fiscal</th>
+            <th rowspan="2" class="fit">Numero de<br/>Factura<br/>Afectada</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Debito</th>
+            <th rowspan="2" class="fit">Numero<br/>Nota<br/>Credito</th>
+            <th rowspan="2" class="fit">Tipo<br/>de<br/>Transac.</th>
             <th rowspan="2">Total ventas<br/>Incluyendo<br/>el IVA</th>
             <th rowspan="2">Ventas<br/>Internas<br/>No Gravadas</th>
             <th class="group" colspan="3">VENTAS INTERNAS O<br/>EXPORTACIONES GRAVADAS</th>
             <th rowspan="2">Iva Retenido<br/>(Por el<br/>Comprador)</th>
-            <th rowspan="2">Comp. de<br/>Retencion</th>
+            <th rowspan="2" class="fit">Comp. de<br/>Retencion</th>
             <th rowspan="2">IVA<br/>Percibido</th>
-            <th rowspan="2">CONT</th>
+            <th rowspan="2" class="fit">CONT</th>
           </tr>
           <tr>
             <th>Base<br/>imponible<br/>16%</th>
@@ -1211,11 +1472,18 @@ export default function LibroVentasPage() {
                 Agregar entrada manual
               </button>
               {entries.length > 0 && (
-                <button onClick={exportPdf}
-                  className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
-                  <FileDown size={16} />
-                  Exportar PDF
-                </button>
+                <>
+                  <button onClick={exportExcel}
+                    className="px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium text-sm flex items-center gap-2">
+                    <FileSpreadsheet size={16} />
+                    Exportar Excel
+                  </button>
+                  <button onClick={exportPdf}
+                    className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
+                    <FileDown size={16} />
+                    Exportar PDF
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -1231,6 +1499,7 @@ export default function LibroVentasPage() {
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Fecha</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Tipo</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Control</th>
+                      <th className="text-left px-2 py-2.5 text-slate-400 font-medium">M&aacute;q. Fiscal</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">N&deg; Doc.</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Doc. Afect.</th>
                       <th className="text-left px-2 py-2.5 text-slate-400 font-medium">Cliente</th>
@@ -1248,7 +1517,7 @@ export default function LibroVentasPage() {
                   <tbody>
                     {entries.length === 0 ? (
                       <tr>
-                        <td colSpan={16} className="text-center py-10 text-slate-500">
+                        <td colSpan={17} className="text-center py-10 text-slate-500">
                           <div className="flex flex-col items-center gap-2">
                             <BookOpen size={32} className="text-slate-600" />
                             <span>No hay entradas en este periodo</span>
@@ -1273,13 +1542,16 @@ export default function LibroVentasPage() {
                               </span>
                             </td>
                             <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
-                              {entry.controlNumber || '-'}
-                            </td>
-                            <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
-                              {entry.invoiceNumber}
+                              {entry.invoice?.fiscalNumber || entry.affectedFiscalNumber || entry.controlNumber || '-'}
                             </td>
                             <td className="px-2 py-2 text-slate-400 font-mono text-[11px]">
-                              {entry.affectedDocNumber || '-'}
+                              {entry.invoice?.fiscalMachineSerial || '-'}
+                            </td>
+                            <td className="px-2 py-2 text-slate-200 font-mono text-[11px]">
+                              {entry.documentType === 'FACTURA' ? correlativo(entry.invoiceNumber) : ''}
+                            </td>
+                            <td className="px-2 py-2 text-slate-400 font-mono text-[11px]">
+                              {correlativo(entry.affectedDocNumber) || '-'}
                             </td>
                             <td className="px-2 py-2 text-slate-200">
                               <div className="flex items-center gap-1.5">
@@ -1332,7 +1604,7 @@ export default function LibroVentasPage() {
                         {/* Totals row */}
                         {totales && (
                           <tr className="bg-slate-700/30 border-t-2 border-slate-600">
-                            <td colSpan={8} className="px-2 py-2.5 text-slate-100 font-bold">
+                            <td colSpan={9} className="px-2 py-2.5 text-slate-100 font-bold">
                               TOTALES ({totales.totalEntries} entradas)
                             </td>
                             <td className="px-2 py-2.5 text-right text-slate-100 font-bold tabular-nums">{formatVe(totales.exemptAmountBs)}</td>
@@ -1367,11 +1639,18 @@ export default function LibroVentasPage() {
                 Agregar Z manual
               </button>
               {zRows.length > 0 && (
-                <button onClick={exportZPdf}
-                  className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
-                  <FileDown size={16} />
-                  Exportar PDF
-                </button>
+                <>
+                  <button onClick={exportZExcel}
+                    className="px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium text-sm flex items-center gap-2">
+                    <FileSpreadsheet size={16} />
+                    Exportar Excel
+                  </button>
+                  <button onClick={exportZPdf}
+                    className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
+                    <FileDown size={16} />
+                    Exportar PDF
+                  </button>
+                </>
               )}
             </div>
           )}

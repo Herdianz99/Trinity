@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
-  BookOpen, Loader2, FileDown, Search, Plus, Pencil, Trash2, X, Save, Calendar,
+  BookOpen, Loader2, FileDown, Search, Plus, Pencil, Trash2, X, Save, Calendar, FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,6 +263,61 @@ export default function LibroComprasPage() {
     }
   }
 
+  // ── Excel Export (detallado tal cual, editable) ───────────────────────────
+
+  function exportExcel() {
+    const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    let n = 0;
+    const rows: Record<string, string | number>[] = entries.map((e) => {
+      const isRet = e.isRetentionLine || e.isIslrRetentionLine;
+      if (!isRet) n += 1;
+      const tipo = e.isRetentionLine ? 'Retención IVA'
+        : e.isIslrRetentionLine ? 'Retención ISLR'
+        : purchaseDocLabel(e.documentType);
+      return {
+        'N°': isRet ? '' : n,
+        'Fecha': isRet ? '' : (e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : ''),
+        'Tipo': tipo,
+        'N° Control': isRet ? '' : (e.supplierControlNumber || ''),
+        'N° Factura': isRet ? '' : (e.supplierInvoiceNumber || ''),
+        'N° Doc. Afectado': isRet ? '' : (e.affectedDocNumber || ''),
+        'Proveedor': isRet ? '' : e.supplierName,
+        'RIF': isRet ? '' : e.supplierRif,
+        'Exento Bs': isRet ? '' : r2(e.exemptAmountBs),
+        'Base Imponible Bs': isRet ? '' : r2(e.taxableBaseBs),
+        'Crédito Fiscal Bs': isRet ? '' : r2(e.ivaAmountBs),
+        'N° Comprobante Ret.': e.retentionVoucherNumber || e.islrRetentionVoucherNumber || '',
+        'Ret. IVA Bs': e.retentionAmountBs ? r2(e.retentionAmountBs) : '',
+        'Ret. ISLR Bs': e.islrRetentionAmountBs ? r2(e.islrRetentionAmountBs) : '',
+        'Total Bs': r2(e.totalBs),
+      };
+    });
+
+    if (totales) {
+      rows.push({
+        'N°': '', 'Fecha': '', 'Tipo': 'TOTALES', 'N° Control': '', 'N° Factura': '',
+        'N° Doc. Afectado': '', 'Proveedor': '', 'RIF': '',
+        'Exento Bs': r2(totales.exemptAmountBs),
+        'Base Imponible Bs': r2(totales.taxableBaseBs),
+        'Crédito Fiscal Bs': r2(totales.ivaAmountBs),
+        'N° Comprobante Ret.': '',
+        'Ret. IVA Bs': r2(totales.retentionAmountBs),
+        'Ret. ISLR Bs': totales.islrRetentionAmountBs ? r2(totales.islrRetentionAmountBs) : '',
+        'Total Bs': r2(totales.totalBs),
+      });
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 5 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
+      { wch: 28 }, { wch: 14 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 20 },
+      { wch: 13 }, { wch: 13 }, { wch: 14 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Libro de Compras');
+    XLSX.writeFile(wb, `libro-compras-${fromDate}_${toDate}.xlsx`);
+  }
+
   // ── PDF Export ───────────────────────────────────────────────────────────
 
   async function exportPdf() {
@@ -510,11 +566,18 @@ export default function LibroComprasPage() {
             Agregar entrada manual
           </button>
           {entries.length > 0 && (
-            <button onClick={exportPdf}
-              className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
-              <FileDown size={16} />
-              Exportar PDF
-            </button>
+            <>
+              <button onClick={exportExcel}
+                className="px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium text-sm flex items-center gap-2">
+                <FileSpreadsheet size={16} />
+                Exportar Excel
+              </button>
+              <button onClick={exportPdf}
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2">
+                <FileDown size={16} />
+                Exportar PDF
+              </button>
+            </>
           )}
         </div>
       )}

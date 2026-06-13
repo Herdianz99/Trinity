@@ -23,12 +23,32 @@ export class SalesBookService {
       },
       include: {
         invoice: {
-          select: { id: true, number: true },
+          select: { id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true },
         },
         createdBy: { select: { id: true, name: true } },
       },
       orderBy: { entryDate: 'asc' },
     });
+
+    // Resolver el numero fiscal (de la maquina) de la factura afectada para notas/retenciones.
+    // La retencion/nota no la imprime la maquina fiscal: hereda el control fiscal de su factura.
+    const affectedNumbers = Array.from(
+      new Set(entries.map((e) => e.affectedDocNumber).filter((n): n is string => !!n)),
+    );
+    const affectedFiscalMap = new Map<string, string | null>();
+    if (affectedNumbers.length) {
+      const affectedInvoices = await this.prisma.invoice.findMany({
+        where: { number: { in: affectedNumbers } },
+        select: { number: true, fiscalNumber: true },
+      });
+      for (const inv of affectedInvoices) {
+        if (inv.number) affectedFiscalMap.set(inv.number, inv.fiscalNumber);
+      }
+    }
+    const entriesOut = entries.map((e) => ({
+      ...e,
+      affectedFiscalNumber: e.affectedDocNumber ? affectedFiscalMap.get(e.affectedDocNumber) || null : null,
+    }));
 
     let totalExempt = 0;
     let totalTaxableBase = 0;
@@ -49,7 +69,7 @@ export class SalesBookService {
 
     return {
       periodo: { from: fromDate, to: toDate },
-      entries,
+      entries: entriesOut,
       totales: {
         totalEntries: entries.length,
         exemptAmountBs: round2(totalExempt),
@@ -81,7 +101,7 @@ export class SalesBookService {
       },
       include: {
         invoice: {
-          select: { id: true, number: true },
+          select: { id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true },
         },
         createdBy: { select: { id: true, name: true } },
       },
@@ -112,7 +132,7 @@ export class SalesBookService {
       data,
       include: {
         invoice: {
-          select: { id: true, number: true },
+          select: { id: true, number: true, fiscalNumber: true, fiscalMachineSerial: true },
         },
         createdBy: { select: { id: true, name: true } },
       },

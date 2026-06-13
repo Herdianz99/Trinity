@@ -80,6 +80,10 @@ export default function NewCreditDebitNotePage() {
 
   const [notes, setNotes] = useState('');
   const [exchangeRate, setExchangeRate] = useState(0);
+  const [noteDate, setNoteDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const isSale = ['NCV', 'NDV'].includes(noteType);
 
@@ -234,6 +238,7 @@ export default function NewCreditDebitNotePage() {
         manualAmountUsd: origin === 'MANUAL' && manualMode === 'fixed' ? manualAmountUsd : undefined,
         manualPct: origin === 'MANUAL' && manualMode === 'pct' ? manualPct : undefined,
         notes: notes || undefined,
+        date: noteDate || undefined,
       };
 
       const res = await fetch('/api/proxy/credit-debit-notes', {
@@ -495,16 +500,28 @@ export default function NewCreditDebitNotePage() {
         </div>
       )}
 
-      {/* Notes */}
-      <div className="card p-5">
-        <label className="text-xs text-slate-500 block mb-1">Observaciones</label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          className="input-field w-full"
-          placeholder="Motivo de la nota..."
-        />
+      {/* Date + Notes */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Fecha del documento</label>
+          <input
+            type="date"
+            value={noteDate}
+            onChange={(e) => setNoteDate(e.target.value)}
+            className="input-field w-full sm:w-56"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">Rige la fecha en el libro fiscal y la tasa de cambio aplicada.</p>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">Observaciones</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            className="input-field w-full"
+            placeholder="Motivo de la nota..."
+          />
+        </div>
       </div>
 
       {/* Summary footer */}

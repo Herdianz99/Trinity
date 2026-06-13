@@ -110,6 +110,21 @@ export class CreditDebitNotesService {
     return note;
   }
 
+  // Numeracion secuencial por tipo cuando la nota no hereda serie (padre sin serie asignada)
+  private async nextSequentialNoteNumber(type: string): Promise<string> {
+    const lastNote = await this.prisma.creditDebitNote.findFirst({
+      where: { type: type as any },
+      orderBy: { number: 'desc' },
+      select: { number: true },
+    });
+    let seq = 1;
+    if (lastNote) {
+      const parts = lastNote.number.split('-');
+      seq = parseInt(parts[parts.length - 1] || '0', 10) + 1;
+    }
+    return `${type}-${String(seq).padStart(4, '0')}`;
+  }
+
   async create(dto: CreateNoteDto, userId: string) {
     // Validate parent document
     if (['NCV', 'NDV'].includes(dto.type) && !dto.invoiceId) {
@@ -147,13 +162,15 @@ export class CreditDebitNotesService {
       }
     }
 
-    // Get exchange rate for today
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Fecha del documento (editable). Si no viene, hoy.
+    const docDate = dto.date ? new Date(dto.date) : new Date();
+    // Tasa de cambio del dia del documento (usa la del dia seleccionado, no siempre hoy)
+    const rateDay = new Date(docDate);
+    rateDay.setUTCHours(0, 0, 0, 0);
     const rateRecord = await this.prisma.exchangeRate.findFirst({
-      where: { date: today },
+      where: { date: rateDay },
     });
-    if (!rateRecord) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    if (!rateRecord) throw new BadRequestException('No hay tasa de cambio registrada para la fecha seleccionada');
     const exchangeRate = rateRecord.rate;
 
     let subtotalUsd = 0;
@@ -374,7 +391,8 @@ export class CreditDebitNotesService {
       }
     }
 
-    // Inherit serie from parent document (invoice or purchase order)
+    // Hereda la serie del documento padre: factura (NCV/NDV) u orden de compra (NCC/NDC).
+    // La serie fiscal es la que determina si la nota entra al libro (ventas o compras).
     let serieId: string | null = null;
     if (dto.invoiceId) {
       const parentInvoice = await this.prisma.invoice.findUnique({
@@ -382,59 +400,47 @@ export class CreditDebitNotesService {
         select: { serieId: true },
       });
       serieId = parentInvoice?.serieId || null;
+    } else if (dto.purchaseOrderId) {
+      const parentPo = await this.prisma.purchaseOrder.findUnique({
+        where: { id: dto.purchaseOrderId },
+        select: { serieId: true },
+      });
+      serieId = parentPo?.serieId || null;
     }
 
-    // Generate number using serie if available, otherwise fallback to sequential
+    // Token y contador segun tipo: NC = credito (NCV/NCC), ND = debito (NDV/NDC).
+    // Cada tipo lleva su propio correlativo dentro de la serie (independiente de las facturas).
+    const isCreditNote = dto.type === 'NCV' || dto.type === 'NCC';
+    const typeToken = isCreditNote ? 'NC' : 'ND';
+    const yearToken = docDate.getFullYear().toString().slice(-2);
+
     let number: string;
     if (serieId) {
       const serie = await this.prisma.serie.findUnique({ where: { id: serieId } });
       if (serie) {
-        // Use transaction with SELECT FOR UPDATE to increment serie correlative
-        const result = await this.prisma.$transaction(async (tx) => {
+        number = await this.prisma.$transaction(async (tx) => {
           const series = await tx.$queryRaw<any[]>`
-            SELECT "id", "lastNumber", "prefix" FROM "Serie"
+            SELECT "id", "prefix", "lastCreditNoteNumber", "lastDebitNoteNumber" FROM "Serie"
             WHERE id = ${serieId} FOR UPDATE
           `;
           const s = series[0];
-          const nextNumber = s.lastNumber + 1;
+          const nextNumber = (isCreditNote ? s.lastCreditNoteNumber : s.lastDebitNoteNumber) + 1;
           await tx.serie.update({
             where: { id: serieId! },
-            data: { lastNumber: nextNumber },
+            data: isCreditNote
+              ? { lastCreditNoteNumber: nextNumber }
+              : { lastDebitNoteNumber: nextNumber },
           });
-          const year = new Date().getFullYear().toString().slice(-2);
           const correlativo = nextNumber.toString().padStart(8, '0');
-          return `${s.prefix}-${year}-${correlativo}`;
+          // Formato: {prefijoSerie}-{NC|ND}-{año}-{correlativo8}  ej. VF-NC-26-00000001
+          return `${s.prefix}-${typeToken}-${yearToken}-${correlativo}`;
         });
-        number = result;
       } else {
-        // Fallback
-        const prefix = dto.type;
-        const lastNote = await this.prisma.creditDebitNote.findFirst({
-          where: { type: dto.type as any },
-          orderBy: { number: 'desc' },
-          select: { number: true },
-        });
-        let seq = 1;
-        if (lastNote) {
-          const parts = lastNote.number.split('-');
-          seq = parseInt(parts[parts.length - 1] || '0', 10) + 1;
-        }
-        number = `${prefix}-${String(seq).padStart(4, '0')}`;
+        number = await this.nextSequentialNoteNumber(dto.type);
       }
     } else {
-      // No serie (purchase notes) — use type-based sequential numbering
-      const prefix = dto.type;
-      const lastNote = await this.prisma.creditDebitNote.findFirst({
-        where: { type: dto.type as any },
-        orderBy: { number: 'desc' },
-        select: { number: true },
-      });
-      let seq = 1;
-      if (lastNote) {
-        const parts = lastNote.number.split('-');
-        seq = parseInt(parts[parts.length - 1] || '0', 10) + 1;
-      }
-      number = `${prefix}-${String(seq).padStart(4, '0')}`;
+      // Sin serie (documento padre sin serie asignada) — numeracion secuencial por tipo
+      number = await this.nextSequentialNoteNumber(dto.type);
     }
 
     const note = await this.prisma.creditDebitNote.create({
@@ -458,6 +464,7 @@ export class CreditDebitNotesService {
         exchangeRate,
         manualAmountUsd: dto.manualAmountUsd || null,
         manualPct: dto.manualPct || null,
+        documentDate: docDate,
         notes: dto.notes || null,
         createdById: userId,
         items: noteItems.length > 0 ? { create: noteItems } : undefined,
@@ -591,7 +598,7 @@ export class CreditDebitNotesService {
           : null;
         await tx.salesBookEntry.create({
           data: {
-            entryDate: new Date(),
+            entryDate: note.documentDate || note.createdAt,
             invoiceNumber: note.number,
             controlNumber: note.fiscalNumber || null,
             customerName: inv?.customer?.name || 'Cliente General',
@@ -620,7 +627,7 @@ export class CreditDebitNotesService {
           : null;
         await tx.purchaseBookEntry.create({
           data: {
-            entryDate: new Date(),
+            entryDate: note.documentDate || note.createdAt,
             supplierControlNumber: note.fiscalNumber || null,
             supplierInvoiceNumber: note.number,
             supplierName: po?.supplier?.name || 'Proveedor',
