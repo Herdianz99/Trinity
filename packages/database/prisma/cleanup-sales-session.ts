@@ -3,35 +3,36 @@
  *  SCRIPT DE UN SOLO USO — Limpieza de facturas de venta cargadas mal
  * ============================================================================
  *
- *  Borra TODAS las facturas de venta (Invoice type = SALE) y SOLO sus datos
- *  derivados, revirtiendo el inventario que descontaron. NO toca la carga
- *  inicial de inventario (esos movimientos son ADJUSTMENT_IN, no SALE).
+ *  Borra TODAS las facturas de venta (Invoice type = SALE) + sus notas de
+ *  crédito/débito de venta (NCV/NDV ligadas a esas facturas), revirtiendo el
+ *  inventario que movieron. NO toca la carga inicial de inventario (esos
+ *  movimientos son ADJUSTMENT_IN, no SALE/RETURN).
  *
- *  Qué borra / revierte por cada factura de venta:
- *    - StockMovement tipo SALE  -> revierte el stock (suma de vuelta) y los borra
- *    - InvoiceItem
- *    - Payment
- *    - PrintJob
- *    - Receivable (CxC generadas por la factura) + ReceivablePayment
- *    - SalesBookEntry (libro de ventas SENIAT)
- *    - CustomerIvaRetention (retenciones de IVA del cliente)
- *    - Invoice
- *  Y al final pone en 0 los correlativos de las series de ventas
- *  (lastInvoiceNumber, lastReceivableNumber, etc.) para que la próxima
- *  factura arranque desde 1.
+ *  Reversa de inventario: por CADA StockMovement que se borra se aplica
+ *    Stock.quantity -= movement.quantity
+ *  Como las ventas tienen quantity negativa y las devoluciones (RETURN_IN)
+ *  positiva, esto deja el stock exactamente como antes de la venta, aunque
+ *  haya habido devoluciones parciales.
+ *
+ *  Qué borra por cada FACTURA de venta:
+ *    StockMovement(SALE) · InvoiceItem · Payment · PrintJob ·
+ *    Receivable(+ReceivablePayment) · SalesBookEntry · CustomerIvaRetention · Invoice
+ *  Qué borra por cada NOTA NCV/NDV ligada:
+ *    StockMovement(RETURN_IN/RETURN_OUT) · CreditDebitNoteItem ·
+ *    SalesBookEntry(de la nota) · CreditDebitNote
+ *  Y pone en 0 los correlativos de las series de ventas.
  *
  *  SEGURIDAD:
- *    - Por defecto corre en DRY RUN: solo muestra lo que haría, NO borra.
+ *    - Por defecto DRY RUN: solo reporta, NO borra.
  *    - Para borrar de verdad: CONFIRM=DELETE_ALL_SALES
- *    - Aborta si encuentra datos que no debería destruir a ciegas
- *      (notas de crédito/débito, recibos, pagos de CxC ya recibidos),
- *      salvo que se fuerce con FORCE=1.
+ *    - Aborta si encuentra datos que NO sabe limpiar (recibos o programaciones
+ *      de pago ligados a notas, pagos de CxC recibidos), salvo FORCE=1.
  *
  *  USO (en el servidor, dentro de /opt/Trinity):
- *    # 1) Ver qué pasaría (no borra nada):
+ *    export DATABASE_URL="$(grep '^DATABASE_URL=' packages/database/.env | cut -d= -f2-)"
+ *    # 1) Dry run:
  *    pnpm --filter @trinity/database exec tsx prisma/cleanup-sales-session.ts
- *
- *    # 2) Ejecutar el borrado real:
+ *    # 2) Borrado real:
  *    CONFIRM=DELETE_ALL_SALES pnpm --filter @trinity/database exec tsx prisma/cleanup-sales-session.ts
  *
  *  >>> BORRAR ESTE ARCHIVO DESPUÉS DE USARLO <<<
@@ -43,10 +44,7 @@ const prisma = new PrismaClient();
 
 const CONFIRM = process.env.CONFIRM === 'DELETE_ALL_SALES';
 const FORCE = process.env.FORCE === '1';
-
-function log(...args: any[]) {
-  console.log(...args);
-}
+const log = (...a: any[]) => console.log(...a);
 
 async function main() {
   log('========================================================');
@@ -54,61 +52,69 @@ async function main() {
   log('  Modo:', CONFIRM ? '*** BORRADO REAL ***' : 'DRY RUN (no borra nada)');
   log('========================================================\n');
 
-  // ---- 1) Identificar el conjunto objetivo: facturas de venta -------------
+  // ---- 1) Conjuntos objetivo ---------------------------------------------
   const invoices = await prisma.invoice.findMany({
     where: { type: 'SALE' },
     select: { id: true, number: true, status: true },
   });
   const invoiceIds = invoices.map((i) => i.id);
+  const invoiceNumbers = invoices.map((i) => i.number).filter(Boolean) as string[];
 
   if (invoiceIds.length === 0) {
     log('No hay facturas de venta (type=SALE). Nada que hacer.');
     return;
   }
 
-  // Receivables generadas por estas facturas
+  // Notas NCV/NDV ligadas a esas facturas
+  const notes = await prisma.creditDebitNote.findMany({
+    where: { invoiceId: { in: invoiceIds } },
+    select: { id: true, number: true, type: true, status: true },
+  });
+  const noteIds = notes.map((n) => n.id);
+  const noteNumbers = notes.map((n) => n.number).filter(Boolean) as string[];
+
+  // CxC generadas por esas facturas
   const receivables = await prisma.receivable.findMany({
     where: { invoiceId: { in: invoiceIds } },
     select: { id: true },
   });
   const receivableIds = receivables.map((r) => r.id);
 
-  // ---- 2) Conteos para el reporte ----------------------------------------
-  const [
-    itemCount,
-    paymentCount,
-    printJobCount,
-    salesBookByInvoice,
-    salesBookByReceivable,
-    retentionCount,
-    saleMovements,
-  ] = await Promise.all([
-    prisma.invoiceItem.count({ where: { invoiceId: { in: invoiceIds } } }),
-    prisma.payment.count({ where: { invoiceId: { in: invoiceIds } } }),
-    prisma.printJob.count({ where: { invoiceId: { in: invoiceIds } } }),
-    prisma.salesBookEntry.count({ where: { invoiceId: { in: invoiceIds } } }),
-    receivableIds.length
-      ? prisma.salesBookEntry.count({ where: { receivableId: { in: receivableIds } } })
-      : Promise.resolve(0),
-    prisma.customerIvaRetention.count({ where: { invoiceId: { in: invoiceIds } } }),
-    prisma.stockMovement.findMany({
-      where: { type: 'SALE', reference: { in: invoices.map((i) => i.number).filter(Boolean) as string[] } },
-      select: { id: true, productId: true, warehouseId: true, quantity: true },
-    }),
+  // ---- 2) Movimientos de inventario a revertir ---------------------------
+  //   a) ventas        -> type SALE, reference = nº de factura
+  //   b) devoluciones   -> RETURN_IN/RETURN_OUT, reference = nº de nota
+  const saleMovements = await prisma.stockMovement.findMany({
+    where: { type: 'SALE', reference: { in: invoiceNumbers } },
+    select: { id: true, productId: true, warehouseId: true, quantity: true },
+  });
+  const noteMovements = noteNumbers.length
+    ? await prisma.stockMovement.findMany({
+        where: { type: { in: ['RETURN_IN', 'RETURN_OUT'] }, reference: { in: noteNumbers } },
+        select: { id: true, productId: true, warehouseId: true, quantity: true },
+      })
+    : [];
+  const allMovements = [...saleMovements, ...noteMovements];
+
+  // ---- 3) Conteos para el reporte ----------------------------------------
+  const [itemCount, paymentCount, printJobCount, sbInvoice, retentionCount, noteItemCount, sbNotes] =
+    await Promise.all([
+      prisma.invoiceItem.count({ where: { invoiceId: { in: invoiceIds } } }),
+      prisma.payment.count({ where: { invoiceId: { in: invoiceIds } } }),
+      prisma.printJob.count({ where: { invoiceId: { in: invoiceIds } } }),
+      prisma.salesBookEntry.count({ where: { invoiceId: { in: invoiceIds } } }),
+      prisma.customerIvaRetention.count({ where: { invoiceId: { in: invoiceIds } } }),
+      noteIds.length ? prisma.creditDebitNoteItem.count({ where: { noteId: { in: noteIds } } }) : Promise.resolve(0),
+      noteNumbers.length ? prisma.salesBookEntry.count({ where: { invoiceNumber: { in: noteNumbers } } }) : Promise.resolve(0),
+    ]);
+
+  // ---- 4) Chequeos de seguridad (lo que el script NO sabe limpiar) -------
+  const [receivablePayments, receiptItemsOnRet, receiptItemsOnNotes, schedItemsOnNotes] = await Promise.all([
+    receivableIds.length ? prisma.receivablePayment.count({ where: { receivableId: { in: receivableIds } } }) : Promise.resolve(0),
+    prisma.receiptItem.count({ where: { customerIvaRetention: { invoiceId: { in: invoiceIds } } } }),
+    noteIds.length ? prisma.receiptItem.count({ where: { creditDebitNoteId: { in: noteIds } } }) : Promise.resolve(0),
+    noteIds.length ? prisma.paymentScheduleItem.count({ where: { creditDebitNoteId: { in: noteIds } } }) : Promise.resolve(0),
   ]);
 
-  // ---- 3) Chequeos de seguridad (datos que NO deberíamos destruir a ciegas)
-  const [creditDebitNotes, receivablePayments, receiptItemsOnRetentions] = await Promise.all([
-    prisma.creditDebitNote.count({ where: { invoiceId: { in: invoiceIds } } }),
-    receivableIds.length
-      ? prisma.receivablePayment.count({ where: { receivableId: { in: receivableIds } } })
-      : Promise.resolve(0),
-    prisma.receiptItem.count({
-      where: { customerIvaRetention: { invoiceId: { in: invoiceIds } } },
-    }),
-  ]);
-
-  // Series de ventas con sus correlativos actuales
   const salesSeries = await prisma.serie.findMany({
     where: { type: 'SALES' },
     select: {
@@ -118,137 +124,112 @@ async function main() {
     },
   });
 
-  // ---- 4) Reporte ---------------------------------------------------------
-  log('--- LO QUE SE BORRARÍA / REVERTIRÍA ---');
-  log(`  Facturas de venta (Invoice type=SALE): ${invoices.length}`);
-  log(`    - PAID:    ${invoices.filter((i) => i.status === 'PAID').length}`);
-  log(`    - PENDING: ${invoices.filter((i) => i.status === 'PENDING').length}`);
-  log(`    - otras:   ${invoices.filter((i) => !['PAID', 'PENDING'].includes(i.status)).length}`);
-  log(`  InvoiceItem:                 ${itemCount}`);
-  log(`  Payment:                     ${paymentCount}`);
-  log(`  PrintJob:                    ${printJobCount}`);
-  log(`  StockMovement (SALE):        ${saleMovements.length}  (se revierte el stock)`);
-  log(`  SalesBookEntry (x factura):  ${salesBookByInvoice}`);
-  log(`  SalesBookEntry (x CxC):      ${salesBookByReceivable}`);
-  log(`  CustomerIvaRetention:        ${retentionCount}`);
-  log(`  Receivable (CxC):            ${receivables.length}`);
-  log('');
-  log('--- SERIES DE VENTAS (correlativos -> se pondrán en 0) ---');
+  // ---- 5) Reporte ---------------------------------------------------------
+  log('--- FACTURAS DE VENTA ---');
+  log(`  Invoice (type=SALE):   ${invoices.length}  (PAID ${invoices.filter(i => i.status === 'PAID').length}, ` +
+      `PENDING ${invoices.filter(i => i.status === 'PENDING').length}, ` +
+      `otras ${invoices.filter(i => !['PAID','PENDING'].includes(i.status)).length})`);
+  log(`  InvoiceItem:           ${itemCount}`);
+  log(`  Payment:               ${paymentCount}`);
+  log(`  PrintJob:              ${printJobCount}`);
+  log(`  SalesBookEntry (fact): ${sbInvoice}`);
+  log(`  CustomerIvaRetention:  ${retentionCount}`);
+  log(`  Receivable (CxC):      ${receivables.length}`);
+  log('--- NOTAS NCV/NDV LIGADAS ---');
+  log(`  CreditDebitNote:       ${notes.length}` + (notes.length ? `  [${notes.map(n => `${n.number}:${n.type}/${n.status}`).join(', ')}]` : ''));
+  log(`  CreditDebitNoteItem:   ${noteItemCount}`);
+  log(`  SalesBookEntry (nota): ${sbNotes}`);
+  log('--- INVENTARIO ---');
+  log(`  StockMovement SALE:        ${saleMovements.length}  (se revierten)`);
+  log(`  StockMovement RETURN nota: ${noteMovements.length}  (se revierten)`);
+  log('--- SERIES DE VENTAS (correlativos -> 0) ---');
   for (const s of salesSeries) {
     log(`  ${s.prefix} (${s.name})${s.isFiscal ? ' [FISCAL]' : ''}: ` +
-      `inv=${s.lastInvoiceNumber} cxc=${s.lastReceivableNumber} ` +
-      `ncv=${s.lastCreditNoteNumber} ndv=${s.lastDebitNoteNumber}`);
+      `inv=${s.lastInvoiceNumber} cxc=${s.lastReceivableNumber} ncv=${s.lastCreditNoteNumber} ndv=${s.lastDebitNoteNumber}`);
   }
   log('');
 
-  // ---- 5) Bloqueos de seguridad ------------------------------------------
+  // ---- 6) Bloqueos --------------------------------------------------------
   const blockers: string[] = [];
-  if (creditDebitNotes > 0) blockers.push(`Hay ${creditDebitNotes} nota(s) de crédito/débito ligadas a estas facturas`);
-  if (receivablePayments > 0) blockers.push(`Hay ${receivablePayments} pago(s) de CxC ya recibidos`);
-  if (receiptItemsOnRetentions > 0) blockers.push(`Hay ${receiptItemsOnRetentions} recibo(s) ligados a retenciones`);
-
-  if (blockers.length > 0) {
-    log('⚠️  ADVERTENCIAS (datos derivados que normalmente NO deberían existir si solo cargaste ventas):');
+  if (receivablePayments > 0) blockers.push(`${receivablePayments} pago(s) de CxC ya recibidos`);
+  if (receiptItemsOnRet > 0) blockers.push(`${receiptItemsOnRet} recibo(s) ligados a retenciones`);
+  if (receiptItemsOnNotes > 0) blockers.push(`${receiptItemsOnNotes} recibo(s) ligados a notas`);
+  if (schedItemsOnNotes > 0) blockers.push(`${schedItemsOnNotes} programación(es) de pago ligadas a notas`);
+  if (blockers.length) {
+    log('⚠️  ADVERTENCIAS (datos que el script no sabe limpiar):');
     blockers.forEach((b) => log('   - ' + b));
-    if (!FORCE) {
-      log('\n❌ Abortado por seguridad. Si estás seguro de borrarlos igual, corre con FORCE=1.');
-      return;
-    }
-    log('   FORCE=1 activo: se continúa de todas formas.\n');
+    if (!FORCE) { log('\n❌ Abortado por seguridad. Para continuar igual: FORCE=1.'); return; }
+    log('   FORCE=1: se continúa.\n');
   }
 
   if (!CONFIRM) {
-    log('🟡 DRY RUN: no se borró nada.');
-    log('   Verifica que el conteo de facturas (~200) sea el esperado.');
-    log('   Para ejecutar el borrado real:');
-    log('   CONFIRM=DELETE_ALL_SALES pnpm --filter @trinity/database exec tsx prisma/cleanup-sales-session.ts');
+    log('🟡 DRY RUN: no se borró nada. Verifica que las facturas (~200) sean lo esperado.');
+    log('   Borrado real: CONFIRM=DELETE_ALL_SALES pnpm --filter @trinity/database exec tsx prisma/cleanup-sales-session.ts');
     return;
   }
 
-  // ---- 6) BORRADO REAL (todo en una transacción) -------------------------
+  // ---- 7) BORRADO REAL (una transacción) ---------------------------------
   log('🔴 Ejecutando borrado real...\n');
 
   // Agregar reversa de stock por (producto, almacén)
   const decByPair = new Map<string, { productId: string; warehouseId: string; qty: number }>();
-  for (const m of saleMovements) {
+  for (const m of allMovements) {
     const key = `${m.productId}::${m.warehouseId}`;
     const cur = decByPair.get(key) ?? { productId: m.productId, warehouseId: m.warehouseId, qty: 0 };
-    cur.qty += m.quantity; // quantity es negativa en ventas
+    cur.qty += m.quantity;
     decByPair.set(key, cur);
   }
 
   await prisma.$transaction(async (tx) => {
-    // 6.1 Revertir inventario: quantity de venta es negativa -> restarla suma de vuelta
+    // 7.1 Revertir inventario (Stock -= quantity por cada movimiento borrado)
     for (const { productId, warehouseId, qty } of decByPair.values()) {
-      await tx.stock.updateMany({
-        where: { productId, warehouseId },
-        data: { quantity: { decrement: qty } }, // decrement de un negativo = incremento
-      });
+      await tx.stock.updateMany({ where: { productId, warehouseId }, data: { quantity: { decrement: qty } } });
     }
-    log(`  ✔ Stock revertido en ${decByPair.size} combinación(es) producto/almacén`);
+    log(`  ✔ Stock revertido en ${decByPair.size} par(es) producto/almacén`);
 
-    // 6.2 Borrar movimientos de venta
-    const delMov = await tx.stockMovement.deleteMany({
-      where: { type: 'SALE', reference: { in: invoices.map((i) => i.number).filter(Boolean) as string[] } },
-    });
-    log(`  ✔ StockMovement (SALE) borrados: ${delMov.count}`);
+    // 7.2 Borrar movimientos de inventario (ventas + devoluciones de notas)
+    const delSaleMov = await tx.stockMovement.deleteMany({ where: { type: 'SALE', reference: { in: invoiceNumbers } } });
+    let delNoteMov = 0;
+    if (noteNumbers.length) {
+      const r = await tx.stockMovement.deleteMany({ where: { type: { in: ['RETURN_IN', 'RETURN_OUT'] }, reference: { in: noteNumbers } } });
+      delNoteMov = r.count;
+    }
+    log(`  ✔ StockMovement borrados: ${delSaleMov.count} venta + ${delNoteMov} devolución`);
 
-    // 6.3 Retenciones de IVA del cliente (referencian salesBookEntry -> primero estas)
+    // 7.3 NOTAS: libro, items, recibos/programaciones (si los hay por FORCE), nota
+    if (noteIds.length) {
+      const delSbNote = await tx.salesBookEntry.deleteMany({ where: { invoiceNumber: { in: noteNumbers }, isManual: false } });
+      if (receiptItemsOnNotes > 0) await tx.receiptItem.deleteMany({ where: { creditDebitNoteId: { in: noteIds } } });
+      if (schedItemsOnNotes > 0) await tx.paymentScheduleItem.deleteMany({ where: { creditDebitNoteId: { in: noteIds } } });
+      const delNoteItems = await tx.creditDebitNoteItem.deleteMany({ where: { noteId: { in: noteIds } } });
+      const delNotes = await tx.creditDebitNote.deleteMany({ where: { id: { in: noteIds } } });
+      log(`  ✔ Notas: ${delNotes.count} nota(s), ${delNoteItems.count} item(s), ${delSbNote.count} entrada(s) de libro`);
+    }
+
+    // 7.4 FACTURAS: retenciones, libro, CxC, pagos, print, items
     const delRet = await tx.customerIvaRetention.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    log(`  ✔ CustomerIvaRetention borradas: ${delRet.count}`);
-
-    // 6.4 Libro de ventas (por factura y por CxC)
     const delSbInv = await tx.salesBookEntry.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    let sbRecv = 0;
-    if (receivableIds.length) {
-      const r = await tx.salesBookEntry.deleteMany({ where: { receivableId: { in: receivableIds } } });
-      sbRecv = r.count;
-    }
-    log(`  ✔ SalesBookEntry borrados: ${delSbInv.count + sbRecv}`);
-
-    // 6.5 Pagos de CxC (si los hubiera) y CxC
-    if (receivableIds.length) {
-      const delRp = await tx.receivablePayment.deleteMany({ where: { receivableId: { in: receivableIds } } });
-      if (delRp.count) log(`  ✔ ReceivablePayment borrados: ${delRp.count}`);
-    }
+    if (receivableIds.length) await tx.receivablePayment.deleteMany({ where: { receivableId: { in: receivableIds } } });
     const delRecv = await tx.receivable.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    log(`  ✔ Receivable borradas: ${delRecv.count}`);
-
-    // 6.6 Pagos, print jobs, items
     const delPay = await tx.payment.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    log(`  ✔ Payment borrados: ${delPay.count}`);
     const delPj = await tx.printJob.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    log(`  ✔ PrintJob borrados: ${delPj.count}`);
     const delItems = await tx.invoiceItem.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-    log(`  ✔ InvoiceItem borrados: ${delItems.count}`);
-
-    // 6.7 Facturas
     const delInv = await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
-    log(`  ✔ Invoice borradas: ${delInv.count}`);
+    log(`  ✔ Facturas: ${delInv.count} factura(s), ${delItems.count} item(s), ${delPay.count} pago(s), ` +
+        `${delRecv.count} CxC, ${delSbInv.count} libro, ${delRet.count} retención, ${delPj.count} printJob`);
 
-    // 6.8 Resetear correlativos de series de ventas a 0
+    // 7.5 Resetear correlativos de series de ventas a 0
     const resetSeries = await tx.serie.updateMany({
       where: { type: 'SALES' },
-      data: {
-        lastInvoiceNumber: 0,
-        lastReceivableNumber: 0,
-        lastCreditNoteNumber: 0,
-        lastDebitNoteNumber: 0,
-        lastNumber: 0,
-      },
+      data: { lastInvoiceNumber: 0, lastReceivableNumber: 0, lastCreditNoteNumber: 0, lastDebitNoteNumber: 0, lastNumber: 0 },
     });
     log(`  ✔ Series de ventas con correlativos en 0: ${resetSeries.count}`);
   }, { timeout: 120_000 });
 
-  log('\n✅ Listo. Facturas de venta eliminadas y correlativos reiniciados.');
+  log('\n✅ Listo. Facturas y notas de venta eliminadas, inventario revertido y correlativos reiniciados.');
   log('   Recuerda BORRAR este archivo (cleanup-sales-session.ts) después de usarlo.');
 }
 
 main()
-  .catch((e) => {
-    console.error('❌ Error:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error('❌ Error:', e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });
