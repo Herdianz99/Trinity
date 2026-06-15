@@ -1,29 +1,14 @@
 # Trinity ERP — Progreso
 
-## 🧪 PARA PROBAR (sesion 55 — PDF de comisiones + todos los vendedores)
-- [ ] **/reports/commissions** → boton **"Exportar PDF"** (PDF generado en el servidor con PDFKit)
-- [ ] Filtro de vendedor con opcion **"— Todos los vendedores —"**: muestra cada vendedor con su Resumen por categoria + gran total
-- [ ] En modo "Todos" el PDF saca el consolidado de todos con **TOTAL GENERAL** al final (solo vendedores con ventas)
-- [ ] El PDF individual incluye categorias + facturas cobradas + marca (Grupo)
-- [ ] Nota: queda un desfase conocido de 1 centavo entre subtotal y suma de categorias (redondeo, decidido dejar asi)
-
-## 🧪 PARA PROBAR (sesion 54 — reporte de comisiones)
-- [ ] **/reports/commissions** → columna **IVA Notas** en "Resumen por categoria": IVA de facturas con **serie no fiscal**
-- [ ] **Comision USD** ahora = **(Base USD + IVA Notas) × %** (el IVA de notas se suma a la base, no se paga completo). Validado con Lennys mejias / herreria = $1.95
-- [ ] **Empresas del grupo**: toggle "Empresa del grupo" en el cliente (nuevo y edicion). Sus facturas NO comisionan
-- [ ] En el reporte: tarjeta **"Vendido al grupo"** (no comisiona) + **badge "Grupo"** en la lista de facturas
-- [ ] Requiere **migracion** `20260615120000_customer_is_group_company` (campo `Customer.isGroupCompany`)
-
-## 🚀 Pendiente de DEPLOY
-- **Sesiones 54 y 55** (comisiones: IVA Notas, empresas del grupo, PDF individual + todos los vendedores). Incluye migracion `20260615120000_customer_is_group_company`. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"` — migraciones + `fix-schema.sql` corren solos.
-
-## ✅ HECHO y DEPLOYADO — Sesiones 49-53 (probado 2026-06-15)
+## ✅ HECHO y DEPLOYADO — Sesiones 49-55 (probado 2026-06-15)
 Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
 - **Sesion 49** — Libro de ventas editable, ticket de devolucion no fiscal, correcciones fiscales.
 - **Sesion 50** — Retenciones de IVA de clientes (contribuyente especial, RVC, cruce en recibo, comprobante, caso reintegro). Verificado 2026-06-13.
 - **Sesion 51** — Libros fiscales detalle SENIAT: libro de ventas detallado (Tipo / Doc. Afect. / IVA Ret. / Comprob.), NCV en negativo y NDV en positivo, retenciones, PDF apaisado, fix Reportes Z, libro de compras con NCC.
 - **Sesion 52** — Correlativos por tipo de documento dentro de la serie, serie en notas de compra, fecha editable de notas, NCC/NDC entran al libro de compras.
 - **Sesion 53** — Libro de compras formato SENIAT (PDF/Excel + cuadro de totales), serie del proveedor en facturas/CxP, Excel=PDF en los 3 libros, menus separados de Notas Cr/Db con N° de nota del proveedor, rediseño y eliminacion de CxC/CxP (clave dinamica), no-sacar-sesion, eliminar conteo fisico, boton "Mas acciones" en factura de compra.
+- **Sesion 54** — Reporte de comisiones: columna IVA Notas (serie no fiscal), Comision = (Base + IVA Notas) × %, empresas del grupo (toggle en cliente, no comisionan, tarjeta + badge). Migracion `20260615120000_customer_is_group_company`.
+- **Sesion 55** — Comisiones a PDF (individual + todos los vendedores con TOTAL GENERAL). *Nota: desfase conocido de 1 centavo por redondeo, decidido dejar asi.*
 
 ## 🔨 PENDIENTE — no implementado aun (para proximas sesiones)
 - [ ] **Comandas automaticas por area de despacho**: al pagar en POS el ticket 80mm ya imprime solo; FALTA que las comandas por area (PrintJob, que el backend ya crea) se manden solas al agente, idealmente con varias impresoras (una por area).
