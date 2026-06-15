@@ -6,12 +6,15 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { SellersService } from './sellers.service';
+import { ReportsPdfService } from '../reports/reports-pdf.service';
 import { CreateSellerDto } from './dto/create-seller.dto';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -22,7 +25,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('sellers')
 export class SellersController {
-  constructor(private readonly service: SellersService) {}
+  constructor(
+    private readonly service: SellersService,
+    private readonly pdfService: ReportsPdfService,
+  ) {}
 
   @Get()
   findAll(
@@ -30,6 +36,30 @@ export class SellersController {
     @Query('search') search?: string,
   ) {
     return this.service.findAll({ isActive, search });
+  }
+
+  @Get('commission-report-all')
+  getAllCommissionReports(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.service.getAllCommissionReports(from, to);
+  }
+
+  @Get('commission-report-all/pdf')
+  async getAllCommissionReportsPdf(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.service.getAllCommissionReports(from, to);
+    const buffer = await this.pdfService.generateCommissionAllPdf(data, from, to);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="comisiones-todos.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id')
@@ -68,5 +98,23 @@ export class SellersController {
     @Query('to') to: string,
   ) {
     return this.service.getCommissionReport(id, from, to);
+  }
+
+  @Get(':id/commission-report/pdf')
+  async getCommissionReportPdf(
+    @Param('id') id: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const seller = await this.service.findOne(id);
+    const data = await this.service.getCommissionReport(id, from, to);
+    const buffer = await this.pdfService.generateCommissionPdf(data, seller.name, from, to);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="comisiones-${seller.code}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }

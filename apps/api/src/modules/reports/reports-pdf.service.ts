@@ -248,4 +248,147 @@ export class ReportsPdfService {
 
     return this.toBuffer(doc);
   }
+
+  // ── Comisiones por Vendedor PDF ───────────────────────
+  async generateCommissionPdf(data: any, sellerName: string, from: string, to: string): Promise<Buffer> {
+    const company = await this.getCompanyName();
+    const doc = this.createDoc();
+    let y = this.drawHeader(doc, `Reporte de Comisiones — ${sellerName}`, company, `${from} al ${to}`);
+
+    // KPIs
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text(`Total vendido: $${this.fmt(data.totalSoldUsd)}`, 40, y);
+    doc.text(`Total comision: $${this.fmt(data.totalCommissionUsd)}`, 220, y);
+    doc.text(`Total IVA Notas: $${this.fmt(data.totalIvaNotasUsd)}`, 400, y);
+    doc.text(`Facturas: ${data.invoiceCount}`, 580, y);
+    y += 14;
+    doc.text(`Vendido al grupo (no comisiona): $${this.fmt(data.totalGroupSoldUsd)} (${data.groupInvoiceCount} fact.)`, 40, y);
+    y += 20;
+
+    // Category breakdown
+    doc.fontSize(10).font('Helvetica-Bold').text('Resumen por categoria', 40, y);
+    y += 16;
+
+    const cols = [
+      { label: 'Categoria', x: 40, width: 180 },
+      { label: 'Unidades', x: 220, width: 70, align: 'right' },
+      { label: 'Base USD', x: 300, width: 90, align: 'right' },
+      { label: 'Comision %', x: 400, width: 70, align: 'right' },
+      { label: 'IVA Notas', x: 480, width: 90, align: 'right' },
+      { label: 'Comision USD', x: 580, width: 100, align: 'right' },
+    ];
+
+    y = this.drawTableHeader(doc, y, cols);
+
+    let tUnits = 0, tBase = 0, tIva = 0, tComm = 0;
+    for (const cat of data.categories || []) {
+      y = this.checkPage(doc, y);
+      tUnits += cat.units; tBase += cat.baseUsd; tIva += cat.ivaNotasUsd; tComm += cat.commissionUsd;
+      y = this.drawTableRow(doc, y, cols, [
+        cat.categoryName, String(cat.units), `$${this.fmt(cat.baseUsd)}`,
+        `${cat.commissionPct.toFixed(2)}%`, `$${this.fmt(cat.ivaNotasUsd)}`,
+        `$${this.fmt(cat.commissionUsd)}`,
+      ]);
+    }
+
+    // Totals
+    y += 4;
+    doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#94a3b8');
+    y += 6;
+    y = this.drawTableRow(doc, y, cols, [
+      'TOTAL', String(tUnits), `$${this.fmt(tBase)}`, '',
+      `$${this.fmt(tIva)}`, `$${this.fmt(tComm)}`,
+    ], true);
+
+    // Invoice list
+    const invoices = data.invoices || [];
+    if (invoices.length > 0) {
+      y += 18;
+      y = this.checkPage(doc, y, 60);
+      doc.fontSize(10).font('Helvetica-Bold').text('Facturas cobradas', 40, y);
+      y += 16;
+
+      const invCols = [
+        { label: '# Factura', x: 40, width: 100 },
+        { label: 'Cliente', x: 140, width: 320 },
+        { label: 'Total USD', x: 470, width: 110, align: 'right' },
+        { label: 'Fecha cobro', x: 590, width: 110 },
+      ];
+      y = this.drawTableHeader(doc, y, invCols);
+
+      for (const inv of invoices) {
+        y = this.checkPage(doc, y);
+        const cliente = (inv.customer?.name || 'Sin cliente') + (inv.isGroup ? ' (Grupo)' : '');
+        const fecha = inv.paidAt ? new Date(inv.paidAt).toLocaleDateString('es-VE') : '';
+        y = this.drawTableRow(doc, y, invCols, [
+          inv.number || 'Sin numero', cliente, `$${this.fmt(inv.totalUsd)}`, fecha,
+        ]);
+      }
+    }
+
+    return this.toBuffer(doc);
+  }
+
+  // ── Comisiones — TODOS los vendedores PDF ─────────────
+  async generateCommissionAllPdf(data: any, from: string, to: string): Promise<Buffer> {
+    const company = await this.getCompanyName();
+    const doc = this.createDoc();
+    let y = this.drawHeader(doc, 'Comisiones por Vendedor (todos)', company, `${from} al ${to}`);
+
+    const cols = [
+      { label: 'Categoria', x: 40, width: 200 },
+      { label: 'Base USD', x: 240, width: 100, align: 'right' },
+      { label: 'IVA Notas', x: 350, width: 100, align: 'right' },
+      { label: 'Comision %', x: 460, width: 70, align: 'right' },
+      { label: 'Comision USD', x: 540, width: 120, align: 'right' },
+    ];
+
+    for (const seller of data.sellers || []) {
+      // Espacio para encabezado + cabecera de tabla + al menos una fila
+      y = this.checkPage(doc, y, 70);
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a')
+        .text(`${seller.sellerCode} — ${seller.sellerName}`, 40, y);
+      doc.fillColor('#000');
+      y += 16;
+
+      y = this.drawTableHeader(doc, y, cols);
+
+      for (const cat of seller.categories || []) {
+        y = this.checkPage(doc, y);
+        y = this.drawTableRow(doc, y, cols, [
+          cat.categoryName, `$${this.fmt(cat.baseUsd)}`, `$${this.fmt(cat.ivaNotasUsd)}`,
+          `${cat.commissionPct.toFixed(2)}%`, `$${this.fmt(cat.commissionUsd)}`,
+        ]);
+      }
+
+      // Subtotal del vendedor
+      y += 2;
+      doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#cbd5e1');
+      y += 4;
+      y = this.drawTableRow(doc, y, cols, [
+        `Total ${seller.sellerName}`, `$${this.fmt(seller.totalSoldUsd)}`,
+        `$${this.fmt(seller.totalIvaNotasUsd)}`, '', `$${this.fmt(seller.totalCommissionUsd)}`,
+      ], true);
+
+      if (seller.groupInvoiceCount > 0) {
+        doc.fontSize(7).font('Helvetica-Oblique').fillColor('#b45309')
+          .text(`Vendido al grupo (no comisiona): $${this.fmt(seller.totalGroupSoldUsd)} (${seller.groupInvoiceCount} fact.)`, 40, y);
+        doc.fillColor('#000');
+        y += 12;
+      }
+      y += 10;
+    }
+
+    // TOTAL GENERAL
+    const gt = data.grandTotals || {};
+    y = this.checkPage(doc, y, 30);
+    doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#0f172a');
+    y += 6;
+    y = this.drawTableRow(doc, y, cols, [
+      'TOTAL GENERAL', `$${this.fmt(gt.totalSoldUsd || 0)}`,
+      `$${this.fmt(gt.totalIvaNotasUsd || 0)}`, '', `$${this.fmt(gt.totalCommissionUsd || 0)}`,
+    ], true);
+
+    return this.toBuffer(doc);
+  }
 }

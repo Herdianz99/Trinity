@@ -253,6 +253,48 @@ export class SellersService {
     };
   }
 
+  // Reporte de comisiones de TODOS los vendedores con ventas en el periodo
+  async getAllCommissionReports(from: string, to: string) {
+    const sellers = await this.prisma.seller.findMany({
+      orderBy: { code: 'asc' },
+    });
+
+    const reports: any[] = [];
+    for (const seller of sellers) {
+      const report = await this.getCommissionReport(seller.id, from, to);
+      // Solo vendedores con ventas en el periodo (comisionables o del grupo)
+      if (report.invoiceCount === 0 && report.groupInvoiceCount === 0) continue;
+      reports.push({
+        sellerCode: seller.code,
+        sellerName: seller.name,
+        ...report,
+      });
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const grandTotals = {
+      totalSoldUsd: r2(reports.reduce((s, r) => s + r.totalSoldUsd, 0)),
+      totalCommissionUsd: r2(reports.reduce((s, r) => s + r.totalCommissionUsd, 0)),
+      totalIvaNotasUsd: r2(reports.reduce((s, r) => s + r.totalIvaNotasUsd, 0)),
+      totalGroupSoldUsd: r2(reports.reduce((s, r) => s + r.totalGroupSoldUsd, 0)),
+      invoiceCount: reports.reduce((s, r) => s + r.invoiceCount, 0),
+      groupInvoiceCount: reports.reduce((s, r) => s + r.groupInvoiceCount, 0),
+      sellerCount: reports.length,
+    };
+
+    const fromDate = new Date(from);
+    fromDate.setUTCHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setUTCHours(23, 59, 59, 999);
+
+    return {
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+      sellers: reports,
+      grandTotals,
+    };
+  }
+
   private async generateCode(): Promise<string> {
     const lastSeller = await this.prisma.seller.findFirst({
       orderBy: { code: 'desc' },

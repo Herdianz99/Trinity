@@ -6,5 +6,6 @@ import { ReportsPdfService } from './reports-pdf.service';
 @Module({
   controllers: [ReportsController],
   providers: [ReportsService, ReportsPdfService],
+  exports: [ReportsPdfService],
 })
 export class ReportsModule {}

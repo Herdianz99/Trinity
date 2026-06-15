@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## 🧪 PARA PROBAR (sesion 55 — PDF de comisiones + todos los vendedores)
+- [ ] **/reports/commissions** → boton **"Exportar PDF"** (PDF generado en el servidor con PDFKit)
+- [ ] Filtro de vendedor con opcion **"— Todos los vendedores —"**: muestra cada vendedor con su Resumen por categoria + gran total
+- [ ] En modo "Todos" el PDF saca el consolidado de todos con **TOTAL GENERAL** al final (solo vendedores con ventas)
+- [ ] El PDF individual incluye categorias + facturas cobradas + marca (Grupo)
+- [ ] Nota: queda un desfase conocido de 1 centavo entre subtotal y suma de categorias (redondeo, decidido dejar asi)
+
 ## 🧪 PARA PROBAR (sesion 54 — reporte de comisiones)
 - [ ] **/reports/commissions** → columna **IVA Notas** en "Resumen por categoria": IVA de facturas con **serie no fiscal**
 - [ ] **Comision USD** ahora = **(Base USD + IVA Notas) × %** (el IVA de notas se suma a la base, no se paga completo). Validado con Lennys mejias / herreria = $1.95

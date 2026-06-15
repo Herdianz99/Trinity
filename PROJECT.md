@@ -730,6 +730,20 @@ model Payment {
 
 **Flujos:** (1) crédito: retención auto-creada se cruza con la CxC en el recibo y se cobra el neto; (2) reintegro: cliente pagó completo, trae comprobante, se crea la retención y un recibo negativo saca el dinero de caja; (3) alerta para exigir comprobantes no entregados
 
+#### Sesión 55 — Exportar comisiones a PDF y reporte de todos los vendedores
+**Backend:**
+- `ReportsPdfService.generateCommissionPdf` — PDF individual del reporte de comisiones (KPIs, resumen por categoría con IVA Notas y Comisión USD, lista de facturas con marca de grupo). Usa PDFKit y los helpers existentes.
+- `ReportsPdfService.generateCommissionAllPdf` — PDF consolidado: un bloque por vendedor (tabla de categorías + subtotal + nota de grupo) y **TOTAL GENERAL** al final.
+- `SellersService.getAllCommissionReports(from, to)` — recorre los vendedores, reutiliza `getCommissionReport`, **solo incluye los que tuvieron ventas** y calcula gran total (Comisión + Base + IVA Notas).
+- Endpoints en `SellersController`: `GET /sellers/:id/commission-report/pdf`, `GET /sellers/commission-report-all` y `GET /sellers/commission-report-all/pdf` (las rutas `commission-report-all` se declaran antes de `:id` para no ser capturadas).
+- `ReportsModule` exporta `ReportsPdfService`; `SellersModule` lo importa.
+
+**Frontend (`/reports/commissions`):**
+- Botón **"Exportar PDF"** (abre el PDF del servidor según el modo).
+- Filtro de vendedor con opción **"— Todos los vendedores —"**: tarjetas de gran total + por cada vendedor su Resumen por categoría (tabla extraída a componente reutilizable `CategoryBreakdown`). El modo individual queda igual.
+
+**Nota:** desfase conocido de 1 centavo entre subtotal por vendedor y suma de categorías (round-then-sum); decidido dejarlo así.
+
 #### Sesión 54 — IVA de notas en comisiones y empresas del grupo
 **Backend (reporte de comisiones — `SellersService.getCommissionReport`):**
 - Columna **IVA Notas** por categoría: suma el IVA (`InvoiceItem.ivaAmount`) de los ítems cuya factura tiene **serie no fiscal** (`Serie.isFiscal = false`). En series fiscales el IVA Notas es 0.
