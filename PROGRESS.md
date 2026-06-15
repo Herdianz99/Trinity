@@ -14,107 +14,38 @@
 - [ ] En el reporte: tarjeta **"Vendido al grupo"** (no comisiona) + **badge "Grupo"** en la lista de facturas
 - [ ] Requiere **migracion** `20260615120000_customer_is_group_company` (campo `Customer.isGroupCompany`)
 
-## 🧪 PARA PROBAR MAÑANA (sesion 53 — todo en local, SIN deploy todavia)
+## 🚀 Pendiente de DEPLOY
+- **Sesiones 54 y 55** (comisiones: IVA Notas, empresas del grupo, PDF individual + todos los vendedores). Incluye migracion `20260615120000_customer_is_group_company`. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"` — migraciones + `fix-schema.sql` corren solos.
 
-> Sistema local: Web http://localhost:3000 (admin@trinity.com / Admin1234!) · API :4000
-> Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. Caja con sesion: Fiscal 2.
-> ⚠️ Para que el boton **Eliminar de CxC/CxP** funcione, primero un ADMIN debe crear/editar una **clave dinamica** en *Configuracion → Claves dinamicas* y activar **"Eliminar CxC"** y **"Eliminar CxP"**.
+## ✅ HECHO y DEPLOYADO — Sesiones 49-53 (probado 2026-06-15)
+Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
+- **Sesion 49** — Libro de ventas editable, ticket de devolucion no fiscal, correcciones fiscales.
+- **Sesion 50** — Retenciones de IVA de clientes (contribuyente especial, RVC, cruce en recibo, comprobante, caso reintegro). Verificado 2026-06-13.
+- **Sesion 51** — Libros fiscales detalle SENIAT: libro de ventas detallado (Tipo / Doc. Afect. / IVA Ret. / Comprob.), NCV en negativo y NDV en positivo, retenciones, PDF apaisado, fix Reportes Z, libro de compras con NCC.
+- **Sesion 52** — Correlativos por tipo de documento dentro de la serie, serie en notas de compra, fecha editable de notas, NCC/NDC entran al libro de compras.
+- **Sesion 53** — Libro de compras formato SENIAT (PDF/Excel + cuadro de totales), serie del proveedor en facturas/CxP, Excel=PDF en los 3 libros, menus separados de Notas Cr/Db con N° de nota del proveedor, rediseño y eliminacion de CxC/CxP (clave dinamica), no-sacar-sesion, eliminar conteo fisico, boton "Mas acciones" en factura de compra.
 
-### A. Libro de COMPRAS formato SENIAT (sesion 52-53)
-- [ ] PDF y Excel de compras en orden de columnas de WenSoft: Oper · Fecha · RIF · Nombre · Factura · **Serie** · Fiscal · Tipo Transac. · Factura Afectada · **Nota Deb · Nota Cred** · Total · No Gravadas · Base16 · %Alic · IVA16 · Iva Retenido · Comp. Retencion · IVA Percibido
-- [ ] **Cuadro de totales** del PDF y Excel (No gravadas, Importacion, Alicuota Gral/+Adic/Reducida, **Total IGTF**, subtotal, contribuyente) — con **Credito Fiscal** (no "Iva percibido")
-- [ ] Columna **Serie**: en facturas sale del campo "N° Serie proveedor"; en CxP del nuevo campo "Serie (factura proveedor)"
-- [ ] **Factura Afectada**: en retencion = N° factura proveedor; en NCC/NDC = N° factura proveedor de la compra afectada (no FC-XXXXX)
-- [ ] **Nota Deb/Cred**: muestra el **N° de la nota del proveedor** (no el del sistema)
-- [ ] Excel de los 3 libros (detallado, Reporte Z, compras) = identico al PDF (orden + cuadro de totales)
+## 🔨 PENDIENTE — no implementado aun (para proximas sesiones)
+- [ ] **Comandas automaticas por area de despacho**: al pagar en POS el ticket 80mm ya imprime solo; FALTA que las comandas por area (PrintJob, que el backend ya crea) se manden solas al agente, idealmente con varias impresoras (una por area).
+- [ ] **Facturas anuladas en el libro de ventas** (mostrar con monto 0 / marca ANULADA).
+- [ ] **TXT de retenciones** para portal SENIAT (declaracion quincenal de retenciones de compras).
+- [ ] **Desglose por alicuota** 8%/31% en libros (hoy todo 16%) — deuda tecnica.
+- [ ] **Ventas automaticas** (post-produccion): catalogo web, chatbot WhatsApp/Instagram, tienda online, difusion de ofertas.
+- [ ] **Refresh deslizante en middleware** (opcional): reabrir tras >1h sin re-login. Hoy el trabajo activo ya esta cubierto.
+- [ ] **Importaciones** en libro de compras (DUA / IVA de aduana) — solo si importan directo.
+- [ ] **Compras sin derecho a credito fiscal** como columna separada de exentas.
+- [ ] **Toggle para ocultar lineas ISLR** al exportar el libro de IVA "legal".
 
-### B. Notas de credito/debito (sesion 53)
-- [ ] Menu separado: **VENTAS → Notas Cr/Db** (solo NCV/NDV) y **COMPRAS → Notas Cr/Db** (solo NCC/NDC)
-- [ ] Al crear NCC/NDC: campo **"N° de la nota del proveedor"** + alerta no bloqueante si se deja vacio
-- [ ] Poder **agregar/editar** ese N° despues de creada (detalle de la nota)
-- [ ] En notas de **compra** NO aparece "Datos Fiscales" de maquina (solo en ventas)
-- [ ] **Eliminar** nota (con clave dinamica): bloquea si impresa fiscal o cruzada en recibo; revierte stock/estado/libros
-- [ ] Numeracion por tipo dentro de la serie (VF-NC-..., VF-ND-..., CMP-NC-...) y fecha editable
-
-### C. CxC / CxP (sesion 53)
-- [ ] Detalle de **CxP** rediseñado tipo formulario (secciones) + campo **Serie** del proveedor visible
-- [ ] **Eliminar CxC y CxP** (clave dinamica DELETE_RECEIVABLE / DELETE_PAYABLE): solo manuales, bloquea si cruzadas/cobradas/pagadas o en programacion de pagos
-- [ ] CxC con serie fiscal → correlativo `VF-CXC-...`, aparece en el libro de ventas detallado (columna Factura = correlativo)
-
-### D. Sesion y otros (sesion 53)
-- [ ] **No te saca sesion** mientras trabajas/facturas (renueva token cada 45 min + al volver a la pestaña); si la dejas inactiva mucho rato, expira sola (esperado)
-- [ ] **Eliminar conteo fisico** no aprobado (detalle, ADMIN/SUPERVISOR)
-- [ ] Boton **"Mas acciones"** en el detalle de factura de **compra** (PDF, ver en libro, NCC/NDC)
-
-### E. PENDIENTE (no implementado aun — para proximas sesiones)
-- [ ] **Punto 5 — Comandas automaticas**: al pagar en POS, el ticket 80mm ya imprime solo (via Trinity Agent si esta corriendo). FALTA que las **comandas por area de despacho** (PrintJob, que el backend ya crea) se manden solas al agente al pagar. Idealmente el agente debe manejar varias impresoras (una por area).
-- [ ] **Facturas anuladas en el libro de ventas** (mostrar con monto 0 / marca ANULADA)
-- [ ] **TXT de retenciones** para portal SENIAT (declaracion quincenal)
-- [ ] **Desglose por alicuota** 8%/31% en libros (hoy todo 16%) — deuda tecnica
-- [ ] **Punto 4 — Ventas automaticas** (post-produccion): catalogo web, chatbot WhatsApp/Instagram, tienda online, difusion de ofertas. Cuello de botella: pago + fiscal + delivery.
-- [ ] **Refresh deslizante en middleware** (opcional): cubrir el caso de reabrir tras >1h sin tener que re-login. Hoy solo cubierto el trabajo activo (suficiente).
-
-### F. Notas
-- DEPLOY pendiente (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`. Las migraciones corren solas; `fix-schema.sql` cubre las columnas/enum nuevos.
-- El fix de login local (`apps/web/.env.local`) es SOLO local, no se commitea.
+> Nota local: Web http://localhost:3000 (admin@trinity.com / Admin1234!) · API :4000. Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. El fix de login local (`apps/web/.env.local`) es SOLO local, no se commitea.
 
 ---
 
-## 🧪 PARA PROBAR (sesiones 50-51 — ya verificado en su mayoria)
-
-## 🧪 PARA PROBAR MAÑANA (sesiones 50-51 — todo en local, SIN deploy todavia)
-
-> Sistema local: Web http://localhost:3000 (login admin@trinity.com / Admin1234!) · API :4000
-> Si no levanta: `pnpm -C apps/api start:prod` y `pnpm -C apps/web dev`. Caja con sesion: Fiscal 2.
-> Checklist detallado de retenciones en `docs/PRUEBAS-retenciones-y-auditoria.md`.
-
-### A. Retenciones de IVA de clientes (sesion 50) — ✅ VERIFICADO 2026-06-13
-- [x] Toggle "Contribuyente especial" en el POS (persiste, oculto para cliente default)
-- [x] Factura a credito a contribuyente especial → retencion auto-creada (RVC-xxxx, 75%)
-- [x] Recibo de cobro: cruzar factura (+) y retencion (−) → cobrar neto
-- [x] Registrar comprobante (14 digitos) → linea en libro de ventas
-- [x] Caso reintegro: factura de contado pagada → nueva retencion con comprobante → recibo negativo saca dinero de caja (movimiento EXPENSE en la sesion)
-- [x] Boton "Retencion IVA" en el detalle de la factura (dentro del menu "Mas acciones")
-- [x] Una sola retencion por factura (la 2da se rechaza; no aparece en el buscador)
-- [x] Menu "Mas acciones" en el detalle de factura agrupa todo (incl. Imprimir PDF)
-- [x] Alerta de comprobantes pendientes (dias en rojo > 7)
-
-### B. Libros fiscales (sesion 51)
-- [ ] **Libro de ventas detallado (pantalla)**: columnas Tipo, Doc. Afect., IVA Ret., Comprob.
-- [ ] **Nota de credito de venta (NCV)** confirmada → aparece en el detallado en NEGATIVO con factura afectada; NO aparece en el tab Reportes Z
-- [ ] **Nota de debito de venta (NDV)** → aparece en positivo
-- [ ] **Retencion** en el detallado: tipo "Retencion", monto en IVA Ret., su comprobante
-- [ ] **Totales del detallado**: IVA Bs (debito fiscal) separado del IVA Retenido
-- [ ] **PDF del detallado** (boton Exportar PDF, tab Detallado): formato SENIAT apaisado con todas las columnas como WenSoft — VERIFICAR contra `docs/screenshots/libro_de_ventas_detallado1.pdf`
-- [ ] **Reportes Z**: la fila de retencion NO muestra la factura (muestra su comprobante) — bug reportado, ya corregido
-- [ ] **Libro de compras**: confirmar una NCC sobre factura de compra → aparece con chip "N. Credito" en negativo → el credito fiscal del periodo BAJA
-
-### C. Notas
-- El fix de login local (`apps/web/.env.local` con COOKIE_SECURE=false) es SOLO local, no se commitea, no afecta deploy.
-- DEPLOY pendiente: lo hace Diego con `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`. La migracion `20260612100000_book_document_types` corre sola (incluye backfill).
-
----
-
-## 🔍 EN PROGRESO — Auditoria libros fiscales
-
-> Hallazgos de la auditoria de los libros de compras y ventas (sesion 50-51).
-> Marcar cada item como [RESUELTO] / [CONFIRMADO] / [NO APLICA] tras la prueba.
-
-### 🔴 Prioridad alta
-- [x] **NCC/NDC de compras no afectan el libro de compras** — **[RE-RESUELTO sesion 52]**: la sesion 51 lo marco resuelto pero estaba roto: la nota de compra NO heredaba serie (`serieId` quedaba null) y la creacion de `PurchaseBookEntry` exige `note.serie?.isFiscal`, asi que nunca entraba. **Fix (sesion 52)**: la NCC/NDC ahora hereda `serieId` de la orden de compra (igual que la NCV/NDV hereda de la factura). Verificado E2E: NCC sobre FC-00001 → `CMP-NC-26-00000001` → linea negativa en el libro de compras. (credit-debit-notes.service.create)
-- [x] **NCV/NDV no generaban linea en el libro de ventas detallado** — **[RESUELTO sesion 51]**: al confirmar una NCV/NDV fiscal se crea `SalesBookEntry` con `documentType` NCV/NDV, monto negativo/positivo y `affectedDocNumber`. (Nota: las devoluciones por maquina fiscal siguen resumiendose en el reporte Z; esto cubre el libro detallado de todas las series fiscales.)
-- [ ] **Facturas anuladas no se reflejan en el libro de ventas**: anular/devolver factura no marca ni ajusta su `SalesBookEntry`. El reglamento pide que las anuladas aparezcan (monto 0 / marca "ANULADA") para no romper la numeracion ante fiscalizacion. Para maquina fiscal el Z lo absorbe; afecta al libro detallado de entradas individuales. PENDIENTE.
-
-### 🟡 Prioridad media
-- [x] **Bug: la retencion mostraba su factura en el libro de reportes Z** — **[RESUELTO sesion 51]**: la fila de retencion en el Z ya no muestra la factura; muestra su comprobante. El detallado si muestra la factura afectada (correcto).
-- [x] **Columnas faltantes en el libro de ventas detallado** — **[RESUELTO sesion 51]**: se agregaron Tipo de documento, N° Doc. Afectado, IVA Retenido y N° Comprobante de Retencion (modelo + tabla en pantalla + total separado). El **PDF exportado del detallado** se reescribio al formato SENIAT (apaisado, como WenSoft): Factura, N° Control, Factura Afectada, Notas Db/Cr, Base/Impuesto 16%, IVA Retenido, Comp. Retencion + resumen. Sin desglose 8%/31% (siempre vacias en la practica).
-- [ ] **Sin desglose por alicuota (8% / 16% / 16+15%)**: `SalesBookEntry` y `PurchaseBookEntry` aplanan todo en una sola base/IVA y los reportes rotulan "16%". Confirmado con el PDF de referencia WenSoft: en la practica TODAS las filas son 16% (las columnas 8%/31% van vacias). Deuda tecnica con disparador: el dia que vendan/compren a alicuota distinta. PENDIENTE.
-- [ ] **TXT de retenciones para portal SENIAT**: si la empresa es contribuyente especial debe declarar quincenalmente las retenciones (de compras) en TXT con formato del portal. El modulo de comprobantes no lo genera. Complemento del modulo de retenciones en compras.
-
-### 🟢 Prioridad baja
-- [ ] **Importaciones**: libro de compras sin campos para DUA/planilla de importacion e IVA de aduana (columnas separadas de compras internas). Solo si importan directo.
-- [ ] **Compras sin derecho a credito fiscal**: el reglamento las pide como columna separada de las exentas. Hoy solo existe "exento".
-- [ ] **ISLR en libro de compras**: las lineas ISLR (informativas, ya excluidas de totales) no pertenecen al libro de IVA. Util un toggle para ocultarlas al exportar el libro "legal".
+## ✅ Auditoria libros fiscales (sesion 50-52) — CONCLUIDA
+Resuelto y deployado: NCC/NDC de compras entran al libro de compras (heredan serie, fix sesion 52);
+NCV/NDV generan linea en el libro de ventas detallado; fix del bug de retencion en Reportes Z;
+columnas SENIAT completas en el detallado + PDF apaisado.
+Lo que la auditoria dejo abierto ya esta listado arriba en **🔨 PENDIENTE** (facturas anuladas,
+desglose por alicuota, TXT de retenciones, importaciones, compras sin credito fiscal, toggle ISLR).
 
 ---
 
