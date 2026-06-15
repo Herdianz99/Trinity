@@ -1,5 +1,8 @@
 # Trinity ERP — Progreso
 
+## 🚀 Pendiente de DEPLOY
+- **Sesion 56** (retenciones): TXT SENIAT de retenciones de IVA en compras (declaracion quincenal) + detalle del comprobante mostrando montos en Bs. Sin migracion. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
+
 ## ✅ HECHO y DEPLOYADO — Sesiones 49-55 (probado 2026-06-15)
 Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
 - **Sesion 49** — Libro de ventas editable, ticket de devolucion no fiscal, correcciones fiscales.
@@ -13,7 +16,7 @@ Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
 ## 🔨 PENDIENTE — no implementado aun (para proximas sesiones)
 - [ ] **Comandas automaticas por area de despacho**: al pagar en POS el ticket 80mm ya imprime solo; FALTA que las comandas por area (PrintJob, que el backend ya crea) se manden solas al agente, idealmente con varias impresoras (una por area).
 - [ ] **Facturas anuladas en el libro de ventas** (mostrar con monto 0 / marca ANULADA).
-- [ ] **TXT de retenciones** para portal SENIAT (declaracion quincenal de retenciones de compras).
+- [ ] **XML de retenciones de ISLR en compras** para el portal SENIAT (equivalente al TXT de IVA pero para ISLR, en formato XML). FALTA generarlo.
 - [ ] **Desglose por alicuota** 8%/31% en libros (hoy todo 16%) — deuda tecnica.
 - [ ] **Ventas automaticas** (post-produccion): catalogo web, chatbot WhatsApp/Instagram, tienda online, difusion de ofertas.
 - [ ] **Refresh deslizante en middleware** (opcional): reabrir tras >1h sin re-login. Hoy el trabajo activo ya esta cubierto.

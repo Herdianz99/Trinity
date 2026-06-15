@@ -374,11 +374,10 @@ export default function RetentionVoucherDetailPage() {
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Nº Factura Prov.</th>
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Nº Control</th>
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Fecha</th>
-                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Total $</th>
-                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base imp. $</th>
-                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA $</th>
+                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Total Bs</th>
+                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base imp. Bs</th>
+                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA Bs</th>
                 <th className="text-center px-3 py-2.5 text-slate-400 font-medium">%</th>
-                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Ret. $</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Ret. Bs</th>
               </tr>
             </thead>
@@ -394,11 +393,10 @@ export default function RetentionVoucherDetailPage() {
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierInvoiceNumber || '--'}</td>
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierControlNumber || '--'}</td>
                   <td className="px-3 py-2.5 text-slate-300 text-xs">{fmtDate(line.invoiceDate)}</td>
-                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(line.invoiceTotalUsd)}</td>
-                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(line.taxableBaseUsd)}</td>
-                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(line.ivaAmountUsd)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.invoiceTotalBs)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.taxableBaseBs)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.ivaAmountBs)}</td>
                   <td className="px-3 py-2.5 text-center text-slate-400">{line.retentionPct}%</td>
-                  <td className="px-3 py-2.5 text-right text-purple-400 font-mono font-bold">${fmt(line.retentionAmountUsd)}</td>
                   <td className="px-3 py-2.5 text-right text-purple-400 font-mono font-bold">Bs {fmt(line.retentionAmountBs)}</td>
                 </tr>
               ))}
@@ -407,16 +405,15 @@ export default function RetentionVoucherDetailPage() {
               <tr className="border-t border-slate-600/50 bg-slate-900/30">
                 <td colSpan={4} className="px-3 py-2.5 text-right text-slate-400 font-medium">Totales:</td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
-                  ${fmt(voucher.lines.reduce((s, l) => s + l.invoiceTotalUsd, 0))}
+                  Bs {fmt(voucher.lines.reduce((s, l) => s + l.invoiceTotalBs, 0))}
                 </td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
-                  ${fmt(voucher.lines.reduce((s, l) => s + l.taxableBaseUsd, 0))}
+                  Bs {fmt(voucher.lines.reduce((s, l) => s + l.taxableBaseBs, 0))}
                 </td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
-                  ${fmt(voucher.lines.reduce((s, l) => s + l.ivaAmountUsd, 0))}
+                  Bs {fmt(voucher.lines.reduce((s, l) => s + l.ivaAmountBs, 0))}
                 </td>
                 <td className="px-3 py-2.5"></td>
-                <td className="px-3 py-2.5 text-right text-purple-400 font-mono font-bold">${fmt(voucher.retentionAmountUsd)}</td>
                 <td className="px-3 py-2.5 text-right text-purple-400 font-mono font-bold">Bs {fmt(voucher.retentionAmountBs)}</td>
               </tr>
             </tfoot>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Shield, Loader2, Search, CheckCircle, Ban, Eye, X, Calendar,
-  Plus, ChevronLeft, ChevronRight, FileText,
+  Plus, ChevronLeft, ChevronRight, FileText, Download,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -176,6 +176,45 @@ export default function RetentionsPage() {
     }
   }
 
+  // ── Export TXT SENIAT ─────────────────────────────────────────────────
+
+  async function handleExportTxt() {
+    if (!fromDate || !toDate) {
+      setError('Selecciona el rango de la quincena (Desde y Hasta) antes de exportar el TXT.');
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/proxy/retention-vouchers/txt?from=${fromDate}&to=${toDate}`,
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al generar el TXT');
+      }
+      const blob = await res.blob();
+      // Nombre: del header Content-Disposition, o calculado por la quincena
+      let filename = '';
+      const cd = res.headers.get('content-disposition');
+      const m = cd && cd.match(/filename="?([^"]+)"?/i);
+      if (m) filename = m[1];
+      if (!filename) {
+        const period = fromDate.slice(0, 7).replace('-', '');
+        const day = Number(fromDate.slice(8, 10));
+        filename = `retenciones_iva_${period}_${day <= 15 ? 'Q1' : 'Q2'}.txt`;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   // ── Cancel handler ────────────────────────────────────────────────────
 
   async function handleCancel(id: string) {
@@ -207,13 +246,23 @@ export default function RetentionsPage() {
             <p className="text-sm text-slate-400">Gestión de comprobantes de retención por compras</p>
           </div>
         </div>
-        <button
-          onClick={() => router.push('/purchases/retentions/new')}
-          className="px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm flex items-center gap-2 transition-colors"
-        >
-          <Plus size={18} />
-          Nueva retención
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportTxt}
+            title="Genera el TXT de la quincena (rango Desde/Hasta) para el portal SENIAT"
+            className="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium text-sm flex items-center gap-2 transition-colors"
+          >
+            <Download size={18} />
+            Exportar TXT SENIAT
+          </button>
+          <button
+            onClick={() => router.push('/purchases/retentions/new')}
+            className="px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm flex items-center gap-2 transition-colors"
+          >
+            <Plus size={18} />
+            Nueva retención
+          </button>
+        </div>
       </div>
 
       {/* Status counters */}

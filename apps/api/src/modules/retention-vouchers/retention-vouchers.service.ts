@@ -513,6 +513,97 @@ export class RetentionVouchersService {
   }
 
   // Generate next retention number YYYYMM + 8-digit global sequence
+  // Normaliza un RIF al formato SENIAT: letra + 9 digitos, sin guiones (J-40990760-0 -> J409907600)
+  private normalizeRif(rif?: string | null): string {
+    if (!rif) return '';
+    const clean = rif.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const m = clean.match(/^([A-Z]?)(\d+)$/);
+    if (!m) return clean;
+    const letter = m[1] || 'J';
+    return `${letter}${m[2].padStart(9, '0')}`;
+  }
+
+  // TXT de retenciones de IVA (compras) para el portal SENIAT — declaracion quincenal.
+  // Una fila por factura (RetentionVoucherLine), TAB-separado, montos en Bs con punto decimal.
+  async generateRetentionTxt(
+    from: string,
+    to: string,
+  ): Promise<{ content: string; filename: string }> {
+    const fromDate = new Date(from);
+    fromDate.setUTCHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setUTCHours(23, 59, 59, 999);
+
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const agentRif = this.normalizeRif(config?.rif);
+
+    // Comprobantes emitidos con al menos una factura en el rango (por fecha de factura)
+    const vouchers = await this.prisma.retentionVoucher.findMany({
+      where: {
+        status: 'ISSUED',
+        lines: { some: { invoiceDate: { gte: fromDate, lte: toDate } } },
+      },
+      include: {
+        supplier: { select: { rif: true } },
+        lines: {
+          where: { invoiceDate: { gte: fromDate, lte: toDate } },
+          orderBy: { invoiceDate: 'desc' },
+        },
+      },
+      orderBy: { number: 'desc' },
+    });
+
+    const period = `${fromDate.getUTCFullYear()}${String(fromDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    const rows: string[] = [];
+    for (const v of vouchers) {
+      const supplierRif = this.normalizeRif(v.supplier?.rif);
+      for (const line of v.lines) {
+        const total = round2(line.invoiceTotalBs);
+        const base = round2(line.taxableBaseBs);
+        const iva = round2(line.ivaAmountBs);
+        const retenido = round2(line.retentionAmountBs);
+        const exento = round2(total - base - iva);
+        const fecha = line.invoiceDate
+          ? line.invoiceDate.toISOString().slice(0, 10)
+          : '';
+        // Tipo de documento: 01 factura (por defecto). Para notas: 02 nota debito,
+        // 03 nota credito; en ese caso col 12 lleva el N° de factura afectada y los
+        // montos de una nota de credito van en negativo. Hoy los comprobantes solo
+        // se arman desde facturas, asi que todas salen como 01 / afectada 0.
+        const docType = '01';
+        const affected = '0';
+        rows.push(
+          [
+            agentRif,
+            period,
+            fecha,
+            'C',
+            docType,
+            supplierRif,
+            line.supplierInvoiceNumber || '',
+            line.supplierControlNumber || '',
+            total.toFixed(2),
+            base.toFixed(2),
+            retenido.toFixed(2),
+            affected,
+            v.number,
+            exento.toFixed(2),
+            '16',
+            '0',
+          ].join('\t'),
+        );
+      }
+    }
+
+    const content = rows.length ? rows.join('\r\n') + '\r\n' : '';
+    const quincena = fromDate.getUTCDate() <= 15 ? 'Q1' : 'Q2';
+    const filename = `retenciones_iva_${period}_${quincena}.txt`;
+    return { content, filename };
+  }
+
   async generateNumber(tx: any): Promise<{ number: string; nextSeq: number }> {
     const now = new Date();
     const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;

@@ -46,6 +46,20 @@ export class RetentionVouchersController {
     return this.service.getAvailablePurchaseOrders(supplierId);
   }
 
+  @Get('txt')
+  async exportTxt(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const { content, filename } = await this.service.generateRetentionTxt(from, to);
+    res.set({
+      'Content-Type': 'text/plain; charset=windows-1252',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(Buffer.from(content, 'latin1'));
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

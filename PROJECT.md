@@ -730,6 +730,18 @@ model Payment {
 
 **Flujos:** (1) crédito: retención auto-creada se cruza con la CxC en el recibo y se cobra el neto; (2) reintegro: cliente pagó completo, trae comprobante, se crea la retención y un recibo negativo saca el dinero de caja; (3) alerta para exigir comprobantes no entregados
 
+#### Sesión 56 — TXT SENIAT de retenciones de IVA (compras) y detalle en Bs
+**Backend (`retention-vouchers`):**
+- `RetentionVouchersService.generateRetentionTxt(from, to)` — genera el TXT de la declaración quincenal de retenciones de IVA para el portal SENIAT. Una fila por factura (`RetentionVoucherLine`) de comprobantes **emitidos** (status ISSUED) con fecha de factura en el rango. TAB-separado, 16 columnas, montos en Bs con punto decimal, codificación Windows-1252, saltos CRLF. Formato matcheado byte-a-byte contra `docs/screenshots/Facturacion.txt` (WenSoft).
+  - Columnas: RIF agente · período AAAAMM · fecha AAAA-MM-DD · `C` · tipo doc (01) · RIF proveedor · N° factura · N° control · total · base · IVA retenido (75% = base×12%) · nota afectada (0) · N° comprobante (14 díg) · exento (total−base−IVA) · alícuota (16) · 0.
+  - Helper `normalizeRif` (letra + 9 dígitos, sin guiones).
+  - Notas (02/03) preparadas en el formato pero hoy los comprobantes solo se arman desde facturas → todas salen 01.
+- Endpoint `GET /retention-vouchers/txt?from=&to=` → descarga `.txt`.
+
+**Frontend:**
+- `/purchases/retentions`: botón **"Exportar TXT SENIAT"** (usa el rango Desde/Hasta como quincena; descarga vía blob, sin abrir pestaña).
+- `/purchases/retentions/[id]`: la tabla de facturas y los totales ahora se muestran en **Bs** (era USD), por ser documento fiscal. El PDF del comprobante ya estaba en Bs.
+
 #### Sesión 55 — Exportar comisiones a PDF y reporte de todos los vendedores
 **Backend:**
 - `ReportsPdfService.generateCommissionPdf` — PDF individual del reporte de comisiones (KPIs, resumen por categoría con IVA Notas y Comisión USD, lista de facturas con marca de grupo). Usa PDFKit y los helpers existentes.
