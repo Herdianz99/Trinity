@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## 🧪 PARA PROBAR (sesion 54 — reporte de comisiones)
+- [ ] **/reports/commissions** → columna **IVA Notas** en "Resumen por categoria": IVA de facturas con **serie no fiscal**
+- [ ] **Comision USD** ahora = **(Base USD + IVA Notas) × %** (el IVA de notas se suma a la base, no se paga completo). Validado con Lennys mejias / herreria = $1.95
+- [ ] **Empresas del grupo**: toggle "Empresa del grupo" en el cliente (nuevo y edicion). Sus facturas NO comisionan
+- [ ] En el reporte: tarjeta **"Vendido al grupo"** (no comisiona) + **badge "Grupo"** en la lista de facturas
+- [ ] Requiere **migracion** `20260615120000_customer_is_group_company` (campo `Customer.isGroupCompany`)
+
 ## 🧪 PARA PROBAR MAÑANA (sesion 53 — todo en local, SIN deploy todavia)
 
 > Sistema local: Web http://localhost:3000 (admin@trinity.com / Admin1234!) · API :4000

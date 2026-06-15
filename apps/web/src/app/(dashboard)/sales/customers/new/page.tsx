@@ -7,7 +7,7 @@ import SeniatModal from '@/components/seniat-modal';
 
 const defaultForm = {
   name: '', documentType: 'V', rif: '', phone: '', email: '', address: '',
-  creditLimit: 0, creditDays: 0,
+  creditLimit: 0, creditDays: 0, isGroupCompany: false,
 };
 
 export default function NewCustomerPage() {
@@ -145,6 +145,20 @@ export default function NewCustomerPage() {
             <input type="number" value={form.creditDays} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
           </div>
         </div>
+        <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
+          <input
+            type="checkbox"
+            checked={form.isGroupCompany}
+            onChange={e => setForm(f => ({ ...f, isGroupCompany: e.target.checked }))}
+            className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+          />
+          <span>
+            <span className="text-sm text-slate-200 block">Empresa del grupo</span>
+            <span className="text-xs text-slate-500">
+              Sus facturas se muestran en el reporte de comisiones pero no generan comision para el vendedor.
+            </span>
+          </span>
+        </label>
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
           <button type="button" onClick={() => router.push('/sales/customers')} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
           <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">

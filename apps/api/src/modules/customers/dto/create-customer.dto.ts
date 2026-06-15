@@ -49,4 +49,9 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsBoolean()
   isSpecialTaxpayer?: boolean;
+
+  @ApiProperty({ default: false, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isGroupCompany?: boolean;
 }

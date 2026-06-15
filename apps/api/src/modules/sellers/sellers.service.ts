@@ -138,7 +138,8 @@ export class SellersService {
             invoice: false,
           },
         },
-        customer: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, isGroupCompany: true } },
+        serie: { select: { isFiscal: true } },
       },
       orderBy: { paidAt: 'asc' },
     });
@@ -164,13 +165,30 @@ export class SellersService {
         baseUsd: number;
         commissionPct: number;
         commissionUsd: number;
+        ivaNotasUsd: number;
       }
     > = {};
 
     let totalSoldUsd = 0;
     let totalCommissionUsd = 0;
+    let totalIvaNotasUsd = 0;
+    let totalGroupSoldUsd = 0;
+    let groupInvoiceCount = 0;
 
     for (const invoice of invoices) {
+      // Facturas a empresas del grupo: se reflejan en la lista pero NO comisionan
+      const isGroup = invoice.customer?.isGroupCompany === true;
+      if (isGroup) {
+        groupInvoiceCount += 1;
+        for (const item of invoice.items) {
+          totalGroupSoldUsd += item.totalUsd;
+        }
+        continue;
+      }
+
+      // Serie no fiscal => el IVA de las notas se le suma al vendedor
+      const isNonFiscal = invoice.serie != null && !invoice.serie.isFiscal;
+
       for (const item of invoice.items) {
         const product = productMap.get(item.productId);
         const categoryId = product?.categoryId || 'sin-categoria';
@@ -178,10 +196,14 @@ export class SellersService {
         const commissionPct = product?.category?.commissionPct || 0;
 
         const baseUsd = item.unitPriceWithoutIva * item.quantity;
-        const commissionUsd = baseUsd * (commissionPct / 100);
+        // En series no fiscales el IVA es parte de la ganancia: se suma a la base
+        // de comision. La comision se calcula sobre (base + IVA notas) x %.
+        const ivaNotasUsd = isNonFiscal ? item.ivaAmount : 0;
+        const commissionUsd = (baseUsd + ivaNotasUsd) * (commissionPct / 100);
 
         totalSoldUsd += item.totalUsd;
         totalCommissionUsd += commissionUsd;
+        totalIvaNotasUsd += ivaNotasUsd;
 
         if (!categoryBreakdown[categoryId]) {
           categoryBreakdown[categoryId] = {
@@ -190,11 +212,13 @@ export class SellersService {
             baseUsd: 0,
             commissionPct,
             commissionUsd: 0,
+            ivaNotasUsd: 0,
           };
         }
         categoryBreakdown[categoryId].units += item.quantity;
         categoryBreakdown[categoryId].baseUsd += baseUsd;
         categoryBreakdown[categoryId].commissionUsd += commissionUsd;
+        categoryBreakdown[categoryId].ivaNotasUsd += ivaNotasUsd;
       }
     }
 
@@ -203,15 +227,19 @@ export class SellersService {
       ...c,
       baseUsd: Math.round(c.baseUsd * 100) / 100,
       commissionUsd: Math.round(c.commissionUsd * 100) / 100,
+      ivaNotasUsd: Math.round(c.ivaNotasUsd * 100) / 100,
     }));
 
     return {
       sellerId,
       from: fromDate.toISOString(),
       to: toDate.toISOString(),
-      invoiceCount: invoices.length,
+      invoiceCount: invoices.length - groupInvoiceCount,
       totalSoldUsd: Math.round(totalSoldUsd * 100) / 100,
       totalCommissionUsd: Math.round(totalCommissionUsd * 100) / 100,
+      totalIvaNotasUsd: Math.round(totalIvaNotasUsd * 100) / 100,
+      totalGroupSoldUsd: Math.round(totalGroupSoldUsd * 100) / 100,
+      groupInvoiceCount,
       categories,
       invoices: invoices.map((inv) => ({
         id: inv.id,
@@ -220,6 +248,7 @@ export class SellersService {
         totalUsd: inv.totalUsd,
         paidAt: inv.paidAt,
         itemCount: inv.items.length,
+        isGroup: inv.customer?.isGroupCompany === true,
       })),
     };
   }

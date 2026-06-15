@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, Loader2, Search, DollarSign, Receipt, TrendingUp, FileText } from 'lucide-react';
+import { BarChart3, Loader2, Search, DollarSign, Receipt, TrendingUp, FileText, Building2 } from 'lucide-react';
 
 /* ---------- Types ---------- */
 
@@ -16,6 +16,7 @@ interface CategoryRow {
   baseUsd: number;
   commissionPct: number;
   commissionUsd: number;
+  ivaNotasUsd: number;
 }
 
 interface InvoiceRow {
@@ -25,6 +26,7 @@ interface InvoiceRow {
   totalUsd: number;
   paidAt: string;
   itemCount: number;
+  isGroup: boolean;
 }
 
 interface CommissionReport {
@@ -34,6 +36,9 @@ interface CommissionReport {
   invoiceCount: number;
   totalSoldUsd: number;
   totalCommissionUsd: number;
+  totalIvaNotasUsd: number;
+  totalGroupSoldUsd: number;
+  groupInvoiceCount: number;
   categories: CategoryRow[];
   invoices: InvoiceRow[];
 }
@@ -122,6 +127,7 @@ export default function CommissionsReportPage() {
         units: report.categories.reduce((s, c) => s + c.units, 0),
         baseUsd: report.categories.reduce((s, c) => s + c.baseUsd, 0),
         commissionUsd: report.categories.reduce((s, c) => s + c.commissionUsd, 0),
+        ivaNotasUsd: report.categories.reduce((s, c) => s + c.ivaNotasUsd, 0),
       }
     : null;
 
@@ -210,8 +216,8 @@ export default function CommissionsReportPage() {
       {loaded && report && (
         <>
           {/* ---- Summary cards ---- */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Total vendido */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total vendido (comisionable) */}
             <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="text-emerald-400" size={18} />
@@ -249,6 +255,22 @@ export default function CommissionsReportPage() {
                 {report.invoiceCount}
               </p>
             </div>
+
+            {/* Vendido al grupo (no comisiona) */}
+            <div className="bg-slate-800/40 border border-amber-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="text-amber-400" size={18} />
+                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+                  Vendido al grupo
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-amber-400 tabular-nums">
+                {formatUsd(report.totalGroupSoldUsd)}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {report.groupInvoiceCount} fact. · no comisiona
+              </p>
+            </div>
           </div>
 
           {/* ---- Category breakdown table ---- */}
@@ -276,13 +298,16 @@ export default function CommissionsReportPage() {
                       <th className="bg-slate-800/80 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3">
                         Comision USD
                       </th>
+                      <th className="bg-slate-800/80 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3">
+                        IVA Notas
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {report.categories.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="px-4 py-8 text-center text-slate-500 text-sm"
                         >
                           Sin datos de categorias
@@ -310,6 +335,9 @@ export default function CommissionsReportPage() {
                             <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">
                               {formatUsd(cat.commissionUsd)}
                             </td>
+                            <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">
+                              {formatUsd(cat.ivaNotasUsd)}
+                            </td>
                           </tr>
                         ))}
                         {/* Total row */}
@@ -327,6 +355,9 @@ export default function CommissionsReportPage() {
                             </td>
                             <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums">
                               {formatUsd(catTotals.commissionUsd)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums">
+                              {formatUsd(catTotals.ivaNotasUsd)}
                             </td>
                           </tr>
                         )}
@@ -380,7 +411,15 @@ export default function CommissionsReportPage() {
                             {inv.number}
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-300">
-                            {inv.customer?.name ?? 'Sin cliente'}
+                            <span className="inline-flex items-center gap-2">
+                              {inv.customer?.name ?? 'Sin cliente'}
+                              {inv.isGroup && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                  <Building2 size={10} />
+                                  Grupo
+                                </span>
+                              )}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">
                             {formatUsd(inv.totalUsd)}

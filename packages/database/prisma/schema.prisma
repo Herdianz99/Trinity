@@ -737,6 +737,7 @@ model Customer {
   isDefault    Boolean      @default(false)
   isActive     Boolean      @default(true)
   isSpecialTaxpayer Boolean @default(false)
+  isGroupCompany    Boolean @default(false) // Empresa del grupo: sus facturas no comisionan
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]

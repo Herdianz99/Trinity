@@ -1998,3 +1998,9 @@ ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "retentionAmountBs" DOUBLE
 ALTER TABLE "SalesBookEntry" ADD COLUMN IF NOT EXISTS "retentionVoucherNumber" TEXT;
 ALTER TABLE "PurchaseBookEntry" ADD COLUMN IF NOT EXISTS "documentType" TEXT NOT NULL DEFAULT 'FACTURA';
 ALTER TABLE "PurchaseBookEntry" ADD COLUMN IF NOT EXISTS "affectedDocNumber" TEXT;
+
+-- =============================================================================
+-- CUSTOMER: empresa del grupo (sus facturas no comisionan)
+-- =============================================================================
+
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "isGroupCompany" BOOLEAN NOT NULL DEFAULT false;

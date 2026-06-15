@@ -13,6 +13,7 @@ interface Customer {
   id: string; name: string; documentType: string; rif: string | null;
   phone: string | null; email: string | null; address: string | null;
   creditLimit: number; creditDays: number; isActive: boolean;
+  isGroupCompany?: boolean;
   pendingDebt: number; availableCredit: number;
   invoices: { id: string; number: string; status: string; totalUsd: number; totalBs: number; createdAt: string }[];
 }
@@ -103,6 +104,7 @@ export default function CustomerDetailPage() {
         name: data.name, documentType: data.documentType || 'V',
         rif: data.rif || '', phone: data.phone || '', email: data.email || '',
         address: data.address || '', creditLimit: data.creditLimit, creditDays: data.creditDays,
+        isGroupCompany: data.isGroupCompany ?? false,
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -308,6 +310,20 @@ export default function CustomerDetailPage() {
                 <input type="number" value={form.creditDays ?? 0} onChange={e => setForm((f: any) => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
               </div>
             </div>
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={form.isGroupCompany ?? false}
+                onChange={e => setForm((f: any) => ({ ...f, isGroupCompany: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+              />
+              <span>
+                <span className="text-sm text-slate-200 block">Empresa del grupo</span>
+                <span className="text-xs text-slate-500">
+                  Sus facturas se muestran en el reporte de comisiones pero no generan comision para el vendedor.
+                </span>
+              </span>
+            </label>
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
               <button
                 type="button"

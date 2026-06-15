@@ -730,6 +730,19 @@ model Payment {
 
 **Flujos:** (1) crédito: retención auto-creada se cruza con la CxC en el recibo y se cobra el neto; (2) reintegro: cliente pagó completo, trae comprobante, se crea la retención y un recibo negativo saca el dinero de caja; (3) alerta para exigir comprobantes no entregados
 
+#### Sesión 54 — IVA de notas en comisiones y empresas del grupo
+**Backend (reporte de comisiones — `SellersService.getCommissionReport`):**
+- Columna **IVA Notas** por categoría: suma el IVA (`InvoiceItem.ivaAmount`) de los ítems cuya factura tiene **serie no fiscal** (`Serie.isFiscal = false`). En series fiscales el IVA Notas es 0.
+- **Cálculo de comisión** actualizado: `Comisión USD = (Base sin IVA + IVA Notas) × % categoría`. En series no fiscales el IVA es parte de la ganancia, por eso se suma a la base antes de aplicar el %.
+- **Empresas del grupo:** nuevo campo `Customer.isGroupCompany`. Las facturas a clientes del grupo se **excluyen** de comisión, IVA Notas, total vendido y conteo; se reportan aparte (`totalGroupSoldUsd`, `groupInvoiceCount`) y cada factura trae `isGroup`. La evaluación es por el estado actual del cliente (recalcula el histórico).
+- `CreateCustomerDto` acepta `isGroupCompany` (fluye a create/update vía `data: dto`).
+
+**Frontend:**
+- `/reports/commissions`: columna **IVA Notas** en "Resumen por categoría", tarjeta **"Vendido al grupo"** (no comisiona) y **badge "Grupo"** en la lista de facturas cobradas.
+- Formularios de cliente (nuevo y edición): toggle **"Empresa del grupo"**.
+
+**Migración:** `20260615120000_customer_is_group_company` (ADD COLUMN IF NOT EXISTS) + entrada en `deploy/fix-schema.sql`.
+
 #### Sesión 5 — Ventas y POS
 **Backend:**
 - CustomersModule: CRUD con crédito
