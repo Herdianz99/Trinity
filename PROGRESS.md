@@ -1,11 +1,13 @@
 # Trinity ERP — Progreso
 
 ## 🚀 Pendiente de DEPLOY
-- **Sesion 57** (comandas de despacho): el `PrintMonitor` ahora aplica el cambio de zona **al instante** (CustomEvent `printAreaChanged`, sin recargar) — antes el cambio en Configuracion no surtia efecto en la misma pestana. Comanda reformateada con ESC/POS (`{{BIG}}/{{BOLD}}/{{LINE}}/{{CUT}}`) y corte automatico. Nuevo indicador visible "Comandas: <zona>" (verde/amarillo, pendientes). **Fix impresion duplicada**: reserva atomica `PATCH /print-jobs/:id/claim` (`updateMany where status=PENDING`) — solo una pestana/PC imprime cada comanda. Sin migracion (frontend + backend print-jobs).
-- **Agente v1.1.1** (Sesion 57): **fix critico** — el `.exe` (pkg) NO leia el `config.json` externo (`__dirname` apuntaba al snapshot virtual); ahora lo resuelve junto a `process.execPath` y tolera BOM del Bloc de notas. `SETUP.md` corregido (sin `comandaPrinterName`/`debugEscPos`), nuevo lanzador portable `iniciar-agente.vbs` (arranca el .exe de su carpeta, sin ventana de consola). `.exe` reempaquetado y commiteado. **En el cliente: copiar exe + config.json + .vbs a C:\Trinity\, editar impresora, acceso directo del .vbs en shell:startup.**
-- **Sesion 56** (retenciones): TXT SENIAT de retenciones de IVA en compras (declaracion quincenal) + detalle del comprobante mostrando montos en Bs. Sin migracion. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
+_(nada pendiente de deploy)_
 
-## ✅ HECHO y DEPLOYADO — Sesiones 49-55 (probado 2026-06-15)
+## ✅ HECHO y DEPLOYADO — Sesiones 49-57 (probado 2026-06-15/16)
+- **Sesion 57** (comandas de despacho): `PrintMonitor` aplica el cambio de zona al instante (CustomEvent `printAreaChanged`, sin recargar). Comanda con formato ESC/POS (`{{BIG}}/{{BOLD}}/{{LINE}}/{{CUT}}`) + corte automatico. Indicador visible "Comandas: <zona>". **Anti-duplicados**: reserva atomica `PATCH /print-jobs/:id/claim`. **Agente v1.1.1**: fix critico — el `.exe` (pkg) ahora lee el `config.json` externo (`process.execPath`, antes `__dirname` apuntaba al snapshot) y tolera BOM; lanzador portable `iniciar-agente.vbs` (sin consola); guias `INSTALACION-CLIENTE.md`/`SETUP.md`/`README.md` actualizadas. Instalar en cliente: copiar exe+config.json+.vbs a `C:\Trinity\`, editar impresora, acceso directo del .vbs en shell:startup.
+- **Sesion 56** (retenciones): TXT SENIAT de retenciones de IVA en compras (declaracion quincenal) + detalle del comprobante mostrando montos en Bs.
+
+### Sesiones 49-55 (probado 2026-06-15)
 Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
 - **Sesion 49** — Libro de ventas editable, ticket de devolucion no fiscal, correcciones fiscales.
 - **Sesion 50** — Retenciones de IVA de clientes (contribuyente especial, RVC, cruce en recibo, comprobante, caso reintegro). Verificado 2026-06-13.
