@@ -46,6 +46,7 @@ import {
   CalendarClock,
   KeyRound,
   PackagePlus,
+  ClipboardList,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -75,6 +76,15 @@ const menuSections: MenuSection[] = [
       { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=sale', icon: <FileX2 size={18} /> },
       { label: 'Retenciones clientes', href: '/sales/customer-retentions', icon: <Shield size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
+    ],
+  },
+  {
+    key: 'commands',
+    label: 'COMANDAS',
+    icon: <ClipboardList size={20} />,
+    permission: 'commands',
+    items: [
+      { label: 'Control de Comandas', href: '/commands', icon: <ClipboardList size={18} /> },
     ],
   },
   {

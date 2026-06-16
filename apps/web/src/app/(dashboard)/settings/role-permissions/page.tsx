@@ -38,6 +38,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
     items: [
       { key: 'dashboard', label: 'Dashboard' },
       { key: 'sales', label: 'Ventas y POS' },
+      { key: 'commands', label: 'Control de Comandas' },
       { key: 'quotations', label: 'Cotizaciones' },
       { key: 'catalog', label: 'Catalogo' },
       { key: 'inventory', label: 'Inventario' },

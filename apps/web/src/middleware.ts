@@ -5,6 +5,7 @@ const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh'];
 // Map route prefixes to permission keys
 // More specific routes must come before less specific ones
 const ROUTE_PERMISSION_MAP: [string, string][] = [
+  ['/commands', 'commands'],
   ['/catalog/suppliers', 'purchases'],
   ['/quotations', 'sales'],
   ['/sales', 'sales'],
