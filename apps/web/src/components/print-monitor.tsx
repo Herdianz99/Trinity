@@ -17,6 +17,7 @@ interface PrintJob {
   printArea: { name: string };
   status: string;
   items: PrintJobItem[];
+  isReprint?: boolean;
   createdAt: string;
 }
 
@@ -50,6 +51,24 @@ export default function PrintMonitor() {
     }
   }, []);
 
+  // Reporta al backend el resultado real de la impresion para que la pantalla
+  // de Control de Comandas distinga "impresa de verdad" de "fallo".
+  const reportPrinted = useCallback(async (jobId: string) => {
+    try {
+      await fetch(`/api/proxy/print-jobs/${jobId}/printed`, { method: 'PATCH' });
+    } catch {}
+  }, []);
+
+  const reportFailed = useCallback(async (jobId: string, reason: string) => {
+    try {
+      await fetch(`/api/proxy/print-jobs/${jobId}/failed`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+    } catch {}
+  }, []);
+
   const buildTicketText = useCallback((job: PrintJob): string => {
     const createdDate = new Date(job.createdAt);
     const dateStr = createdDate.toLocaleDateString('es-VE', {
@@ -66,6 +85,12 @@ export default function PrintMonitor() {
     lines.push('{{CENTER}}{{BIG}}COMANDA{{/BIG}}{{/CENTER}}');
     lines.push(`{{CENTER}}{{BOLD}}${job.printArea.name}{{/BOLD}}{{/CENTER}}`);
     lines.push('{{LINE}}');
+
+    // Sello de reimpresion: avisa a quien toma la comanda que ya se habia impreso
+    if (job.isReprint) {
+      lines.push('{{CENTER}}{{BOLD}}** REIMPRESION **{{/BOLD}}{{/CENTER}}');
+      lines.push('{{LINE}}');
+    }
 
     // Datos de la factura
     lines.push(`{{BOLD}}Factura: ${job.invoice.number || 'S/N'}{{/BOLD}}`);
@@ -101,22 +126,29 @@ export default function PrintMonitor() {
         const content = buildTicketText(job);
         const printed = await printTicket(content);
         if (printed) {
+          await reportPrinted(job.id);
           isPrinting.current = false;
           setPrinting(false);
           return;
         }
+        // El agente estaba arriba pero la impresion fallo (papel, impresora, etc.)
+        await reportFailed(job.id, 'El agente reporto error al imprimir (revise papel/impresora)');
+        isPrinting.current = false;
+        setPrinting(false);
+        return;
       }
     } catch {}
 
-    // Fallback: use window.print()
+    // Fallback: use window.print() (sin garantia de exito real -> se marca PRINTED)
     setCurrentJob(job);
     await new Promise((resolve) => setTimeout(resolve, 100));
     window.print();
+    await reportPrinted(job.id);
 
     setCurrentJob(null);
     isPrinting.current = false;
     setPrinting(false);
-  }, [buildTicketText]);
+  }, [buildTicketText, reportPrinted, reportFailed]);
 
   const fetchPendingJobs = useCallback(async () => {
     if (isPrinting.current || !printAreaId.current) return;
