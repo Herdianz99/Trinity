@@ -6,7 +6,7 @@ El agente es un servidor local (.exe) que corre en cada PC (caja y cada despacho
 Recibe tickets y comandas desde la web app y los envia a la impresora termica con
 formato ESC/POS (bold, centrado, texto grande, corte de papel automatico).
 
-Version actual: **1.1.0**.
+Version actual: **1.1.1**.
 
 ## Arquitectura (importante)
 
@@ -112,11 +112,14 @@ Debe responder algo como:
 ```json
 {
   "status": "ok",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "thermalEnabled": true,
   "printerName": "POS-80"
 }
 ```
+
+> El `config.json` va junto al .exe (lo lee desde la carpeta del ejecutable).
+> Se puede editar con el Bloc de notas; tolera que se guarde como UTF-8 con BOM.
 
 ## Troubleshooting
 

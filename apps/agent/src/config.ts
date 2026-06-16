@@ -14,7 +14,13 @@ const REQUIRED_FIELDS: (keyof AgentConfig)[] = [
 ];
 
 export function loadConfig(): AgentConfig {
-  const configPath = path.resolve(__dirname, '..', 'config.json');
+  // Empaquetado con pkg, __dirname apunta al snapshot virtual (C:\snapshot\...),
+  // por eso el config.json debe resolverse junto al .exe REAL (process.execPath).
+  // En desarrollo (ts-node) se usa la ruta del proyecto.
+  const baseDir = (process as any).pkg
+    ? path.dirname(process.execPath)
+    : path.resolve(__dirname, '..');
+  const configPath = path.join(baseDir, 'config.json');
 
   if (!fs.existsSync(configPath)) {
     console.error(`[ERROR] No se encontró config.json en: ${configPath}`);
@@ -25,6 +31,8 @@ export function loadConfig(): AgentConfig {
   let raw: string;
   try {
     raw = fs.readFileSync(configPath, 'utf-8');
+    // El Bloc de notas puede guardar UTF-8 con BOM (U+FEFF) y romper JSON.parse
+    if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
   } catch (err) {
     console.error(`[ERROR] No se pudo leer config.json: ${(err as Error).message}`);
     process.exit(1);
