@@ -2004,3 +2004,14 @@ ALTER TABLE "PurchaseBookEntry" ADD COLUMN IF NOT EXISTS "affectedDocNumber" TEX
 -- =============================================================================
 
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "isGroupCompany" BOOLEAN NOT NULL DEFAULT false;
+
+-- =============================================================================
+-- CONTROL DE COMANDAS (Session 58): estado PRINTING + campos de reimpresion
+-- =============================================================================
+
+ALTER TYPE "PrintStatus" ADD VALUE IF NOT EXISTS 'PRINTING';
+ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "isReprint" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "reprintOfId" TEXT;
+ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "failureReason" TEXT;
+ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3);
+UPDATE "PrintJob" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;
