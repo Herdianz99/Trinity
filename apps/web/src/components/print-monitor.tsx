@@ -33,13 +33,20 @@ export default function PrintMonitor() {
   const isPrinting = useRef(false);
   const printAreaId = useRef<string | null>(null);
 
-  const markAsPrinted = useCallback(async (jobId: string) => {
+  // Reserva atomica de la comanda en el backend. Solo la pestana/PC que gana
+  // la reserva (claimed === true) imprime; las demas la saltan. Evita duplicados
+  // cuando hay varias pestañas o PCs configuradas a la misma zona.
+  const claimJob = useCallback(async (jobId: string): Promise<boolean> => {
     try {
-      await fetch(`/api/proxy/print-jobs/${jobId}/printed`, {
+      const res = await fetch(`/api/proxy/print-jobs/${jobId}/claim`, {
         method: 'PATCH',
       });
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.claimed === true;
     } catch {
-      // Silently fail - the job will remain pending and be retried
+      // Si la reserva falla, no imprimimos para no arriesgar duplicados
+      return false;
     }
   }, []);
 
@@ -94,7 +101,6 @@ export default function PrintMonitor() {
         const content = buildTicketText(job);
         const printed = await printTicket(content);
         if (printed) {
-          await markAsPrinted(job.id);
           isPrinting.current = false;
           setPrinting(false);
           return;
@@ -107,12 +113,10 @@ export default function PrintMonitor() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     window.print();
 
-    await markAsPrinted(job.id);
-
     setCurrentJob(null);
     isPrinting.current = false;
     setPrinting(false);
-  }, [markAsPrinted, buildTicketText]);
+  }, [buildTicketText]);
 
   const fetchPendingJobs = useCallback(async () => {
     if (isPrinting.current || !printAreaId.current) return;
@@ -127,15 +131,17 @@ export default function PrintMonitor() {
       setPendingCount(jobs.length);
 
       for (const job of jobs) {
-        if (!processedIds.current.has(job.id)) {
-          processedIds.current.add(job.id);
-          await handlePrint(job);
-        }
+        if (processedIds.current.has(job.id)) continue;
+        processedIds.current.add(job.id);
+        // Reservar antes de imprimir: si otra pestana/PC ya la tomo, saltarla
+        const claimed = await claimJob(job.id);
+        if (!claimed) continue;
+        await handlePrint(job);
       }
     } catch {
       // Silently fail - will retry on next poll
     }
-  }, [handlePrint]);
+  }, [handlePrint, claimJob]);
 
   useEffect(() => {
     // Leer la zona configurada para esta PC desde localStorage

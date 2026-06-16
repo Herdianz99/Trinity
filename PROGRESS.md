@@ -1,7 +1,7 @@
 # Trinity ERP — Progreso
 
 ## 🚀 Pendiente de DEPLOY
-- **Sesion 57** (comandas de despacho): el `PrintMonitor` ahora aplica el cambio de zona **al instante** (CustomEvent `printAreaChanged`, sin recargar) — antes el cambio en Configuracion no surtia efecto en la misma pestana. Comanda reformateada con ESC/POS (`{{BIG}}/{{BOLD}}/{{LINE}}/{{CUT}}`) y corte automatico. Nuevo indicador visible "Comandas: <zona>" (verde/amarillo, pendientes). Sin migracion. Solo frontend. **Config en cada PC del cliente: ver seccion "Setup comandas en produccion" abajo.**
+- **Sesion 57** (comandas de despacho): el `PrintMonitor` ahora aplica el cambio de zona **al instante** (CustomEvent `printAreaChanged`, sin recargar) — antes el cambio en Configuracion no surtia efecto en la misma pestana. Comanda reformateada con ESC/POS (`{{BIG}}/{{BOLD}}/{{LINE}}/{{CUT}}`) y corte automatico. Nuevo indicador visible "Comandas: <zona>" (verde/amarillo, pendientes). **Fix impresion duplicada**: reserva atomica `PATCH /print-jobs/:id/claim` (`updateMany where status=PENDING`) — solo una pestana/PC imprime cada comanda. `SETUP.md` del agente corregido (v1.1.0, sin `comandaPrinterName`/`debugEscPos`, + lanzador `.vbs` sin consola). Sin migracion (frontend + backend print-jobs).
 - **Sesion 56** (retenciones): TXT SENIAT de retenciones de IVA en compras (declaracion quincenal) + detalle del comprobante mostrando montos en Bs. Sin migracion. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
 
 ## ✅ HECHO y DEPLOYADO — Sesiones 49-55 (probado 2026-06-15)

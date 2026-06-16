@@ -26,4 +26,9 @@ export class PrintJobsController {
   markPrinted(@Param('id') id: string) {
     return this.service.markPrinted(id);
   }
+
+  @Patch(':id/claim')
+  claim(@Param('id') id: string) {
+    return this.service.claim(id);
+  }
 }
