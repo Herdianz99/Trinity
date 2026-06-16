@@ -1162,6 +1162,15 @@ model QuotationItem {
 
 ---
 
+#### Sesión 58 — Control de Comandas (estado real + reimpresión) ✅
+- **Página nueva** `/commands` (menú **COMANDAS**, permiso de sección `commands`) para supervisar el estado de las comandas y **reimprimir por factura**. No toca el POS; pensada para un encargado/admin con permiso.
+- **Ciclo de vida real de impresión**: `claim` pasa la comanda de `PENDING`→`PRINTING` (sigue siendo `updateMany` atómico = anti-duplicados), y el `PrintMonitor` reporta el resultado real: `markPrinted` (`PRINTED`) si el agente confirma, o `markFailed` (`FAILED` + `failureReason`) si reporta error. Antes se marcaba `PRINTED` **antes** de imprimir, así que los fallos (papel, impresora, red) eran invisibles. El camino `window.print()` queda como `PRINTED` (el navegador no garantiza éxito).
+- **Reimpresión** `POST /print-jobs/reprint/:invoiceId`: clona la comanda más reciente **de cada zona** de la factura como registro nuevo `PENDING` (`isReprint=true`, `reprintOfId`), en transacción. La PC de cada zona la imprime en su poll con el sello **"REIMPRESIÓN"**. Cubre facturas multi-zona (va a todas).
+- **Listado** `GET /print-jobs` con filtros (fecha con `setUTCHours`, zona, estado, n° de factura). La pantalla ancla **fallidas/pendientes** arriba y auto-refresca cada 10s.
+- **BD**: enum `PrintStatus` +`PRINTING`; `PrintJob` +`isReprint`/`reprintOfId`/`failureReason`/`updatedAt`. Migración `20260616000000_print_jobs_control` (idempotente) + `deploy/fix-schema.sql`.
+- **Permisos**: módulo `commands` agregado al menú (`sidebar.tsx`), a *Permisos por rol*, al `ROUTE_PERMISSION_MAP` del middleware y al `VALID_MODULES` del backend. ADMIN tiene acceso vía `*`.
+- Spec y plan en `docs/superpowers/specs/` y `docs/superpowers/plans/`.
+
 ## Backlog — Sesiones Futuras
 
 ### PDFs / Reportes Fiscales Pendientes
