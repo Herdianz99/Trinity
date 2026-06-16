@@ -115,6 +115,19 @@ export default function ProductDetailPage() {
   const [priceFinalMayor, setPriceFinalMayor] = useState(0);
   const [savingPrices, setSavingPrices] = useState(false);
   const [priceMsg, setPriceMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Borradores de texto para los inputs del panel de precios (evitan que el punto borre el campo)
+  const [detalGananciaStr, setDetalGananciaStr] = useState('0');
+  const [detalPriceStr, setDetalPriceStr] = useState('0');
+  const [mayorGananciaStr, setMayorGananciaStr] = useState('0');
+  const [mayorPriceStr, setMayorPriceStr] = useState('0');
+
+  // Acepta punto o coma como separador decimal; devuelve 0 si no es válido
+  const parseNum = (v: string | number) => {
+    const n = parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+  // Mantiene solo dígitos y separadores mientras se escribe (no rompe al teclear el punto)
+  const sanitizeDecimal = (v: string) => v.replace(/[^0-9.,]/g, '');
 
   // ── Fetch product ──
   const fetchProduct = useCallback(async () => {
@@ -139,13 +152,13 @@ export default function ProductDetailPage() {
         purchaseUnit: data.purchaseUnit,
         saleUnit: data.saleUnit,
         conversionFactor: data.conversionFactor,
-        costUsd: data.costUsd,
+        costUsd: String(data.costUsd ?? ''),
         bregaApplies: data.bregaApplies,
         manualPrice: data.manualPrice ?? false,
-        priceDetal: data.priceDetal,
-        priceMayor: data.priceMayor,
-        gananciaPct: data.gananciaPct,
-        gananciaMayorPct: data.gananciaMayorPct,
+        priceDetal: String(data.priceDetal ?? ''),
+        priceMayor: String(data.priceMayor ?? ''),
+        gananciaPct: String(data.gananciaPct ?? ''),
+        gananciaMayorPct: String(data.gananciaMayorPct ?? ''),
         ivaType: data.ivaType,
         minStock: data.minStock,
         isActive: data.isActive,
@@ -238,6 +251,10 @@ export default function ProductDetailPage() {
       setPriceGananciaMayorPct(product.gananciaMayorPct);
       setPriceFinalDetal(product.priceDetal);
       setPriceFinalMayor(product.priceMayor);
+      setDetalGananciaStr(product.gananciaPct.toFixed(2));
+      setMayorGananciaStr(product.gananciaMayorPct.toFixed(2));
+      setDetalPriceStr(product.priceDetal.toFixed(2));
+      setMayorPriceStr(product.priceMayor.toFixed(2));
     }
   }, [product]);
 
@@ -260,18 +277,18 @@ export default function ProductDetailPage() {
         purchaseUnit: form.purchaseUnit,
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
-        costUsd: Number(form.costUsd),
+        costUsd: parseNum(form.costUsd),
         bregaApplies: form.bregaApplies,
         manualPrice: form.manualPrice,
-        gananciaPct: Number(form.gananciaPct),
-        gananciaMayorPct: Number(form.gananciaMayorPct),
+        gananciaPct: parseNum(form.gananciaPct),
+        gananciaMayorPct: parseNum(form.gananciaMayorPct),
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
       };
       if (form.manualPrice) {
-        body.priceDetal = Number(form.priceDetal);
-        body.priceMayor = Number(form.priceMayor);
+        body.priceDetal = parseNum(form.priceDetal);
+        body.priceMayor = parseNum(form.priceMayor);
       }
       const res = await fetch(`/api/proxy/products/${product.id}`, {
         method: 'PATCH',
@@ -301,16 +318,23 @@ export default function ProductDetailPage() {
   }
 
   // ── Price editing handlers ──
-  function handleDetalGananciaChange(value: number) {
+  // Reciben texto crudo: se guarda el borrador tal cual y se calcula con parseNum (acepta . y ,)
+  function handleDetalGananciaChange(raw: string) {
+    setDetalGananciaStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
     setPriceGananciaPct(value);
     if (!product) return;
     const cost = product.costUsd;
     const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
-    setPriceFinalDetal(cost * brechaM * (1 + value / 100) * ivaM);
+    const price = cost * brechaM * (1 + value / 100) * ivaM;
+    setPriceFinalDetal(price);
+    setDetalPriceStr(price.toFixed(2));
   }
 
-  function handleDetalPriceChange(value: number) {
+  function handleDetalPriceChange(raw: string) {
+    setDetalPriceStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
     setPriceFinalDetal(value);
     if (!product) return;
     const cost = product.costUsd;
@@ -318,20 +342,28 @@ export default function ProductDetailPage() {
     const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
-      setPriceGananciaPct(((value / base) - 1) * 100);
+      const g = ((value / base) - 1) * 100;
+      setPriceGananciaPct(g);
+      setDetalGananciaStr(g.toFixed(2));
     }
   }
 
-  function handleMayorGananciaChange(value: number) {
+  function handleMayorGananciaChange(raw: string) {
+    setMayorGananciaStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
     setPriceGananciaMayorPct(value);
     if (!product) return;
     const cost = product.costUsd;
     const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
-    setPriceFinalMayor(cost * brechaM * (1 + value / 100) * ivaM);
+    const price = cost * brechaM * (1 + value / 100) * ivaM;
+    setPriceFinalMayor(price);
+    setMayorPriceStr(price.toFixed(2));
   }
 
-  function handleMayorPriceChange(value: number) {
+  function handleMayorPriceChange(raw: string) {
+    setMayorPriceStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
     setPriceFinalMayor(value);
     if (!product) return;
     const cost = product.costUsd;
@@ -339,7 +371,9 @@ export default function ProductDetailPage() {
     const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
-      setPriceGananciaMayorPct(((value / base) - 1) * 100);
+      const g = ((value / base) - 1) * 100;
+      setPriceGananciaMayorPct(g);
+      setMayorGananciaStr(g.toFixed(2));
     }
   }
 
@@ -361,8 +395,8 @@ export default function ProductDetailPage() {
         setProduct(updated);
         setForm((f: any) => ({
           ...f,
-          gananciaPct: updated.gananciaPct,
-          gananciaMayorPct: updated.gananciaMayorPct,
+          gananciaPct: String(updated.gananciaPct ?? ''),
+          gananciaMayorPct: String(updated.gananciaMayorPct ?? ''),
         }));
         setPriceMsg({ type: 'success', text: 'Precios actualizados correctamente' });
       } else {
@@ -411,7 +445,7 @@ export default function ProductDetailPage() {
   );
 
   const totalStock = product.stock?.reduce((s, st) => s + st.quantity, 0) || 0;
-  const costUsd = Number(form.costUsd);
+  const costUsd = parseNum(form.costUsd);
 
   const brecha = form.bregaApplies ? bregaGlobalPct : 0;
   const brechaAmt = costUsd * brecha / 100;
@@ -422,11 +456,11 @@ export default function ProductDetailPage() {
   let priceMayor: number;
 
   if (form.manualPrice) {
-    priceDetal = Number(form.priceDetal) || 0;
-    priceMayor = Number(form.priceMayor) || 0;
+    priceDetal = parseNum(form.priceDetal);
+    priceMayor = parseNum(form.priceMayor);
   } else {
-    const gananciaDetal = costConBrecha * Number(form.gananciaPct) / 100;
-    const gananciaMayor = costConBrecha * Number(form.gananciaMayorPct) / 100;
+    const gananciaDetal = costConBrecha * parseNum(form.gananciaPct) / 100;
+    const gananciaMayor = costConBrecha * parseNum(form.gananciaMayorPct) / 100;
     const subtotalDetal = costConBrecha + gananciaDetal;
     const ivaDetal = subtotalDetal * ivaPct / 100;
     priceDetal = subtotalDetal + ivaDetal;
@@ -592,30 +626,30 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD <span className="text-slate-600">(opcional)</span></label>
-                    <input type="number" step="0.01" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                    <input type="text" inputMode="decimal" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-amber-400 mb-1">Precio Detal (final c/IVA)</label>
-                    <input type="number" step="0.01" value={form.priceDetal ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceDetal: Number(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
+                    <input type="text" inputMode="decimal" value={form.priceDetal ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceDetal: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-amber-400 mb-1">Precio Mayor (final c/IVA)</label>
-                    <input type="number" step="0.01" value={form.priceMayor ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceMayor: Number(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
+                    <input type="text" inputMode="decimal" value={form.priceMayor ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceMayor: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
-                    <input type="number" step="0.01" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                    <input type="text" inputMode="decimal" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
-                    <input type="number" step="0.01" value={form.gananciaPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                    <input type="text" inputMode="decimal" value={form.gananciaPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
-                    <input type="number" step="0.01" value={form.gananciaMayorPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaMayorPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                    <input type="text" inputMode="decimal" value={form.gananciaMayorPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaMayorPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
                   </div>
                 </div>
               )}
@@ -929,20 +963,20 @@ export default function ProductDetailPage() {
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia detal (%)</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={Number(priceGananciaPct.toFixed(2))}
-                        onChange={e => handleDetalGananciaChange(Number(e.target.value))}
+                        type="text"
+                        inputMode="decimal"
+                        value={detalGananciaStr}
+                        onChange={e => handleDetalGananciaChange(e.target.value)}
                         className="input-field !py-2.5 text-sm font-mono"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={Number(priceFinalDetal.toFixed(2))}
-                        onChange={e => handleDetalPriceChange(Number(e.target.value))}
+                        type="text"
+                        inputMode="decimal"
+                        value={detalPriceStr}
+                        onChange={e => handleDetalPriceChange(e.target.value)}
                         className="input-field !py-2.5 text-sm font-mono"
                       />
                     </div>
@@ -959,20 +993,20 @@ export default function ProductDetailPage() {
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia mayor (%)</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={Number(priceGananciaMayorPct.toFixed(2))}
-                        onChange={e => handleMayorGananciaChange(Number(e.target.value))}
+                        type="text"
+                        inputMode="decimal"
+                        value={mayorGananciaStr}
+                        onChange={e => handleMayorGananciaChange(e.target.value)}
                         className="input-field !py-2.5 text-sm font-mono"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={Number(priceFinalMayor.toFixed(2))}
-                        onChange={e => handleMayorPriceChange(Number(e.target.value))}
+                        type="text"
+                        inputMode="decimal"
+                        value={mayorPriceStr}
+                        onChange={e => handleMayorPriceChange(e.target.value)}
                         className="input-field !py-2.5 text-sm font-mono"
                       />
                     </div>

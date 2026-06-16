@@ -20,7 +20,7 @@ const defaultForm = {
   code: '', barcode: '', supplierRef: '', name: '', description: '',
   categoryId: '', brandId: '', supplierId: '',
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
-  costUsd: 0, bregaApplies: true, gananciaPct: 0, gananciaMayorPct: 0,
+  costUsd: '0', bregaApplies: true, gananciaPct: '0', gananciaMayorPct: '0',
   ivaType: 'GENERAL', minStock: 0, isActive: true, isService: false,
 };
 
@@ -51,8 +51,8 @@ export default function NewProductPage() {
       setBregaGlobalPct(cfg.bregaGlobalPct || 0);
       setForm(f => ({
         ...f,
-        gananciaPct: cfg.defaultGananciaPct || 0,
-        gananciaMayorPct: cfg.defaultGananciaMayorPct || 0,
+        gananciaPct: String(cfg.defaultGananciaPct || 0),
+        gananciaMayorPct: String(cfg.defaultGananciaMayorPct || 0),
       }));
     }
     if (rateRes.ok) {
@@ -64,6 +64,14 @@ export default function NewProductPage() {
   useEffect(() => { document.title = 'Nuevo Producto | Trinity ERP'; }, []);
 
   useEffect(() => { fetchMeta(); }, [fetchMeta]);
+
+  // Acepta punto o coma como separador decimal; devuelve 0 si no es válido
+  const parseNum = (v: string | number) => {
+    const n = parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+  // Mantiene solo dígitos y separadores mientras se escribe (no rompe al teclear el punto)
+  const sanitizeDecimal = (v: string) => v.replace(/[^0-9.,]/g, '');
 
   function calcPreviewPrice(costUsd: number, gananciaPct: number, bregaApplies: boolean, ivaType: string) {
     const brecha = bregaApplies ? bregaGlobalPct : 0;
@@ -86,10 +94,10 @@ export default function NewProductPage() {
         purchaseUnit: form.purchaseUnit,
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
-        costUsd: Number(form.costUsd),
+        costUsd: parseNum(form.costUsd),
         bregaApplies: form.bregaApplies,
-        gananciaPct: Number(form.gananciaPct),
-        gananciaMayorPct: Number(form.gananciaMayorPct),
+        gananciaPct: parseNum(form.gananciaPct),
+        gananciaMayorPct: parseNum(form.gananciaMayorPct),
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
@@ -125,8 +133,8 @@ export default function NewProductPage() {
     });
   });
 
-  const previewDetal = calcPreviewPrice(Number(form.costUsd), Number(form.gananciaPct), form.bregaApplies, form.ivaType);
-  const previewMayor = calcPreviewPrice(Number(form.costUsd), Number(form.gananciaMayorPct), form.bregaApplies, form.ivaType);
+  const previewDetal = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaPct), form.bregaApplies, form.ivaType);
+  const previewMayor = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaMayorPct), form.bregaApplies, form.ivaType);
 
   return (
     <div>
@@ -250,15 +258,15 @@ export default function NewProductPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
-              <input type="number" step="0.01" value={form.costUsd} onChange={e => setForm(f => ({ ...f, costUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+              <input type="text" inputMode="decimal" value={form.costUsd} onChange={e => setForm(f => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
-              <input type="number" step="0.01" value={form.gananciaPct} onChange={e => setForm(f => ({ ...f, gananciaPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+              <input type="text" inputMode="decimal" value={form.gananciaPct} onChange={e => setForm(f => ({ ...f, gananciaPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
-              <input type="number" step="0.01" value={form.gananciaMayorPct} onChange={e => setForm(f => ({ ...f, gananciaMayorPct: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+              <input type="text" inputMode="decimal" value={form.gananciaMayorPct} onChange={e => setForm(f => ({ ...f, gananciaMayorPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
             </div>
           </div>
 
