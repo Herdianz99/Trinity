@@ -149,12 +149,25 @@ export default function ConfigPage() {
 
   function handlePrintAreaChange(id: string) {
     setSelectedPrintAreaId(id);
+    const area = printAreas.find(a => a.id === id);
     if (id) {
       localStorage.setItem('printAreaId', id);
+      localStorage.setItem('printAreaName', area?.name || '');
     } else {
       localStorage.removeItem('printAreaId');
+      localStorage.removeItem('printAreaName');
     }
-    setMessage({ type: 'success', text: 'Area de impresion configurada para esta PC' });
+    // Avisar al PrintMonitor de ESTA pestana al instante: el evento nativo
+    // 'storage' solo se dispara en OTRAS pestanas, nunca en la que hizo el cambio.
+    window.dispatchEvent(new CustomEvent('printAreaChanged', {
+      detail: { id: id || null, name: area?.name || null },
+    }));
+    setMessage({
+      type: 'success',
+      text: id
+        ? `Esta PC imprimira las comandas de "${area?.name}"`
+        : 'Impresion de comandas desactivada en esta PC',
+    });
   }
 
   async function fetchConfig() {

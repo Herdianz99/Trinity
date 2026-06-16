@@ -1,6 +1,7 @@
 # Trinity ERP — Progreso
 
 ## 🚀 Pendiente de DEPLOY
+- **Sesion 57** (comandas de despacho): el `PrintMonitor` ahora aplica el cambio de zona **al instante** (CustomEvent `printAreaChanged`, sin recargar) — antes el cambio en Configuracion no surtia efecto en la misma pestana. Comanda reformateada con ESC/POS (`{{BIG}}/{{BOLD}}/{{LINE}}/{{CUT}}`) y corte automatico. Nuevo indicador visible "Comandas: <zona>" (verde/amarillo, pendientes). Sin migracion. Solo frontend. **Config en cada PC del cliente: ver seccion "Setup comandas en produccion" abajo.**
 - **Sesion 56** (retenciones): TXT SENIAT de retenciones de IVA en compras (declaracion quincenal) + detalle del comprobante mostrando montos en Bs. Sin migracion. Deploy (lo hace Diego): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
 
 ## ✅ HECHO y DEPLOYADO — Sesiones 49-55 (probado 2026-06-15)
@@ -14,7 +15,7 @@ Resumen (detalle tecnico completo en los logs de cada sesion mas abajo):
 - **Sesion 55** — Comisiones a PDF (individual + todos los vendedores con TOTAL GENERAL). *Nota: desfase conocido de 1 centavo por redondeo, decidido dejar asi.*
 
 ## 🔨 PENDIENTE — no implementado aun (para proximas sesiones)
-- [ ] **Comandas automaticas por area de despacho**: al pagar en POS el ticket 80mm ya imprime solo; FALTA que las comandas por area (PrintJob, que el backend ya crea) se manden solas al agente, idealmente con varias impresoras (una por area).
+- [x] **Comandas automaticas por area de despacho** (Sesion 57): al pagar en POS el ticket 80mm imprime solo y las comandas por area se mandan solas al agente. Arquitectura: 1 PC por despacho (cada una fija a su zona via Configuracion) + su propio agente con su impresora. Pendiente real para futuro: que UN solo agente reparta a varias impresoras por zona (hoy 1 agente = 1 impresora).
 - [ ] **Facturas anuladas en el libro de ventas** (mostrar con monto 0 / marca ANULADA).
 - [ ] **XML de retenciones de ISLR en compras** para el portal SENIAT (equivalente al TXT de IVA pero para ISLR, en formato XML). FALTA generarlo.
 - [ ] **Desglose por alicuota** 8%/31% en libros (hoy todo 16%) — deuda tecnica.
