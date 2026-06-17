@@ -146,6 +146,8 @@ export class DashboardService {
       sales: {
         totalUsd: sales.totalUsd,
         totalBs: sales.totalBs,
+        // Ventas netas reales = brutas - devoluciones del periodo.
+        netUsd: round2(sales.totalUsd - returns.totalUsd),
         invoiceCount: sales.count,
         avgTicketUsd: sales.count > 0 ? round2(sales.totalUsd / sales.count) : 0,
         vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd),
@@ -164,7 +166,9 @@ export class DashboardService {
     const result = await this.prisma.invoice.aggregate({
       where: {
         sellerId,
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
+        // Ventas BRUTAS: incluye RETURNED por su total original. El neto se
+        // obtiene restando las devoluciones (getSellerReturns) en getVendedor.
+        status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
         paidAt: dateRange,
       },
       _sum: { totalUsd: true, totalBs: true },

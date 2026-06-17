@@ -18,6 +18,7 @@ interface SellerDashboard {
   sales: {
     totalUsd: number;
     totalBs: number;
+    netUsd: number;
     invoiceCount: number;
     avgTicketUsd: number;
     vsLastPeriod: number | null;
@@ -202,6 +203,7 @@ export default function SellerDashboardPage() {
           <div className="flex items-center gap-1.5 text-emerald-400 mb-2">
             <DollarSign size={14} />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Mis Ventas</span>
+            <span className="text-[9px] text-slate-500 normal-case font-normal">bruto</span>
           </div>
           <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">${fmt(data.sales.totalUsd)}</p>
           {vs !== null && (
@@ -213,6 +215,10 @@ export default function SellerDashboardPage() {
               </span>
             </div>
           )}
+          <div className="mt-2 pt-2 border-t border-emerald-500/15 flex items-center justify-between">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Neto real</span>
+            <span className="text-sm font-bold text-emerald-300 tabular-nums">${fmt(data.sales.netUsd)}</span>
+          </div>
         </div>
 
         {/* Facturas */}
