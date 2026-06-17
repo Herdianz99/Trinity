@@ -52,6 +52,27 @@ export class InvoicesController {
     return this.service.findPending(today === 'true');
   }
 
+  @Get('report/by-seller')
+  async getSellerReport(
+    @Query('status') status: string,
+    @Query('paymentType') paymentType: string,
+    @Query('sellerId') sellerId: string,
+    @Query('search') search: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.pdfService.generateSellerReport({
+      status, paymentType, sellerId, search, from, to,
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="ventas-por-vendedor.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id/pdf')
   async getPdf(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.pdfService.generatePdf(id);

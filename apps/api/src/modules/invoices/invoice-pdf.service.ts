@@ -15,6 +15,156 @@ const IVA_LABELS: Record<string, string> = {
 export class InvoicePdfService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Reporte de ventas agrupado por vendedor: por factura (correlativo - cliente)
+  // y debajo los items (descripcion, cantidad, precio, descuento). Respeta los
+  // mismos filtros que el listado de facturas.
+  async generateSellerReport(filters: {
+    status?: string;
+    paymentType?: string;
+    sellerId?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+  }): Promise<Buffer> {
+    const where: any = { type: 'SALE' };
+    // Si no se filtra por estado, incluir solo ventas concretadas (no PENDING/CANCELLED).
+    if (filters.status) where.status = filters.status;
+    else where.status = { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] };
+    if (filters.paymentType) where.paymentType = filters.paymentType;
+    if (filters.sellerId) where.sellerId = filters.sellerId;
+    if (filters.search) {
+      where.OR = [
+        { number: { contains: filters.search, mode: 'insensitive' } },
+        { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { customer: { rif: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
+    if (filters.from || filters.to) {
+      where.createdAt = {};
+      if (filters.from) { const d = new Date(filters.from); d.setUTCHours(0, 0, 0, 0); where.createdAt.gte = d; }
+      if (filters.to) { const d = new Date(filters.to); d.setUTCHours(23, 59, 59, 999); where.createdAt.lte = d; }
+    }
+
+    const invoices = await this.prisma.invoice.findMany({
+      where,
+      include: {
+        customer: { select: { name: true } },
+        seller: { select: { name: true } },
+        items: { select: { productName: true, quantity: true, totalUsd: true, discountPct: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Agrupar por vendedor
+    const groups = new Map<string, typeof invoices>();
+    for (const inv of invoices) {
+      const key = inv.seller?.name || 'SIN VENDEDOR';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(inv);
+    }
+    const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    const config = await this.prisma.companyConfig.findFirst();
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+      const buffers: Buffer[] = [];
+      doc.on('data', (c: Buffer) => buffers.push(c));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const left = 40;
+      const right = doc.page.width - 40;
+      const bottom = doc.page.height - 40;
+      const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const C = { art: 40, cant: 350, precio: 408, desc: 478, total: 522 };
+      const W = { art: 300, cant: 52, precio: 62, desc: 40, total: 50 };
+
+      let y = 40;
+      doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(config?.companyName || 'Trinity ERP', left, y);
+      y += 19;
+      doc.fontSize(12).font('Helvetica-Bold').text('Reporte de Ventas por Vendedor', left, y);
+      y += 15;
+      const period = (filters.from || filters.to) ? `${filters.from || '…'} al ${filters.to || '…'}` : 'Todas las fechas';
+      doc.fontSize(8).font('Helvetica').fillColor('#555')
+        .text(`Periodo: ${period}     Generado: ${new Date().toLocaleDateString('es-VE')}`, left, y);
+      y += 13;
+      doc.moveTo(left, y).lineTo(right, y).strokeColor('#94a3b8').stroke();
+      y += 10;
+
+      const ensure = (need: number) => { if (y + need > bottom) { doc.addPage(); y = 40; } };
+      const itemHeader = () => {
+        doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#64748b');
+        doc.text('Articulo', C.art, y, { width: W.art });
+        doc.text('Cant', C.cant, y, { width: W.cant, align: 'right' });
+        doc.text('Precio', C.precio, y, { width: W.precio, align: 'right' });
+        doc.text('Desc%', C.desc, y, { width: W.desc, align: 'right' });
+        doc.text('Total', C.total, y, { width: W.total, align: 'right' });
+        y += 11;
+      };
+
+      if (sortedGroups.length === 0) {
+        doc.fontSize(10).font('Helvetica').fillColor('#555')
+          .text('No hay facturas para los filtros seleccionados.', left, y);
+        doc.end();
+        return;
+      }
+
+      let grandTotal = 0;
+      for (const [sellerName, sellerInvoices] of sortedGroups) {
+        ensure(46);
+        doc.rect(left, y, right - left, 16).fill('#1e293b');
+        doc.fontSize(9.5).font('Helvetica-Bold').fillColor('#fff')
+          .text(`VENDEDOR: ${sellerName}   (${sellerInvoices.length} factura${sellerInvoices.length === 1 ? '' : 's'})`, left + 6, y + 4);
+        y += 22;
+        doc.fillColor('#000');
+
+        let sellerTotal = 0;
+        for (const inv of sellerInvoices) {
+          ensure(40);
+          sellerTotal += inv.totalUsd;
+          doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#0f766e')
+            .text(`${inv.number || 'S/N'}  —  ${inv.customer?.name || 'Cliente Final'}`, C.art, y, { width: 360 });
+          doc.fontSize(7.5).font('Helvetica').fillColor('#555')
+            .text(`${new Date(inv.createdAt).toLocaleDateString('es-VE')}    Total: $${fmt(inv.totalUsd)}`, 400, y + 1, { width: right - 400, align: 'right' });
+          y += 13;
+          doc.fillColor('#000');
+          itemHeader();
+          for (const it of inv.items) {
+            ensure(14);
+            const disc = it.discountPct || 0;
+            const denom = it.quantity * (1 - disc / 100);
+            const precio = denom > 0 ? it.totalUsd / denom : it.totalUsd;
+            doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
+            doc.text(it.productName, C.art, y, { width: W.art });
+            doc.text(String(it.quantity), C.cant, y, { width: W.cant, align: 'right' });
+            doc.text(`$${fmt(precio)}`, C.precio, y, { width: W.precio, align: 'right' });
+            doc.text(disc ? fmt(disc) : '—', C.desc, y, { width: W.desc, align: 'right' });
+            doc.text(`$${fmt(it.totalUsd)}`, C.total, y, { width: W.total, align: 'right' });
+            y += 12;
+          }
+          y += 5;
+        }
+
+        ensure(20);
+        doc.moveTo(left, y).lineTo(right, y).strokeColor('#cbd5e1').stroke();
+        y += 3;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#000')
+          .text(`Total ${sellerName}: $${fmt(sellerTotal)}`, left, y, { width: right - left, align: 'right' });
+        y += 18;
+        grandTotal += sellerTotal;
+      }
+
+      ensure(24);
+      doc.moveTo(left, y).lineTo(right, y).strokeColor('#94a3b8').stroke();
+      y += 4;
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
+        .text(`TOTAL GENERAL: $${fmt(grandTotal)}`, left, y, { width: right - left, align: 'right' });
+
+      doc.end();
+    });
+  }
+
   async generatePdf(invoiceId: string): Promise<Buffer> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },

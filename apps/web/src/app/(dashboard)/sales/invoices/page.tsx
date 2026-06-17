@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 
 interface Invoice {
@@ -162,6 +163,17 @@ export default function InvoicesPage() {
     window.open(`/api/proxy/invoices/${id}/pdf`, '_blank');
   }
 
+  function handleSellerReport() {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (paymentType) params.set('paymentType', paymentType);
+    if (searchDebounced) params.set('search', searchDebounced);
+    if (sellerId) params.set('sellerId', sellerId);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    window.open(`/api/proxy/invoices/report/by-seller?${params}`, '_blank');
+  }
+
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex items-center gap-3">
@@ -172,6 +184,14 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-white">Facturas</h1>
           <p className="text-slate-400 text-sm">{total} facturas registradas</p>
         </div>
+        <button
+          onClick={handleSellerReport}
+          className="ml-auto btn-secondary !py-2.5 text-sm flex items-center gap-2"
+          title="Generar PDF de ventas agrupado por vendedor (respeta los filtros activos)"
+        >
+          <Users size={16} />
+          <span className="hidden sm:inline">Reporte por vendedor</span>
+        </button>
       </div>
 
       {message && (
