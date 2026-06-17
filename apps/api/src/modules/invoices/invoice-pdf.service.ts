@@ -50,10 +50,17 @@ export class InvoicePdfService {
       include: {
         customer: { select: { name: true } },
         seller: { select: { name: true } },
-        items: { select: { productName: true, quantity: true, totalUsd: true, discountPct: true } },
+        items: { select: { productId: true, productName: true, quantity: true, totalUsd: true, discountPct: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // Codigos de producto (InvoiceItem no tiene relacion a Product; se mapea aparte)
+    const productIds = [...new Set(invoices.flatMap((inv) => inv.items.map((it) => it.productId)))];
+    const products = productIds.length
+      ? await this.prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, code: true } })
+      : [];
+    const codeMap = new Map(products.map((p) => [p.id, p.code]));
 
     // Agrupar por vendedor
     const groups = new Map<string, typeof invoices>();
@@ -135,8 +142,11 @@ export class InvoicePdfService {
             const disc = it.discountPct || 0;
             const denom = it.quantity * (1 - disc / 100);
             const precio = denom > 0 ? it.totalUsd / denom : it.totalUsd;
+            const code = codeMap.get(it.productId);
+            let label = code ? `${code} - ${it.productName}` : it.productName;
+            if (label.length > 58) label = label.slice(0, 57) + '…';
             doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
-            doc.text(it.productName, C.art, y, { width: W.art });
+            doc.text(label, C.art, y, { width: W.art, lineBreak: false });
             doc.text(String(it.quantity), C.cant, y, { width: W.cant, align: 'right' });
             doc.text(`$${fmt(precio)}`, C.precio, y, { width: W.precio, align: 'right' });
             doc.text(disc ? fmt(disc) : '—', C.desc, y, { width: W.desc, align: 'right' });
