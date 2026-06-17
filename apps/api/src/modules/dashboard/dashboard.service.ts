@@ -194,7 +194,8 @@ export class DashboardService {
       where: {
         type: 'NCV',
         status: 'POSTED',
-        appliedAt: dateRange,
+        // Date the return actually happened (set on post), not appliedAt.
+        documentDate: dateRange,
         invoice: { sellerId },
       },
       _sum: { totalUsd: true },
@@ -491,7 +492,9 @@ export class DashboardService {
       where: {
         type: 'NCV',
         status: 'POSTED',
-        appliedAt: dateRange,
+        // Date the return actually happened (set on post), not appliedAt which
+        // only fills when the note is later cruzada en un recibo.
+        documentDate: dateRange,
       },
       _sum: { totalUsd: true },
       _count: { id: true },

@@ -149,7 +149,9 @@ export class ReportsService {
       where: {
         type: 'NCV',
         status: 'POSTED',
-        appliedAt: { gte: from, lte: to },
+        // Date the return actually happened (set on post), not appliedAt which
+        // only fills when the note is later cruzada en un recibo.
+        documentDate: { gte: from, lte: to },
         ...(sellerId ? { invoice: { sellerId } } : {}),
       },
       select: {

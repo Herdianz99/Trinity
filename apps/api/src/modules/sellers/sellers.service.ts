@@ -129,7 +129,9 @@ export class SellersService {
     const invoices = await this.prisma.invoice.findMany({
       where: {
         sellerId,
-        status: 'PAID',
+        // Include returned invoices so the seller keeps commission on what the
+        // customer DID keep; returned quantities are netted out below.
+        status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
         paidAt: { gte: fromDate, lte: toDate },
       },
       include: {
@@ -174,6 +176,7 @@ export class SellersService {
     let totalIvaNotasUsd = 0;
     let totalGroupSoldUsd = 0;
     let groupInvoiceCount = 0;
+    let commissionableCount = 0;
 
     for (const invoice of invoices) {
       // Facturas a empresas del grupo: se reflejan en la lista pero NO comisionan
@@ -181,7 +184,9 @@ export class SellersService {
       if (isGroup) {
         groupInvoiceCount += 1;
         for (const item of invoice.items) {
-          totalGroupSoldUsd += item.totalUsd;
+          const netQty = item.quantity - (item.returnedQty || 0);
+          const netRatio = item.quantity > 0 ? netQty / item.quantity : 0;
+          totalGroupSoldUsd += item.totalUsd * netRatio;
         }
         continue;
       }
@@ -189,19 +194,27 @@ export class SellersService {
       // Serie no fiscal => el IVA de las notas se le suma al vendedor
       const isNonFiscal = invoice.serie != null && !invoice.serie.isFiscal;
 
+      let invoiceHasNetSale = false;
       for (const item of invoice.items) {
+        // Net out returned units so commission reflects what the customer kept.
+        // returnedQty == quantity (factura RETURNED) => netQty 0 => no comisiona.
+        const netQty = item.quantity - (item.returnedQty || 0);
+        if (netQty <= 0) continue;
+        invoiceHasNetSale = true;
+        const netRatio = item.quantity > 0 ? netQty / item.quantity : 0;
+
         const product = productMap.get(item.productId);
         const categoryId = product?.categoryId || 'sin-categoria';
         const categoryName = product?.category?.name || 'Sin categoria';
         const commissionPct = product?.category?.commissionPct || 0;
 
-        const baseUsd = item.unitPriceWithoutIva * item.quantity;
+        const baseUsd = item.unitPriceWithoutIva * netQty;
         // En series no fiscales el IVA es parte de la ganancia: se suma a la base
         // de comision. La comision se calcula sobre (base + IVA notas) x %.
-        const ivaNotasUsd = isNonFiscal ? item.ivaAmount : 0;
+        const ivaNotasUsd = isNonFiscal ? item.ivaAmount * netRatio : 0;
         const commissionUsd = (baseUsd + ivaNotasUsd) * (commissionPct / 100);
 
-        totalSoldUsd += item.totalUsd;
+        totalSoldUsd += item.totalUsd * netRatio;
         totalCommissionUsd += commissionUsd;
         totalIvaNotasUsd += ivaNotasUsd;
 
@@ -215,11 +228,13 @@ export class SellersService {
             ivaNotasUsd: 0,
           };
         }
-        categoryBreakdown[categoryId].units += item.quantity;
+        categoryBreakdown[categoryId].units += netQty;
         categoryBreakdown[categoryId].baseUsd += baseUsd;
         categoryBreakdown[categoryId].commissionUsd += commissionUsd;
         categoryBreakdown[categoryId].ivaNotasUsd += ivaNotasUsd;
       }
+      // Solo cuenta la factura si quedo algo vendido (no totalmente devuelta).
+      if (invoiceHasNetSale) commissionableCount += 1;
     }
 
     // Round values
@@ -234,22 +249,25 @@ export class SellersService {
       sellerId,
       from: fromDate.toISOString(),
       to: toDate.toISOString(),
-      invoiceCount: invoices.length - groupInvoiceCount,
+      invoiceCount: commissionableCount,
       totalSoldUsd: Math.round(totalSoldUsd * 100) / 100,
       totalCommissionUsd: Math.round(totalCommissionUsd * 100) / 100,
       totalIvaNotasUsd: Math.round(totalIvaNotasUsd * 100) / 100,
       totalGroupSoldUsd: Math.round(totalGroupSoldUsd * 100) / 100,
       groupInvoiceCount,
       categories,
-      invoices: invoices.map((inv) => ({
-        id: inv.id,
-        number: inv.number,
-        customer: inv.customer,
-        totalUsd: inv.totalUsd,
-        paidAt: inv.paidAt,
-        itemCount: inv.items.length,
-        isGroup: inv.customer?.isGroupCompany === true,
-      })),
+      invoices: invoices
+        // Ocultar facturas totalmente devueltas (sin venta neta) del listado.
+        .filter((inv) => inv.items.some((it) => it.quantity - (it.returnedQty || 0) > 0))
+        .map((inv) => ({
+          id: inv.id,
+          number: inv.number,
+          customer: inv.customer,
+          totalUsd: inv.totalUsd,
+          paidAt: inv.paidAt,
+          itemCount: inv.items.length,
+          isGroup: inv.customer?.isGroupCompany === true,
+        })),
     };
   }
 
