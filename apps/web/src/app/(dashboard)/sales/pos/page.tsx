@@ -13,6 +13,7 @@ import {
   X,
   Loader2,
   User,
+  UserCheck,
   ShoppingCart,
   CreditCard,
   Lock,
@@ -1075,6 +1076,8 @@ export default function POSPage() {
         setCustomerId(null);
         setCustomerName('');
       }
+      // Preserve the original seller so commissions stay with whoever sold it
+      setSelectedSellerId(fullInvoice.seller?.id ?? null);
       setExistingInvoiceId(inv.id);
       setPendingDrawerOpen(false);
       setConfirmRetake(null);
@@ -2036,6 +2039,10 @@ export default function POSPage() {
                   <div className="flex items-center gap-2">
                     <User size={12} className="text-slate-500" />
                     <span className="text-sm text-slate-300">{inv.customer?.name || 'Sin cliente'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <UserCheck size={12} className="text-slate-500" />
+                    <span className="text-xs text-slate-400">{inv.seller?.name || 'Sin vendedor'}</span>
                   </div>
                   <div className="text-xs text-slate-500">
                     {inv.items?.slice(0, 2).map((it: any, i: number) => (

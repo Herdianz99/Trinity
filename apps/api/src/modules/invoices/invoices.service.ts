@@ -106,6 +106,7 @@ export class InvoicesService {
       where,
       include: {
         customer: { select: { id: true, name: true, documentType: true, rif: true } },
+        seller: { select: { id: true, code: true, name: true } },
         items: {
           take: 3,
           select: { id: true, productName: true, quantity: true },
@@ -1032,7 +1033,11 @@ export class InvoicesService {
   async retake(id: string, user: { id: string; role: UserRole }) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: { items: true, customer: true },
+      include: {
+        items: true,
+        customer: true,
+        seller: { select: { id: true, code: true, name: true } },
+      },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
     if (invoice.status !== 'PENDING') {
