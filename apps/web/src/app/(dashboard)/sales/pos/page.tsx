@@ -779,6 +779,7 @@ export default function POSPage() {
           isCredit: true,
           creditAuthPassword,
           creditDays,
+          cashRegisterId: selectedCashRegister?.id || undefined,
         }),
       });
       if (!payRes.ok) {
@@ -914,6 +915,7 @@ export default function POSPage() {
           payments: finalPayments,
           isCredit: false,
           changeMethodId: hasChange ? changeMethodId : undefined,
+          cashRegisterId: selectedCashRegister?.id || undefined,
         }),
       });
       if (!payRes.ok) {

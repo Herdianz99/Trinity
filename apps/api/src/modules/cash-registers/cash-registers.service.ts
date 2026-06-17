@@ -294,13 +294,15 @@ export class CashRegistersService {
     });
     if (!session) throw new NotFoundException('Sesion no encontrada');
 
+    // Count sales by payment date (paidAt): a seller may create a parked invoice
+    // before this session opened, and the cashier cobra it inside this session.
     const invoiceWhere: any = {
       cashRegisterId: session.cashRegisterId,
-      createdAt: { gte: session.openedAt },
+      paidAt: { gte: session.openedAt },
       status: 'PAID',
     };
     if (session.closedAt) {
-      invoiceWhere.createdAt.lte = session.closedAt;
+      invoiceWhere.paidAt.lte = session.closedAt;
     }
 
     // Get invoice IDs for this session
@@ -353,13 +355,15 @@ export class CashRegistersService {
     openedAt: Date,
     closedAt?: Date,
   ) {
+    // Count sales by payment date (paidAt): a seller may create a parked invoice
+    // before this session opened, and the cashier cobra it inside this session.
     const where: any = {
       cashRegisterId,
-      createdAt: { gte: openedAt },
+      paidAt: { gte: openedAt },
       status: 'PAID',
     };
     if (closedAt) {
-      where.createdAt.lte = closedAt;
+      where.paidAt.lte = closedAt;
     }
 
     const invoices = await this.prisma.invoice.findMany({

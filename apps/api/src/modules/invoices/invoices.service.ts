@@ -444,9 +444,13 @@ export class InvoicesService {
       }
     }
 
-    // Resolve serie: prioritize the invoice's original cash register (set at POS creation)
-    // Only fall back to cashier's current session for pre-invoices without a register
-    let serieCashRegisterId: string = invoice.cashRegisterId;
+    // Resolve cash register at payment time. Priority:
+    //   1. dto.cashRegisterId — the register the cashier is standing at (sent by POS).
+    //      This is what matters: a seller may have parked the invoice with an arbitrary
+    //      register, and the cashier can have several registers open at once.
+    //   2. invoice.cashRegisterId — fallback to whatever was set at creation.
+    //   3. cashier's only open session — last resort for direct API calls.
+    let serieCashRegisterId: string = dto.cashRegisterId || invoice.cashRegisterId;
     if (!serieCashRegisterId) {
       const cashierSession = await this.prisma.cashSession.findFirst({
         where: { openedById: user.id, status: 'OPEN' },
@@ -456,11 +460,34 @@ export class InvoicesService {
       }
       serieCashRegisterId = cashierSession.cashRegisterId;
     }
+
+    // The register where we cobramos must have an OPEN session, otherwise the sale
+    // would not land in any cash count (arqueo). Shared registers may be opened by
+    // another user; non-shared registers must be opened by this cashier.
+    const register = await this.prisma.cashRegister.findUnique({
+      where: { id: serieCashRegisterId },
+    });
+    if (!register) {
+      throw new BadRequestException('La caja indicada no existe');
+    }
+    const openSession = await this.prisma.cashSession.findFirst({
+      where: {
+        cashRegisterId: serieCashRegisterId,
+        status: 'OPEN',
+        ...(register.isShared ? {} : { openedById: user.id }),
+      },
+    });
+    if (!openSession) {
+      throw new BadRequestException(
+        `Debes tener una caja abierta para cobrar (caja "${register.name}" sin sesión abierta)`,
+      );
+    }
+
     const paymentSerie = await this.prisma.serie.findUnique({
       where: { cashRegisterId: serieCashRegisterId },
     });
     if (!paymentSerie) {
-      throw new BadRequestException('La caja del cajero no tiene serie configurada');
+      throw new BadRequestException(`La caja "${register.name}" no tiene serie configurada`);
     }
     if (!paymentSerie.isActive) {
       throw new BadRequestException('La serie de la caja del cajero está desactivada');

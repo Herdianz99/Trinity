@@ -57,4 +57,11 @@ export class PayInvoiceDto {
   @IsOptional()
   @IsString()
   changeMethodId?: string;
+
+  // Caja donde el cajero esta cobrando (la activa en su pantalla al procesar).
+  // Tiene prioridad sobre la caja con que se creo la factura en espera.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  cashRegisterId?: string;
 }
