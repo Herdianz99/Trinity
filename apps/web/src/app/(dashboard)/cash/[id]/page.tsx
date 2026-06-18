@@ -418,10 +418,30 @@ export default function CashDetailPage() {
                       {summary.paymentsByMethod.map((m: any) => (
                         <div key={m.methodName} className="flex justify-between text-xs">
                           <span className="text-slate-400">{m.methodName} ({m.count})</span>
-                          <span className="text-slate-200">${m.totalUsd.toFixed(2)}</span>
+                          <span className="text-slate-200">
+                            {m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}
+                          </span>
                         </div>
                       ))}
                     </div>
+                  </>
+                )}
+
+                {summary && (summary.cashExpectedUsd != null || summary.cashExpectedBs != null) && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Efectivo esperado en gaveta</h3>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="text-slate-200">Efectivo USD</span>
+                        <span className="text-emerald-400">${(summary.cashExpectedUsd ?? 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-bold">
+                        <span className="text-slate-200">Efectivo Bs</span>
+                        <span className="text-emerald-400">Bs {(summary.cashExpectedBs ?? 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2">Lo que deberia haber en la gaveta ahora (sin cerrar). Los pagos electronicos no cuentan aqui.</p>
                   </>
                 )}
 
@@ -996,7 +1016,7 @@ export default function CashDetailPage() {
                   {historyDetail.paymentsByMethod?.map((m: any) => (
                     <div key={m.methodName} className="flex justify-between text-sm">
                       <span className="text-slate-300">{m.methodName} ({m.count})</span>
-                      <span className="text-white">${m.totalUsd.toFixed(2)}</span>
+                      <span className="text-white">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
                     </div>
                   ))}
                   <div className="border-t border-slate-600/50 mt-2 pt-2 flex justify-between text-sm font-medium">

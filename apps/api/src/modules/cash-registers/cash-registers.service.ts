@@ -378,7 +378,7 @@ export class CashRegistersService {
       include: { payments: { include: { method: true, changeMethod: true } } },
     });
 
-    const byMethod: Record<string, { methodName: string; count: number; totalUsd: number; totalBs: number }> = {};
+    const byMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
     const electronicByMethod: Record<string, { methodName: string; isDivisa: boolean; count: number; expectedUsd: number; expectedBs: number }> = {};
     const changeOutflows: Array<{ invoiceNumber: string; changeBs: number; changeMethodName: string }> = [];
     let totalChangeBs = 0;
@@ -390,9 +390,9 @@ export class CashRegistersService {
         const method = (p as any).method;
         const methodName = method?.name || p.methodId;
 
-        // Desglose total por metodo (display)
+        // Desglose total por metodo (display) — con moneda para mostrar cada uno en su divisa
         if (!byMethod[methodName]) {
-          byMethod[methodName] = { methodName, count: 0, totalUsd: 0, totalBs: 0 };
+          byMethod[methodName] = { methodName, isDivisa: !!method?.isDivisa, isCash: !!method?.isCash, count: 0, totalUsd: 0, totalBs: 0 };
         }
         byMethod[methodName].count += 1;
         byMethod[methodName].totalUsd += p.amountUsd;
