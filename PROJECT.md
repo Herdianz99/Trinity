@@ -455,6 +455,10 @@ model CashSession {
   openingBalanceBs  Float         @default(0)
   closingBalanceUsd Float?
   closingBalanceBs  Float?
+  expectedUsd       Float?        // snapshot del efectivo esperado al cerrar (por moneda)
+  expectedBs        Float?
+  differenceUsd     Float?        // descuadre persistido (contado - esperado)
+  differenceBs      Float?
   status            SessionStatus @default(OPEN)
   notes             String?
   openedAt          DateTime      @default(now())
@@ -522,7 +526,8 @@ model InvoiceItem {
 model PaymentMethod {
   id                 String            @id @default(cuid())
   name               String            @unique
-  isDivisa           Boolean           @default(false)
+  isDivisa           Boolean           @default(false)  // denominado en USD (no = efectivo)
+  isCash             Boolean           @default(false)  // efectivo fisico de gaveta (Efectivo USD/Bs) — se arquea
   createsReceivable  Boolean           @default(false)
   isActive           Boolean           @default(true)
   sortOrder          Int               @default(0)
