@@ -485,22 +485,6 @@ export default function CashDetailPage() {
                   </>
                 )}
 
-                {summary && (
-                  <>
-                    <div className="my-3 border-t border-slate-700/50" />
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Balance neto</h3>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-white">Neto USD</span>
-                        <span className="text-white">${summary.totalUsd.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-white">Neto Bs</span>
-                        <span className="text-white">Bs {summary.totalBs.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
 
