@@ -165,11 +165,21 @@ export class CashRegistersService {
     // Get sales summary for this session
     const summary = await this.getSessionSalesData(session.id, session.cashRegisterId, session.openedAt);
 
+    // El esperado del arqueo es SOLO el efectivo fisico (gaveta), por moneda.
+    const expectedUsd = summary.cashExpectedUsd;
+    const expectedBs = summary.cashExpectedBs;
+    const differenceUsd = Math.round((dto.closingBalanceUsd - expectedUsd) * 100) / 100;
+    const differenceBs = Math.round((dto.closingBalanceBs - expectedBs) * 100) / 100;
+
     const updatedSession = await this.prisma.cashSession.update({
       where: { id: sessionId },
       data: {
         closingBalanceUsd: dto.closingBalanceUsd,
         closingBalanceBs: dto.closingBalanceBs,
+        expectedUsd,
+        expectedBs,
+        differenceUsd,
+        differenceBs,
         status: 'CLOSED',
         closedAt: new Date(),
         closedById: userId,
@@ -181,11 +191,6 @@ export class CashRegistersService {
         closedBy: { select: { id: true, name: true } },
       },
     });
-
-    const expectedUsd = session.openingBalanceUsd + summary.totalUsd;
-    const expectedBs = session.openingBalanceBs + summary.totalBs;
-    const differenceUsd = dto.closingBalanceUsd - expectedUsd;
-    const differenceBs = dto.closingBalanceBs - expectedBs;
 
     return {
       session: updatedSession,
@@ -212,14 +217,16 @@ export class CashRegistersService {
       session.closedAt || undefined,
     );
 
-    const expectedUsd = session.openingBalanceUsd + salesData.totalUsd;
-    const expectedBs = session.openingBalanceBs + salesData.totalBs;
-    const differenceUsd = session.closingBalanceUsd != null
-      ? session.closingBalanceUsd - expectedUsd
-      : null;
-    const differenceBs = session.closingBalanceBs != null
-      ? session.closingBalanceBs - expectedBs
-      : null;
+    // Para sesiones cerradas, preferir el snapshot persistido al cierre (auditoria inmutable).
+    // Para sesiones abiertas, calcular el efectivo esperado en vivo.
+    const expectedUsd = session.expectedUsd ?? salesData.cashExpectedUsd;
+    const expectedBs = session.expectedBs ?? salesData.cashExpectedBs;
+    const differenceUsd = session.differenceUsd ?? (
+      session.closingBalanceUsd != null ? Math.round((session.closingBalanceUsd - expectedUsd) * 100) / 100 : null
+    );
+    const differenceBs = session.differenceBs ?? (
+      session.closingBalanceBs != null ? Math.round((session.closingBalanceBs - expectedBs) * 100) / 100 : null
+    );
 
     return {
       session,
@@ -372,12 +379,18 @@ export class CashRegistersService {
     });
 
     const byMethod: Record<string, { methodName: string; count: number; totalUsd: number; totalBs: number }> = {};
+    const electronicByMethod: Record<string, { methodName: string; isDivisa: boolean; count: number; expectedUsd: number; expectedBs: number }> = {};
     const changeOutflows: Array<{ invoiceNumber: string; changeBs: number; changeMethodName: string }> = [];
     let totalChangeBs = 0;
+    let cashSalesUsd = 0; // Efectivo USD recibido (metodo isCash && isDivisa)
+    let cashSalesBs = 0;  // Efectivo Bs recibido  (metodo isCash && !isDivisa)
 
     for (const inv of invoices) {
       for (const p of inv.payments) {
-        const methodName = (p as any).method?.name || p.methodId;
+        const method = (p as any).method;
+        const methodName = method?.name || p.methodId;
+
+        // Desglose total por metodo (display)
         if (!byMethod[methodName]) {
           byMethod[methodName] = { methodName, count: 0, totalUsd: 0, totalBs: 0 };
         }
@@ -385,7 +398,20 @@ export class CashRegistersService {
         byMethod[methodName].totalUsd += p.amountUsd;
         byMethod[methodName].totalBs += p.amountBs;
 
-        // Track change outflows
+        // Segregar efectivo de gaveta vs canales electronicos
+        if (method?.isCash) {
+          if (method.isDivisa) cashSalesUsd += p.amountUsd;
+          else cashSalesBs += p.amountBs;
+        } else {
+          if (!electronicByMethod[methodName]) {
+            electronicByMethod[methodName] = { methodName, isDivisa: !!method?.isDivisa, count: 0, expectedUsd: 0, expectedBs: 0 };
+          }
+          electronicByMethod[methodName].count += 1;
+          electronicByMethod[methodName].expectedUsd += p.amountUsd;
+          electronicByMethod[methodName].expectedBs += p.amountBs;
+        }
+
+        // Vuelto (sale de la gaveta en Bs)
         if ((p as any).changeAmountBs > 0) {
           changeOutflows.push({
             invoiceNumber: inv.number || 'S/N',
@@ -413,29 +439,47 @@ export class CashRegistersService {
     let movementsIncomeBs = 0;
     let movementsExpenseUsd = 0;
     let movementsExpenseBs = 0;
+    // Segregados por moneda real del movimiento (para el efectivo esperado en gaveta)
+    let movInCashUsd = 0, movInCashBs = 0, movOutCashUsd = 0, movOutCashBs = 0;
 
     for (const mov of cashMovements) {
+      const isUsd = mov.currency === 'USD';
       if (mov.type === 'INCOME') {
         movementsIncomeUsd += mov.amountUsd;
         movementsIncomeBs += mov.amountBs;
+        if (isUsd) movInCashUsd += mov.amountUsd; else movInCashBs += mov.amountBs;
       } else {
         movementsExpenseUsd += mov.amountUsd;
         movementsExpenseBs += mov.amountBs;
+        if (isUsd) movOutCashUsd += mov.amountUsd; else movOutCashBs += mov.amountBs;
       }
     }
 
     const salesTotalUsd = invoices.reduce((s, i) => s + i.totalUsd, 0);
     const salesTotalBs = invoices.reduce((s, i) => s + i.totalBs, 0);
 
+    const openingUsd = session?.openingBalanceUsd || 0;
+    const openingBs = session?.openingBalanceBs || 0;
+
+    // Efectivo fisico esperado en gaveta (lo que de verdad se arquea)
+    const cashExpectedUsd = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd) * 100) / 100;
+    const cashExpectedBs = Math.round((openingBs + cashSalesBs - totalChangeBs + movInCashBs - movOutCashBs) * 100) / 100;
+
     return {
-      openingBalanceUsd: session?.openingBalanceUsd || 0,
-      openingBalanceBs: session?.openingBalanceBs || 0,
+      openingBalanceUsd: openingUsd,
+      openingBalanceBs: openingBs,
       invoiceCount: invoices.length,
       totalUsd: salesTotalUsd + movementsIncomeUsd - movementsExpenseUsd,
       totalBs: salesTotalBs + movementsIncomeBs - movementsExpenseBs,
       salesTotalUsd: salesTotalUsd,
       salesTotalBs: salesTotalBs,
       paymentsByMethod: Object.values(byMethod),
+      // Efectivo de gaveta (esperado por moneda) y canales electronicos (informativo)
+      cashSalesUsd: Math.round(cashSalesUsd * 100) / 100,
+      cashSalesBs: Math.round(cashSalesBs * 100) / 100,
+      cashExpectedUsd,
+      cashExpectedBs,
+      electronicByMethod: Object.values(electronicByMethod),
       changeOutflows,
       totalChangeBs,
       cashMovements,
