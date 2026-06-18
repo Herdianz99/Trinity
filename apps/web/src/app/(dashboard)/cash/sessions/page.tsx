@@ -15,6 +15,7 @@ export default function CashSessionsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [onlyMismatch, setOnlyMismatch] = useState(false);
 
   useEffect(() => { document.title = 'Sesiones de Caja | Trinity ERP'; }, []);
 
@@ -43,6 +44,11 @@ export default function CashSessionsPage() {
     } catch {}
     setLoading(false);
   }
+
+  // Una sesion cerrada esta descuadrada si su diferencia (efectivo, ya persistida) supera 1 centavo
+  const hasMismatch = (s: any) =>
+    s.status === 'CLOSED' && (Math.abs(s.differenceUsd || 0) >= 0.01 || Math.abs(s.differenceBs || 0) >= 0.01);
+  const displayed = onlyMismatch ? sessions.filter(hasMismatch) : sessions;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -80,6 +86,10 @@ export default function CashSessionsPage() {
           <label className="block text-xs text-slate-400 mb-1">Hasta</label>
           <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="input-field !py-1.5 !w-40 text-sm" />
         </div>
+        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-1.5">
+          <input type="checkbox" checked={onlyMismatch} onChange={e => setOnlyMismatch(e.target.checked)} className="accent-red-500" />
+          Solo descuadradas
+        </label>
       </div>
 
       <div className="card overflow-hidden">
@@ -87,7 +97,7 @@ export default function CashSessionsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="animate-spin text-slate-500" size={24} />
           </div>
-        ) : sessions.length === 0 ? (
+        ) : displayed.length === 0 ? (
           <div className="text-center py-12 text-slate-500 text-sm">No se encontraron sesiones</div>
         ) : (
           <table className="w-full text-sm">
@@ -100,11 +110,12 @@ export default function CashSessionsPage() {
                 <th className="px-4 py-3 font-medium">Fecha cierre</th>
                 <th className="px-4 py-3 font-medium text-right">Fondo USD</th>
                 <th className="px-4 py-3 font-medium text-right">Fondo Bs</th>
+                <th className="px-4 py-3 font-medium text-right">Descuadre</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
               </tr>
             </thead>
             <tbody>
-              {sessions.map(s => (
+              {displayed.map(s => (
                 <tr
                   key={s.id}
                   className="border-b border-slate-700/30 hover:bg-slate-800/30 cursor-pointer transition-colors"
@@ -117,6 +128,21 @@ export default function CashSessionsPage() {
                   <td className="px-4 py-2.5 text-slate-400">{s.closedAt ? new Date(s.closedAt).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                   <td className="px-4 py-2.5 text-right text-white">${(s.openingBalanceUsd || 0).toFixed(2)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-300">Bs {(s.openingBalanceBs || 0).toFixed(2)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {s.status !== 'CLOSED' ? (
+                      <span className="text-slate-500">—</span>
+                    ) : (s.differenceUsd == null && s.differenceBs == null) ? (
+                      <span className="text-slate-500" title="Cerrada antes de registrar el descuadre">s/d</span>
+                    ) : hasMismatch(s) ? (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 whitespace-nowrap">
+                        {Math.abs(s.differenceUsd || 0) >= 0.01 ? `${(s.differenceUsd || 0) >= 0 ? '+' : ''}$${(s.differenceUsd || 0).toFixed(2)}` : ''}
+                        {Math.abs(s.differenceUsd || 0) >= 0.01 && Math.abs(s.differenceBs || 0) >= 0.01 ? ' · ' : ''}
+                        {Math.abs(s.differenceBs || 0) >= 0.01 ? `${(s.differenceBs || 0) >= 0 ? '+' : ''}Bs ${(s.differenceBs || 0).toFixed(2)}` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400">Cuadra</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5">
                     {s.status === 'OPEN' ? (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400">Abierta</span>
