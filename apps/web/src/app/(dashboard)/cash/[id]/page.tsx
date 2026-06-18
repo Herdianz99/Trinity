@@ -291,12 +291,12 @@ export default function CashDetailPage() {
     }
   }
 
-  // Calculate close modal difference
+  // Calculate close modal difference (solo efectivo fisico de gaveta, por moneda)
   const closeDiffUsd = closeSummary
-    ? (parseFloat(closingUsd) || 0) - (closeSummary.openingBalanceUsd + closeSummary.totalUsd)
+    ? (parseFloat(closingUsd) || 0) - (closeSummary.cashExpectedUsd ?? 0)
     : null;
   const closeDiffBs = closeSummary
-    ? (parseFloat(closingBs) || 0) - (closeSummary.openingBalanceBs + closeSummary.totalBs)
+    ? (parseFloat(closingBs) || 0) - (closeSummary.cashExpectedBs ?? 0)
     : null;
 
   if (loading) {
@@ -845,19 +845,34 @@ export default function CashDetailPage() {
 
             {closeSummary && (
               <div className="mb-4 space-y-3">
-                <div className="p-3 rounded-lg bg-slate-700/30 space-y-1.5">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase">Resumen de ventas</h4>
-                  {closeSummary.paymentsByMethod?.map((m: any) => (
-                    <div key={m.methodName} className="flex justify-between text-sm">
-                      <span className="text-slate-300">{m.methodName} ({m.count})</span>
-                      <span className="text-white">${m.totalUsd.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-600/50 mt-2 pt-2 flex justify-between text-sm font-medium">
-                    <span className="text-slate-300">Total ({closeSummary.invoiceCount} facturas)</span>
-                    <span className="text-green-400">${closeSummary.totalUsd.toFixed(2)}</span>
+                {/* Efectivo de gaveta: lo que SI se arquea */}
+                <div className="p-3 rounded-lg bg-slate-700/30">
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">Efectivo esperado en gaveta</h4>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-300">Efectivo USD</span>
+                    <span className="text-white">${(closeSummary.cashExpectedUsd ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-slate-300">Efectivo Bs</span>
+                    <span className="text-white">Bs {(closeSummary.cashExpectedBs ?? 0).toFixed(2)}</span>
                   </div>
                 </div>
+
+                {/* Otros canales: informativo, NO entra al conteo de gaveta */}
+                {closeSummary.electronicByMethod?.length > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-700/30">
+                    <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">Otros canales (cuadrar aparte)</h4>
+                    {closeSummary.electronicByMethod.map((m: any) => (
+                      <div key={m.methodName} className="flex justify-between text-sm mt-1">
+                        <span className="text-slate-300">{m.methodName} ({m.count})</span>
+                        <span className="text-slate-200">
+                          {m.isDivisa ? `$${m.expectedUsd.toFixed(2)}` : `Bs ${m.expectedBs.toFixed(2)}`}
+                        </span>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 mt-2">Estos pagos no estan en la gaveta; se cuadran contra banco/plataforma.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -994,7 +1009,7 @@ export default function CashDetailPage() {
                   <div className={`p-3 rounded-lg ${Math.abs(historyDetail.differenceUsd || 0) < 0.01 && Math.abs(historyDetail.differenceBs || 0) < 0.01 ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
                     <h4 className="text-xs font-semibold text-slate-400 uppercase mb-1.5">Arqueo</h4>
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Esperado USD</span>
+                      <span className="text-slate-300">Esperado efectivo USD</span>
                       <span className="text-white">${(historyDetail.expectedUsd || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
