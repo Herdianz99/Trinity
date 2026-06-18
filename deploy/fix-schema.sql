@@ -2015,3 +2015,15 @@ ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "reprintOfId" TEXT;
 ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "failureReason" TEXT;
 ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3);
 UPDATE "PrintJob" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;
+
+-- =============================================================================
+-- ARQUEO DE CAJA POR MONEDA (Session 60): efectivo vs electronico + descuadre
+-- =============================================================================
+
+ALTER TABLE "PaymentMethod" ADD COLUMN IF NOT EXISTS "isCash" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "expectedUsd"   DOUBLE PRECISION;
+ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "expectedBs"    DOUBLE PRECISION;
+ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "differenceUsd" DOUBLE PRECISION;
+ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "differenceBs"  DOUBLE PRECISION;
+UPDATE "PaymentMethod" SET "isCash" = true
+ WHERE id IN ('pm_cash_usd', 'pm_cash_bs') OR name IN ('Efectivo USD', 'Efectivo Bs');

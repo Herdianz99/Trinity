@@ -478,10 +478,10 @@ async function main() {
   // PAYMENT METHODS
   // ============================================
   const pmCashUsd = await prisma.paymentMethod.create({
-    data: { id: 'pm_cash_usd', name: 'Efectivo USD', isDivisa: true, sortOrder: 1 },
+    data: { id: 'pm_cash_usd', name: 'Efectivo USD', isDivisa: true, isCash: true, sortOrder: 1 },
   });
   const pmCashBs = await prisma.paymentMethod.create({
-    data: { id: 'pm_cash_bs', name: 'Efectivo Bs', isDivisa: false, sortOrder: 2 },
+    data: { id: 'pm_cash_bs', name: 'Efectivo Bs', isDivisa: false, isCash: true, sortOrder: 2 },
   });
   const pmPdv = await prisma.paymentMethod.create({
     data: { id: 'pm_punto_venta', name: 'Punto de Venta', isDivisa: false, sortOrder: 3 },

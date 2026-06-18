@@ -799,6 +799,7 @@ model PaymentMethod {
   id                 String              @id @default(cuid())
   name               String              @unique
   isDivisa           Boolean             @default(false)
+  isCash             Boolean             @default(false)
   createsReceivable  Boolean             @default(false)
   isActive           Boolean             @default(true)
   sortOrder          Int                 @default(0)
@@ -881,6 +882,10 @@ model CashSession {
   openingBalanceBs  Float          @default(0)
   closingBalanceUsd Float?
   closingBalanceBs  Float?
+  expectedUsd       Float?
+  expectedBs        Float?
+  differenceUsd     Float?
+  differenceBs      Float?
   status            SessionStatus  @default(OPEN)
   notes             String?
   openedAt          DateTime       @default(now())
