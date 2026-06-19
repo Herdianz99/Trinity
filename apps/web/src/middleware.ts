@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh'];
+const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh', '/manifest.webmanifest', '/sw.js', '/icons'];
 
 // Map route prefixes to permission keys
 // More specific routes must come before less specific ones

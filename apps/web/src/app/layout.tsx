@@ -1,6 +1,7 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import PwaRegister from '@/components/pwa-register';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -13,6 +14,22 @@ export const metadata: Metadata = {
     template: '%s | Trinity ERP',
   },
   description: 'ERP para ferreterias venezolanas',
+  applicationName: 'El Trebol',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'El Trebol',
+  },
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0f172a',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -22,7 +39,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${inter.variable} font-sans antialiased`}>
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }
