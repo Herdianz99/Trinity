@@ -1306,8 +1306,13 @@ export default function POSPage() {
                         <ShoppingCart size={16} className="text-slate-500" />
                       </div>
                       <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{product.code}</p>
-                      <p className="text-sm font-semibold text-green-400 mt-1">${product.priceDetal?.toFixed(2)}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-sm font-semibold text-green-400">${product.priceDetal?.toFixed(2)}</p>
+                        {!blockNoStock && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-amber-400 bg-amber-500/10'}`}>Stock: {prodStock}</span>
+                        )}
+                      </div>
                       {blockNoStock && <p className="text-[10px] text-red-400 mt-0.5">Sin stock</p>}
                     </button>
                   );
@@ -2207,7 +2212,7 @@ export default function POSPage() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-500">{product.code}</span>
+                    <span className="text-xs font-mono text-slate-500">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</span>
                     <span className="text-sm text-white font-medium truncate">{product.name}</span>
                   </div>
                   {product.barcode && <span className="text-xs text-slate-600">CB: {product.barcode}</span>}
