@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   Printer,
   FileX2,
+  Trash2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -692,19 +693,18 @@ export default function PurchaseBillDetailPage() {
     }
   }
 
-  // ---- Cancel action ----
-  async function handleCancel() {
-    if (!confirm('¿Cancelar esta factura de compra? Esta accion no se puede deshacer.')) return;
+  // ---- Delete action ----
+  async function handleDelete() {
+    if (!confirm('¿Eliminar esta factura de compra? Esta acción no se puede deshacer.')) return;
     try {
-      const res = await fetch(`/api/proxy/purchases/${id}/cancel`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/proxy/purchases/${id}`, {
+        method: 'DELETE',
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Error al cancelar');
+        throw new Error(errData.message || 'Error al eliminar');
       }
-      setMessage({ type: 'success', text: 'Factura cancelada exitosamente' });
-      fetchBill();
+      router.push('/purchases');
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     }
@@ -781,10 +781,10 @@ export default function PurchaseBillDetailPage() {
                 Procesar
               </button>
               <button
-                onClick={handleCancel}
+                onClick={handleDelete}
                 className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
               >
-                <Ban size={14} /> Cancelar
+                <Trash2 size={14} /> Eliminar
               </button>
             </>
           )}

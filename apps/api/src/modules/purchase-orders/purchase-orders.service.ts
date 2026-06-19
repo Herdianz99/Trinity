@@ -620,6 +620,25 @@ export class PurchaseOrdersService {
     });
   }
 
+  async remove(id: string) {
+    const order = await this.prisma.purchaseOrder.findUnique({
+      where: { id },
+      select: { id: true, status: true, number: true },
+    });
+    if (!order) throw new NotFoundException('Factura de compra no encontrada');
+    // Solo PENDIENTE: aún no tocó inventario, cuentas por pagar ni libros fiscales
+    if (order.status !== 'PENDING') {
+      throw new BadRequestException('Solo se pueden eliminar facturas en estado PENDIENTE');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
+      await tx.purchaseOrder.delete({ where: { id } });
+    });
+
+    return { id, number: order.number, deleted: true };
+  }
+
   async process(id: string, dto: ProcessPurchaseBillDto, userId: string) {
     const order = await this.findOne(id);
     if (order.status !== 'PENDING') {

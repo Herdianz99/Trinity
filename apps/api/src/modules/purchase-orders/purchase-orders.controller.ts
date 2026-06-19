@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -91,6 +92,11 @@ export class PurchaseOrdersController {
   @Patch(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.service.cancel(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 
   @Get(':id/suggested-prices')

@@ -8,7 +8,7 @@ import {
   Plus,
   Loader2,
   Eye,
-  X,
+  Trash2,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -104,20 +104,20 @@ export default function PurchasesPage() {
     fetchBills();
   }, [fetchBills]);
 
-  async function handleCancel(id: string) {
-    if (!confirm('¿Cancelar esta factura de compra?')) return;
+  async function handleDelete(id: string) {
+    if (!confirm('¿Eliminar esta factura de compra? Esta acción no se puede deshacer.')) return;
     try {
-      const res = await fetch(`/api/proxy/purchases/${id}/cancel`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/proxy/purchases/${id}`, {
+        method: 'DELETE',
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error al cancelar');
+        throw new Error(err.message || 'Error al eliminar');
       }
       fetchBills();
-      setMessage({ type: 'success', text: 'Factura cancelada exitosamente' });
+      setMessage({ type: 'success', text: 'Factura eliminada exitosamente' });
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Error al cancelar' });
+      setMessage({ type: 'error', text: err.message || 'Error al eliminar' });
     }
   }
 
@@ -262,11 +262,11 @@ export default function PurchasesPage() {
                         </Link>
                         {bill.status === 'PENDING' && (
                           <button
-                            onClick={() => handleCancel(bill.id)}
+                            onClick={() => handleDelete(bill.id)}
                             className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
-                            title="Cancelar factura"
+                            title="Eliminar factura"
                           >
-                            <X size={15} />
+                            <Trash2 size={15} />
                           </button>
                         )}
                       </div>
