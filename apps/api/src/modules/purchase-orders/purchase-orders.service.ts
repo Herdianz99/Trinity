@@ -961,7 +961,8 @@ export class PurchaseOrdersService {
         const product = item.product;
         const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
         const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
-        const newCost = item.netCostUsd;
+        // Costo aterrizado (costo de factura + recargo repartido) — igual que en process()
+        const newCost = item.landedCostUsd || item.netCostUsd;
 
         const suggestedPriceDetal = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaPct / 100) * ivaMultiplier);
         const suggestedPriceMayor = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaMayorPct / 100) * ivaMultiplier);
