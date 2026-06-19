@@ -76,6 +76,61 @@ export class PurchaseOrdersService {
     return { costUsd, costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
   }
 
+  /**
+   * Calcula el costo aterrizado (costo de factura + recargo repartido) por item.
+   * NO modifica los totales de la factura (totalUsd/netCostUsd quedan intactos).
+   * Los items de servicio nunca reciben recargo. Muta item.landedCostUsd/landedCostBs.
+   */
+  private applySurchargeLandedCost(
+    items: Array<{
+      productId: string;
+      quantity: number;
+      netCostUsd: number;
+      netCostBs: number;
+      totalUsd: number;
+      totalBs: number;
+      landedCostUsd: number;
+      landedCostBs: number;
+    }>,
+    serviceIds: Set<string>,
+    surchargeInput: number,
+    surchargeDistribution: string,
+    currency: 'USD' | 'BS',
+    exchangeRate: number,
+  ) {
+    // Por defecto el costo aterrizado = costo neto (sin recargo)
+    for (const item of items) {
+      item.landedCostUsd = item.netCostUsd;
+      item.landedCostBs = item.netCostBs;
+    }
+    if (!surchargeInput || surchargeInput <= 0) return;
+
+    const nonServiceItems = items.filter((i) => !serviceIds.has(i.productId));
+    if (nonServiceItems.length === 0) return;
+
+    if (currency === 'BS') {
+      const totalNonServiceBs = nonServiceItems.reduce((sum, i) => sum + i.totalBs, 0);
+      for (const item of nonServiceItems) {
+        const share = surchargeDistribution === 'PROPORTIONAL'
+          ? (totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeInput : 0)
+          : surchargeInput / nonServiceItems.length;
+        const perUnitBs = round2(share / item.quantity);
+        item.landedCostBs = round2(item.netCostBs + perUnitBs);
+        item.landedCostUsd = round2(item.landedCostBs / exchangeRate);
+      }
+    } else {
+      const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
+      for (const item of nonServiceItems) {
+        const share = surchargeDistribution === 'PROPORTIONAL'
+          ? (totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeInput : 0)
+          : surchargeInput / nonServiceItems.length;
+        const perUnitUsd = round2(share / item.quantity);
+        item.landedCostUsd = round2(item.netCostUsd + perUnitUsd);
+        item.landedCostBs = round2(item.landedCostUsd * exchangeRate);
+      }
+    }
+  }
+
   private async calculateFiscalTotals(
     items: Array<{ productId: string; quantity: number; netCostUsd: number; totalUsd: number; totalBs: number }>,
     discountGlobalPct: number,
@@ -119,7 +174,8 @@ export class PurchaseOrdersService {
         }
       }
 
-      const totalBs = round2(subtotalAfterDiscountBs + totalIvaBs + surchargeBs);
+      // El recargo NO afecta el total de la factura (solo el costo aterrizado de los items)
+      const totalBs = round2(subtotalAfterDiscountBs + totalIvaBs);
 
       return {
         subtotalUsd: round2(subtotalBs / exchangeRate),
@@ -163,7 +219,8 @@ export class PurchaseOrdersService {
     }
 
     const totalSurchargeUsd = surchargeInput;
-    const totalUsd = round2(subtotalAfterDiscountUsd + totalIvaUsd + totalSurchargeUsd);
+    // El recargo NO afecta el total de la factura (solo el costo aterrizado de los items)
+    const totalUsd = round2(subtotalAfterDiscountUsd + totalIvaUsd);
 
     return {
       subtotalUsd: round2(subtotalUsd),
@@ -269,52 +326,19 @@ export class PurchaseOrdersService {
           netCostBs: calc.netCostBs,
           totalUsd: calc.totalUsd,
           totalBs: calc.totalBs,
+          landedCostUsd: calc.netCostUsd,
+          landedCostBs: calc.netCostBs,
         };
       });
 
-      // Distribute surcharge among non-service items
+      // Repartir el recargo en el costo aterrizado (NO toca los totales de la factura)
       if (surchargeUsd > 0) {
         const products = await tx.product.findMany({
           where: { id: { in: items.map((i) => i.productId) } },
           select: { id: true, isService: true },
         });
         const serviceIds = new Set(products.filter((p: any) => p.isService).map((p: any) => p.id));
-        const nonServiceItems = items.filter((i) => !serviceIds.has(i.productId));
-
-        if (currency === 'BS') {
-          // Surcharge input is in Bs
-          const totalNonServiceBs = nonServiceItems.reduce((sum, i) => sum + i.totalBs, 0);
-          for (const item of nonServiceItems) {
-            const share = surchargeDistribution === 'PROPORTIONAL'
-              ? totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeUsd : 0
-              : surchargeUsd / nonServiceItems.length;
-            const perUnit = round2(share / item.quantity);
-            const newCostBs = round2(item.costBs + perUnit);
-            const calc = this.calculateItemValues(newCostBs, item.quantity, item.discountPct, rate, 'BS');
-            item.costUsd = calc.costUsd;
-            item.costBs = calc.costBs;
-            item.netCostUsd = calc.netCostUsd;
-            item.netCostBs = calc.netCostBs;
-            item.totalUsd = calc.totalUsd;
-            item.totalBs = calc.totalBs;
-          }
-        } else {
-          const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
-          for (const item of nonServiceItems) {
-            const share = surchargeDistribution === 'PROPORTIONAL'
-              ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
-              : surchargeUsd / nonServiceItems.length;
-            const perUnit = round2(share / item.quantity);
-            const newCostUsd = round2(item.costUsd + perUnit);
-            const calc = this.calculateItemValues(newCostUsd, item.quantity, item.discountPct, rate, 'USD');
-            item.costUsd = calc.costUsd;
-            item.costBs = calc.costBs;
-            item.netCostUsd = calc.netCostUsd;
-            item.netCostBs = calc.netCostBs;
-            item.totalUsd = calc.totalUsd;
-            item.totalBs = calc.totalBs;
-          }
-        }
+        this.applySurchargeLandedCost(items, serviceIds, surchargeUsd, surchargeDistribution, currency as 'USD' | 'BS', rate);
       }
 
       // Check if serie is VAT exempt
@@ -505,51 +529,19 @@ export class PurchaseOrdersService {
           netCostBs: calc.netCostBs,
           totalUsd: calc.totalUsd,
           totalBs: calc.totalBs,
+          landedCostUsd: calc.netCostUsd,
+          landedCostBs: calc.netCostBs,
         };
       });
 
-      // Distribute surcharge
+      // Repartir el recargo en el costo aterrizado (NO toca los totales de la factura)
       if (surchargeUsd > 0) {
         const products = await this.prisma.product.findMany({
           where: { id: { in: items.map((i) => i.productId) } },
           select: { id: true, isService: true },
         });
         const serviceIds = new Set(products.filter((p) => p.isService).map((p) => p.id));
-        const nonServiceItems = items.filter((i) => !serviceIds.has(i.productId));
-
-        if (currency === 'BS') {
-          const totalNonServiceBs = nonServiceItems.reduce((sum, i) => sum + i.totalBs, 0);
-          for (const item of nonServiceItems) {
-            const share = surchargeDistribution === 'PROPORTIONAL'
-              ? totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeUsd : 0
-              : surchargeUsd / nonServiceItems.length;
-            const perUnit = round2(share / item.quantity);
-            const newCostBs = round2(item.costBs + perUnit);
-            const calc = this.calculateItemValues(newCostBs, item.quantity, item.discountPct, rate, 'BS');
-            item.costUsd = calc.costUsd;
-            item.costBs = calc.costBs;
-            item.netCostUsd = calc.netCostUsd;
-            item.netCostBs = calc.netCostBs;
-            item.totalUsd = calc.totalUsd;
-            item.totalBs = calc.totalBs;
-          }
-        } else {
-          const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
-          for (const item of nonServiceItems) {
-            const share = surchargeDistribution === 'PROPORTIONAL'
-              ? totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeUsd : 0
-              : surchargeUsd / nonServiceItems.length;
-            const perUnit = round2(share / item.quantity);
-            const newCostUsd = round2(item.costUsd + perUnit);
-            const calc = this.calculateItemValues(newCostUsd, item.quantity, item.discountPct, rate, 'USD');
-            item.costUsd = calc.costUsd;
-            item.costBs = calc.costBs;
-            item.netCostUsd = calc.netCostUsd;
-            item.netCostBs = calc.netCostBs;
-            item.totalUsd = calc.totalUsd;
-            item.totalBs = calc.totalBs;
-          }
-        }
+        this.applySurchargeLandedCost(items, serviceIds, surchargeUsd, surchargeDistribution, currency as 'USD' | 'BS', rate);
       }
 
       await this.prisma.purchaseOrderItem.createMany({ data: items });
@@ -698,7 +690,8 @@ export class PurchaseOrdersService {
         // Update product cost and prices
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (product) {
-          const newCost = item.netCostUsd;
+          // Costo aterrizado = costo de factura + recargo repartido (define el precio de venta)
+          const newCost = item.landedCostUsd || item.netCostUsd;
           const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
           const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
 
@@ -718,7 +711,7 @@ export class PurchaseOrdersService {
             warehouseId,
             type: 'PURCHASE',
             quantity: item.quantity,
-            costUsd: item.netCostUsd,
+            costUsd: item.landedCostUsd || item.netCostUsd,
             stockAfter,
             reference: order.number,
             createdById: userId,
