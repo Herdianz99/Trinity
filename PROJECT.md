@@ -65,7 +65,8 @@ Precio Mayor USD  = Costo USD × (1 + Brecha%) × (1 + GananciaMayorPct%) × (1 
 Precio Detal Bs   = Precio Detal USD × Tasa BCV
 Precio Mayor Bs   = Precio Mayor USD × Tasa BCV
 ```
-- **Costo USD**: viene de la última orden de compra recibida
+- **Costo USD**: viene de la última orden de compra recibida (es el **costo aterrizado** = costo de factura + recargo repartido, ver abajo)
+- **Recargo (compras)**: cargo extra de la factura de compra (flete/gastos/"recuperación de gastos"). **NO afecta el total ni los montos de la factura** (que debe ser idéntica a la del proveedor); se reparte (PROPORCIONAL o EQUITATIVO) entre los artículos no-servicio subiendo solo su **costo aterrizado** (`PurchaseOrderItem.landedCostUsd`), que al recibir pasa a `Product.costUsd` y por tanto al precio de venta. Las líneas de servicio aportan su monto al pool de reparto pero no reciben recargo. (Sesión 61)
 - **Brecha%**: porcentaje global en CompanyConfig, activable por producto (`bregaApplies`)
 - **GananciaPct%**: porcentaje por producto para precio detal
 - **GananciaMayorPct%**: porcentaje por producto para precio mayor
