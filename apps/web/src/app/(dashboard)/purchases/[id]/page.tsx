@@ -61,6 +61,8 @@ interface PurchaseItem {
   discountBs: number;
   netCostUsd: number;
   netCostBs: number;
+  landedCostUsd: number;
+  landedCostBs: number;
   totalUsd: number;
   totalBs: number;
   receivedQty: number;
@@ -984,6 +986,11 @@ export default function PurchaseBillDetailPage() {
                       {bill.currency === 'BS' ? 'Precio Bs' : 'Precio USD'}
                     </th>
                     <th className="text-right px-3 py-3 text-slate-400 font-medium w-20">% Dto.</th>
+                    {bill.surchargeUsd > 0 && (
+                      <th className="text-right px-3 py-3 text-amber-400 font-medium w-28" title="Costo unitario con el recargo repartido (afecta el precio de venta, no la factura)">
+                        Costo c/recargo
+                      </th>
+                    )}
                     <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">
                       {bill.currency === 'BS' ? 'Importe Bs' : 'Importe USD'}
                     </th>
@@ -1020,6 +1027,13 @@ export default function PurchaseBillDetailPage() {
                       <td className="px-3 py-2.5 text-right font-mono text-slate-400">
                         {item.discountPct > 0 ? `${item.discountPct}%` : '--'}
                       </td>
+                      {bill.surchargeUsd > 0 && (
+                        <td className="px-3 py-2.5 text-right font-mono text-amber-400">
+                          {item.product.isService
+                            ? '--'
+                            : bill.currency === 'BS' ? `Bs ${fmt(item.landedCostBs)}` : `$${fmt(item.landedCostUsd)}`}
+                        </td>
+                      )}
                       <td className="px-3 py-2.5 text-right font-mono text-white">
                         {bill.currency === 'BS' ? `Bs ${fmt(item.totalBs)}` : `$${fmt(item.totalUsd)}`}
                       </td>
@@ -1124,6 +1138,11 @@ export default function PurchaseBillDetailPage() {
                     ? (bill.totalSurchargeBs > 0 ? `Bs ${fmt(bill.totalSurchargeBs)}` : '--')
                     : (bill.totalSurchargeUsd > 0 ? `$${fmt(bill.totalSurchargeUsd)}` : '--')}
                 </p>
+                {bill.surchargeUsd > 0 && (
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {bill.surchargeDistribution === 'EQUAL' ? 'Equitativo' : 'Proporcional'} · va al costo, no al total
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">
