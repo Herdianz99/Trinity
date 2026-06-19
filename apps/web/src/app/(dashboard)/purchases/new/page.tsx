@@ -143,6 +143,7 @@ export default function NewPurchaseBillPage() {
   // ---- Fiscal totals ----
   const [surchargeUsd, setSurchargeUsd] = useState<number>(0);
   const [surchargeDistribution, setSurchargeDistribution] = useState<'PROPORTIONAL' | 'EQUAL'>('PROPORTIONAL');
+  const [surchargeTouched, setSurchargeTouched] = useState(false);
   const [discountGlobalPct, setDiscountGlobalPct] = useState<number>(0);
   const [retentionVoucherNumber, setRetentionVoucherNumber] = useState('');
   const [notes, setNotes] = useState('');
@@ -325,6 +326,16 @@ export default function NewPurchaseBillPage() {
     setItems(newItems);
   }
 
+  // Auto-rellenar "Recargo $" con la suma de las líneas de servicio (Escenario A),
+  // a menos que el usuario lo haya editado a mano (Escenario B / flete externo).
+  useEffect(() => {
+    if (surchargeTouched) return;
+    const serviceTotal = items
+      .filter((i) => i.isService && i.productId)
+      .reduce((sum, i) => sum + i.costUsd * i.quantity * (1 - (i.discountPct || 0) / 100), 0);
+    setSurchargeUsd(Math.round(serviceTotal * 100) / 100);
+  }, [items, surchargeTouched]);
+
   // ---- Real-time calculations ----
   const serieIsVatExempt = series.find(s => s.id === serieId)?.isVatExempt === true;
 
@@ -377,7 +388,8 @@ export default function NewPurchaseBillPage() {
     const totalIvaUsd = isBs ? totalIvaPrimario / exchangeRate : totalIvaPrimario;
     const totalIvaBs = isBs ? totalIvaPrimario : totalIvaPrimario * exchangeRate;
 
-    const totalPrimario = subtotalAfterDiscount + totalIvaPrimario + surchargeUsd;
+    // El recargo NO afecta el total de la factura (solo el costo aterrizado)
+    const totalPrimario = subtotalAfterDiscount + totalIvaPrimario;
     const totalUsd = isBs ? totalPrimario / exchangeRate : totalPrimario;
     const totalBs = isBs ? totalPrimario : totalPrimario * exchangeRate;
 
@@ -1059,7 +1071,7 @@ export default function NewPurchaseBillPage() {
                   min="0"
                   step="0.01"
                   value={surchargeUsd || ''}
-                  onChange={(e) => setSurchargeUsd(Number(e.target.value))}
+                  onChange={(e) => { setSurchargeTouched(true); setSurchargeUsd(Number(e.target.value)); }}
                   className="input-field !py-1 text-sm w-24 font-mono"
                   placeholder="0.00"
                 />
