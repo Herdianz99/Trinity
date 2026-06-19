@@ -718,6 +718,8 @@ model PurchaseOrderItem {
   discountBs      Float         @default(0)
   netCostUsd      Float         @default(0)
   netCostBs       Float         @default(0)
+  landedCostUsd   Float         @default(0)
+  landedCostBs    Float         @default(0)
 }
 
 // ============================================
