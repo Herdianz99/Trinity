@@ -1548,11 +1548,18 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Ir a cobrar */}
-          <div className="px-3 pb-2">
+          {/* Guardar pre-factura + Ir a cobrar */}
+          <div className="px-3 pb-2 flex gap-2">
+            <button
+              onClick={handleSaveInvoice}
+              disabled={cart.length === 0 || processing}
+              className="shrink-0 py-2.5 px-3 rounded-xl border border-slate-600 text-slate-200 font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-[0.98] transition-transform"
+            >
+              <Clock size={16} /> {processing ? 'Guardando...' : 'Guardar'}
+            </button>
             <button
               onClick={() => setMobileView('cart')}
-              className="w-full py-2.5 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              className="flex-1 py-2.5 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
             >
               <ShoppingCart size={16} /> Ir a cobrar — ${totalUsd.toFixed(2)}
             </button>
