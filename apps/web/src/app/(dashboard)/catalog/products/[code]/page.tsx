@@ -58,7 +58,6 @@ const IVA_OPTIONS = [
   { value: 'SPECIAL', label: 'Especial (31%)' },
 ];
 const IVA_MULTIPLIERS: Record<string, number> = { EXEMPT: 1, REDUCED: 1.08, GENERAL: 1.16, SPECIAL: 1.31 };
-const IVA_PCTS: Record<string, number> = { EXEMPT: 0, REDUCED: 8, GENERAL: 16, SPECIAL: 31 };
 
 const MOVEMENT_LABELS: Record<string, { label: string; color: string }> = {
   PURCHASE: { label: 'Compra', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
@@ -265,6 +264,8 @@ export default function ProductDetailPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
+      // Los precios (costo, IVA, brecha, manual, ganancias) se gestionan en el tab "Precios".
+      // Aqui solo se guardan datos no relacionados al precio.
       const body: any = {
         name: form.name,
         barcode: form.barcode || undefined,
@@ -277,19 +278,9 @@ export default function ProductDetailPage() {
         purchaseUnit: form.purchaseUnit,
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
-        costUsd: parseNum(form.costUsd),
-        bregaApplies: form.bregaApplies,
-        manualPrice: form.manualPrice,
-        gananciaPct: parseNum(form.gananciaPct),
-        gananciaMayorPct: parseNum(form.gananciaMayorPct),
-        ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
       };
-      if (form.manualPrice) {
-        body.priceDetal = parseNum(form.priceDetal);
-        body.priceMayor = parseNum(form.priceMayor);
-      }
       const res = await fetch(`/api/proxy/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -324,9 +315,9 @@ export default function ProductDetailPage() {
     const value = parseNum(raw);
     setPriceGananciaPct(value);
     if (!product) return;
-    const cost = product.costUsd;
-    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
-    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const price = cost * brechaM * (1 + value / 100) * ivaM;
     setPriceFinalDetal(price);
     setDetalPriceStr(price.toFixed(2));
@@ -337,9 +328,9 @@ export default function ProductDetailPage() {
     const value = parseNum(raw);
     setPriceFinalDetal(value);
     if (!product) return;
-    const cost = product.costUsd;
-    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
-    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
       const g = ((value / base) - 1) * 100;
@@ -353,9 +344,9 @@ export default function ProductDetailPage() {
     const value = parseNum(raw);
     setPriceGananciaMayorPct(value);
     if (!product) return;
-    const cost = product.costUsd;
-    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
-    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const price = cost * brechaM * (1 + value / 100) * ivaM;
     setPriceFinalMayor(price);
     setMayorPriceStr(price.toFixed(2));
@@ -366,9 +357,9 @@ export default function ProductDetailPage() {
     const value = parseNum(raw);
     setPriceFinalMayor(value);
     if (!product) return;
-    const cost = product.costUsd;
-    const brechaM = product.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
-    const ivaM = IVA_MULTIPLIERS[product.ivaType] || 1.16;
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
       const g = ((value / base) - 1) * 100;
@@ -377,26 +368,84 @@ export default function ProductDetailPage() {
     }
   }
 
+  // Recalcula los precios finales a partir de la ganancia actual cuando cambia
+  // la base (costo / brecha / IVA). La ganancia no se toca, solo el precio resultante.
+  function recomputeFinalsFromGanancia(cost: number, brechaApplies: boolean, ivaType: string) {
+    const base = cost * (brechaApplies ? (1 + bregaGlobalPct / 100) : 1) * (IVA_MULTIPLIERS[ivaType] || 1.16);
+    const pd = base * (1 + priceGananciaPct / 100);
+    setPriceFinalDetal(pd);
+    setDetalPriceStr(pd.toFixed(2));
+    const pm = base * (1 + priceGananciaMayorPct / 100);
+    setPriceFinalMayor(pm);
+    setMayorPriceStr(pm.toFixed(2));
+  }
+
+  function handlePriceCostChange(raw: string) {
+    const clean = sanitizeDecimal(raw);
+    setForm((f: any) => ({ ...f, costUsd: clean }));
+    recomputeFinalsFromGanancia(parseNum(clean), form.bregaApplies, form.ivaType);
+  }
+
+  function handlePriceIvaChange(val: string) {
+    setForm((f: any) => ({ ...f, ivaType: val }));
+    recomputeFinalsFromGanancia(parseNum(form.costUsd), form.bregaApplies, val);
+  }
+
+  function handlePriceBrechaToggle(checked: boolean) {
+    setForm((f: any) => ({ ...f, bregaApplies: checked }));
+    recomputeFinalsFromGanancia(parseNum(form.costUsd), checked, form.ivaType);
+  }
+
+  function handlePriceManualToggle(checked: boolean) {
+    setForm((f: any) => {
+      const next = { ...f, manualPrice: checked };
+      if (checked) {
+        // Al pasar a manual, sembrar los precios finales con lo ya calculado
+        next.priceDetal = (priceFinalDetal || parseNum(f.priceDetal) || 0).toFixed(2);
+        next.priceMayor = (priceFinalMayor || parseNum(f.priceMayor) || 0).toFixed(2);
+      }
+      return next;
+    });
+    if (!checked) {
+      recomputeFinalsFromGanancia(parseNum(form.costUsd), form.bregaApplies, form.ivaType);
+    }
+  }
+
   async function handleSavePrices() {
     if (!product) return;
     setSavingPrices(true);
     setPriceMsg(null);
     try {
+      const body: any = {
+        costUsd: parseNum(form.costUsd),
+        ivaType: form.ivaType,
+        bregaApplies: form.bregaApplies,
+        manualPrice: form.manualPrice,
+        gananciaPct: Number(priceGananciaPct.toFixed(2)),
+        gananciaMayorPct: Number(priceGananciaMayorPct.toFixed(2)),
+      };
+      if (form.manualPrice) {
+        body.priceDetal = parseNum(form.priceDetal);
+        body.priceMayor = parseNum(form.priceMayor);
+      }
       const res = await fetch(`/api/proxy/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gananciaPct: Number(priceGananciaPct.toFixed(2)),
-          gananciaMayorPct: Number(priceGananciaMayorPct.toFixed(2)),
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updated = await res.json();
         setProduct(updated);
         setForm((f: any) => ({
           ...f,
+          costUsd: String(updated.costUsd ?? ''),
+          ivaType: updated.ivaType,
+          bregaApplies: updated.bregaApplies,
+          manualPrice: updated.manualPrice,
           gananciaPct: String(updated.gananciaPct ?? ''),
           gananciaMayorPct: String(updated.gananciaMayorPct ?? ''),
+          priceDetal: String(updated.priceDetal ?? ''),
+          priceMayor: String(updated.priceMayor ?? ''),
         }));
         setPriceMsg({ type: 'success', text: 'Precios actualizados correctamente' });
       } else {
@@ -448,26 +497,6 @@ export default function ProductDetailPage() {
   const costUsd = parseNum(form.costUsd);
 
   const brecha = form.bregaApplies ? bregaGlobalPct : 0;
-  const brechaAmt = costUsd * brecha / 100;
-  const costConBrecha = costUsd + brechaAmt;
-  const ivaPct = IVA_PCTS[form.ivaType] ?? 16;
-
-  let priceDetal: number;
-  let priceMayor: number;
-
-  if (form.manualPrice) {
-    priceDetal = parseNum(form.priceDetal);
-    priceMayor = parseNum(form.priceMayor);
-  } else {
-    const gananciaDetal = costConBrecha * parseNum(form.gananciaPct) / 100;
-    const gananciaMayor = costConBrecha * parseNum(form.gananciaMayorPct) / 100;
-    const subtotalDetal = costConBrecha + gananciaDetal;
-    const ivaDetal = subtotalDetal * ivaPct / 100;
-    priceDetal = subtotalDetal + ivaDetal;
-    const subtotalMayor = costConBrecha + gananciaMayor;
-    const ivaMayor = subtotalMayor * ivaPct / 100;
-    priceMayor = subtotalMayor + ivaMayor;
-  }
 
   return (
     <div>
@@ -596,63 +625,6 @@ export default function ProductDetailPage() {
                   <input type="number" step="0.001" value={form.conversionFactor ?? ''} onChange={e => setForm((f: any) => ({ ...f, conversionFactor: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
                 </div>
               </div>
-            </div>
-
-            {/* Pricing */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Precios</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">IVA</label>
-                  <select value={form.ivaType || 'GENERAL'} onChange={e => setForm((f: any) => ({ ...f, ivaType: e.target.value }))} className="input-field !py-2 text-sm">
-                    {IVA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.bregaApplies ?? true} onChange={e => setForm((f: any) => ({ ...f, bregaApplies: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" disabled={form.manualPrice} />
-                    Aplica brecha ({bregaGlobalPct}%)
-                  </label>
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.manualPrice ?? false} onChange={e => setForm((f: any) => ({ ...f, manualPrice: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40" />
-                    Precio manual
-                  </label>
-                </div>
-              </div>
-
-              {form.manualPrice ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD <span className="text-slate-600">(opcional)</span></label>
-                    <input type="text" inputMode="decimal" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Detal (final c/IVA)</label>
-                    <input type="text" inputMode="decimal" value={form.priceDetal ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceDetal: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Mayor (final c/IVA)</label>
-                    <input type="text" inputMode="decimal" value={form.priceMayor ?? ''} onChange={e => setForm((f: any) => ({ ...f, priceMayor: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm !border-amber-500/30 focus:!border-amber-500" />
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
-                    <input type="text" inputMode="decimal" value={form.costUsd ?? ''} onChange={e => setForm((f: any) => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
-                    <input type="text" inputMode="decimal" value={form.gananciaPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
-                    <input type="text" inputMode="decimal" value={form.gananciaMayorPct ?? ''} onChange={e => setForm((f: any) => ({ ...f, gananciaMayorPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Stock minimum */}
@@ -920,42 +892,88 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {product.manualPrice ? (
+            {/* Costo y configuracion (editable) */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Costo y configuracion</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={form.costUsd ?? ''}
+                    onChange={e => handlePriceCostChange(e.target.value)}
+                    className="input-field !py-2.5 text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">IVA</label>
+                  <select
+                    value={form.ivaType || 'GENERAL'}
+                    onChange={e => handlePriceIvaChange(e.target.value)}
+                    className="input-field !py-2.5 text-sm"
+                  >
+                    {IVA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5">
+                    <input
+                      type="checkbox"
+                      checked={form.bregaApplies ?? true}
+                      onChange={e => handlePriceBrechaToggle(e.target.checked)}
+                      disabled={form.manualPrice}
+                      className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                    />
+                    Aplica brecha ({bregaGlobalPct}%)
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5">
+                    <input
+                      type="checkbox"
+                      checked={form.manualPrice ?? false}
+                      onChange={e => handlePriceManualToggle(e.target.checked)}
+                      className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40"
+                    />
+                    Precio manual
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {form.manualPrice ? (
               <>
-                <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                  <p className="text-sm text-amber-400">Este producto tiene precio manual. Los precios se establecen directamente desde la pestana Informacion General.</p>
+                <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <p className="text-sm text-amber-400">Precio manual activo: escribe directamente el precio final (con IVA). No se calcula desde la ganancia.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
-                    <span className="text-xs text-slate-500 uppercase">Precio Detal</span>
-                    <p className="font-mono text-green-400 text-2xl">${product.priceDetal.toFixed(2)}</p>
-                    {exchangeRate > 0 && <p className="text-xs text-slate-500 font-mono mt-1">= Bs {(product.priceDetal * exchangeRate).toFixed(2)}</p>}
+                  <div>
+                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Detal (final c/IVA)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.priceDetal ?? ''}
+                      onChange={e => setForm((f: any) => ({ ...f, priceDetal: sanitizeDecimal(e.target.value) }))}
+                      className="input-field !py-2.5 text-sm font-mono !border-amber-500/30 focus:!border-amber-500"
+                    />
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(parseNum(form.priceDetal) * exchangeRate).toFixed(2)}</p>}
                   </div>
-                  <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
-                    <span className="text-xs text-slate-500 uppercase">Precio Mayor</span>
-                    <p className="font-mono text-blue-400 text-2xl">${product.priceMayor.toFixed(2)}</p>
-                    {exchangeRate > 0 && <p className="text-xs text-slate-500 font-mono mt-1">= Bs {(product.priceMayor * exchangeRate).toFixed(2)}</p>}
+                  <div>
+                    <label className="block text-xs font-medium text-amber-400 mb-1">Precio Mayor (final c/IVA)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.priceMayor ?? ''}
+                      onChange={e => setForm((f: any) => ({ ...f, priceMayor: sanitizeDecimal(e.target.value) }))}
+                      className="input-field !py-2.5 text-sm font-mono !border-amber-500/30 focus:!border-amber-500"
+                    />
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(parseNum(form.priceMayor) * exchangeRate).toFixed(2)}</p>}
                   </div>
                 </div>
               </>
             ) : (
               <>
-                {/* Base info (read-only) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-slate-800/40 border border-slate-700/40">
-                  <div>
-                    <span className="text-xs text-slate-500 uppercase">Costo USD</span>
-                    <p className="font-mono text-white text-lg">${costUsd.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500 uppercase">Brecha</span>
-                    <p className="font-mono text-white text-lg">{brecha}%{brecha > 0 ? ` (+$${brechaAmt.toFixed(2)})` : ''}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500 uppercase">IVA</span>
-                    <p className="font-mono text-white text-lg">{ivaPct}%</p>
-                  </div>
-                </div>
-
                 {/* Detal */}
                 <div>
                   <h3 className="text-sm font-semibold text-green-400 mb-3 uppercase tracking-wider">Precio Detal</h3>
@@ -1023,19 +1041,20 @@ export default function ProductDetailPage() {
                   <p>Mayor: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaMayorPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalMayor.toFixed(2)}</p>
                 </div>
 
-                {/* Save button */}
-                <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
-                  <button
-                    onClick={handleSavePrices}
-                    disabled={savingPrices}
-                    className="btn-primary !py-2.5 text-sm flex items-center gap-2"
-                  >
-                    {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                    Guardar precios
-                  </button>
-                </div>
               </>
             )}
+
+            {/* Save button (aplica a modo manual y calculado) */}
+            <div className="flex items-center justify-end pt-2 border-t border-slate-700/50">
+              <button
+                onClick={handleSavePrices}
+                disabled={savingPrices}
+                className="btn-primary !py-2.5 text-sm flex items-center gap-2"
+              >
+                {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                Guardar precios
+              </button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
