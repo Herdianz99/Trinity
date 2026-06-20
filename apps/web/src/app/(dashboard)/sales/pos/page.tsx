@@ -24,6 +24,8 @@ import {
   FileCheck,
   ArrowRightLeft,
   Percent,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
 
@@ -75,6 +77,55 @@ interface PaymentLine {
   amountUsd: number;
   amountBs: number;
   reference: string;
+}
+
+// Input de cantidad que permite borrar, escribir decimales (0.25) y el punto en movil.
+// Mantiene el texto crudo mientras se edita y confirma al salir; revierte si queda invalido/0.
+function QtyInput({
+  value,
+  onCommit,
+  className,
+}: {
+  value: number;
+  onCommit: (qty: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState<string>(String(value));
+  const [editing, setEditing] = useState(false);
+
+  // Si el valor cambia desde afuera (botones +/-), refrescar el texto cuando no se esta editando.
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onFocus={(e) => {
+        setEditing(true);
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        // permitir solo digitos y un punto
+        let v = e.target.value.replace(/[^0-9.]/g, '');
+        const parts = v.split('.');
+        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+        setText(v);
+      }}
+      onBlur={() => {
+        setEditing(false);
+        const n = parseFloat(text);
+        if (!isNaN(n) && n > 0) onCommit(n);
+        else setText(String(value)); // revertir: nunca queda en vacio/0/negativo
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      className={className}
+    />
+  );
 }
 
 export default function POSPage() {
@@ -166,6 +217,7 @@ export default function POSPage() {
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
   const [mobileView, setMobileView] = useState<'search' | 'cart'>('search');
+  const [cartStripCollapsed, setCartStripCollapsed] = useState(false);
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
   const [showSellerModal, setShowSellerModal] = useState(false);
 
@@ -688,6 +740,7 @@ export default function POSPage() {
       setCustomerId(null);
       setCustomerName('');
       setExistingInvoiceId(null);
+      setMobileView('search'); // volver a la pantalla de busqueda para la siguiente factura
       setMessage({ type: 'success', text: 'Factura guardada en espera' });
       fetchPending();
     } catch (err: any) {
@@ -1289,7 +1342,7 @@ export default function POSPage() {
           )}
 
           {/* Product results grid */}
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${cart.length > 0 ? 'pb-64' : ''}`}>
             {searchResults.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {searchResults.map(product => {
@@ -1396,20 +1449,10 @@ export default function POSPage() {
                       <button onClick={() => updateQuantity(item.productId, -1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
                         <Minus size={14} />
                       </button>
-                      <input
-                        type="number"
+                      <QtyInput
                         value={item.quantity}
-                        onChange={e => {
-                          const v = parseFloat(e.target.value);
-                          if (!isNaN(v) && v > 0) setQuantity(item.productId, v);
-                        }}
-                        onBlur={e => {
-                          const v = parseFloat(e.target.value);
-                          if (isNaN(v) || v <= 0) setQuantity(item.productId, 1);
-                        }}
-                        className="w-14 text-center text-sm font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-lg px-1 py-1 focus:outline-none focus:border-green-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        step="0.01"
-                        min="0.01"
+                        onCommit={(q) => setQuantity(item.productId, q)}
+                        className="w-14 text-center text-sm font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-lg px-1 py-1 focus:outline-none focus:border-green-500/50"
                       />
                       <button onClick={() => updateQuantity(item.productId, 1)} className="w-8 h-8 rounded-lg bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
                         <Plus size={14} />
@@ -1465,15 +1508,56 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Floating cart badge (search view only) */}
+      {/* Tira de agregados (solo en la vista de busqueda) */}
       {mobileView === 'search' && cart.length > 0 && (
-        <button
-          onClick={() => setMobileView('cart')}
-          className="fixed bottom-[72px] left-4 right-4 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base flex items-center justify-center gap-2 z-30 shadow-lg shadow-green-500/20 active:scale-[0.98] transition-transform"
-        >
-          <ShoppingCart size={18} />
-          Ver carrito ({cart.reduce((s, i) => s + i.quantity, 0)} items) — ${totalUsd.toFixed(2)}
-        </button>
+        <div className="fixed bottom-14 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50">
+          {/* Cabecera / toggle */}
+          <button
+            onClick={() => setCartStripCollapsed(c => !c)}
+            className="w-full flex items-center justify-between px-4 py-2"
+          >
+            <span className="text-xs font-semibold text-slate-300">En esta factura ({cart.length})</span>
+            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+              ${totalUsd.toFixed(2)}
+              {cartStripCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </span>
+          </button>
+
+          {/* Lista de items (expandida) */}
+          {!cartStripCollapsed && (
+            <div className="max-h-44 overflow-y-auto px-3 pb-2 space-y-1.5">
+              {cart.map(item => (
+                <div key={item.productId} className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/40 rounded-lg px-2 py-1.5">
+                  <span className="flex-1 min-w-0 text-xs text-white truncate" title={item.name}>{item.name}</span>
+                  <button onClick={() => updateQuantity(item.productId, -1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                    <Minus size={12} />
+                  </button>
+                  <QtyInput
+                    value={item.quantity}
+                    onCommit={(q) => setQuantity(item.productId, q)}
+                    className="w-12 text-center text-xs font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-md px-1 py-1 focus:outline-none focus:border-green-500/50"
+                  />
+                  <button onClick={() => updateQuantity(item.productId, 1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                    <Plus size={12} />
+                  </button>
+                  <span className="w-14 text-right text-xs font-bold text-green-400">
+                    ${(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100)).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Ir a cobrar */}
+          <div className="px-3 pb-2">
+            <button
+              onClick={() => setMobileView('cart')}
+              className="w-full py-2.5 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <ShoppingCart size={16} /> Ir a cobrar — ${totalUsd.toFixed(2)}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Mobile options bottom sheet */}
@@ -1955,16 +2039,30 @@ export default function POSPage() {
             <h2 className="text-lg font-bold text-white">Seleccionar Cliente</h2>
           </div>
           <div className="px-4 pt-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, RIF..."
-                value={customerSearch}
-                onChange={e => setCustomerSearch(e.target.value)}
-                className="input-field pl-9 !py-3 text-base w-full"
-                autoFocus
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, RIF..."
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  className="input-field pl-9 !py-3 text-base w-full"
+                  autoFocus
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setShowCustomerSearch(false);
+                  setCustomerSearch('');
+                  setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
+                  setShowCreateClient(true);
+                }}
+                title="Crear nuevo cliente"
+                className="shrink-0 w-12 h-12 rounded-xl bg-green-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-green-500/20"
+              >
+                <Plus size={22} />
+              </button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-2">
@@ -2404,20 +2502,10 @@ export default function POSPage() {
                   <button onClick={() => updateQuantity(item.productId, -1)} className="p-1 rounded hover:bg-slate-600 text-slate-400">
                     <Minus size={14} />
                   </button>
-                  <input
-                    type="number"
+                  <QtyInput
                     value={item.quantity}
-                    onChange={e => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v) && v > 0) setQuantity(item.productId, v);
-                    }}
-                    onBlur={e => {
-                      const v = parseFloat(e.target.value);
-                      if (isNaN(v) || v <= 0) setQuantity(item.productId, 1);
-                    }}
-                    className="w-14 text-center text-sm text-white font-medium bg-slate-800 border border-slate-700 rounded px-1 py-0.5 focus:outline-none focus:border-green-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    step="0.01"
-                    min="0.01"
+                    onCommit={(q) => setQuantity(item.productId, q)}
+                    className="w-14 text-center text-sm text-white font-medium bg-slate-800 border border-slate-700 rounded px-1 py-0.5 focus:outline-none focus:border-green-500/50"
                   />
                   <button onClick={() => updateQuantity(item.productId, 1)} className="p-1 rounded hover:bg-slate-600 text-slate-400">
                     <Plus size={14} />
