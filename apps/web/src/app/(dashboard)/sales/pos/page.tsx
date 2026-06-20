@@ -128,6 +128,61 @@ function QtyInput({
   );
 }
 
+// Input de monto (USD/Bs) que permite escribir el punto decimal sin que se borre.
+// Mantiene el texto crudo mientras se edita y avisa el numero parseado en cada cambio
+// (para que el campo enlazado USD<->Bs se recalcule en vivo). Al salir, normaliza a numero.
+function MoneyInput({
+  value,
+  onChange,
+  className,
+  readOnly,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  className?: string;
+  readOnly?: boolean;
+}) {
+  const [text, setText] = useState<string>(String(value));
+  const [editing, setEditing] = useState(false);
+
+  // Si el valor cambia desde afuera (auto-relleno, campo enlazado), refrescar cuando no se edita.
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      readOnly={readOnly}
+      onFocus={(e) => {
+        if (readOnly) return;
+        setEditing(true);
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        // permitir solo digitos y un punto
+        let v = e.target.value.replace(/[^0-9.]/g, '');
+        const parts = v.split('.');
+        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+        setText(v);
+        const n = parseFloat(v);
+        onChange(isNaN(n) ? 0 : n);
+      }}
+      onBlur={() => {
+        setEditing(false);
+        const n = parseFloat(text);
+        setText(String(isNaN(n) ? 0 : n)); // normaliza ("12." -> "12", "" -> "0")
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      className={className}
+    />
+  );
+}
+
 export default function POSPage() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get('invoiceId');
@@ -1705,26 +1760,19 @@ export default function POSPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         <div>
                           <label className="text-xs text-slate-500">USD</label>
-                          <input
-                            type="number"
+                          <MoneyInput
                             value={p.amountUsd}
-                            onChange={e => updatePayment(idx, 'amountUsd', Number(e.target.value))}
+                            onChange={n => updatePayment(idx, 'amountUsd', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            step="0.01"
-                            min="0"
-                            max={p.methodId === 'pm_saldo_favor' && creditBalance ? creditBalance.totalUsd : undefined}
                             readOnly={!p.isDivisa}
                           />
                         </div>
                         <div>
                           <label className="text-xs text-slate-500">Bs</label>
-                          <input
-                            type="number"
+                          <MoneyInput
                             value={p.amountBs}
-                            onChange={e => updatePayment(idx, 'amountBs', Number(e.target.value))}
+                            onChange={n => updatePayment(idx, 'amountBs', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            step="0.01"
-                            min="0"
                             readOnly={p.isDivisa}
                           />
                         </div>
