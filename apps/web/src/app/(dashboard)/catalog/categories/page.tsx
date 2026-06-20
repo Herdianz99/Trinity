@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Layers, Plus, Edit2, Trash2, Loader2, X, ChevronRight, ChevronDown, FolderOpen, Folder, ExternalLink
+  Layers, Plus, Edit2, Trash2, Loader2, X, ChevronRight, ChevronDown, FolderOpen, Folder, ExternalLink, RefreshCw
 } from 'lucide-react';
 
 interface Category {
@@ -39,6 +39,7 @@ export default function CategoriesPage() {
   const [newPrintAreaId, setNewPrintAreaId] = useState('');
   const [newCommissionPct, setNewCommissionPct] = useState('0');
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   async function fetchCategories() {
@@ -149,6 +150,30 @@ export default function CategoriesPage() {
       setMessage({ type: 'error', text: 'Error al actualizar' });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSyncCorrelatives() {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/proxy/import/sync-correlatives', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al sincronizar');
+      }
+      const data = await res.json();
+      const updated: { code: string; oldValue: number; newValue: number }[] = data.updated || [];
+      if (updated.length === 0) {
+        setMessage({ type: 'success', text: 'Todos los correlativos ya estaban sincronizados' });
+      } else {
+        const detalle = updated.map(u => `${u.code} (${u.oldValue}→${u.newValue})`).join(', ');
+        setMessage({ type: 'success', text: `${updated.length} familia(s) corregida(s): ${detalle}` });
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -363,12 +388,23 @@ export default function CategoriesPage() {
             <p className="text-slate-400 text-sm">Organiza tus productos en categorias y subcategorias</p>
           </div>
         </div>
-        <button
-          onClick={() => { setAddingParentId('root'); setNewName(''); setNewCode(''); setNewPrintAreaId(''); }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} /> Nueva categoria
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncCorrelatives}
+            disabled={syncing}
+            className="btn-secondary flex items-center gap-2"
+            title="Ajusta el correlativo de cada familia al codigo mas alto existente. Solo sube el contador, nunca lo baja."
+          >
+            {syncing ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
+            Sincronizar correlativos
+          </button>
+          <button
+            onClick={() => { setAddingParentId('root'); setNewName(''); setNewCode(''); setNewPrintAreaId(''); }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} /> Nueva categoria
+          </button>
+        </div>
       </div>
 
       {message && (

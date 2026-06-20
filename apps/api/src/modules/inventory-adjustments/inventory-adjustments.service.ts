@@ -351,4 +351,30 @@ export class InventoryAdjustmentsService {
       include: INCLUDE_LIST,
     });
   }
+
+  async remove(id: string) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+    });
+
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+
+    if (adjustment.status === 'PROCESSED') {
+      throw new BadRequestException(
+        'No se puede eliminar un ajuste ya procesado (afecto el stock)',
+      );
+    }
+
+    // No hay cascade en el schema: borrar primero los items, luego el ajuste
+    await this.prisma.$transaction([
+      this.prisma.inventoryAdjustmentItem.deleteMany({
+        where: { inventoryAdjustmentId: id },
+      }),
+      this.prisma.inventoryAdjustment.delete({ where: { id } }),
+    ]);
+
+    return { message: 'Ajuste eliminado' };
+  }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Layers, Save, Loader2, ChevronLeft, ChevronRight, ExternalLink, LogOut,
+  ArrowLeft, Layers, Save, Loader2, ChevronLeft, ChevronRight, ExternalLink, LogOut, RefreshCw, Hash,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -12,6 +12,7 @@ interface Category {
   name: string;
   code: string | null;
   commissionPct: number;
+  lastProductNumber: number;
   parentId: string | null;
   printAreaId: string | null;
   printArea: { id: string; name: string } | null;
@@ -45,6 +46,7 @@ export default function CategoryDetailPage() {
 
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState('info');
@@ -133,6 +135,28 @@ export default function CategoryDetailPage() {
   async function handleSaveAndExit() {
     const ok = await handleSave();
     if (ok) router.push('/catalog/categories');
+  }
+
+  async function handleSyncCorrelative() {
+    setSyncing(true); setSaveMsg(null);
+    try {
+      const res = await fetch('/api/proxy/import/sync-correlatives', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al sincronizar');
+      }
+      const data = await res.json();
+      const updated: { code: string; oldValue: number; newValue: number }[] = data.updated || [];
+      const mine = updated.find(u => u.code === category?.code);
+      if (mine) {
+        setSaveMsg({ type: 'success', text: `Correlativo actualizado: ${mine.oldValue} → ${mine.newValue}` });
+      } else {
+        setSaveMsg({ type: 'success', text: 'El correlativo ya estaba sincronizado' });
+      }
+      fetchCategory();
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: err.message });
+    } finally { setSyncing(false); }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-green-500" size={32} /></div>;
@@ -258,6 +282,40 @@ export default function CategoryDetailPage() {
                       {child.name}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Correlativo de la familia (solo raiz con codigo) */}
+            {isRoot && category.code && (
+              <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-slate-700/40">
+                      <Hash size={18} className="text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-400">Correlativo de codigos</p>
+                      <p className="text-sm text-slate-300">
+                        Ultimo usado: <span className="font-mono text-white">{category.lastProductNumber}</span>
+                        <span className="text-slate-600 mx-2">•</span>
+                        Proximo codigo:{' '}
+                        <span className="font-mono text-amber-400">
+                          {category.code}{String(category.lastProductNumber + 1).padStart(5, '0')}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncCorrelative}
+                    disabled={syncing}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                    title="Ajusta el correlativo al codigo mas alto existente en esta familia. Solo sube el contador, nunca lo baja."
+                  >
+                    {syncing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                    Sincronizar
+                  </button>
                 </div>
               </div>
             )}

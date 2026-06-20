@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -93,5 +94,10 @@ export class InventoryAdjustmentsController {
   @Patch(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.inventoryAdjustmentsService.cancel(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.inventoryAdjustmentsService.remove(id);
   }
 }

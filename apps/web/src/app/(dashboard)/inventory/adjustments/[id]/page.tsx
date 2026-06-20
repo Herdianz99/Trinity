@@ -94,11 +94,16 @@ export default function InventoryAdjustmentDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setAdjustment(data);
-        const vals: Record<string, number> = {};
-        data.items.forEach((item: AdjustmentItem) => {
-          vals[item.productId] = item.quantity;
+        // Preservar las cantidades que el usuario ya escribio y aun no ha guardado:
+        // al agregar/eliminar un producto se re-consulta el ajuste, pero esos cambios
+        // locales todavia no estan en el server. Solo tomamos del server los items nuevos.
+        setQuantityValues((prev) => {
+          const vals: Record<string, number> = {};
+          data.items.forEach((item: AdjustmentItem) => {
+            vals[item.productId] = prev[item.productId] ?? item.quantity;
+          });
+          return vals;
         });
-        setQuantityValues(vals);
       }
     } catch { /* ignore */ } finally {
       setLoading(false);
@@ -236,6 +241,25 @@ export default function InventoryAdjustmentDetailPage() {
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Delete adjustment (solo borrador/cancelado) ────
+  async function handleDelete() {
+    if (!confirm('Eliminar este ajuste permanentemente? Esta accion no se puede deshacer.')) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/inventory-adjustments/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        router.push('/inventory/adjustments');
+        return;
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Error');
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
       setSaving(false);
     }
   }
@@ -458,15 +482,26 @@ export default function InventoryAdjustmentDetailPage() {
           </div>
 
           {/* Action bar */}
-          {adjustment.items.length > 0 && (
-            <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
               <button
-                onClick={handleCancel}
+                onClick={handleDelete}
                 disabled={saving}
                 className="text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5"
               >
-                <XCircle size={16} /> Cancelar ajuste
+                <Trash2 size={16} /> Eliminar ajuste
               </button>
+              {adjustment.items.length > 0 && (
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="text-sm text-slate-400 hover:text-slate-300 transition-colors flex items-center gap-1.5"
+                >
+                  <XCircle size={16} /> Cancelar ajuste
+                </button>
+              )}
+            </div>
+            {adjustment.items.length > 0 && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleSaveQuantities}
@@ -485,8 +520,8 @@ export default function InventoryAdjustmentDetailPage() {
                   Procesar ajuste
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
@@ -555,6 +590,13 @@ export default function InventoryAdjustmentDetailPage() {
           <XCircle size={48} className="mx-auto mb-3 text-red-400 opacity-40" />
           <p className="text-slate-400 text-lg">Este ajuste fue cancelado</p>
           <p className="text-slate-500 text-sm mt-1">{totalItems} producto(s) estaban en el ajuste</p>
+          <button
+            onClick={handleDelete}
+            disabled={saving}
+            className="mt-4 text-sm text-red-400 hover:text-red-300 transition-colors inline-flex items-center gap-1.5"
+          >
+            <Trash2 size={16} /> Eliminar ajuste
+          </button>
         </div>
       )}
     </div>
