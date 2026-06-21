@@ -119,7 +119,7 @@ export default function CashSessionsPage() {
                 <tr
                   key={s.id}
                   className="border-b border-slate-700/30 hover:bg-slate-800/30 cursor-pointer transition-colors"
-                  onClick={() => router.push(`/cash/${s.cashRegister?.id || s.cashRegisterId}`)}
+                  onClick={() => router.push(`/cash/sessions/${s.id}`)}
                 >
                   <td className="px-4 py-2.5 text-white font-medium">{s.cashRegister?.name || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-300">{s.openedBy?.name || '—'}</td>

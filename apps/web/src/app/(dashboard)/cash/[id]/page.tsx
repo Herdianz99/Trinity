@@ -57,8 +57,6 @@ export default function CashDetailPage() {
   // History tab
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [historyDetail, setHistoryDetail] = useState<any>(null);
-  const [loadingHistoryDetail, setLoadingHistoryDetail] = useState(false);
 
   const [reportLoading, setReportLoading] = useState<'X' | 'Z' | null>(null);
 
@@ -198,16 +196,9 @@ export default function CashDetailPage() {
     }
   }
 
-  // View history detail
-  async function viewHistoryDetail(sid: string) {
-    setLoadingHistoryDetail(true);
-    setHistoryDetail(null);
-    try {
-      const res = await fetch(`/api/proxy/cash-sessions/${sid}/summary`);
-      const data = await res.json();
-      setHistoryDetail(data);
-    } catch {}
-    setLoadingHistoryDetail(false);
+  // View history detail — abre la pagina propia de la sesion (resumido + detallado + reporte)
+  function viewHistoryDetail(sid: string) {
+    router.push(`/cash/sessions/${sid}`);
   }
 
   function openMovementModal() {
@@ -853,7 +844,7 @@ export default function CashDetailPage() {
       {/* CLOSE MODAL */}
       {closeModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setCloseModalOpen(false)}>
-          <div className="card p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+          <div className="card p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Cerrar caja</h3>
               <button onClick={() => setCloseModalOpen(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
@@ -981,96 +972,6 @@ export default function CashDetailPage() {
         </div>
       )}
 
-      {/* HISTORY DETAIL MODAL */}
-      {historyDetail && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setHistoryDetail(null)}>
-          <div className="card p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Detalle de cierre</h3>
-              <button onClick={() => setHistoryDetail(null)} className="text-slate-400 hover:text-white"><X size={18} /></button>
-            </div>
-
-            {loadingHistoryDetail ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="animate-spin text-slate-500" size={24} />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-slate-500 block">Abierta por</span>
-                    <span className="text-white">{historyDetail.session?.openedBy?.name}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Cerrada por</span>
-                    <span className="text-white">{historyDetail.session?.closedBy?.name || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Apertura</span>
-                    <span className="text-slate-300">{historyDetail.session?.openedAt ? new Date(historyDetail.session.openedAt).toLocaleString('es-VE') : '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Cierre</span>
-                    <span className="text-slate-300">{historyDetail.session?.closedAt ? new Date(historyDetail.session.closedAt).toLocaleString('es-VE') : '—'}</span>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-700/30 space-y-1.5">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase">Fondos de apertura</h4>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-300">USD</span>
-                    <span className="text-white">${(historyDetail.openingBalanceUsd || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-300">Bs</span>
-                    <span className="text-white">Bs {(historyDetail.openingBalanceBs || 0).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-700/30 space-y-1.5">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase">Ventas por metodo</h4>
-                  {historyDetail.paymentsByMethod?.map((m: any) => (
-                    <div key={m.methodName} className="flex justify-between text-sm">
-                      <span className="text-slate-300">{m.methodName} ({m.count})</span>
-                      <span className="text-white">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-600/50 mt-2 pt-2 flex justify-between text-sm font-medium">
-                    <span className="text-slate-300">Total ({historyDetail.invoiceCount} facturas)</span>
-                    <span className="text-green-400">${historyDetail.totalUsd.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {historyDetail.session?.closingBalanceUsd != null && (
-                  <div className={`p-3 rounded-lg ${Math.abs(historyDetail.differenceUsd || 0) < 0.01 && Math.abs(historyDetail.differenceBs || 0) < 0.01 ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase mb-1.5">Arqueo</h4>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Esperado efectivo USD</span>
-                      <span className="text-white">${(historyDetail.expectedUsd || 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Contado USD</span>
-                      <span className="text-white">${(historyDetail.session.closingBalanceUsd || 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-medium mt-1">
-                      <span className={Math.abs(historyDetail.differenceUsd || 0) < 0.01 ? 'text-green-400' : 'text-red-400'}>Diferencia USD</span>
-                      <span className={Math.abs(historyDetail.differenceUsd || 0) < 0.01 ? 'text-green-400' : 'text-red-400'}>
-                        {(historyDetail.differenceUsd || 0) >= 0 ? '+' : ''}{(historyDetail.differenceUsd || 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm font-medium">
-                      <span className={Math.abs(historyDetail.differenceBs || 0) < 0.01 ? 'text-green-400' : 'text-red-400'}>Diferencia Bs</span>
-                      <span className={Math.abs(historyDetail.differenceBs || 0) < 0.01 ? 'text-green-400' : 'text-red-400'}>
-                        {(historyDetail.differenceBs || 0) >= 0 ? '+' : ''}{(historyDetail.differenceBs || 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
