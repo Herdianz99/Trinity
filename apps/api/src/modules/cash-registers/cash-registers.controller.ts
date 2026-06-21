@@ -123,4 +123,47 @@ export class CashRegistersController {
     });
     res.end(buffer);
   }
+
+  /** Vista global de movimientos de caja (cruza cajas y sesiones) */
+  @Get('cash/movements')
+  findGlobalMovements(
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+    @Query('page') page?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    return this.service.findGlobalMovements(
+      { cashRegisterId, userId, from, to, methodIds: ids },
+      parseInt(page || '1', 10),
+    );
+  }
+
+  /** PDF de la vista global, agrupado por metodo de pago, respetando filtros */
+  @Get('cash/movements-report')
+  async getGlobalMovementsReport(
+    @Res() res: Response,
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const buffer = await this.pdfService.generateGlobalReport({
+      cashRegisterId,
+      userId,
+      from,
+      to,
+      methodIds: ids,
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="movimientos-caja.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 }

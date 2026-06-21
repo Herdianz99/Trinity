@@ -136,6 +136,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Cajas', href: '/cash', icon: <Banknote size={18} /> },
       { label: 'Sesiones', href: '/cash/sessions', icon: <History size={18} /> },
+      { label: 'Movimientos', href: '/cash/movements', icon: <ArrowLeftRight size={18} /> },
     ],
   },
   {

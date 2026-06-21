@@ -506,4 +506,282 @@ export class CashRegistersService {
       movementsExpenseBs: Math.round(movementsExpenseBs * 100) / 100,
     };
   }
+
+  /**
+   * Vista GLOBAL de movimientos de caja (cruza cajas y sesiones).
+   * Solo lee y refleja lo que YA toca la caja hoy: pagos de ventas (Payment de
+   * Invoice cobrada dentro de la ventana de una sesion) + movimientos manuales
+   * de gaveta (CashMovement: ingresos/egresos/gastos/anticipos). NO incluye
+   * cobros CxC / pagos CxP / compras porque hoy esos no generan CashMovement
+   * (ver pendiente en PROGRESS.md). El "cajero" es el dueno de la sesion.
+   */
+  async getGlobalMovementsData(filters: {
+    cashRegisterId?: string;
+    userId?: string;
+    from?: string;
+    to?: string;
+    methodIds?: string[];
+  }) {
+    // Rango por timestamp del propio movimiento (no por ventana de sesion)
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+    if (filters.from) {
+      fromDate = new Date(filters.from);
+      fromDate.setUTCHours(0, 0, 0, 0);
+    }
+    if (filters.to) {
+      toDate = new Date(filters.to);
+      toDate.setUTCHours(23, 59, 59, 999);
+    }
+
+    const methodSet =
+      filters.methodIds && filters.methodIds.length ? new Set(filters.methodIds) : null;
+
+    // Sesiones candidatas: por caja, cajero (dueno) y solapamiento con el rango
+    const sessionWhere: any = {};
+    if (filters.cashRegisterId) sessionWhere.cashRegisterId = filters.cashRegisterId;
+    if (filters.userId) sessionWhere.openedById = filters.userId;
+    if (fromDate || toDate) {
+      const and: any[] = [];
+      if (toDate) and.push({ openedAt: { lte: toDate } });
+      if (fromDate) and.push({ OR: [{ closedAt: null }, { closedAt: { gte: fromDate } }] });
+      if (and.length) sessionWhere.AND = and;
+    }
+
+    const sessions = await this.prisma.cashSession.findMany({
+      where: sessionWhere,
+      include: {
+        cashRegister: { select: { id: true, name: true, code: true } },
+        openedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { openedAt: 'desc' },
+    });
+
+    const meta = await this.buildGlobalMeta(filters);
+    const emptySummary = {
+      paymentCount: 0, paymentUsd: 0, paymentBs: 0,
+      incomeUsd: 0, incomeBs: 0, expenseUsd: 0, expenseBs: 0,
+      movementCount: 0, byMethod: [] as any[],
+    };
+    if (sessions.length === 0) {
+      return { rows: [] as any[], summary: emptySummary, meta };
+    }
+
+    const sessionIds = sessions.map((s) => s.id);
+    const registerIds = Array.from(new Set(sessions.map((s) => s.cashRegisterId)));
+
+    // Ventana global acotada por las sesiones seleccionadas
+    const minOpened = sessions.reduce(
+      (min, s) => (s.openedAt < min ? s.openedAt : min),
+      sessions[0].openedAt,
+    );
+    const maxClosed = new Date(); // las abiertas llegan hasta ahora
+
+    // Index de sesiones por caja para mapear pago -> sesion (no se solapan por caja)
+    const sessionsByRegister = new Map<string, typeof sessions>();
+    for (const s of sessions) {
+      const arr = sessionsByRegister.get(s.cashRegisterId) || ([] as typeof sessions);
+      arr.push(s);
+      sessionsByRegister.set(s.cashRegisterId, arr);
+    }
+    const findSession = (registerId: string, when: Date) => {
+      const arr = sessionsByRegister.get(registerId);
+      if (!arr) return null;
+      return (
+        arr.find((s) => s.openedAt <= when && (s.closedAt ? when <= s.closedAt : true)) || null
+      );
+    };
+
+    const rows: any[] = [];
+
+    // 1) Pagos de ventas (mismo criterio que el arqueo: por paidAt en la ventana)
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        cashRegisterId: { in: registerIds },
+        status: 'PAID',
+        paidAt: { gte: minOpened, lte: maxClosed },
+      },
+      select: {
+        id: true,
+        number: true,
+        cashRegisterId: true,
+        paidAt: true,
+        customer: { select: { name: true } },
+        payments: {
+          select: {
+            id: true,
+            methodId: true,
+            reference: true,
+            amountUsd: true,
+            amountBs: true,
+            createdAt: true,
+            method: { select: { id: true, name: true, isDivisa: true, isCash: true } },
+          },
+        },
+      },
+    });
+
+    for (const inv of invoices) {
+      if (!inv.paidAt) continue;
+      const session = findSession(inv.cashRegisterId, inv.paidAt);
+      if (!session) continue; // pago de una sesion no seleccionada (otro cajero/caja)
+      for (const p of inv.payments) {
+        if (methodSet && !methodSet.has(p.methodId)) continue;
+        const when = p.createdAt;
+        if (fromDate && when < fromDate) continue;
+        if (toDate && when > toDate) continue;
+        rows.push({
+          kind: 'PAYMENT',
+          date: when,
+          sessionId: session.id,
+          cashRegisterId: session.cashRegisterId,
+          cashRegisterName: session.cashRegister?.name || '',
+          cashierName: session.openedBy?.name || '',
+          methodId: p.methodId,
+          methodName: p.method?.name || p.methodId,
+          isDivisa: !!p.method?.isDivisa,
+          isCash: !!p.method?.isCash,
+          invoiceNumber: inv.number || 'S/N',
+          customerName: inv.customer?.name || 'Sin cliente',
+          reference: p.reference || null,
+          amountUsd: p.amountUsd,
+          amountBs: p.amountBs,
+        });
+      }
+    }
+
+    // 2) Movimientos manuales de gaveta (solo si NO se filtra por metodo de pago)
+    if (!methodSet) {
+      const movements = await this.prisma.cashMovement.findMany({
+        where: { cashSessionId: { in: sessionIds } },
+        include: {
+          createdBy: { select: { name: true } },
+          expense: { select: { description: true, category: { select: { name: true } } } },
+          cashSession: {
+            select: {
+              cashRegisterId: true,
+              cashRegister: { select: { name: true } },
+              openedBy: { select: { name: true } },
+            },
+          },
+        },
+      });
+      for (const m of movements) {
+        const when = m.createdAt;
+        if (fromDate && when < fromDate) continue;
+        if (toDate && when > toDate) continue;
+        const concept =
+          m.reason || m.expense?.description || m.expense?.category?.name || '—';
+        rows.push({
+          kind: 'MOVEMENT',
+          date: when,
+          sessionId: m.cashSessionId,
+          cashRegisterId: m.cashSession?.cashRegisterId,
+          cashRegisterName: m.cashSession?.cashRegister?.name || '',
+          cashierName: m.cashSession?.openedBy?.name || '',
+          movementType: m.type, // INCOME | EXPENSE
+          concept,
+          userName: m.createdBy?.name || '',
+          currency: m.currency,
+          amountUsd: m.amountUsd,
+          amountBs: m.amountBs,
+        });
+      }
+    }
+
+    rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Resumen del set filtrado completo
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const byMethod: Record<string, { methodName: string; count: number; totalUsd: number; totalBs: number }> = {};
+    const summary = { ...emptySummary, byMethod: [] as any[] };
+    let paymentUsd = 0, paymentBs = 0, incomeUsd = 0, incomeBs = 0, expenseUsd = 0, expenseBs = 0;
+    for (const r of rows) {
+      if (r.kind === 'PAYMENT') {
+        summary.paymentCount += 1;
+        paymentUsd += r.amountUsd;
+        paymentBs += r.amountBs;
+        if (!byMethod[r.methodName]) byMethod[r.methodName] = { methodName: r.methodName, count: 0, totalUsd: 0, totalBs: 0 };
+        byMethod[r.methodName].count += 1;
+        byMethod[r.methodName].totalUsd += r.amountUsd;
+        byMethod[r.methodName].totalBs += r.amountBs;
+      } else {
+        summary.movementCount += 1;
+        if (r.movementType === 'INCOME') { incomeUsd += r.amountUsd; incomeBs += r.amountBs; }
+        else { expenseUsd += r.amountUsd; expenseBs += r.amountBs; }
+      }
+    }
+    summary.paymentUsd = round(paymentUsd);
+    summary.paymentBs = round(paymentBs);
+    summary.incomeUsd = round(incomeUsd);
+    summary.incomeBs = round(incomeBs);
+    summary.expenseUsd = round(expenseUsd);
+    summary.expenseBs = round(expenseBs);
+    summary.byMethod = Object.values(byMethod)
+      .map((m) => ({ ...m, totalUsd: round(m.totalUsd), totalBs: round(m.totalBs) }))
+      .sort((a, b) => a.methodName.localeCompare(b.methodName));
+
+    return { rows, summary, meta };
+  }
+
+  /** Etiquetas legibles de los filtros activos (para el encabezado del PDF/UI) */
+  private async buildGlobalMeta(filters: {
+    cashRegisterId?: string;
+    userId?: string;
+    from?: string;
+    to?: string;
+    methodIds?: string[];
+  }) {
+    let registerName: string | null = null;
+    if (filters.cashRegisterId) {
+      const r = await this.prisma.cashRegister.findUnique({
+        where: { id: filters.cashRegisterId },
+        select: { name: true },
+      });
+      registerName = r?.name || null;
+    }
+    let cashierName: string | null = null;
+    if (filters.userId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: filters.userId },
+        select: { name: true },
+      });
+      cashierName = u?.name || null;
+    }
+    let methodNames: string[] = [];
+    if (filters.methodIds && filters.methodIds.length) {
+      const ms = await this.prisma.paymentMethod.findMany({
+        where: { id: { in: filters.methodIds } },
+        select: { name: true },
+      });
+      methodNames = ms.map((m) => m.name);
+    }
+    return { registerName, cashierName, methodNames, from: filters.from || null, to: filters.to || null };
+  }
+
+  /** GET /cash/movements — vista global paginada */
+  async findGlobalMovements(
+    filters: {
+      cashRegisterId?: string;
+      userId?: string;
+      from?: string;
+      to?: string;
+      methodIds?: string[];
+    },
+    page: number = 1,
+  ) {
+    const { rows, summary, meta } = await this.getGlobalMovementsData(filters);
+    const take = 50;
+    const total = rows.length;
+    const safePage = page < 1 ? 1 : page;
+    const start = (safePage - 1) * take;
+    return {
+      data: rows.slice(start, start + take),
+      total,
+      page: safePage,
+      totalPages: Math.max(1, Math.ceil(total / take)),
+      summary,
+      meta,
+    };
+  }
 }
