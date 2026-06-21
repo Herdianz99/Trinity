@@ -491,18 +491,27 @@ export default function CashDetailPage() {
             {/* Right column - Payments (70%) */}
             <div className="w-[70%]">
               <div className="card overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-white">Pagos ({paymentsTotal})</span>
-                  <select
-                    value={filterMethodId}
-                    onChange={e => { setFilterMethodId(e.target.value); setPaymentsPage(1); }}
-                    className="input-field !w-48 !py-1.5 text-xs"
-                  >
-                    <option value="">Todos los metodos</option>
-                    {paymentMethods.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => window.open(`/api/proxy/cash-sessions/${sessionId}/movements-report`, '_blank')}
+                      className="btn-secondary !py-1.5 !px-3 text-xs flex items-center gap-1.5 whitespace-nowrap"
+                      title="Reporte detallado: movimientos agrupados por metodo con referencia"
+                    >
+                      <FileText size={14} /> Reporte detallado
+                    </button>
+                    <select
+                      value={filterMethodId}
+                      onChange={e => { setFilterMethodId(e.target.value); setPaymentsPage(1); }}
+                      className="input-field !w-48 !py-1.5 text-xs"
+                    >
+                      <option value="">Todos los metodos</option>
+                      {paymentMethods.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {loadingPayments ? (

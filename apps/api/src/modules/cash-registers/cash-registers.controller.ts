@@ -7,11 +7,14 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CashRegistersService } from './cash-registers.service';
+import { CashSessionPdfService } from './cash-session-pdf.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
@@ -24,7 +27,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller()
 export class CashRegistersController {
-  constructor(private readonly service: CashRegistersService) {}
+  constructor(
+    private readonly service: CashRegistersService,
+    private readonly pdfService: CashSessionPdfService,
+  ) {}
 
   @Get('cash-registers')
   findAll() {
@@ -105,5 +111,16 @@ export class CashRegistersController {
     @Query('methodId') methodId?: string,
   ) {
     return this.service.findSessionPayments(id, parseInt(page || '1', 10), methodId);
+  }
+
+  @Get('cash-sessions/:id/movements-report')
+  async getMovementsReport(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generate(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="cierre-caja-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }
