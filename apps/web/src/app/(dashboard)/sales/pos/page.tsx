@@ -77,6 +77,7 @@ interface PaymentLine {
   amountUsd: number;
   amountBs: number;
   reference: string;
+  createsReceivable?: boolean;
 }
 
 // Input de cantidad que permite borrar, escribir decimales (0.25) y el punto en movil.
@@ -231,6 +232,7 @@ export default function POSPage() {
   const [savingClient, setSavingClient] = useState(false);
   const [seniatOpen, setSeniatOpen] = useState(false);
   const [clientRifWarning, setClientRifWarning] = useState('');
+  const [clientRifMatch, setClientRifMatch] = useState<any>(null);
 
   // Cash register selection
   const [selectedCashRegister, setSelectedCashRegister] = useState<any>(null);
@@ -247,11 +249,13 @@ export default function POSPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
+  const [pendingFilterMine, setPendingFilterMine] = useState(true);
 
   // Seller state
   const [sellers, setSellers] = useState<any[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [userSellerName, setUserSellerName] = useState<string | null>(null);
+  const [mySellerId, setMySellerId] = useState<string | null>(null);
 
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
@@ -268,6 +272,14 @@ export default function POSPage() {
 
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
+
+  // Hay alguna linea de pago que genera CxC (cashea/crediagro/etc) sin referencia cargada
+  const hasMissingCxcReference = payments.some(p => p.createsReceivable && !p.reference.trim());
+
+  // Drawer de facturas en espera: filtro "mis facturas" (solo si el usuario tiene vendedor propio)
+  const visiblePendingInvoices = (mySellerId && pendingFilterMine)
+    ? pendingInvoices.filter(inv => inv.seller?.id === mySellerId)
+    : pendingInvoices;
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -302,6 +314,7 @@ export default function POSPage() {
         if (data?.seller) {
           setSelectedSellerId(data.seller.id);
           setUserSellerName(data.seller.name);
+          setMySellerId(data.seller.id);
         }
         // Fetch all sellers for ADMIN/SUPERVISOR dropdown
         if (data?.role === 'ADMIN' || data?.role === 'SUPERVISOR') {
@@ -496,20 +509,22 @@ export default function POSPage() {
   // Check for duplicate RIF in client form
   useEffect(() => {
     const rif = clientForm.rif?.replace(/[-\s]/g, '') || '';
-    if (rif.length < 5) { setClientRifWarning(''); return; }
+    if (rif.length < 5) { setClientRifWarning(''); setClientRifMatch(null); return; }
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=5&isActive=true`);
         const data = await res.json();
         const match = (data.data || []).find((c: any) =>
-          c.rif && c.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase()
+          c.id !== customerId
+          && c.rif && c.rif.replace(/[-\s]/g, '').toUpperCase() === rif.toUpperCase()
           && c.documentType === clientForm.documentType
         );
         setClientRifWarning(match ? `Ya existe un cliente con este documento: ${match.name}` : '');
-      } catch { setClientRifWarning(''); }
+        setClientRifMatch(match || null);
+      } catch { setClientRifWarning(''); setClientRifMatch(null); }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientForm.rif, clientForm.documentType]);
+  }, [clientForm.rif, clientForm.documentType, customerId]);
 
   // Fetch credit balance when customer changes
   const refreshCreditBalance = useCallback(() => {
@@ -712,6 +727,7 @@ export default function POSPage() {
         amountUsd,
         amountBs: Math.round(amountUsd * exchangeRate * 100) / 100,
         reference: '',
+        createsReceivable: pm.createsReceivable,
       }]);
     } else {
       // Bs method: fill with remaining Bs, use remaining USD directly to avoid rounding discrepancy
@@ -724,6 +740,7 @@ export default function POSPage() {
         amountUsd,
         amountBs,
         reference: '',
+        createsReceivable: pm.createsReceivable,
       }]);
     }
     setExpandedGroup(null);
@@ -842,6 +859,32 @@ export default function POSPage() {
     }
   }
 
+  // Empuja el carrito actual (descuentos/cantidades/precios editados) a una factura
+  // que YA existe en la BD, antes de cobrar. Sin esto, pay() valida el pago contra el
+  // total guardado (viejo) y rechaza el cobro con "El monto pagado es menor al total".
+  async function syncExistingInvoiceItems(targetInvoiceId: string) {
+    const res = await fetch(`/api/proxy/invoices/${targetInvoiceId}/update-items`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerId: customerId || undefined,
+        cashRegisterId: selectedCashRegister?.id || undefined,
+        sellerId: selectedSellerId || undefined,
+        items: cart.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          discountPct: i.discountPct || 0,
+          priceOverridden: i.priceOverridden || false,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Error al actualizar la factura antes de cobrar');
+    }
+  }
+
   async function handleConfirmCredit() {
     if (!customerId) {
       setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' });
@@ -878,6 +921,9 @@ export default function POSPage() {
         }
         const created = await createRes.json();
         targetInvoiceId = created.id;
+      } else {
+        // Factura existente (retomada/cargada): sincronizar el carrito antes de cobrar
+        await syncExistingInvoiceItems(targetInvoiceId);
       }
 
       const payRes = await fetch(`/api/proxy/invoices/${targetInvoiceId}/pay`, {
@@ -1015,6 +1061,9 @@ export default function POSPage() {
         }
         const created = await createRes.json();
         targetInvoiceId = created.id;
+      } else {
+        // Factura existente (retomada/cargada): sincronizar el carrito antes de cobrar
+        await syncExistingInvoiceItems(targetInvoiceId);
       }
 
       const payRes = await fetch(`/api/proxy/invoices/${targetInvoiceId}/pay`, {
@@ -1103,6 +1152,20 @@ export default function POSPage() {
   }
 
   // Client modal functions
+  // Abre el modal de nuevo cliente precargando lo escrito en la busqueda.
+  // Si parece documento (prefijo opcional V/E/J/G/C/P + 5+ digitos) lo pone en RIF; si no, en Nombre.
+  function openCreateClient() {
+    const raw = customerSearch.trim();
+    const cleaned = raw.replace(/[\s.\-]/g, '');
+    const m = cleaned.match(/^([VEJGCP])?(\d{5,})$/i);
+    if (m) {
+      setClientForm({ documentType: (m[1] || 'V').toUpperCase(), rif: m[2], name: '', address: '', phone: '' });
+    } else {
+      setClientForm({ documentType: 'V', rif: '', name: raw, address: '', phone: '' });
+    }
+    setShowCreateClient(true);
+  }
+
   async function handleSaveClient(isEdit: boolean) {
     setSavingClient(true);
     try {
@@ -1777,14 +1840,17 @@ export default function POSPage() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-slate-500">Referencia</label>
+                          <label className="text-xs text-slate-500">Referencia{p.createsReceivable && <span className="text-red-400"> *</span>}</label>
                           <input
                             type="text"
                             value={p.reference}
                             onChange={e => updatePayment(idx, 'reference', e.target.value)}
-                            className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            placeholder="Opcional"
+                            className={`input-field !py-2.5 md:!py-1.5 text-sm ${p.createsReceivable && !p.reference.trim() ? '!border-red-500/70 focus:!border-red-500' : ''}`}
+                            placeholder={p.createsReceivable ? 'Obligatoria' : 'Opcional'}
                           />
+                          {p.createsReceivable && !p.reference.trim() && (
+                            <p className="text-[11px] text-red-400 mt-1">Referencia obligatoria para credito</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1870,7 +1936,7 @@ export default function POSPage() {
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId)}
+                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId) || hasMissingCxcReference}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 w-full md:w-auto justify-center"
                 >
                   {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}
@@ -2002,8 +2068,25 @@ export default function POSPage() {
                   </div>
                 </div>
                 {clientRifWarning && (
-                  <div className="p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400">
-                    {clientRifWarning}
+                  <div className="p-2.5 rounded-lg border text-xs bg-amber-500/10 border-amber-500/20 text-amber-400 flex flex-col gap-2">
+                    <span>{clientRifWarning}</span>
+                    {clientRifMatch && !showEditClient && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerId(clientRifMatch.id);
+                          setCustomerName(clientRifMatch.name);
+                          setShowCreateClient(false);
+                          setShowCustomerSearch(false);
+                          setCustomerSearch('');
+                          setClientRifWarning('');
+                          setClientRifMatch(null);
+                        }}
+                        className="self-start px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 font-medium hover:bg-amber-500/30 transition-colors"
+                      >
+                        Usar este cliente
+                      </button>
+                    )}
                   </div>
                 )}
                 <div>
@@ -2108,10 +2191,9 @@ export default function POSPage() {
               </div>
               <button
                 onClick={() => {
+                  openCreateClient();
                   setShowCustomerSearch(false);
                   setCustomerSearch('');
-                  setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
-                  setShowCreateClient(true);
                 }}
                 title="Crear nuevo cliente"
                 className="shrink-0 w-12 h-12 rounded-xl bg-green-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-green-500/20"
@@ -2149,10 +2231,9 @@ export default function POSPage() {
           <div className="px-4 py-3 border-t border-slate-700/50">
             <button
               onClick={() => {
+                openCreateClient();
                 setShowCustomerSearch(false);
                 setCustomerSearch('');
-                setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
-                setShowCreateClient(true);
               }}
               className="w-full py-3 rounded-xl border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium flex items-center justify-center gap-2 active:bg-green-500/20"
             >
@@ -2171,15 +2252,32 @@ export default function POSPage() {
               <div className="flex items-center gap-2">
                 <PanelRightOpen size={18} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-white">Facturas en espera</h2>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400">{pendingInvoices.length}</span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400">{visiblePendingInvoices.length}</span>
               </div>
               <button onClick={() => setPendingDrawerOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
             </div>
 
+            {mySellerId && (
+              <div className="px-4 md:px-5 py-2.5 border-b border-slate-700/50 flex gap-2">
+                <button
+                  onClick={() => setPendingFilterMine(true)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${pendingFilterMine ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-slate-700/30 text-slate-400 border border-transparent hover:bg-slate-700/50'}`}
+                >
+                  Mis facturas
+                </button>
+                <button
+                  onClick={() => setPendingFilterMine(false)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${!pendingFilterMine ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-slate-700/30 text-slate-400 border border-transparent hover:bg-slate-700/50'}`}
+                >
+                  Todas
+                </button>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {pendingInvoices.length === 0 ? (
-                <div className="text-center py-12 text-slate-600 text-sm">No hay facturas en espera</div>
-              ) : pendingInvoices.map(inv => {
+              {visiblePendingInvoices.length === 0 ? (
+                <div className="text-center py-12 text-slate-600 text-sm">{mySellerId && pendingFilterMine ? 'No tienes facturas en espera' : 'No hay facturas en espera'}</div>
+              ) : visiblePendingInvoices.map(inv => {
                 const lockedByOther = inv.lockedById && inv.lockedById !== userId;
                 const lockedByMe = inv.lockedById && inv.lockedById === userId;
                 return (
@@ -2480,7 +2578,7 @@ export default function POSPage() {
                     )}
                   </div>
                   <button
-                    onClick={() => { setClientForm({ documentType: 'V', rif: '', name: '', address: '', phone: '' }); setShowCreateClient(true); }}
+                    onClick={openCreateClient}
                     className="p-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
                     title="Crear cliente"
                   >

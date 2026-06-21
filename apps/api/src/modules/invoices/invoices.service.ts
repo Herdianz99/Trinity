@@ -504,7 +504,9 @@ export class InvoicesService {
       let subtotalUsd = 0;
       let subtotalBsAccum = 0;
       for (const item of invoice.items) {
-        const lineSubtotal = item.unitPrice * item.quantity;
+        // Aplicar el descuento de linea (item.unitPrice es el precio base SIN descuento)
+        const discountMultiplier = 1 - (item.discountPct || 0) / 100;
+        const lineSubtotal = item.unitPrice * item.quantity * discountMultiplier;
         const lineSubtotalBs = Math.round(lineSubtotal * invoice.exchangeRate * 100) / 100;
         subtotalUsd += lineSubtotal;
         subtotalBsAccum += lineSubtotalBs;
