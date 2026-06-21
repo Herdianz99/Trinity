@@ -21,6 +21,12 @@ const MOV_COLS = [
   { label: 'Bs', x: 482, width: 73, align: 'right' },
 ];
 
+const VUELTO_COLS = [
+  { label: 'Factura', x: 40, width: 120 },
+  { label: 'Metodo de vuelto', x: 170, width: 250 },
+  { label: 'Bs', x: 482, width: 73, align: 'right' },
+];
+
 @Injectable()
 export class CashSessionPdfService {
   constructor(private readonly prisma: PrismaService) {}
@@ -42,7 +48,7 @@ export class CashSessionPdfService {
     });
   }
 
-  private drawTableHeader(doc: any, y: number, columns: typeof PAY_COLS): number {
+  private drawTableHeader(doc: any, y: number, columns: any[]): number {
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
     for (const col of columns) {
       const opts: any = { width: col.width };
@@ -55,7 +61,7 @@ export class CashSessionPdfService {
     return y + 4;
   }
 
-  private drawRow(doc: any, y: number, columns: typeof PAY_COLS, values: string[], bold = false): number {
+  private drawRow(doc: any, y: number, columns: any[], values: string[], bold = false): number {
     doc.fontSize(8).font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#1e293b');
     for (let i = 0; i < columns.length; i++) {
       const opts: any = { width: columns[i].width, lineBreak: false, ellipsis: true };
@@ -111,10 +117,21 @@ export class CashSessionPdfService {
       where: { invoiceId: { in: invoiceIds } },
       include: {
         method: { select: { name: true } },
+        changeMethod: { select: { name: true } },
         invoice: { select: { number: true, customer: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // Vueltos / cambios entregados (egresos)
+    const vueltos = payments
+      .filter((p) => p.changeAmountBs > 0)
+      .map((p) => ({
+        invoiceNumber: p.invoice?.number || 'S/N',
+        methodName: p.changeMethod?.name || 'Efectivo Bs',
+        changeBs: p.changeAmountBs,
+      }));
+    const totalChangeBs = vueltos.reduce((s, v) => s + v.changeBs, 0);
 
     // Agrupar por metodo
     const groupsMap = new Map<string, any>();
@@ -209,6 +226,23 @@ export class CashSessionPdfService {
       doc.text(`$${this.fmt(grandUsd)}   /   Bs ${this.fmt(grandBs)}`, 255, y + 1, { width: 300, align: 'right' });
       doc.fillColor('#000');
       y += 26;
+    }
+
+    // Seccion de vueltos / cambios entregados
+    if (vueltos.length > 0) {
+      y = this.checkPage(doc, y, 60);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('VUELTOS / CAMBIOS ENTREGADOS', 40, y);
+      y += 18;
+      y = this.drawTableHeader(doc, y, VUELTO_COLS);
+      for (const v of vueltos) {
+        y = this.checkPage(doc, y, 30);
+        if (y === 40) y = this.drawTableHeader(doc, y, VUELTO_COLS);
+        y = this.drawRow(doc, y, VUELTO_COLS, [v.invoiceNumber, v.methodName, `-${this.fmt(v.changeBs)}`]);
+      }
+      doc.moveTo(40, y).lineTo(555, y).stroke('#cbd5e1');
+      y += 3;
+      y = this.drawRow(doc, y, VUELTO_COLS, ['', 'Total vueltos', `-${this.fmt(totalChangeBs)}`], true);
+      y += 12;
     }
 
     // Seccion de movimientos de caja

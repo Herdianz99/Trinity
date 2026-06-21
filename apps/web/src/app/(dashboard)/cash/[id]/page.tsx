@@ -440,6 +440,9 @@ export default function CashDetailPage() {
                         <span className="text-slate-200">Efectivo Bs</span>
                         <span className="text-emerald-400">Bs {(summary.cashExpectedBs ?? 0).toFixed(2)}</span>
                       </div>
+                      {summary.cashChangeBs > 0 && (
+                        <p className="text-[11px] text-amber-400/80">Incluye -Bs {summary.cashChangeBs.toFixed(2)} de vueltos dados en efectivo</p>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-500 mt-2">Lo que deberia haber en la gaveta ahora (sin cerrar). Los pagos electronicos no cuentan aqui.</p>
                   </>
@@ -452,7 +455,7 @@ export default function CashDetailPage() {
                     <div className="space-y-1.5">
                       {summary.changeOutflows.map((c: any, i: number) => (
                         <div key={i} className="flex justify-between text-xs">
-                          <span className="text-slate-400">{c.invoiceNumber}</span>
+                          <span className="text-slate-400">{c.invoiceNumber} <span className="text-slate-500">· {c.changeMethodName}</span></span>
                           <span className="text-amber-400">-Bs {c.changeBs.toFixed(2)}</span>
                         </div>
                       ))}
@@ -869,7 +872,27 @@ export default function CashDetailPage() {
                     <span className="text-slate-300">Efectivo Bs</span>
                     <span className="text-white">Bs {(closeSummary.cashExpectedBs ?? 0).toFixed(2)}</span>
                   </div>
+                  {closeSummary.cashChangeBs > 0 && (
+                    <p className="text-[11px] text-amber-400/80 mt-1">Incluye -Bs {closeSummary.cashChangeBs.toFixed(2)} de vueltos dados en efectivo (ver detalle abajo)</p>
+                  )}
                 </div>
+
+                {/* Vueltos entregados: por que la gaveta Bs puede verse reducida/negativa */}
+                {closeSummary.changeOutflows?.length > 0 && (
+                  <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <h4 className="text-xs font-semibold text-amber-400 uppercase mb-2">Vueltos entregados</h4>
+                    {closeSummary.changeOutflows.map((c: any, i: number) => (
+                      <div key={i} className="flex justify-between text-sm mt-1">
+                        <span className="text-slate-300">{c.invoiceNumber} <span className="text-slate-500">· {c.changeMethodName}</span></span>
+                        <span className="text-amber-400">-Bs {c.changeBs.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-sm font-bold border-t border-amber-500/20 mt-1.5 pt-1.5">
+                      <span className="text-amber-300">Total vueltos</span>
+                      <span className="text-amber-400">-Bs {closeSummary.totalChangeBs.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Otros canales: informativo, NO entra al conteo de gaveta */}
                 {closeSummary.electronicByMethod?.length > 0 && (

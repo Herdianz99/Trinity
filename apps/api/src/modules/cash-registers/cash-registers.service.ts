@@ -380,8 +380,9 @@ export class CashRegistersService {
 
     const byMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
     const electronicByMethod: Record<string, { methodName: string; isDivisa: boolean; count: number; expectedUsd: number; expectedBs: number }> = {};
-    const changeOutflows: Array<{ invoiceNumber: string; changeBs: number; changeMethodName: string }> = [];
-    let totalChangeBs = 0;
+    const changeOutflows: Array<{ invoiceNumber: string; changeBs: number; changeMethodName: string; isCash: boolean }> = [];
+    let totalChangeBs = 0;   // todos los vueltos (para mostrar el detalle)
+    let cashChangeBs = 0;    // solo los vueltos que salieron de la gaveta (metodo de vuelto en efectivo)
     let cashSalesUsd = 0; // Efectivo USD recibido (metodo isCash && isDivisa)
     let cashSalesBs = 0;  // Efectivo Bs recibido  (metodo isCash && !isDivisa)
 
@@ -411,14 +412,29 @@ export class CashRegistersService {
           electronicByMethod[methodName].expectedBs += p.amountBs;
         }
 
-        // Vuelto (sale de la gaveta en Bs)
+        // Vuelto: solo descuenta de la gaveta si el metodo de vuelto es efectivo (isCash).
+        // Si se dio por un canal no-efectivo (ej. pago movil), reduce ESE canal, no la gaveta.
         if ((p as any).changeAmountBs > 0) {
+          const changeMethod = (p as any).changeMethod;
+          // changeMethod null (datos viejos) se asume efectivo Bs, como antes.
+          const isCashChange = changeMethod ? !!changeMethod.isCash : true;
+          const changeName = changeMethod?.name || 'Efectivo Bs';
           changeOutflows.push({
             invoiceNumber: inv.number || 'S/N',
             changeBs: (p as any).changeAmountBs,
-            changeMethodName: (p as any).changeMethod?.name || 'Efectivo Bs',
+            changeMethodName: changeName,
+            isCash: isCashChange,
           });
           totalChangeBs += (p as any).changeAmountBs;
+          if (isCashChange) {
+            cashChangeBs += (p as any).changeAmountBs;
+          } else {
+            // Egreso por canal electronico: reduce el esperado de ese canal
+            if (!electronicByMethod[changeName]) {
+              electronicByMethod[changeName] = { methodName: changeName, isDivisa: !!changeMethod?.isDivisa, count: 0, expectedUsd: 0, expectedBs: 0 };
+            }
+            electronicByMethod[changeName].expectedBs -= (p as any).changeAmountBs;
+          }
         }
       }
     }
@@ -463,7 +479,7 @@ export class CashRegistersService {
 
     // Efectivo fisico esperado en gaveta (lo que de verdad se arquea)
     const cashExpectedUsd = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd) * 100) / 100;
-    const cashExpectedBs = Math.round((openingBs + cashSalesBs - totalChangeBs + movInCashBs - movOutCashBs) * 100) / 100;
+    const cashExpectedBs = Math.round((openingBs + cashSalesBs - cashChangeBs + movInCashBs - movOutCashBs) * 100) / 100;
 
     return {
       openingBalanceUsd: openingUsd,
@@ -482,6 +498,7 @@ export class CashRegistersService {
       electronicByMethod: Object.values(electronicByMethod),
       changeOutflows,
       totalChangeBs,
+      cashChangeBs: Math.round(cashChangeBs * 100) / 100,
       cashMovements,
       movementsIncomeUsd: Math.round(movementsIncomeUsd * 100) / 100,
       movementsIncomeBs: Math.round(movementsIncomeBs * 100) / 100,
