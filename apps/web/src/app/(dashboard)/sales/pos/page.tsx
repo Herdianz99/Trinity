@@ -1277,16 +1277,130 @@ export default function POSPage() {
     return `${hrs}h ${mins % 60}min`;
   }
 
-  // Barcode scanner with @zxing/browser
+  // ── Escaner de codigos de barras HIBRIDO ──────────────────────────────────
+  // Usa el motor NATIVO del navegador (BarcodeDetector) cuando existe — instantaneo
+  // en Android/Chrome (tablets y telefonos), el mismo tipo de motor que usan las
+  // apps nativas. En iPhone/Safari (sin BarcodeDetector) cae a ZXing calibrado.
+  // En ambos: formatos restringidos a los 1D de tienda, camara trasera forzada y
+  // confirmacion de 2 lecturas iguales seguidas (evita lecturas erroneas).
   const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const lastScanRef = useRef<{ code: string; count: number }>({ code: '', count: 0 });
+
+  // Formatos nativos (BarcodeDetector) — EAN/UPC de fabrica + CODE-128/39 para etiquetas propias
+  const NATIVE_BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+  // Restriccion de camara: trasera + buena resolucion para enfocar el codigo nitido
+  const SCANNER_VIDEO_CONSTRAINTS: MediaStreamConstraints = {
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+  };
+
+  function stopScanner() {
+    if (scannerControlsRef.current) {
+      scannerControlsRef.current.stop();
+      scannerControlsRef.current = null;
+    }
+    lastScanRef.current = { code: '', count: 0 };
+  }
+
+  // Exige 2 lecturas identicas seguidas antes de aceptar (mata los falsos positivos)
+  function confirmScan(code: string): boolean {
+    if (lastScanRef.current.code === code) {
+      lastScanRef.current.count += 1;
+    } else {
+      lastScanRef.current = { code, count: 1 };
+    }
+    return lastScanRef.current.count >= 2;
+  }
+
+  function finishScan(code: string) {
+    handleProductSearch(code);
+    setScannerActive(false);
+    stopScanner();
+  }
+
+  // Intenta el motor nativo. Devuelve true si arranco, false si no esta soportado.
+  async function startNativeDetector(): Promise<boolean> {
+    const BD = (window as any).BarcodeDetector;
+    if (!BD) return false;
+    let formats = NATIVE_BARCODE_FORMATS;
+    try {
+      const supported: string[] = await BD.getSupportedFormats();
+      formats = NATIVE_BARCODE_FORMATS.filter((f) => supported.includes(f));
+      if (formats.length === 0) return false;
+    } catch {
+      // si getSupportedFormats falla, intentamos con la lista por defecto
+    }
+    const detector = new BD({ formats });
+    const stream = await navigator.mediaDevices.getUserMedia(SCANNER_VIDEO_CONSTRAINTS);
+    if (!videoRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      return false;
+    }
+    videoRef.current.srcObject = stream;
+    await videoRef.current.play().catch(() => {});
+
+    let stopped = false;
+    let rafId = 0;
+    const tick = async () => {
+      if (stopped || !videoRef.current) return;
+      try {
+        const codes = await detector.detect(videoRef.current);
+        if (codes && codes.length > 0) {
+          const code = codes[0].rawValue as string;
+          if (code && confirmScan(code)) {
+            finishScan(code);
+            return;
+          }
+        }
+      } catch {
+        // errores por frame (video no listo, etc.) se ignoran
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    scannerControlsRef.current = {
+      stop: () => {
+        stopped = true;
+        cancelAnimationFrame(rafId);
+        stream.getTracks().forEach((t) => t.stop());
+        if (videoRef.current) videoRef.current.srcObject = null;
+      },
+    };
+    return true;
+  }
+
+  // Fallback ZXing calibrado (iPhone/Safari y navegadores viejos)
+  async function startZxingScanner() {
+    const { BrowserMultiFormatReader } = await import('@zxing/browser');
+    const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+    const hints = new Map<number, any>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+    ]);
+    const codeReader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
+    if (!videoRef.current) throw new Error('No se pudo inicializar el video');
+    const controls = await codeReader.decodeFromConstraints(
+      SCANNER_VIDEO_CONSTRAINTS,
+      videoRef.current,
+      (result) => {
+        if (result) {
+          const code = result.getText();
+          if (code && confirmScan(code)) finishScan(code);
+        }
+      },
+    );
+    scannerControlsRef.current = { stop: () => controls.stop() };
+  }
 
   async function toggleScanner() {
     if (scannerActive) {
       setScannerActive(false);
-      if (scannerControlsRef.current) {
-        scannerControlsRef.current.stop();
-        scannerControlsRef.current = null;
-      }
+      stopScanner();
       return;
     }
 
@@ -1302,33 +1416,17 @@ export default function POSPage() {
     }
 
     try {
-      const { BrowserMultiFormatReader } = await import('@zxing/browser');
-      const codeReader = new BrowserMultiFormatReader();
+      lastScanRef.current = { code: '', count: 0 };
       setScannerActive(true);
 
       // Wait for React to render the <video> element before attaching the stream
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      if (!videoRef.current) {
-        throw new Error('No se pudo inicializar el video');
+      // Motor nativo primero (Android -> instantaneo); si no, ZXing (iPhone)
+      const startedNative = await startNativeDetector();
+      if (!startedNative) {
+        await startZxingScanner();
       }
-
-      const controls = await codeReader.decodeFromVideoDevice(
-        undefined,
-        videoRef.current,
-        (result) => {
-          if (result) {
-            const code = result.getText();
-            handleProductSearch(code);
-            setScannerActive(false);
-            if (scannerControlsRef.current) {
-              scannerControlsRef.current.stop();
-              scannerControlsRef.current = null;
-            }
-          }
-        },
-      );
-      scannerControlsRef.current = controls;
     } catch (err) {
       console.error('Scanner error:', err);
       const errorMsg = err instanceof DOMException && err.name === 'NotAllowedError'
@@ -1338,6 +1436,7 @@ export default function POSPage() {
         : 'No se pudo acceder a la camara';
       setMessage({ type: 'error', text: errorMsg });
       setScannerActive(false);
+      stopScanner();
     }
   }
 
