@@ -5,6 +5,17 @@ import { printTicket } from './printer';
 
 const app = express();
 
+// Private Network Access (Chrome): cuando una pagina HTTPS publica (eltrebol.app)
+// hace fetch a una direccion local (localhost:8765), Chrome manda un preflight con
+// 'Access-Control-Request-Private-Network: true' y BLOQUEA la respuesta si el agente
+// no contesta con 'Access-Control-Allow-Private-Network: true'. Sin esto, isAgentRunning()
+// del navegador falla aunque el agente este corriendo, y la comanda cae a window.print().
+// Se setea antes del middleware de cors para que viaje tambien en la respuesta del preflight.
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Private-Network', 'true');
+  next();
+});
+
 // CORS: permitir localhost:3000, eltrebol.app y cualquier origen local
 app.use(cors({
   origin: (origin, callback) => {
@@ -33,7 +44,7 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    version: '1.1.1',
+    version: '1.1.3',
     thermalEnabled: config.thermalEnabled,
     printerName: config.thermalPrinterName,
   });
@@ -69,7 +80,7 @@ app.post('/print-ticket', async (req, res) => {
 // Iniciar servidor
 app.listen(config.port, () => {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║       TRINITY AGENT v1.1.1              ║');
+  console.log('║       TRINITY AGENT v1.1.3              ║');
   console.log('╠══════════════════════════════════════════╣');
   console.log(`║  Puerto: ${config.port}                          ║`);
   console.log(`║  Impresora: ${config.thermalEnabled ? 'ACTIVA' : 'DESACTIVADA'}                  ║`);

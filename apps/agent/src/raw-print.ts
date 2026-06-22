@@ -206,19 +206,35 @@ export function sendRawToPrinter(data: Buffer, printerName: string, debug = fals
     }
 
     const psScript = buildPowerShellScript(binFile, printerName);
+    const ps1File = path.join(tempDir, `trinity-rawprint-${timestamp}.ps1`);
 
-    // Encode as Base64 UTF-16LE for -EncodedCommand (avoids quoting issues)
-    const utf16le = Buffer.from(psScript, 'utf16le');
-    const b64 = utf16le.toString('base64');
+    // Escribir el script a un .ps1 y ejecutarlo con -File. ANTES se pasaba todo el
+    // C# por -EncodedCommand (base64 UTF-16LE), pero ese comando superaba el limite
+    // de longitud de linea de cmd.exe (~8191 chars) -> "La linea de comandos es
+    // demasiado larga", el RAW fallaba SIEMPRE y caia al fallback de texto plano
+    // (que manda el markup {{...}} literal a la impresora). Con -File la linea de
+    // comando queda corta. ExecutionPolicy Bypass: correr un .ps1 si pasa por la
+    // politica de ejecucion (a diferencia de -EncodedCommand), asi que la saltamos.
+    try {
+      fs.writeFileSync(ps1File, '﻿' + psScript, 'utf-8');
+    } catch (err) {
+      console.error(`[RAW-PRINT] Error writing ps1 file: ${(err as Error).message}`);
+      try { if (fs.existsSync(binFile)) fs.unlinkSync(binFile); } catch {}
+      resolve(false);
+      return;
+    }
 
-    const command = `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${b64}`;
+    const command = `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${ps1File}"`;
 
     console.log(`[RAW-PRINT] Sending ${data.length} bytes to "${printerName}"`);
 
     exec(command, { timeout: 15000 }, (error, stdout, stderr) => {
-      // Clean up temp file
+      // Clean up temp files
       try {
         if (fs.existsSync(binFile)) fs.unlinkSync(binFile);
+      } catch {}
+      try {
+        if (fs.existsSync(ps1File)) fs.unlinkSync(ps1File);
       } catch {}
 
       if (error) {

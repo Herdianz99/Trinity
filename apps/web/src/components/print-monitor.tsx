@@ -264,8 +264,9 @@ export default function PrintMonitor() {
           style={{
             width: '80mm',
             fontFamily: "'Courier New', Courier, monospace",
-            fontSize: '11px',
-            lineHeight: '1.3',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            lineHeight: '1.35',
             color: '#000',
             padding: '2mm',
           }}
@@ -282,6 +283,9 @@ export default function PrintMonitor() {
                     left: 0 !important;
                     top: 0 !important;
                     width: 80mm !important;
+                    font-weight: bold !important;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
                   }
                   @page { size: 80mm auto; margin: 0; }
                 }
@@ -290,45 +294,45 @@ export default function PrintMonitor() {
           />
 
           {/* Header */}
-          <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '4px', marginBottom: '4px' }}>
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>COMANDA</div>
-            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+          <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '6px' }}>
+            <div style={{ fontSize: '26px', fontWeight: 'bold', letterSpacing: '2px' }}>COMANDA</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
               {currentJob.printArea.name}
             </div>
-            <div style={{ marginTop: '2px' }}>
+            {currentJob.isReprint && (
+              <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '2px' }}>** REIMPRESION **</div>
+            )}
+            <div style={{ fontSize: '16px', marginTop: '4px' }}>
               Factura: {currentJob.invoice.number || 'S/N'}
             </div>
-            <div>
+            <div style={{ fontSize: '13px' }}>
               {new Date(currentJob.createdAt).toLocaleString('es-VE', { hour12: false })}
             </div>
           </div>
 
-          {/* Items table */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #000' }}>
-                <th style={{ textAlign: 'right', padding: '2px 1px', fontWeight: 'bold' }}>Cant</th>
-                <th style={{ textAlign: 'left', padding: '2px 1px', fontWeight: 'bold' }}>Cod.</th>
-                <th style={{ textAlign: 'left', padding: '2px 1px', fontWeight: 'bold' }}>Ref.Prov</th>
-                <th style={{ textAlign: 'left', padding: '2px 1px', fontWeight: 'bold' }}>Descripcion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentJob.items.map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px dotted #ccc' }}>
-                  <td style={{ padding: '2px 1px', verticalAlign: 'top', textAlign: 'right', fontWeight: 'bold' }}>
-                    {item.quantity}
-                  </td>
-                  <td style={{ padding: '2px 1px', verticalAlign: 'top' }}>{item.code}</td>
-                  <td style={{ padding: '2px 1px', verticalAlign: 'top' }}>{item.supplierRef || '—'}</td>
-                  <td style={{ padding: '2px 1px', verticalAlign: 'top', wordBreak: 'break-word' }}>{item.name}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Items: cada producto en bloque vertical, codigo/ref debajo del nombre */}
+          <div>
+            {currentJob.items.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  borderBottom: '1px dashed #000',
+                  padding: '5px 0',
+                }}
+              >
+                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                  {item.quantity} x {(item.name || 'Producto').toUpperCase()}
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                  Cod: {item.code || '-'}
+                  {item.supplierRef ? `   Ref: ${item.supplierRef}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Footer */}
-          <div style={{ borderTop: '1px dashed #000', marginTop: '4px', paddingTop: '4px', textAlign: 'center', fontSize: '9px' }}>
+          <div style={{ marginTop: '6px', paddingTop: '4px', textAlign: 'center', fontSize: '15px', fontWeight: 'bold' }}>
             Renglones: {currentJob.items.length} | Unidades:{' '}
             {currentJob.items.reduce((sum, i) => sum + i.quantity, 0)}
           </div>

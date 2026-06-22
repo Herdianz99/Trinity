@@ -7,12 +7,12 @@ export class CreateCategoryDto {
   @MinLength(2)
   name: string;
 
-  @ApiProperty({ required: false, description: '3 letras mayusculas, ej: HER' })
+  @ApiProperty({ required: false, description: '2 a 6 letras mayusculas, ej: HER / ELEC' })
   @IsOptional()
   @IsString()
-  @MinLength(3, { message: 'El codigo debe tener exactamente 3 letras' })
-  @MaxLength(3, { message: 'El codigo debe tener exactamente 3 letras' })
-  @Matches(/^[A-Za-z]{3}$/, { message: 'El codigo debe contener solo letras (3)' })
+  @MinLength(2, { message: 'El codigo debe tener entre 2 y 6 letras' })
+  @MaxLength(6, { message: 'El codigo debe tener entre 2 y 6 letras' })
+  @Matches(/^[A-Za-z]{2,6}$/, { message: 'El codigo debe contener solo letras (2 a 6)' })
   code?: string;
 
   @ApiProperty({ required: false })

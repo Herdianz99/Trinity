@@ -207,13 +207,13 @@ export default function CategoryDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {isRoot && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Codigo (3 letras) *</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Codigo (2 a 6 letras) *</label>
                   <input
                     type="text"
                     value={form.code || ''}
-                    onChange={e => setForm((f: any) => ({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) }))}
+                    onChange={e => setForm((f: any) => ({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6) }))}
                     className="input-field !py-2 text-sm uppercase font-mono tracking-wider"
-                    maxLength={3}
+                    maxLength={6}
                     readOnly={category.children && category.children.length > 0}
                   />
                   {category.children && category.children.length > 0 && (

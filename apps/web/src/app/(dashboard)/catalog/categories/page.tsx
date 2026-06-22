@@ -83,8 +83,8 @@ export default function CategoriesPage() {
   async function handleAdd(parentId: string | null) {
     if (!newName.trim()) return;
     const isRoot = parentId === null;
-    if (isRoot && newCode.length !== 3) {
-      setMessage({ type: 'error', text: 'El codigo debe tener exactamente 3 letras' });
+    if (isRoot && (newCode.length < 2 || newCode.length > 6)) {
+      setMessage({ type: 'error', text: 'El codigo debe tener entre 2 y 6 letras' });
       return;
     }
     setSaving(true);
@@ -122,8 +122,8 @@ export default function CategoriesPage() {
 
   async function handleUpdate(id: string, isRoot: boolean) {
     if (!editName.trim()) return;
-    if (isRoot && editCode.length !== 3) {
-      setMessage({ type: 'error', text: 'El codigo debe tener exactamente 3 letras' });
+    if (isRoot && (editCode.length < 2 || editCode.length > 6)) {
+      setMessage({ type: 'error', text: 'El codigo debe tener entre 2 y 6 letras' });
       return;
     }
     setSaving(true);
@@ -229,10 +229,10 @@ export default function CategoriesPage() {
                 <input
                   type="text"
                   value={editCode}
-                  onChange={(e) => setEditCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3))}
+                  onChange={(e) => setEditCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6))}
                   placeholder="COD"
-                  maxLength={3}
-                  className="input-field !py-1 !px-2 text-sm w-16 uppercase text-center tracking-wider font-mono"
+                  maxLength={6}
+                  className="input-field !py-1 !px-2 text-sm w-20 uppercase text-center tracking-wider font-mono"
                   autoFocus
                 />
               )}
@@ -421,10 +421,10 @@ export default function CategoriesPage() {
             <input
               type="text"
               value={newCode}
-              onChange={(e) => setNewCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3))}
+              onChange={(e) => setNewCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6))}
               placeholder="COD"
-              maxLength={3}
-              className="input-field !py-1.5 !px-2 text-sm w-16 uppercase text-center tracking-wider font-mono"
+              maxLength={6}
+              className="input-field !py-1.5 !px-2 text-sm w-20 uppercase text-center tracking-wider font-mono"
               autoFocus
             />
             <input
