@@ -10,13 +10,6 @@ const IVA_RATES: Record<string, number> = {
   SPECIAL: 0.31,
 };
 
-const IVA_LABELS: Record<string, string> = {
-  EXEMPT: 'Exento',
-  REDUCED: 'IVA 8%',
-  GENERAL: 'IVA 16%',
-  SPECIAL: 'IVA 31%',
-};
-
 // Payment method labels now come from payment.method.name (relation)
 
 interface CompanyInfo {
@@ -223,17 +216,15 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   const cashRegister = invoice.cashRegister;
   const exchangeRate = invoice.exchangeRate || 0;
   const isCredit = invoice.isCredit || false;
-  const igtfUsd = invoice.igtfUsd || 0;
 
+  // Total con IVA e IGTF YA incluidos (no se desglosan, igual que el ticket HTML aprobado).
+  // Se calculan subtotal/iva solo para el fallback cuando invoice.totalUsd no viene.
   let subtotalUsd = 0;
-  let totalDiscountUsd = 0;
   const ivaGroups: Record<string, number> = {};
   for (const item of items) {
     const lineTotal = item.quantity * item.unitPrice;
     const discountPct = item.discountPct || 0;
-    const discountAmount = lineTotal * discountPct / 100;
-    totalDiscountUsd += discountAmount;
-    const discountedLine = lineTotal - discountAmount;
+    const discountedLine = lineTotal * (1 - discountPct / 100);
     subtotalUsd += discountedLine;
     const ivaType = item.ivaType || 'GENERAL';
     const rate = IVA_RATES[ivaType] || 0;
@@ -242,6 +233,7 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
     }
   }
   const totalIva = Object.values(ivaGroups).reduce((s, v) => s + v, 0);
+  const igtfUsd = invoice.igtfUsd || 0;
   const totalUsd = invoice.totalUsd ?? subtotalUsd + totalIva + igtfUsd;
   const totalBs = invoice.totalBs ?? totalUsd * exchangeRate;
 
@@ -277,10 +269,7 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   }
   lines.push('{{LINE}}');
 
-  // Items header
-  lines.push(`{{BOLD}}${pad('ARTICULO', 'TOTAL')}{{/BOLD}}`);
-
-  // Items
+  // Items (precio incluye IVA, sin encabezado de columnas ni desglose, igual que el HTML)
   for (const item of items) {
     const ivaType = item.ivaType || 'GENERAL';
     const rate = IVA_RATES[ivaType] || 0;
@@ -289,7 +278,7 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
     const discountPct = item.discountPct || 0;
     const name = item.productName || item.name || 'Producto';
     lines.push(`{{BOLD}}${name}{{/BOLD}}`);
-    lines.push(`  ${item.quantity} x ${fmt(unitPriceWithIva)}${' '.repeat(Math.max(1, w - 4 - String(item.quantity).length - fmt(unitPriceWithIva).length - fmt(lineTotal).length - 3))}${fmt(lineTotal)}`);
+    lines.push(pad(`  ${item.quantity} x ${fmt(unitPriceWithIva)}`, fmt(lineTotal)));
     if (discountPct > 0) {
       const discountAmount = lineTotal * discountPct / 100;
       lines.push(pad(`  Desc. ${fmtPct(discountPct)}%`, `-${fmt(discountAmount)}`));
@@ -297,54 +286,45 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   }
   lines.push('{{LINE}}');
 
-  // Subtotal / IVA / IGTF / Totals
-  lines.push(pad('Subtotal:', `$${fmt(subtotalUsd)}`));
-  for (const [type, amount] of Object.entries(ivaGroups)) {
-    if (amount > 0) {
-      lines.push(pad(`${IVA_LABELS[type] || type}:`, `$${fmt(amount)}`));
-    }
-  }
-  if (igtfUsd > 0) {
-    lines.push(pad('IGTF:', `$${fmt(igtfUsd)}`));
-  }
-  lines.push(`{{BOLD}}${pad('TOTAL USD:', `$${fmt(totalUsd)}`)}{{/BOLD}}`);
-  lines.push(`{{BOLD}}${pad('TOTAL Bs:', `Bs ${fmt(totalBs)}`)}{{/BOLD}}`);
+  // Totales (IVA e IGTF incluidos, NO se muestran por separado — igual que el HTML aprobado)
+  lines.push(`{{BOLD}}${pad('TOTAL USD:', fmt(totalUsd))}{{/BOLD}}`);
+  lines.push(`{{BOLD}}${pad('TOTAL Bs:', fmt(totalBs))}{{/BOLD}}`);
   if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmt(exchangeRate)} Bs/USD{{/CENTER}}`);
   lines.push('{{LINE}}');
 
-  // Payments
+  // Forma de pago
   if (payments.length > 0) {
     lines.push('{{BOLD}}Forma de pago:{{/BOLD}}');
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
       const isBs = !(p.method?.isDivisa ?? true);
-      const amount = isBs ? `${fmt(p.amountBs)} Bs` : `$${fmt(p.amountUsd)}`;
-      lines.push(pad(`  ${label}:`, amount));
-      if (p.reference) lines.push(`    Ref: ${p.reference}`);
+      const amount = isBs ? `${fmt(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      lines.push(pad(`${label}:`, amount));
+      if (p.reference) lines.push(`  Ref: ${p.reference}`);
     }
   }
 
-  // Change (vuelto)
+  // Vuelto (igual que el HTML: monto Bs + desglose USD x tasa + metodo)
   if (invoice.changeBs > 0) {
     const changeUsd = exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0;
     const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
     lines.push('{{LINE}}');
-    lines.push(pad('Total recibido USD:', `$${fmt(totalUsd + changeUsd)}`));
-    lines.push(`{{BOLD}}${pad('Vuelto:', `Bs ${fmt(invoice.changeBs)}`)}{{/BOLD}}`);
-    lines.push(pad('Metodo vuelto:', changeMethodName));
+    lines.push(`{{BOLD}}${pad('Vuelto:', `${fmt(invoice.changeBs)} Bs`)}{{/BOLD}}`);
+    lines.push(`  ${fmt(changeUsd)} USD x ${fmt(exchangeRate)} = ${fmt(invoice.changeBs)} Bs`);
+    lines.push(`  Metodo: ${changeMethodName}`);
   }
 
-  // Credit badge
+  // Credito
   if (isCredit) {
     lines.push('{{LINE}}');
-    lines.push('{{CENTER}}{{BIG}}*** CREDITO ***{{/BIG}}{{/CENTER}}');
+    lines.push('{{CENTER}}{{BOLD}}*** VENTA A CREDITO ***{{/BOLD}}{{/CENTER}}');
     if (invoice.creditDays) lines.push(`{{CENTER}}Plazo: ${invoice.creditDays} dias{{/CENTER}}`);
     if (invoice.dueDate) lines.push(`{{CENTER}}Vence: ${fmtDate(invoice.dueDate)}{{/CENTER}}`);
   }
 
   lines.push('{{LINE}}');
-  lines.push('{{CENTER}}No constituye factura fiscal{{/CENTER}}');
-  lines.push('{{CENTER}}Gracias por su compra!{{/CENTER}}');
+  lines.push('{{CENTER}}Gracias por su compra{{/CENTER}}');
+  lines.push('{{CENTER}}*** No constituye factura fiscal ***{{/CENTER}}');
   lines.push('{{FEED:3}}');
   lines.push('{{CUT}}');
 
