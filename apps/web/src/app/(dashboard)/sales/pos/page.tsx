@@ -197,6 +197,8 @@ export default function POSPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerIsSpecial, setCustomerIsSpecial] = useState(false);
   const [customerIsDefault, setCustomerIsDefault] = useState(false);
+  // Aviso (no bloqueante) al aparcar una factura que quedaria con el cliente por defecto
+  const [showCustomerReminder, setShowCustomerReminder] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -768,7 +770,29 @@ export default function POSPage() {
     setPayments(prev => prev.filter((_, i) => i !== idx));
   }
 
-  async function handleSaveInvoice() {
+  // Guardar/Aparcar: si la factura quedaria con el cliente por defecto (sin cliente
+  // elegido -> el backend le asigna el por defecto, o con el cliente marcado por defecto),
+  // avisar al vendedor antes de aparcar. Es solo informativo: NO bloquea el aparcado.
+  function handleSaveInvoice() {
+    if (cart.length === 0) return;
+    if (!customerId || customerIsDefault) {
+      setShowCustomerReminder(true);
+      return;
+    }
+    doSaveInvoice();
+  }
+
+  // Abre el buscador de cliente en el sitio que corresponde al dispositivo:
+  // en movil/tablet el modal "Seleccionar Cliente" a pantalla completa; en PC el
+  // buscador del carrito (al limpiar el cliente por defecto queda visible el input).
+  function goAssignCustomer() {
+    setShowCustomerReminder(false);
+    setCustomerId(null);
+    setCustomerName('');
+    setShowCustomerSearch(true);
+  }
+
+  async function doSaveInvoice() {
     if (cart.length === 0) return;
     setProcessing(true);
     setMessage(null);
@@ -2338,6 +2362,40 @@ export default function POSPage() {
             >
               <Plus size={16} /> Crear nuevo cliente
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso (no bloqueante): la factura quedaria con el cliente por defecto */}
+      {showCustomerReminder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl max-w-sm w-full p-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <User size={18} className="text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">Cliente no asignado</h3>
+                <p className="text-sm text-slate-300 mt-1">
+                  Esta factura se va a aparcar con el{' '}
+                  <span className="font-semibold text-amber-300">cliente por defecto</span>. ¿Deseas asignarle un cliente?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => { setShowCustomerReminder(false); doSaveInvoice(); }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm font-medium hover:bg-slate-700/50 transition-colors"
+              >
+                No, aparcar asi
+              </button>
+              <button
+                onClick={goAssignCustomer}
+                className="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-colors"
+              >
+                Si, asignar cliente
+              </button>
+            </div>
           </div>
         </div>
       )}
