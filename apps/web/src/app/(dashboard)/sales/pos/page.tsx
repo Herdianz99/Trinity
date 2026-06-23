@@ -214,7 +214,7 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean } | null>(null);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean; defaultCustomerId?: string | null } | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
@@ -222,6 +222,7 @@ export default function POSPage() {
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
   const searchTimeout = useRef<any>(null);
+  const customerSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Price override state
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
@@ -340,6 +341,7 @@ export default function POSPage() {
           address: data.address || '',
           phone: data.phone || '',
           allowNegativeStock: data.allowNegativeStock ?? true,
+          defaultCustomerId: data.defaultCustomerId || null,
         });
       });
     fetch('/api/proxy/payment-methods')
@@ -775,7 +777,13 @@ export default function POSPage() {
   // avisar al vendedor antes de aparcar. Es solo informativo: NO bloquea el aparcado.
   function handleSaveInvoice() {
     if (cart.length === 0) return;
-    if (!customerId || customerIsDefault) {
+    // La factura queda con el cliente por defecto si: no hay cliente elegido (el backend
+    // le asigna config.defaultCustomerId), o el cliente actual ES ese por defecto (caso al
+    // retomar una factura ya aparcada). Se compara contra config.defaultCustomerId — el flag
+    // Customer.isDefault no es confiable (el "Cliente Final" lo tiene en false).
+    const isDefaultCustomer =
+      !customerId || customerIsDefault || customerId === companyConfig?.defaultCustomerId;
+    if (isDefaultCustomer) {
       setShowCustomerReminder(true);
       return;
     }
@@ -790,6 +798,10 @@ export default function POSPage() {
     setCustomerId(null);
     setCustomerName('');
     setShowCustomerSearch(true);
+    // En PC el buscador del carrito queda visible al limpiar el cliente: lo enfocamos
+    // (en movil/tablet el modal full-screen ya hace autoFocus). El timeout deja
+    // montar el input tras el re-render.
+    setTimeout(() => customerSearchInputRef.current?.focus(), 100);
   }
 
   async function doSaveInvoice() {
@@ -2708,6 +2720,7 @@ export default function POSPage() {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input
+                      ref={customerSearchInputRef}
                       type="text"
                       placeholder="Buscar cliente..."
                       value={customerSearch}

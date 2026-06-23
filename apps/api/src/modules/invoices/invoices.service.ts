@@ -96,9 +96,15 @@ export class InvoicesService {
     const where: any = { status: 'PENDING' };
 
     if (todayOnly) {
-      const now = new Date();
-      const startOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
+      // "Hoy" segun la zona horaria de Venezuela (America/Caracas, UTC-4), NO la del
+      // servidor ni un rango UTC-naive: una factura aparcada de noche en Caracas cae
+      // en el dia UTC siguiente, y con el rango viejo desaparecia de "facturas en espera".
+      const ymd = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Caracas',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date());
+      const startOfDay = new Date(`${ymd}T00:00:00.000-04:00`);
+      const endOfDay = new Date(`${ymd}T23:59:59.999-04:00`);
       where.createdAt = { gte: startOfDay, lte: endOfDay };
     }
 
