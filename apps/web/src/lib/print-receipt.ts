@@ -41,26 +41,42 @@ function fmtPct(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-interface BsLine {
+type Currency = 'BS' | 'USD';
+
+interface ReceiptLine {
   name: string;
   qty: number;
-  unitBs: number;   // precio unitario con IVA, en Bs
-  grossBs: number;  // total de linea (sin descuento), en Bs — ajustado para cuadrar
+  unit: number;   // precio unitario con IVA, en la moneda elegida
+  gross: number;  // total de linea (sin descuento) — ajustado para cuadrar
   discountPct: number;
-  discBs: number;   // monto de descuento de la linea, en Bs
+  disc: number;   // monto de descuento de la linea
+}
+
+interface ReceiptCalc {
+  cur: Currency;
+  rate: number;
+  lines: ReceiptLine[];
+  igtf: number;
+  total: number;
+}
+
+// Formato segun moneda: Bs estilo VE (1.234,56) / USD plano (1234.56)
+function curFmt(cur: Currency, n: number): string {
+  return cur === 'BS' ? fmtBs(n) : fmt(n);
 }
 
 /**
- * Calcula el recibo en Bs anclado a lo que REALMENTE se cobro.
- * - El total es SIEMPRE `invoice.totalBs` (campo guardado = lo cobrado, lo que cubren los pagos).
- *   Nunca se reconstruye sumando lineas redondeadas.
- * - Las lineas se calculan en Bs y el residual de redondeo (1-2 centimos) se carga a la
- *   ULTIMA linea, de modo que la suma impresa de lineas netas == (totalBs - IGTF). Asi, si el
- *   cliente suma lo que ve en el ticket, le da exactamente el total.
+ * Calcula el recibo en la moneda elegida, anclado a lo que REALMENTE se cobro.
+ * - Serie NO fiscal: contado -> 'BS', credito -> 'USD' (decidido por el llamador).
+ * - El total es SIEMPRE el campo guardado (`invoice.totalBs`/`invoice.totalUsd` = lo cobrado,
+ *   lo que cubren los pagos). Nunca se reconstruye sumando lineas redondeadas.
+ * - El residual de redondeo (1-2 centimos) se carga a la ULTIMA linea, de modo que la suma
+ *   NETA de lineas impresas == (total - IGTF). Asi, si el cliente suma lo que ve, da el total.
  */
-function computeReceiptBs(invoice: any): { rate: number; lines: BsLine[]; igtfBs: number; totalBs: number } {
+function computeReceipt(invoice: any, cur: Currency): ReceiptCalc {
   const items: any[] = invoice.items || [];
   const rate = invoice.exchangeRate || 0;
+  const toCur = (usd: number) => (cur === 'BS' ? usd * rate : usd);
 
   // Fallback de totales solo si el registro no trae totalBs/totalUsd guardados
   let subtotalUsd = 0;
@@ -79,37 +95,37 @@ function computeReceiptBs(invoice: any): { rate: number; lines: BsLine[]; igtfBs
   const totalIva = Object.values(ivaGroups).reduce((s, v) => s + v, 0);
   const igtfUsd = invoice.igtfUsd || 0;
   const totalUsd = invoice.totalUsd ?? subtotalUsd + totalIva + igtfUsd;
-  const igtfBs = round2(invoice.igtfBs ?? igtfUsd * rate);
-  const totalBs = round2(invoice.totalBs ?? totalUsd * rate);
-  const goodsTargetBs = round2(totalBs - igtfBs);
 
-  const lines: BsLine[] = items.map((item) => {
+  const igtf = round2(cur === 'BS' ? (invoice.igtfBs ?? igtfUsd * rate) : igtfUsd);
+  const total = round2(cur === 'BS' ? (invoice.totalBs ?? totalUsd * rate) : totalUsd);
+  const goodsTarget = round2(total - igtf);
+
+  const lines: ReceiptLine[] = items.map((item) => {
     const r = IVA_RATES[item.ivaType || 'GENERAL'] || 0;
-    const unitPriceWithIvaUsd = item.unitPrice * (1 + r);
+    const unitWithIva = toCur(item.unitPrice * (1 + r));
     const discountPct = item.discountPct || 0;
-    const grossBs = round2(item.quantity * unitPriceWithIvaUsd * rate);
+    const gross = round2(item.quantity * unitWithIva);
     return {
       name: item.productName || item.name || 'Producto',
       qty: item.quantity,
-      unitBs: round2(unitPriceWithIvaUsd * rate),
-      grossBs,
+      unit: round2(unitWithIva),
+      gross,
       discountPct,
-      discBs: round2(grossBs * discountPct / 100),
+      disc: round2(gross * discountPct / 100),
     };
   });
 
-  // Snap: que la suma NETA de las lineas cuadre EXACTO con (totalBs - IGTF).
-  // El residual (centimos de redondeo) se carga a la ultima linea.
+  // Snap: que la suma NETA de las lineas cuadre EXACTO con (total - IGTF).
   if (lines.length > 0) {
-    const sumNet = round2(lines.reduce((s, l) => s + (l.grossBs - l.discBs), 0));
-    const residual = round2(goodsTargetBs - sumNet);
+    const sumNet = round2(lines.reduce((s, l) => s + (l.gross - l.disc), 0));
+    const residual = round2(goodsTarget - sumNet);
     if (residual !== 0) {
       const last = lines[lines.length - 1];
-      last.grossBs = round2(last.grossBs + residual);
+      last.gross = round2(last.gross + residual);
     }
   }
 
-  return { rate, lines, igtfBs, totalBs };
+  return { cur, rate, lines, igtf, total };
 }
 
 function fmtDate(dateStr: string): string {
@@ -131,8 +147,10 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   const exchangeRate = invoice.exchangeRate || 0;
   const isCredit = invoice.isCredit || false;
 
-  // Montos en Bs anclados a lo cobrado (ver computeReceiptBs)
-  const bs = computeReceiptBs(invoice);
+  // Serie no fiscal: contado -> Bs, credito -> USD. Anclado a lo cobrado (ver computeReceipt)
+  const cur: Currency = isCredit ? 'USD' : 'BS';
+  const sym = cur === 'BS' ? 'Bs' : 'USD';
+  const calc = computeReceipt(invoice, cur);
 
   // --- Build HTML ---
   let html = `<!DOCTYPE html>
@@ -199,28 +217,28 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
 
   html += `<div class="separator"></div>`;
 
-  // Items (montos en Bs, precio incluye IVA)
-  for (const l of bs.lines) {
+  // Items (precio incluye IVA), en la moneda elegida
+  for (const l of calc.lines) {
     html += `<div class="item-name">${l.name}</div>`;
     html += `<div class="item-detail">
-      <span>${l.qty} x ${fmtBs(l.unitBs)}</span>
-      <span>${fmtBs(l.grossBs)}</span>
+      <span>${l.qty} x ${curFmt(cur, l.unit)}</span>
+      <span>${curFmt(cur, l.gross)}</span>
     </div>`;
     if (l.discountPct > 0) {
       html += `<div class="item-detail" style="font-size:10px;">
         <span>Desc. ${fmtPct(l.discountPct)}%</span>
-        <span>-${fmtBs(l.discBs)}</span>
+        <span>-${curFmt(cur, l.disc)}</span>
       </div>`;
     }
   }
 
   html += `<div class="separator"></div>`;
 
-  // Total en Bs (IVA incluido). IGTF aparte solo si aplica.
-  if (bs.igtfBs > 0) {
-    html += `<div class="row" style="font-size:12px;"><span>IGTF:</span><span>${fmtBs(bs.igtfBs)}</span></div>`;
+  // Total (IVA incluido). IGTF aparte solo si aplica.
+  if (calc.igtf > 0) {
+    html += `<div class="row" style="font-size:12px;"><span>IGTF:</span><span>${curFmt(cur, calc.igtf)}</span></div>`;
   }
-  html += `<div class="row bold" style="font-size:15px;"><span>TOTAL Bs:</span><span>${fmtBs(bs.totalBs)}</span></div>`;
+  html += `<div class="row bold" style="font-size:15px;"><span>TOTAL ${sym}:</span><span>${curFmt(cur, calc.total)}</span></div>`;
 
   if (exchangeRate > 0) {
     html += `<div class="center" style="font-size:11px;">Tasa: ${fmtBs(exchangeRate)} Bs/USD</div>`;
@@ -228,21 +246,25 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
 
   html += `<div class="separator"></div>`;
 
-  // Payments (en Bs)
+  // Payments (en la moneda elegida)
   if (payments.length > 0) {
     html += `<div class="bold">Forma de pago:</div>`;
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
-      html += `<div class="row"><span>${label}:</span><span>${fmtBs(p.amountBs)} Bs</span></div>`;
+      const amount = cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      html += `<div class="row"><span>${label}:</span><span>${amount}</span></div>`;
       if (p.reference) html += `<div style="font-size:10px;padding-left:8px;">Ref: ${p.reference}</div>`;
     }
   }
 
-  // Change (vuelto) en Bs
+  // Change (vuelto) en la moneda elegida
   if (invoice.changeBs > 0) {
     const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
+    const changeStr = cur === 'BS'
+      ? `${fmtBs(invoice.changeBs)} Bs`
+      : `${fmt(exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0)} USD`;
     html += `<div class="separator"></div>`;
-    html += `<div class="row bold"><span>Vuelto:</span><span>${fmtBs(invoice.changeBs)} Bs</span></div>`;
+    html += `<div class="row bold"><span>Vuelto:</span><span>${changeStr}</span></div>`;
     html += `<div style="font-size:11px;padding-left:4px;">Metodo: ${changeMethodName}</div>`;
   }
 
@@ -270,8 +292,10 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   const exchangeRate = invoice.exchangeRate || 0;
   const isCredit = invoice.isCredit || false;
 
-  // Montos en Bs anclados a lo cobrado (ver computeReceiptBs)
-  const bs = computeReceiptBs(invoice);
+  // Serie no fiscal: contado -> Bs, credito -> USD. Anclado a lo cobrado (ver computeReceipt)
+  const cur: Currency = isCredit ? 'USD' : 'BS';
+  const sym = cur === 'BS' ? 'Bs' : 'USD';
+  const calc = computeReceipt(invoice, cur);
 
   const w = 42;
   const lines: string[] = [];
@@ -305,37 +329,41 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   }
   lines.push('{{LINE}}');
 
-  // Items en Bs (precio incluye IVA, sin encabezado de columnas ni desglose)
-  for (const l of bs.lines) {
+  // Items (precio incluye IVA, sin encabezado ni desglose), en la moneda elegida
+  for (const l of calc.lines) {
     lines.push(`{{BOLD}}${l.name}{{/BOLD}}`);
-    lines.push(pad(`  ${l.qty} x ${fmtBs(l.unitBs)}`, fmtBs(l.grossBs)));
+    lines.push(pad(`  ${l.qty} x ${curFmt(cur, l.unit)}`, curFmt(cur, l.gross)));
     if (l.discountPct > 0) {
-      lines.push(pad(`  Desc. ${fmtPct(l.discountPct)}%`, `-${fmtBs(l.discBs)}`));
+      lines.push(pad(`  Desc. ${fmtPct(l.discountPct)}%`, `-${curFmt(cur, l.disc)}`));
     }
   }
   lines.push('{{LINE}}');
 
-  // Total en Bs (IVA incluido). IGTF aparte solo si aplica.
-  if (bs.igtfBs > 0) lines.push(pad('IGTF:', `${fmtBs(bs.igtfBs)} Bs`));
-  lines.push(`{{BOLD}}${pad('TOTAL Bs:', fmtBs(bs.totalBs))}{{/BOLD}}`);
+  // Total (IVA incluido). IGTF aparte solo si aplica.
+  if (calc.igtf > 0) lines.push(pad('IGTF:', `${curFmt(cur, calc.igtf)} ${sym}`));
+  lines.push(`{{BOLD}}${pad(`TOTAL ${sym}:`, curFmt(cur, calc.total))}{{/BOLD}}`);
   if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmtBs(exchangeRate)} Bs/USD{{/CENTER}}`);
   lines.push('{{LINE}}');
 
-  // Forma de pago (en Bs)
+  // Forma de pago (en la moneda elegida)
   if (payments.length > 0) {
     lines.push('{{BOLD}}Forma de pago:{{/BOLD}}');
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
-      lines.push(pad(`${label}:`, `${fmtBs(p.amountBs)} Bs`));
+      const amount = cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      lines.push(pad(`${label}:`, amount));
       if (p.reference) lines.push(`  Ref: ${p.reference}`);
     }
   }
 
-  // Vuelto en Bs
+  // Vuelto (en la moneda elegida)
   if (invoice.changeBs > 0) {
     const changeMethodName = payments.find((p: any) => p.changeAmountBs > 0)?.changeMethod?.name || 'Efectivo Bs';
+    const changeStr = cur === 'BS'
+      ? `${fmtBs(invoice.changeBs)} Bs`
+      : `${fmt(exchangeRate > 0 ? invoice.changeBs / exchangeRate : 0)} USD`;
     lines.push('{{LINE}}');
-    lines.push(`{{BOLD}}${pad('Vuelto:', `${fmtBs(invoice.changeBs)} Bs`)}{{/BOLD}}`);
+    lines.push(`{{BOLD}}${pad('Vuelto:', changeStr)}{{/BOLD}}`);
     lines.push(`  Metodo: ${changeMethodName}`);
   }
 
