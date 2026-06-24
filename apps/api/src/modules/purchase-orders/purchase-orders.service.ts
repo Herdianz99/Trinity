@@ -684,6 +684,43 @@ export class PurchaseOrdersService {
       }
     }
 
+    // Montos fiscales EFECTIVOS: si viene ajuste fiscal (solo credito + fiscal), usar los montos
+    // exactos del documento; si no, los calculados de las lineas (como siempre). El inventario/costo
+    // NO se toca (sale de las lineas) — conviven las dos verdades a proposito.
+    const fa = (order.isCredit && order.serie?.isFiscal) ? dto.fiscalAdjustment : undefined;
+    const effExchangeRate = fa?.exchangeRate && fa.exchangeRate > 0 ? fa.exchangeRate : order.exchangeRate;
+    const faCurrency = fa?.currency || order.currency || 'USD';
+    const faToUsd = (v: number) => (faCurrency === 'USD' ? round2(v) : round2(v / effExchangeRate));
+    const faToBs = (v: number) => (faCurrency === 'USD' ? round2(v * effExchangeRate) : round2(v));
+
+    let effAmountUsd: number, effAmountBs: number;
+    let effExemptUsd: number, effExemptBs: number;
+    let effTaxableUsd: number, effTaxableBs: number;
+    let effIvaUsd: number, effIvaBs: number;
+    let effIgtfUsd: number, effIgtfBs: number;
+    if (fa) {
+      const exempt = fa.exemptBase || 0;
+      const taxable = fa.taxableBase || 0;
+      const iva = fa.ivaAmount || 0;
+      const igtf = fa.igtfAmount || 0;
+      const total = round2(exempt + taxable + iva + igtf);
+      effAmountUsd = faToUsd(total); effAmountBs = faToBs(total);
+      effExemptUsd = faToUsd(exempt); effExemptBs = faToBs(exempt);
+      effTaxableUsd = faToUsd(taxable); effTaxableBs = faToBs(taxable);
+      effIvaUsd = faToUsd(iva); effIvaBs = faToBs(iva);
+      effIgtfUsd = faToUsd(igtf); effIgtfBs = faToBs(igtf);
+    } else {
+      effAmountUsd = order.totalUsd; effAmountBs = order.totalBs;
+      effExemptUsd = order.exemptAmountUsd; effExemptBs = order.exemptAmountBs;
+      effTaxableUsd = order.taxableBaseUsd; effTaxableBs = order.taxableBaseBs;
+      effIvaUsd = order.totalIvaUsd; effIvaBs = order.totalIvaBs;
+      effIgtfUsd = 0; effIgtfBs = 0;
+    }
+    // Fechas efectivas: original (se muestra en libro) y recepcion (periodo de declaracion)
+    const faOriginalDate = fa?.originalDate ? new Date(fa.originalDate) : (order.invoiceDate || processedAt);
+    const faReceptionDate = fa?.receptionDate ? new Date(fa.receptionDate) : (order.invoiceDate || processedAt);
+    const faCreditDays = fa?.creditDays != null ? fa.creditDays : order.creditDays;
+
     return this.prisma.$transaction(async (tx) => {
       // Process inventory for non-service items
       for (const item of order.items) {
@@ -756,9 +793,9 @@ export class PurchaseOrdersService {
 
       // Create Payable — always create for accounting trail
       {
-        const exchangeRate = order.exchangeRate;
-        const amountUsd = order.totalUsd;
-        const amountBs = round2(amountUsd * exchangeRate);
+        const exchangeRate = effExchangeRate;
+        const amountUsd = effAmountUsd;
+        const amountBs = effAmountBs;
 
         // IVA retention is now a separate document (IvaRetention), not embedded in Payable
         const retentionUsd = 0;
@@ -777,15 +814,18 @@ export class PurchaseOrdersService {
         const netPayableUsd = round2(amountUsd - islrRetUsd);
         const netPayableBs = round2(netPayableUsd * exchangeRate);
 
-        const dueDate = new Date();
-        if (order.isCredit && order.creditDays > 0) {
-          dueDate.setDate(dueDate.getDate() + order.creditDays);
+        // Vencimiento = fecha original del documento + dias de credito
+        let dueDate: Date | null = null;
+        if (order.isCredit && faCreditDays > 0) {
+          dueDate = new Date(faOriginalDate);
+          dueDate.setDate(dueDate.getDate() + faCreditDays);
         }
 
         const payable = await tx.payable.create({
           data: {
             supplierId: order.supplierId,
             purchaseOrderId: order.id,
+            currency: order.currency,
             amountUsd,
             amountBs,
             exchangeRate,
@@ -793,7 +833,19 @@ export class PurchaseOrdersService {
             retentionBs,
             netPayableUsd,
             netPayableBs,
-            dueDate: order.isCredit && order.creditDays > 0 ? dueDate : null,
+            dueDate,
+            originalDate: faOriginalDate,
+            receptionDate: faReceptionDate,
+            exemptBaseUsd: effExemptUsd,
+            exemptBaseBs: effExemptBs,
+            taxableBase16Usd: effTaxableUsd,
+            taxableBase16Bs: effTaxableBs,
+            iva16Usd: effIvaUsd,
+            iva16Bs: effIvaBs,
+            totalIvaUsd: effIvaUsd,
+            totalIvaBs: effIvaBs,
+            igtfUsd: effIgtfUsd,
+            igtfBs: effIgtfBs,
             status: order.isCredit ? 'PENDING' : 'PAID',
             paidAmountUsd: order.isCredit ? 0 : netPayableUsd,
             paidAmountBs: order.isCredit ? 0 : netPayableBs,
@@ -821,10 +873,10 @@ export class PurchaseOrdersService {
       }
 
       // Create IvaRetention document if applicable
-      if (config?.isIGTFContributor && order.isFiscal && order.totalIvaUsd > 0) {
-        const exchangeRate = order.exchangeRate;
+      if (config?.isIGTFContributor && order.isFiscal && effIvaUsd > 0) {
+        const exchangeRate = effExchangeRate;
         const ivaRetPct = config.ivaRetentionPct || 75;
-        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
+        const retUsd = round2(effIvaUsd * (ivaRetPct / 100));
         const retBs = round2(retUsd * exchangeRate);
 
         // Generate number: YYYYMM + 8-digit sequence
@@ -838,8 +890,8 @@ export class PurchaseOrdersService {
             number,
             purchaseOrderId: order.id,
             supplierId: order.supplierId,
-            ivaBaseUsd: order.totalIvaUsd,
-            ivaBaseBs: order.totalIvaBs,
+            ivaBaseUsd: effIvaUsd,
+            ivaBaseBs: effIvaBs,
             retentionPct: ivaRetPct,
             retentionUsd: retUsd,
             retentionBs: retBs,
@@ -856,13 +908,13 @@ export class PurchaseOrdersService {
       }
 
       // Create RetentionVoucher (header + line) if supplier is retention agent
-      if (order.supplier.isRetentionAgent && order.serie?.isFiscal && order.totalIvaUsd > 0) {
-        const exchangeRate = order.exchangeRate;
+      if (order.supplier.isRetentionAgent && order.serie?.isFiscal && effIvaUsd > 0) {
+        const exchangeRate = effExchangeRate;
         const ivaRetPct = config?.ivaRetentionPct || 75;
-        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
+        const retUsd = round2(effIvaUsd * (ivaRetPct / 100));
         const retBs = round2(retUsd * exchangeRate);
-        const taxBaseUsd = round2(order.totalUsd - order.totalIvaUsd);
-        const taxBaseBs = round2(order.totalBs - order.totalIvaBs);
+        const taxBaseUsd = round2(effAmountUsd - effIvaUsd);
+        const taxBaseBs = round2(effAmountBs - effIvaBs);
 
         // Generate YYYYMM + 8-digit global sequence from CompanyConfig.retentionNextNumber
         const now = new Date();
@@ -887,13 +939,13 @@ export class PurchaseOrdersService {
                 purchaseOrderId: order.id,
                 supplierInvoiceNumber: order.supplierInvoiceNumber,
                 supplierControlNumber: order.supplierControlNumber,
-                invoiceDate: order.invoiceDate,
-                invoiceTotalUsd: order.totalUsd,
-                invoiceTotalBs: order.totalBs,
+                invoiceDate: faOriginalDate,
+                invoiceTotalUsd: effAmountUsd,
+                invoiceTotalBs: effAmountBs,
                 taxableBaseUsd: taxBaseUsd,
                 taxableBaseBs: taxBaseBs,
-                ivaAmountUsd: order.totalIvaUsd,
-                ivaAmountBs: order.totalIvaBs,
+                ivaAmountUsd: effIvaUsd,
+                ivaAmountBs: effIvaBs,
                 retentionPct: ivaRetPct,
                 retentionAmountUsd: retUsd,
                 retentionAmountBs: retBs,
@@ -915,16 +967,18 @@ export class PurchaseOrdersService {
         await tx.purchaseBookEntry.create({
           data: {
             purchaseOrderId: order.id,
-            entryDate: order.invoiceDate || processedAt,
+            // Periodo = recepcion (cuando se declara); display = original (fecha del proveedor)
+            entryDate: faReceptionDate,
+            documentDate: faOriginalDate,
             supplierControlNumber: order.supplierControlNumber || null,
             supplierInvoiceNumber: order.supplierInvoiceNumber || null,
             supplierSerie: order.supplierSerialNumber || null,
             supplierName: order.supplier.name,
             supplierRif: order.supplier.rif || 'S/R',
-            exemptAmountBs: order.exemptAmountBs,
-            taxableBaseBs: order.taxableBaseBs,
-            ivaAmountBs: order.totalIvaBs,
-            totalBs: order.totalBs,
+            exemptAmountBs: effExemptBs,
+            taxableBaseBs: effTaxableBs,
+            ivaAmountBs: effIvaBs,
+            totalBs: effAmountBs,
             isManual: false,
             isRetentionLine: false,
             documentType: 'FACTURA',
