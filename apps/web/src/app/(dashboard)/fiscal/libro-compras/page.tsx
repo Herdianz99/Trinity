@@ -530,7 +530,8 @@ export default function LibroComprasPage() {
         table.main th.fit, table.main td.fit { width: 1px; white-space: nowrap; }
         .totales td { background: #f0f0f0; border-top: 1.5px solid #333; }
         .footer { font-size: 6pt; color: #888; margin-top: 4px; }
-        table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; }
+        table.resumen { border-collapse: collapse; margin: 15px 0; width: auto; page-break-inside: avoid; break-inside: avoid; }
+        table.resumen tr { page-break-inside: avoid; break-inside: avoid; }
         table.resumen td { border: 0.5px solid #999; padding: 2px 6px; font-size: 6.5pt; }
         table.resumen .lbl { text-align: left; font-weight: normal; }
         table.resumen .num { text-align: right; }
