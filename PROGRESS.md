@@ -1,5 +1,31 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 66 (2026-06-24) — CxC/CxP fechas+tasa, Libro de Compras fecha doc vs declaracion, montos fiscales exactos al procesar (COMMITEADO+PUSHEADO, **FALTA DEPLOY + PRUEBA E2E**)
+
+> Todo el codigo esta en `main` (pusheado) y typechequeado (API+Web limpio), pero **NO se ha deployado ni probado E2E**. Quedo pendiente porque Docker Desktop local se cayo (se llevo el Postgres `trinity-postgres-1`) al intentar levantar el sistema para probar. **Al volver: levantar local y correr el checklist de prueba, luego deployar.**
+
+### Commits de esta sesion (en `main`)
+- `7cb9d79` — fix: cuadro de totales SENIAT no se parte entre paginas (PDFs de libro de ventas detallado + reporte Z, y libro de compras) — `page-break-inside: avoid`. Solo CSS.
+- `c89da2e` — **Tanda A**: CxC/CxP vencimiento desde Fecha original + Tasa del dia editable; Libro de Compras nuevo campo `documentDate` (fecha que se MUESTRA) vs `entryDate` (periodo/declaracion). Incluye **migracion Prisma** `20260624120000_purchasebook_document_date` + `deploy/fix-schema.sql`.
+- `3cb4a97` — **Tanda B**: pantalla de "Montos fiscales del documento" al procesar factura de compra a **credito + fiscal** → monto exacto del documento alimenta CxP + libro + retencion; inventario sigue saliendo de las lineas (dos verdades). DTO `ProcessPurchaseBillDto.fiscalAdjustment`.
+- Plan completo: `docs/superpowers/plans/2026-06-24-cxp-libro-compras-montos-fiscales-exactos.md`.
+
+### Operaciones en PRODUCCION ya aplicadas hoy (cerradas, solo registro)
+- Reasignacion de vendedor por error de carga: facturas **NE-26-00000487** y **NE-26-00000488** de LENNYS MEJIA → **YULEINI RODRIGUEZ** (VEN-005); factura **NE-26-00000449** de YULEINI → **Roxana Marrero** (VEN-006). Solo `sellerId`+`updatedAt`.
+
+### PENDIENTE al volver (en orden)
+1. **Levantar local**: arrancar Docker Desktop → `docker start trinity-postgres-1` (la columna `documentDate` ya se aplico a la BD local, persiste en el volumen) → `pnpm -C apps/api dev` (puerto 4000) → `pnpm -C apps/web dev` (puerto 3000). Web `http://localhost:3000`, `admin@trinity.com` / `Test1234!`. NOTA: el Postgres local usa el **puerto 5432**; el proyecto "romana" usa el 5433 (no chocan).
+2. **Correr el checklist de prueba E2E** (ver abajo).
+3. **Deployar** (lleva migracion, el deploy normal la corre): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
+4. Opcional futuro: montos fiscales exactos tambien en compras de **contado** (hoy contado fiscal sigue usando montos de lineas, a proposito).
+
+### Checklist de prueba E2E (Tandas A+B)
+- **CxC/CxP manual**: vencimiento se mueve con Fecha **original** (no recepcion); Tasa editable (precargada, recalcula totales, no deja guardar en 0).
+- **CxP fiscal con original 28/05 + recepcion 02/06**: aparece en Libro de Compras de **junio** mostrando **28/05**; NO en mayo; linea de retencion en junio junto a su factura.
+- **Libro de Compras**: modal con 2 fechas (documento=se muestra / declaracion=periodo); PDF y Excel muestran fecha documento; entradas viejas sin cambios.
+- **Procesar factura compra credito+fiscal**: sale seccion "Montos fiscales del documento" precargada; escribir montos exactos + fechas + tasa; verificar **1 sola CxP** con total exacto, libro en periodo recepcion mostrando fecha documento con montos exactos, retencion sobre IVA exacto, inventario con costo de lineas, vencimiento = fecha doc + dias credito.
+- **Regresion**: contado y no-fiscal NO muestran la seccion fiscal; flujo igual.
+
 ## ✅ Sesion 65 (2026-06-23) — Fix timezone UTC→Caracas en TODA la API (DEPLOYADO 2026-06-23, commit 82f3ea0)
 
 > Detectado por Diego: el dashboard mezclaba las ventas de hoy con las de ayer cuando las de ayer se cargaron despues de las 8 PM. **Causa raiz**: el server corre en UTC y el negocio es en Caracas (UTC-4, sin DST). Calcular "hoy"/rangos con `new Date()` + `setUTCHours(0/23)` hace que todo lo posterior a las 8 PM Caracas (= medianoche UTC) caiga en el dia UTC siguiente. Mismo patron del fix de "facturas en espera" de la Sesion 64, pero ahora resuelto a nivel de toda la API.
