@@ -9,6 +9,7 @@ import { UserRole } from '@prisma/client';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
+import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class PaymentSchedulesService {
@@ -33,14 +34,10 @@ export class PaymentSchedulesService {
     if (filters.from || filters.to) {
       where.createdAt = {};
       if (filters.from) {
-        const fromDate = new Date(filters.from);
-        fromDate.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = fromDate;
+        where.createdAt.gte = caracasDayStart(filters.from);
       }
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDate;
+        where.createdAt.lte = caracasDayEnd(filters.to);
       }
     }
 
@@ -143,8 +140,7 @@ export class PaymentSchedulesService {
   // ============ CREATE ============
 
   async create(dto: CreateScheduleDto, userId: string) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
 
     if (!rate) {

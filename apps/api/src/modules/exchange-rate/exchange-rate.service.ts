@@ -4,14 +4,14 @@ import * as cheerio from 'cheerio';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { UserRole } from '@prisma/client';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class ExchangeRateService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getToday() {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
 
     return this.prisma.exchangeRate.findUnique({
       where: { date: today },
@@ -19,8 +19,7 @@ export class ExchangeRateService {
   }
 
   async getByDate(dateStr: string) {
-    const date = new Date(dateStr);
-    date.setUTCHours(0, 0, 0, 0);
+    const date = caracasDateKey(dateStr);
 
     return this.prisma.exchangeRate.findUnique({
       where: { date },
@@ -56,8 +55,7 @@ export class ExchangeRateService {
       throw new ForbiddenException('Solo ADMIN puede registrar tasas de cambio');
     }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
 
     return this.prisma.exchangeRate.upsert({
       where: { date: today },

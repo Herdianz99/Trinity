@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerAdvanceDto } from './dto/create-customer-advance.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class CustomerAdvancesService {
@@ -21,8 +22,7 @@ export class CustomerAdvancesService {
     if (!session) throw new NotFoundException('Sesion de caja no encontrada');
     if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
 

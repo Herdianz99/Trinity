@@ -3,6 +3,7 @@ import * as http from 'http';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 const SENIAT_BASE = 'http://contribuyente.seniat.gob.ve/BuscaRif';
 
@@ -339,8 +340,7 @@ export class CustomersService {
     if (!customer) throw new NotFoundException('Cliente no encontrado');
 
     // Get today's rate for Bs conversion
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     const todayRate = rate?.rate || 0;
 

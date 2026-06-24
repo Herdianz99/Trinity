@@ -10,6 +10,7 @@ import { UpdateDynamicKeyDto } from './dto/update-dynamic-key.dto';
 import { ValidateKeyDto } from './dto/validate-key.dto';
 import * as bcrypt from 'bcrypt';
 import { DynamicKeyPerm } from '@prisma/client';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 const VALID_PERMS = Object.values(DynamicKeyPerm);
 
@@ -53,14 +54,10 @@ export class DynamicKeysService {
     if (filters.from || filters.to) {
       where.createdAt = {};
       if (filters.from) {
-        const fromDate = new Date(filters.from);
-        fromDate.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = fromDate;
+        where.createdAt.gte = caracasDayStart(filters.from);
       }
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDate;
+        where.createdAt.lte = caracasDayEnd(filters.to);
       }
     }
 

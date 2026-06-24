@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 const IVA_LABELS: Record<string, string> = {
   EXEMPT: 'Exento',
@@ -41,8 +42,8 @@ export class InvoicePdfService {
     }
     if (filters.from || filters.to) {
       where.createdAt = {};
-      if (filters.from) { const d = new Date(filters.from); d.setUTCHours(0, 0, 0, 0); where.createdAt.gte = d; }
-      if (filters.to) { const d = new Date(filters.to); d.setUTCHours(23, 59, 59, 999); where.createdAt.lte = d; }
+      if (filters.from) { where.createdAt.gte = caracasDayStart(filters.from); }
+      if (filters.to) { where.createdAt.lte = caracasDayEnd(filters.to); }
     }
 
     const invoices = await this.prisma.invoice.findMany({

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class StockMovementsService {
@@ -34,14 +35,10 @@ export class StockMovementsService {
     if (filters.from || filters.to) {
       where.createdAt = {};
       if (filters.from) {
-        const fromDate = new Date(filters.from);
-        fromDate.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = fromDate;
+        where.createdAt.gte = caracasDayStart(filters.from);
       }
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDate;
+        where.createdAt.lte = caracasDayEnd(filters.to);
       }
     }
 

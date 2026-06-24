@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { IvaType, PurchaseStatus } from '@prisma/client';
+import { caracasDateKey } from '../../common/timezone';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -40,15 +41,13 @@ export class PurchaseOrdersService {
   }
 
   private async getTodayRate() {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     return rate?.rate || 0;
   }
 
   private async getRateForDate(date: Date) {
-    const rateDate = new Date(date);
-    rateDate.setUTCHours(0, 0, 0, 0);
+    const rateDate = caracasDateKey(date);
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: rateDate } });
     return rate?.rate || 0;
   }

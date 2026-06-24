@@ -35,9 +35,26 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Páginas de detalle con datos dinámicos: título con datos del registro (ej: `document.title = \`${product.code} - ${product.name} | Trinity ERP\``)
 - Usar un `useEffect` para setear el título: estático con `[]`, dinámico con `[entity]`
 
-## Fechas y timezone
-- Siempre usar setUTCHours para rangos de fecha en queries de backend
-- Para fechas locales en frontend usar getFullYear()/getMonth()/getDate() nunca toISOString()
+## Fechas y timezone — REGLA CRITICA (UTC vs Caracas)
+El servidor corre en **UTC** pero el negocio opera en **Caracas (America/Caracas, UTC-4, sin horario de verano)**.
+NUNCA calcular "hoy" ni rangos de fecha con `new Date()` + `setUTCHours(0/23)`: a las 8 PM de Caracas
+ya es medianoche UTC, asi que todo lo de la noche cae en el dia siguiente (ventas mezcladas,
+"tasa de hoy" que falla de noche). Este bug se arreglo en toda la API en la Sesion 65.
+
+- **PROHIBIDO** `const d = new Date(); d.setUTCHours(0,0,0,0)` para fechas de negocio. Si ves este patron, es un bug.
+- **Usar SIEMPRE el helper** `apps/api/src/common/timezone.ts`:
+  - `caracasToday()` → 'YYYY-MM-DD' de hoy en Caracas
+  - `caracasDayStart(input?)` / `caracasDayEnd(input?)` → limites UTC de un dia-calendario Caracas, para rangos
+    sobre campos **TIMESTAMP** (`createdAt`, `paidAt`, `openedAt`, `postedAt`, `documentDate`)
+  - `caracasDateKey(input?)` → medianoche UTC de la fecha-Caracas, para lookups de **`ExchangeRate.date`**
+    y comparaciones "hoy" contra campos date-only (`dueDate` en vencidos, etc.)
+  - `caracasParts(date)` → `{ymd, hour}` en Caracas, para agrupar timelines por hora/dia
+- **EXCEPCION — NO tocar** rangos sobre campos **date-only** guardados a medianoche UTC: libros fiscales (`date`
+  en sales-book/purchase-book/fiscal), `invoiceDate`, `dueDate` (en rangos), `reportDate`, `voucherDate`.
+  Son timezone-independientes (fecha elegida por el usuario) y anclarlos a Caracas ROMPE los reportes contables.
+  El unico campo `@db.Date` real del schema es `ExchangeRate.date`.
+- Para fechas locales en **frontend** usar getFullYear()/getMonth()/getDate() (que es la hora local del navegador
+  = Caracas para el usuario), nunca toISOString().
 
 ## Deploy al servidor
 - Servidor: `134.209.220.233` (root)

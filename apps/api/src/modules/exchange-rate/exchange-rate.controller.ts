@@ -11,6 +11,7 @@ import { ExchangeRateService } from './exchange-rate.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
+import { caracasDateKey } from '../../common/timezone';
 
 @Controller('exchange-rate')
 @UseGuards(AuthGuard('jwt'))
@@ -33,8 +34,7 @@ export class ExchangeRateController {
     if (rate === null) {
       return { rate: null, error: 'No se pudo obtener la tasa del BCV. Intente de nuevo o ingrese manualmente.' };
     }
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     return { rate, source: 'BCV', date: today.toISOString() };
   }
 

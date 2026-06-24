@@ -1,16 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoiceStatus } from '@prisma/client';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
 function parseDateRange(fromStr: string, toStr: string) {
-  const from = fromStr ? new Date(fromStr) : new Date();
-  const to = toStr ? new Date(toStr) : new Date();
-  from.setUTCHours(0, 0, 0, 0);
-  to.setUTCHours(23, 59, 59, 999);
+  const from = caracasDayStart(fromStr || undefined);
+  const to = caracasDayEnd(toStr || undefined);
   return { from, to };
 }
 

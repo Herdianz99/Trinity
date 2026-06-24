@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class CashRegistersService {
@@ -270,11 +271,9 @@ export class CashRegistersService {
     if (filters.status) where.status = filters.status;
     if (filters.from || filters.to) {
       where.openedAt = {};
-      if (filters.from) where.openedAt.gte = new Date(filters.from);
+      if (filters.from) where.openedAt.gte = caracasDayStart(filters.from);
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        where.openedAt.lte = toDate;
+        where.openedAt.lte = caracasDayEnd(filters.to);
       }
     }
 
@@ -526,12 +525,10 @@ export class CashRegistersService {
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
     if (filters.from) {
-      fromDate = new Date(filters.from);
-      fromDate.setUTCHours(0, 0, 0, 0);
+      fromDate = caracasDayStart(filters.from);
     }
     if (filters.to) {
-      toDate = new Date(filters.to);
-      toDate.setUTCHours(23, 59, 59, 999);
+      toDate = caracasDayEnd(filters.to);
     }
 
     const methodSet =

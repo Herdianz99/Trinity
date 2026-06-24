@@ -8,6 +8,7 @@ import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
 import { QueryPendingDocumentsDto } from './dto/query-pending-documents.dto';
+import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class ReceiptsService {
@@ -30,14 +31,10 @@ export class ReceiptsService {
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {
-        const from = new Date(query.from);
-        from.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = from;
+        where.createdAt.gte = caracasDayStart(query.from);
       }
       if (query.to) {
-        const to = new Date(query.to);
-        to.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = caracasDayEnd(query.to);
       }
     }
 
@@ -101,8 +98,7 @@ export class ReceiptsService {
     }
 
     // Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) {
       throw new BadRequestException('No hay tasa de cambio registrada para hoy. Registre la tasa antes de crear el recibo.');
@@ -352,8 +348,7 @@ export class ReceiptsService {
     }
 
     // Get today's rate for payment records
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) {
       throw new BadRequestException('No hay tasa de cambio registrada para hoy');

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class IvaRetentionService {
@@ -33,14 +34,10 @@ export class IvaRetentionService {
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {
-        const from = new Date(query.from);
-        from.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = from;
+        where.createdAt.gte = caracasDayStart(query.from);
       }
       if (query.to) {
-        const to = new Date(query.to);
-        to.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = caracasDayEnd(query.to);
       }
     }
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class InventoryAnalysisService {
@@ -9,10 +10,8 @@ export class InventoryAnalysisService {
    * ABC Classification: Products ranked by sales contribution
    */
   async getAbcClassification(from: string, to: string) {
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
 
     // Get all invoice items in period from PAID invoices (type SALE)
     const items = await this.prisma.invoiceItem.findMany({
@@ -116,10 +115,8 @@ export class InventoryAnalysisService {
    * Rotation analysis: How fast products sell relative to stock
    */
   async getRotation(from: string, to: string) {
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
 
     const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
@@ -188,10 +185,8 @@ export class InventoryAnalysisService {
    * Profitability: Revenue vs cost per product
    */
   async getProfitability(from: string, to: string) {
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
 
     const items = await this.prisma.invoiceItem.findMany({
       where: {
@@ -308,10 +303,8 @@ export class InventoryAnalysisService {
    * Purchase suggestions: products below min stock grouped by supplier
    */
   async getPurchaseSuggestions(from: string, to: string) {
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
     const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Get sales in period

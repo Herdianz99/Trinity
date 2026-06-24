@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { UserRole } from '@prisma/client';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class StockService {
@@ -81,8 +82,7 @@ export class StockService {
       },
     });
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const todayRate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     const exchangeRate = todayRate?.rate ?? 1;
 

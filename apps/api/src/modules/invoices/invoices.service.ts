@@ -10,6 +10,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -61,14 +62,10 @@ export class InvoicesService {
     if (filters.from || filters.to) {
       where.createdAt = {};
       if (filters.from) {
-        const fromDate = new Date(filters.from);
-        fromDate.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = fromDate;
+        where.createdAt.gte = caracasDayStart(filters.from);
       }
       if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDate;
+        where.createdAt.lte = caracasDayEnd(filters.to);
       }
     }
 
@@ -209,8 +206,7 @@ export class InvoicesService {
     user: { id: string; role: UserRole },
   ) {
     // Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) {
       throw new BadRequestException(
@@ -1102,8 +1098,7 @@ export class InvoicesService {
     }
 
     // Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) {
       throw new BadRequestException('No hay tasa BCV registrada para hoy');

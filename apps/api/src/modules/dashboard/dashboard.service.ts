@@ -1,5 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  caracasToday, caracasDayStart, caracasDayEnd, caracasDateKey, caracasParts,
+} from '../../common/timezone';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -16,19 +19,17 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getGerencial(fromStr?: string, toStr?: string) {
-    // Default to today
-    const now = new Date();
-    const from = fromStr ? new Date(fromStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const to = toStr ? new Date(toStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    from.setUTCHours(0, 0, 0, 0);
-    to.setUTCHours(23, 59, 59, 999);
+    // Rango anclado al dia-calendario de Caracas (ver helpers arriba).
+    const fromYmd = fromStr ? fromStr.slice(0, 10) : caracasToday();
+    const toYmd = toStr ? toStr.slice(0, 10) : caracasToday();
+    const from = caracasDayStart(fromYmd);
+    const to = caracasDayEnd(toYmd);
 
-    // Calculate previous period of equal duration for comparison
+    // Periodo anterior de igual duracion, terminando justo antes de `from`.
+    // Sin setUTCHours: from/to ya son instantes alineados al dia Caracas.
     const durationMs = to.getTime() - from.getTime();
     const prevTo = new Date(from.getTime() - 1);
-    prevTo.setUTCHours(23, 59, 59, 999);
     const prevFrom = new Date(prevTo.getTime() - durationMs);
-    prevFrom.setUTCHours(0, 0, 0, 0);
 
     const dateRange = { gte: from, lte: to };
     const prevDateRange = { gte: prevFrom, lte: prevTo };
@@ -104,19 +105,16 @@ export class DashboardService {
       throw new NotFoundException('Este usuario no tiene vendedor asignado');
     }
 
-    // Date range
-    const now = new Date();
-    const from = fromStr ? new Date(fromStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const to = toStr ? new Date(toStr) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    from.setUTCHours(0, 0, 0, 0);
-    to.setUTCHours(23, 59, 59, 999);
+    // Rango anclado al dia-calendario de Caracas (ver helpers arriba).
+    const fromYmd = fromStr ? fromStr.slice(0, 10) : caracasToday();
+    const toYmd = toStr ? toStr.slice(0, 10) : caracasToday();
+    const from = caracasDayStart(fromYmd);
+    const to = caracasDayEnd(toYmd);
 
-    // Previous period for comparison
+    // Periodo anterior de igual duracion, terminando justo antes de `from`.
     const durationMs = to.getTime() - from.getTime();
     const prevTo = new Date(from.getTime() - 1);
-    prevTo.setUTCHours(23, 59, 59, 999);
     const prevFrom = new Date(prevTo.getTime() - durationMs);
-    prevFrom.setUTCHours(0, 0, 0, 0);
 
     const dateRange = { gte: from, lte: to };
     const prevDateRange = { gte: prevFrom, lte: prevTo };
@@ -281,27 +279,25 @@ export class DashboardService {
       }));
       for (const inv of invoices) {
         if (!inv.paidAt) continue;
-        const h = new Date(inv.paidAt).getHours();
+        const h = caracasParts(new Date(inv.paidAt)).hour;
         hours[h].totalUsd += inv.totalUsd;
         hours[h].count += 1;
       }
       return hours.slice(7, 22).map(h => ({ ...h, totalUsd: round2(h.totalUsd) }));
     } else {
+      const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       const dayMap = new Map<string, { label: string; totalUsd: number; count: number }>();
-      const cursor = new Date(from);
-      while (cursor <= to) {
-        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
-        const d = cursor.getDate();
-        const m = cursor.getMonth();
-        const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-        dayMap.set(key, { label: `${d} ${months[m]}`, totalUsd: 0, count: 0 });
-        cursor.setDate(cursor.getDate() + 1);
+      // Itera dia a dia en horas de Caracas (Venezuela no tiene DST, paso fijo de 24h).
+      for (let t = from.getTime(); t <= to.getTime(); t += 86400000) {
+        const { ymd } = caracasParts(new Date(t));
+        if (dayMap.has(ymd)) continue;
+        const [, m, d] = ymd.split('-');
+        dayMap.set(ymd, { label: `${Number(d)} ${months[Number(m) - 1]}`, totalUsd: 0, count: 0 });
       }
       for (const inv of invoices) {
         if (!inv.paidAt) continue;
-        const d = new Date(inv.paidAt);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const entry = dayMap.get(key);
+        const { ymd } = caracasParts(new Date(inv.paidAt));
+        const entry = dayMap.get(ymd);
         if (entry) {
           entry.totalUsd += inv.totalUsd;
           entry.count += 1;
@@ -343,9 +339,8 @@ export class DashboardService {
   async getHome(role: string) {
     const result: Record<string, any> = {};
 
-    // Exchange rate (all roles)
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Exchange rate (all roles) — clave por dia-calendario de Caracas.
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     result.exchangeRate = rate ? rate.rate : null;
 
@@ -434,9 +429,9 @@ export class DashboardService {
       for (const p of overdue) overdueTotal += p.netPayableUsd - p.paidAmountUsd;
       result.overduePayables = { count: overdue.length, totalUsd: round2(overdueTotal) };
 
-      // Due this week
-      const weekEnd = new Date();
-      weekEnd.setDate(weekEnd.getDate() + 7);
+      // Due this week — anclado al dia-calendario de Caracas (dueDate es date-only).
+      const weekEnd = caracasDateKey();
+      weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
       weekEnd.setUTCHours(23, 59, 59, 999);
       const upcoming = await this.prisma.payable.count({
         where: {
@@ -775,30 +770,28 @@ export class DashboardService {
       }));
       for (const inv of invoices) {
         if (!inv.paidAt) continue;
-        const h = new Date(inv.paidAt).getHours();
+        const h = caracasParts(new Date(inv.paidAt)).hour;
         hours[h].totalUsd += inv.totalUsd;
         hours[h].count += 1;
       }
       // Only return hours 7-21 for cleaner display
       return hours.slice(7, 22).map(h => ({ ...h, totalUsd: round2(h.totalUsd) }));
     } else {
-      // Group by day
+      // Group by day (en horas de Caracas)
+      const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       const dayMap = new Map<string, { label: string; totalUsd: number; count: number }>();
-      const cursor = new Date(from);
-      while (cursor <= to) {
-        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
-        const d = cursor.getDate();
-        const m = cursor.getMonth();
-        const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-        dayMap.set(key, { label: `${d} ${months[m]}`, totalUsd: 0, count: 0 });
-        cursor.setDate(cursor.getDate() + 1);
+      // Venezuela no tiene DST, asi que el paso fijo de 24h cae siempre en medianoche Caracas.
+      for (let t = from.getTime(); t <= to.getTime(); t += 86400000) {
+        const { ymd } = caracasParts(new Date(t));
+        if (dayMap.has(ymd)) continue;
+        const [, m, d] = ymd.split('-');
+        dayMap.set(ymd, { label: `${Number(d)} ${months[Number(m) - 1]}`, totalUsd: 0, count: 0 });
       }
 
       for (const inv of invoices) {
         if (!inv.paidAt) continue;
-        const d = new Date(inv.paidAt);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const entry = dayMap.get(key);
+        const { ymd } = caracasParts(new Date(inv.paidAt));
+        const entry = dayMap.get(ymd);
         if (entry) {
           entry.totalUsd += inv.totalUsd;
           entry.count += 1;

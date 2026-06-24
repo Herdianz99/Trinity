@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 import { CreateCashMovementDto } from './dto/create-cash-movement.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class CashMovementsService {
@@ -38,8 +39,7 @@ export class CashMovementsService {
     if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
 
     // 3. Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
 

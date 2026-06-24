@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListPrintJobsDto } from './dto/list-print-jobs.dto';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class PrintJobsService {
@@ -63,14 +64,10 @@ export class PrintJobsService {
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {
-        const f = new Date(query.from);
-        f.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = f;
+        where.createdAt.gte = caracasDayStart(query.from);
       }
       if (query.to) {
-        const t = new Date(query.to);
-        t.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = t;
+        where.createdAt.lte = caracasDayEnd(query.to);
       }
     }
 

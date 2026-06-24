@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { QueryNotesDto } from './dto/query-notes.dto';
+import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class CreditDebitNotesService {
@@ -48,14 +49,10 @@ export class CreditDebitNotesService {
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {
-        const d = new Date(query.from);
-        d.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = d;
+        where.createdAt.gte = caracasDayStart(query.from);
       }
       if (query.to) {
-        const d = new Date(query.to);
-        d.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = d;
+        where.createdAt.lte = caracasDayEnd(query.to);
       }
     }
 
@@ -167,8 +164,7 @@ export class CreditDebitNotesService {
     // Fecha del documento (editable). Si no viene, hoy.
     const docDate = dto.date ? new Date(dto.date) : new Date();
     // Tasa de cambio del dia del documento (usa la del dia seleccionado, no siempre hoy)
-    const rateDay = new Date(docDate);
-    rateDay.setUTCHours(0, 0, 0, 0);
+    const rateDay = caracasDateKey(docDate);
     const rateRecord = await this.prisma.exchangeRate.findFirst({
       where: { date: rateDay },
     });

@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class ExpensesService {
@@ -186,8 +187,7 @@ export class ExpensesService {
 
   async create(dto: CreateExpenseDto, userId: string) {
     // Get today's exchange rate
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = caracasDateKey();
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
 
     if (!rate) {
@@ -288,8 +288,7 @@ export class ExpensesService {
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     if (dto.amountUsd !== undefined || dto.amountBs !== undefined) {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      const today = caracasDateKey();
       const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
       if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
 

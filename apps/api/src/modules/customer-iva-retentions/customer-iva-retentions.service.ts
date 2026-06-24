@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerIvaRetentionDto } from './dto/create-customer-iva-retention.dto';
 import { RegisterVoucherDto } from './dto/register-voucher.dto';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 // Margen por redondeos de la máquina fiscal
 const TOLERANCE_BS = 1;
@@ -219,14 +220,10 @@ export class CustomerIvaRetentionsService {
     if (filters.from || filters.to) {
       where.createdAt = {};
       if (filters.from) {
-        const d = new Date(filters.from);
-        d.setUTCHours(0, 0, 0, 0);
-        where.createdAt.gte = d;
+        where.createdAt.gte = caracasDayStart(filters.from);
       }
       if (filters.to) {
-        const d = new Date(filters.to);
-        d.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = d;
+        where.createdAt.lte = caracasDayEnd(filters.to);
       }
     }
     return this.prisma.customerIvaRetention.findMany({

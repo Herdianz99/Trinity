@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSellerDto } from './dto/create-seller.dto';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 @Injectable()
 export class SellersService {
@@ -121,10 +122,8 @@ export class SellersService {
   ) {
     await this.findOne(sellerId);
 
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
@@ -300,10 +299,8 @@ export class SellersService {
       sellerCount: reports.length,
     };
 
-    const fromDate = new Date(from);
-    fromDate.setUTCHours(0, 0, 0, 0);
-    const toDate = new Date(to);
-    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
 
     return {
       from: fromDate.toISOString(),

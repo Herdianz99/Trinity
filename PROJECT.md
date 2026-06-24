@@ -994,7 +994,11 @@ model QuotationItem {
 
 **Conteo físico:** Sesión de conteo con diferencias. SUPERVISOR aprueba → ajuste automático con StockMovement tipo COUNT_ADJUST.
 
-**Fechas:** Siempre `setUTCHours` para rangos de fecha en queries.
+**Fechas y timezone (Caracas vs UTC):** El servidor corre en UTC pero el negocio opera en Caracas (America/Caracas, UTC-4, sin horario de verano). **PROHIBIDO** calcular "hoy"/rangos con `new Date()` + `setUTCHours(0/23)`: a las 8 PM Caracas ya es medianoche UTC, así que lo de la noche cae en el día siguiente (bug del dashboard "ventas de hoy mezcladas con las de ayer" + lookups de "tasa de hoy" que fallan de noche; arreglado a nivel de toda la API en la Sesión 65). Usar SIEMPRE el helper `apps/api/src/common/timezone.ts`:
+- `caracasDayStart(input?)` / `caracasDayEnd(input?)` → límites UTC de un día-calendario Caracas, para rangos sobre campos **TIMESTAMP** (`createdAt`, `paidAt`, `openedAt`, `postedAt`, `documentDate`)
+- `caracasDateKey(input?)` → medianoche UTC de la fecha-Caracas, para lookups de **`ExchangeRate.date`** y comparaciones "hoy" contra campos date-only
+- `caracasToday()` / `caracasParts(date)` → fecha de hoy en Caracas y agrupación de timelines por hora/día
+- **NO anclar a Caracas** los rangos sobre campos **date-only** guardados a medianoche UTC (libros fiscales `date`, `invoiceDate`, `dueDate` en rangos, `reportDate`, `voucherDate`): son timezone-independientes y romperían los reportes contables. El único `@db.Date` real del schema es `ExchangeRate.date`.
 
 **Numeración de documentos por Serie:** Formato `VTA-26-00000001`:
 - `VTA` = prefijo de la Serie (configurable por serie: VTA, NE, VF, etc.)
