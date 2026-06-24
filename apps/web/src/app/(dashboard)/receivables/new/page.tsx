@@ -104,10 +104,10 @@ export default function NewReceivablePage() {
   }, []);
 
   useEffect(() => {
-    const [y, m, d] = receptionDate.split('-').map(Number);
+    const [y, m, d] = originalDate.split('-').map(Number);
     const base = new Date(y, m - 1, d);
     setDueDate(formatLocalDate(addDays(base, creditDays)));
-  }, [creditDays, receptionDate]);
+  }, [creditDays, originalDate]);
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers;
@@ -137,12 +137,14 @@ export default function NewReceivablePage() {
     if (!customerId) { setError('Debe seleccionar un cliente'); return; }
     if (!description.trim()) { setError('La descripcion es obligatoria'); return; }
     if (totalDoc <= 0) { setError('El total del documento debe ser mayor a 0'); return; }
+    if (!exchangeRate || exchangeRate <= 0) { setError('La tasa del dia debe ser mayor a 0'); return; }
 
     setSaving(true);
     try {
       const pt = creditDays > 0 ? `CREDITO_${creditDays}` : 'CONTADO';
       const body: Record<string, unknown> = {
         customerId, totalAmount: totalDoc, currency, paymentTerms: pt,
+        exchangeRate,
         exemptBase: exemptBase || 0, taxableBase8: taxableBase8 || 0,
         taxableBase16: taxableBase16 || 0, taxableBase31: taxableBase31 || 0,
         igtfPct: igtfPct || 0,
@@ -162,7 +164,7 @@ export default function NewReceivablePage() {
       router.push(`/receivables/${created.id}`);
     } catch (err: any) { setError(err.message || 'Error al guardar'); }
     finally { setSaving(false); }
-  }, [customerId, totalDoc, currency, serieId, creditDays, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, router]);
+  }, [customerId, totalDoc, currency, serieId, creditDays, exchangeRate, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, router]);
 
   const numInput = useCallback((setter: (v: number) => void) => {
     return (e: React.ChangeEvent<HTMLInputElement>) => { setter(parseFloat(e.target.value) || 0); };
@@ -294,8 +296,8 @@ export default function NewReceivablePage() {
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Tasa del dia</label>
-                <input type="text" value={exchangeRate ? `Bs ${fmt(exchangeRate)}` : '-'} readOnly tabIndex={-1}
-                  className="input-field !py-1 text-sm bg-slate-900/60 text-slate-500 cursor-not-allowed" />
+                <input type="number" step="0.01" min="0" value={exchangeRate || ''} onChange={e => setExchangeRate(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00" className="input-field !py-1 text-sm font-mono" />
               </div>
             </div>
           </div>

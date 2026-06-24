@@ -25,6 +25,12 @@ export class CreatePayableDto {
   @IsString()
   currency?: string; // 'USD' or 'BS'
 
+  // Tasa del dia editable; si no viene, se usa la tasa registrada de hoy
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  exchangeRate?: number;
+
   @IsOptional()
   @IsString()
   originalDate?: string;

@@ -39,9 +39,16 @@ export class PayablesService {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
 
-    const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    // Tasa: la que envia el usuario (editable) tiene prioridad; si no, la registrada de hoy
+    let r: number;
+    if (dto.exchangeRate && dto.exchangeRate > 0) {
+      r = dto.exchangeRate;
+    } else {
+      const today = caracasDateKey();
+      const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+      if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+      r = rate.rate;
+    }
 
     // Resolve serie and fiscal status
     let serie: any = null;
@@ -54,7 +61,6 @@ export class PayablesService {
     }
 
     const currency = dto.currency || 'USD';
-    const r = rate.rate;
 
     // Fiscal breakdown in input currency
     const exemptBase = dto.exemptBase || 0;
@@ -166,7 +172,9 @@ export class PayablesService {
         await tx.purchaseBookEntry.create({
           data: {
             payableId: payable.id,
-            entryDate: originalDate || new Date(),
+            // Periodo del libro = fecha recepcion (cuando se declara). Display = fecha original.
+            entryDate: receptionDate || originalDate || new Date(),
+            documentDate: originalDate || receptionDate || new Date(),
             supplierControlNumber: dto.controlFiscal || null,
             supplierInvoiceNumber: dto.documentNumber || number,
             supplierSerie: dto.serie || null,
@@ -212,7 +220,8 @@ export class PayablesService {
             supplierId: dto.supplierId,
             serieId: dto.serieId || null,
             status: 'ISSUED',
-            issueDate: originalDate || new Date(),
+            // La retencion se declara con su documento (periodo de recepcion)
+            issueDate: receptionDate || originalDate || new Date(),
             retentionPct: retPct,
             retentionAmountUsd: retAmountUsd,
             retentionAmountBs: retAmountBs,
@@ -246,7 +255,9 @@ export class PayablesService {
           data: {
             retentionVoucherId: retentionVoucher.id,
             payableId: payable.id,
-            entryDate: originalDate || new Date(),
+            // Misma fecha que su factura: periodo recepcion, display original
+            entryDate: receptionDate || originalDate || new Date(),
+            documentDate: originalDate || receptionDate || new Date(),
             supplierControlNumber: dto.controlFiscal || null,
             supplierInvoiceNumber: dto.documentNumber || number,
             supplierName: supplier.name,

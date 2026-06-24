@@ -1505,7 +1505,8 @@ model PurchaseBookEntry {
   purchaseOrder          PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
   payableId              String?
   payable                Payable?          @relation(fields: [payableId], references: [id])
-  entryDate              DateTime
+  entryDate              DateTime          // periodo: cuando se declara/aparece en el libro (filtro). En CxP = fecha recepcion
+  documentDate           DateTime?         // fecha que se MUESTRA en el reporte (fecha original del proveedor). Si null, se usa entryDate
   supplierControlNumber  String?
   supplierInvoiceNumber  String?
   supplierSerie          String?   // serie alfanumerica de la factura del proveedor (ej. "A")

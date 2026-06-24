@@ -90,6 +90,7 @@ export class PurchaseBookService {
     return this.prisma.purchaseBookEntry.create({
       data: {
         entryDate: new Date(dto.entryDate),
+        documentDate: dto.documentDate ? new Date(dto.documentDate) : new Date(dto.entryDate),
         supplierControlNumber: dto.supplierControlNumber || null,
         supplierInvoiceNumber: dto.supplierInvoiceNumber || null,
         supplierSerie: dto.supplierSerie || null,
@@ -122,6 +123,7 @@ export class PurchaseBookService {
 
     const data: any = {};
     if (dto.entryDate !== undefined) data.entryDate = new Date(dto.entryDate);
+    if (dto.documentDate !== undefined) data.documentDate = dto.documentDate ? new Date(dto.documentDate) : null;
     if (dto.supplierControlNumber !== undefined) data.supplierControlNumber = dto.supplierControlNumber;
     if (dto.supplierInvoiceNumber !== undefined) data.supplierInvoiceNumber = dto.supplierInvoiceNumber;
     if (dto.supplierSerie !== undefined) data.supplierSerie = dto.supplierSerie;

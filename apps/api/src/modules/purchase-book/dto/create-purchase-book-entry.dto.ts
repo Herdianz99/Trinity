@@ -2,7 +2,11 @@ import { IsString, IsOptional, IsNumber, IsDateString } from 'class-validator';
 
 export class CreatePurchaseBookEntryDto {
   @IsDateString()
-  entryDate: string;
+  entryDate: string; // periodo: mes en que se declara
+
+  @IsOptional()
+  @IsDateString()
+  documentDate?: string; // fecha que se muestra (original del proveedor); si vacia, = entryDate
 
   @IsOptional()
   @IsString()

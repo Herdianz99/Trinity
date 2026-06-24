@@ -13,6 +13,7 @@ interface PurchaseBookEntry {
   purchaseOrderId: string | null;
   purchaseOrder: { id: string; number: string; purchaseNumber: number } | null;
   entryDate: string;
+  documentDate: string | null;
   supplierControlNumber: string | null;
   supplierInvoiceNumber: string | null;
   supplierSerie: string | null;
@@ -95,6 +96,7 @@ function lastDayOfMonth(year: number, month: number): number {
 
 const EMPTY_FORM = {
   entryDate: '',
+  documentDate: '',
   supplierControlNumber: '',
   supplierInvoiceNumber: '',
   supplierName: '',
@@ -180,7 +182,7 @@ export default function LibroComprasPage() {
 
   function openCreateModal() {
     setEditingId(null);
-    setForm({ ...EMPTY_FORM, entryDate: toLocalDateStr(now) });
+    setForm({ ...EMPTY_FORM, entryDate: toLocalDateStr(now), documentDate: toLocalDateStr(now) });
     setModalOpen(true);
   }
 
@@ -188,6 +190,7 @@ export default function LibroComprasPage() {
     setEditingId(entry.id);
     setForm({
       entryDate: entry.entryDate ? entry.entryDate.substring(0, 10) : '',
+      documentDate: (entry.documentDate || entry.entryDate) ? (entry.documentDate || entry.entryDate).substring(0, 10) : '',
       supplierControlNumber: entry.supplierControlNumber || '',
       supplierInvoiceNumber: entry.supplierInvoiceNumber || '',
       supplierName: entry.supplierName,
@@ -281,7 +284,7 @@ export default function LibroComprasPage() {
     let n = 0;
     for (const e of entries) {
       if (e.isIslrRetentionLine) continue; // ISLR fuera del libro por ahora
-      const fecha = e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '';
+      const fecha = (e.documentDate || e.entryDate) ? new Date(e.documentDate || e.entryDate).toLocaleDateString('es-VE') : '';
       if (e.isRetentionLine) {
         aoa.push([
           '', fecha, e.supplierRif || '', e.supplierName || '', '', '', '',
@@ -370,7 +373,7 @@ export default function LibroComprasPage() {
     const tableRows = entries.map((r) => {
       // ISLR fuera del libro por ahora (decision del usuario)
       if (r.isIslrRetentionLine) return '';
-      const fecha = r.entryDate ? new Date(r.entryDate).toLocaleDateString('es-VE') : '';
+      const fecha = (r.documentDate || r.entryDate) ? new Date(r.documentDate || r.entryDate).toLocaleDateString('es-VE') : '';
 
       // Fila de retencion IVA: repite proveedor y factura, muestra retencion + comprobante
       if (r.isRetentionLine) {
@@ -736,7 +739,7 @@ export default function LibroComprasPage() {
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine || e.isIslrRetentionLine).length}
                         </td>
                         <td className="px-2 py-2 text-slate-300" style={(entry.isRetentionLine || entry.isIslrRetentionLine) ? { fontSize: '10px' } : {}}>
-                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : (entry.documentDate || entry.entryDate) ? new Date(entry.documentDate || entry.entryDate).toLocaleDateString('es-VE') : ''}
                         </td>
                         <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierControlNumber || '-'}
@@ -863,14 +866,26 @@ export default function LibroComprasPage() {
 
             {/* Modal body */}
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              {/* Row 1: Fecha, Control, Factura */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Row 1a: Fechas (documento = la que se muestra; declaracion = mes en que se declara) */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Fecha *</label>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha documento *</label>
+                  <input type="date" value={form.documentDate}
+                    onChange={e => updateForm('documentDate', e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                  <p className="text-[10px] text-slate-500 mt-0.5">Fecha original del proveedor (la que se muestra)</p>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha declaracion *</label>
                   <input type="date" value={form.entryDate}
                     onChange={e => updateForm('entryDate', e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                  <p className="text-[10px] text-slate-500 mt-0.5">Mes/periodo en que aparece en el libro</p>
                 </div>
+              </div>
+
+              {/* Row 1b: Control, Factura */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">N&deg; Control</label>
                   <input type="text" value={form.supplierControlNumber}

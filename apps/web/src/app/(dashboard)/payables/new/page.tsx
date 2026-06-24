@@ -92,9 +92,9 @@ export default function NewPayablePage() {
   }, []);
 
   useEffect(() => {
-    const [y, m, d] = receptionDate.split('-').map(Number);
+    const [y, m, d] = originalDate.split('-').map(Number);
     setDueDate(localDateStr(addDays(new Date(y, m - 1, d), creditDays)));
-  }, [creditDays, receptionDate]);
+  }, [creditDays, originalDate]);
 
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch.trim()) return suppliers;
@@ -131,11 +131,12 @@ export default function NewPayablePage() {
     if (!supplierId) { setError('Debe seleccionar un proveedor'); return; }
     if (!description.trim()) { setError('La descripcion es obligatoria'); return; }
     if (totalDoc <= 0) { setError('El total del documento debe ser mayor a 0'); return; }
+    if (!exchangeRate || exchangeRate <= 0) { setError('La tasa del dia debe ser mayor a 0'); return; }
 
     setSaving(true); setError('');
     try {
       const pt = creditDays > 0 ? `CREDITO_${creditDays}` : 'CONTADO';
-      const body: Record<string, any> = { supplierId, totalAmount: totalDoc, currency };
+      const body: Record<string, any> = { supplierId, totalAmount: totalDoc, currency, exchangeRate };
       if (serieId) body.serieId = serieId;
       if (documentNumber.trim()) body.documentNumber = documentNumber.trim();
       if (controlFiscal.trim()) body.controlFiscal = controlFiscal.trim();
@@ -302,8 +303,8 @@ export default function NewPayablePage() {
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Tasa del dia</label>
-                <input type="text" value={exchangeRate ? `Bs ${fmt(exchangeRate)}` : '-'} readOnly tabIndex={-1}
-                  className="input-field !py-1 text-sm bg-slate-900/60 text-slate-500 cursor-not-allowed" />
+                <input type="number" step="0.01" min="0" value={exchangeRate || ''} onChange={e => setExchangeRate(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00" className="input-field !py-1 text-sm font-mono" />
               </div>
             </div>
           </div>

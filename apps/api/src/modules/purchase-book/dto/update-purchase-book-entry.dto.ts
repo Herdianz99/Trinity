@@ -6,6 +6,10 @@ export class UpdatePurchaseBookEntryDto {
   entryDate?: string;
 
   @IsOptional()
+  @IsDateString()
+  documentDate?: string;
+
+  @IsOptional()
   @IsString()
   supplierControlNumber?: string;
 

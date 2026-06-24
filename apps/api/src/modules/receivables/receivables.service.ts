@@ -36,9 +36,16 @@ export class ReceivablesService {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
     if (!customer) throw new NotFoundException('Cliente no encontrado');
 
-    const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    // Tasa: la que envia el usuario (editable) tiene prioridad; si no, la registrada de hoy
+    let r: number;
+    if (dto.exchangeRate && dto.exchangeRate > 0) {
+      r = dto.exchangeRate;
+    } else {
+      const today = caracasDateKey();
+      const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+      if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+      r = rate.rate;
+    }
 
     // Resolve serie and fiscal status
     let serie: any = null;
@@ -51,7 +58,6 @@ export class ReceivablesService {
     }
 
     const currency = dto.currency || 'USD';
-    const r = rate.rate;
 
     // Fiscal breakdown in input currency
     const exemptBase = dto.exemptBase || 0;
