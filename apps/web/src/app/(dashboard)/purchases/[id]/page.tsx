@@ -298,11 +298,6 @@ export default function PurchaseBillDetailPage() {
   const [suggestedPrices, setSuggestedPrices] = useState<SuggestedPrice[]>([]);
   const [priceEdits, setPriceEdits] = useState<Record<string, { gananciaPct: number; gananciaMayorPct: number; priceDetal: number; priceMayor: number }>>({});
   const [processing, setProcessing] = useState(false);
-  // Ajuste fiscal del documento (solo credito + fiscal): montos exactos del documento del proveedor
-  const [fiscalAdj, setFiscalAdj] = useState({
-    exemptBase: 0, taxableBase: 0, ivaAmount: 0, igtfAmount: 0,
-    originalDate: '', receptionDate: '', creditDays: 0, exchangeRate: 0,
-  });
 
   // Lazy-loaded tab data
   const [payables, setPayables] = useState<Payable[]>([]);
@@ -472,22 +467,6 @@ export default function PurchaseBillDetailPage() {
         return;
       }
     }
-    // Prefill ajuste fiscal con los montos calculados de la factura (en su moneda)
-    {
-      const isBs = bill.currency === 'BS';
-      const d = new Date();
-      const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      setFiscalAdj({
-        exemptBase: isBs ? bill.exemptAmountBs : bill.exemptAmountUsd,
-        taxableBase: isBs ? bill.taxableBaseBs : bill.taxableBaseUsd,
-        ivaAmount: isBs ? bill.totalIvaBs : bill.totalIvaUsd,
-        igtfAmount: 0,
-        originalDate: bill.invoiceDate ? bill.invoiceDate.slice(0, 10) : todayStr,
-        receptionDate: todayStr,
-        creditDays: bill.creditDays || 0,
-        exchangeRate: bill.exchangeRate || 0,
-      });
-    }
     setProcessing(true);
     setMessage(null);
     try {
@@ -638,27 +617,6 @@ export default function PurchaseBillDetailPage() {
     });
   }
 
-  // Solo aplica a factura a CREDITO + FISCAL: monto exacto del documento -> CxP/libro/retencion
-  const showFiscalAdjust = !!(bill && bill.isCredit && bill.serie?.isFiscal);
-  const fiscalAdjTotal = Math.round(
-    ((Number(fiscalAdj.exemptBase) || 0) + (Number(fiscalAdj.taxableBase) || 0) +
-      (Number(fiscalAdj.ivaAmount) || 0) + (Number(fiscalAdj.igtfAmount) || 0)) * 100,
-  ) / 100;
-
-  function buildFiscalAdjustment() {
-    return {
-      currency: bill?.currency || 'USD',
-      exchangeRate: Number(fiscalAdj.exchangeRate) || 0,
-      exemptBase: Number(fiscalAdj.exemptBase) || 0,
-      taxableBase: Number(fiscalAdj.taxableBase) || 0,
-      ivaAmount: Number(fiscalAdj.ivaAmount) || 0,
-      igtfAmount: Number(fiscalAdj.igtfAmount) || 0,
-      originalDate: fiscalAdj.originalDate || undefined,
-      receptionDate: fiscalAdj.receptionDate || undefined,
-      creditDays: Number(fiscalAdj.creditDays) || 0,
-    };
-  }
-
   async function handleProcessWithPrices() {
     setProcessing(true);
     setMessage(null);
@@ -669,7 +627,6 @@ export default function PurchaseBillDetailPage() {
         gananciaMayorPct: data.gananciaMayorPct,
       }));
       const body: Record<string, unknown> = { priceUpdates };
-      if (showFiscalAdjust) body.fiscalAdjustment = buildFiscalAdjustment();
       if (bill && !bill.isCredit) {
         body.payments = paymentLines
           .filter((l) => l.methodId && l.amountUsd > 0)
@@ -707,7 +664,6 @@ export default function PurchaseBillDetailPage() {
     setMessage(null);
     try {
       const body: Record<string, unknown> = {};
-      if (showFiscalAdjust) body.fiscalAdjustment = buildFiscalAdjustment();
       if (bill && !bill.isCredit) {
         body.payments = paymentLines
           .filter((l) => l.methodId && l.amountUsd > 0)
@@ -1566,77 +1522,6 @@ export default function PurchaseBillDetailPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
-              )}
-
-              {/* Montos fiscales del documento (solo credito + fiscal) */}
-              {showFiscalAdjust && (
-                <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-                  <h3 className="text-sm font-semibold text-amber-300 mb-1">Montos fiscales del documento</h3>
-                  <p className="text-xs text-slate-400 mb-3">
-                    Escribe los montos <strong>exactos</strong> del documento del proveedor (alimentan la CxP, el
-                    libro de compras y la retencion). El costo de inventario sigue saliendo de las lineas y puede
-                    diferir por centimos.
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Exento {bill.currency === 'BS' ? 'Bs' : '$'}</label>
-                      <input type="number" step="0.01" min="0" value={fiscalAdj.exemptBase || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, exemptBase: Number(e.target.value) || 0 }))}
-                        placeholder="0.00" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Base imponible {bill.currency === 'BS' ? 'Bs' : '$'}</label>
-                      <input type="number" step="0.01" min="0" value={fiscalAdj.taxableBase || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, taxableBase: Number(e.target.value) || 0 }))}
-                        placeholder="0.00" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">IVA / Cred. fiscal {bill.currency === 'BS' ? 'Bs' : '$'}</label>
-                      <input type="number" step="0.01" min="0" value={fiscalAdj.ivaAmount || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, ivaAmount: Number(e.target.value) || 0 }))}
-                        placeholder="0.00" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">IGTF {bill.currency === 'BS' ? 'Bs' : '$'}</label>
-                      <input type="number" step="0.01" min="0" value={fiscalAdj.igtfAmount || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, igtfAmount: Number(e.target.value) || 0 }))}
-                        placeholder="0.00" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Total documento {bill.currency === 'BS' ? 'Bs' : '$'}</label>
-                      <input type="text" readOnly tabIndex={-1} value={fmt(fiscalAdjTotal)}
-                        className="input-field !py-1 text-sm font-mono w-full bg-slate-900/60 text-amber-300 font-bold cursor-not-allowed" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t border-slate-700/40">
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Fecha documento</label>
-                      <input type="date" value={fiscalAdj.originalDate}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, originalDate: e.target.value }))}
-                        className="input-field !py-1 text-sm w-full" />
-                      <p className="text-[9px] text-slate-500 mt-0.5">Se muestra en el libro</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Fecha recepcion</label>
-                      <input type="date" value={fiscalAdj.receptionDate}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, receptionDate: e.target.value }))}
-                        className="input-field !py-1 text-sm w-full" />
-                      <p className="text-[9px] text-slate-500 mt-0.5">Mes en que se declara</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Dias de credito</label>
-                      <input type="number" min="0" value={fiscalAdj.creditDays || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, creditDays: Number(e.target.value) || 0 }))}
-                        placeholder="0" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 mb-0.5 block">Tasa del dia</label>
-                      <input type="number" step="0.01" min="0" value={fiscalAdj.exchangeRate || ''}
-                        onChange={(e) => setFiscalAdj((p) => ({ ...p, exchangeRate: Number(e.target.value) || 0 }))}
-                        placeholder="0.00" className="input-field !py-1 text-sm font-mono w-full" />
-                    </div>
-                  </div>
                 </div>
               )}
 

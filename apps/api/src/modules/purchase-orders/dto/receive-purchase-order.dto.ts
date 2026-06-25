@@ -29,54 +29,6 @@ export class ProcessPaymentLineDto {
   reference?: string;
 }
 
-// Ajuste fiscal del documento (solo factura de compra a CREDITO + FISCAL): permite escribir
-// los montos exactos del documento del proveedor (que difieren por centimos de la suma de
-// lineas) para alimentar la CxP, el libro de compras y la retencion. El inventario/costo
-// sigue saliendo de las lineas. Montos en la moneda de la orden (currency).
-export class FiscalAdjustmentDto {
-  @IsOptional()
-  @IsString()
-  currency?: string; // 'USD' | 'BS' (default = moneda de la orden)
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  exchangeRate?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  exemptBase?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  taxableBase?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  ivaAmount?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  igtfAmount?: number;
-
-  @IsOptional()
-  @IsString()
-  originalDate?: string; // fecha del documento del proveedor (la que se muestra en el libro)
-
-  @IsOptional()
-  @IsString()
-  receptionDate?: string; // fecha de recepcion (periodo en que se declara en el libro)
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  creditDays?: number;
-}
-
 export class ProcessPurchaseBillDto {
   @IsOptional()
   @IsArray()
@@ -89,9 +41,4 @@ export class ProcessPurchaseBillDto {
   @ValidateNested({ each: true })
   @Type(() => ProcessPaymentLineDto)
   payments?: ProcessPaymentLineDto[];
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => FiscalAdjustmentDto)
-  fiscalAdjustment?: FiscalAdjustmentDto;
 }
