@@ -9,7 +9,7 @@ const VALID_MODULES = [
   'users', 'settings', 'expenses', 'payment-schedules',
   'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE',
   'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE',
-  'MANAGE_EXPENSES',
+  'MANAGE_EXPENSES', 'MANAGE_EXCHANGE_RATE',
 ];
 
 const CACHE_PREFIX = 'role-permissions:';

@@ -454,7 +454,7 @@ export default function ExpensesPage() {
             ) : (
               expenses.map((exp) => (
                 <tr key={exp.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
-                  <td className="px-4 py-3 text-slate-300">{new Date(exp.date).toLocaleDateString('es-VE')}</td>
+                  <td className="px-4 py-3 text-slate-300">{new Date(exp.date).toLocaleDateString('es-VE', { timeZone: 'UTC' })}</td>
                   <td className="px-4 py-3">
                     <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700/50 text-slate-300 border border-slate-600/50">
                       {exp.category.name}

@@ -68,6 +68,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
     group: 'Administracion',
     items: [
       { key: 'MANAGE_EXPENSES', label: 'Gestionar gastos' },
+      { key: 'MANAGE_EXCHANGE_RATE', label: 'Actualizar tasa de cambio' },
     ],
   },
 ];

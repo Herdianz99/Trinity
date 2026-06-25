@@ -5,10 +5,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
 import { UserRole } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
+import { RolePermissionsService } from '../role-permissions/role-permissions.service';
+
+// Permiso configurable que habilita registrar/actualizar la tasa del dia (ademas de ADMIN,
+// que siempre puede). Se asigna por rol desde "Permisos por rol".
+const RATE_PERMISSION = 'MANAGE_EXCHANGE_RATE';
 
 @Injectable()
 export class ExchangeRateService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rolePermissions: RolePermissionsService,
+  ) {}
 
   async getToday() {
     const today = caracasDateKey();
@@ -51,8 +59,13 @@ export class ExchangeRateService {
   }
 
   async create(dto: CreateExchangeRateDto, user: { id: string; role: UserRole }) {
+    // ADMIN siempre puede; los demas roles necesitan el permiso MANAGE_EXCHANGE_RATE
+    // (configurable desde "Permisos por rol").
     if (user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo ADMIN puede registrar tasas de cambio');
+      const modules = await this.rolePermissions.getModulesForRole(user.role);
+      if (!modules.includes(RATE_PERMISSION)) {
+        throw new ForbiddenException('No tiene permiso para registrar la tasa de cambio');
+      }
     }
 
     const today = caracasDateKey();

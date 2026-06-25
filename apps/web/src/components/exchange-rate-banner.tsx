@@ -11,6 +11,7 @@ export default function ExchangeRateBanner() {
   const [bcvMessage, setBcvMessage] = useState('');
   const [fetchingBcv, setFetchingBcv] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function ExchangeRateBanner() {
   async function handleSaveRate() {
     if (!newRate || Number(newRate) <= 0) return;
     setSaving(true);
+    setSaveError('');
     try {
       const res = await fetch('/api/proxy/exchange-rate', {
         method: 'POST',
@@ -66,8 +68,13 @@ export default function ExchangeRateBanner() {
         setHasRate(true);
         setShowModal(false);
         setNewRate('');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSaveError(err.message || 'No se pudo guardar la tasa. Es posible que no tengas permiso.');
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      setSaveError('Error de conexion al guardar la tasa.');
+    } finally {
       setSaving(false);
     }
   }
@@ -139,6 +146,10 @@ export default function ExchangeRateBanner() {
                   {rateFromBcv ? 'Confirmar y guardar' : 'Guardar'}
                 </button>
               </div>
+
+              {saveError && (
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{saveError}</p>
+              )}
 
               <button
                 onClick={() => setShowModal(false)}

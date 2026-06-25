@@ -279,7 +279,16 @@ export default function NewReceivablePage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-3 pt-3 border-t border-slate-700/50">
               <div>
                 <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Fecha original</label>
-                <input type="date" value={originalDate} onChange={e => setOriginalDate(e.target.value)} className="input-field !py-1 text-sm" />
+                <input type="date" value={originalDate} onChange={e => {
+                  const d = e.target.value;
+                  setOriginalDate(d);
+                  if (d) {
+                    fetch(`/api/proxy/exchange-rate/by-date?date=${d}`)
+                      .then(r => r.ok ? r.json() : null)
+                      .then(data => { if (data?.rate) setExchangeRate(data.rate); })
+                      .catch(() => {});
+                  }
+                }} className="input-field !py-1 text-sm" />
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Fecha recepcion</label>

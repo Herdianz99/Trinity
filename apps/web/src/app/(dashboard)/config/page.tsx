@@ -481,7 +481,7 @@ export default function ConfigPage() {
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {rateHistory.slice(0, 15).map((r: any) => (
                   <div key={r.id} className="flex items-center justify-between text-sm py-1">
-                    <span className="text-slate-400">{new Date(r.date).toLocaleDateString('es-VE')}</span>
+                    <span className="text-slate-400">{new Date(r.date).toLocaleDateString('es-VE', { timeZone: 'UTC' })}</span>
                     <span className="font-mono text-white">{r.rate.toFixed(2)} Bs</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{r.source}</span>
                   </div>
