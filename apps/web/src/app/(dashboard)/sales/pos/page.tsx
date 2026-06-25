@@ -57,6 +57,10 @@ interface PaymentMethodData {
 
 const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
 
+// Formato Bs venezolano: 1.234,56 (punto miles, coma decimal)
+const fmtBs = (n: number) =>
+  (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 interface CartItem {
   productId: string;
   code: string;
@@ -1614,9 +1618,14 @@ export default function POSPage() {
                       <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</p>
                       <div className="flex items-center justify-between mt-1">
-                        <p className="text-sm font-semibold text-green-400">${product.priceDetal?.toFixed(2)}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-green-400">${product.priceDetal?.toFixed(2)}</p>
+                          {exchangeRate > 0 && (
+                            <p className="text-[10px] text-slate-500 leading-tight">Bs {fmtBs((product.priceDetal || 0) * exchangeRate)}</p>
+                          )}
+                        </div>
                         {!blockNoStock && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-amber-400 bg-amber-500/10'}`}>Stock: {prodStock}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-amber-400 bg-amber-500/10'}`}>Stock: {prodStock}</span>
                         )}
                       </div>
                       {blockNoStock && <p className="text-[10px] text-red-400 mt-0.5">Sin stock</p>}
@@ -1691,7 +1700,9 @@ export default function POSPage() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0 mr-2">
                       <p className="text-sm font-medium text-white line-clamp-2 leading-tight" title={item.name}>{item.name}</p>
-                      <p className="text-xs text-slate-500">${item.unitPrice.toFixed(2)} c/u</p>
+                      <p className="text-xs text-slate-500">
+                        ${item.unitPrice.toFixed(2)}{exchangeRate > 0 && <> · Bs {fmtBs(item.unitPrice * exchangeRate)}</>} c/u
+                      </p>
                     </div>
                     <button onClick={() => removeItem(item.productId)} className="p-1 text-red-400">
                       <Trash2 size={14} />
@@ -1711,7 +1722,10 @@ export default function POSPage() {
                         <Plus size={14} />
                       </button>
                     </div>
-                    <span className="text-sm font-bold text-green-400">${lineTotal.toFixed(2)}</span>
+                    <div className="text-right">
+                      <span className="block text-sm font-bold text-green-400">${lineTotal.toFixed(2)}</span>
+                      {exchangeRate > 0 && <span className="text-[10px] text-slate-500">Bs {fmtBs(lineTotal * exchangeRate)}</span>}
+                    </div>
                   </div>
                 </div>
               );
@@ -1728,8 +1742,12 @@ export default function POSPage() {
                 <span className="text-slate-500">IVA {IVA_LABELS[type]}</span><span className="text-slate-400">${(amount as number).toFixed(2)}</span>
               </div>
             ))}
-            <div className="flex justify-between text-lg font-bold mt-1 mb-3">
-              <span className="text-white">Total</span><span className="text-green-400">${totalUsd.toFixed(2)}</span>
+            <div className="flex justify-between items-baseline text-lg font-bold mt-1 mb-3">
+              <span className="text-white">Total</span>
+              <span className="text-right">
+                <span className="block text-green-400">${totalUsd.toFixed(2)}</span>
+                {exchangeRate > 0 && <span className="block text-xs font-normal text-slate-400">Bs {fmtBs(totalUsd * exchangeRate)}</span>}
+              </span>
             </div>
             {userRole === 'SELLER' ? (
               <button
@@ -1771,33 +1789,51 @@ export default function POSPage() {
           >
             <span className="text-xs font-semibold text-slate-300">En esta factura ({cart.length})</span>
             <span className="flex items-center gap-1.5 text-xs text-slate-400">
-              ${totalUsd.toFixed(2)}
+              <span className="text-right leading-tight">
+                <span className="block">${totalUsd.toFixed(2)}</span>
+                {exchangeRate > 0 && <span className="block text-[10px] text-slate-500">Bs {fmtBs(totalUsd * exchangeRate)}</span>}
+              </span>
               {cartStripCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </span>
           </button>
 
           {/* Lista de items (expandida) */}
           {!cartStripCollapsed && (
-            <div className="max-h-44 overflow-y-auto px-3 pb-2 space-y-1.5">
-              {cart.map(item => (
-                <div key={item.productId} className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/40 rounded-lg px-2 py-1.5">
-                  <span className="flex-1 min-w-0 text-xs text-white truncate" title={item.name}>{item.name}</span>
-                  <button onClick={() => updateQuantity(item.productId, -1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
-                    <Minus size={12} />
-                  </button>
-                  <QtyInput
-                    value={item.quantity}
-                    onCommit={(q) => setQuantity(item.productId, q)}
-                    className="w-12 text-center text-xs font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-md px-1 py-1 focus:outline-none focus:border-green-500/50"
-                  />
-                  <button onClick={() => updateQuantity(item.productId, 1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
-                    <Plus size={12} />
-                  </button>
-                  <span className="w-14 text-right text-xs font-bold text-green-400">
-                    ${(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100)).toFixed(2)}
-                  </span>
-                </div>
-              ))}
+            <div className="max-h-52 overflow-y-auto px-3 pb-2 space-y-1.5">
+              {cart.map(item => {
+                const lineTot = item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100);
+                return (
+                  <div key={item.productId} className="bg-slate-800/50 border border-slate-700/40 rounded-lg px-2.5 py-2">
+                    {/* Linea 1: nombre + eliminar */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="flex-1 min-w-0 text-xs text-white truncate" title={item.name}>{item.name}</span>
+                      <button onClick={() => removeItem(item.productId)} className="shrink-0 p-1 text-red-400 active:scale-90" aria-label="Eliminar articulo">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    {/* Linea 2: cantidad + total ($ y Bs) */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => updateQuantity(item.productId, -1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                          <Minus size={12} />
+                        </button>
+                        <QtyInput
+                          value={item.quantity}
+                          onCommit={(q) => setQuantity(item.productId, q)}
+                          className="w-12 text-center text-xs font-semibold text-white bg-slate-700/60 border border-slate-600 rounded-md px-1 py-1 focus:outline-none focus:border-green-500/50"
+                        />
+                        <button onClick={() => updateQuantity(item.productId, 1)} className="w-7 h-7 rounded-md bg-slate-700/60 border border-slate-600 flex items-center justify-center text-white active:scale-90">
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-xs font-bold text-green-400">${lineTot.toFixed(2)}</span>
+                        {exchangeRate > 0 && <span className="text-[10px] text-slate-500">Bs {fmtBs(lineTot * exchangeRate)}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1812,9 +1848,10 @@ export default function POSPage() {
             </button>
             <button
               onClick={() => setMobileView('cart')}
-              className="flex-1 py-2.5 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              className="flex-1 py-2.5 rounded-xl bg-green-500 text-white font-bold text-sm flex flex-col items-center justify-center leading-tight active:scale-[0.98] transition-transform"
             >
-              <ShoppingCart size={16} /> Ir a cobrar — ${totalUsd.toFixed(2)}
+              <span className="flex items-center gap-2"><ShoppingCart size={16} /> Ir a cobrar — ${totalUsd.toFixed(2)}</span>
+              {exchangeRate > 0 && <span className="text-[11px] font-medium text-green-50/90">Bs {fmtBs(totalUsd * exchangeRate)}</span>}
             </button>
           </div>
         </div>
@@ -2640,7 +2677,7 @@ export default function POSPage() {
                 <div className="flex items-center gap-4 flex-shrink-0 ml-3">
                   <div className="text-right">
                     <div className="text-sm font-medium text-green-400">${product.priceDetal?.toFixed(2)}</div>
-                    <div className="text-xs text-slate-500">Bs {(product.priceDetal * exchangeRate).toFixed(2)}</div>
+                    {exchangeRate > 0 && <div className="text-xs text-slate-500">Bs {fmtBs((product.priceDetal || 0) * exchangeRate)}</div>}
                   </div>
                   {blockNoStock ? (
                     <span className="text-xs px-2 py-0.5 rounded-full text-red-400 bg-red-500/10 border border-red-500/20 font-medium">Sin stock</span>
@@ -2834,8 +2871,9 @@ export default function POSPage() {
                     <Plus size={14} />
                   </button>
                 </div>
-                <span className="text-sm text-white font-medium w-16 text-right">
-                  ${(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100)).toFixed(2)}
+                <span className="w-20 text-right leading-tight">
+                  <span className="block text-sm text-white font-medium">${(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100)).toFixed(2)}</span>
+                  {exchangeRate > 0 && <span className="block text-[10px] text-slate-500">Bs {fmtBs(item.unitPrice * item.quantity * (1 - (item.discountPct || 0) / 100) * exchangeRate)}</span>}
                 </span>
                 <button onClick={() => removeItem(item.productId)} className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400">
                   <Trash2 size={14} />
@@ -2882,7 +2920,7 @@ export default function POSPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Total Bs</span>
-              <span className="text-slate-300">Bs {totalBs.toFixed(2)}</span>
+              <span className="text-slate-300">Bs {fmtBs(totalBs)}</span>
             </div>
 
             <div className="flex gap-2 pt-2">

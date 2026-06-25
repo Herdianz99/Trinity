@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 67 (2026-06-25) — POS: precios en Bs en movil + eliminar articulo en la franja (FALTA DEPLOY)
+
+> Dos observaciones de los **vendedores probando el sistema** en el cliente. Solo frontend (`sales/pos/page.tsx`), typecheck Web limpio (exit 0). **FALTA DEPLOY** (al deployar tambien sube lo de Tanda A de la Sesion 66, que sigue sin probarse E2E — son del mismo `main`).
+
+- **Precios en Bs en la vista movil/tablet (la que usan los vendedores)**: antes los precios salian **solo en USD** en movil; en escritorio ya mostraba Bs debajo del $. Se replico ese patron (Bs en gris, pequeno, debajo del verde) en: tarjeta de producto del buscador, renglones de "Mi carrito", la franja de agregados, el total del renglon, subtotales y botones de total ("Ir a cobrar"/"Cobrar"). Se agrego helper `fmtBs` (formato venezolano `1.234,56` via `toLocaleString('es-VE')`) y se unifico el formato Bs en escritorio (antes `.toFixed(2)`). Todo usa la `tasa` que el POS ya tenia cargada; si `exchangeRate` es 0, no se muestra Bs.
+- **Boton de eliminar en la franja de abajo del movil ("En esta factura")**: no tenia forma de quitar un articulo si el vendedor se equivocaba. Se reestructuro cada renglon a **2 lineas** (elegido por Diego sobre 1-linea-apretada y swipe): arriba el nombre + **papelera roja** (`removeItem`), abajo los controles de cantidad + total ($ y Bs). Mas alto pero legible y cabe todo. El carrito completo ("Mi carrito") ya tenia papelera; ahora la franja rapida tambien.
+
 ## 🚧 Sesion 66 (2026-06-24) — CxC/CxP fechas+tasa, Libro de Compras fecha doc vs declaracion (Tanda A). **Tanda B (montos fiscales al procesar) REVERTIDA por pedido del cliente (2026-06-25).**
 
 > **ACTUALIZACION 2026-06-25**: el cliente indico que la pantalla de "Montos fiscales del documento" al procesar la factura **no le sirve** ("no podia ser asi por varios problemas, mejor dejarlo como trabajan ya"). Se **revirtio la Tanda B** (`3cb4a97`) con `git revert` (commit `d84195e`): los 3 archivos afectados volvieron **byte-identicos a `c89da2e`**. **Tanda A se queda.** No hubo cambio de schema (las columnas fiscales de `Payable` ya existian; la columna `documentDate` del libro es de Tanda A y se conserva). Sin referencias colgantes en el codigo fuente.
