@@ -554,7 +554,7 @@ export default function LibroVentasPage() {
       const isFactura = e.documentType === 'FACTURA' || e.documentType === 'CXC';
       aoa.push([
         i + 1,
-        e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE') : '',
+        e.entryDate ? new Date(e.entryDate).toLocaleDateString('es-VE', { timeZone: 'UTC' }) : '',
         e.customerRif || '',
         e.customerName || '',
         isFactura ? correlativo(e.invoiceNumber) : '',
@@ -1545,7 +1545,7 @@ export default function LibroVentasPage() {
                           <tr key={entry.id} className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors group ${entry.isRetentionLine ? 'bg-purple-500/5' : ''}`}>
                             <td className="px-2 py-2 text-slate-400">{i + 1}</td>
                             <td className="px-2 py-2 text-slate-300">
-                              {entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE') : ''}
+                              {entry.entryDate ? new Date(entry.entryDate).toLocaleDateString('es-VE', { timeZone: 'UTC' }) : ''}
                             </td>
                             <td className="px-2 py-2">
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-600/40 text-slate-300 border border-slate-500/30 whitespace-nowrap">

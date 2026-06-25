@@ -189,6 +189,13 @@ export default function ReceivableDetailPage() {
     return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
   }
 
+  // Fechas date-only (originalDate/receptionDate/dueDate) guardadas a medianoche UTC: formatear en
+  // UTC para no correr un dia en Caracas. (createdAt es timestamp real -> va con fmtDate local.)
+  function fmtDateOnly(iso: string) {
+    const d = new Date(iso);
+    return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-green-500" size={32} /></div>;
   if (error || !receivable) return (
     <div className="text-center py-20">
@@ -320,19 +327,19 @@ export default function ReceivableDetailPage() {
                 {receivable.originalDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-400">Fecha original</span>
-                    <span className="text-white">{fmtDate(receivable.originalDate)}</span>
+                    <span className="text-white">{fmtDateOnly(receivable.originalDate)}</span>
                   </div>
                 )}
                 {receivable.receptionDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-400">Fecha recepcion</span>
-                    <span className="text-white">{fmtDate(receivable.receptionDate)}</span>
+                    <span className="text-white">{fmtDateOnly(receivable.receptionDate)}</span>
                   </div>
                 )}
                 {receivable.dueDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-400">Fecha vencimiento</span>
-                    <span className="text-white">{fmtDate(receivable.dueDate)}</span>
+                    <span className="text-white">{fmtDateOnly(receivable.dueDate)}</span>
                   </div>
                 )}
                 {receivable.paymentTerms && (

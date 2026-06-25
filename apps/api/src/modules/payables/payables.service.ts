@@ -29,6 +29,42 @@ export class PayablesService {
       throw new BadRequestException('No se puede eliminar: la CxP esta incluida en una programacion de pagos');
     }
     await this.prisma.$transaction(async (tx) => {
+      // Borrar el/los comprobante(s) de retencion IVA creados junto a esta CxP (las lineas del
+      // comprobante se borran en cascada). Si el comprobante era el ULTIMO emitido, devolver el
+      // correlativo para no quemar el numero (importante al continuar la numeracion del sistema viejo).
+      const retLines = await tx.retentionVoucherLine.findMany({
+        where: { payableId: id },
+        select: { retentionVoucherId: true },
+      });
+      const voucherIds = [
+        ...new Set(retLines.map((l) => l.retentionVoucherId).filter((x): x is string => !!x)),
+      ];
+      if (voucherIds.length > 0) {
+        const vouchers = await tx.retentionVoucher.findMany({
+          where: { id: { in: voucherIds } },
+          select: { number: true },
+        });
+        await tx.retentionVoucher.deleteMany({ where: { id: { in: voucherIds } } });
+
+        const cfg = await tx.companyConfig.findUnique({
+          where: { id: 'singleton' },
+          select: { retentionNextNumber: true },
+        });
+        if (cfg) {
+          // consecutivo = ultimos 8 digitos del numero (formato YYYYMM + 8 digitos)
+          const consecutivos = vouchers
+            .map((v) => parseInt((v.number || '').slice(-8), 10))
+            .filter((n) => !Number.isNaN(n));
+          const maxCons = consecutivos.length ? Math.max(...consecutivos) : 0;
+          if (maxCons > 0 && maxCons === cfg.retentionNextNumber - 1) {
+            await tx.companyConfig.update({
+              where: { id: 'singleton' },
+              data: { retentionNextNumber: maxCons },
+            });
+          }
+        }
+      }
+
       await tx.purchaseBookEntry.deleteMany({ where: { payableId: id } });
       await tx.payable.delete({ where: { id } });
     });
@@ -254,6 +290,7 @@ export class PayablesService {
         await tx.purchaseBookEntry.create({
           data: {
             retentionVoucherId: retentionVoucher.id,
+            retentionVoucherNumber: retNumber,
             payableId: payable.id,
             // Misma fecha que su factura: periodo recepcion, display original
             entryDate: receptionDate || originalDate || new Date(),

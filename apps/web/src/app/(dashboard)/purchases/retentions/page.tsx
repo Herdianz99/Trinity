@@ -11,7 +11,7 @@ import {
 
 interface RetentionVoucherLine {
   id: string;
-  purchaseOrderId: string;
+  purchaseOrderId: string | null;
   supplierInvoiceNumber: string | null;
   supplierControlNumber: string | null;
   invoiceDate: string | null;
@@ -37,7 +37,7 @@ interface RetentionVoucherLine {
     exchangeRate: number;
     supplierControlNumber: string | null;
     supplierInvoiceNumber: string | null;
-  };
+  } | null;
 }
 
 interface RetentionVoucher {
@@ -357,10 +357,16 @@ export default function RetentionsPage() {
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col gap-0.5">
                         {v.lines.slice(0, 3).map((line) => (
-                          <a key={line.id} href={`/purchases/${line.purchaseOrder.id}`}
-                            className="text-blue-400 hover:text-blue-300 font-mono text-xs">
-                            {line.purchaseOrder.number}
-                          </a>
+                          line.purchaseOrder ? (
+                            <a key={line.id} href={`/purchases/${line.purchaseOrder.id}`}
+                              className="text-blue-400 hover:text-blue-300 font-mono text-xs">
+                              {line.purchaseOrder.number}
+                            </a>
+                          ) : (
+                            <span key={line.id} className="text-slate-300 font-mono text-xs">
+                              {line.supplierInvoiceNumber || 'CxP manual'}
+                            </span>
+                          )
                         ))}
                         {v.lines.length > 3 && (
                           <span className="text-xs text-slate-500">+{v.lines.length - 3} más</span>
@@ -565,10 +571,16 @@ export default function RetentionsPage() {
                       {detailModal.lines.map((line) => (
                         <tr key={line.id} className="border-b border-slate-700/20">
                           <td className="px-3 py-2">
-                            <a href={`/purchases/${line.purchaseOrder.id}`}
-                              className="text-blue-400 hover:text-blue-300 font-mono">
-                              {line.purchaseOrder.number}
-                            </a>
+                            {line.purchaseOrder ? (
+                              <a href={`/purchases/${line.purchaseOrder.id}`}
+                                className="text-blue-400 hover:text-blue-300 font-mono">
+                                {line.purchaseOrder.number}
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 font-mono">
+                                {line.supplierInvoiceNumber || 'CxP manual'}
+                              </span>
+                            )}
                             <div className="text-slate-600">{fmtDate(line.invoiceDate)}</div>
                           </td>
                           <td className="px-3 py-2 text-slate-400 font-mono">{line.supplierControlNumber || '--'}</td>

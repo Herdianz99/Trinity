@@ -24,6 +24,8 @@ interface CompanyConfig {
   allowNegativeStock: boolean;
   defaultCustomerId: string;
   retentionProvidencia: string;
+  retentionNextNumber: number;
+  islrRetentionNextNumber: number;
 }
 
 interface CustomerOption {
@@ -55,6 +57,8 @@ export default function ConfigPage() {
     allowNegativeStock: true,
     defaultCustomerId: '',
     retentionProvidencia: 'SNAT/2025/000054',
+    retentionNextNumber: 1,
+    islrRetentionNextNumber: 1,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -196,6 +200,8 @@ export default function ConfigPage() {
           allowNegativeStock: data.allowNegativeStock ?? true,
           defaultCustomerId: data.defaultCustomerId || '',
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
+          retentionNextNumber: data.retentionNextNumber ?? 1,
+          islrRetentionNextNumber: data.islrRetentionNextNumber ?? 1,
         });
         if (data.defaultCustomerId) {
           try {
@@ -266,6 +272,8 @@ export default function ConfigPage() {
           allowNegativeStock: config.allowNegativeStock,
           defaultCustomerId: config.defaultCustomerId || null,
           retentionProvidencia: config.retentionProvidencia,
+          retentionNextNumber: Number(config.retentionNextNumber),
+          islrRetentionNextNumber: Number(config.islrRetentionNextNumber),
           ...(creditAuthPassword ? { creditAuthPassword } : {}),
           ...(logoChanged ? { logo } : {}),
           ...(stampChanged ? { stampImage } : {}),
@@ -771,6 +779,50 @@ export default function ConfigPage() {
                   placeholder="SNAT/2025/000054"
                 />
                 <p className="text-xs text-slate-500 mt-1">Numero de providencia que aparece en los comprobantes de retencion IVA</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Proximo correlativo — Retencion IVA
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={config.retentionNextNumber}
+                  onChange={(e) => handleChange('retentionNextNumber', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Consecutivo del proximo comprobante de retencion IVA. Para continuar la numeracion de tu sistema anterior, pon el <strong>ultimo numero usado + 1</strong>.
+                  {(() => {
+                    const now = new Date();
+                    const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    const seq = String(Math.max(1, Number(config.retentionNextNumber) || 1)).padStart(8, '0');
+                    return <> Proximo numero: <span className="text-slate-300 font-mono">{prefix}{seq}</span></>;
+                  })()}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Proximo correlativo — Retencion ISLR
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={config.islrRetentionNextNumber}
+                  onChange={(e) => handleChange('islrRetentionNextNumber', e.target.value)}
+                  className="input-field"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Consecutivo del proximo comprobante de retencion ISLR (contador aparte del de IVA).
+                  {(() => {
+                    const now = new Date();
+                    const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    const seq = String(Math.max(1, Number(config.islrRetentionNextNumber) || 1)).padStart(8, '0');
+                    return <> Proximo numero: <span className="text-slate-300 font-mono">{prefix}{seq}</span></>;
+                  })()}
+                </p>
               </div>
             </div>
           </div>

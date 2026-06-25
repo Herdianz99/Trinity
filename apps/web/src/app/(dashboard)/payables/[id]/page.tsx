@@ -136,6 +136,19 @@ export default function PayableDetailPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  function handleDeleteClick() {
+    const rvs = (payable?.retentionVoucherLines || []).map(l => l.retentionVoucher).filter(Boolean);
+    if (rvs.length > 0) {
+      const nums = rvs.map(rv => rv.number).join(', ');
+      const plural = rvs.length > 1;
+      const ok = window.confirm(
+        `Esta CxP tiene ${plural ? 'comprobantes' : 'un comprobante'} de retención (N° ${nums}) que también se eliminará${plural ? 'n' : ''} al borrar la CxP. ¿Continuar?`
+      );
+      if (!ok) return;
+    }
+    setAuthModalOpen(true);
+  }
+
   async function executeDelete() {
     setDeleting(true);
     try {
@@ -210,6 +223,13 @@ export default function PayableDetailPage() {
     return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
   }
 
+  // Fechas date-only (originalDate/receptionDate/dueDate) guardadas a medianoche UTC: formatear en
+  // UTC para no correr un dia en Caracas. (createdAt es timestamp real -> va con fmtDate local.)
+  function fmtDateOnly(iso: string) {
+    const d = new Date(iso);
+    return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-green-500" size={32} /></div>;
   if (error || !payable) return (
     <div className="text-center py-20">
@@ -266,7 +286,7 @@ export default function PayableDetailPage() {
             </button>
           )}
           {canDelete && (
-            <button onClick={() => setAuthModalOpen(true)} disabled={deleting}
+            <button onClick={handleDeleteClick} disabled={deleting}
               className="text-sm px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
               {deleting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar
             </button>
@@ -322,9 +342,9 @@ export default function PayableDetailPage() {
             <section>
               <h3 className="text-sm font-semibold text-slate-300 mb-3 pb-2 border-b border-slate-700/50">Fechas y forma de pago</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
-                <Field label="Fecha original" value={payable.originalDate ? fmtDate(payable.originalDate) : null} />
-                <Field label="Fecha recepción" value={payable.receptionDate ? fmtDate(payable.receptionDate) : null} />
-                <Field label="Fecha vencimiento" value={payable.dueDate ? fmtDate(payable.dueDate) : null} />
+                <Field label="Fecha original" value={payable.originalDate ? fmtDateOnly(payable.originalDate) : null} />
+                <Field label="Fecha recepción" value={payable.receptionDate ? fmtDateOnly(payable.receptionDate) : null} />
+                <Field label="Fecha vencimiento" value={payable.dueDate ? fmtDateOnly(payable.dueDate) : null} />
                 <Field label="Forma de pago" value={payable.paymentTerms ? payable.paymentTerms.replace(/_/g, ' ') : null} />
                 <Field label="Tasa al crear" value={`Bs ${payable.exchangeRate?.toFixed(2)}`} mono />
                 <Field label="Fecha de creación" value={fmtDate(payable.createdAt)} />

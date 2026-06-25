@@ -30,6 +30,16 @@ export class PurchaseBookService {
       orderBy: { entryDate: 'asc' },
     });
 
+    // Orden cronologico por la fecha que se MUESTRA en el libro (documentDate ?? entryDate), con
+    // createdAt como desempate estable. El filtro/periodo sigue siendo entryDate, pero la columna
+    // "Fecha" del reporte debe salir ascendente (si no, con documentDate != entryDate se ve saltada).
+    entries.sort((a, b) => {
+      const da = (a.documentDate ?? a.entryDate).getTime();
+      const db = (b.documentDate ?? b.entryDate).getTime();
+      if (da !== db) return da - db;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+
     // Reordenar al estilo SENIAT/WenSoft: cada factura seguida inmediatamente de su(s)
     // linea(s) de retencion (IVA/ISLR), emparejadas por N° de factura del proveedor + RIF.
     const retLines = entries.filter((e) => e.isRetentionLine || e.isIslrRetentionLine);
@@ -63,11 +73,21 @@ export class PurchaseBookService {
     let totalAmount = 0;
 
     for (const entry of entries) {
+      // Las lineas de retencion NO suman a exento/base/credito-fiscal/total (esos van en BRUTO,
+      // solo de las facturas). La retencion se acumula aparte: se guarda como ivaAmountBs negativo
+      // en su linea (retentionAmountBs suele quedar en 0), asi que se toma retentionAmountBs si viene
+      // o, si no, el negativo del IVA de la linea.
+      if (entry.isRetentionLine) {
+        totalRetention += entry.retentionAmountBs || -entry.ivaAmountBs;
+        continue;
+      }
+      if (entry.isIslrRetentionLine) {
+        totalIslrRetention += entry.islrRetentionAmountBs || -entry.ivaAmountBs;
+        continue;
+      }
       totalExempt += entry.exemptAmountBs;
       totalTaxableBase += entry.taxableBaseBs;
       totalIva += entry.ivaAmountBs;
-      totalRetention += entry.retentionAmountBs;
-      totalIslrRetention += entry.islrRetentionAmountBs;
       totalAmount += entry.totalBs;
     }
 
@@ -137,15 +157,71 @@ export class PurchaseBookService {
     if (dto.totalBs !== undefined) data.totalBs = dto.totalBs;
     if (dto.notes !== undefined) data.notes = dto.notes;
 
-    return this.prisma.purchaseBookEntry.update({
-      where: { id },
-      data,
-      include: {
-        purchaseOrder: {
-          select: { id: true, number: true, purchaseNumber: true },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseBookEntry.update({
+        where: { id },
+        data,
+        include: {
+          purchaseOrder: {
+            select: { id: true, number: true, purchaseNumber: true },
+          },
+          createdBy: { select: { id: true, name: true } },
         },
-        createdBy: { select: { id: true, name: true } },
-      },
+      });
+
+      // Si se cambio la fecha de una FACTURA (no una linea de retencion), arrastrar la misma
+      // fecha de declaracion (entryDate) y de documento (documentDate) a su(s) linea(s) de
+      // retencion del libro y al issueDate del/los comprobante(s), para que factura y retencion
+      // queden en el MISMO periodo de declaracion. El numero del comprobante (prefijo YYYYMM) se
+      // mantiene. Se emparejan por payableId (CxP manual) o purchaseOrderId (factura de compra).
+      const movedDate = dto.entryDate !== undefined || dto.documentDate !== undefined;
+      const isFactura = !entry.isRetentionLine && !entry.isIslrRetentionLine;
+      const link = entry.payableId
+        ? { payableId: entry.payableId }
+        : entry.purchaseOrderId
+          ? { purchaseOrderId: entry.purchaseOrderId }
+          : null;
+
+      if (movedDate && isFactura && link) {
+        const retWhere = {
+          ...link,
+          OR: [{ isRetentionLine: true }, { isIslrRetentionLine: true }],
+        };
+        const retLines = await tx.purchaseBookEntry.findMany({
+          where: retWhere,
+          select: { id: true, retentionVoucherId: true, islrRetentionVoucherId: true },
+        });
+        if (retLines.length > 0) {
+          const retData: any = {};
+          if (dto.entryDate !== undefined) retData.entryDate = data.entryDate;
+          if (dto.documentDate !== undefined) retData.documentDate = data.documentDate;
+          await tx.purchaseBookEntry.updateMany({ where: retWhere, data: retData });
+
+          // El issueDate del comprobante = fecha de declaracion de la retencion → mover con entryDate
+          if (dto.entryDate !== undefined) {
+            const ivaIds = retLines
+              .map((r) => r.retentionVoucherId)
+              .filter((x): x is string => !!x);
+            const islrIds = retLines
+              .map((r) => r.islrRetentionVoucherId)
+              .filter((x): x is string => !!x);
+            if (ivaIds.length > 0) {
+              await tx.retentionVoucher.updateMany({
+                where: { id: { in: ivaIds } },
+                data: { issueDate: data.entryDate },
+              });
+            }
+            if (islrIds.length > 0) {
+              await tx.islrRetentionVoucher.updateMany({
+                where: { id: { in: islrIds } },
+                data: { issueDate: data.entryDate },
+              });
+            }
+          }
+        }
+      }
+
+      return updated;
     });
   }
 

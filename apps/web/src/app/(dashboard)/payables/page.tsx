@@ -471,7 +471,7 @@ export default function PayablesPage() {
                     <td className="px-4 py-3 text-right text-slate-300">${p.paidAmountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-100">${p.balanceUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-slate-300 text-xs">
-                      {p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '-'}
+                      {p.dueDate ? new Date(p.dueDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[p.status] || ''}`}>
@@ -631,7 +631,7 @@ export default function PayablesPage() {
                 {selectedPayable.dueDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-400">Fecha vencimiento</span>
-                    <span className="text-slate-200">{new Date(selectedPayable.dueDate).toLocaleDateString()}</span>
+                    <span className="text-slate-200">{new Date(selectedPayable.dueDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

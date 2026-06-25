@@ -11,7 +11,7 @@ import {
 
 interface RetentionVoucherLine {
   id: string;
-  purchaseOrderId: string;
+  purchaseOrderId: string | null;
   supplierInvoiceNumber: string | null;
   supplierControlNumber: string | null;
   invoiceDate: string | null;
@@ -38,7 +38,7 @@ interface RetentionVoucherLine {
     exchangeRate: number;
     supplierControlNumber: string | null;
     supplierInvoiceNumber: string | null;
-  };
+  } | null;
 }
 
 interface RetentionVoucher {
@@ -385,10 +385,16 @@ export default function RetentionVoucherDetailPage() {
               {voucher.lines.map(line => (
                 <tr key={line.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
                   <td className="px-3 py-2.5">
-                    <a href={`/purchases/${line.purchaseOrder.id}`}
-                      className="text-blue-400 hover:text-blue-300 font-mono text-xs">
-                      {line.purchaseOrder.number}
-                    </a>
+                    {line.purchaseOrder ? (
+                      <a href={`/purchases/${line.purchaseOrder.id}`}
+                        className="text-blue-400 hover:text-blue-300 font-mono text-xs">
+                        {line.purchaseOrder.number}
+                      </a>
+                    ) : (
+                      <span className="text-slate-300 font-mono text-xs">
+                        {line.supplierInvoiceNumber || 'CxP manual'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierInvoiceNumber || '--'}</td>
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierControlNumber || '--'}</td>

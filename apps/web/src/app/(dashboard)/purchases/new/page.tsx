@@ -10,7 +10,10 @@ import {
   Search,
   X,
   Plus,
+  Pencil,
 } from 'lucide-react';
+import SupplierFormModal from '@/components/supplier-form-modal';
+import ProductFormModal from '@/components/product-form-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,6 +142,14 @@ export default function NewPurchaseBillPage() {
   const [searchingProducts, setSearchingProducts] = useState(false);
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- Modales crear/editar proveedor y producto ----
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
+  const [productModalId, setProductModalId] = useState<string | null>(null);
+  const [productModalRow, setProductModalRow] = useState<number | null>(null);
 
   // ---- Fiscal totals ----
   const [surchargeUsd, setSurchargeUsd] = useState<number>(0);
@@ -318,6 +329,53 @@ export default function NewPurchaseBillPage() {
 
   function removeRow(idx: number) {
     setItems(items.filter((_, i) => i !== idx));
+  }
+
+  // ---- Modales crear/editar proveedor y producto ----
+  function openNewSupplier() { setSupplierModalMode('create'); setSupplierModalOpen(true); }
+  function openEditSupplier() { if (supplierId) { setSupplierModalMode('edit'); setSupplierModalOpen(true); } }
+  function openNewProduct() { setProductModalMode('create'); setProductModalId(null); setProductModalRow(null); setProductModalOpen(true); }
+  function openEditProduct(rowIdx: number, prodId: string) { setProductModalMode('edit'); setProductModalId(prodId); setProductModalRow(rowIdx); setProductModalOpen(true); }
+
+  async function handleSupplierSaved(saved: any) {
+    try {
+      const res = await fetch('/api/proxy/suppliers?isActive=true');
+      if (res.ok) { const data = await res.json(); setSuppliers(Array.isArray(data) ? data : data.data || []); }
+    } catch { /* ignore */ }
+    if (saved?.id) { setSupplierId(saved.id); setSupplierSearch(''); setSupplierDropdownOpen(false); }
+    setSupplierModalOpen(false);
+  }
+
+  async function handleProductSaved(saved: any) {
+    setProductModalOpen(false);
+    if (!saved?.id) { setProductModalId(null); setProductModalRow(null); return; }
+    // Leer el detalle autoritativo del producto (codigo/nombre/costo/IVA)
+    let prod: any = saved;
+    try {
+      const res = await fetch(`/api/proxy/products/${saved.id}`);
+      if (res.ok) prod = await res.json();
+    } catch { /* usa lo que devolvio el guardado */ }
+    const costUsd = prod.costUsd || 0;
+    const costValue = currency === 'BS' ? Math.round(costUsd * exchangeRate * 100) / 100 : costUsd;
+    const filled: FormItem = {
+      productId: prod.id, code: prod.code || '', name: prod.name || '',
+      quantity: 1, costUsd: costValue, discountPct: 0,
+      ivaType: prod.ivaType || 'GENERAL', isService: prod.isService || false,
+    };
+    if (productModalMode === 'create') {
+      setItems(prev => [...prev, filled]);
+    } else if (productModalRow != null) {
+      const rowIdx = productModalRow;
+      setItems(prev => {
+        const next = [...prev];
+        const q = next[rowIdx]?.quantity || 1;
+        const d = next[rowIdx]?.discountPct || 0;
+        next[rowIdx] = { ...filled, quantity: q, discountPct: d };
+        return next;
+      });
+    }
+    setProductModalId(null);
+    setProductModalRow(null);
   }
 
   function updateItem(idx: number, field: keyof FormItem, value: any) {
@@ -604,9 +662,19 @@ export default function NewPurchaseBillPage() {
           {/* Col 2: Proveedor + Almacen + Responsable (stacked) */}
           <div className="space-y-1.5">
             <div ref={supplierRef} className="relative">
-              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Proveedor *
-              </label>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="block text-[10px] font-medium text-slate-400">Proveedor *</label>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={openNewSupplier} className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5" title="Nuevo proveedor">
+                    <Plus size={11} /> Nuevo
+                  </button>
+                  {supplierId && (
+                    <button type="button" onClick={openEditSupplier} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5" title="Editar proveedor seleccionado">
+                      <Pencil size={11} /> Editar
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
@@ -848,13 +916,23 @@ export default function NewPurchaseBillPage() {
           <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
             Articulos
           </h3>
-          <button
-            type="button"
-            onClick={addEmptyRow}
-            className="flex items-center gap-1.5 text-sm text-green-400 hover:text-green-300 transition-colors"
-          >
-            <Plus size={16} /> Agregar linea
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={openNewProduct}
+              className="flex items-center gap-1.5 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+              title="Crear un articulo nuevo y agregarlo a la compra"
+            >
+              <Plus size={16} /> Nuevo articulo
+            </button>
+            <button
+              type="button"
+              onClick={addEmptyRow}
+              className="flex items-center gap-1.5 text-sm text-green-400 hover:text-green-300 transition-colors"
+            >
+              <Plus size={16} /> Agregar linea
+            </button>
+          </div>
         </div>
 
         <div className="overflow-visible min-w-0">
@@ -869,7 +947,7 @@ export default function NewPurchaseBillPage() {
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-center px-3 py-3 text-slate-400 font-medium w-16">% IVA</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'USD' : 'Bs'}</th>
-                <th className="w-10"></th>
+                <th className="w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -1013,15 +1091,28 @@ export default function NewPurchaseBillPage() {
                       </span>
                     </td>
 
-                    {/* Remove */}
-                    <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(idx)}
-                        className="p-1 text-slate-500 hover:text-red-400 transition-colors"
-                      >
-                        <X size={15} />
-                      </button>
+                    {/* Editar producto + Remove */}
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-center gap-0.5">
+                        {item.productId && (
+                          <button
+                            type="button"
+                            onClick={() => openEditProduct(idx, item.productId)}
+                            className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
+                            title="Editar este articulo"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeRow(idx)}
+                          className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Quitar linea"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1238,6 +1329,23 @@ export default function NewPurchaseBillPage() {
           Guardar
         </button>
       </div>
+
+      {/* Modales crear/editar proveedor y producto */}
+      <SupplierFormModal
+        open={supplierModalOpen}
+        mode={supplierModalMode}
+        supplierId={supplierModalMode === 'edit' ? supplierId : null}
+        onClose={() => setSupplierModalOpen(false)}
+        onSaved={handleSupplierSaved}
+      />
+      <ProductFormModal
+        open={productModalOpen}
+        mode={productModalMode}
+        productId={productModalId}
+        defaultSupplierId={supplierId || null}
+        onClose={() => { setProductModalOpen(false); setProductModalId(null); setProductModalRow(null); }}
+        onSaved={handleProductSaved}
+      />
 
     </div>
   );

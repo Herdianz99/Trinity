@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEmail, IsBoolean, ValidateIf } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEmail, IsBoolean, ValidateIf, IsInt, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateCompanyConfigDto {
@@ -114,6 +114,20 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsString()
   retentionProvidencia?: string;
+
+  // Proximo correlativo (consecutivo) del comprobante de retencion. Permite continuar la
+  // numeracion del sistema anterior. El numero final es YYYYMM + este consecutivo (8 digitos).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  retentionNextNumber?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  islrRetentionNextNumber?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

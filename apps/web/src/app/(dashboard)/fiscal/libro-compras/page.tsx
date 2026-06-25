@@ -88,6 +88,16 @@ function toLocalDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// Fechas fiscales del libro (entryDate/documentDate) son date-only guardadas a medianoche UTC:
+// formatear desde el YYYY-MM-DD del ISO, SIN convertir a zona horaria (si no, en Caracas se corre
+// un dia atras). Devuelve DD/MM/YYYY.
+function fmtFiscalDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ymd = iso.substring(0, 10).split('-');
+  if (ymd.length !== 3) return '';
+  return `${ymd[2]}/${ymd[1]}/${ymd[0]}`;
+}
+
 function lastDayOfMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -284,12 +294,12 @@ export default function LibroComprasPage() {
     let n = 0;
     for (const e of entries) {
       if (e.isIslrRetentionLine) continue; // ISLR fuera del libro por ahora
-      const fecha = (e.documentDate || e.entryDate) ? new Date(e.documentDate || e.entryDate).toLocaleDateString('es-VE') : '';
+      const fecha = fmtFiscalDate(e.documentDate || e.entryDate);
       if (e.isRetentionLine) {
         aoa.push([
           '', fecha, e.supplierRif || '', e.supplierName || '', '', '', '',
           e.supplierInvoiceNumber || '', '', '', '01 - reg',
-          '', '', '', '16,00', '', r2(e.retentionAmountBs), e.retentionVoucherNumber || '', '',
+          '', '', '', '16,00', '', r2(e.retentionAmountBs || -e.ivaAmountBs), e.retentionVoucherNumber || '', '',
         ]);
         continue;
       }
@@ -373,7 +383,7 @@ export default function LibroComprasPage() {
     const tableRows = entries.map((r) => {
       // ISLR fuera del libro por ahora (decision del usuario)
       if (r.isIslrRetentionLine) return '';
-      const fecha = (r.documentDate || r.entryDate) ? new Date(r.documentDate || r.entryDate).toLocaleDateString('es-VE') : '';
+      const fecha = fmtFiscalDate(r.documentDate || r.entryDate);
 
       // Fila de retencion IVA: repite proveedor y factura, muestra retencion + comprobante
       if (r.isRetentionLine) {
@@ -394,7 +404,7 @@ export default function LibroComprasPage() {
           <td class="num"></td>
           <td class="fit">16,00</td>
           <td class="num"></td>
-          <td class="num">${fmtNum(r.retentionAmountBs)}</td>
+          <td class="num">${fmtNum(r.retentionAmountBs || -r.ivaAmountBs)}</td>
           <td class="fit">${r.retentionVoucherNumber || ''}</td>
           <td class="num"></td>
         </tr>`;
@@ -739,7 +749,7 @@ export default function LibroComprasPage() {
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine || e.isIslrRetentionLine).length}
                         </td>
                         <td className="px-2 py-2 text-slate-300" style={(entry.isRetentionLine || entry.isIslrRetentionLine) ? { fontSize: '10px' } : {}}>
-                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : (entry.documentDate || entry.entryDate) ? new Date(entry.documentDate || entry.entryDate).toLocaleDateString('es-VE') : ''}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : fmtFiscalDate(entry.documentDate || entry.entryDate)}
                         </td>
                         <td className="px-2 py-2 text-slate-300 font-mono text-[11px]">
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : entry.supplierControlNumber || '-'}
@@ -794,9 +804,7 @@ export default function LibroComprasPage() {
                           {entry.retentionVoucherNumber || '-'}
                         </td>
                         <td className="px-2 py-2 text-right text-orange-400 tabular-nums">
-                          {entry.isRetentionLine
-                            ? formatVe(entry.retentionAmountBs)
-                            : formatVe(entry.retentionAmountBs)}
+                          {entry.isRetentionLine ? formatVe(entry.retentionAmountBs || -entry.ivaAmountBs) : ''}
                         </td>
                         <td className="px-2 py-2 text-right text-amber-400 tabular-nums">
                           {entry.isIslrRetentionLine
@@ -806,7 +814,7 @@ export default function LibroComprasPage() {
                         <td className={`px-2 py-2 text-right tabular-nums ${
                           entry.isRetentionLine || entry.isIslrRetentionLine ? 'text-purple-400 font-medium' : 'text-slate-100 font-semibold'
                         }`}>
-                          {formatVe(entry.totalBs)}
+                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : formatVe(entry.totalBs)}
                         </td>
                         <td className="px-2 py-2">
                           {!entry.isRetentionLine && !entry.isIslrRetentionLine && (

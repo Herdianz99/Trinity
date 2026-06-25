@@ -507,7 +507,7 @@ export default function ReceivablesPage() {
                     <td className="px-4 py-3 text-right text-slate-300">${r.paidAmountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-100">${r.balanceUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-slate-300 text-xs">
-                      {r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-'}
+                      {r.dueDate ? new Date(r.dueDate).toLocaleDateString(undefined, { timeZone: 'UTC' }) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[r.status] || ''}`}>
@@ -692,7 +692,7 @@ export default function ReceivablesPage() {
                 {selectedReceivable.dueDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-400">Fecha vencimiento</span>
-                    <span className="text-slate-200">{new Date(selectedReceivable.dueDate).toLocaleDateString()}</span>
+                    <span className="text-slate-200">{new Date(selectedReceivable.dueDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

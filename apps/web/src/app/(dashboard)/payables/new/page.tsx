@@ -129,6 +129,7 @@ export default function NewPayablePage() {
 
   async function handleSubmit() {
     if (!supplierId) { setError('Debe seleccionar un proveedor'); return; }
+    if (!serieId) { setError('La serie fiscal es obligatoria'); return; }
     if (!description.trim()) { setError('La descripcion es obligatoria'); return; }
     if (totalDoc <= 0) { setError('El total del documento debe ser mayor a 0'); return; }
     if (!exchangeRate || exchangeRate <= 0) { setError('La tasa del dia debe ser mayor a 0'); return; }
@@ -273,9 +274,9 @@ export default function NewPayablePage() {
                     className="input-field !py-1 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie fiscal</label>
+                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie fiscal <span className="text-red-400">*</span></label>
                   <select value={serieId} onChange={e => setSerieId(e.target.value)} className="input-field !py-1 text-sm">
-                    <option value="">Sin serie</option>
+                    <option value="">Seleccione una serie...</option>
                     {series.map(s => <option key={s.id} value={s.id}>{s.name} {s.isFiscal ? '(Fiscal)' : ''}</option>)}
                   </select>
                 </div>
@@ -423,7 +424,7 @@ export default function NewPayablePage() {
 
           {/* Submit button */}
           <button onClick={handleSubmit}
-            disabled={saving || !supplierId || totalDoc <= 0 || !description.trim()}
+            disabled={saving || !supplierId || !serieId || totalDoc <= 0 || !description.trim()}
             className="w-full bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-4 py-2 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors text-sm">
             {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
             Guardar CxP
