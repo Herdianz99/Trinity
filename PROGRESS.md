@@ -1,13 +1,15 @@
 # Trinity ERP — Progreso
 
-## 🚧 Sesion 66 (2026-06-24) — CxC/CxP fechas+tasa, Libro de Compras fecha doc vs declaracion, montos fiscales exactos al procesar (COMMITEADO+PUSHEADO, **FALTA DEPLOY + PRUEBA E2E**)
+## 🚧 Sesion 66 (2026-06-24) — CxC/CxP fechas+tasa, Libro de Compras fecha doc vs declaracion (Tanda A). **Tanda B (montos fiscales al procesar) REVERTIDA por pedido del cliente (2026-06-25).**
 
-> Todo el codigo esta en `main` (pusheado) y typechequeado (API+Web limpio), pero **NO se ha deployado ni probado E2E**. Quedo pendiente porque Docker Desktop local se cayo (se llevo el Postgres `trinity-postgres-1`) al intentar levantar el sistema para probar. **Al volver: levantar local y correr el checklist de prueba, luego deployar.**
+> **ACTUALIZACION 2026-06-25**: el cliente indico que la pantalla de "Montos fiscales del documento" al procesar la factura **no le sirve** ("no podia ser asi por varios problemas, mejor dejarlo como trabajan ya"). Se **revirtio la Tanda B** (`3cb4a97`) con `git revert` (commit `d84195e`): los 3 archivos afectados volvieron **byte-identicos a `c89da2e`**. **Tanda A se queda.** No hubo cambio de schema (las columnas fiscales de `Payable` ya existian; la columna `documentDate` del libro es de Tanda A y se conserva). Sin referencias colgantes en el codigo fuente.
+
+> Tanda A (`c89da2e`) sigue en `main`, pusheada y typechequeada, pero **NO se ha deployado ni probado E2E**. Quedo pendiente porque Docker Desktop local se cayo (se llevo el Postgres `trinity-postgres-1`) al intentar levantar el sistema para probar. **Al volver: levantar local y correr el checklist de prueba (solo lo de Tanda A), luego deployar.**
 
 ### Commits de esta sesion (en `main`)
 - `7cb9d79` — fix: cuadro de totales SENIAT no se parte entre paginas (PDFs de libro de ventas detallado + reporte Z, y libro de compras) — `page-break-inside: avoid`. Solo CSS.
 - `c89da2e` — **Tanda A**: CxC/CxP vencimiento desde Fecha original + Tasa del dia editable; Libro de Compras nuevo campo `documentDate` (fecha que se MUESTRA) vs `entryDate` (periodo/declaracion). Incluye **migracion Prisma** `20260624120000_purchasebook_document_date` + `deploy/fix-schema.sql`.
-- `3cb4a97` — **Tanda B**: pantalla de "Montos fiscales del documento" al procesar factura de compra a **credito + fiscal** → monto exacto del documento alimenta CxP + libro + retencion; inventario sigue saliendo de las lineas (dos verdades). DTO `ProcessPurchaseBillDto.fiscalAdjustment`.
+- ~~`3cb4a97` — **Tanda B**: pantalla de "Montos fiscales del documento" al procesar factura de compra~~ → **REVERTIDA** (`d84195e`, 2026-06-25) por pedido del cliente. No deployar.
 - Plan completo: `docs/superpowers/plans/2026-06-24-cxp-libro-compras-montos-fiscales-exactos.md`.
 
 ### Operaciones en PRODUCCION ya aplicadas hoy (cerradas, solo registro)
@@ -19,12 +21,11 @@
 3. **Deployar** (lleva migracion, el deploy normal la corre): `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`.
 4. Opcional futuro: montos fiscales exactos tambien en compras de **contado** (hoy contado fiscal sigue usando montos de lineas, a proposito).
 
-### Checklist de prueba E2E (Tandas A+B)
+### Checklist de prueba E2E (solo Tanda A — Tanda B revertida)
 - **CxC/CxP manual**: vencimiento se mueve con Fecha **original** (no recepcion); Tasa editable (precargada, recalcula totales, no deja guardar en 0).
 - **CxP fiscal con original 28/05 + recepcion 02/06**: aparece en Libro de Compras de **junio** mostrando **28/05**; NO en mayo; linea de retencion en junio junto a su factura.
 - **Libro de Compras**: modal con 2 fechas (documento=se muestra / declaracion=periodo); PDF y Excel muestran fecha documento; entradas viejas sin cambios.
-- **Procesar factura compra credito+fiscal**: sale seccion "Montos fiscales del documento" precargada; escribir montos exactos + fechas + tasa; verificar **1 sola CxP** con total exacto, libro en periodo recepcion mostrando fecha documento con montos exactos, retencion sobre IVA exacto, inventario con costo de lineas, vencimiento = fecha doc + dias credito.
-- **Regresion**: contado y no-fiscal NO muestran la seccion fiscal; flujo igual.
+- **Regresion (procesar factura de compra)**: el modal **NO** debe mostrar ninguna seccion de "Montos fiscales del documento" (volvio al flujo previo); CxP y libro salen de las lineas como siempre.
 
 ## ✅ Sesion 65 (2026-06-23) — Fix timezone UTC→Caracas en TODA la API (DEPLOYADO 2026-06-23, commit 82f3ea0)
 
