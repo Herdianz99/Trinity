@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
+// Umbrales de clasificación de alertas de inventario (fijos en código).
+// Para cambiarlos: ajustar aquí y actualizar el texto en apps/web/src/lib/metrics-help.ts
+const DIAS_RECIEN_INGRESADO = 10; // < 10 días sin ventas => "Recién ingresado" (neutro)
+const DIAS_STOCK_MUERTO = 28;     // > 28 días sin ventas => "Stock muerto" (rojo); intermedio => "Nuevo sin rotación" (naranja)
+const DIAS_EXCESO = 180;          // > 180 días de inventario (vendiendo) => "Exceso"
+
 @Injectable()
 export class InventoryAnalysisService {
   constructor(private readonly prisma: PrismaService) {}
@@ -397,5 +403,129 @@ export class InventoryAnalysisService {
     const grandTotal = grouped.reduce((s, g) => s + g.totalEstimated, 0);
 
     return { suppliers: grouped, grandTotal: Math.round(grandTotal * 100) / 100 };
+  }
+
+  /**
+   * Inventory alerts: agotados, bajo mínimo, sin rotación (por antigüedad de última compra), exceso.
+   * Devuelve una sola lista; el frontend filtra por reporte. El período solo afecta el cálculo de Exceso.
+   */
+  async getInventoryAlerts(from: string, to: string) {
+    const fromDate = caracasDayStart(from);
+    const toDate = caracasDayEnd(to);
+    const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const now = new Date();
+
+    // 1. Productos activos no-servicio con stock, costo, proveedor, categoría
+    const products = await this.prisma.product.findMany({
+      where: { isActive: true, isService: false },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        costUsd: true,
+        minStock: true,
+        createdAt: true,
+        supplierId: true,
+        supplier: { select: { name: true } },
+        category: { select: { name: true } },
+        stock: { select: { quantity: true } },
+      },
+    });
+    const productIds = products.map((p) => p.id);
+
+    // 2. Última compra por producto (StockMovement tipo PURCHASE)
+    const lastPurchases = await this.prisma.stockMovement.groupBy({
+      by: ['productId'],
+      where: { type: 'PURCHASE', productId: { in: productIds } },
+      _max: { createdAt: true },
+    });
+    const lastPurchaseMap = new Map<string, Date>();
+    for (const lp of lastPurchases) {
+      if (lp._max.createdAt) lastPurchaseMap.set(lp.productId, lp._max.createdAt);
+    }
+
+    // 3. Última venta por producto (StockMovement tipo SALE)
+    const lastSales = await this.prisma.stockMovement.groupBy({
+      by: ['productId'],
+      where: { type: 'SALE', productId: { in: productIds } },
+      _max: { createdAt: true },
+    });
+    const lastSaleMap = new Map<string, Date>();
+    for (const ls of lastSales) {
+      if (ls._max.createdAt) lastSaleMap.set(ls.productId, ls._max.createdAt);
+    }
+
+    // 4. Ventas del período seleccionado (para rotación => Exceso)
+    const periodItems = await this.prisma.invoiceItem.findMany({
+      where: {
+        invoice: {
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          type: 'SALE',
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+      },
+      select: { productId: true, quantity: true, returnedQty: true },
+    });
+    const periodSalesMap = new Map<string, number>();
+    for (const it of periodItems) {
+      const eff = it.quantity - (it.returnedQty || 0);
+      if (eff <= 0) continue;
+      periodSalesMap.set(it.productId, (periodSalesMap.get(it.productId) || 0) + eff);
+    }
+
+    const MS_DAY = 1000 * 60 * 60 * 24;
+
+    const items = products.map((p) => {
+      const currentStock = p.stock.reduce((s, st) => s + st.quantity, 0);
+
+      // Antigüedad: última compra, o createdAt si nunca se compró
+      const lastPurchase = lastPurchaseMap.get(p.id) || null;
+      const entryDate = lastPurchase || p.createdAt;
+      const lastEntrySource: 'PURCHASE' | 'CREATED' = lastPurchase ? 'PURCHASE' : 'CREATED';
+      const daysSinceEntry = Math.floor((now.getTime() - entryDate.getTime()) / MS_DAY);
+
+      // ¿Vendió algo desde su última entrada?
+      const lastSale = lastSaleMap.get(p.id) || null;
+      const soldSinceEntry = !!lastSale && lastSale.getTime() >= entryDate.getTime();
+
+      // Rotación del período (para exceso)
+      const periodSales = periodSalesMap.get(p.id) || 0;
+      const rotation = currentStock > 0 ? periodSales / currentStock : 0;
+      const daysOfInventory = rotation > 0 ? Math.round(periodDays / rotation) : currentStock > 0 ? 9999 : 0;
+
+      // Clasificación "sin rotación" (solo con stock y sin ventas desde la entrada)
+      let sinRotacion: null | 'RECIEN_INGRESADO' | 'NUEVO_SIN_ROTACION' | 'STOCK_MUERTO' = null;
+      if (currentStock > 0 && !soldSinceEntry) {
+        if (daysSinceEntry < DIAS_RECIEN_INGRESADO) sinRotacion = 'RECIEN_INGRESADO';
+        else if (daysSinceEntry <= DIAS_STOCK_MUERTO) sinRotacion = 'NUEVO_SIN_ROTACION';
+        else sinRotacion = 'STOCK_MUERTO';
+      }
+
+      const agotado = currentStock <= 0;
+      const bajoMinimo = currentStock > 0 && currentStock <= p.minStock;
+      const exceso = currentStock > 0 && periodSales > 0 && daysOfInventory > DIAS_EXCESO;
+
+      return {
+        productId: p.id,
+        productCode: p.code,
+        productName: p.name,
+        category: p.category?.name || '',
+        supplierId: p.supplierId,
+        supplierName: p.supplier?.name || 'Sin proveedor',
+        currentStock,
+        minStock: p.minStock,
+        costUsd: p.costUsd,
+        inventoryValueUsd: Math.round(Math.max(currentStock, 0) * p.costUsd * 100) / 100,
+        lastEntryDate: entryDate.toISOString(),
+        lastEntrySource,
+        daysSinceEntry,
+        soldSinceEntry,
+        periodSales: Math.round(periodSales * 100) / 100,
+        daysOfInventory,
+        alerts: { agotado, bajoMinimo, sinRotacion, exceso },
+      };
+    });
+
+    return { items, periodDays };
   }
 }
