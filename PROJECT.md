@@ -101,8 +101,9 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 #### Sesión 69 — Alertas de Inventario + botón "¿Cómo se calcula?"
 Pantalla nueva `/inventory/alerts` con 4 reportes (Agotados, Bajo mínimo, Sin rotación, Exceso) filtrables y exportables a Excel/PDF. El "stock muerto" se reclasificó por **antigüedad de la última compra** (StockMovement PURCHASE, fallback createdAt): <10 días Recién ingresado, 10-28 Nuevo sin rotación, >28 Stock muerto; una compra reciente reinicia el reloj. Botón "¿Cómo se calcula?" (modal reusable con glosario de fórmulas) en Alertas y en Análisis ABC. Umbrales fijos en código.
-- **Backend:** `getInventoryAlerts` + `GET /inventory-analysis/alerts` + `/alerts/pdf` (`inventory-alerts-pdf.service.ts`).
+- **Backend:** `getInventoryAlerts` + `GET /inventory-analysis/alerts` + `/alerts/pdf` (`inventory-alerts-pdf.service.ts`). PDF en carta vertical, sin columna proveedor (código + Ref. Proveedor), altura de fila dinámica y paginación "Página X de Y".
 - **Frontend:** `inventory/alerts/page.tsx`, `components/metrics-help-modal.tsx`, `lib/metrics-help.ts`, entrada en sidebar, botón en `purchases/analysis`.
+- **Ajuste de precios por selección** (`/catalog/price-adjustment`): checkbox por artículo (default desmarcados) para ajustar solo los elegidos, no todo el filtro. Layout rediseñado (filtros arriba + tabla a ancho completo, sin paginación). Backend acepta `productIds` en `POST /products/price-adjustment`.
 
 ---
 

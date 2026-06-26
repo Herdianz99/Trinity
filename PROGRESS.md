@@ -10,6 +10,16 @@
 - **Boton "¿Como se calcula?"** (modal reusable `components/metrics-help-modal.tsx`) en **Alertas** y en **Analisis** (`/purchases/analysis`). Glosario con formula + explicacion simple de cada metrica (ABC, rotacion, dias inventario, rentabilidad, margen, valor inventario, sugerencia compra, y las alertas). Fuente unica de verdad en `lib/metrics-help.ts` — al cambiar un umbral en codigo, actualizar tambien ese texto.
 - **Nota datos**: en la copia LOCAL casi todo cae al fallback `createdAt` (solo 99 movimientos `PURCHASE` vs 1424 `ADJUSTMENT_IN` de la importacion), asi que el "stock muerto" local sale subestimado; en prod los `createdAt` reales son mas viejos y la clasificacion sera correcta. El cliente confirmo que el dato de importacion no importa (la feature es para compras futuras). Tambien: se reseteo el password del `admin@trinity.com` **LOCAL** a `Test1234!` para el smoke test (prod intacto).
 
+### Mejoras al PDF de Alertas (mismo dia)
+- **Altura de fila dinamica** (`inventory-alerts-pdf.service.ts`): los nombres/proveedores largos hacian 2 lineas y se encimaban con la fila siguiente (altura fija 14px). Ahora cada fila mide su celda mas alta con `heightOfString` y avanza esa altura.
+- **Carta vertical** (antes A4 horizontal): `size: 'LETTER', layout: 'portrait'`. Se **quito la columna Proveedor** y en la columna de codigo se muestra el codigo del articulo + `Ref: <supplierRef>` (campo "Ref. Proveedor"). Se agrego `supplierRef` al `getInventoryAlerts`.
+- **Paginacion** "Pagina X de Y" al pie de cada pagina (`bufferPages: true` + `bufferedPageRange`, con `margins.bottom=0` temporal para no agregar paginas de mas).
+
+### Ajuste de precios por SELECCION de articulos (`/catalog/price-adjustment`)
+- **Antes** el "Aplicar" mandaba los filtros y el backend reajustaba **TODOS** los que coincidian. **Ahora** se eligen articulos puntuales con **checkbox** (default **desmarcados**) y solo esos se modifican. Pedido del cliente: "no siempre son todos los de una categoria o marca".
+- **Backend** (`apply-price-adjustment.dto.ts` + `products.service.applyPriceAdjustment`): nuevo `productIds: string[]` opcional; si viene, `where = { id: { in: productIds }, isActive: true }` (si no, cae al filtro, compatible). Tope de carga del preview subido 500 -> 5000 (`findForPriceAdjustment`). Verificado: enviar 2 IDs afecta exactamente 2.
+- **Frontend** rediseñado: filtros en **barra horizontal arriba**, barra de ajuste con contador "N seleccionados", y **tabla a ancho completo y alta** (scroll + header fijo) que muestra **todos** los filtrados (sin paginacion — el cliente pidio verlos todos, no por pagina). Clic en fila o checkbox marca; "seleccionar todos" en el header; el preview de precios nuevos solo se muestra en filas marcadas.
+
 ## 🚧 Sesion 68 (2026-06-25) — CxP/Libro de Compras/Retenciones: fixes + UTC + totales + modales en /purchases/new (FALTA DEPLOY)
 
 > Continuacion de Tanda A (Sesion 66). Todo **probado en local con datos reales** (consultas SQL a la BD local), typecheck API+Web limpio (exit 0). **FALTA DEPLOY + prueba E2E del cliente.** Va junto con Tanda A en `main`. Nota: hubo un **backfill SOLO en la BD local** (numero de comprobante de retencion); prod NO lo necesita (ver punto de retencion abajo).
