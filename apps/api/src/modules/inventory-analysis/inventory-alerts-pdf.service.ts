@@ -72,11 +72,8 @@ export class InventoryAlertsPdfService {
     doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#e2e8f0');
     y += 4;
 
+    doc.fontSize(8).font('Helvetica');
     for (const it of items) {
-      if (y > doc.page.height - doc.page.margins.bottom - 20) {
-        doc.addPage();
-        y = 40;
-      }
       let estado = '';
       if (it.alerts.agotado) estado = 'Agotado';
       else if (it.alerts.sinRotacion) estado = NIVEL_LABEL[it.alerts.sinRotacion] || '';
@@ -93,12 +90,26 @@ export class InventoryAlertsPdfService {
         String(it.daysSinceEntry),
         estado,
       ];
-      doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
+
+      // Altura real de la fila = la celda mas alta (el nombre/proveedor pueden ocupar 2+ lineas)
+      let rowHeight = 12;
       for (let i = 0; i < columns.length; i++) {
-        doc.text(values[i] || '', columns[i].x, y, { width: columns[i].width, align: columns[i].align });
+        const h = doc.heightOfString(values[i] || '', { width: columns[i].width });
+        if (h > rowHeight) rowHeight = h;
+      }
+      rowHeight += 4; // padding inferior
+
+      if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        y = 40;
+      }
+
+      doc.fillColor('#1e293b');
+      for (let i = 0; i < columns.length; i++) {
+        doc.text(values[i] || '', columns[i].x, y, { width: columns[i].width, align: columns[i].align, lineBreak: true });
       }
       doc.fillColor('#000');
-      y += 14;
+      y += rowHeight;
     }
 
     doc.end();
