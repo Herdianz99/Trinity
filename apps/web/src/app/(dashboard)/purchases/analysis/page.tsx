@@ -7,6 +7,7 @@ import {
   ShoppingCart, Search, Filter, ArrowUpDown,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { MetricsHelpButton } from '@/components/metrics-help-modal';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie,
@@ -150,6 +151,7 @@ export default function InventoryAnalysisPage() {
             <p className="text-slate-400 text-sm">Clasificacion ABC, rotacion y rentabilidad</p>
           </div>
         </div>
+        <MetricsHelpButton metricKeys={['abc', 'rotacion', 'diasInventario', 'rentabilidad', 'margen', 'valorInventario', 'sugerenciaCompra']} />
       </div>
 
       {/* Period selector */}
