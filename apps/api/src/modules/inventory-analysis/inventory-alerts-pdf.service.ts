@@ -44,7 +44,7 @@ export class InventoryAlertsPdfService {
   async generate(report: string, items: AlertItem[], period: string): Promise<Buffer> {
     const company = await this.getCompanyName();
     const title = REPORT_TITLES[report] || 'Alertas de Inventario';
-    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
 
     // Header
     doc.fontSize(16).font('Helvetica-Bold').text(company, 40, 40);
@@ -111,6 +111,24 @@ export class InventoryAlertsPdfService {
       }
       doc.fillColor('#000');
       y += rowHeight;
+    }
+
+    // Paginacion: "Pagina X de Y" centrada al pie de cada pagina.
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const oldBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0; // evita que pdfkit agregue una pagina al escribir en el margen inferior
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('#64748b')
+        .text(`Pagina ${i + 1} de ${range.count}`, 40, doc.page.height - 28, {
+          align: 'center',
+          width: doc.page.width - 80,
+        });
+      doc.fillColor('#000');
+      doc.page.margins.bottom = oldBottom;
     }
 
     doc.end();
