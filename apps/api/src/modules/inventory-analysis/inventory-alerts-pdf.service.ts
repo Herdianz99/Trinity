@@ -5,7 +5,7 @@ import * as PDFDocument from 'pdfkit';
 type AlertItem = {
   productCode: string;
   productName: string;
-  supplierName: string;
+  supplierRef: string;
   currentStock: number;
   minStock: number;
   daysSinceEntry: number;
@@ -44,7 +44,7 @@ export class InventoryAlertsPdfService {
   async generate(report: string, items: AlertItem[], period: string): Promise<Buffer> {
     const company = await this.getCompanyName();
     const title = REPORT_TITLES[report] || 'Alertas de Inventario';
-    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
 
     // Header
     doc.fontSize(16).font('Helvetica-Bold').text(company, 40, 40);
@@ -53,15 +53,16 @@ export class InventoryAlertsPdfService {
     doc.text(`Generado: ${new Date().toLocaleDateString('es-VE')}  |  ${items.length} articulos`, 40, 88);
     doc.moveTo(40, 104).lineTo(doc.page.width - 40, 104).stroke('#94a3b8');
 
+    // Carta vertical: ancho util ~532 (x de 40 a 572). Sin columna Proveedor;
+    // el codigo del articulo + Ref. Proveedor van juntos en la primera columna.
     const columns = [
-      { label: 'Codigo', x: 40, width: 70 },
-      { label: 'Producto', x: 115, width: 200 },
-      { label: 'Proveedor', x: 320, width: 130 },
-      { label: 'Stock', x: 455, width: 45, align: 'right' as const },
-      { label: 'Min', x: 505, width: 40, align: 'right' as const },
-      { label: 'Ult. entrada', x: 550, width: 70 },
-      { label: 'Dias', x: 625, width: 35, align: 'right' as const },
-      { label: 'Estado', x: 665, width: 130 },
+      { label: 'Codigo / Ref.', x: 40, width: 90 },
+      { label: 'Producto', x: 132, width: 180 },
+      { label: 'Stock', x: 314, width: 40, align: 'right' as const },
+      { label: 'Min', x: 356, width: 32, align: 'right' as const },
+      { label: 'Ult. entrada', x: 390, width: 70 },
+      { label: 'Dias', x: 462, width: 28, align: 'right' as const },
+      { label: 'Estado', x: 492, width: 80 },
     ];
 
     let y = 114;
@@ -80,10 +81,10 @@ export class InventoryAlertsPdfService {
       else if (it.alerts.exceso) estado = `Exceso (${it.daysOfInventory} d)`;
       else if (it.alerts.bajoMinimo) estado = 'Bajo minimo';
 
+      const codigoCell = it.supplierRef ? `${it.productCode}\nRef: ${it.supplierRef}` : it.productCode;
       const values = [
-        it.productCode,
+        codigoCell,
         it.productName,
-        it.supplierName,
         String(it.currentStock),
         String(it.minStock),
         this.fmtDate(it.lastEntryDate),
