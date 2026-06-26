@@ -44,4 +44,11 @@ export class InventoryAnalysisController {
   getPurchaseSuggestions(@Query('from') from: string, @Query('to') to: string) {
     return this.service.getPurchaseSuggestions(from, to);
   }
+
+  @Get('alerts')
+  @ApiQuery({ name: 'from', required: true })
+  @ApiQuery({ name: 'to', required: true })
+  getAlerts(@Query('from') from: string, @Query('to') to: string) {
+    return this.service.getInventoryAlerts(from, to);
+  }
 }
