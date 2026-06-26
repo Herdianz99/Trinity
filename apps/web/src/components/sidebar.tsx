@@ -111,6 +111,7 @@ const menuSections: MenuSection[] = [
       { label: 'Conteo fisico', href: '/inventory/count', icon: <ClipboardCheck size={18} /> },
       { label: 'Ajustes', href: '/inventory/adjustments', icon: <PackagePlus size={18} /> },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
+      { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },
     ],
   },
   {
