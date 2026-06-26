@@ -404,7 +404,7 @@ export class ProductsService {
 
     const products = await this.prisma.product.findMany({
       where,
-      take: 500,
+      take: 5000,
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -427,13 +427,17 @@ export class ProductsService {
   }
 
   async applyPriceAdjustment(dto: ApplyPriceAdjustmentDto, userId: string) {
-    const where = this.buildPriceAdjustmentWhere(dto.filters);
+    // Si vienen productIds seleccionados, se ajustan SOLO esos. Si no, se cae al filtro (compatibilidad).
+    const where: Prisma.ProductWhereInput =
+      dto.productIds && dto.productIds.length > 0
+        ? { id: { in: dto.productIds }, isActive: true }
+        : this.buildPriceAdjustmentWhere(dto.filters);
 
     return this.prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where });
 
       if (products.length === 0) {
-        throw new BadRequestException('No hay productos que coincidan con los filtros');
+        throw new BadRequestException('No hay productos seleccionados que coincidan');
       }
 
       const config = await tx.companyConfig.findUnique({

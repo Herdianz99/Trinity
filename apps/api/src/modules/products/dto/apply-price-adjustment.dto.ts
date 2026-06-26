@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, IsEnum, ValidateNested, Min } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsEnum, ValidateNested, Min, IsArray } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -41,6 +41,12 @@ export class ApplyPriceAdjustmentDto {
   @ValidateNested()
   @Type(() => PriceAdjustmentFiltersDto)
   filters: PriceAdjustmentFiltersDto;
+
+  @ApiProperty({ required: false, type: [String], description: 'IDs de productos a ajustar. Si viene, se ajustan solo esos (ignora los filtros para seleccionar).' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productIds?: string[];
 
   @ApiProperty({ enum: ['REPLACE', 'ADD'] })
   @IsEnum(['REPLACE', 'ADD'])
