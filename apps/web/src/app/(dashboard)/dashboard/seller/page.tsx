@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
-  DollarSign, FileText, RotateCcw, Clock, TrendingUp, TrendingDown,
-  AlertCircle, Loader2, RefreshCw, ChevronRight, Package, AlertTriangle,
+  Target, FileText, RotateCcw, TrendingUp, TrendingDown,
+  AlertCircle, Loader2, RefreshCw, Package, Pencil, Check, X,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,19 +14,16 @@ import {
 interface SellerDashboard {
   period: { from: string; to: string };
   seller: { name: string; code: string };
-  sales: {
-    totalUsd: number;
-    totalBs: number;
-    netUsd: number;
-    invoiceCount: number;
-    avgTicketUsd: number;
+  goal: {
+    monthlyGoalUsd: number;
+    isSet: boolean;
+    pct: number | null;
     vsLastPeriod: number | null;
+    invoiceCount: number;
   };
-  pendingInvoices: { count: number; totalUsd: number };
-  returns: { totalUsd: number; count: number };
-  topProducts: { productName: string; productCode: string; unitsSold: number; totalUsd: number }[];
-  salesTimeline: { label: string; totalUsd: number; count: number }[];
-  receivables: { totalPendingUsd: number; totalOverdueUsd: number; count: number };
+  returns: { pctOfSales: number; count: number };
+  topProducts: { productName: string; productCode: string; unitsSold: number; sharePct: number }[];
+  salesTimeline: { label: string; pct: number; count: number }[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -36,19 +32,13 @@ function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function fmt(n: number) {
+function fmtUsd(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtCompact(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return fmt(n);
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function SellerDashboardPage() {
-  const router = useRouter();
   const now = new Date();
   const today = toLocalDateStr(now);
 
@@ -58,6 +48,11 @@ export default function SellerDashboardPage() {
   const [data, setData] = useState<SellerDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Meta editing
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+  const [savingGoal, setSavingGoal] = useState(false);
 
   useEffect(() => { document.title = 'Mi Dashboard | Trinity ERP'; }, []);
 
@@ -82,7 +77,7 @@ export default function SellerDashboardPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/proxy/dashboard/vendedor?from=${fromDate}&to=${toDate}`);
+      const res = await fetch(`/api/proxy/dashboard/vendedor?from=${fromDate}&to=${toDate}&period=${period}`);
       if (res.status === 404) {
         setError('no-seller');
         return;
@@ -94,9 +89,33 @@ export default function SellerDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, period]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  async function saveGoal() {
+    const val = parseFloat(goalInput);
+    if (isNaN(val) || val < 0) return;
+    setSavingGoal(true);
+    try {
+      const res = await fetch('/api/proxy/dashboard/vendedor/meta', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyGoalUsd: val }),
+      });
+      if (res.ok) {
+        setEditingGoal(false);
+        fetchData();
+      }
+    } finally {
+      setSavingGoal(false);
+    }
+  }
+
+  function openEditGoal() {
+    setGoalInput(data && data.goal.monthlyGoalUsd > 0 ? String(data.goal.monthlyGoalUsd) : '');
+    setEditingGoal(true);
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const greeting = (() => {
@@ -107,6 +126,7 @@ export default function SellerDashboardPage() {
   })();
 
   const todayFormatted = now.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const periodLabel = period === 'today' ? 'hoy' : period === 'week' ? 'esta semana' : 'este mes';
 
   // ── Error states ──────────────────────────────────────────────────────────
 
@@ -144,21 +164,20 @@ export default function SellerDashboardPage() {
     return (
       <div className="space-y-4 p-4 sm:p-0 animate-pulse">
         <div className="h-16 bg-slate-800/50 rounded-xl" />
+        <div className="h-40 bg-slate-800/50 rounded-xl" />
         <div className="grid grid-cols-2 gap-3">
-          <div className="h-28 bg-slate-800/50 rounded-xl" />
-          <div className="h-28 bg-slate-800/50 rounded-xl" />
           <div className="h-28 bg-slate-800/50 rounded-xl" />
           <div className="h-28 bg-slate-800/50 rounded-xl" />
         </div>
         <div className="h-52 bg-slate-800/50 rounded-xl" />
-        <div className="h-40 bg-slate-800/50 rounded-xl" />
       </div>
     );
   }
 
   if (!data) return null;
 
-  const vs = data.sales.vsLastPeriod;
+  const vs = data.goal.vsLastPeriod;
+  const pct = data.goal.pct;
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-3xl mx-auto -mx-6 -mt-6 lg:-mt-8 lg:-mx-8 px-4 pt-5 pb-8 sm:px-6 sm:pt-6">
@@ -185,9 +204,7 @@ export default function SellerDashboardPage() {
               key={key}
               onClick={() => setPeriod(key)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                period === key
-                  ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                period === key ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {label}
@@ -196,77 +213,103 @@ export default function SellerDashboardPage() {
         </div>
       </div>
 
-      {/* ═══ Row 1 — Main KPIs ═══ */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Mis Ventas */}
-        <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-emerald-400 mb-2">
-            <DollarSign size={14} />
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Mis Ventas</span>
-            <span className="text-[9px] text-slate-500 normal-case font-normal">bruto</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">${fmt(data.sales.totalUsd)}</p>
-          {vs !== null && (
-            <div className={`flex items-center gap-0.5 mt-1.5 text-xs ${vs >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {vs >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-              <span>{vs >= 0 ? '+' : ''}{vs}%</span>
-              <span className="text-slate-500 ml-0.5">
-                vs {period === 'today' ? 'ayer' : period === 'week' ? 'sem. ant.' : 'mes ant.'}
-              </span>
-            </div>
-          )}
-          <div className="mt-2 pt-2 border-t border-emerald-500/15 flex items-center justify-between">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Neto real</span>
-            <span className="text-sm font-bold text-emerald-300 tabular-nums">${fmt(data.sales.netUsd)}</span>
-          </div>
+      {/* ═══ Hero — % de meta ═══ */}
+      <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-2xl p-5">
+        <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
+          <Target size={15} />
+          <span className="text-xs font-semibold uppercase tracking-wider">Avance de mi meta — {periodLabel}</span>
         </div>
 
-        {/* Facturas */}
+        {data.goal.isSet && pct !== null ? (
+          <>
+            <div className="flex items-end gap-3">
+              <p className="text-5xl font-bold text-slate-100 tabular-nums leading-none">{pct}%</p>
+              {vs !== null && (
+                <div className={`flex items-center gap-0.5 mb-1 text-sm ${vs >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {vs >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  <span>{vs >= 0 ? '+' : ''}{vs}%</span>
+                  <span className="text-slate-500 ml-0.5 text-xs">
+                    vs {period === 'today' ? 'ayer' : period === 'week' ? 'sem. ant.' : 'mes ant.'}
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Progress bar */}
+            <div className="mt-3 h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-gradient-to-r from-emerald-400 to-teal-300' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="py-2">
+            <p className="text-slate-300 text-sm">Aun no defines tu meta del mes.</p>
+            <p className="text-slate-500 text-xs mt-0.5">Definela para ver tu avance en porcentaje.</p>
+          </div>
+        )}
+
+        {/* Meta editor */}
+        <div className="mt-4 pt-3 border-t border-emerald-500/15">
+          {editingGoal ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Meta del mes $</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                autoFocus
+                value={goalInput}
+                onChange={(e) => setGoalInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveGoal(); if (e.key === 'Escape') setEditingGoal(false); }}
+                placeholder="Ej: 5000"
+                className="w-28 bg-slate-900/80 border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500/50"
+              />
+              <button onClick={saveGoal} disabled={savingGoal} className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50">
+                {savingGoal ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+              <button onClick={() => setEditingGoal(false)} className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={openEditGoal} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-emerald-300 transition-colors">
+              <span>Meta del mes: <span className="text-slate-200 font-semibold">${fmtUsd(data.goal.monthlyGoalUsd)}</span></span>
+              <Pencil size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ Row — Facturas & Devoluciones ═══ */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-1.5 text-blue-400 mb-2">
             <FileText size={14} />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Facturas</span>
           </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">{data.sales.invoiceCount}</p>
-          <p className="text-xs text-slate-500 mt-1.5">
-            Ticket: <span className="text-slate-300 font-medium">${fmt(data.sales.avgTicketUsd)}</span>
-          </p>
-        </div>
-      </div>
-
-      {/* ═══ Row 2 — Pending & Returns ═══ */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Pendientes */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-amber-400 mb-2">
-            <Clock size={14} />
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Pendientes</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">{data.pendingInvoices.count}</p>
-          <p className="text-xs text-slate-500 mt-1.5">
-            ${fmt(data.pendingInvoices.totalUsd)} <span className="text-slate-600">por cobrar</span>
-          </p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">{data.goal.invoiceCount}</p>
+          <p className="text-xs text-slate-500 mt-1.5">{periodLabel}</p>
         </div>
 
-        {/* Devoluciones */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-1.5 text-red-400 mb-2">
             <RotateCcw size={14} />
             <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Devoluciones</span>
           </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">${fmt(data.returns.totalUsd)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-100 tabular-nums">{data.returns.pctOfSales}%</p>
           <p className="text-xs text-slate-500 mt-1.5">
-            {data.returns.count} {data.returns.count === 1 ? 'nota' : 'notas'}
+            de tus ventas · {data.returns.count} {data.returns.count === 1 ? 'nota' : 'notas'}
           </p>
         </div>
       </div>
 
-      {/* ═══ Sales Chart ═══ */}
+      {/* ═══ Sales Chart (en %) ═══ */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
         <h3 className="text-sm font-semibold text-slate-300 mb-3">
-          Ventas {period === 'today' ? 'por hora' : 'por dia'}
+          Avance {period === 'today' ? 'por hora' : 'por dia'} <span className="text-slate-500 font-normal">(% de meta)</span>
         </h3>
-        {data.salesTimeline.some(t => t.totalUsd > 0) ? (
+        {data.goal.isSet && data.salesTimeline.some(t => t.pct > 0) ? (
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={data.salesTimeline} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
@@ -277,82 +320,47 @@ export default function SellerDashboardPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={{ stroke: '#475569' }} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${fmtCompact(Number(v))}`} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
               <Tooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 11 }}
                 labelStyle={{ color: '#94a3b8' }}
-                formatter={(v: any) => [`$${fmt(Number(v) || 0)}`, 'Ventas']}
+                formatter={(v: any) => [`${Number(v) || 0}%`, 'Avance']}
               />
-              <Area type="monotone" dataKey="totalUsd" stroke="#10b981" strokeWidth={2} fill="url(#sellerGrad)" />
+              <Area type="monotone" dataKey="pct" stroke="#10b981" strokeWidth={2} fill="url(#sellerGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
-            Sin ventas en este periodo
+            {data.goal.isSet ? 'Sin ventas en este periodo' : 'Define tu meta para ver el avance'}
           </div>
         )}
       </div>
 
-      {/* ═══ CxC from my clients ═══ */}
-      {data.receivables.count > 0 && (
-        <div className={`border rounded-xl p-4 ${
-          data.receivables.totalOverdueUsd > 0
-            ? 'bg-red-500/5 border-red-500/20'
-            : 'bg-slate-800/50 border-slate-700/50'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                {data.receivables.totalOverdueUsd > 0 && <AlertTriangle size={14} className="text-red-400" />}
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CxC Mis Clientes</span>
-              </div>
-              <p className="text-lg font-bold text-slate-100">${fmt(data.receivables.totalPendingUsd)}</p>
-              <div className="flex gap-3 mt-1 text-xs">
-                <span className="text-slate-500">{data.receivables.count} pendientes</span>
-                {data.receivables.totalOverdueUsd > 0 && (
-                  <span className="text-red-400">${fmt(data.receivables.totalOverdueUsd)} vencidas</span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => router.push('/receivables')}
-              className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 shrink-0"
-            >
-              Ver detalle <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Top 5 Products ═══ */}
+      {/* ═══ Top 5 Products (% participacion) ═══ */}
       {data.topProducts.length > 0 && (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-1.5">
             <Package size={14} className="text-slate-400" />
-            Top productos
+            Top productos <span className="text-slate-500 font-normal">(% de tus ventas)</span>
           </h3>
           <div className="space-y-2.5">
-            {data.topProducts.map((p, i) => {
-              const maxUsd = data.topProducts[0].totalUsd;
-              const pct = maxUsd > 0 ? (p.totalUsd / maxUsd) * 100 : 0;
-              return (
-                <div key={i}>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <div className="min-w-0 flex-1 mr-3">
-                      <p className="text-sm text-slate-200 truncate">{p.productName}</p>
-                      <p className="text-[10px] text-slate-500">{p.productCode} &middot; {p.unitsSold} uds</p>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-300 tabular-nums shrink-0">${fmt(p.totalUsd)}</span>
+            {data.topProducts.map((p, i) => (
+              <div key={i}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <div className="min-w-0 flex-1 mr-3">
+                    <p className="text-sm text-slate-200 truncate">{p.productName}</p>
+                    <p className="text-[10px] text-slate-500">{p.productCode} &middot; {p.unitsSold} uds</p>
                   </div>
-                  <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                  <span className="text-sm font-semibold text-slate-300 tabular-nums shrink-0">{p.sharePct}%</span>
                 </div>
-              );
-            })}
+                <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                    style={{ width: `${Math.min(p.sharePct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

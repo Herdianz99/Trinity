@@ -95,11 +95,11 @@ export class DashboardService {
 
   // ── Seller Dashboard ─────────────────────────────────────────────────────
 
-  async getVendedor(userId: string, fromStr?: string, toStr?: string) {
+  async getVendedor(userId: string, fromStr?: string, toStr?: string, period?: string) {
     // Find seller linked to this user
     const seller = await this.prisma.seller.findUnique({
       where: { userId },
-      select: { id: true, name: true, code: true },
+      select: { id: true, name: true, code: true, monthlyGoalUsd: true },
     });
     if (!seller) {
       throw new NotFoundException('Este usuario no tiene vendedor asignado');
@@ -120,42 +120,64 @@ export class DashboardService {
     const prevDateRange = { gte: prevFrom, lte: prevTo };
     const sellerId = seller.id;
 
-    const [
-      sales,
-      prevSales,
-      pendingInvoices,
-      returns,
-      topProducts,
-      salesTimeline,
-      receivables,
-    ] = await Promise.all([
+    const [sales, prevSales, returns, topProducts, salesTimeline] = await Promise.all([
       this.getSellerSales(sellerId, dateRange),
       this.getSellerSales(sellerId, prevDateRange),
-      this.getSellerPendingInvoices(sellerId),
       this.getSellerReturns(sellerId, dateRange),
       this.getSellerTopProducts(sellerId, dateRange),
       this.getSellerTimeline(sellerId, from, to),
-      this.getSellerReceivables(sellerId),
     ]);
+
+    // ── Solo PORCENTAJES (el vendedor no ve montos en $; ver requisito Sesion 69) ──
+    // Meta mensual prorrateada al periodo: dia = 1/30, semana = 7/30, mes = 30/30 (mes nominal de 30 dias).
+    const nominalDays = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+    const periodGoalUsd = (seller.monthlyGoalUsd || 0) * (nominalDays / 30);
+    const goalPct = periodGoalUsd > 0 ? Math.round((sales.totalUsd / periodGoalUsd) * 100) : null;
+    const totalSalesUsd = sales.totalUsd;
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
       seller: { name: seller.name, code: seller.code },
-      sales: {
-        totalUsd: sales.totalUsd,
-        totalBs: sales.totalBs,
-        // Ventas netas reales = brutas - devoluciones del periodo.
-        netUsd: round2(sales.totalUsd - returns.totalUsd),
-        invoiceCount: sales.count,
-        avgTicketUsd: sales.count > 0 ? round2(sales.totalUsd / sales.count) : 0,
-        vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd),
+      goal: {
+        monthlyGoalUsd: round2(seller.monthlyGoalUsd || 0),
+        isSet: (seller.monthlyGoalUsd || 0) > 0,
+        pct: goalPct, // % de la meta del periodo, entero (null si no hay meta)
+        vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd), // ya es %
+        invoiceCount: sales.count, // conteo, no es monto
       },
-      pendingInvoices,
-      returns,
-      topProducts,
-      salesTimeline,
-      receivables,
+      returns: {
+        pctOfSales: totalSalesUsd > 0 ? Math.round((returns.totalUsd / totalSalesUsd) * 100) : 0,
+        count: returns.count,
+      },
+      topProducts: topProducts.map((p) => ({
+        productName: p.productName,
+        productCode: p.productCode,
+        unitsSold: p.unitsSold,
+        sharePct: totalSalesUsd > 0 ? Math.round((p.totalUsd / totalSalesUsd) * 100) : 0,
+      })),
+      salesTimeline: salesTimeline.map((t) => ({
+        label: t.label,
+        pct: periodGoalUsd > 0 ? Math.round((t.totalUsd / periodGoalUsd) * 100) : 0,
+        count: t.count,
+      })),
     };
+  }
+
+  /** El vendedor define/edita su propia meta mensual (USD). */
+  async setSellerGoal(userId: string, monthlyGoalUsd: number) {
+    const seller = await this.prisma.seller.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!seller) {
+      throw new NotFoundException('Este usuario no tiene vendedor asignado');
+    }
+    const goal = Math.max(0, monthlyGoalUsd);
+    await this.prisma.seller.update({
+      where: { id: seller.id },
+      data: { monthlyGoalUsd: goal },
+    });
+    return { monthlyGoalUsd: round2(goal) };
   }
 
   // ── Seller-specific queries ─────────────────────────────────────────────

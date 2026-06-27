@@ -378,16 +378,17 @@ model DynamicKeyLog {
 // ============================================
 
 model Seller {
-  id        String    @id @default(cuid())
-  code      String    @unique
-  name      String
-  phone     String?
-  isActive  Boolean   @default(true)
-  userId    String?   @unique
-  user      User?     @relation(fields: [userId], references: [id])
-  invoices  Invoice[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  code            String    @unique
+  name            String
+  phone           String?
+  isActive        Boolean   @default(true)
+  monthlyGoalUsd  Float     @default(0)
+  userId          String?   @unique
+  user            User?     @relation(fields: [userId], references: [id])
+  invoices        Invoice[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 // ============================================

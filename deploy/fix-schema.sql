@@ -2028,3 +2028,8 @@ ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "differenceUsd" DOUBLE PRECIS
 ALTER TABLE "CashSession" ADD COLUMN IF NOT EXISTS "differenceBs"  DOUBLE PRECISION;
 UPDATE "PaymentMethod" SET "isCash" = true
  WHERE id IN ('pm_cash_usd', 'pm_cash_bs') OR name IN ('Efectivo USD', 'Efectivo Bs');
+
+-- =============================================================================
+-- META MENSUAL DEL VENDEDOR (Session 69)
+-- =============================================================================
+ALTER TABLE "Seller" ADD COLUMN IF NOT EXISTS "monthlyGoalUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;

@@ -1,7 +1,8 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { DashboardService } from './dashboard.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SetSellerGoalDto } from './dto/set-seller-goal.dto';
 
 @Controller('dashboard')
 @UseGuards(AuthGuard('jwt'))
@@ -21,8 +22,17 @@ export class DashboardController {
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('period') period?: string,
   ) {
-    return this.service.getVendedor(user.id, from, to);
+    return this.service.getVendedor(user.id, from, to, period);
+  }
+
+  @Patch('vendedor/meta')
+  setVendedorMeta(
+    @CurrentUser() user: { id: string },
+    @Body() dto: SetSellerGoalDto,
+  ) {
+    return this.service.setSellerGoal(user.id, dto.monthlyGoalUsd);
   }
 
   @Get('home')
