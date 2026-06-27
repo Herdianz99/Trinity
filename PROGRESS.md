@@ -19,6 +19,20 @@
 - **Antes** el "Aplicar" mandaba los filtros y el backend reajustaba **TODOS** los que coincidian. **Ahora** se eligen articulos puntuales con **checkbox** (default **desmarcados**) y solo esos se modifican. Pedido del cliente: "no siempre son todos los de una categoria o marca".
 - **Backend** (`apply-price-adjustment.dto.ts` + `products.service.applyPriceAdjustment`): nuevo `productIds: string[]` opcional; si viene, `where = { id: { in: productIds }, isActive: true }` (si no, cae al filtro, compatible). Tope de carga del preview subido 500 -> 5000 (`findForPriceAdjustment`). Verificado: enviar 2 IDs afecta exactamente 2.
 - **Frontend** rediseñado: filtros en **barra horizontal arriba**, barra de ajuste con contador "N seleccionados", y **tabla a ancho completo y alta** (scroll + header fijo) que muestra **todos** los filtrados (sin paginacion — el cliente pidio verlos todos, no por pagina). Clic en fila o checkbox marca; "seleccionar todos" en el header; el preview de precios nuevos solo se muestra en filas marcadas.
+- **Columna + filtro de Brecha**: la tabla muestra **Brecha Si/No** por articulo y hay un filtro **Todas/Con brecha/Sin brecha** (`bregaApplies` en query DTO + `buildPriceAdjustmentWhere`). **Bug arreglado**: el booleano se corrompia con `enableImplicitConversion` (`Boolean('false')===true`); se dejo el param como **string** interpretado en el `where`. Verificado: con brecha 438, sin brecha 93.
+- **Columnas de la lista**: se quitaron **P. Mayor** y **Gan. Mayor%**, y se agrego **P. sin IVA** (costo+brecha+ganancia sin el multiplicador de IVA) antes de **P. Detal**. El input de ganancia mayor sigue disponible para aplicar; solo se saco de las columnas.
+
+### Dashboard del vendedor: SOLO porcentajes + meta mensual (`/dashboard/seller`)
+- Pedido del cliente: **los vendedores no deben ver montos en $**, todo en **%**; cada uno **pone su meta mensual** y el % se calcula sobre ella (entero, sin decimales).
+- **Seguridad real (backend)**: `getVendedor` ya **NO devuelve montos** (ni `totalUsd`, neto, ticket, pendientes ni CxC); solo %. Verificado con un vendedor real: cero fugas de $ en la respuesta. Asi no se ven ni mirando la red.
+- **Meta mensual**: campo nuevo `monthlyGoalUsd` en `Seller` (migracion `20260626210000_seller_monthly_goal` con `IF NOT EXISTS` + agregado a `deploy/fix-schema.sql`). El vendedor la pone/edita desde el dashboard (ruta `PATCH /dashboard/vendedor/meta`, DTO `set-seller-goal.dto.ts`).
+- **Prorrateo por dias** (param `period`): Hoy = meta/30, Semana = meta×7/30, Mes = meta completa. `goalPct = ventas/periodGoal`.
+- **Frontend**: hero con **% de meta** + barra de progreso + vs periodo anterior + editor de meta; Devoluciones como **% de ventas**; Top productos como **% de participacion**; grafico en **% de meta**; Facturas como conteo. Ocultados: ticket, pendientes, CxC, neto.
+
+### Correcciones puntuales en PRODUCCION (por SSH, este dia)
+- **Factura NE-26-00000505**: vendedor LENNYS MEJIA → **VIRGINIA CRESPO** (el usuario se equivoco de vendedor).
+- **8 facturas montadas la mañana del 26/06 que eran ventas del 25/06**: `createdAt`/`paidAt` movidos al 25/06 21:00 Caracas (tasa identica entre ambos dias, no fiscales, caja abierta → sin efectos colaterales). Numeros: VTA-214..217, NE-525..528.
+- **Factura NE-26-00000539**: vendedor YULEINI RODRIGUEZ → **Roxana Marrero**.
 
 ## 🚧 Sesion 68 (2026-06-25) — CxP/Libro de Compras/Retenciones: fixes + UTC + totales + modales en /purchases/new (FALTA DEPLOY)
 
