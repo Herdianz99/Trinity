@@ -48,6 +48,7 @@ import {
   PackagePlus,
   ClipboardList,
   Repeat,
+  PackageSearch,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -106,6 +107,7 @@ const menuSections: MenuSection[] = [
     icon: <Warehouse size={20} />,
     permission: 'inventory',
     items: [
+      { label: 'Consultar articulos', href: '/inventory/articulos', icon: <PackageSearch size={18} /> },
       { label: 'Stock', href: '/inventory/stock', icon: <BoxesIcon size={18} /> },
       { label: 'Almacenes', href: '/inventory/warehouses', icon: <Building2 size={18} /> },
       { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={18} /> },

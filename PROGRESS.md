@@ -1,5 +1,13 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 72 (2026-06-27) — Pagina de consulta de articulos para inventario (solo lectura) (FALTA DEPLOY)
+
+> Pedido del cliente: una pantalla para el personal de inventario (rol WAREHOUSE) que puedan **ver y buscar** articulos, **solo lectura** (no modifican nada). Frontend puro — reutiliza endpoints GET existentes, sin cambios de backend. Web typecheck **0 errores**, smoke test de los 3 endpoints OK (2368 productos, tasa, kardex).
+
+- **Pagina nueva `/inventory/articulos`** ("Consultar articulos" en sidebar INVENTARIO; WAREHOUSE ya tiene permiso `inventory`, no se tocaron permisos). Distinta de `/inventory/stock` (esa muestra costo/valor y tiene modal de ajuste; esta muestra Ref. proveedor + precio de VENTA y es 100% lectura).
+- **Lista con buscador** (codigo/nombre/referencia, busqueda + paginacion del lado del servidor via `GET /products?search=&page=&limit=25&isActive=true`). Columnas: **Codigo, Ref. proveedor, Nombre, Existencias** (suma de `stock[]` de todos los almacenes), **Precio USD** (priceDetal) y **Precio Bs** (priceDetal x tasa de `GET /exchange-rate/today`).
+- **Clic en fila → panel lateral (drawer)** con cabecera del articulo + **kardex** (`GET /stock-movements/kardex/:productId`): Fecha, Tipo (badge), Cantidad, Saldo corrido, Almacen, Referencia. Con paginacion del kardex. Sin links a documentos editables ni botones de edicion (solo lectura).
+
 ## 🚧 Sesion 71 (2026-06-27) — Reemplazos de inventario (canje de un articulo por otro) (FALTA DEPLOY)
 
 > Feature nueva pedida por el cliente: cambiar un articulo por otro en el inventario (ej. vende cable por rollo y por metro; cuando no hay metros, saca 2 rollos y mete 200 metros). Documento con pagina de detalle propia (no modal). Calcado de Ajustes de inventario. Backend typecheck **0 errores**, web **0 errores TS**. **Probado E2E en local con datos reales** (login admin local + endpoints reales: correlativo, stock, movimientos, costo derivado, recalculo de precio, PDF 200/`%PDF-`). **FALTA DEPLOY + prueba E2E del cliente.**
