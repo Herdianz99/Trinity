@@ -24,6 +24,9 @@ const IVA_RATES: Record<IvaType, number> = {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+// Costos UNITARIOS: 6 decimales (para articulos de costo muy bajo, ej. 0.0233 por unidad).
+// Los TOTALES de linea/factura siguen en round2 (dinero real).
+const round6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -54,24 +57,24 @@ export class PurchaseOrdersService {
 
   private calculateItemValues(costInput: number, quantity: number, discountPct: number, exchangeRate: number, currency: 'USD' | 'BS' = 'USD') {
     if (currency === 'BS') {
-      const costBs = costInput;
-      const costUsd = round2(costBs / exchangeRate);
-      const discountBs = round2(costBs * (discountPct / 100));
-      const discountUsd = round2(discountBs / exchangeRate);
-      const netCostBs = round2(costBs - discountBs);
-      const netCostUsd = round2(netCostBs / exchangeRate);
+      const costBs = round6(costInput);
+      const costUsd = round6(costBs / exchangeRate);
+      const discountBs = round6(costBs * (discountPct / 100));
+      const discountUsd = round6(discountBs / exchangeRate);
+      const netCostBs = round6(costBs - discountBs);
+      const netCostUsd = round6(netCostBs / exchangeRate);
       const totalBs = round2(netCostBs * quantity);
       const totalUsd = round2(totalBs / exchangeRate);
       return { costUsd, costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
     }
-    const costUsd = costInput;
-    const discountUsd = round2(costUsd * (discountPct / 100));
-    const discountBs = round2(discountUsd * exchangeRate);
-    const netCostUsd = round2(costUsd - discountUsd);
-    const netCostBs = round2(netCostUsd * exchangeRate);
+    const costUsd = round6(costInput);
+    const discountUsd = round6(costUsd * (discountPct / 100));
+    const discountBs = round6(discountUsd * exchangeRate);
+    const netCostUsd = round6(costUsd - discountUsd);
+    const netCostBs = round6(netCostUsd * exchangeRate);
     const totalUsd = round2(netCostUsd * quantity);
     const totalBs = round2(totalUsd * exchangeRate);
-    const costBs = round2(costUsd * exchangeRate);
+    const costBs = round6(costUsd * exchangeRate);
     return { costUsd, costBs, discountUsd, discountBs, netCostUsd, netCostBs, totalUsd, totalBs };
   }
 
@@ -113,9 +116,9 @@ export class PurchaseOrdersService {
         const share = surchargeDistribution === 'PROPORTIONAL'
           ? (totalNonServiceBs > 0 ? (item.totalBs / totalNonServiceBs) * surchargeInput : 0)
           : surchargeInput / nonServiceItems.length;
-        const perUnitBs = round2(share / item.quantity);
-        item.landedCostBs = round2(item.netCostBs + perUnitBs);
-        item.landedCostUsd = round2(item.landedCostBs / exchangeRate);
+        const perUnitBs = round6(share / item.quantity);
+        item.landedCostBs = round6(item.netCostBs + perUnitBs);
+        item.landedCostUsd = round6(item.landedCostBs / exchangeRate);
       }
     } else {
       const totalNonServiceUsd = nonServiceItems.reduce((sum, i) => sum + i.totalUsd, 0);
@@ -123,9 +126,9 @@ export class PurchaseOrdersService {
         const share = surchargeDistribution === 'PROPORTIONAL'
           ? (totalNonServiceUsd > 0 ? (item.totalUsd / totalNonServiceUsd) * surchargeInput : 0)
           : surchargeInput / nonServiceItems.length;
-        const perUnitUsd = round2(share / item.quantity);
-        item.landedCostUsd = round2(item.netCostUsd + perUnitUsd);
-        item.landedCostBs = round2(item.landedCostUsd * exchangeRate);
+        const perUnitUsd = round6(share / item.quantity);
+        item.landedCostUsd = round6(item.netCostUsd + perUnitUsd);
+        item.landedCostBs = round6(item.landedCostUsd * exchangeRate);
       }
     }
   }

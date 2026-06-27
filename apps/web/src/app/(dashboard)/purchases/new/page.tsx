@@ -1038,7 +1038,7 @@ export default function NewPurchaseBillPage() {
                       <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="any"
                         value={item.costUsd || ''}
                         onChange={(e) => updateItem(idx, 'costUsd', Number(e.target.value))}
                         className="input-field !py-1.5 text-sm w-full text-right font-mono"

@@ -277,6 +277,14 @@ function fmt(n: number): string {
   });
 }
 
+// Costos UNITARIOS: hasta 6 decimales (sin ceros de relleno) para articulos de costo muy bajo.
+function fmtCost(n: number): string {
+  return n.toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
@@ -1022,7 +1030,7 @@ export default function PurchaseBillDetailPage() {
                         {item.quantity}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-300">
-                        {bill.currency === 'BS' ? `Bs ${fmt(item.costBs)}` : `$${fmt(item.costUsd)}`}
+                        {bill.currency === 'BS' ? `Bs ${fmtCost(item.costBs)}` : `$${fmtCost(item.costUsd)}`}
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-400">
                         {item.discountPct > 0 ? `${item.discountPct}%` : '--'}
@@ -1031,7 +1039,7 @@ export default function PurchaseBillDetailPage() {
                         <td className="px-3 py-2.5 text-right font-mono text-amber-400">
                           {item.product.isService
                             ? '--'
-                            : bill.currency === 'BS' ? `Bs ${fmt(item.landedCostBs)}` : `$${fmt(item.landedCostUsd)}`}
+                            : bill.currency === 'BS' ? `Bs ${fmtCost(item.landedCostBs)}` : `$${fmtCost(item.landedCostUsd)}`}
                         </td>
                       )}
                       <td className="px-3 py-2.5 text-right font-mono text-white">

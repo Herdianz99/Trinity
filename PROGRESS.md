@@ -1,5 +1,14 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 76 (2026-06-27) — Costos unitarios de compra a 6 decimales (articulos de costo muy bajo) (FALTA DEPLOY)
+
+> Bug real: en compras el **costo unitario** se redondeaba a 2 decimales, rompiendo los articulos de costo muy bajo. Ej. factura FER01752: 10 paquetes x 100 uds = 1000 uds a $2.33/paquete = **$0.0233/unidad**, pero `round2(0.0233)=0.02` → la linea daba **$20** cuando debe ser **$23.30**. Sin cambio de schema (los campos ya son Float). Probado E2E. Web/API **0 errores**.
+
+- **Backend** (`purchase-orders.service`): nuevo helper `round6`. En `calculateItemValues` y `applySurchargeLandedCost`, los costos **UNITARIOS** (costUsd, costBs, netCostUsd/Bs, discountUsd/Bs, landedCostUsd/Bs) redondean a **6 decimales**; los **TOTALES** de linea/factura siguen en **round2** (dinero real). Los totales fiscales usan los totales de linea, asi que el IVA cuadra. Verificado: 0.0233 x 1000 -> linea $23.30 (+ IVA = factura $27.03).
+- **Frontend**: detalle de compra (`/purchases/[id]`) usa nuevo `fmtCost` (formateo inteligente min 2 / max 6 decimales, sin ceros de relleno) para los **costos unitarios** → muestra `0.0233`; los totales siguen con `fmt` (2 dec). Form de compra (`/purchases/new`): input de costo `step="any"`.
+- **Decision**: los **precios de venta se dejan en 2 decimales** (el precio es lo que se cobra, limpio; el costo ahora preciso ya da margenes reales). Asimetria a proposito: costo 6 dec, precio 2 dec.
+- *Pendiente*: la factura vieja FER01752 quedo en $20 (procesada con el bug) — corregir aparte si se quiere. Otros displays de costo del producto (detalle/stock) siguen en 2 dec.
+
 ## 🚧 Sesion 75 (2026-06-27) — Pagina de detalle de transferencias + correlativo + clicables (FALTA DEPLOY)
 
 > Se completo lo que quedo pendiente en la Sesion 70 ("luego hacemos transferencias como debe de ser"). Probado E2E en local (crear TRF-0001, aprobar, movimientos con sourceType). Web typecheck **0 errores**, API **0 errores**. **Cambio de schema** (campo `Transfer.number`).
