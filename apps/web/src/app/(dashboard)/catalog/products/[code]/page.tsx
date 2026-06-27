@@ -69,6 +69,10 @@ const MOVEMENT_LABELS: Record<string, { label: string; color: string }> = {
   TRANSFER_IN: { label: 'Transf. +', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   TRANSFER_OUT: { label: 'Transf. -', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   COUNT_ADJUST: { label: 'Conteo', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+  RETURN_IN: { label: 'Devol. +', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  RETURN_OUT: { label: 'Devol. -', color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  REPLACEMENT_IN: { label: 'Reemplazo +', color: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
+  REPLACEMENT_OUT: { label: 'Reemplazo -', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
 };
 
 export default function ProductDetailPage() {

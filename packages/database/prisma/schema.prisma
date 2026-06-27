@@ -39,6 +39,8 @@ enum MovementType {
   COUNT_ADJUST
   RETURN_IN
   RETURN_OUT
+  REPLACEMENT_IN
+  REPLACEMENT_OUT
 }
 
 enum NoteType {
@@ -496,6 +498,8 @@ model Product {
   transferItems    TransferItem[]
   countItems       InventoryCountItem[]
   adjustmentItems  InventoryAdjustmentItem[]
+  replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
+  replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
 }
@@ -516,6 +520,7 @@ model Warehouse {
   transfersTo     Transfer[]       @relation("TransferTo")
   inventoryCounts      InventoryCount[]
   inventoryAdjustments InventoryAdjustment[]
+  inventoryReplacements InventoryReplacement[]
   purchaseBills        PurchaseOrder[]  @relation("PurchaseBillWarehouse")
   createdAt       DateTime         @default(now())
 }
@@ -636,6 +641,49 @@ model InventoryAdjustmentItem {
   quantity              Float               @default(0)
 
   @@unique([inventoryAdjustmentId, productId])
+}
+
+// ============================================
+// REEMPLAZOS DE INVENTARIO
+// Canje: sale un articulo y entra otro en su lugar (ej. 2 rollos -> 200 metros)
+// ============================================
+
+enum ReplacementStatus {
+  DRAFT
+  PROCESSED
+  CANCELLED
+}
+
+model InventoryReplacement {
+  id            String                     @id @default(cuid())
+  number        String                     @unique // REP-0001
+  warehouseId   String
+  warehouse     Warehouse                  @relation(fields: [warehouseId], references: [id])
+  date          DateTime // fecha-calendario elegida por el usuario (medianoche UTC, date-only)
+  notes         String? // observacion
+  status        ReplacementStatus          @default(DRAFT)
+  items         InventoryReplacementItem[]
+  createdById   String
+  processedById String?
+  processedAt   DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+}
+
+model InventoryReplacementItem {
+  id            String               @id @default(cuid())
+  replacementId String
+  replacement   InventoryReplacement @relation(fields: [replacementId], references: [id])
+  // Articulo que SALE
+  outProductId  String
+  outProduct    Product              @relation("ReplacementOut", fields: [outProductId], references: [id])
+  outQuantity   Float                @default(0)
+  outCostUsd    Float                @default(0) // costo congelado al procesar
+  // Articulo que ENTRA
+  inProductId   String
+  inProduct     Product              @relation("ReplacementIn", fields: [inProductId], references: [id])
+  inQuantity    Float                @default(0)
+  inCostUsd     Float                @default(0) // costo congelado al procesar
 }
 
 // ============================================

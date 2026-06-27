@@ -617,9 +617,10 @@ model Payment {
   - GET /inventory-counts/:id/differences — ver diferencias
   - PATCH /inventory-counts/:id/approve — aprobar y ajustar stock (SUPERVISOR)
 - StockMovementsModule: GET /stock-movements con filtros
+- InventoryReplacementsModule (ruta `/inventory-replacements`): canje de un artículo por otro (ej. 2 rollos → 200 metros). Documento con correlativo REP-XXXX, cada línea = 1 sale ↔ 1 entra. Al procesar resta stock del que sale y suma al que entra (movimientos `REPLACEMENT_OUT`/`REPLACEMENT_IN` linkeados al documento). El costo del que entra se DERIVA del valor del que sale (valor sale / cantidad entra) y recalcula su precio; así los productos que solo entran por canje (metros) tienen costo y utilidad reales. Reporte PDF 2 columnas (SALIDA | ENTRADA) que se declara a administración; validación anti-robo por cantidades.
 
 **Frontend:**
-- Sección INVENTARIO en sidebar: Stock, Ajustes, Transferencias, Conteo, Movimientos
+- Sección INVENTARIO en sidebar: Stock, Ajustes, Reemplazos, Transferencias, Conteo, Movimientos
 - Vista de stock con columnas por almacén y total global
 - Modal de ajuste con motivo y tipo (entrada/salida/corrección)
 - Flujo de transferencia con estados visuales

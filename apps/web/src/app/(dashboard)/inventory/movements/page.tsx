@@ -31,6 +31,10 @@ const TYPE_BADGES: Record<string, string> = {
   TRANSFER_IN: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   TRANSFER_OUT: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   COUNT_ADJUST: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  RETURN_IN: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  RETURN_OUT: 'bg-red-500/10 text-red-400 border-red-500/20',
+  REPLACEMENT_IN: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+  REPLACEMENT_OUT: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,6 +45,10 @@ const TYPE_LABELS: Record<string, string> = {
   TRANSFER_IN: 'Transfer. entrada',
   TRANSFER_OUT: 'Transfer. salida',
   COUNT_ADJUST: 'Ajuste conteo',
+  RETURN_IN: 'Devolucion +',
+  RETURN_OUT: 'Devolucion -',
+  REPLACEMENT_IN: 'Reemplazo +',
+  REPLACEMENT_OUT: 'Reemplazo -',
 };
 
 type DateRange = 'today' | 'week' | 'month' | 'custom';

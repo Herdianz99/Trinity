@@ -47,6 +47,7 @@ import {
   KeyRound,
   PackagePlus,
   ClipboardList,
+  Repeat,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -110,6 +111,7 @@ const menuSections: MenuSection[] = [
       { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={18} /> },
       { label: 'Conteo fisico', href: '/inventory/count', icon: <ClipboardCheck size={18} /> },
       { label: 'Ajustes', href: '/inventory/adjustments', icon: <PackagePlus size={18} /> },
+      { label: 'Reemplazos', href: '/inventory/replacements', icon: <Repeat size={18} /> },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },
     ],
