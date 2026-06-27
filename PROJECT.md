@@ -608,7 +608,9 @@ model Payment {
   - GET /stock/low — productos bajo mínimo
   - POST /stock/adjust — ajuste manual (SUPERVISOR aprueba si es salida)
 - TransfersModule:
+  - Correlativo `number` TRF-0001. Pagina de detalle `/inventory/transfers/[id]` y creacion en pagina propia `/inventory/transfers/new`. Al aprobar, los movimientos llevan `sourceType:'TRANSFER'` + `sourceId` (clicables desde Movimientos).
   - POST /transfers — crear solicitud (WAREHOUSE)
+  - GET /transfers/:id — detalle
   - PATCH /transfers/:id/approve — aprobar (SUPERVISOR)
   - PATCH /transfers/:id/cancel
 - InventoryCountModule:

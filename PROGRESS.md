@@ -1,5 +1,16 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 75 (2026-06-27) — Pagina de detalle de transferencias + correlativo + clicables (FALTA DEPLOY)
+
+> Se completo lo que quedo pendiente en la Sesion 70 ("luego hacemos transferencias como debe de ser"). Probado E2E en local (crear TRF-0001, aprobar, movimientos con sourceType). Web typecheck **0 errores**, API **0 errores**. **Cambio de schema** (campo `Transfer.number`).
+
+- **Schema**: `Transfer.number String? @unique` (TRF-0001). Migracion `20260627180000_transfer_number` con `IF NOT EXISTS` + `fix-schema.sql`. Nullable: las transferencias viejas quedan sin numero (muestran "—"); las nuevas reciben correlativo.
+- **Backend** (`transfers.service`): correlativo **TRF-0001** al crear (SELECT FOR UPDATE). Al aprobar, los movimientos `TRANSFER_OUT/IN` ahora guardan `sourceType:'TRANSFER'` + `sourceId` + `reference:TRF-XXXX` (antes no, por eso no eran clicables). Mensaje de **stock insuficiente legible**: "codigo - nombre" (+ disponible vs requerido al crear) en vez del id.
+- **Pagina de detalle** `/inventory/transfers/[id]`: cabecera (N°, origen → destino, estado, fecha, notas), tabla de items (codigo, ref. proveedor, nombre, cantidad, total) y botones **Aprobar/Cancelar** si esta PENDING (aprobar solo ADMIN/SUPERVISOR).
+- **Lista**: filas **clicables al detalle** + columna **N°**; acciones inline con `stopPropagation`.
+- **Nueva transferencia** de **modal a pagina propia** `/inventory/transfers/new` (consistente con Ajustes/Reemplazos). Buscador de productos (todos, antes el modal cargaba solo 200) que **muestra las existencias del almacen origen elegido**; columna "Disponible" en los items y aviso visual si la cantidad supera el stock. Al crear redirige al detalle.
+- **Movimientos clicables**: activado `TRANSFER` en `lib/movement-source.ts`.
+
 ## 🚧 Sesion 74 (2026-06-27) — Ventas perdidas / demanda insatisfecha (EN RAMA feat/ventas-perdidas, NO en main)
 
 > Feature nueva: el vendedor registra lo que el cliente quiso comprar y no se vendio, para analizar cuanto se dejo de facturar. **En rama aparte `feat/ventas-perdidas`** (a pedido del cliente: main queda como checkpoint por si no le gusta). Probado E2E en local (crear catalogo + texto libre, reporte agregado). Web typecheck **0 errores**, API **0 errores**. **Otro cambio de schema** (tabla `LostSale` + enum). Si el cliente aprueba -> merge a main; si no -> se descarta la rama.

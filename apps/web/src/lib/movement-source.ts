@@ -21,7 +21,7 @@ const SOURCE_MAP: Record<string, { href: (id: string) => string; label: string }
   INVENTORY_COUNT: { href: (id) => `/inventory/count/${id}`, label: 'Ver conteo' },
   CREDIT_DEBIT_NOTE: { href: (id) => `/credit-debit-notes/${id}`, label: 'Ver nota' },
   REPLACEMENT: { href: (id) => `/inventory/replacements/${id}`, label: 'Ver reemplazo' },
-  // TRANSFER: pendiente — se agrega cuando exista la pagina de detalle de transferencias
+  TRANSFER: { href: (id) => `/inventory/transfers/${id}`, label: 'Ver transferencia' },
 };
 
 /**

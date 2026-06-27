@@ -563,6 +563,7 @@ model StockMovement {
 
 model Transfer {
   id              String         @id @default(cuid())
+  number          String?        @unique // TRF-0001 (correlativo)
   fromWarehouseId String
   fromWarehouse   Warehouse      @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
   toWarehouseId   String

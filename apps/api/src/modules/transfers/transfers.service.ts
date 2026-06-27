@@ -10,6 +10,17 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 export class TransfersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Correlativo TRF-0001 con SELECT FOR UPDATE (regla de correlativos). */
+  private async generateNumber(tx: any): Promise<string> {
+    const result = await tx.$queryRaw<{ max: number | null }[]>`
+      SELECT MAX(CAST(SPLIT_PART("number", '-', 2) AS INTEGER)) as max FROM (
+        SELECT "number" FROM "Transfer" WHERE "number" IS NOT NULL FOR UPDATE
+      ) sub
+    `;
+    const next = (result[0]?.max || 0) + 1;
+    return `TRF-${next.toString().padStart(4, '0')}`;
+  }
+
   async create(dto: CreateTransferDto, userId: string) {
     for (const item of dto.items) {
       const stock = await this.prisma.stock.findUnique({
@@ -22,31 +33,40 @@ export class TransfersService {
       });
 
       if (!stock || stock.quantity < item.quantity) {
+        const p = await this.prisma.product.findUnique({
+          where: { id: item.productId },
+          select: { code: true, name: true },
+        });
+        const label = p ? `${p.code} - ${p.name}` : item.productId;
         throw new BadRequestException(
-          `Stock insuficiente para el producto ${item.productId} en almacen origen`,
+          `Stock insuficiente de "${label}" en el almacen origen (disponible ${stock?.quantity ?? 0}, requiere ${item.quantity})`,
         );
       }
     }
 
-    return this.prisma.transfer.create({
-      data: {
-        fromWarehouseId: dto.fromWarehouseId,
-        toWarehouseId: dto.toWarehouseId,
-        notes: dto.notes,
-        status: 'PENDING',
-        createdById: userId,
-        items: {
-          create: dto.items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
+    return this.prisma.$transaction(async (tx) => {
+      const number = await this.generateNumber(tx);
+      return tx.transfer.create({
+        data: {
+          number,
+          fromWarehouseId: dto.fromWarehouseId,
+          toWarehouseId: dto.toWarehouseId,
+          notes: dto.notes,
+          status: 'PENDING',
+          createdById: userId,
+          items: {
+            create: dto.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          },
         },
-      },
-      include: {
-        items: { include: { product: true } },
-        fromWarehouse: true,
-        toWarehouse: true,
-      },
+        include: {
+          items: { include: { product: true } },
+          fromWarehouse: true,
+          toWarehouse: true,
+        },
+      });
     });
   }
 
@@ -95,7 +115,7 @@ export class TransfersService {
   async approve(id: string, userId: string) {
     const transfer = await this.prisma.transfer.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: { include: { product: { select: { code: true, name: true } } } } },
     });
 
     if (!transfer) {
@@ -105,6 +125,8 @@ export class TransfersService {
     if (transfer.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden aprobar transferencias PENDING');
     }
+
+    const ref = transfer.number || `TRF-${transfer.id.slice(0, 8)}`;
 
     return this.prisma.$transaction(async (tx) => {
       for (const item of transfer.items) {
@@ -122,8 +144,9 @@ export class TransfersService {
         });
 
         if (sourceStock.quantity < 0) {
+          const label = item.product ? `${item.product.code} - ${item.product.name}` : item.productId;
           throw new BadRequestException(
-            `Stock insuficiente para el producto ${item.productId} en almacen origen`,
+            `Stock insuficiente de "${label}" en el almacen origen`,
           );
         }
 
@@ -152,8 +175,10 @@ export class TransfersService {
             warehouseId: transfer.fromWarehouseId,
             type: 'TRANSFER_OUT',
             quantity: -item.quantity,
-            reason: `Transferencia ${transfer.id}`,
-            reference: `TRF-${transfer.id.slice(0, 8)}`,
+            reason: `Transferencia ${ref} (salida)`,
+            reference: ref,
+            sourceType: 'TRANSFER',
+            sourceId: transfer.id,
             createdById: userId,
           },
         });
@@ -165,8 +190,10 @@ export class TransfersService {
             warehouseId: transfer.toWarehouseId,
             type: 'TRANSFER_IN',
             quantity: item.quantity,
-            reason: `Transferencia ${transfer.id}`,
-            reference: `TRF-${transfer.id.slice(0, 8)}`,
+            reason: `Transferencia ${ref} (entrada)`,
+            reference: ref,
+            sourceType: 'TRANSFER',
+            sourceId: transfer.id,
             createdById: userId,
           },
         });
