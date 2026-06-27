@@ -60,6 +60,7 @@ export default function PriceAdjustmentPage() {
   const [filterSubcategory, setFilterSubcategory] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterBrega, setFilterBrega] = useState(''); // '' | 'true' | 'false'
   const [costMin, setCostMin] = useState('');
   const [costMax, setCostMax] = useState('');
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
@@ -121,7 +122,7 @@ export default function PriceAdjustmentPage() {
     setFilterSubcategory('');
   }, [filterCategory]);
 
-  const hasFilters = filterCategory || filterSubcategory || filterBrand || filterSupplier || costMin || costMax;
+  const hasFilters = filterCategory || filterSubcategory || filterBrand || filterSupplier || filterBrega || costMin || costMax;
 
   const fetchPreview = useCallback(async () => {
     if (!hasFilters) return;
@@ -133,6 +134,7 @@ export default function PriceAdjustmentPage() {
     if (filterSubcategory) params.set('subcategoryId', filterSubcategory);
     if (filterBrand) params.set('brandId', filterBrand);
     if (filterSupplier) params.set('supplierId', filterSupplier);
+    if (filterBrega) params.set('bregaApplies', filterBrega);
     if (costMin) params.set('costMin', costMin);
     if (costMax) params.set('costMax', costMax);
 
@@ -146,7 +148,7 @@ export default function PriceAdjustmentPage() {
     } finally {
       setLoadingPreview(false);
     }
-  }, [filterCategory, filterSubcategory, filterBrand, filterSupplier, costMin, costMax, hasFilters]);
+  }, [filterCategory, filterSubcategory, filterBrand, filterSupplier, filterBrega, costMin, costMax, hasFilters]);
 
   async function fetchHistory() {
     setLoadingHistory(true);
@@ -344,6 +346,15 @@ export default function PriceAdjustmentPage() {
             </select>
           </div>
 
+          <div className="w-[130px]">
+            <label className="block text-xs font-medium text-slate-400 mb-1">Brecha</label>
+            <select value={filterBrega} onChange={(e) => setFilterBrega(e.target.value)} className={selectClass}>
+              <option value="">Todas</option>
+              <option value="true">Con brecha</option>
+              <option value="false">Sin brecha</option>
+            </select>
+          </div>
+
           <div className="w-[100px]">
             <label className="block text-xs font-medium text-slate-400 mb-1">Costo min</label>
             <input type="number" min="0" step="0.01" placeholder="Min" value={costMin} onChange={(e) => setCostMin(e.target.value)} className={selectClass} />
@@ -364,7 +375,7 @@ export default function PriceAdjustmentPage() {
           {hasFilters && (
             <button
               onClick={() => {
-                setFilterCategory(''); setFilterSubcategory(''); setFilterBrand(''); setFilterSupplier('');
+                setFilterCategory(''); setFilterSubcategory(''); setFilterBrand(''); setFilterSupplier(''); setFilterBrega('');
                 setCostMin(''); setCostMax(''); setProducts([]); setPreviewLoaded(false); setSelectedIds(new Set());
               }}
               className="text-xs text-slate-500 hover:text-slate-300 transition-colors py-2 px-2"
@@ -516,6 +527,7 @@ export default function PriceAdjustmentPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Nombre</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Categoria</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Marca</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Brecha</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Costo USD</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Gan. Detal%</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Gan. Mayor%</th>
@@ -549,6 +561,11 @@ export default function PriceAdjustmentPage() {
                       <td className="px-4 py-2.5 text-slate-200 font-medium max-w-[260px] truncate">{p.name}</td>
                       <td className="px-4 py-2.5 text-slate-400 text-xs">{p.category?.name || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-400 text-xs">{p.brand?.name || '—'}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        {p.bregaApplies
+                          ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Si</span>
+                          : <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-600/20 text-slate-500 border border-slate-600/20">No</span>}
+                      </td>
                       <td className="px-4 py-2.5 text-right text-slate-300 font-mono">${p.costUsd.toFixed(2)}</td>
                       <td className="px-4 py-2.5 text-right">
                         <span className="text-slate-400 font-mono">{p.gananciaPct}%</span>

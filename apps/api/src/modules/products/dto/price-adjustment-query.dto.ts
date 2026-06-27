@@ -36,4 +36,11 @@ export class PriceAdjustmentQueryDto {
   @IsNumber()
   @Min(0)
   costMax?: number;
+
+  // String ('true' | 'false') a proposito: con enableImplicitConversion, un boolean se corrompe
+  // (Boolean('false') === true). Se mantiene como string y se interpreta en buildPriceAdjustmentWhere.
+  @ApiProperty({ required: false, description: "'true' = solo con brecha, 'false' = solo sin brecha" })
+  @IsOptional()
+  @IsString()
+  bregaApplies?: string;
 }

@@ -395,6 +395,8 @@ export class ProductsService {
       if (query.costMin !== undefined) (where.costUsd as any).gte = query.costMin;
       if (query.costMax !== undefined) (where.costUsd as any).lte = query.costMax;
     }
+    if (query.bregaApplies === 'true') where.bregaApplies = true;
+    else if (query.bregaApplies === 'false') where.bregaApplies = false;
 
     return where;
   }
