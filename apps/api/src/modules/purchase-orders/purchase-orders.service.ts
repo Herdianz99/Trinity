@@ -732,6 +732,8 @@ export class PurchaseOrdersService {
             costUsd: item.landedCostUsd || item.netCostUsd,
             stockAfter,
             reference: order.number,
+            sourceType: 'PURCHASE_ORDER',
+            sourceId: order.id,
             createdById: userId,
             createdAt: processedAt,
           },

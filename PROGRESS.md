@@ -1,5 +1,21 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 70 (2026-06-27) — Movimientos con link al documento origen + Reporte PDF de ajuste (FALTA DEPLOY)
+
+> Dos pedidos del cliente. Backend typecheck limpio (API 0 errores, Web 0 errores TS). Migracion `20260627120000_stock_movement_source` aplicada en LOCAL; render del PDF de ajuste probado con datos reales (ajuste real procesado: 2 items, total importe $11.84, `%PDF-` OK). **FALTA DEPLOY + prueba E2E del cliente.**
+
+### Trazabilidad: clic en un movimiento de inventario abre su documento origen
+- Pedido: en la pestaña **Movimientos** del detalle de producto (`/catalog/products/[code]`) y en `/inventory/movements`, poder **hacer clic** en un movimiento y abrir el documento que lo genero (factura de venta/compra, ajuste, conteo, nota de credito), para auditar.
+- **Schema**: 2 campos nuevos en `StockMovement` → `sourceType` (`SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT`) y `sourceId` (ID real del documento). Migracion con `IF NOT EXISTS` + agregado a `deploy/fix-schema.sql`.
+- **API**: se setean `sourceType`/`sourceId` al crear el movimiento en: ventas (`invoices.service`), compras (`purchase-orders.service`), ajustes (`inventory-adjustments.service`), conteo fisico (`inventory-counts.service`, ademas se le agrego `reference` `CNT-xxxxxxxx`) y notas de credito venta/compra (`credit-debit-notes.service`). Los endpoints ya devuelven los campos (usan `include`).
+- **Decision: SOLO movimientos nuevos** (forward-only). Los viejos no traen origen → no son clicables (muestran "—"). Sin backfill por ahora. La **carga inicial Wensoft**, los ajustes manuales y las **transferencias** quedan sin link (transferencias: pendiente hasta hacer su pagina de detalle). **Reemplazos de inventario** (a futuro) ya quedan contemplados: basta setear `sourceType: 'REPLACEMENT'` + `sourceId`.
+- **Frontend**: helper unico `lib/movement-source.ts` mapea `sourceType` → ruta + etiqueta. En ambas vistas: **fila clicable** (cursor + hover, solo si hay origen) **+ boton "Ver ..."** con icono. Se quito la logica rota previa de prefijos `FAC-`/`PO-` (nunca existieron en los datos). En `/inventory/movements` se agrego columna **Origen**.
+
+### Reporte PDF del ajuste de inventario (`/inventory/adjustments/[id]`)
+- Pedido: un reporte como el de diferencias de conteo, con **Codigo, Ref. Proveedor, Producto, Cantidad, Costo, Importe** y **TOTAL** al final.
+- **Backend**: `inventory-adjustments-pdf.service.ts` (carta vertical, paginacion, encabezado con almacen/fecha/tipo/estado/proveedor-cliente/descripcion). Importe = `cantidad × costo` (costo actual del producto); Total = suma de importes + total de unidades. Endpoint `GET /inventory-adjustments/:id/pdf` (JWT), servicio registrado en el modulo.
+- **Frontend**: boton **"Imprimir reporte"** 🖨️ en el header del detalle (si el ajuste tiene productos), abre `/api/proxy/inventory-adjustments/:id/pdf` en pestaña nueva (mismo patron que conteo).
+
 ## 🚧 Sesion 69 (2026-06-26) — Alertas de Inventario + boton "¿Como se calcula?" (FALTA DEPLOY)
 
 > Feature nueva pedida por el cliente, en rama `feat/alertas-inventario` (no en `main` aun). Backend **probado en local con datos reales** (login admin local + curl al endpoint: 2367 productos, conteos correctos; PDF 200/`%PDF-`). **Build de produccion API+Web limpio (exit 0).** **FALTA: merge a `main` + DEPLOY + prueba E2E del cliente.** Spec: `docs/superpowers/specs/2026-06-26-alertas-inventario-design.md`; Plan: `docs/superpowers/plans/2026-06-26-alertas-inventario.md`.

@@ -544,6 +544,8 @@ model StockMovement {
   stockAfter  Float        @default(0)
   reason      String?
   reference   String?
+  sourceType  String?      // SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT
+  sourceId    String?      // ID real del documento origen, para auditar (abrir el documento desde el movimiento)
   createdById String
   createdAt   DateTime     @default(now())
 }

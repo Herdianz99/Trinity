@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Search, Trash2, Check, Save,
-  Package, XCircle,
+  Package, XCircle, Printer,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────
@@ -362,6 +362,14 @@ export default function InventoryAdjustmentDetailPage() {
             {adjustment.description && <span className="text-slate-500">| {adjustment.description}</span>}
           </div>
         </div>
+        {adjustment.items.length > 0 && (
+          <button
+            onClick={() => window.open(`/api/proxy/inventory-adjustments/${id}/pdf`)}
+            className="btn-secondary !py-2 text-sm flex items-center gap-2 self-start"
+          >
+            <Printer size={16} /> Imprimir reporte
+          </button>
+        )}
       </div>
 
       {/* Messages */}

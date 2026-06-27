@@ -329,7 +329,9 @@ model StockMovement {
   quantity      Float         // positivo = entrada, negativo = salida
   costUsd       Float?
   reason        String?
-  reference     String?       // PO-001, FAC-001, etc.
+  reference     String?       // numero del documento (texto): PO-001, FAC-001, etc.
+  sourceType    String?       // SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT
+  sourceId      String?       // ID real del documento origen → link de auditoria desde el movimiento (solo movimientos nuevos)
   createdById   String
   createdAt     DateTime      @default(now())
 }

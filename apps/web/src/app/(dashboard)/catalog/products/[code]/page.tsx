@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, ExternalLink, LogOut,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { getMovementSource } from '@/lib/movement-source';
 
 // ───── types ─────
 interface Product {
@@ -44,6 +45,7 @@ interface Supplier { id: string; name: string; }
 interface Movement {
   id: string; type: string; quantity: number; costUsd: number; stockAfter: number;
   reason: string | null; reference: string | null; createdAt: string; createdById: string;
+  sourceType: string | null; sourceId: string | null;
   warehouse: { id: string; name: string };
 }
 interface PurchaseRow {
@@ -739,11 +741,14 @@ export default function ProductDetailPage() {
                         <tr><td colSpan={8} className="text-center py-8 text-slate-500">Sin movimientos</td></tr>
                       ) : movements.map(mov => {
                         const ml = MOVEMENT_LABELS[mov.type] || { label: mov.type, color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' };
-                        const isInvoice = mov.reference && /^FAC-/.test(mov.reference);
-                        const isPO = mov.reference && /^PO-/.test(mov.reference);
+                        const source = getMovementSource(mov.sourceType, mov.sourceId);
                         const isEntry = ['PURCHASE', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_ADJUST'].includes(mov.type) && mov.quantity > 0;
                         return (
-                          <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                          <tr
+                            key={mov.id}
+                            onClick={source ? () => router.push(source.href) : undefined}
+                            className={`border-b border-slate-700/30 transition-colors ${source ? 'cursor-pointer hover:bg-slate-700/50' : 'hover:bg-slate-800/40'}`}
+                          >
                             <td className="px-4 py-3 text-slate-300">{fmtDate(mov.createdAt)}</td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-0.5 rounded-full border ${ml.color}`}>{ml.label}</span>
@@ -760,20 +765,13 @@ export default function ProductDetailPage() {
                             <td className="px-4 py-3 text-slate-400">{mov.warehouse.name}</td>
                             <td className="px-4 py-3 text-slate-400 font-mono text-xs">{mov.reference || mov.reason || '—'}</td>
                             <td className="px-4 py-3 text-center">
-                              {isInvoice && (
+                              {source && (
                                 <button
-                                  onClick={() => router.push('/sales/invoices')}
-                                  className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto"
+                                  onClick={(e) => { e.stopPropagation(); router.push(source.href); }}
+                                  className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto whitespace-nowrap"
+                                  title={source.label}
                                 >
-                                  Ver factura <ExternalLink size={10} />
-                                </button>
-                              )}
-                              {isPO && (
-                                <button
-                                  onClick={() => router.push('/purchases')}
-                                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 mx-auto"
-                                >
-                                  Ver compra <ExternalLink size={10} />
+                                  {source.label} <ExternalLink size={10} />
                                 </button>
                               )}
                             </td>

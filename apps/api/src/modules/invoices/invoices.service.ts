@@ -886,6 +886,8 @@ export class InvoicesService {
             quantity: -item.quantity,
             reason: `Venta factura ${invoiceNumber}`,
             reference: invoiceNumber,
+            sourceType: 'SALE_INVOICE',
+            sourceId: id,
             createdById: user.id,
           },
         });

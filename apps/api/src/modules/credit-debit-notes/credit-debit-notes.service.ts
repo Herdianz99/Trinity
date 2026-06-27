@@ -508,6 +508,8 @@ export class CreditDebitNotesService {
               costUsd: item.unitPriceUsd,
               reason: `NC Venta ${note.number}`,
               reference: note.number,
+              sourceType: 'CREDIT_DEBIT_NOTE',
+              sourceId: note.id,
               createdById: userId,
             },
           });
@@ -578,6 +580,8 @@ export class CreditDebitNotesService {
               costUsd: item.unitPriceUsd,
               reason: `NC Compra ${note.number}`,
               reference: note.number,
+              sourceType: 'CREDIT_DEBIT_NOTE',
+              sourceId: note.id,
               createdById: userId,
             },
           });

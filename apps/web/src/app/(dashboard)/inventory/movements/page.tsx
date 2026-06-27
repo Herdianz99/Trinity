@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Activity, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { getMovementSource } from '@/lib/movement-source';
 
 interface Movement {
   id: string;
@@ -12,6 +13,8 @@ interface Movement {
   quantity: number;
   reason: string | null;
   reference: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
   createdById: string;
   createdAt: string;
   product: { id: string; code: string; name: string };
@@ -44,6 +47,7 @@ type DateRange = 'today' | 'week' | 'month' | 'custom';
 
 export default function MovementsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialProductId = searchParams.get('productId') || '';
 
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -200,15 +204,22 @@ export default function MovementsPage() {
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Motivo</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Referencia</th>
+                <th className="text-center px-4 py-3 text-slate-400 font-medium w-24">Origen</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
+                <tr><td colSpan={8} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
               ) : movements.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-500">No hay movimientos en este periodo</td></tr>
-              ) : movements.map(m => (
-                <tr key={m.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
+                <tr><td colSpan={8} className="text-center py-12 text-slate-500">No hay movimientos en este periodo</td></tr>
+              ) : movements.map(m => {
+                const source = getMovementSource(m.sourceType, m.sourceId);
+                return (
+                <tr
+                  key={m.id}
+                  onClick={source ? () => router.push(source.href) : undefined}
+                  className={`border-b border-slate-700/30 transition-colors ${source ? 'cursor-pointer hover:bg-slate-700/50' : 'hover:bg-slate-800/40'}`}
+                >
                   <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">
                     {new Date(m.createdAt).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </td>
@@ -227,8 +238,22 @@ export default function MovementsPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">{m.reason || '—'}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs hidden lg:table-cell">{m.reference || '—'}</td>
+                  <td className="px-4 py-3 text-center">
+                    {source ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); router.push(source.href); }}
+                        className="text-xs text-green-400 hover:text-green-300 inline-flex items-center gap-1 whitespace-nowrap"
+                        title={source.label}
+                      >
+                        {source.label} <ExternalLink size={10} />
+                      </button>
+                    ) : (
+                      <span className="text-slate-600 text-xs">—</span>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

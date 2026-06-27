@@ -322,6 +322,9 @@ export class InventoryCountsService {
               type: 'COUNT_ADJUST',
               quantity: item.difference,
               reason: `Ajuste por conteo fisico #${count.id.slice(0, 8)}`,
+              reference: `CNT-${count.id.slice(0, 8)}`,
+              sourceType: 'INVENTORY_COUNT',
+              sourceId: count.id,
               createdById: userId,
             },
           });

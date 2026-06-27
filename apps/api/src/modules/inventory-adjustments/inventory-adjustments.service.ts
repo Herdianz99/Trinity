@@ -315,6 +315,8 @@ export class InventoryAdjustmentsService {
             stockAfter: updatedStock?.quantity ?? 0,
             reason: adjustment.description || `Ajuste de inventario #${adjustment.id.slice(0, 8)}`,
             reference: `ADJ-${adjustment.id.slice(0, 8)}`,
+            sourceType: 'INVENTORY_ADJUSTMENT',
+            sourceId: adjustment.id,
             createdById: userId,
           },
         });

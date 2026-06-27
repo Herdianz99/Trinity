@@ -7,13 +7,16 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { InventoryAdjustmentsService } from './inventory-adjustments.service';
+import { InventoryAdjustmentsPdfService } from './inventory-adjustments-pdf.service';
 import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.dto';
 import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
@@ -26,6 +29,7 @@ import { RemoveItemsDto } from './dto/remove-items.dto';
 export class InventoryAdjustmentsController {
   constructor(
     private readonly inventoryAdjustmentsService: InventoryAdjustmentsService,
+    private readonly pdfService: InventoryAdjustmentsPdfService,
   ) {}
 
   @Post()
@@ -55,6 +59,17 @@ export class InventoryAdjustmentsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryAdjustmentsService.findOne(id);
+  }
+
+  @Get(':id/pdf')
+  async getPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateReport(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="ajuste-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Post(':id/items/by-filter')
