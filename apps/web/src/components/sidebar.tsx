@@ -49,12 +49,17 @@ import {
   ClipboardList,
   Repeat,
   PackageSearch,
+  Tags,
 } from 'lucide-react';
 
 interface MenuItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  // Permiso propio del item: si se define, el item se muestra a quien tenga el
+  // permiso de la seccion O este permiso. Sirve para dar acceso fino (ej. solo
+  // "Consultar articulos" + "Etiquetas" sin todo el modulo inventory).
+  permission?: string;
 }
 
 interface MenuSection {
@@ -107,7 +112,7 @@ const menuSections: MenuSection[] = [
     icon: <Warehouse size={20} />,
     permission: 'inventory',
     items: [
-      { label: 'Consultar articulos', href: '/inventory/articulos', icon: <PackageSearch size={18} /> },
+      { label: 'Consultar articulos', href: '/inventory/articulos', icon: <PackageSearch size={18} />, permission: 'inventory-consult' },
       { label: 'Stock', href: '/inventory/stock', icon: <BoxesIcon size={18} /> },
       { label: 'Almacenes', href: '/inventory/warehouses', icon: <Building2 size={18} /> },
       { label: 'Transferencias', href: '/inventory/transfers', icon: <ArrowLeftRight size={18} /> },
@@ -115,6 +120,7 @@ const menuSections: MenuSection[] = [
       { label: 'Ajustes', href: '/inventory/adjustments', icon: <PackagePlus size={18} /> },
       { label: 'Reemplazos', href: '/inventory/replacements', icon: <Repeat size={18} /> },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
+      { label: 'Etiquetas', href: '/inventory/etiquetas', icon: <Tags size={18} />, permission: 'inventory-consult' },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },
     ],
   },
@@ -311,6 +317,14 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
     router.refresh();
   }
 
+  // Items visibles de una seccion: si el usuario tiene el permiso de la seccion,
+  // ve todos; si no, solo los items que tengan su propio permiso y el usuario lo tenga.
+  const visibleItemsFor = (section: MenuSection): MenuItem[] => {
+    if (section.key === 'settings' || section.key === 'reports') return section.items;
+    if (hasPermission(permissions, section.permission)) return section.items;
+    return section.items.filter((it) => it.permission && hasPermission(permissions, it.permission));
+  };
+
   const filteredSections = menuSections.filter((section) => {
     if (section.key === 'settings') {
       return user?.role === 'ADMIN';
@@ -318,7 +332,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
     if (section.key === 'reports') {
       return user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
     }
-    return hasPermission(permissions, section.permission);
+    return visibleItemsFor(section).length > 0;
   });
 
   const isItemActive = (href: string) => {
@@ -378,7 +392,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
         {/* Accordion sections */}
         {filteredSections.map((section) => {
           const isOpen = openSections[section.key] ?? false;
-          const hasActiveItem = section.items.some((item) => isItemActive(item.href));
+          const sectionItems = visibleItemsFor(section);
+          const hasActiveItem = sectionItems.some((item) => isItemActive(item.href));
 
           return (
             <div key={section.key} className="mb-0.5">
@@ -426,7 +441,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
                     isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
-                  {section.items.map((item) => {
+                  {sectionItems.map((item) => {
                     const isActive = isItemActive(item.href);
                     return (
                       <Link

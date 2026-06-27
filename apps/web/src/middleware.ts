@@ -2,25 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh', '/manifest.webmanifest', '/sw.js', '/icons'];
 
-// Map route prefixes to permission keys
+// Map route prefixes to acceptable permission keys (ANY of them grants access)
 // More specific routes must come before less specific ones
-const ROUTE_PERMISSION_MAP: [string, string][] = [
-  ['/commands', 'commands'],
-  ['/catalog/suppliers', 'purchases'],
-  ['/quotations', 'sales'],
-  ['/sales', 'sales'],
-  ['/catalog', 'catalog'],
-  ['/inventory', 'inventory'],
-  ['/purchases', 'purchases'],
-  ['/cash', 'cash'],
-  ['/receivables', 'receivables'],
-  ['/payment-schedules', 'payment-schedules'],
-  ['/payables', 'payables'],
-  ['/fiscal', 'fiscal'],
-  ['/settings', 'settings'],
-  ['/config', 'settings'],
-  ['/users', 'settings'],
-  ['/import', 'settings'],
+const ROUTE_PERMISSION_MAP: [string, string[]][] = [
+  ['/commands', ['commands']],
+  ['/catalog/suppliers', ['purchases']],
+  ['/quotations', ['sales']],
+  ['/sales', ['sales']],
+  ['/catalog', ['catalog']],
+  // Paginas de inventario de SOLO CONSULTA: tambien las puede ver 'inventory-consult'
+  ['/inventory/articulos', ['inventory', 'inventory-consult']],
+  ['/inventory/etiquetas', ['inventory', 'inventory-consult']],
+  ['/inventory', ['inventory']],
+  ['/purchases', ['purchases']],
+  ['/cash', ['cash']],
+  ['/receivables', ['receivables']],
+  ['/payment-schedules', ['payment-schedules']],
+  ['/payables', ['payables']],
+  ['/fiscal', ['fiscal']],
+  ['/settings', ['settings']],
+  ['/config', ['settings']],
+  ['/users', ['settings']],
+  ['/import', ['settings']],
 ];
 
 function decodeJwtPayload(token: string): any {
@@ -72,10 +75,10 @@ export function middleware(request: NextRequest) {
   if (!pathname.startsWith('/api/') && !pathname.startsWith('/dashboard') && !pathname.startsWith('/change-password') && pathname !== '/403') {
     const permissions: string[] = payload.permissions || [];
 
-    // Find the matching route permission
-    for (const [routePrefix, permissionKey] of ROUTE_PERMISSION_MAP) {
+    // Find the matching route permission (any of the acceptable keys grants access)
+    for (const [routePrefix, allowedKeys] of ROUTE_PERMISSION_MAP) {
       if (pathname.startsWith(routePrefix)) {
-        if (!hasPermission(permissions, permissionKey)) {
+        if (!allowedKeys.some((key) => hasPermission(permissions, key))) {
           return NextResponse.redirect(new URL('/403', request.url));
         }
         break;

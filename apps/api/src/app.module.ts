@@ -15,6 +15,7 @@ import { TransfersModule } from './modules/transfers/transfers.module';
 import { InventoryCountsModule } from './modules/inventory-counts/inventory-counts.module';
 import { InventoryAdjustmentsModule } from './modules/inventory-adjustments/inventory-adjustments.module';
 import { InventoryReplacementsModule } from './modules/inventory-replacements/inventory-replacements.module';
+import { LabelsModule } from './modules/labels/labels.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
@@ -74,6 +75,7 @@ import { CustomerIvaRetentionsModule } from './modules/customer-iva-retentions/c
     InventoryCountsModule,
     InventoryAdjustmentsModule,
     InventoryReplacementsModule,
+    LabelsModule,
     StockMovementsModule,
     PurchaseOrdersModule,
     ExchangeRateModule,

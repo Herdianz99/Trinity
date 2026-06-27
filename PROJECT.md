@@ -617,6 +617,8 @@ model Payment {
   - GET /inventory-counts/:id/differences — ver diferencias
   - PATCH /inventory-counts/:id/approve — aprobar y ajustar stock (SUPERVISOR)
 - StockMovementsModule: GET /stock-movements con filtros
+- LabelsModule (ruta `/labels`): `POST /labels/pdf` genera etiquetas internas (sin precio) con codigo de barras Code128 (pdfkit + bwip-js). Una etiqueta por copia, pagina = tamano de la etiqueta (57x40mm default). Contenido: nombre, codigo, ref. proveedor.
+- **Permisos**: ademas del permiso de seccion `inventory`, existe `inventory-consult` (acceso fino: solo "Consultar articulos" + "Etiquetas", de solo lectura). El backend bloquea las modificaciones de inventario con la guarda reutilizable `ModuleGuard` + `@RequireModule('inventory')` (respeta "Permisos por rol"). El sidebar y el middleware soportan permiso por item/ruta. Rol WAREHOUSE = solo consulta; AUDITOR = modifica.
 - InventoryReplacementsModule (ruta `/inventory-replacements`): canje de un artículo por otro (ej. 2 rollos → 200 metros). Documento con correlativo REP-XXXX, cada línea = 1 sale ↔ 1 entra. Al procesar resta stock del que sale y suma al que entra (movimientos `REPLACEMENT_OUT`/`REPLACEMENT_IN` linkeados al documento). El costo del que entra se DERIVA del valor del que sale (valor sale / cantidad entra) y recalcula su precio; así los productos que solo entran por canje (metros) tienen costo y utilidad reales. Reporte PDF 2 columnas (SALIDA | ENTRADA) que se declara a administración; validación anti-robo por cantidades.
 
 **Frontend:**

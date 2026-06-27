@@ -10,6 +10,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { StockService } from './stock.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 
@@ -52,6 +54,8 @@ export class StockController {
   }
 
   @Post('adjust')
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('inventory')
   adjust(
     @Body() dto: AdjustStockDto,
     @CurrentUser() user: { id: string; email: string; role: UserRole },

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  PackageSearch, Search, Loader2, X, ChevronLeft, ChevronRight, Activity,
+  PackageSearch, Search, Loader2, X, ChevronLeft, ChevronRight, Activity, ScanLine,
 } from 'lucide-react';
+import { BarcodeScanner } from '@/components/barcode-scanner';
 
 // ── Types ──
 interface StockRow { quantity: number; warehouse: { id: string; name: string }; }
@@ -58,6 +59,7 @@ export default function InventoryArticlesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [rate, setRate] = useState(0);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Kardex panel
   const [selected, setSelected] = useState<Product | null>(null);
@@ -144,16 +146,26 @@ export default function InventoryArticlesPage() {
       </div>
 
       {/* Search */}
-      <div className="mb-4 relative max-w-xl">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-        <input
-          type="text"
-          placeholder="Buscar por codigo, nombre o referencia..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input-field pl-9 !py-2.5 text-sm w-full"
-          autoComplete="off"
-        />
+      <div className="mb-4 flex items-center gap-2 max-w-xl">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <input
+            type="text"
+            placeholder="Buscar por codigo, nombre o referencia..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input-field pl-9 !py-2.5 text-sm w-full"
+            autoComplete="off"
+          />
+        </div>
+        <button
+          onClick={() => setShowScanner(true)}
+          className="btn-secondary !py-2.5 px-3 flex items-center gap-2 flex-shrink-0"
+          title="Buscar con el escaner"
+        >
+          <ScanLine size={18} />
+          <span className="hidden sm:inline text-sm">Escanear</span>
+        </button>
       </div>
 
       {/* Table */}
@@ -293,6 +305,13 @@ export default function InventoryArticlesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showScanner && (
+        <BarcodeScanner
+          onScan={(code) => { setSearch(code); setShowScanner(false); }}
+          onClose={() => setShowScanner(false)}
+        />
       )}
     </div>
   );

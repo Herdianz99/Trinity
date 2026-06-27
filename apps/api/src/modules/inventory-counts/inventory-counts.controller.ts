@@ -17,6 +17,8 @@ import { Response } from 'express';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { InventoryCountsService } from './inventory-counts.service';
 import { InventoryCountsPdfService } from './inventory-counts-pdf.service';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
@@ -26,7 +28,8 @@ import { RemoveItemsDto } from './dto/remove-items.dto';
 
 @ApiTags('Inventory Counts')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('inventory')
 @Controller('inventory-counts')
 export class InventoryCountsController {
   constructor(

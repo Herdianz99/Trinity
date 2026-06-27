@@ -15,6 +15,8 @@ import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { InventoryAdjustmentsService } from './inventory-adjustments.service';
 import { InventoryAdjustmentsPdfService } from './inventory-adjustments-pdf.service';
 import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.dto';
@@ -24,7 +26,8 @@ import { RemoveItemsDto } from './dto/remove-items.dto';
 
 @ApiTags('Inventory Adjustments')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('inventory')
 @Controller('inventory-adjustments')
 export class InventoryAdjustmentsController {
   constructor(

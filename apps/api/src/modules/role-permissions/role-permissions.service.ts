@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 
 const VALID_MODULES = [
   'dashboard', 'sales', 'commands', 'quotations', 'catalog', 'inventory',
+  'inventory-consult',
   'purchases', 'cash', 'receivables', 'payables', 'fiscal',
   'users', 'settings', 'expenses', 'payment-schedules',
   'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE',

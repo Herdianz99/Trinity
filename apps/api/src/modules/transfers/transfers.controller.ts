@@ -14,12 +14,15 @@ import { UserRole } from '@prisma/client';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { TransfersService } from './transfers.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 
 @ApiTags('Transfers')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
+@RequireModule('inventory')
 @Controller('transfers')
 export class TransfersController {
   constructor(private readonly transfersService: TransfersService) {}

@@ -1,5 +1,26 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 73 (2026-06-27) — Modulo de etiquetas + escaner en consulta + permiso de inventario solo-lectura (FALTA DEPLOY)
+
+> Tres cosas pedidas por el cliente. Frontend + backend, probado E2E en local (login admin/warehouse, endpoints reales, PDF de etiquetas `%PDF-`, bloqueo de permisos verificado). Web typecheck **0 errores**, API **0 errores**. **Nueva dependencia `bwip-js`** en `apps/api` (el deploy.sh corre `pnpm install`). **FALTA DEPLOY + prueba E2E del cliente.**
+
+### Modulo de Etiquetas (`/inventory/etiquetas`)
+- **Etiquetas internas SIN precio** (uso interno): nombre, codigo, ref. proveedor y **codigo de barras Code128** (codifica el `code` interno para que coincida con el "CODIGO" impreso; si no tuviera, cae al `barcode`). Se descarto el QR: el escaner del POS hoy lee solo 1D y agregar QR lo haria mas lento (decision del cliente: Code128).
+- **Backend** `POST /labels/pdf` (modulo nuevo `labels`, pdfkit + **bwip-js**): una etiqueta por copia, pagina = tamano exacto (57x40mm default, configurable ancho x alto en mm). Diseno con borde, nombre con auto-ajuste de letra (2 lineas), columnas **CODIGO | REF. PROVEEDOR** y el codigo de barras. Tope 2000 etiquetas/lote.
+- **Frontend**: buscar/filtrar productos por **proveedor, categoria, marca** + busqueda; agregar individual o **"Agregar todos los filtrados"** (tope 1000). **Toggle "Cantidad = existencias"** (al agregar carga la cantidad = stock total; si no, 1). **"Importar de una compra"** (modal): se escribe el proveedor → lista sus compras (filtrable por N° de factura) → "Cargar" trae los articulos con la **cantidad comprada** (suma si se repite). Genera el PDF y lo abre para imprimir. Sin tocar Compras ni otros modulos.
+
+### Escaner del POS en la consulta de articulos
+- Componente reutilizable `components/barcode-scanner.tsx` con el **mismo motor hibrido del POS** (BarcodeDetector nativo + fallback ZXing, formatos 1D, doble lectura). Boton **"Escanear"** junto al buscador en `/inventory/articulos`: lee un codigo y lo pone en la busqueda.
+
+### Permiso de inventario SOLO-LECTURA (real: menu + backend)
+- Pedido: el personal de inventario (rol **WAREHOUSE**) debe ver **solo** Consultar articulos + Etiquetas; el **AUDITOR** maneja las modificaciones. Antes el permiso `inventory` era todo-o-nada (por seccion) y solo ocultaba el menu (no bloqueaba el API).
+- **Nuevo permiso `inventory-consult`** (solo esas 2 paginas). Agregado a `VALID_MODULES` y al catalogo de "Permisos por rol" ("Inventario (solo consulta: articulos + etiquetas)"). Default de **WAREHOUSE** cambiado a `['dashboard','inventory-consult']` (AUDITOR sigue con `inventory`).
+- **Sidebar con permiso por ITEM**: quien tenga `inventory-consult` ve solo esas 2; quien tenga `inventory` ve todo.
+- **Middleware de rutas** (`middleware.ts`): `/inventory/articulos` y `/inventory/etiquetas` admiten `inventory` **o** `inventory-consult`; el resto de `/inventory/*` sigue exigiendo `inventory`. (Era la causa de un 403 al entrar a la consulta con solo `inventory-consult`.)
+- **Bloqueo REAL en backend**: guarda reutilizable `ModuleGuard` + decorador `@RequireModule` (lee de "Permisos por rol", respeta la config de la UI). `RolePermissionsModule` hecho `@Global`. Aplicada a los controllers que modifican inventario (ajustes, reemplazos, transferencias, conteo) y a `POST /stock/adjust` con `@RequireModule('inventory')`. Verificado E2E: WAREHOUSE recibe **403** en todos los modify y **200** en consulta/etiquetas; ADMIN/AUDITOR pasan. (Lo de modificar productos/catalogo se dejo fuera: el AUDITOR no tiene `catalog` hoy, es decision aparte.)
+- **Nota de permisos (importante)**: los permisos viajan en el token JWT; un cambio de permiso de rol aplica al **proximo login** del usuario (logout + login). El backend (guarda) usa el valor de BD al instante, asi que no hay hueco de seguridad. **Post-deploy**: en *Permisos por rol* dejar **WAREHOUSE** en "Inventario (solo consulta)" (la BD de prod no se actualiza sola).
+- *Pendiente menor*: la pagina de **inicio** muestra accesos rapidos hardcodeados por rol (Stock/Movimientos/Transferencias/Conteo) que un `inventory-consult` no puede abrir (daria 403). Hacerlos respetar el permiso queda para otra pasada.
+
 ## 🚧 Sesion 72 (2026-06-27) — Pagina de consulta de articulos para inventario (solo lectura) (FALTA DEPLOY)
 
 > Pedido del cliente: una pantalla para el personal de inventario (rol WAREHOUSE) que puedan **ver y buscar** articulos, **solo lectura** (no modifican nada). Frontend puro — reutiliza endpoints GET existentes, sin cambios de backend. Web typecheck **0 errores**, smoke test de los 3 endpoints OK (2368 productos, tasa, kardex).
