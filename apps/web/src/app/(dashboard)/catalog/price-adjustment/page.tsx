@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   SlidersHorizontal, Search, Replace, PlusCircle,
   Loader2, AlertTriangle, CheckCircle2, History, X,
-  TrendingUp, TrendingDown, Percent
+  TrendingUp, TrendingDown
 } from 'lucide-react';
 
 interface Product {
@@ -205,6 +205,13 @@ export default function PriceAdjustmentPage() {
     const currentPct = type === 'detal' ? product.gananciaPct : product.gananciaMayorPct;
     const newPct = adjustmentType === 'REPLACE' ? val : currentPct + val;
     return Math.max(0, newPct);
+  }
+
+  // Precio detal SIN IVA para una ganancia dada (costo + brecha + ganancia, sin el multiplicador de IVA)
+  function priceNoIva(product: Product, pct: number): number {
+    const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
+    const price = product.costUsd * (1 + bregaPct / 100) * (1 + Math.max(0, pct) / 100);
+    return Math.round(price * 100) / 100;
   }
 
   const canApply = selectedIds.size > 0 && (gananciaPctInput !== '' || gananciaMayorPctInput !== '');
@@ -530,18 +537,17 @@ export default function PriceAdjustmentPage() {
                   <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Brecha</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Costo USD</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Gan. Detal%</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Gan. Mayor%</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">P. sin IVA</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">P. Detal</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">P. Mayor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/30">
                 {products.map((p) => {
                   const checked = selectedIds.has(p.id);
                   const newDetalPrice = calculateNewPrice(p, 'detal');
-                  const newMayorPrice = calculateNewPrice(p, 'mayor');
                   const newDetalPct = calculateNewPct(p, 'detal');
-                  const newMayorPct = calculateNewPct(p, 'mayor');
+                  const curNoIva = priceNoIva(p, p.gananciaPct);
+                  const newNoIva = newDetalPct !== null ? priceNoIva(p, newDetalPct) : null;
 
                   return (
                     <tr
@@ -574,21 +580,15 @@ export default function PriceAdjustmentPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <span className="text-slate-400 font-mono">{p.gananciaMayorPct}%</span>
-                        {checked && newMayorPct !== null && newMayorPct !== p.gananciaMayorPct && (
-                          <span className="text-amber-400 font-mono text-xs ml-1">&rarr; {newMayorPct}%</span>
+                        <span className="text-slate-300 font-mono">${curNoIva.toFixed(2)}</span>
+                        {checked && newNoIva !== null && newNoIva !== curNoIva && (
+                          <span className={`font-mono text-xs ml-1 ${newNoIva > curNoIva ? 'text-emerald-400' : 'text-red-400'}`}>&rarr; ${newNoIva.toFixed(2)}</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span className="text-slate-300 font-mono">${p.priceDetal.toFixed(2)}</span>
                         {checked && newDetalPrice !== null && newDetalPrice !== p.priceDetal && (
                           <span className={`font-mono text-xs ml-1 ${newDetalPrice > p.priceDetal ? 'text-emerald-400' : 'text-red-400'}`}>&rarr; ${newDetalPrice.toFixed(2)}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="text-slate-300 font-mono">${p.priceMayor.toFixed(2)}</span>
-                        {checked && newMayorPrice !== null && newMayorPrice !== p.priceMayor && (
-                          <span className={`font-mono text-xs ml-1 ${newMayorPrice > p.priceMayor ? 'text-emerald-400' : 'text-red-400'}`}>&rarr; ${newMayorPrice.toFixed(2)}</span>
                         )}
                       </td>
                     </tr>
