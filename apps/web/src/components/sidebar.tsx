@@ -50,6 +50,7 @@ import {
   Repeat,
   PackageSearch,
   Tags,
+  PackageX,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -209,6 +210,7 @@ const menuSections: MenuSection[] = [
       { label: 'Clientes frecuentes', href: '/reports/top-customers', icon: <BarChart3 size={18} /> },
       { label: 'Horas pico', href: '/reports/peak-hours', icon: <BarChart3 size={18} /> },
       { label: 'Ventas por caja', href: '/reports/sales-cash', icon: <BarChart3 size={18} /> },
+      { label: 'Ventas perdidas', href: '/reports/ventas-perdidas', icon: <PackageX size={18} /> },
     ],
   },
   {

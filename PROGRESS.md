@@ -1,5 +1,15 @@
 # Trinity ERP — Progreso
 
+## 🚧 Sesion 74 (2026-06-27) — Ventas perdidas / demanda insatisfecha (EN RAMA feat/ventas-perdidas, NO en main)
+
+> Feature nueva: el vendedor registra lo que el cliente quiso comprar y no se vendio, para analizar cuanto se dejo de facturar. **En rama aparte `feat/ventas-perdidas`** (a pedido del cliente: main queda como checkpoint por si no le gusta). Probado E2E en local (crear catalogo + texto libre, reporte agregado). Web typecheck **0 errores**, API **0 errores**. **Otro cambio de schema** (tabla `LostSale` + enum). Si el cliente aprueba -> merge a main; si no -> se descarta la rama.
+
+- **Schema**: enum `LostSaleReason` (SIN_STOCK, PRECIO_ALTO, DESCONTINUADO, PEDIDO_NO_RECIBIDO) + modelo `LostSale` (producto opcional/texto libre, cantidad, motivo, **precio del momento USD+Bs snapshot**, **valor estimado**, existencia al momento, cliente opcional, nota, vendedor, fecha). Migracion `20260627160000_lost_sales` con `IF NOT EXISTS` + `fix-schema.sql`.
+- **Backend** modulo `lost-sales`: `POST /lost-sales` (congela precio del producto y calcula Bs con la tasa del dia, no bloquea si no hay tasa), `GET /lost-sales` (lista con filtros), `GET /lost-sales/report` (agregado por producto + por motivo + totales), `DELETE`.
+- **POS (lo importante: rapido)**: boton **"Venta perdida"** (icono PackageX) junto al escaner, en layout movil Y desktop. Modal `lost-sale-modal.tsx`: producto **del catalogo** (buscar) o **texto libre** (con precio aprox opcional), cantidad (default 1), **motivo en chips** (default Sin stock), nota opcional. Caso tipico = 3 toques. **Atajo contextual**: en el buscador del POS, un producto **sin stock** ahora es clicable y abre el modal **pre-llenado** con ese producto (en vez de quedar deshabilitado).
+- **Reporte** `/reports/ventas-perdidas` (seccion Reportes, ADMIN/SUPERVISOR): filtro por fecha, tarjetas de resumen (registros, unidades, $ y Bs estimados), desglose por motivo, y tabla **por producto** ordenada por $ perdido (lo que mas se dejo de vender → sirve para decidir que comprar).
+- Motivos: por ahora los 4 que pidio el cliente (sin "Otro").
+
 ## 🚧 Sesion 73 (2026-06-27) — Modulo de etiquetas + escaner en consulta + permiso de inventario solo-lectura (FALTA DEPLOY)
 
 > Tres cosas pedidas por el cliente. Frontend + backend, probado E2E en local (login admin/warehouse, endpoints reales, PDF de etiquetas `%PDF-`, bloqueo de permisos verificado). Web typecheck **0 errores**, API **0 errores**. **Nueva dependencia `bwip-js`** en `apps/api` (el deploy.sh corre `pnpm install`). **FALTA DEPLOY + prueba E2E del cliente.**

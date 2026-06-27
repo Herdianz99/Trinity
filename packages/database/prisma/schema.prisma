@@ -317,6 +317,7 @@ model User {
   payablesCreated     Payable[]           @relation("PayableCreator")
   zReports            ZReport[]           @relation("ZReportCreator")
   customerIvaRetentions   CustomerIvaRetention[] @relation("CustomerIvaRetentionCreator")
+  lostSales           LostSale[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -500,6 +501,7 @@ model Product {
   adjustmentItems  InventoryAdjustmentItem[]
   replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
+  lostSales        LostSale[]
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
 }
@@ -798,8 +800,42 @@ model Customer {
   advances              CustomerAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
   ivaRetentions         CustomerIvaRetention[]
+  lostSales             LostSale[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+}
+
+// ============================================
+// VENTAS PERDIDAS (demanda insatisfecha)
+// El vendedor registra lo que el cliente quiso comprar y no se vendio.
+// ============================================
+
+enum LostSaleReason {
+  SIN_STOCK
+  PRECIO_ALTO
+  DESCONTINUADO
+  PEDIDO_NO_RECIBIDO
+}
+
+model LostSale {
+  id            String         @id @default(cuid())
+  productId     String? // opcional: si es del catalogo
+  product       Product?       @relation(fields: [productId], references: [id])
+  productName   String // nombre (del catalogo o texto libre)
+  productCode   String? // codigo si es del catalogo
+  quantity      Float          @default(1)
+  reason        LostSaleReason @default(SIN_STOCK)
+  unitPriceUsd  Float          @default(0) // precio del momento (snapshot)
+  unitPriceBs   Float          @default(0)
+  estimatedUsd  Float          @default(0) // quantity * unitPriceUsd
+  estimatedBs   Float          @default(0)
+  stockAtMoment Float? // existencia del producto al momento (contexto)
+  customerId    String?
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  notes         String?
+  createdById   String
+  createdBy     User           @relation(fields: [createdById], references: [id])
+  createdAt     DateTime       @default(now())
 }
 
 model CustomerAdvance {

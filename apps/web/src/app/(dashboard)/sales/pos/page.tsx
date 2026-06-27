@@ -26,8 +26,10 @@ import {
   Percent,
   ChevronUp,
   ChevronDown,
+  PackageX,
 } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
+import { LostSaleModal } from '@/components/lost-sale-modal';
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -222,6 +224,8 @@ export default function POSPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
+  const [showLostSale, setShowLostSale] = useState(false);
+  const [lostSalePreset, setLostSalePreset] = useState<{ id: string; code: string; name: string } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
@@ -1590,6 +1594,9 @@ export default function POSPage() {
             <button onClick={toggleScanner} className={`p-3 rounded-lg border ${scannerActive ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-slate-700/50 border-slate-600 text-slate-400'}`}>
               <Camera size={20} />
             </button>
+            <button onClick={() => { setLostSalePreset(null); setShowLostSale(true); }} className="p-3 rounded-lg border border-slate-600 bg-slate-700/50 text-slate-400 hover:text-amber-400 hover:border-amber-500/30" title="Registrar venta perdida">
+              <PackageX size={20} />
+            </button>
           </div>
 
           {scannerActive && (
@@ -1898,6 +1905,13 @@ export default function POSPage() {
   // ── Shared Modals (rendered in both mobile & desktop) ─────────────────
   const renderSharedModals = () => (
     <>
+      {showLostSale && (
+        <LostSaleModal
+          initialProduct={lostSalePreset}
+          onClose={() => { setShowLostSale(false); setLostSalePreset(null); }}
+        />
+      )}
+
       {/* Payment Modal — full-screen on mobile */}
       {payModalOpen && (
         <div className="fixed inset-0 z-50 flex md:items-start md:justify-center md:pt-4 md:px-4">
@@ -2645,6 +2659,9 @@ export default function POSPage() {
             <button onClick={toggleScanner} className={`p-2.5 rounded-lg border transition-colors ${scannerActive ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:text-white'}`} title="Escanear codigo de barras">
               <Camera size={20} />
             </button>
+            <button onClick={() => { setLostSalePreset(null); setShowLostSale(true); }} className="p-2.5 rounded-lg border border-slate-600 bg-slate-700/50 text-slate-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors" title="Registrar venta perdida">
+              <PackageX size={20} />
+            </button>
           </div>
 
           {scannerActive && (
@@ -2663,9 +2680,16 @@ export default function POSPage() {
               return (
               <button
                 key={product.id}
-                onClick={() => addToCart(product)}
-                disabled={blockNoStock}
-                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${blockNoStock ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700/40'}`}
+                onClick={() => {
+                  if (blockNoStock) {
+                    setLostSalePreset({ id: product.id, code: product.code, name: product.name });
+                    setShowLostSale(true);
+                  } else {
+                    addToCart(product);
+                  }
+                }}
+                title={blockNoStock ? 'Sin stock — clic para registrar venta perdida' : undefined}
+                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${blockNoStock ? 'hover:bg-amber-500/5' : 'hover:bg-slate-700/40'}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -2680,13 +2704,13 @@ export default function POSPage() {
                     {exchangeRate > 0 && <div className="text-xs text-slate-500">Bs {fmtBs((product.priceDetal || 0) * exchangeRate)}</div>}
                   </div>
                   {blockNoStock ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full text-red-400 bg-red-500/10 border border-red-500/20 font-medium">Sin stock</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10 border border-amber-500/20 font-medium whitespace-nowrap">Sin stock · venta perdida</span>
                   ) : (
                     <span className={`text-xs px-2 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
                       Stock: {prodStock}
                     </span>
                   )}
-                  <Plus size={18} className={blockNoStock ? 'text-slate-600' : 'text-green-400'} />
+                  {blockNoStock ? <PackageX size={18} className="text-amber-400" /> : <Plus size={18} className="text-green-400" />}
                 </div>
               </button>
               );

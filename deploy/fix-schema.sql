@@ -17,6 +17,7 @@ DO $$ BEGIN CREATE TYPE "NoteStatus" AS ENUM (); EXCEPTION WHEN duplicate_object
 DO $$ BEGIN CREATE TYPE "TransferStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "CountStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "ReplacementStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "LostSaleReason" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "PurchaseStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "PermissionKey" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "SessionStatus" AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -99,6 +100,12 @@ ALTER TYPE "CountStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
 ALTER TYPE "ReplacementStatus" ADD VALUE IF NOT EXISTS 'DRAFT';
 ALTER TYPE "ReplacementStatus" ADD VALUE IF NOT EXISTS 'PROCESSED';
 ALTER TYPE "ReplacementStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+
+-- LostSaleReason
+ALTER TYPE "LostSaleReason" ADD VALUE IF NOT EXISTS 'SIN_STOCK';
+ALTER TYPE "LostSaleReason" ADD VALUE IF NOT EXISTS 'PRECIO_ALTO';
+ALTER TYPE "LostSaleReason" ADD VALUE IF NOT EXISTS 'DESCONTINUADO';
+ALTER TYPE "LostSaleReason" ADD VALUE IF NOT EXISTS 'PEDIDO_NO_RECIBIDO';
 
 -- PurchaseStatus
 ALTER TYPE "PurchaseStatus" ADD VALUE IF NOT EXISTS 'DRAFT';
@@ -524,6 +531,37 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER TABLE "InventoryReplacementItem" ADD CONSTRAINT "InventoryReplacementItem_inProductId_fkey" FOREIGN KEY ("inProductId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "LostSale" (
+    "id" TEXT NOT NULL,
+    "productId" TEXT,
+    "productName" TEXT NOT NULL,
+    "productCode" TEXT,
+    "quantity" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "reason" "LostSaleReason" NOT NULL DEFAULT 'SIN_STOCK',
+    "unitPriceUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "unitPriceBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "estimatedUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "estimatedBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "stockAtMoment" DOUBLE PRECISION,
+    "customerId" TEXT,
+    "notes" TEXT,
+    "createdById" TEXT NOT NULL DEFAULT '',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "LostSale_pkey" PRIMARY KEY ("id")
+);
+
+DO $$ BEGIN
+  ALTER TABLE "LostSale" ADD CONSTRAINT "LostSale_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "LostSale" ADD CONSTRAINT "LostSale_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "LostSale" ADD CONSTRAINT "LostSale_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS "PurchaseOrder" (
