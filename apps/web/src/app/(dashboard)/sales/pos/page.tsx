@@ -1047,13 +1047,19 @@ export default function POSPage() {
   async function handleConfirmPayment() {
     if (payments.length === 0) return;
 
-    // Build final payments adjusting last one to close tiny USD/Bs rounding gaps
-    const finalPayments = payments.map(p => ({
-      methodId: p.methodId,
-      amountUsd: Number(p.amountUsd),
-      amountBs: Number(p.amountBs),
-      reference: p.reference || undefined,
-    }));
+    // Build final payments adjusting last one to close tiny USD/Bs rounding gaps.
+    // Descartar filas en cero: al agregar un metodo cuando el restante ya es 0,
+    // se pre-llena en $0 y se persistiria como "pago fantasma" que ensucia los
+    // reportes por metodo de pago. Solo enviamos pagos con monto real.
+    const finalPayments = payments
+      .filter(p => Number(p.amountUsd) > 0 || Number(p.amountBs) > 0)
+      .map(p => ({
+        methodId: p.methodId,
+        amountUsd: Number(p.amountUsd),
+        amountBs: Number(p.amountBs),
+        reference: p.reference || undefined,
+      }));
+    if (finalPayments.length === 0) return;
     if (finalPayments.length > 0) {
       const lastIdx = finalPayments.length - 1;
       const prevUsd = finalPayments.slice(0, lastIdx).reduce((s, p) => s + p.amountUsd, 0);

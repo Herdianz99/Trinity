@@ -519,6 +519,12 @@ export class InvoicesService {
       effectiveTotalBs = effectiveSubtotalBs;
     }
 
+    // Red de seguridad: descartar pagos en cero (amountUsd y amountBs ambos <= 0).
+    // El POS pre-llena un metodo recien agregado con el restante; si el total ya
+    // estaba cubierto, ese metodo entra en $0 y se persistiria como "pago fantasma"
+    // que infla los reportes por metodo de pago. Ninguna ruta debe guardarlos.
+    dto.payments = dto.payments.filter((p) => p.amountUsd > 0 || p.amountBs > 0);
+
     // Validate payment total (using effective totals that account for VAT exemption)
     const totalPaidUsd = dto.payments.reduce((s, p) => s + p.amountUsd, 0);
 
