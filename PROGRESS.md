@@ -1,6 +1,17 @@
 # Trinity ERP — Progreso
 
-## 🚧 Sesion 76 (2026-06-27) — Costos unitarios de compra a 6 decimales (articulos de costo muy bajo) (FALTA DEPLOY)
+## ✅ DEPLOY a PRODUCCION — 2026-06-27 (noche) — commit `8ff02e5`
+
+Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634` a `8ff02e5`): **Sesiones 69 a 76** (y lo que quedaba pendiente de 66-68). Las **5 migraciones** se aplicaron correctamente y el schema quedo sincronizado.
+
+- **Incidente (resuelto)**: el `deploy.sh` **se salto el `pnpm install`** (paso [2/9] "sin cambios en dependencias") porque se hizo `git pull` antes y el pull interno del script vio "Already up to date" → su deteccion de cambios concluyo que no habia dependencias nuevas. Resultado: **`bwip-js` no se instalo** → el build de la API fallo y la API entro en crash-loop (`MODULE_NOT_FOUND: bwip-js` en `labels.service`). **Fix aplicado a mano**: `pnpm install && pnpm --filter @trinity/api build && pm2 restart trinity-api` → API estable (uptime subiendo, ↺ sin crecer). Datos y migraciones intactos.
+- **Leccion / pendiente**: ajustar `deploy.sh` para que el `pnpm install` **no dependa** de su deteccion de cambios (que siempre lo intente, o que compare `pnpm-lock.yaml` contra el ultimo commit desplegado). Mientras tanto: si un deploy trae dependencia nueva, correr `pnpm install` aparte.
+- **Paso manual post-deploy PENDIENTE**: en *Configuracion → Permisos por rol*, dejar **WAREHOUSE** en "Inventario (solo consulta)" (la BD de prod no se actualiza sola) y que el usuario cierre sesion y vuelva a entrar.
+- **Pendientes de prueba E2E del cliente en prod**: etiquetas (PDF), reemplazos, transferencias (TRF-0001), ventas perdidas (boton POS), compra con costo bajo (6 decimales).
+
+---
+
+## Sesion 76 (2026-06-27) — Costos unitarios de compra a 6 decimales (articulos de costo muy bajo) (DESPLEGADO 2026-06-27)
 
 > Bug real: en compras el **costo unitario** se redondeaba a 2 decimales, rompiendo los articulos de costo muy bajo. Ej. factura FER01752: 10 paquetes x 100 uds = 1000 uds a $2.33/paquete = **$0.0233/unidad**, pero `round2(0.0233)=0.02` → la linea daba **$20** cuando debe ser **$23.30**. Sin cambio de schema (los campos ya son Float). Probado E2E. Web/API **0 errores**.
 
@@ -9,7 +20,7 @@
 - **Decision**: los **precios de venta se dejan en 2 decimales** (el precio es lo que se cobra, limpio; el costo ahora preciso ya da margenes reales). Asimetria a proposito: costo 6 dec, precio 2 dec.
 - *Pendiente*: la factura vieja FER01752 quedo en $20 (procesada con el bug) — corregir aparte si se quiere. Otros displays de costo del producto (detalle/stock) siguen en 2 dec.
 
-## 🚧 Sesion 75 (2026-06-27) — Pagina de detalle de transferencias + correlativo + clicables (FALTA DEPLOY)
+## 🚧 Sesion 75 (2026-06-27) — Pagina de detalle de transferencias + correlativo + clicables (DESPLEGADO 2026-06-27)
 
 > Se completo lo que quedo pendiente en la Sesion 70 ("luego hacemos transferencias como debe de ser"). Probado E2E en local (crear TRF-0001, aprobar, movimientos con sourceType). Web typecheck **0 errores**, API **0 errores**. **Cambio de schema** (campo `Transfer.number`).
 
@@ -20,7 +31,7 @@
 - **Nueva transferencia** de **modal a pagina propia** `/inventory/transfers/new` (consistente con Ajustes/Reemplazos). Buscador de productos (todos, antes el modal cargaba solo 200) que **muestra las existencias del almacen origen elegido**; columna "Disponible" en los items y aviso visual si la cantidad supera el stock. Al crear redirige al detalle.
 - **Movimientos clicables**: activado `TRANSFER` en `lib/movement-source.ts`.
 
-## 🚧 Sesion 74 (2026-06-27) — Ventas perdidas / demanda insatisfecha (FALTA DEPLOY)
+## 🚧 Sesion 74 (2026-06-27) — Ventas perdidas / demanda insatisfecha (DESPLEGADO 2026-06-27)
 
 > Feature nueva: el vendedor registra lo que el cliente quiso comprar y no se vendio, para analizar cuanto se dejo de facturar. Se desarrollo en rama `feat/ventas-perdidas` (checkpoint), el cliente la aprobo y se **mergeo a main** (rama eliminada). Probado E2E en local. Web/API **0 errores**. **Cambio de schema** (tabla `LostSale` + enum).
 
@@ -30,7 +41,7 @@
 - **Reporte** `/reports/ventas-perdidas` (seccion Reportes, ADMIN/SUPERVISOR): filtro por fecha, tarjetas de resumen (registros, unidades, $ y Bs estimados), desglose por motivo, y tabla **por producto** ordenada por $ perdido (lo que mas se dejo de vender → sirve para decidir que comprar).
 - Motivos: por ahora los 4 que pidio el cliente (sin "Otro").
 
-## 🚧 Sesion 73 (2026-06-27) — Modulo de etiquetas + escaner en consulta + permiso de inventario solo-lectura (FALTA DEPLOY)
+## 🚧 Sesion 73 (2026-06-27) — Modulo de etiquetas + escaner en consulta + permiso de inventario solo-lectura (DESPLEGADO 2026-06-27)
 
 > Tres cosas pedidas por el cliente. Frontend + backend, probado E2E en local (login admin/warehouse, endpoints reales, PDF de etiquetas `%PDF-`, bloqueo de permisos verificado). Web typecheck **0 errores**, API **0 errores**. **Nueva dependencia `bwip-js`** en `apps/api` (el deploy.sh corre `pnpm install`). **FALTA DEPLOY + prueba E2E del cliente.**
 
@@ -51,7 +62,7 @@
 - **Nota de permisos (importante)**: los permisos viajan en el token JWT; un cambio de permiso de rol aplica al **proximo login** del usuario (logout + login). El backend (guarda) usa el valor de BD al instante, asi que no hay hueco de seguridad. **Post-deploy**: en *Permisos por rol* dejar **WAREHOUSE** en "Inventario (solo consulta)" (la BD de prod no se actualiza sola).
 - *Pendiente menor*: la pagina de **inicio** muestra accesos rapidos hardcodeados por rol (Stock/Movimientos/Transferencias/Conteo) que un `inventory-consult` no puede abrir (daria 403). Hacerlos respetar el permiso queda para otra pasada.
 
-## 🚧 Sesion 72 (2026-06-27) — Pagina de consulta de articulos para inventario (solo lectura) (FALTA DEPLOY)
+## 🚧 Sesion 72 (2026-06-27) — Pagina de consulta de articulos para inventario (solo lectura) (DESPLEGADO 2026-06-27)
 
 > Pedido del cliente: una pantalla para el personal de inventario (rol WAREHOUSE) que puedan **ver y buscar** articulos, **solo lectura** (no modifican nada). Frontend puro — reutiliza endpoints GET existentes, sin cambios de backend. Web typecheck **0 errores**, smoke test de los 3 endpoints OK (2368 productos, tasa, kardex).
 
@@ -59,7 +70,7 @@
 - **Lista con buscador** (codigo/nombre/referencia, busqueda + paginacion del lado del servidor via `GET /products?search=&page=&limit=25&isActive=true`). Columnas: **Codigo, Ref. proveedor, Nombre, Existencias** (suma de `stock[]` de todos los almacenes), **Precio USD** (priceDetal) y **Precio Bs** (priceDetal x tasa de `GET /exchange-rate/today`).
 - **Clic en fila → panel lateral (drawer)** con cabecera del articulo + **kardex** (`GET /stock-movements/kardex/:productId`): Fecha, Tipo (badge), Cantidad, Saldo corrido, Almacen, Referencia. Con paginacion del kardex. Sin links a documentos editables ni botones de edicion (solo lectura).
 
-## 🚧 Sesion 71 (2026-06-27) — Reemplazos de inventario (canje de un articulo por otro) (FALTA DEPLOY)
+## 🚧 Sesion 71 (2026-06-27) — Reemplazos de inventario (canje de un articulo por otro) (DESPLEGADO 2026-06-27)
 
 > Feature nueva pedida por el cliente: cambiar un articulo por otro en el inventario (ej. vende cable por rollo y por metro; cuando no hay metros, saca 2 rollos y mete 200 metros). Documento con pagina de detalle propia (no modal). Calcado de Ajustes de inventario. Backend typecheck **0 errores**, web **0 errores TS**. **Probado E2E en local con datos reales** (login admin local + endpoints reales: correlativo, stock, movimientos, costo derivado, recalculo de precio, PDF 200/`%PDF-`). **FALTA DEPLOY + prueba E2E del cliente.**
 
@@ -72,7 +83,7 @@
 - **Badges** `Reemplazo +/−` (y se completaron `Devolucion +/−`) en `/inventory/movements` y en la pestaña Movimientos del producto.
 - **Notas de prueba (solo LOCAL)**: se reseteo el password del `admin@trinity.com` **LOCAL** a `Test1234!` para el smoke test (prod intacto). Quedaron reemplazos de prueba REP-0001..0003 con movimientos en la BD local; un producto de prueba (CON00957) se modifico y luego se **restauro** a su costo/precio original.
 
-## 🚧 Sesion 70 (2026-06-27) — Movimientos con link al documento origen + Reporte PDF de ajuste (FALTA DEPLOY)
+## 🚧 Sesion 70 (2026-06-27) — Movimientos con link al documento origen + Reporte PDF de ajuste (DESPLEGADO 2026-06-27)
 
 > Dos pedidos del cliente. Backend typecheck limpio (API 0 errores, Web 0 errores TS). Migracion `20260627120000_stock_movement_source` aplicada en LOCAL; render del PDF de ajuste probado con datos reales (ajuste real procesado: 2 items, total importe $11.84, `%PDF-` OK). **FALTA DEPLOY + prueba E2E del cliente.**
 
@@ -88,7 +99,7 @@
 - **Backend**: `inventory-adjustments-pdf.service.ts` (carta vertical, paginacion, encabezado con almacen/fecha/tipo/estado/proveedor-cliente/descripcion). Importe = `cantidad × costo` (costo actual del producto); Total = suma de importes + total de unidades. Endpoint `GET /inventory-adjustments/:id/pdf` (JWT), servicio registrado en el modulo.
 - **Frontend**: boton **"Imprimir reporte"** 🖨️ en el header del detalle (si el ajuste tiene productos), abre `/api/proxy/inventory-adjustments/:id/pdf` en pestaña nueva (mismo patron que conteo).
 
-## 🚧 Sesion 69 (2026-06-26) — Alertas de Inventario + boton "¿Como se calcula?" (FALTA DEPLOY)
+## 🚧 Sesion 69 (2026-06-26) — Alertas de Inventario + boton "¿Como se calcula?" (DESPLEGADO 2026-06-27)
 
 > Feature nueva pedida por el cliente, en rama `feat/alertas-inventario` (no en `main` aun). Backend **probado en local con datos reales** (login admin local + curl al endpoint: 2367 productos, conteos correctos; PDF 200/`%PDF-`). **Build de produccion API+Web limpio (exit 0).** **FALTA: merge a `main` + DEPLOY + prueba E2E del cliente.** Spec: `docs/superpowers/specs/2026-06-26-alertas-inventario-design.md`; Plan: `docs/superpowers/plans/2026-06-26-alertas-inventario.md`.
 
@@ -122,7 +133,7 @@
 - **8 facturas montadas la mañana del 26/06 que eran ventas del 25/06**: `createdAt`/`paidAt` movidos al 25/06 21:00 Caracas (tasa identica entre ambos dias, no fiscales, caja abierta → sin efectos colaterales). Numeros: VTA-214..217, NE-525..528.
 - **Factura NE-26-00000539**: vendedor YULEINI RODRIGUEZ → **Roxana Marrero**.
 
-## 🚧 Sesion 68 (2026-06-25) — CxP/Libro de Compras/Retenciones: fixes + UTC + totales + modales en /purchases/new (FALTA DEPLOY)
+## 🚧 Sesion 68 (2026-06-25) — CxP/Libro de Compras/Retenciones: fixes + UTC + totales + modales en /purchases/new (DESPLEGADO 2026-06-27)
 
 > Continuacion de Tanda A (Sesion 66). Todo **probado en local con datos reales** (consultas SQL a la BD local), typecheck API+Web limpio (exit 0). **FALTA DEPLOY + prueba E2E del cliente.** Va junto con Tanda A en `main`. Nota: hubo un **backfill SOLO en la BD local** (numero de comprobante de retencion); prod NO lo necesita (ver punto de retencion abajo).
 
@@ -142,7 +153,7 @@
 - **Fix UTC restante (display)**: historial de tasa en Configuracion (`config:484`, `ExchangeRate.date` es `@db.Date`) y lista de Gastos (`expenses:457`, `Expense.date` confirmado a medianoche UTC) ya no muestran la fecha un dia atras (`{ timeZone: 'UTC' }`).
 - **Actualizar la tasa: de solo-ADMIN hardcodeado → PERMISO configurable** `MANAGE_EXCHANGE_RATE`. **Causa del bloqueo de los probadores**: el banner "No hay tasa BCV" se muestra a todos y el boton "Obtener del BCV" funciona, pero `exchange-rate.service.create` tenia `if (user.role !== ADMIN) throw Forbidden` y el banner se **comia el error** (catch vacio) → "no me deja guardar" sin mensaje. Ahora: (1) ADMIN siempre puede, los demas roles si tienen el permiso `MANAGE_EXCHANGE_RATE` (via `RolePermissionsService.getModulesForRole`, `ExchangeRateModule` importa `RolePermissionsModule`); (2) agregado a `VALID_MODULES` (backend) y al catalogo de "Permisos por rol" (frontend, grupo Administracion, label "Actualizar tasa de cambio"); (3) el banner `exchange-rate-banner.tsx` ahora **muestra el error** si el guardado falla. **PASO POST-DEPLOY**: en *Permisos por rol* activar "Actualizar tasa de cambio" para **Cajero** (y los roles que se quiera) para que puedan registrar la tasa desde el banner sin el admin.
 
-## 🚧 Sesion 67 (2026-06-25) — POS: precios en Bs en movil + eliminar articulo en la franja (FALTA DEPLOY)
+## 🚧 Sesion 67 (2026-06-25) — POS: precios en Bs en movil + eliminar articulo en la franja (DESPLEGADO 2026-06-27)
 
 > Dos observaciones de los **vendedores probando el sistema** en el cliente. Solo frontend (`sales/pos/page.tsx`), typecheck Web limpio (exit 0). **FALTA DEPLOY** (al deployar tambien sube lo de Tanda A de la Sesion 66, que sigue sin probarse E2E — son del mismo `main`).
 
