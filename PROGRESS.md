@@ -15,9 +15,10 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 > Pedido: poder reimprimir el ticket termico de una factura cuando es **nota de entrega** (no fiscal). Antes solo se podia: reimprimir si era fiscal (impresora fiscal) o "Imprimir PDF" que sale tamaño **carta**. La funcion `printReceipt()` (ticket 80mm, ya usada por el POS al cobrar) existia pero no estaba cableada para reimprimir. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
 
-- **Detalle de factura** (`sales/invoices/[id]`): nuevo `handleReprintTicket` + item "Reimprimir ticket" en "Mas acciones", visible solo si `canPrintPdf && !serie.isFiscal`. Llama a `printReceipt(invoice, companyConfig)` (intenta agente termico, si no cae a window.print() 80mm). El boton viejo se relabeló "Imprimir PDF (carta)".
-- **Listado de facturas** (`sales/invoices`): boton "Reimprimir ticket" (icono Receipt) en la fila (tabla escritorio) y en la tarjeta movil, solo para no fiscales PAID/PARTIAL_RETURN/RETURNED. Como el listado solo trae resumen, el handler **pide la factura completa** (`GET /invoices/:id`) + `/config` antes de imprimir. Estado `ticketBusyId` para el spinner por fila.
-- Las fiscales siguen con su "Reimprimir Fiscal"; el ticket 80mm es solo para notas de entrega.
+- **Decision UX**: NO se agrega un boton aparte; se reusa el **boton de impresora que ya existia**. Para no fiscales imprime el ticket 80mm; para fiscales mantiene el PDF carta.
+- **Detalle de factura** (`sales/invoices/[id]`): el item de impresion en "Mas acciones" ahora ramifica: `serie.isFiscal` -> "Imprimir PDF (carta)" (window.open pdf); no fiscal -> "Imprimir ticket" via `handleReprintTicket()` -> `printReceipt(invoice, companyConfig)` (agente termico, o window.print() 80mm). Mismo icono Printer.
+- **Listado de facturas** (`sales/invoices`): el boton de impresora de cada fila ramifica igual (fiscal -> PDF, no fiscal -> ticket). Como el listado solo trae resumen, para el ticket **pide la factura completa** (`GET /invoices/:id`) + `/config` antes de imprimir. Estado `ticketBusyId` para el spinner por fila. (La tarjeta movil no tiene boton de impresion; en movil se imprime desde el detalle, como era antes.)
+- Las fiscales siguen con su "Reimprimir Fiscal" (impresora fiscal) ademas del PDF.
 
 ## Sesion 81 (2026-06-29) — POS: "Disponible" = stock real - reservado en facturas en espera (PENDIENTE DEPLOY)
 

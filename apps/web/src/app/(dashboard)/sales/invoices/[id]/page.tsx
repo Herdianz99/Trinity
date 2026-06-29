@@ -238,8 +238,6 @@ export default function InvoiceDetailPage() {
   // Acciones secundarias (van al menú "Más acciones")
   const isPaidish = ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '');
   const canPrintPdf = ['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice?.status || '');
-  // Ticket termico 80mm solo para notas de entrega (no fiscales); las fiscales usan la reimpresion fiscal.
-  const canReprintTicket = canPrintPdf && !invoice?.serie?.isFiscal;
   const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
   const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
   const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
@@ -469,21 +467,13 @@ export default function InvoiceDetailPage() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[210px]">
-                {canReprintTicket && (
+                {canPrintPdf && (
                   <DropdownMenuItem
-                    onClick={handleReprintTicket}
+                    onClick={() => { if (invoice.serie?.isFiscal) { window.open(`/api/proxy/invoices/${id}/pdf`, '_blank'); } else { handleReprintTicket(); } }}
                     disabled={ticketLoading}
                     className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
                   >
-                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Reimprimir ticket
-                  </DropdownMenuItem>
-                )}
-                {canPrintPdf && (
-                  <DropdownMenuItem
-                    onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')}
-                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
-                  >
-                    <Printer size={14} /> Imprimir PDF (carta)
+                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} {invoice.serie?.isFiscal ? 'Imprimir PDF (carta)' : 'Imprimir ticket'}
                   </DropdownMenuItem>
                 )}
                 {canReturnInvoice && (

@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Eye,
   Printer,
-  Receipt,
   Trash2,
   X,
   AlertTriangle,
@@ -294,15 +293,6 @@ export default function InvoicesPage() {
               <span className="text-base font-bold text-white">${inv.totalUsd.toFixed(2)}</span>
             </div>
             {inv.seller && <p className="text-xs text-slate-500 mt-1">Vendedor: {inv.seller.name}</p>}
-            {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && !inv.serie?.isFiscal && (
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReprintTicket(inv.id); }}
-                disabled={ticketBusyId === inv.id}
-                className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium disabled:opacity-50"
-              >
-                {ticketBusyId === inv.id ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} />} Reimprimir ticket
-              </button>
-            )}
           </Link>
         ))}
         {totalPages > 1 && (
@@ -375,14 +365,14 @@ export default function InvoicesPage() {
                       <Link href={`/sales/invoices/${inv.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 inline-flex" title="Ver detalle">
                         <Eye size={15} />
                       </Link>
-                      {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && !inv.serie?.isFiscal && (
-                        <button onClick={() => handleReprintTicket(inv.id)} disabled={ticketBusyId === inv.id} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-50" title="Reimprimir ticket (80mm)">
-                          {ticketBusyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} />}
-                        </button>
-                      )}
                       {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && (
-                        <button onClick={() => handlePrint(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF (carta)">
-                          <Printer size={15} />
+                        <button
+                          onClick={() => inv.serie?.isFiscal ? handlePrint(inv.id) : handleReprintTicket(inv.id)}
+                          disabled={ticketBusyId === inv.id}
+                          className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400 disabled:opacity-50"
+                          title={inv.serie?.isFiscal ? 'Imprimir PDF (carta)' : 'Imprimir ticket (80mm)'}
+                        >
+                          {ticketBusyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
                         </button>
                       )}
                       {inv.status === 'PENDING' && (
