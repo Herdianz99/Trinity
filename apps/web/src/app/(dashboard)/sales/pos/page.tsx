@@ -2124,7 +2124,7 @@ export default function POSPage() {
                       <option value="">Seleccionar metodo...</option>
                       {paymentMethods
                         .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
-                        .filter(pm => !pm.isDivisa && pm.isActive)
+                        .filter(pm => !pm.isDivisa && pm.isActive && pm.id !== 'pm_saldo_favor')
                         .map(pm => (
                           <option key={pm.id} value={pm.id}>{pm.name}</option>
                         ))

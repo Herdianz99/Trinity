@@ -11,6 +11,15 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 80 (2026-06-29) — Cobro con "Saldo a Favor" reventaba: faltaba el metodo en prod (INSERT YA APLICADO en prod; resto PENDIENTE DEPLOY)
+
+> En produccion, al cobrar una factura cruzando el saldo a favor del cliente, fallaba con *"Metodo de pago con id 'pm_saldo_favor' no encontrado"* (`invoices.service.pay` linea ~421). **Causa raiz = dato faltante, no codigo**: el sistema usa el id fijo `pm_saldo_favor` (seed.ts:505) y `Payment.methodId` es FK a `PaymentMethod`, asi que esa fila DEBE existir. La BD de prod (sembrada antes de que el seed lo incluyera) NO la tenia. Verificado por SSH: habia 20 metodos, ninguno el saldo a favor.
+
+- **Fix inmediato (YA aplicado en prod por SSH)**: `INSERT` de `pm_saldo_favor` (Saldo a Favor, isDivisa=false, isActive=true, sortOrder=99) con `ON CONFLICT DO NOTHING`. La caja quedo desbloqueada al instante (el backend lee el metodo fresco en cada cobro, sin reinicio).
+- **Auto-reparacion** (`deploy/fix-schema.sql`): se agrego el mismo INSERT idempotente para que cualquier BD sin el metodo se repare en el proximo deploy.
+- **Frontend** (`sales/pos/page.tsx`): el dropdown de **metodo de vuelto** filtraba solo por `!isDivisa && isActive`, asi que "Saldo a Favor" (que es ambas) se colaba como opcion de vuelto. Se agrego `&& pm.id !== 'pm_saldo_favor'` (igual que ya hacian los selectores de pago y de anticipo). El selector principal de pago ya lo excluia: el cajero NO lo ve como metodo normal, solo via el boton "Saldo a favor del cliente" cuando el cliente tiene saldo.
+- *Sin cambio de codigo backend ni de schema.* Web typecheck 0 errores.
+
 ## Sesion 79 (2026-06-29) — POS: busqueda mostraba solo 10 resultados (PENDIENTE DEPLOY)
 
 > Reporte de vendedores en el arranque en produccion: buscar "clavo" en el POS mostraba **10** articulos, pero en `/catalog/products` salian **40** ("donde estan los demas?"). Causa: el POS pedia `&limit=10` sin paginacion; POS y catalogo usan **la misma busqueda del API** (full-text + ILIKE sobre name/code/barcode/supplierRef), la unica diferencia era el limite. Los productos nunca faltaron. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.

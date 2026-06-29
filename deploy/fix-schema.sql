@@ -2128,3 +2128,14 @@ UPDATE "PaymentMethod" SET "isCash" = true
 -- META MENSUAL DEL VENDEDOR (Session 69)
 -- =============================================================================
 ALTER TABLE "Seller" ADD COLUMN IF NOT EXISTS "monthlyGoalUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- =============================================================================
+-- METODO DE PAGO "SALDO A FAVOR" (Session 80)
+-- El sistema usa el id fijo 'pm_saldo_favor' al cruzar anticipos/notas de credito
+-- (invoices.service.pay). Payment.methodId es FK a PaymentMethod, asi que la fila
+-- DEBE existir o el cobro revienta con "Metodo de pago ... no encontrado".
+-- BDs sembradas antes de que el seed lo incluyera no lo tienen -> esto lo auto-repara.
+-- =============================================================================
+INSERT INTO "PaymentMethod" (id, name, "isDivisa", "isCash", "createsReceivable", "isActive", "sortOrder", "createdAt", "updatedAt")
+VALUES ('pm_saldo_favor', 'Saldo a Favor', false, false, false, true, 99, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
