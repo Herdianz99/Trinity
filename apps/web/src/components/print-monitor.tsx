@@ -12,7 +12,11 @@ interface PrintJobItem {
 interface PrintJob {
   id: string;
   invoiceId: string;
-  invoice: { number: string };
+  invoice: {
+    number: string;
+    customer?: { name: string } | null;
+    seller?: { name: string } | null;
+  };
   printAreaId: string;
   printArea: { name: string };
   status: string;
@@ -92,9 +96,13 @@ export default function PrintMonitor() {
       lines.push('{{LINE}}');
     }
 
-    // Datos de la factura
+    // Datos de la factura + cliente y vendedor (despacho los necesita)
     lines.push(`{{BOLD}}Factura: ${job.invoice.number || 'S/N'}{{/BOLD}}`);
     lines.push(`${dateStr} ${timeStr}`);
+    lines.push(`{{BOLD}}Cliente:{{/BOLD}} ${job.invoice.customer?.name || 'Contado'}`);
+    if (job.invoice.seller?.name) {
+      lines.push(`{{BOLD}}Vendedor:{{/BOLD}} ${job.invoice.seller.name}`);
+    }
     lines.push('{{LINE}}');
 
     // Items: cantidad y nombre destacados, codigo/ref en linea secundaria
@@ -107,6 +115,11 @@ export default function PrintMonitor() {
 
     lines.push('{{LINE}}');
     lines.push(`{{BOLD}}Renglones: ${job.items.length}  |  Unidades: ${totalUnits}{{/BOLD}}`);
+
+    // Seccion de firma de quien despacha
+    lines.push('{{FEED:3}}');
+    lines.push('________________________________');
+    lines.push('{{BOLD}}Despachado por (firma){{/BOLD}}');
     lines.push('{{FEED:1}}');
     lines.push('{{CUT}}');
 
@@ -310,6 +323,14 @@ export default function PrintMonitor() {
             </div>
           </div>
 
+          {/* Cliente y vendedor (despacho los necesita) */}
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>
+            <div>Cliente: {currentJob.invoice.customer?.name || 'Contado'}</div>
+            {currentJob.invoice.seller?.name && (
+              <div>Vendedor: {currentJob.invoice.seller.name}</div>
+            )}
+          </div>
+
           {/* Items: cada producto en bloque vertical, codigo/ref debajo del nombre */}
           <div>
             {currentJob.items.map((item, idx) => (
@@ -335,6 +356,13 @@ export default function PrintMonitor() {
           <div style={{ marginTop: '6px', paddingTop: '4px', textAlign: 'center', fontSize: '15px', fontWeight: 'bold' }}>
             Renglones: {currentJob.items.length} | Unidades:{' '}
             {currentJob.items.reduce((sum, i) => sum + i.quantity, 0)}
+          </div>
+
+          {/* Seccion de firma de quien despacha */}
+          <div style={{ marginTop: '28px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold' }}>
+            <div style={{ borderTop: '1px solid #000', paddingTop: '3px', margin: '0 auto', width: '85%' }}>
+              Despachado por (firma)
+            </div>
           </div>
         </div>
       )}

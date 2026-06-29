@@ -11,6 +11,22 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 78 (2026-06-29) — Comanda de despacho: cliente, vendedor y firma (PENDIENTE DEPLOY)
+
+> Pedido de la gente de despacho en el arranque de Trinity en produccion: la comanda debe mostrar **cliente** y **vendedor**, mas una **seccion para firmar quien despacha**. Sin cambio de schema (solo se incluyen relaciones ya existentes). API typecheck 0 errores, Web typecheck 0 errores. El **agente termico NO cambia** (el texto se arma en el web y se le envia listo): solo deploy de **API + Web**.
+
+- **Backend** (`print-jobs.service.ts`, `findPending`): el `include` de la factura ahora trae `customer { name }` y `seller { name }` para que la comanda pendiente los tenga al imprimirse.
+- **Frontend** (`print-monitor.tsx`): interfaz `PrintJob` ampliada + las **dos** rutas de impresion actualizadas: (1) `buildTicketText` (markup ESC/POS del agente termico) y (2) el fallback HTML de `window.print()`. Se agrega bajo Factura/fecha: `Cliente: <nombre>` (o "Contado" si null) y `Vendedor: <nombre>` (solo si la factura tiene vendedor). Al final, tras Renglones/Unidades, bloque de firma: linea + "Despachado por (firma)".
+- *Nota*: las comandas que ya esten `PENDING` antes del deploy no traeran cliente/vendedor; las nuevas y las reimpresiones si. El vendedor se preserva en el flujo POS (vendedor→cajero), asi que viene poblado en ventas reales.
+
+## Sesion 77 (2026-06-28) — Descartar pagos en cero en el POS (filas fantasma) (DESPLEGADO 2026-06-28)
+
+> Bug de datos detectado al revisar la factura NE-26-00000443: tenia **3 registros de pago pero 2 en $0** (Transferencia y Efectivo USD), aunque el cobro real fue 100% Efectivo Bs. El POS pre-llena un metodo recien agregado con el **restante**; si el total ya estaba cubierto, ese metodo entra en $0 y se persistia igual, **inflando los reportes por metodo de pago** (no afecta total ni cuadre). La pantalla de cobranzas (`receipts/new`) ya filtraba; el POS no. Sin cambio de schema. API typecheck 0 errores, watcher recompilo limpio. Commit `8ba484a`.
+
+- **Frontend** (`sales/pos/page.tsx`, `handleConfirmPayment`): `finalPayments` ahora filtra las filas con `amountUsd <= 0 && amountBs <= 0` antes de enviar (igual que cobranzas) + corta si no queda ningun pago real. **No rompe el pago dividido**: el cajero sigue pudiendo agregar metodos y repartir montos; solo se descartan las filas realmente vacias. Se descarto la idea de "bloquear al agregar cuando el restante es 0" porque romperia justamente el flujo de dividir el pago.
+- **Backend** (`invoices.service.pay`): red de seguridad — filtra los mismos pagos en cero al inicio del metodo, antes de validar/persistir, para que **ninguna ruta** pueda volver a guardar filas fantasma. Toda la logica posterior (validacion de total, ajuste de redondeo del ultimo pago, guardado) opera solo sobre pagos reales.
+- *Pendiente*: las facturas viejas que ya tienen filas de pago en $0 quedan como estan (el usuario indico que el conteo/limpieza global no era necesario).
+
 ## Sesion 76 (2026-06-27) — Costos unitarios de compra a 6 decimales (articulos de costo muy bajo) (DESPLEGADO 2026-06-27)
 
 > Bug real: en compras el **costo unitario** se redondeaba a 2 decimales, rompiendo los articulos de costo muy bajo. Ej. factura FER01752: 10 paquetes x 100 uds = 1000 uds a $2.33/paquete = **$0.0233/unidad**, pero `round2(0.0233)=0.02` → la linea daba **$20** cuando debe ser **$23.30**. Sin cambio de schema (los campos ya son Float). Probado E2E. Web/API **0 errores**.

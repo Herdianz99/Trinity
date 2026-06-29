@@ -14,7 +14,14 @@ export class PrintJobsService {
         status: 'PENDING',
       },
       include: {
-        invoice: { select: { id: true, number: true } },
+        invoice: {
+          select: {
+            id: true,
+            number: true,
+            customer: { select: { name: true } },
+            seller: { select: { name: true } },
+          },
+        },
         printArea: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'asc' },
