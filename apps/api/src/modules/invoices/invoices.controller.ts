@@ -52,6 +52,13 @@ export class InvoicesController {
     return this.service.findPending(today === 'true');
   }
 
+  // Cantidad comprometida por producto en facturas en espera (PENDING), para
+  // mostrar "Disponible" = stock real - reservado en el POS.
+  @Get('reserved-stock')
+  getReservedStock() {
+    return this.service.getReservedStock();
+  }
+
   @Get('report/by-seller')
   async getSellerReport(
     @Query('status') status: string,

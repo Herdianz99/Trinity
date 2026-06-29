@@ -259,6 +259,8 @@ export default function POSPage() {
   const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  // Cantidad comprometida por producto en facturas en espera. "Disponible" = stock - reservado.
+  const [reservedStock, setReservedStock] = useState<Record<string, number>>({});
   const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [pendingFilterMine, setPendingFilterMine] = useState(true);
@@ -474,11 +476,18 @@ export default function POSPage() {
   // Fetch pending invoices count (polling every 30s)
   const fetchPending = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/invoices/pending?today=true');
-      const data = await res.json();
+      const [pendRes, reservedRes] = await Promise.all([
+        fetch('/api/proxy/invoices/pending?today=true'),
+        fetch('/api/proxy/invoices/reserved-stock'),
+      ]);
+      const data = await pendRes.json();
       if (Array.isArray(data)) {
         setPendingInvoices(data);
         setPendingCount(data.length);
+      }
+      if (reservedRes.ok) {
+        const map = await reservedRes.json();
+        if (map && typeof map === 'object') setReservedStock(map);
       }
     } catch {}
   }, []);
@@ -1622,6 +1631,8 @@ export default function POSPage() {
               <div className="grid grid-cols-2 gap-2">
                 {searchResults.map(product => {
                   const prodStock = product.stock?.[0]?.quantity || 0;
+                  const reserved = reservedStock[product.id] || 0;
+                  const available = prodStock - reserved;
                   const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
                   return (
                     <button
@@ -1646,6 +1657,9 @@ export default function POSPage() {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-amber-400 bg-amber-500/10'}`}>Stock: {prodStock}</span>
                         )}
                       </div>
+                      {!blockNoStock && reserved > 0 && (
+                        <p className={`text-[10px] mt-0.5 ${available > 0 ? 'text-sky-400' : 'text-red-400'}`}>Disponible: {available} <span className="text-slate-500">({reserved} en espera)</span></p>
+                      )}
                       {blockNoStock && <p className="text-[10px] text-red-400 mt-0.5">Sin stock</p>}
                     </button>
                   );
@@ -2692,6 +2706,8 @@ export default function POSPage() {
           <div className="card mb-3 max-h-80 overflow-y-auto">
             {searchResults.map(product => {
               const prodStock = product.stock?.[0]?.quantity || 0;
+              const reserved = reservedStock[product.id] || 0;
+              const available = prodStock - reserved;
               const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
               return (
               <button
@@ -2722,9 +2738,16 @@ export default function POSPage() {
                   {blockNoStock ? (
                     <span className="text-xs px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10 border border-amber-500/20 font-medium whitespace-nowrap">Sin stock · venta perdida</span>
                   ) : (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
-                      Stock: {prodStock}
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                        Stock: {prodStock}
+                      </span>
+                      {reserved > 0 && (
+                        <span className={`text-[10px] whitespace-nowrap ${available > 0 ? 'text-sky-400' : 'text-red-400'}`}>
+                          Disponible: {available} <span className="text-slate-500">({reserved} en espera)</span>
+                        </span>
+                      )}
+                    </div>
                   )}
                   {blockNoStock ? <PackageX size={18} className="text-amber-400" /> : <Plus size={18} className="text-green-400" />}
                 </div>

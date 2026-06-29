@@ -11,6 +11,15 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 81 (2026-06-29) — POS: "Disponible" = stock real - reservado en facturas en espera (PENDIENTE DEPLOY)
+
+> Pedido: en el POS ver, ademas del stock real, cuanto queda DISPONIBLE descontando lo que otros vendedores ya pusieron en facturas en espera (PENDING). Ej: 80 tubos reales, 5 en una factura en espera y 7 en otra -> "Stock: 80 / Disponible: 68". El stock solo se descuenta al PAGAR, asi que las en-espera no reservaban nada. **Cambio de schema** (2 indices). API + Web typecheck 0 errores. Migracion aplicada y validada en local.
+
+- **Backend** (`invoices`): nuevo `GET /invoices/reserved-stock` -> `getReservedStock()` hace `groupBy InvoiceItem by productId where invoice.status='PENDING' _sum quantity`, devuelve `{productId: cantidadReservada}` (todas las pendientes, de cualquier dia/vendedor/caja). Escala con # de pendientes, NO con el catalogo.
+- **Frontend** (`sales/pos/page.tsx`): estado `reservedStock`, se carga junto al sondeo de pendientes (cada 30s, `Promise.all`). En resultados de busqueda (movil grid y escritorio lista) muestra "Disponible: X (N en espera)" debajo del stock, **solo si reserved>0**; en rojo si queda negativo (sobrevendido en espera). No cuenta el carrito en construccion.
+- **Indices** (migracion `20260629160000_invoice_pending_indexes` + `@@index` en schema + `fix-schema.sql`): `Invoice(status)` e `InvoiceItem(invoiceId)`. No afectan nada existente (aditivos/transparentes); aceleran esta consulta Y la lista de facturas en espera. Especialmente valiosos en la tienda grande por VOLUMEN de ventas (no por catalogo). Nombres = defaults de Prisma para evitar drift.
+- *Pendiente/aparte (tienda grande)*: `Product.searchVector` NO tiene indice GIN -> la busqueda hace seq scan. A 2.381 productos es instantaneo; a 6-8k sigue rapido (~15-25ms). Si alguna vez se siente lento buscar, agregar GIN sobre searchVector (tema separado, no urgente).
+
 ## Sesion 80 (2026-06-29) — Cobro con "Saldo a Favor" reventaba: faltaba el metodo en prod (INSERT YA APLICADO en prod; resto PENDIENTE DEPLOY)
 
 > En produccion, al cobrar una factura cruzando el saldo a favor del cliente, fallaba con *"Metodo de pago con id 'pm_saldo_favor' no encontrado"* (`invoices.service.pay` linea ~421). **Causa raiz = dato faltante, no codigo**: el sistema usa el id fijo `pm_saldo_favor` (seed.ts:505) y `Payment.methodId` es FK a `PaymentMethod`, asi que esa fila DEBE existir. La BD de prod (sembrada antes de que el seed lo incluyera) NO la tenia. Verificado por SSH: habia 20 metodos, ninguno el saldo a favor.

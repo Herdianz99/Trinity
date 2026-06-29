@@ -89,6 +89,26 @@ export class InvoicesService {
     return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 
+  /**
+   * Suma la cantidad comprometida por producto en TODAS las facturas en espera
+   * (status PENDING, de cualquier dia/vendedor/caja). El stock solo se descuenta al
+   * pagar, asi que estos items aun figuran en el stock real; el POS resta este mapa
+   * para mostrar el "Disponible". Devuelve { [productId]: cantidadReservada }.
+   */
+  async getReservedStock(): Promise<Record<string, number>> {
+    const grouped = await this.prisma.invoiceItem.groupBy({
+      by: ['productId'],
+      where: { invoice: { status: 'PENDING' } },
+      _sum: { quantity: true },
+    });
+    const map: Record<string, number> = {};
+    for (const g of grouped) {
+      const qty = g._sum.quantity || 0;
+      if (qty > 0) map[g.productId] = qty;
+    }
+    return map;
+  }
+
   async findPending(todayOnly = false) {
     const where: any = { status: 'PENDING' };
 

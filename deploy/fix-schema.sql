@@ -2139,3 +2139,10 @@ ALTER TABLE "Seller" ADD COLUMN IF NOT EXISTS "monthlyGoalUsd" DOUBLE PRECISION 
 INSERT INTO "PaymentMethod" (id, name, "isDivisa", "isCash", "createsReceivable", "isActive", "sortOrder", "createdAt", "updatedAt")
 VALUES ('pm_saldo_favor', 'Saldo a Favor', false, false, false, true, 99, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- =============================================================================
+-- INDICES PARA "DISPONIBLE" / FACTURAS EN ESPERA (Session 81)
+-- Aceleran encontrar facturas PENDING y sus items sin escanear todo el historial.
+-- =============================================================================
+CREATE INDEX IF NOT EXISTS "Invoice_status_idx" ON "Invoice"("status");
+CREATE INDEX IF NOT EXISTS "InvoiceItem_invoiceId_idx" ON "InvoiceItem"("invoiceId");

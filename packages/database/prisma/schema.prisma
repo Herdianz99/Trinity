@@ -1055,6 +1055,8 @@ model Invoice {
   lockedAt            DateTime?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+
+  @@index([status])
 }
 
 model InvoiceItem {
@@ -1078,6 +1080,8 @@ model InvoiceItem {
   costBs                Float   @default(0)
   priceOverridden       Boolean @default(false)
   returnedQty           Float   @default(0)
+
+  @@index([invoiceId])
 }
 
 model Payment {
