@@ -197,6 +197,7 @@ export default function InvoiceDetailPage() {
 
   const [fiscalLoading, setFiscalLoading] = useState(false);
   const [reprintLoading, setReprintLoading] = useState(false);
+  const [ticketLoading, setTicketLoading] = useState(false);
   const [editingFiscal, setEditingFiscal] = useState(false);
   const [editFiscalNumber, setEditFiscalNumber] = useState('');
   const [editMachineSerial, setEditMachineSerial] = useState('');
@@ -237,6 +238,8 @@ export default function InvoiceDetailPage() {
   // Acciones secundarias (van al menú "Más acciones")
   const isPaidish = ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '');
   const canPrintPdf = ['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice?.status || '');
+  // Ticket termico 80mm solo para notas de entrega (no fiscales); las fiscales usan la reimpresion fiscal.
+  const canReprintTicket = canPrintPdf && !invoice?.serie?.isFiscal;
   const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
   const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
   const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
@@ -337,6 +340,22 @@ export default function InvoiceDetailPage() {
       setMessage({ type: 'error', text: `Error al reimprimir: ${err.message}` });
     } finally {
       setReprintLoading(false);
+    }
+  };
+
+  // Reimprimir ticket termico 80mm (notas de entrega / series no fiscales).
+  // Usa el agente termico si esta activo; si no, cae a window.print() en 80mm.
+  const handleReprintTicket = async () => {
+    if (!invoice) return;
+    setTicketLoading(true);
+    setMessage(null);
+    try {
+      const { printReceipt } = await import('@/lib/print-receipt');
+      await printReceipt(invoice, companyConfig || {});
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `No se pudo imprimir el ticket: ${err.message}` });
+    } finally {
+      setTicketLoading(false);
     }
   };
 
@@ -450,12 +469,21 @@ export default function InvoiceDetailPage() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[210px]">
+                {canReprintTicket && (
+                  <DropdownMenuItem
+                    onClick={handleReprintTicket}
+                    disabled={ticketLoading}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Reimprimir ticket
+                  </DropdownMenuItem>
+                )}
                 {canPrintPdf && (
                   <DropdownMenuItem
                     onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')}
                     className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
                   >
-                    <Printer size={14} /> Imprimir PDF
+                    <Printer size={14} /> Imprimir PDF (carta)
                   </DropdownMenuItem>
                 )}
                 {canReturnInvoice && (

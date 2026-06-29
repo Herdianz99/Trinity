@@ -11,6 +11,14 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 82 (2026-06-29) — Reimprimir ticket 80mm de notas de entrega (no fiscales) (PENDIENTE DEPLOY)
+
+> Pedido: poder reimprimir el ticket termico de una factura cuando es **nota de entrega** (no fiscal). Antes solo se podia: reimprimir si era fiscal (impresora fiscal) o "Imprimir PDF" que sale tamaño **carta**. La funcion `printReceipt()` (ticket 80mm, ya usada por el POS al cobrar) existia pero no estaba cableada para reimprimir. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
+
+- **Detalle de factura** (`sales/invoices/[id]`): nuevo `handleReprintTicket` + item "Reimprimir ticket" en "Mas acciones", visible solo si `canPrintPdf && !serie.isFiscal`. Llama a `printReceipt(invoice, companyConfig)` (intenta agente termico, si no cae a window.print() 80mm). El boton viejo se relabeló "Imprimir PDF (carta)".
+- **Listado de facturas** (`sales/invoices`): boton "Reimprimir ticket" (icono Receipt) en la fila (tabla escritorio) y en la tarjeta movil, solo para no fiscales PAID/PARTIAL_RETURN/RETURNED. Como el listado solo trae resumen, el handler **pide la factura completa** (`GET /invoices/:id`) + `/config` antes de imprimir. Estado `ticketBusyId` para el spinner por fila.
+- Las fiscales siguen con su "Reimprimir Fiscal"; el ticket 80mm es solo para notas de entrega.
+
 ## Sesion 81 (2026-06-29) — POS: "Disponible" = stock real - reservado en facturas en espera (PENDIENTE DEPLOY)
 
 > Pedido: en el POS ver, ademas del stock real, cuanto queda DISPONIBLE descontando lo que otros vendedores ya pusieron en facturas en espera (PENDING). Ej: 80 tubos reales, 5 en una factura en espera y 7 en otra -> "Stock: 80 / Disponible: 68". El stock solo se descuenta al PAGAR, asi que las en-espera no reservaban nada. **Cambio de schema** (2 indices). API + Web typecheck 0 errores. Migracion aplicada y validada en local.

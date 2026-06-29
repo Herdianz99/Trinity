@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Eye,
   Printer,
+  Receipt,
   Trash2,
   X,
   AlertTriangle,
@@ -82,6 +83,7 @@ export default function InvoicesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [loading, setLoading] = useState(true);
+  const [ticketBusyId, setTicketBusyId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -161,6 +163,27 @@ export default function InvoicesPage() {
 
   function handlePrint(id: string) {
     window.open(`/api/proxy/invoices/${id}/pdf`, '_blank');
+  }
+
+  // Reimprimir ticket termico 80mm (notas de entrega). El listado solo trae resumen,
+  // asi que se pide la factura completa (items/pagos) + config antes de imprimir.
+  async function handleReprintTicket(id: string) {
+    setTicketBusyId(id);
+    try {
+      const [invRes, cfgRes] = await Promise.all([
+        fetch(`/api/proxy/invoices/${id}`),
+        fetch('/api/proxy/config'),
+      ]);
+      if (!invRes.ok) throw new Error('No se pudo cargar la factura');
+      const inv = await invRes.json();
+      const cfg = cfgRes.ok ? await cfgRes.json() : {};
+      const { printReceipt } = await import('@/lib/print-receipt');
+      await printReceipt(inv, cfg || {});
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'No se pudo imprimir el ticket' });
+    } finally {
+      setTicketBusyId(null);
+    }
   }
 
   function handleSellerReport() {
@@ -271,6 +294,15 @@ export default function InvoicesPage() {
               <span className="text-base font-bold text-white">${inv.totalUsd.toFixed(2)}</span>
             </div>
             {inv.seller && <p className="text-xs text-slate-500 mt-1">Vendedor: {inv.seller.name}</p>}
+            {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && !inv.serie?.isFiscal && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReprintTicket(inv.id); }}
+                disabled={ticketBusyId === inv.id}
+                className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium disabled:opacity-50"
+              >
+                {ticketBusyId === inv.id ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} />} Reimprimir ticket
+              </button>
+            )}
           </Link>
         ))}
         {totalPages > 1 && (
@@ -343,8 +375,13 @@ export default function InvoicesPage() {
                       <Link href={`/sales/invoices/${inv.id}`} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400 inline-flex" title="Ver detalle">
                         <Eye size={15} />
                       </Link>
+                      {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && !inv.serie?.isFiscal && (
+                        <button onClick={() => handleReprintTicket(inv.id)} disabled={ticketBusyId === inv.id} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-50" title="Reimprimir ticket (80mm)">
+                          {ticketBusyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} />}
+                        </button>
+                      )}
                       {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && (
-                        <button onClick={() => handlePrint(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
+                        <button onClick={() => handlePrint(inv.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF (carta)">
                           <Printer size={15} />
                         </button>
                       )}
