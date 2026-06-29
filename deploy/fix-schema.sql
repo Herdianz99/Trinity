@@ -2146,3 +2146,11 @@ ON CONFLICT (id) DO NOTHING;
 -- =============================================================================
 CREATE INDEX IF NOT EXISTS "Invoice_status_idx" ON "Invoice"("status");
 CREATE INDEX IF NOT EXISTS "InvoiceItem_invoiceId_idx" ON "InvoiceItem"("invoiceId");
+
+-- =============================================================================
+-- INDICE GIN DE BUSQUEDA DE PRODUCTOS (Session 81 follow-up)
+-- La migracion 20260510000000 lo crea, pero en prod se habia perdido (la columna y
+-- el trigger estaban, el indice GIN no) -> la busqueda hacia seq scan. Esto lo
+-- re-crea y evita que vuelva a faltar. Acelera Product.searchVector @@ tsquery.
+-- =============================================================================
+CREATE INDEX IF NOT EXISTS "Product_searchVector_idx" ON "Product" USING GIN ("searchVector");
