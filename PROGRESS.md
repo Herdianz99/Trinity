@@ -1,5 +1,19 @@
 # Trinity ERP — Progreso
 
+## ✅ DEPLOY a PRODUCCION — 2026-06-29 (noche) — commit `4ad88bf`
+
+Desplegadas las **Sesiones 78 a 85** (primer dia de Trinity en produccion en El Trebol). Verificado por SSH: migracion `20260629160000_invoice_pending_indexes` aplicada, PM2 (`trinity-api`/`trinity-web`) online y estable, health `ok` + `database: ok`. Sin incidentes.
+
+- **Ya estaba en prod sin deploy (aplicado a mano por SSH durante el dia):** metodo de pago `pm_saldo_favor` (desbloqueo de caja, Sesion 80) e indice GIN `Product_searchVector_idx` (busqueda de productos). Ambos confirmados + en `fix-schema.sql` como red de seguridad.
+
+### 🔜 Para continuar mañana (2026-06-30)
+1. **Reporte Z + Libro (Sesion 84)** — PROBAR en la HKA80 real. Si imprime y guarda → OK. Si da error → usar **"Reporte Z simple"** (siempre cierra) y capturar el log de consola (`[FISCAL] U0X raw:` y `readReportData: N paquete(s)`) para afinar offsets / pasar a `U0Z`. (El fix del timeout fue: los comandos de extraccion usan protocolo multi-paquete ETB/EOT, no la trama simple ETX.)
+2. **Cuadre de caja (Sesion 83)** — confirmar que ya NO da sobrante falso cuando hay facturas devueltas (PARTIAL_RETURN/RETURNED ahora cuentan en el esperado). El sobrante que anotaron a mano hoy queda a criterio de Diego.
+3. **Verificaciones rapidas en prod:** reimpresion de ticket 80mm de nota de entrega (Sesion 82, el boton de impresora ahora saca ticket en no fiscales), comanda con cliente/vendedor/firma (Sesion 78), "Disponible" en POS (Sesion 81), busqueda POS completa (Sesion 79), KPI Ventas monto completo (Sesion 85).
+4. **Pendientes menores documentados (NO urgentes):** drift FK `onDelete RESTRICT` en `Receivable.invoiceId` y `RetentionVoucherLine.purchaseOrderId` (solo afecta si se BORRAN facturas/compras con relaciones; las facturas se anulan, no se borran); columnas `NOT NULL` en `PurchaseOrder`/`PurchaseOrderItem` con 0 NULLs reales hoy; opcion de monto completo en las mini-cards de caja del dashboard (Ingresos/Egresos/Neto) si lo piden.
+
+---
+
 ## ✅ DEPLOY a PRODUCCION — 2026-06-27 (noche) — commit `8ff02e5`
 
 Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634` a `8ff02e5`): **Sesiones 69 a 76** (y lo que quedaba pendiente de 66-68). Las **5 migraciones** se aplicaron correctamente y el schema quedo sincronizado.
@@ -11,11 +25,11 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
-## Sesion 85 (2026-06-29) — Dashboard: KPI de Ventas muestra monto completo (no $2.8K / Bs 1.7M) (PENDIENTE DEPLOY)
+## Sesion 85 (2026-06-29) — Dashboard: KPI de Ventas muestra monto completo (no $2.8K / Bs 1.7M) (DESPLEGADO 2026-06-29)
 
 > El KPI "Ventas" del dashboard abreviaba con `fmtCompact` ($2.8K, Bs 1.7M). Se cambio a `fmt` (monto completo con separadores VE: $2.800,00 / Bs 1.700.000,00), igual que ya hacian "Devoluciones" y "Ticket Promedio". Solo el value y sub de la card Ventas (`dashboard/page.tsx`). Los ejes de los graficos SIGUEN compactos (si no, no caben las etiquetas). Solo frontend, deploy Web. Typecheck 0 errores.
 
-## Sesion 84 (2026-06-29) — Reporte Z: 2 botones (simple seguro + "Z + Libro") + fix protocolo multi-paquete (PENDIENTE DEPLOY)
+## Sesion 84 (2026-06-29) — Reporte Z: 2 botones (simple seguro + "Z + Libro") + fix protocolo multi-paquete (DESPLEGADO 2026-06-29)
 
 > El boton Reporte Z fallaba con "Timeout esperando ETX en trama de respuesta". **Causa raiz (confirmada con el manual The Factory HKA, §10.3 Tabla 11)**: los comandos de extraccion de reporte (`U0X`/`U0Z`) responden con protocolo **multi-paquete** — varios paquetes `STX-DATA-ETB-LRC` (ETB=0x17), ACK por paquete, cerrando con `EOT` (0x04). El codigo solo sabia leer la trama simple terminada en `ETX` (0x03, Tabla 10, que usan S1/SV) -> `readFrame` nunca hallaba ETX -> timeout. Por eso la deteccion (S1/SV) funcionaba pero el Z no. `U0X` NO era inventado (manual §21.1, valido para HKA80).
 
@@ -25,7 +39,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
   - **"Reporte Z simple"** (`'Zs'`): solo manda `I0Z` (como el X), imprime el cierre SIN leer ni guardar. **Respaldo garantizado** si el "+ Libro" falla. Como el "+ Libro" lee ANTES de cerrar, si falla la lectura el Z no se cierra -> el simple lo cierra sin doble cierre.
 - Solo frontend, sin schema/backend. Web typecheck 0 errores. No se pudo probar local (no hay impresora fiscal): se valida manana en caja; si "+ Libro" da error, usan el simple y se itera con el log del raw.
 
-## Sesion 83 (2026-06-29) — Caja: facturas devueltas desaparecian del reporte Y del arqueo (sobrante falso) (PENDIENTE DEPLOY)
+## Sesion 83 (2026-06-29) — Caja: facturas devueltas desaparecian del reporte Y del arqueo (sobrante falso) (DESPLEGADO 2026-06-29)
 
 > **Bug grave detectado en produccion hoy**: al cuadrar caja "sobraba dinero". Causa: el modulo de caja contaba pagos de ventas filtrando `status: 'PAID'`. Cuando una factura se devuelve (parcial o total) pasa a `PARTIAL_RETURN`/`RETURNED` y se caia de esos calculos, PERO el pago original SI entro a la caja (la nota de credito no saca efectivo de la gaveta; los pagos no se borran). Resultado: el **esperado** del arqueo quedaba subestimado -> Real > Esperado = **sobrante falso**. Ej. real: NE-26-00000573 (PARTIAL_RETURN) con pagos P.V Bancaribe $167.70 + Cashea $251.55 no aparecia en el reporte de movimientos.
 
@@ -34,7 +48,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - **Alcance**: solo modulo de caja (movimiento de dinero). NO toca reportes de ventas (donde una devolucion si debe restar ventas netas). Solo backend, sin schema. API typecheck 0 errores.
 - *Nota*: corrige hacia adelante; sesiones ya cerradas con el sobrante falso quedan como estan (el calculo del esperado se recomputa bien al re-consultar).
 
-## Sesion 82 (2026-06-29) — Reimprimir ticket 80mm de notas de entrega (no fiscales) (PENDIENTE DEPLOY)
+## Sesion 82 (2026-06-29) — Reimprimir ticket 80mm de notas de entrega (no fiscales) (DESPLEGADO 2026-06-29)
 
 > Pedido: poder reimprimir el ticket termico de una factura cuando es **nota de entrega** (no fiscal). Antes solo se podia: reimprimir si era fiscal (impresora fiscal) o "Imprimir PDF" que sale tamaño **carta**. La funcion `printReceipt()` (ticket 80mm, ya usada por el POS al cobrar) existia pero no estaba cableada para reimprimir. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
 
@@ -43,7 +57,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - **Listado de facturas** (`sales/invoices`): el boton de impresora de cada fila ramifica igual (fiscal -> PDF, no fiscal -> ticket). Como el listado solo trae resumen, para el ticket **pide la factura completa** (`GET /invoices/:id`) + `/config` antes de imprimir. Estado `ticketBusyId` para el spinner por fila. (La tarjeta movil no tiene boton de impresion; en movil se imprime desde el detalle, como era antes.)
 - Las fiscales siguen con su "Reimprimir Fiscal" (impresora fiscal) ademas del PDF.
 
-## Sesion 81 (2026-06-29) — POS: "Disponible" = stock real - reservado en facturas en espera (PENDIENTE DEPLOY)
+## Sesion 81 (2026-06-29) — POS: "Disponible" = stock real - reservado en facturas en espera (DESPLEGADO 2026-06-29)
 
 > Pedido: en el POS ver, ademas del stock real, cuanto queda DISPONIBLE descontando lo que otros vendedores ya pusieron en facturas en espera (PENDING). Ej: 80 tubos reales, 5 en una factura en espera y 7 en otra -> "Stock: 80 / Disponible: 68". El stock solo se descuenta al PAGAR, asi que las en-espera no reservaban nada. **Cambio de schema** (2 indices). API + Web typecheck 0 errores. Migracion aplicada y validada en local.
 
@@ -52,7 +66,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - **Indices** (migracion `20260629160000_invoice_pending_indexes` + `@@index` en schema + `fix-schema.sql`): `Invoice(status)` e `InvoiceItem(invoiceId)`. No afectan nada existente (aditivos/transparentes); aceleran esta consulta Y la lista de facturas en espera. Especialmente valiosos en la tienda grande por VOLUMEN de ventas (no por catalogo). Nombres = defaults de Prisma para evitar drift.
 - **Follow-up GIN (RESUELTO en prod):** se descubrio que el indice GIN `Product_searchVector_idx` (que crea la migracion 20260510000000) **faltaba en prod** — la columna `searchVector` y el trigger estaban, el indice no -> la busqueda hacia seq scan. Se **re-creo directo en prod por SSH** (instantaneo, sin deploy, no bloquea lecturas) y se agrego a `fix-schema.sql` con `IF NOT EXISTS` para que no vuelva a faltar. (Optimizacion mas profunda futura, NO hecha: indice trigram pg_trgm para el `ILIKE '%...%'`; no urgente.)
 
-## Sesion 80 (2026-06-29) — Cobro con "Saldo a Favor" reventaba: faltaba el metodo en prod (INSERT YA APLICADO en prod; resto PENDIENTE DEPLOY)
+## Sesion 80 (2026-06-29) — Cobro con "Saldo a Favor" reventaba: faltaba el metodo en prod (DESPLEGADO 2026-06-29)
 
 > En produccion, al cobrar una factura cruzando el saldo a favor del cliente, fallaba con *"Metodo de pago con id 'pm_saldo_favor' no encontrado"* (`invoices.service.pay` linea ~421). **Causa raiz = dato faltante, no codigo**: el sistema usa el id fijo `pm_saldo_favor` (seed.ts:505) y `Payment.methodId` es FK a `PaymentMethod`, asi que esa fila DEBE existir. La BD de prod (sembrada antes de que el seed lo incluyera) NO la tenia. Verificado por SSH: habia 20 metodos, ninguno el saldo a favor.
 
@@ -61,7 +75,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - **Frontend** (`sales/pos/page.tsx`): el dropdown de **metodo de vuelto** filtraba solo por `!isDivisa && isActive`, asi que "Saldo a Favor" (que es ambas) se colaba como opcion de vuelto. Se agrego `&& pm.id !== 'pm_saldo_favor'` (igual que ya hacian los selectores de pago y de anticipo). El selector principal de pago ya lo excluia: el cajero NO lo ve como metodo normal, solo via el boton "Saldo a favor del cliente" cuando el cliente tiene saldo.
 - *Sin cambio de codigo backend ni de schema.* Web typecheck 0 errores.
 
-## Sesion 79 (2026-06-29) — POS: busqueda mostraba solo 10 resultados (PENDIENTE DEPLOY)
+## Sesion 79 (2026-06-29) — POS: busqueda mostraba solo 10 resultados (DESPLEGADO 2026-06-29)
 
 > Reporte de vendedores en el arranque en produccion: buscar "clavo" en el POS mostraba **10** articulos, pero en `/catalog/products` salian **40** ("donde estan los demas?"). Causa: el POS pedia `&limit=10` sin paginacion; POS y catalogo usan **la misma busqueda del API** (full-text + ILIKE sobre name/code/barcode/supplierRef), la unica diferencia era el limite. Los productos nunca faltaron. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
 
@@ -69,7 +83,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - **Aviso de seguridad**: nuevo estado `searchTotal` (del `total` que ya devuelve el API). Si los resultados superan el tope, muestra "Mostrando X de Y. Refiná la búsqueda para ver el resto." en las **dos** vistas del POS (grid desktop y lista). Se resetea al limpiar busqueda / agregar al carrito.
 - **Sin cambio de backend**: el DTO de products (`limit`) solo tiene `@Min(1)`, sin `@Max`, asi que acepta 500.
 
-## Sesion 78 (2026-06-29) — Comanda de despacho: cliente, vendedor y firma (PENDIENTE DEPLOY)
+## Sesion 78 (2026-06-29) — Comanda de despacho: cliente, vendedor y firma (DESPLEGADO 2026-06-29)
 
 > Pedido de la gente de despacho en el arranque de Trinity en produccion: la comanda debe mostrar **cliente** y **vendedor**, mas una **seccion para firmar quien despacha**. Sin cambio de schema (solo se incluyen relaciones ya existentes). API typecheck 0 errores, Web typecheck 0 errores. El **agente termico NO cambia** (el texto se arma en el web y se le envia listo): solo deploy de **API + Web**.
 
