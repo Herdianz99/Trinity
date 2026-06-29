@@ -294,6 +294,11 @@ const ETX = 0x03;
 const ENQ = 0x05;
 const ACK = 0x06;
 const NAK = 0x15;
+// Lectura de reportes (manual §10.3, Tabla 11): la impresora responde con varios
+// paquetes STX-DATA-ETB-LRC (cada uno ACK-eado) y cierra con EOT. Distinto de la
+// lectura simple (Tabla 10), que es una sola trama terminada en ETX.
+const ETB = 0x17;
+const EOT = 0x04;
 
 const SERIAL_CONFIG = {
   baudRate: 9600,
@@ -432,6 +437,70 @@ class SerialIO {
       const value = (result as ReadableStreamReadResult<Uint8Array>).value;
       if (value) for (let j = 0; j < value.length; j++) this.pending.push(value[j]);
     }
+  }
+
+  /**
+   * Lee una respuesta de reporte multi-paquete (manual §10.3, Tabla 11):
+   * la impresora envia varios paquetes STX-DATA-ETB-LRC; el PC hace ACK por cada
+   * uno; la secuencia termina con EOT. Devuelve la concatenacion del DATA de todos.
+   * Es lo que faltaba: los comandos de extraccion (U0X/U0Z) usan ESTE protocolo,
+   * no la trama simple terminada en ETX que entiende readFrame().
+   */
+  async readReportData(timeoutMs: number): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    const decoder = new TextDecoder();
+    let data = '';
+    let packets = 0;
+
+    const pump = async () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error('Timeout leyendo datos del reporte fiscal');
+      const result = await Promise.race([
+        this.reader.read(),
+        new Promise<null>((r) => setTimeout(() => r(null), remaining)),
+      ]);
+      if (result === null) throw new Error('Timeout leyendo datos del reporte fiscal');
+      if ((result as ReadableStreamReadResult<Uint8Array>).done) {
+        throw new Error('Puerto serial cerrado');
+      }
+      const value = (result as ReadableStreamReadResult<Uint8Array>).value;
+      if (value) for (let j = 0; j < value.length; j++) this.pending.push(value[j]);
+    };
+
+    while (true) {
+      while (this.pending.length === 0) await pump();
+
+      // Fin de la secuencia
+      if (this.pending[0] === EOT) {
+        this.pending.shift();
+        break;
+      }
+      // Descarta ruido / bytes sueltos (ACK/NAK/etc) hasta encontrar un STX
+      if (this.pending[0] !== STX) {
+        this.pending.shift();
+        continue;
+      }
+
+      // Busca el ETB que cierra este paquete
+      let etbIdx = this.pending.indexOf(ETB, 1);
+      while (etbIdx < 0) {
+        await pump();
+        etbIdx = this.pending.indexOf(ETB, 1);
+      }
+      // Necesita el ETB + 1 byte de LRC
+      const frameLen = etbIdx + 2;
+      while (this.pending.length < frameLen) await pump();
+      const frame = this.pending.splice(0, frameLen);
+      // DATA = entre STX (0) y ETB (etbIdx)
+      const dataBytes = frame.slice(1, etbIdx);
+      data += decoder.decode(new Uint8Array(dataBytes));
+      packets++;
+      // ACK para solicitar el siguiente paquete
+      await this.write(new Uint8Array([ACK]));
+    }
+
+    console.log(`[FISCAL] readReportData: ${packets} paquete(s), ${data.length} chars`);
+    return data;
   }
 
   /**
@@ -691,6 +760,17 @@ async function sendReadCommand(io: SerialIO, cmd: string): Promise<string> {
   }
 
   throw new Error(`Falló la lectura del comando ${cmd} tras ${MAX_RETRIES} reintentos`);
+}
+
+/**
+ * Envia un comando de EXTRACCION de reporte (U0X/U0Z) y lee la respuesta como
+ * secuencia multi-paquete (ETB por paquete + EOT al final, manual §10.3 Tabla 11).
+ * A diferencia de sendReadCommand, no espera una trama unica terminada en ETX.
+ */
+async function sendReportReadCommand(io: SerialIO, cmd: string): Promise<string> {
+  const frame = buildFrame(cmd);
+  await io.write(frame);
+  return io.readReportData(10000);
 }
 
 // ─── Printer model detection — SV (MEJORA 2) ────────────────────
@@ -1086,9 +1166,12 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
     const s1 = await readStatusS1(io, model.family);
     const machineSerial = s1.machineSerial;
 
-    // 2. Send U0X to read Z accumulators without clearing
+    // 2. Send U0X to read Z accumulators without clearing.
+    // U0X usa el protocolo de lectura multi-paquete (ETB/EOT), NO la trama simple
+    // terminada en ETX -> por eso sendReadCommand daba "Timeout esperando ETX".
     await waitForReady(io);
-    const rawResponse = await sendReadCommand(io, 'U0X');
+    const rawResponse = await sendReportReadCommand(io, 'U0X');
+    console.log('[FISCAL] U0X raw:', JSON.stringify(rawResponse));
     const f = rawResponse.split('\n');
 
     console.log(`[FISCAL] U0X response: ${f.length} fields, family ${model.family}`);

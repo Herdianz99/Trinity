@@ -58,7 +58,7 @@ export default function CashDetailPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
-  const [reportLoading, setReportLoading] = useState<'X' | 'Z' | null>(null);
+  const [reportLoading, setReportLoading] = useState<'X' | 'Z' | 'Zs' | null>(null);
 
   // Manual movement modal
   const [movementModalOpen, setMovementModalOpen] = useState(false);
@@ -240,13 +240,18 @@ export default function CashDetailPage() {
     }
   }
 
-  async function handleFiscalReport(type: 'X' | 'Z') {
+  async function handleFiscalReport(type: 'X' | 'Z' | 'Zs') {
     setReportLoading(type);
     setMessage(null);
     try {
       if (type === 'X') {
         await sendToFiscalPrinter(['I0X']);
         setMessage({ type: 'success', text: 'Reporte X enviado correctamente' });
+      } else if (type === 'Zs') {
+        // Z simple: solo manda el comando de cierre (como el X), SIN leer datos ni
+        // guardar en el libro. Es el respaldo seguro si el "Z + Libro" falla.
+        await sendToFiscalPrinter(['I0Z']);
+        setMessage({ type: 'success', text: 'Reporte Z impreso (cierre simple, no se guardo en el libro)' });
       } else {
         // Z Report: extract data, print, and save to backend
         const zData = await extractAndPrintZReport();
@@ -639,10 +644,20 @@ export default function CashDetailPage() {
                 <button
                   onClick={() => handleFiscalReport('Z')}
                   disabled={reportLoading !== null}
+                  title="Imprime el Z y extrae sus datos para guardarlos en el libro de ventas"
                   className="px-4 py-2 text-sm rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {reportLoading === 'Z' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                  Reporte Z
+                  Reporte Z + Libro
+                </button>
+                <button
+                  onClick={() => handleFiscalReport('Zs')}
+                  disabled={reportLoading !== null}
+                  title="Solo imprime el cierre Z (sin guardar en el libro). Usar si el 'Z + Libro' da error."
+                  className="px-4 py-2 text-sm rounded-lg bg-slate-500/10 border border-slate-500/20 text-slate-300 hover:bg-slate-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {reportLoading === 'Zs' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                  Reporte Z simple
                 </button>
               </>
             )}

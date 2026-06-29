@@ -11,6 +11,16 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 84 (2026-06-29) — Reporte Z: 2 botones (simple seguro + "Z + Libro") + fix protocolo multi-paquete (PENDIENTE DEPLOY)
+
+> El boton Reporte Z fallaba con "Timeout esperando ETX en trama de respuesta". **Causa raiz (confirmada con el manual The Factory HKA, §10.3 Tabla 11)**: los comandos de extraccion de reporte (`U0X`/`U0Z`) responden con protocolo **multi-paquete** — varios paquetes `STX-DATA-ETB-LRC` (ETB=0x17), ACK por paquete, cerrando con `EOT` (0x04). El codigo solo sabia leer la trama simple terminada en `ETX` (0x03, Tabla 10, que usan S1/SV) -> `readFrame` nunca hallaba ETX -> timeout. Por eso la deteccion (S1/SV) funcionaba pero el Z no. `U0X` NO era inventado (manual §21.1, valido para HKA80).
+
+- **Fix protocolo** (`fiscal-printer.ts`): constantes `ETB`/`EOT`; nuevo `SerialIO.readReportData()` que lee los paquetes ETB, ACK-ea cada uno y termina en EOT, concatenando el DATA; nuevo `sendReportReadCommand()`. `extractAndPrintZReport` ahora lee `U0X` con ese protocolo (+ logs del raw para afinar offsets si hiciera falta). Se mantiene `U0X` (lee acumuladores actuales antes de cerrar) y el parseo existente.
+- **UX — 2 botones de Z** (decision del usuario, patron seguro):
+  - **"Reporte Z + Libro"** (`'Z'`): extrae datos (multi-paquete) + imprime + guarda en libro. Experimental hasta validar contra la HKA80 real.
+  - **"Reporte Z simple"** (`'Zs'`): solo manda `I0Z` (como el X), imprime el cierre SIN leer ni guardar. **Respaldo garantizado** si el "+ Libro" falla. Como el "+ Libro" lee ANTES de cerrar, si falla la lectura el Z no se cierra -> el simple lo cierra sin doble cierre.
+- Solo frontend, sin schema/backend. Web typecheck 0 errores. No se pudo probar local (no hay impresora fiscal): se valida manana en caja; si "+ Libro" da error, usan el simple y se itera con el log del raw.
+
 ## Sesion 83 (2026-06-29) — Caja: facturas devueltas desaparecian del reporte Y del arqueo (sobrante falso) (PENDIENTE DEPLOY)
 
 > **Bug grave detectado en produccion hoy**: al cuadrar caja "sobraba dinero". Causa: el modulo de caja contaba pagos de ventas filtrando `status: 'PAID'`. Cuando una factura se devuelve (parcial o total) pasa a `PARTIAL_RETURN`/`RETURNED` y se caia de esos calculos, PERO el pago original SI entro a la caja (la nota de credito no saca efectivo de la gaveta; los pagos no se borran). Resultado: el **esperado** del arqueo quedaba subestimado -> Real > Esperado = **sobrante falso**. Ej. real: NE-26-00000573 (PARTIAL_RETURN) con pagos P.V Bancaribe $167.70 + Cashea $251.55 no aparecia en el reporte de movimientos.
