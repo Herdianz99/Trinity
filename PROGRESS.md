@@ -11,6 +11,10 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 85 (2026-06-29) — Dashboard: KPI de Ventas muestra monto completo (no $2.8K / Bs 1.7M) (PENDIENTE DEPLOY)
+
+> El KPI "Ventas" del dashboard abreviaba con `fmtCompact` ($2.8K, Bs 1.7M). Se cambio a `fmt` (monto completo con separadores VE: $2.800,00 / Bs 1.700.000,00), igual que ya hacian "Devoluciones" y "Ticket Promedio". Solo el value y sub de la card Ventas (`dashboard/page.tsx`). Los ejes de los graficos SIGUEN compactos (si no, no caben las etiquetas). Solo frontend, deploy Web. Typecheck 0 errores.
+
 ## Sesion 84 (2026-06-29) — Reporte Z: 2 botones (simple seguro + "Z + Libro") + fix protocolo multi-paquete (PENDIENTE DEPLOY)
 
 > El boton Reporte Z fallaba con "Timeout esperando ETX en trama de respuesta". **Causa raiz (confirmada con el manual The Factory HKA, §10.3 Tabla 11)**: los comandos de extraccion de reporte (`U0X`/`U0Z`) responden con protocolo **multi-paquete** — varios paquetes `STX-DATA-ETB-LRC` (ETB=0x17), ACK por paquete, cerrando con `EOT` (0x04). El codigo solo sabia leer la trama simple terminada en `ETX` (0x03, Tabla 10, que usan S1/SV) -> `readFrame` nunca hallaba ETX -> timeout. Por eso la deteccion (S1/SV) funcionaba pero el Z no. `U0X` NO era inventado (manual §21.1, valido para HKA80).

@@ -256,8 +256,8 @@ export default function DashboardPage() {
               icon={<DollarSign size={20} />}
               iconBg="bg-emerald-500/15 text-emerald-400"
               label="Ventas"
-              value={`$${fmtCompact(data.sales.totalUsd)}`}
-              sub={`Bs ${fmtCompact(data.sales.totalBs)}`}
+              value={`$${fmt(data.sales.totalUsd)}`}
+              sub={`Bs ${fmt(data.sales.totalBs)}`}
               change={data.sales.vsLastPeriod}
               positiveIsGood
             />
