@@ -134,7 +134,8 @@ export class CashSessionPdfService {
     const invoiceWhere: any = {
       cashRegisterId: data.cashRegisterId,
       paidAt: { gte: data.openedAt },
-      status: 'PAID',
+      // Incluye devueltas: el pago original entro a la caja (ver cash-registers.service).
+      status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
     };
     if (data.closedAt) invoiceWhere.paidAt.lte = data.closedAt;
     const invoices = await this.prisma.invoice.findMany({ where: invoiceWhere, select: { id: true } });

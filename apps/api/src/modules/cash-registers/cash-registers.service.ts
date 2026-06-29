@@ -305,7 +305,9 @@ export class CashRegistersService {
     const invoiceWhere: any = {
       cashRegisterId: session.cashRegisterId,
       paidAt: { gte: session.openedAt },
-      status: 'PAID',
+      // Incluye facturas devueltas: el pago original SI entro a la caja; la devolucion
+      // es un movimiento aparte. Excluirlas subestima el esperado -> sobrante falso.
+      status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
     };
     if (session.closedAt) {
       invoiceWhere.paidAt.lte = session.closedAt;
@@ -366,7 +368,9 @@ export class CashRegistersService {
     const where: any = {
       cashRegisterId,
       paidAt: { gte: openedAt },
-      status: 'PAID',
+      // Incluye facturas devueltas: el pago original SI entro a la caja; la devolucion
+      // es un movimiento aparte. Excluirlas subestima el esperado -> sobrante falso.
+      status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
     };
     if (closedAt) {
       where.paidAt.lte = closedAt;
@@ -595,7 +599,9 @@ export class CashRegistersService {
     const invoices = await this.prisma.invoice.findMany({
       where: {
         cashRegisterId: { in: registerIds },
-        status: 'PAID',
+        // Incluye facturas devueltas: el pago original SI entro a la caja; la devolucion
+      // es un movimiento aparte. Excluirlas subestima el esperado -> sobrante falso.
+      status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
         paidAt: { gte: minOpened, lte: maxClosed },
       },
       select: {

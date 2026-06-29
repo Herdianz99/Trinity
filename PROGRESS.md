@@ -11,6 +11,15 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 83 (2026-06-29) — Caja: facturas devueltas desaparecian del reporte Y del arqueo (sobrante falso) (PENDIENTE DEPLOY)
+
+> **Bug grave detectado en produccion hoy**: al cuadrar caja "sobraba dinero". Causa: el modulo de caja contaba pagos de ventas filtrando `status: 'PAID'`. Cuando una factura se devuelve (parcial o total) pasa a `PARTIAL_RETURN`/`RETURNED` y se caia de esos calculos, PERO el pago original SI entro a la caja (la nota de credito no saca efectivo de la gaveta; los pagos no se borran). Resultado: el **esperado** del arqueo quedaba subestimado -> Real > Esperado = **sobrante falso**. Ej. real: NE-26-00000573 (PARTIAL_RETURN) con pagos P.V Bancaribe $167.70 + Cashea $251.55 no aparecia en el reporte de movimientos.
+
+- **Fix** (`cash-registers.service.ts` x3 + `cash-session-pdf.service.ts` x1): `status: 'PAID'` -> `status: { in: ['PAID','PARTIAL_RETURN','RETURNED'] }` en: reporte global de movimientos, reporte de sesion (PDF), lista de pagos de sesion, y `getSessionSalesData` (calculo del arqueo/esperado).
+- **Por que es correcto**: una factura pagada-y-luego-devuelta FUE pagada; ese movimiento de dinero ocurrio y debe contarse. La devolucion es un evento aparte (si entrega efectivo, ya se registra como movimiento de salida). Verificado: la NCV no crea CashMovement ni borra los Payment, asi que NO hay doble conteo.
+- **Alcance**: solo modulo de caja (movimiento de dinero). NO toca reportes de ventas (donde una devolucion si debe restar ventas netas). Solo backend, sin schema. API typecheck 0 errores.
+- *Nota*: corrige hacia adelante; sesiones ya cerradas con el sobrante falso quedan como estan (el calculo del esperado se recomputa bien al re-consultar).
+
 ## Sesion 82 (2026-06-29) — Reimprimir ticket 80mm de notas de entrega (no fiscales) (PENDIENTE DEPLOY)
 
 > Pedido: poder reimprimir el ticket termico de una factura cuando es **nota de entrega** (no fiscal). Antes solo se podia: reimprimir si era fiscal (impresora fiscal) o "Imprimir PDF" que sale tamaño **carta**. La funcion `printReceipt()` (ticket 80mm, ya usada por el POS al cobrar) existia pero no estaba cableada para reimprimir. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
