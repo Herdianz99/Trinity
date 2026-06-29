@@ -197,6 +197,7 @@ export default function POSPage() {
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -492,13 +493,16 @@ export default function POSPage() {
   const handleProductSearch = useCallback((query: string) => {
     setSearchQuery(query);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!query.trim()) { setSearchResults([]); return; }
+    if (!query.trim()) { setSearchResults([]); setSearchTotal(0); return; }
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(query)}&limit=10`);
+        // Tope alto (no 10): el cajero scrollea todos los resultados de su busqueda.
+        // 500 = "todos" para cualquier busqueda real; protege de pintar miles si el termino es muy generico.
+        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(query)}&limit=500`);
         const data = await res.json();
         setSearchResults(data.data || []);
+        setSearchTotal(data.total || 0);
       } catch {} finally {
         setSearching(false);
       }
@@ -645,6 +649,7 @@ export default function POSPage() {
     });
     setSearchQuery('');
     setSearchResults([]);
+    setSearchTotal(0);
   }
 
   function updateQuantity(productId: string, delta: number) {
@@ -1653,6 +1658,11 @@ export default function POSPage() {
                   <p className="text-slate-500 text-sm">Busca un producto</p>
                 </div>
               </div>
+            )}
+            {searchTotal > searchResults.length && (
+              <p className="text-center text-xs text-amber-400 mt-3 px-2">
+                Mostrando {searchResults.length} de {searchTotal}. Refiná la búsqueda para ver el resto.
+              </p>
             )}
           </div>
         </div>
@@ -2721,6 +2731,11 @@ export default function POSPage() {
               </button>
               );
             })}
+            {searchTotal > searchResults.length && (
+              <p className="text-center text-xs text-amber-400 py-2 px-3 border-t border-slate-700/30">
+                Mostrando {searchResults.length} de {searchTotal}. Refiná la búsqueda para ver el resto.
+              </p>
+            )}
           </div>
         )}
 

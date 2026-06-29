@@ -11,6 +11,14 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 79 (2026-06-29) — POS: busqueda mostraba solo 10 resultados (PENDIENTE DEPLOY)
+
+> Reporte de vendedores en el arranque en produccion: buscar "clavo" en el POS mostraba **10** articulos, pero en `/catalog/products` salian **40** ("donde estan los demas?"). Causa: el POS pedia `&limit=10` sin paginacion; POS y catalogo usan **la misma busqueda del API** (full-text + ILIKE sobre name/code/barcode/supplierRef), la unica diferencia era el limite. Los productos nunca faltaron. Solo frontend, deploy **solo Web**. Web typecheck 0 errores.
+
+- **Frontend** (`sales/pos/page.tsx`, `handleProductSearch`): limite **10 → 500** para que el cajero scrollee todos los resultados de su busqueda (ej. "tubo"/"cable" pasan de 50). El dropdown ya era scrollable. No se quita el tope del todo para no arriesgar pintar miles de tarjetas si el termino es muy generico (tablet de caja).
+- **Aviso de seguridad**: nuevo estado `searchTotal` (del `total` que ya devuelve el API). Si los resultados superan el tope, muestra "Mostrando X de Y. Refiná la búsqueda para ver el resto." en las **dos** vistas del POS (grid desktop y lista). Se resetea al limpiar busqueda / agregar al carrito.
+- **Sin cambio de backend**: el DTO de products (`limit`) solo tiene `@Min(1)`, sin `@Max`, asi que acepta 500.
+
 ## Sesion 78 (2026-06-29) — Comanda de despacho: cliente, vendedor y firma (PENDIENTE DEPLOY)
 
 > Pedido de la gente de despacho en el arranque de Trinity en produccion: la comanda debe mostrar **cliente** y **vendedor**, mas una **seccion para firmar quien despacha**. Sin cambio de schema (solo se incluyen relaciones ya existentes). API typecheck 0 errores, Web typecheck 0 errores. El **agente termico NO cambia** (el texto se arma en el web y se le envia listo): solo deploy de **API + Web**.
