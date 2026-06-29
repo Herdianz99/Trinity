@@ -837,6 +837,9 @@ model LostSale {
   createdById   String
   createdBy     User           @relation(fields: [createdById], references: [id])
   createdAt     DateTime       @default(now())
+
+  @@index([createdAt])
+  @@index([productId])
 }
 
 model CustomerAdvance {
