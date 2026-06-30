@@ -1,5 +1,11 @@
 # Trinity ERP — Progreso
 
+## ✅ DEPLOY a PRODUCCION — 2026-06-30 (mediodia) — commit `b6ea75e`
+
+Desplegadas las **Sesiones 86 a 91** (deploy hecho por Diego al mediodia, en el descanso de 2h de los vendedores). Ya en uso en la nube. Incluye: Precio venta + Descuento en movimientos (S86), vuelto en efectivo USD + fix base IGTF sobre sobrepago (S87), emails de usuario normalizados/login case-insensitive + tasa de cambio a 4 decimales (S88), boton imprimir en cotizaciones movil (S89), y navegacion con teclado (flechas + Enter) en los buscadores de compras (S90) y POS (S91).
+
+- **Verificar en prod (pendiente del cliente):** (1) IGTF en caja fiscal real usa la base correcta sin contar el vuelto; (2) el vuelto en efectivo USD deja la caja cuadrada; (3) opcional para uniformar emails: `UPDATE "User" SET email = lower(email) WHERE email <> lower(email);` (el login ya es case-insensitive, nadie queda bloqueado sin esto).
+
 ## ✅ DEPLOY a PRODUCCION — 2026-06-29 (noche) — commit `4ad88bf`
 
 Desplegadas las **Sesiones 78 a 85** (primer dia de Trinity en produccion en El Trebol). Verificado por SSH: migracion `20260629160000_invoice_pending_indexes` aplicada, PM2 (`trinity-api`/`trinity-web`) online y estable, health `ok` + `database: ok`. Sin incidentes.
@@ -25,7 +31,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
-## Sesion 91 (2026-06-30) — POS: navegacion con teclado en buscadores de producto y cliente (SIN DESPLEGAR)
+## Sesion 91 (2026-06-30) — POS: navegacion con teclado en buscadores de producto y cliente (DESPLEGADA 2026-06-30)
 
 > Continuacion de la S90: mismo patron de teclado replicado en el POS (`sales/pos/page.tsx`) para consistencia. Solo las vistas DESKTOP (lista de una columna); la grilla movil de productos (2 columnas, tactil) se dejo como estaba.
 - Estados `productHighlight` / `customerHighlight`. Helpers `pickProduct` (sin stock → venta perdida, con stock → carrito) y `pickCustomer` (asigna cliente), reusados en click y Enter.
@@ -33,19 +39,19 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 - Reset del indice a 0 al teclear y al llegar resultados (producto async con debounce; cliente via useEffect de `customerSearch`).
 - Lector de codigo de barras sin conflicto: si Enter llega antes de cargar resultados (`length===0`), el handler retorna sin hacer nada (igual que antes). Solo frontend, Web typecheck 0 errores.
 
-## Sesion 90 (2026-06-30) — Compras: navegacion con teclado en buscadores de proveedor y producto (SIN DESPLEGAR)
+## Sesion 90 (2026-06-30) — Compras: navegacion con teclado en buscadores de proveedor y producto (DESPLEGADA 2026-06-30)
 
 > Pedido de Diego: los usuarios venian de un sistema donde buscaban el proveedor y bajaban con las flechas del teclado para seleccionar sin mouse. Se agrego navegacion con teclado a los dos autocompletes de `purchases/new/page.tsx`.
 - **Proveedor** (dropdown sincronico, lista `filteredSuppliers`): estado `supplierHighlight`; `onKeyDown` en el input con ArrowDown/ArrowUp (mueve y topa el indice), Enter (selecciona el resaltado + `preventDefault` para no enviar el form), Escape (cierra). Resaltado visual del item activo, `scrollIntoView({block:'nearest'})` para auto-scroll, y `onMouseEnter` unifica mouse+teclado. Reset del indice a 0 en onChange/onFocus.
 - **Productos** (busqueda async con debounce, lista `productResults` por fila `activeSearchRow`): estado `productHighlight`; misma logica en `onKeyDown` del input de producto (guard `activeSearchRow === idx`), Enter llama `selectProduct`, Escape limpia resultados. Reset del indice a 0 al teclear y al llegar los resultados async.
 - Solo frontend, Web typecheck 0 errores. Mismo patron reusable para POS (cliente/producto) si lo piden.
 
-## Sesion 89 (2026-06-30) — Cotizaciones: boton de imprimir en la vista movil (SIN DESPLEGAR)
+## Sesion 89 (2026-06-30) — Cotizaciones: boton de imprimir en la vista movil (DESPLEGADA 2026-06-30)
 
 > El listado de cotizaciones (`quotations/page.tsx`) tenia boton de imprimir PDF en cada fila del desktop, pero la vista movil (tarjetas) no lo tenia (ni el modal de detalle). Se agrego un boton "Imprimir" a cada tarjeta movil.
 - La tarjeta era un `<button>` (abria el detalle); se convirtio en `<div>` clickeable (no se puede anidar un boton dentro de otro). El boton de imprimir usa `e.stopPropagation()` para imprimir sin abrir el detalle. Misma accion `handlePrint` (abre `/quotations/:id/pdf`). Solo frontend, Web typecheck 0 errores.
 
-## Sesion 88 (2026-06-30) — Emails de usuario estandarizados + tasa de cambio a 4 decimales (SIN DESPLEGAR)
+## Sesion 88 (2026-06-30) — Emails de usuario estandarizados + tasa de cambio a 4 decimales (DESPLEGADA 2026-06-30)
 
 > Dos pedidos chicos de Diego. Probado en local con copia de la BD de prod.
 
@@ -61,7 +67,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 - Sin cambios de schema. API + Web typecheck 0 errores.
 
-## Sesion 87 (2026-06-30) — POS: vuelto en efectivo USD (ayuda de calculo) + fix base IGTF sobre sobrepago (SIN DESPLEGAR)
+## Sesion 87 (2026-06-30) — POS: vuelto en efectivo USD (ayuda de calculo) + fix base IGTF sobre sobrepago (DESPLEGADA 2026-06-30)
 
 > Dos cambios en el cobro del POS (`sales/pos/page.tsx`) + backend de IGTF (`invoices.service.ts`). Probado en local con copia de la BD de prod.
 
@@ -74,7 +80,7 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 - API + Web typecheck 0 errores. Sin cambios de schema. **Pendiente probar en caja fiscal real** antes de confiar el IGTF en produccion.
 
-## Sesion 86 (2026-06-30) — Movimientos de Stock: quitar "Referencia", agregar "Precio venta" + "Descuento" (SIN DESPLEGAR)
+## Sesion 86 (2026-06-30) — Movimientos de Stock: quitar "Referencia", agregar "Precio venta" + "Descuento" (DESPLEGADA 2026-06-30)
 
 > Pedido de Diego: en `/inventory/movements` las columnas "Motivo" y "Referencia" eran casi lo mismo (ej. reason "Venta factura X-001" / reference "X-001", y el numero ya esta dentro del Motivo + la columna "Origen" enlaza al documento). Se **elimino "Referencia"** (se dejo "Motivo", la mas descriptiva) y se agregaron dos columnas para auditar descuentos de cajeros: **"Precio venta"** y **"Descuento"**.
 
