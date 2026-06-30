@@ -55,6 +55,8 @@ export default function QuotationsPage() {
   const [detail, setDetail] = useState<any>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [converting, setConverting] = useState<string | null>(null);
+  // Cotizacion pendiente de elegir como imprimir el PDF (con o sin IVA)
+  const [printChoiceId, setPrintChoiceId] = useState<string | null>(null);
   const router = useRouter();
 
   const fetchQuotations = useCallback(async () => {
@@ -95,8 +97,8 @@ export default function QuotationsPage() {
     }
   }
 
-  function handlePrint(id: string) {
-    window.open(`/api/proxy/quotations/${id}/pdf`, '_blank');
+  function handlePrint(id: string, hideIva = false) {
+    window.open(`/api/proxy/quotations/${id}/pdf${hideIva ? '?hideIva=true' : ''}`, '_blank');
   }
 
   async function handleChangeStatus(id: string, newStatus: string) {
@@ -236,7 +238,7 @@ export default function QuotationsPage() {
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-slate-500">{q._count.items} items</p>
               <button
-                onClick={(e) => { e.stopPropagation(); handlePrint(q.id); }}
+                onClick={(e) => { e.stopPropagation(); setPrintChoiceId(q.id); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700/50 text-slate-300 hover:text-green-400 active:scale-95 transition-transform"
               >
                 <Printer size={14} /> Imprimir
@@ -300,7 +302,7 @@ export default function QuotationsPage() {
                       <button onClick={() => openDetail(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Ver detalle">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => handlePrint(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
+                      <button onClick={() => setPrintChoiceId(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
                         <Printer size={15} />
                       </button>
                       {['DRAFT', 'APPROVED'].includes(q.status) && (
@@ -443,6 +445,43 @@ export default function QuotationsPage() {
                   Esta cotizacion fue convertida a factura.
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Eleccion al imprimir: con o sin IVA */}
+      {printChoiceId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setPrintChoiceId(null)} />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
+                <Printer className="text-green-400" size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Imprimir cotizacion</h3>
+                <p className="text-sm text-slate-400">Elige el formato del PDF</p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-2">
+              <button
+                onClick={() => { handlePrint(printChoiceId, false); setPrintChoiceId(null); }}
+                className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors"
+              >
+                <p className="text-sm font-medium text-white">Con IVA</p>
+                <p className="text-xs text-slate-500">Muestra el desglose del IVA y el subtotal.</p>
+              </button>
+              <button
+                onClick={() => { handlePrint(printChoiceId, true); setPrintChoiceId(null); }}
+                className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors"
+              >
+                <p className="text-sm font-medium text-white">Sin IVA</p>
+                <p className="text-xs text-slate-500">Solo precios y total finales, sin mostrar el impuesto.</p>
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => setPrintChoiceId(null)} className="btn-secondary !py-2 text-sm">Cancelar</button>
             </div>
           </div>
         </div>

@@ -13,7 +13,7 @@ const IVA_LABELS: Record<string, string> = {
 export class QuotationPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generatePdf(quotationId: string): Promise<Buffer> {
+  async generatePdf(quotationId: string, hideIva = false): Promise<Buffer> {
     const quotation = await this.prisma.quotation.findUnique({
       where: { id: quotationId },
       include: {
@@ -100,7 +100,7 @@ export class QuotationPdfService {
       doc.text('Descripcion', colX.desc, y);
       doc.text('Cant.', colX.qty, y, { width: 40, align: 'right' });
       doc.text('P. Unit. USD', colX.price, y, { width: 55, align: 'right' });
-      doc.text('% IVA', colX.iva, y, { width: 50, align: 'right' });
+      if (!hideIva) doc.text('% IVA', colX.iva, y, { width: 50, align: 'right' });
       doc.text('Total USD', colX.total, y, { width: 80, align: 'right' });
       y += 14;
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
@@ -116,8 +116,11 @@ export class QuotationPdfService {
         doc.text(item.productCode, colX.code, y, { width: 65 });
         doc.text(item.productName, colX.desc, y, { width: 195 });
         doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right' });
-        doc.text(`$${item.unitPriceUsd.toFixed(2)}`, colX.price, y, { width: 55, align: 'right' });
-        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right' });
+        // En modo "sin IVA" el precio unitario se muestra con IVA incluido (totalUsd/cant),
+        // asi cant x unitario = total y todo el reporte queda consistente, sin mostrar el impuesto.
+        const unitToShow = hideIva && item.quantity ? item.totalUsd / item.quantity : item.unitPriceUsd;
+        doc.text(`$${unitToShow.toFixed(2)}`, colX.price, y, { width: 55, align: 'right' });
+        if (!hideIva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right' });
         doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' });
         y += 14;
       }
@@ -134,11 +137,14 @@ export class QuotationPdfService {
 
       const totalsX = 380;
       doc.fontSize(9).font('Helvetica');
-      doc.text('Subtotal:', totalsX, y); doc.text(`$${quotation.subtotalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
+      // En modo "sin IVA" no se muestran ni el subtotal neto ni el desglose de IVA: solo el TOTAL.
+      if (!hideIva) {
+        doc.text('Subtotal:', totalsX, y); doc.text(`$${quotation.subtotalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
 
-      for (const [type, amount] of Object.entries(ivaByType)) {
-        if (amount > 0) {
-          doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
+        for (const [type, amount] of Object.entries(ivaByType)) {
+          if (amount > 0) {
+            doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
+          }
         }
       }
 

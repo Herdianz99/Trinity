@@ -79,8 +79,12 @@ export class QuotationsController {
   }
 
   @Get(':id/pdf')
-  async getPdf(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.pdfService.generatePdf(id);
+  async getPdf(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Query('hideIva') hideIva?: string,
+  ) {
+    const buffer = await this.pdfService.generatePdf(id, hideIva === 'true');
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="cotizacion-${id}.pdf"`,

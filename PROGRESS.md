@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## Sesion 94 (2026-06-30) — Cotizaciones: PDF con opcion "Sin IVA" (vendedor elige al imprimir) (SIN DESPLEGAR)
+
+> Pedido de Diego: poder mandar la cotizacion sin que el reporte muestre el IVA, para que el vendedor elija cual ver/enviar. Decision (confirmada): "sin IVA" = MISMO total, solo se oculta el impuesto (precios finales, el cliente paga lo mismo), NO precios netos.
+- **Backend** (`quotation-pdf.service.ts` + `quotations.controller.ts`): `generatePdf(id, hideIva=false)`; el endpoint `GET :id/pdf` acepta `?hideIva=true`. En modo sin IVA: se oculta la columna "% IVA", el desglose de IVA y la linea Subtotal; queda solo el TOTAL (= `quotation.totalUsd`, con IVA incluido). El precio unitario se muestra con IVA (`totalUsd/cant`) para que cant x unitario = total quede consistente.
+- **Frontend** (`quotations/page.tsx`): los botones de impresora (tabla desktop + tarjeta movil) ahora abren un modal "Imprimir cotizacion" con 2 opciones: **Con IVA** (PDF de siempre) / **Sin IVA**. `handlePrint(id, hideIva)` agrega el query param.
+- Probado E2E: ambos PDFs generan 200 `application/pdf` validos (sin IVA sale mas liviano). API + Web typecheck 0 errores. Sin cambios de schema.
+
 ## Sesion 93 (2026-06-30) — Inventario/Stock: KPIs arriba + toggle Costo/Brecha en valuacion (SIN DESPLEGAR)
 
 > Dos pedidos de Diego en `/inventory/stock` (solo frontend, `inventory/stock/page.tsx`).
