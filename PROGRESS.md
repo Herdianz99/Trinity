@@ -1,5 +1,14 @@
 # Trinity ERP — Progreso
 
+## Sesion 92 (2026-06-30) — POS: autorizar venta sin stock con clave de supervisor al agregar (SIN DESPLEGAR)
+
+> Pedido de Diego (2da iteracion; la 1ra se revirtio). El 1er intento pedia la clave AL COBRAR, pero el vendedor no se enteraba de que no habia stock hasta el final. Este enfoque autoriza **al agregar el producto**: el vendedor ve "Sin stock" al instante y un boton discreto "Autorizar" que pide la clave del supervisor (que esta ahi mismo).
+
+- **Permiso nuevo** `SELL_NEGATIVE_STOCK` ("Vender sin stock (negativo)") en el enum `DynamicKeyPerm` (migracion `20260630183000_sell_negative_stock_perm`, solo `ADD VALUE IF NOT EXISTS`, + en `fix-schema.sql`; tambien se agrego el faltante `MANUAL_CASH_MOVEMENT` a fix-schema). **Sin columna nueva, sin config de 3 modos**: se reusa el toggle "Permitir ventas sin stock".
+- **Flujo**: con el toggle apagado, el producto sin stock en el POS muestra "Sin stock · Autorizar 🔒". Click → `DynamicKeyModal` (modo normal, valida contra `/dynamic-keys/validate` + log de auditoria, igual que las otras claves). Al autorizar, `addToCart(product, true)` lo agrega marcando la linea `authorizedNegative`. Por producto.
+- **Backend** (`invoices.service` pay): el bloqueo de stock ahora es `if (allowNegativeStock===false && !dto.negativeStockAuthorized)`. El POS manda `negativeStockAuthorized: cart.some(i => i.authorizedNegative)` en cobro contado Y credito. `pay-invoice.dto` gana `negativeStockAuthorized?: boolean`. NO se re-valida la clave en el backend (frontend-gated, como el resto de claves dinamicas).
+- Probado E2E el eslabon nuevo: crear clave + validar `SELL_NEGATIVE_STOCK` autoriza; el flujo en POS lo confirmo Diego. API + Web typecheck 0 errores. **Nota**: el 1er intento (clave al cobrar + columna `negativeStockRequiresAuth` + config 3 modos) tuvo un bug (el evento del click se pasaba como authKey → "circular JSON") y se revirtio entero; quedo una columna huerfana `negativeStockRequiresAuth` solo en la BD LOCAL (no en prod, no en schema).
+
 ## ✅ DEPLOY a PRODUCCION — 2026-06-30 (mediodia) — commit `b6ea75e`
 
 Desplegadas las **Sesiones 86 a 91** (deploy hecho por Diego al mediodia, en el descanso de 2h de los vendedores). Ya en uso en la nube. Incluye: Precio venta + Descuento en movimientos (S86), vuelto en efectivo USD + fix base IGTF sobre sobrepago (S87), emails de usuario normalizados/login case-insensitive + tasa de cambio a 4 decimales (S88), boton imprimir en cotizaciones movil (S89), y navegacion con teclado (flechas + Enter) en los buscadores de compras (S90) y POS (S91).

@@ -64,4 +64,12 @@ export class PayInvoiceDto {
   @IsOptional()
   @IsString()
   cashRegisterId?: string;
+
+  // El POS marca esto cuando alguna linea sin stock fue autorizada por un supervisor
+  // (clave dinamica SELL_NEGATIVE_STOCK validada al agregar el producto). Permite que el
+  // backend deje pasar la venta en negativo aunque "Permitir ventas sin stock" este apagado.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  negativeStockAuthorized?: boolean;
 }

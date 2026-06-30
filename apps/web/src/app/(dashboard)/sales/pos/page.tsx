@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
 import { LostSaleModal } from '@/components/lost-sale-modal';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -74,6 +75,7 @@ interface CartItem {
   stock: number;
   priceOverridden: boolean;
   discountPct: number;
+  authorizedNegative?: boolean; // línea sin stock autorizada por supervisor (clave dinámica)
 }
 
 interface PaymentLine {
@@ -227,6 +229,8 @@ export default function POSPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [showLostSale, setShowLostSale] = useState(false);
   const [lostSalePreset, setLostSalePreset] = useState<{ id: string; code: string; name: string } | null>(null);
+  // Producto sin stock pendiente de autorizar con clave de supervisor para agregarlo en negativo
+  const [negKeyProduct, setNegKeyProduct] = useState<any | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
@@ -641,16 +645,19 @@ export default function POSPage() {
     }
   }
 
-  function addToCart(product: any) {
+  function addToCart(product: any, authorizedNegative = false) {
     const stockQty = product.stock?.[0]?.quantity || 0;
     const blockNoStock = companyConfig?.allowNegativeStock === false;
 
-    if (blockNoStock && stockQty <= 0) return;
+    // Bloquea sin stock SALVO que un supervisor lo haya autorizado (clave dinamica)
+    if (blockNoStock && stockQty <= 0 && !authorizedNegative) return;
 
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
-        return prev.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i => i.productId === product.id
+          ? { ...i, quantity: i.quantity + 1, authorizedNegative: i.authorizedNegative || authorizedNegative }
+          : i);
       }
       return [{
         productId: product.id,
@@ -663,6 +670,7 @@ export default function POSPage() {
         stock: stockQty,
         priceOverridden: false,
         discountPct: 0,
+        authorizedNegative,
       }, ...prev];
     });
     setSearchQuery('');
@@ -1031,6 +1039,7 @@ export default function POSPage() {
           creditAuthPassword,
           creditDays,
           cashRegisterId: selectedCashRegister?.id || undefined,
+          negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
         }),
       });
       if (!payRes.ok) {
@@ -1199,6 +1208,7 @@ export default function POSPage() {
           isCredit: false,
           changeMethodId: hasChange && needsBsChange ? changeMethodId : undefined,
           cashRegisterId: selectedCashRegister?.id || undefined,
+          negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
         }),
       });
       if (!payRes.ok) {
@@ -1700,9 +1710,8 @@ export default function POSPage() {
                   return (
                     <button
                       key={product.id}
-                      onClick={() => addToCart(product)}
-                      disabled={blockNoStock}
-                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${blockNoStock ? 'opacity-40 border-slate-700/30' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
+                      onClick={() => blockNoStock ? setNegKeyProduct(product) : addToCart(product)}
+                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
                     >
                       <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center mb-2">
                         <ShoppingCart size={16} className="text-slate-500" />
@@ -1723,7 +1732,7 @@ export default function POSPage() {
                       {!blockNoStock && reserved > 0 && (
                         <p className={`text-[10px] mt-0.5 ${available > 0 ? 'text-sky-400' : 'text-red-400'}`}>Disponible: {available} <span className="text-slate-500">({reserved} en espera)</span></p>
                       )}
-                      {blockNoStock && <p className="text-[10px] text-red-400 mt-0.5">Sin stock</p>}
+                      {blockNoStock && <p className="text-[10px] text-amber-400 mt-0.5 inline-flex items-center gap-1"><Lock size={10} /> Sin stock · Autorizar</p>}
                     </button>
                   );
                 })}
@@ -2723,6 +2732,19 @@ export default function POSPage() {
         onResult={handleSeniatResult}
         initialRif={clientForm.rif ? `${clientForm.documentType}${clientForm.rif.replace(/\D/g, '')}` : ''}
       />
+
+      {/* Autorizar agregar un producto sin stock (clave de supervisor) */}
+      <DynamicKeyModal
+        isOpen={!!negKeyProduct}
+        onClose={() => setNegKeyProduct(null)}
+        onAuthorized={() => { if (negKeyProduct) addToCart(negKeyProduct, true); setNegKeyProduct(null); }}
+        permission="SELL_NEGATIVE_STOCK"
+        action="Autorizar venta sin stock"
+        entityType="Product"
+        entityId={negKeyProduct?.id}
+        title="Autorizar venta sin stock"
+        description={negKeyProduct ? `Clave de supervisor para agregar "${negKeyProduct.name}" sin stock` : 'Clave de supervisor'}
+      />
     </>
   );
 
@@ -2855,7 +2877,18 @@ export default function POSPage() {
                     {exchangeRate > 0 && <div className="text-xs text-slate-500">Bs {fmtBs((product.priceDetal || 0) * exchangeRate)}</div>}
                   </div>
                   {blockNoStock ? (
-                    <span className="text-xs px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10 border border-amber-500/20 font-medium whitespace-nowrap">Sin stock · venta perdida</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-0.5 rounded-full text-amber-400 bg-amber-500/10 border border-amber-500/20 font-medium whitespace-nowrap">Sin stock</span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); setNegKeyProduct(product); }}
+                        title="Autorizar venta sin stock (clave de supervisor)"
+                        className="text-xs px-2 py-0.5 rounded-full text-slate-300 bg-slate-700/60 border border-slate-600 hover:text-amber-300 hover:border-amber-500/40 inline-flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                      >
+                        <Lock size={11} /> Autorizar
+                      </span>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-end gap-0.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${prodStock > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>

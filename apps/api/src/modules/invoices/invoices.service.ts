@@ -442,8 +442,10 @@ export class InvoicesService {
       }
     }
 
-    // Stock validation: if allowNegativeStock is false, check stock before proceeding
-    if (config && config.allowNegativeStock === false) {
+    // Stock validation: if allowNegativeStock is false, check stock before proceeding.
+    // Excepcion: si el POS marca negativeStockAuthorized, un supervisor ya autorizo la
+    // venta en negativo con su clave dinamica (SELL_NEGATIVE_STOCK) al agregar el producto.
+    if (config && config.allowNegativeStock === false && !dto.negativeStockAuthorized) {
       const productIds = invoice.items.map(i => i.productId);
       const stocks = await this.prisma.stock.findMany({
         where: { productId: { in: productIds }, warehouseId: warehouseId! },

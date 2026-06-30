@@ -222,6 +222,7 @@ enum DynamicKeyPerm {
   GIVE_DISCOUNT
   ALLOW_CREDIT_INVOICE
   MANUAL_CASH_MOVEMENT
+  SELL_NEGATIVE_STOCK
 }
 
 enum CashMovementType {

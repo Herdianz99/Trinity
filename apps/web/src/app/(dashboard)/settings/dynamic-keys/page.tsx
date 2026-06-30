@@ -43,6 +43,7 @@ const PERM_LABELS: Record<string, string> = {
   GIVE_DISCOUNT: 'Dar descuento POS',
   ALLOW_CREDIT_INVOICE: 'Facturar a credito',
   MANUAL_CASH_MOVEMENT: 'Movimiento manual caja',
+  SELL_NEGATIVE_STOCK: 'Vender sin stock (negativo)',
 };
 
 const ALL_PERMS = Object.keys(PERM_LABELS);
