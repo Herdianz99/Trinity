@@ -25,6 +25,16 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 86 (2026-06-30) — Movimientos de Stock: quitar "Referencia", agregar "Precio venta" + "Descuento" (SIN DESPLEGAR)
+
+> Pedido de Diego: en `/inventory/movements` las columnas "Motivo" y "Referencia" eran casi lo mismo (ej. reason "Venta factura X-001" / reference "X-001", y el numero ya esta dentro del Motivo + la columna "Origen" enlaza al documento). Se **elimino "Referencia"** (se dejo "Motivo", la mas descriptiva) y se agregaron dos columnas para auditar descuentos de cajeros: **"Precio venta"** y **"Descuento"**.
+
+- **Backend** (`stock-movements.service.ts`, `findAll`): el `StockMovement` no guarda precio ni descuento, asi que se **enriquecen** los movimientos de venta buscando su `InvoiceItem` por `(invoiceId, productId)`. Una sola query extra por pagina (`invoiceId IN [...]`), solo para `sourceType='SALE_INVOICE'`. Devuelve `salePrice` y `discountPct` (null en compras/ajustes/transferencias).
+- **Precio CON IVA** (decision de Diego): `salePrice = totalUsd / quantity` de la linea = precio unitario final que paga el cliente, **con IVA incluido y descuento ya aplicado**. (Primero se hizo neto sin IVA y quedaba "en menos" vs lo que el supervisor espera; se corrigio a con-IVA. Maneja exentos OK: IVA 0 sin recargo.)
+- **Frontend** (`inventory/movements/page.tsx`): nuevas columnas "Precio venta" (`$x.xx`) y "Descuento" (% en ambar si >0, gris si 0%, `—` si no aplica). colSpan 8→9. Solo ventas traen datos; compras/ajustes salen con `—`.
+- Sin cambios de schema. API + Web typecheck 0 errores. Probado en local (Diego valido el numero con IVA).
+- **Pendiente**: ¿incluir tambien precio/descuento en devoluciones (`CREDIT_DEBIT_NOTE`)? Hoy salen con `—`.
+
 ## Sesion 85 (2026-06-29) — Dashboard: KPI de Ventas muestra monto completo (no $2.8K / Bs 1.7M) (DESPLEGADO 2026-06-29)
 
 > El KPI "Ventas" del dashboard abreviaba con `fmtCompact` ($2.8K, Bs 1.7M). Se cambio a `fmt` (monto completo con separadores VE: $2.800,00 / Bs 1.700.000,00), igual que ya hacian "Devoluciones" y "Ticket Promedio". Solo el value y sub de la card Ventas (`dashboard/page.tsx`). Los ejes de los graficos SIGUEN compactos (si no, no caben las etiquetas). Solo frontend, deploy Web. Typecheck 0 errores.

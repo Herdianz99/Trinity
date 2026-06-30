@@ -15,6 +15,8 @@ interface Movement {
   reference: string | null;
   sourceType: string | null;
   sourceId: string | null;
+  salePrice: number | null;
+  discountPct: number | null;
   createdById: string;
   createdAt: string;
   product: { id: string; code: string; name: string };
@@ -210,16 +212,17 @@ export default function MovementsPage() {
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Almacen</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Tipo</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
+                <th className="text-right px-4 py-3 text-slate-400 font-medium">Precio venta</th>
+                <th className="text-right px-4 py-3 text-slate-400 font-medium">Descuento</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Motivo</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Referencia</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium w-24">Origen</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
+                <tr><td colSpan={9} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
               ) : movements.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-500">No hay movimientos en este periodo</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay movimientos en este periodo</td></tr>
               ) : movements.map(m => {
                 const source = getMovementSource(m.sourceType, m.sourceId);
                 return (
@@ -244,8 +247,19 @@ export default function MovementsPage() {
                   <td className={`px-4 py-3 text-right font-mono font-medium ${m.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {m.quantity > 0 ? '+' : ''}{m.quantity}
                   </td>
+                  <td className="px-4 py-3 text-right font-mono text-xs text-slate-300 whitespace-nowrap">
+                    {m.salePrice != null ? `$${m.salePrice.toFixed(2)}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap">
+                    {m.discountPct != null && m.discountPct > 0 ? (
+                      <span className="text-amber-400">{m.discountPct.toFixed(m.discountPct % 1 === 0 ? 0 : 2)}%</span>
+                    ) : m.discountPct === 0 ? (
+                      <span className="text-slate-600">0%</span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">{m.reason || '—'}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs hidden lg:table-cell">{m.reference || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     {source ? (
                       <button

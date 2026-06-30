@@ -56,8 +56,47 @@ export class StockMovementsService {
       this.prisma.stockMovement.count({ where }),
     ]);
 
+    // Enriquecer movimientos de venta con el precio de venta y descuento de la
+    // linea de factura origen (para auditar descuentos de cajeros). El movimiento
+    // SALE no guarda precio; lo buscamos en InvoiceItem por (invoiceId, productId).
+    const saleInvoiceIds = [
+      ...new Set(
+        data
+          .filter((m) => m.sourceType === 'SALE_INVOICE' && m.sourceId)
+          .map((m) => m.sourceId as string),
+      ),
+    ];
+
+    const itemsByKey = new Map<string, { quantity: number; totalUsd: number; discountPct: number }>();
+    if (saleInvoiceIds.length) {
+      const items = await this.prisma.invoiceItem.findMany({
+        where: { invoiceId: { in: saleInvoiceIds } },
+        select: { invoiceId: true, productId: true, quantity: true, totalUsd: true, discountPct: true },
+      });
+      for (const it of items) {
+        itemsByKey.set(`${it.invoiceId}|${it.productId}`, {
+          quantity: it.quantity,
+          totalUsd: it.totalUsd,
+          discountPct: it.discountPct,
+        });
+      }
+    }
+
+    const enriched = data.map((m) => {
+      if (m.sourceType === 'SALE_INVOICE' && m.sourceId) {
+        const it = itemsByKey.get(`${m.sourceId}|${m.productId}`);
+        if (it && it.quantity > 0) {
+          // Precio unitario final que paga el cliente: con IVA incluido y descuento
+          // ya aplicado. totalUsd = subtotal-con-descuento + IVA de la linea.
+          const grossUnitPrice = Math.round((it.totalUsd / it.quantity) * 100) / 100;
+          return { ...m, salePrice: grossUnitPrice, discountPct: it.discountPct };
+        }
+      }
+      return { ...m, salePrice: null, discountPct: null };
+    });
+
     return {
-      data,
+      data: enriched,
       meta: {
         total,
         page,
