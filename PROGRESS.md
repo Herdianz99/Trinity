@@ -1,5 +1,11 @@
 # Trinity ERP — Progreso
 
+## Sesion 96 (2026-06-30) — Proveedores: buscador (como en clientes) (SIN DESPLEGAR)
+
+> Pedido de Diego: filtro en `/catalog/suppliers` como el de `/sales/customers`. Solo frontend (`catalog/suppliers/page.tsx`): el backend (`suppliers.service findAll`) YA soportaba `?search=` (name + rif, case-insensitive), solo faltaba cablearlo.
+- Se agrego un input "Buscar por nombre o RIF..." arriba de la tabla (mismo patron que clientes). `fetchSuppliers` paso a `useCallback([search])` y manda `?search=`; refetch al escribir. Imports: `useCallback`, `Search`.
+- Probado: 56 proveedores, filtrar por "ACEROS" devuelve 3. Web typecheck 0 errores. Sin backend ni schema.
+
 ## Sesion 95 (2026-06-30) — Cotizaciones: compartir PDF en movil (WhatsApp/correo) + Firma y Sello en el PDF (SIN DESPLEGAR)
 
 > Dos pedidos de Diego sobre el PDF de cotizacion (continuacion de S94).

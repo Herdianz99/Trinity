@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Truck, Plus, Edit2, Trash2, Loader2, Shield,
+  Truck, Plus, Edit2, Trash2, Loader2, Shield, Search,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -16,19 +16,22 @@ interface Supplier {
 export default function SuppliersPage() {
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  async function fetchSuppliers() {
+  const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/proxy/suppliers');
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      const res = await fetch(`/api/proxy/suppliers?${params}`);
       if (res.ok) setSuppliers(await res.json());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }
+  }, [search]);
 
   useEffect(() => { document.title = 'Proveedores | Trinity ERP'; }, []);
-  useEffect(() => { fetchSuppliers(); }, []);
+  useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
 
   async function handleDelete(id: string) {
     if (!confirm('Desactivar este proveedor?')) return;
@@ -58,6 +61,14 @@ export default function SuppliersPage() {
           {message.text}
         </div>
       )}
+
+      <div className="card p-4 mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <input type="text" placeholder="Buscar por nombre o RIF..." value={search}
+            onChange={e => setSearch(e.target.value)} className="input-field pl-9 !py-2.5 text-sm" />
+        </div>
+      </div>
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
