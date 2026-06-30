@@ -1,6 +1,12 @@
-# Trinity ERP — Progreso
+﻿# Trinity ERP — Progreso
 
-## Sesion 97 (2026-06-30) — Recibos (cobro/pago): fix bug duplicados + tasa editable + eliminar + lista pendientes (SIN DESPLEGAR)
+## ✅ DEPLOY a PRODUCCION — 2026-06-30 (tarde) — commit `c7f76cd`
+
+Desplegadas las **Sesiones 92 a 97** (segundo deploy del dia, hecho por Diego). Incluye: autorizar venta sin stock con clave de supervisor al agregar (S92, migracion `SELL_NEGATIVE_STOCK`), inventario KPIs arriba + toggle Costo/Brecha (S93), cotizacion PDF "Sin IVA" (S94), cotizacion compartible en movil + Firma y Sello en el PDF (S95), buscador en proveedores (S96), y el bloque grande de recibos: fix duplicados/doble-pago + tasa editable + eliminar borradores + lista de pendientes con fechas/total/orden por vencimiento (S97).
+
+- **Verificar en prod (pendiente):** (1) flujo completo de recibo de cobro/pago con la tasa editable (afecta CxC/CxP y diferencial cambiario); (2) eliminar los borradores **RPG-0001/0002** desde Recibos de Pago -> filtro Borrador -> Trash (el doc ya lo pago RPG-0003); (3) la venta sin stock con clave (S92) en caja real.
+
+## Sesion 97 (2026-06-30) — Recibos (cobro/pago): fix bug duplicados + tasa editable + eliminar + lista pendientes (DESPLEGADA 2026-06-30)
 
 > Bloque grande pedido por Diego tras detectar en prod 3 recibos de pago al MISMO documento (RPG-0001/2/3: 0003 procesado, 0001/0002 borradores). Se trajo copia fresca de prod a local para investigar y probar (prod intacto).
 
@@ -16,34 +22,34 @@
 
 - Probado E2E en la copia de prod: by-date OK (607/623), DELETE protege POSTED, post valida saldo. API + Web typecheck 0 errores. Sin cambios de schema. **Importante**: probar bien el flujo completo de cobro/pago antes de desplegar (afecta CxC/CxP y diferencial cambiario).
 
-## Sesion 96 (2026-06-30) — Proveedores: buscador (como en clientes) (SIN DESPLEGAR)
+## Sesion 96 (2026-06-30) — Proveedores: buscador (como en clientes) (DESPLEGADA 2026-06-30)
 
 > Pedido de Diego: filtro en `/catalog/suppliers` como el de `/sales/customers`. Solo frontend (`catalog/suppliers/page.tsx`): el backend (`suppliers.service findAll`) YA soportaba `?search=` (name + rif, case-insensitive), solo faltaba cablearlo.
 - Se agrego un input "Buscar por nombre o RIF..." arriba de la tabla (mismo patron que clientes). `fetchSuppliers` paso a `useCallback([search])` y manda `?search=`; refetch al escribir. Imports: `useCallback`, `Search`.
 - Probado: 56 proveedores, filtrar por "ACEROS" devuelve 3. Web typecheck 0 errores. Sin backend ni schema.
 
-## Sesion 95 (2026-06-30) — Cotizaciones: compartir PDF en movil (WhatsApp/correo) + Firma y Sello en el PDF (SIN DESPLEGAR)
+## Sesion 95 (2026-06-30) — Cotizaciones: compartir PDF en movil (WhatsApp/correo) + Firma y Sello en el PDF (DESPLEGADA 2026-06-30)
 
 > Dos pedidos de Diego sobre el PDF de cotizacion (continuacion de S94).
 - **Compartir en movil** (`quotations/page.tsx`, `handlePrint` ahora async): antes `window.open` solo dejaba VER el PDF en movil (no compartir). Ahora, si es movil (UA Android/iPhone) y soporta `navigator.canShare`, baja el PDF como `File` y abre el **menu nativo de compartir** (`navigator.share({files})`) → WhatsApp, correo, Drive. En desktop o sin Web Share: `window.open` (ver/imprimir), como antes. Cae con gracia si cancela (AbortError) o no soporta archivos. Modal renombrado a "Imprimir / Compartir".
 - **Firma y Sello en el PDF** (`quotation-pdf.service.ts`): se renderiza `config.stampImage` (campo "Firma y Sello (Retenciones)" de Configuracion) a la IZQUIERDA de los totales, con rotulo "Firma y Sello", para darle seriedad. Mismo patron base64→Buffer que el logo, guardado en try/catch. Ajusta el cursor `y = max(y, totalsTopY+95)` para no encimar la nota.
 - Probado: PDF genera 200 valido en todos los modos; el sello se embebe sin error (probado con sello temporal, restaurado a NULL). La copia LOCAL tiene `stampImage` NULL, asi que el sello solo se ve en prod (donde esta configurado) o si se carga en Config. API + Web typecheck 0 errores. Sin cambios de schema.
 
-## Sesion 94 (2026-06-30) — Cotizaciones: PDF con opcion "Sin IVA" (vendedor elige al imprimir) (SIN DESPLEGAR)
+## Sesion 94 (2026-06-30) — Cotizaciones: PDF con opcion "Sin IVA" (vendedor elige al imprimir) (DESPLEGADA 2026-06-30)
 
 > Pedido de Diego: poder mandar la cotizacion sin que el reporte muestre el IVA, para que el vendedor elija cual ver/enviar. Decision (confirmada): "sin IVA" = MISMO total, solo se oculta el impuesto (precios finales, el cliente paga lo mismo), NO precios netos.
 - **Backend** (`quotation-pdf.service.ts` + `quotations.controller.ts`): `generatePdf(id, hideIva=false)`; el endpoint `GET :id/pdf` acepta `?hideIva=true`. En modo sin IVA: se oculta la columna "% IVA", el desglose de IVA y la linea Subtotal; queda solo el TOTAL (= `quotation.totalUsd`, con IVA incluido). El precio unitario se muestra con IVA (`totalUsd/cant`) para que cant x unitario = total quede consistente.
 - **Frontend** (`quotations/page.tsx`): los botones de impresora (tabla desktop + tarjeta movil) ahora abren un modal "Imprimir cotizacion" con 2 opciones: **Con IVA** (PDF de siempre) / **Sin IVA**. `handlePrint(id, hideIva)` agrega el query param.
 - Probado E2E: ambos PDFs generan 200 `application/pdf` validos (sin IVA sale mas liviano). API + Web typecheck 0 errores. Sin cambios de schema.
 
-## Sesion 93 (2026-06-30) — Inventario/Stock: KPIs arriba + toggle Costo/Brecha en valuacion (SIN DESPLEGAR)
+## Sesion 93 (2026-06-30) — Inventario/Stock: KPIs arriba + toggle Costo/Brecha en valuacion (DESPLEGADA 2026-06-30)
 
 > Dos pedidos de Diego en `/inventory/stock` (solo frontend, `inventory/stock/page.tsx`).
 - **KPIs arriba**: el "Reporte Valorizado" (Productos, Unidades, Valor USD, Valor Bs) se movio de DESPUES de la tabla a ARRIBA (debajo del selector de almacen), para verlo sin scrollear toda la lista.
 - **Toggle Costo / Brecha**: en la cabecera del reporte. "Costo" = costo puro; "Brecha" = costo + brecha (`bregaGlobalPct` global) sumada SOLO a productos con `bregaApplies`. **Arranca en "Brecha" por defecto** (la valuacion que el negocio mira). Afecta el total USD/Bs y las columnas Costo USD + Valor USD por fila (coherente: stock x costo = valor). Muestra "Brecha +X%" cuando esta activo.
 - Sin backend: el endpoint de stock ya devolvia `bregaApplies` (include product:true); solo se trajo `bregaGlobalPct` del `/config`. Web typecheck 0 errores.
 
-## Sesion 92 (2026-06-30) — POS: autorizar venta sin stock con clave de supervisor al agregar (SIN DESPLEGAR)
+## Sesion 92 (2026-06-30) — POS: autorizar venta sin stock con clave de supervisor al agregar (DESPLEGADA 2026-06-30)
 
 > Pedido de Diego (2da iteracion; la 1ra se revirtio). El 1er intento pedia la clave AL COBRAR, pero el vendedor no se enteraba de que no habia stock hasta el final. Este enfoque autoriza **al agregar el producto**: el vendedor ve "Sin stock" al instante y un boton discreto "Autorizar" que pide la clave del supervisor (que esta ahi mismo).
 
