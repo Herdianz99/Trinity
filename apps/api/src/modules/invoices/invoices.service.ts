@@ -595,12 +595,18 @@ export class InvoicesService {
     let invoiceIgtfBs = 0;
 
     if (isIGTFContributor && isCajaFiscal && invoice.igtfUsd === 0) {
-      const firstForeignPayment = dto.payments.find(p => {
-        const method = methodMap.get(p.methodId);
-        return method?.isDivisa;
-      });
-      if (firstForeignPayment) {
-        invoiceIgtfUsd = Math.round(firstForeignPayment.amountUsd * (igtfPct / 100) * 100) / 100;
+      // Base IGTF = divisa que REALMENTE paga la factura, NO el vuelto. Se topa al total
+      // (bienes+IVA) descontando lo cubierto por otros metodos, para no gravar el sobrepago
+      // que se devuelve como vuelto.
+      const divisaPaidUsd = dto.payments
+        .filter(p => methodMap.get(p.methodId)?.isDivisa)
+        .reduce((s, p) => s + p.amountUsd, 0);
+      const nonDivisaPaidUsd = dto.payments
+        .filter(p => !methodMap.get(p.methodId)?.isDivisa)
+        .reduce((s, p) => s + p.amountUsd, 0);
+      const igtfBaseUsd = Math.max(0, Math.min(divisaPaidUsd, effectiveTotalUsd - nonDivisaPaidUsd));
+      if (igtfBaseUsd > 0) {
+        invoiceIgtfUsd = Math.round(igtfBaseUsd * (igtfPct / 100) * 100) / 100;
         invoiceIgtfBs = Math.round(invoiceIgtfUsd * invoice.exchangeRate * 100) / 100;
       }
     }

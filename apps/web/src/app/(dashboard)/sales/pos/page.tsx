@@ -274,6 +274,8 @@ export default function POSPage() {
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
   const [changeMethodId, setChangeMethodId] = useState<string | null>(null);
+  // Parte del vuelto que el cajero entrega en efectivo USD (billetes). El resto va en Bs.
+  const [changeUsdCash, setChangeUsdCash] = useState<number>(0);
 
   // Anticipo modal state
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
@@ -716,11 +718,14 @@ export default function POSPage() {
   const totalUsd = subtotalUsd + totalIva;
   const totalBs = Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100;
 
-  // IGTF: se calcula una sola vez sobre el primer pago en divisas (solo en caja fiscal)
-  const firstForeignPayment = payments.find(p => p.isDivisa);
-  const isIGTFApplicable = companyConfig?.isIGTFContributor && selectedCashRegister?.serie?.isFiscal && firstForeignPayment && firstForeignPayment.amountUsd > 0;
+  // IGTF (solo caja fiscal): 3% sobre la divisa que REALMENTE paga la factura, NO el vuelto.
+  // Base = min(divisa pagada, total bienes+IVA - lo cubierto por otros metodos), topada al total.
+  const divisaPaidUsdForIgtf = payments.filter(p => p.isDivisa).reduce((s, p) => s + Number(p.amountUsd || 0), 0);
+  const nonDivisaPaidUsdForIgtf = payments.filter(p => !p.isDivisa).reduce((s, p) => s + Number(p.amountUsd || 0), 0);
+  const igtfBaseUsd = Math.max(0, Math.min(divisaPaidUsdForIgtf, totalUsd - nonDivisaPaidUsdForIgtf));
+  const isIGTFApplicable = companyConfig?.isIGTFContributor && selectedCashRegister?.serie?.isFiscal && igtfBaseUsd > 0;
   const igtfUsd = isIGTFApplicable
-    ? Math.round(firstForeignPayment.amountUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
+    ? Math.round(igtfBaseUsd * ((companyConfig?.igtfPct || 3) / 100) * 100) / 100
     : 0;
   const igtfBs = Math.round(igtfUsd * exchangeRate * 100) / 100;
   const grandTotalUsd = totalUsd + igtfUsd;
@@ -741,6 +746,11 @@ export default function POSPage() {
     : 0;
   const changeBsCalc = Math.round(changeUsd * exchangeRate * 100) / 100;
   const hasChange = changeUsd > 0.01;
+  // El cajero puede dar parte del vuelto en efectivo USD (topado al vuelto total);
+  // el resto se entrega en Bs con el metodo seleccionado.
+  const changeUsdCashApplied = Math.min(Math.max(0, changeUsdCash), changeUsd);
+  const changeBsRemaining = Math.round((changeUsd - changeUsdCashApplied) * exchangeRate * 100) / 100;
+  const needsBsChange = changeUsd - changeUsdCashApplied > 0.01;
 
   function addPayment(pm: PaymentMethodData) {
     if (pm.isDivisa) {
@@ -1088,13 +1098,36 @@ export default function POSPage() {
       }
     }
 
+    // Vuelto en efectivo USD: el cajero devuelve billetes USD, asi que a la caja
+    // entra el NETO (recibido - vuelto USD). Restamos ese monto del pago en divisa
+    // para guardar lo que realmente queda en gaveta; la logica de vuelto del backend
+    // calcula sola el resto en Bs. Sin campo nuevo ni migracion.
+    if (hasChange && changeUsdCashApplied > 0.001) {
+      const divisaMethodIds = new Set(payments.filter(p => p.isDivisa).map(p => p.methodId));
+      let toReduce = changeUsdCashApplied;
+      for (let i = finalPayments.length - 1; i >= 0 && toReduce > 0.001; i--) {
+        const fp = finalPayments[i];
+        if (!divisaMethodIds.has(fp.methodId)) continue;
+        const cut = Math.min(fp.amountUsd, toReduce);
+        fp.amountUsd = Math.round((fp.amountUsd - cut) * 100) / 100;
+        fp.amountBs = Math.round(fp.amountUsd * exchangeRate * 100) / 100;
+        toReduce = Math.round((toReduce - cut) * 100) / 100;
+      }
+      // Quitar pagos que quedaron en cero tras la reduccion (evita pagos fantasma)
+      for (let i = finalPayments.length - 1; i >= 0; i--) {
+        if (finalPayments[i].amountUsd <= 0.001 && finalPayments[i].amountBs <= 0.001) {
+          finalPayments.splice(i, 1);
+        }
+      }
+    }
+
     const finalPaidUsd = finalPayments.reduce((s, p) => s + p.amountUsd, 0);
     const finalRemaining = grandTotalUsd - finalPaidUsd;
     if (finalRemaining > 0.01 && !hasChange) {
       setMessage({ type: 'error', text: 'El monto pagado no cubre el total' });
       return;
     }
-    if (hasChange && !changeMethodId) {
+    if (hasChange && needsBsChange && !changeMethodId) {
       setMessage({ type: 'error', text: 'Seleccione un metodo de vuelto' });
       return;
     }
@@ -1136,7 +1169,7 @@ export default function POSPage() {
         body: JSON.stringify({
           payments: finalPayments,
           isCredit: false,
-          changeMethodId: hasChange ? changeMethodId : undefined,
+          changeMethodId: hasChange && needsBsChange ? changeMethodId : undefined,
           cashRegisterId: selectedCashRegister?.id || undefined,
         }),
       });
@@ -1193,6 +1226,8 @@ export default function POSPage() {
       setCustomerId(null);
       setCustomerName('');
       setPayments([]);
+      setChangeMethodId(null);
+      setChangeUsdCash(0);
       setPayModalOpen(false);
       setExistingInvoiceId(null);
       setMessage({ type: 'success', text: `Factura ${result.number} cobrada exitosamente` });
@@ -1804,7 +1839,7 @@ export default function POSPage() {
                   <Clock size={16} />
                 </button>
                 <button
-                  onClick={() => { setPayments([]); setChangeMethodId(null); setPayModalOpen(true); }}
+                  onClick={() => { setPayments([]); setChangeMethodId(null); setChangeUsdCash(0); setPayModalOpen(true); }}
                   disabled={cart.length === 0 || processing}
                   className="flex-1 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base disabled:opacity-50 active:scale-[0.98] transition-transform"
                 >
@@ -2119,7 +2154,7 @@ export default function POSPage() {
               ) : (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto</span>
+                    <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto total</span>
                     <div className="text-right">
                       <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
                       <span className="text-slate-400 mx-2">×</span>
@@ -2128,23 +2163,68 @@ export default function POSPage() {
                       <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
                     </div>
                   </div>
+
+                  {/* Parte del vuelto que el cajero entrega en billetes USD */}
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Metodo de vuelto</label>
-                    <select
-                      value={changeMethodId || ''}
-                      onChange={e => setChangeMethodId(e.target.value || null)}
-                      className="input-field !py-2 text-sm w-full"
-                    >
-                      <option value="">Seleccionar metodo...</option>
-                      {paymentMethods
-                        .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
-                        .filter(pm => !pm.isDivisa && pm.isActive && pm.id !== 'pm_saldo_favor')
-                        .map(pm => (
-                          <option key={pm.id} value={pm.id}>{pm.name}</option>
-                        ))
-                      }
-                    </select>
+                    <label className="text-xs text-slate-400 mb-1 block">Vuelto en efectivo USD (billetes)</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={changeUsd}
+                          step="0.01"
+                          value={changeUsdCash || ''}
+                          onChange={e => setChangeUsdCash(Math.min(Math.max(0, Number(e.target.value) || 0), changeUsd))}
+                          placeholder="0.00"
+                          className="input-field !py-2 !pl-7 text-sm w-full"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setChangeUsdCash(changeUsd)}
+                        className="px-3 py-2 rounded-lg text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 whitespace-nowrap"
+                      >
+                        Todo USD
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Resto a entregar en Bs */}
+                  {needsBsChange ? (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">A entregar en Bs</span>
+                        <span className="font-bold text-amber-300">
+                          Bs {changeBsRemaining.toFixed(2)}
+                          <span className="text-slate-500 font-normal ml-1">(${(changeUsd - changeUsdCashApplied).toFixed(2)})</span>
+                        </span>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400 mb-1 block">Metodo de vuelto (Bs)</label>
+                        <select
+                          value={changeMethodId || ''}
+                          onChange={e => setChangeMethodId(e.target.value || null)}
+                          className="input-field !py-2 text-sm w-full"
+                        >
+                          <option value="">Seleccionar metodo...</option>
+                          {paymentMethods
+                            .flatMap(pm => pm.children && pm.children.filter(c => c.isActive).length > 0 ? pm.children.filter(c => c.isActive) : [pm])
+                            .filter(pm => !pm.isDivisa && pm.isActive && pm.id !== 'pm_saldo_favor')
+                            .map(pm => (
+                              <option key={pm.id} value={pm.id}>{pm.name}</option>
+                            ))
+                          }
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">A entregar en Bs</span>
+                      <span className="font-medium text-green-400">Bs 0.00 — todo el vuelto en efectivo USD</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2152,7 +2232,7 @@ export default function POSPage() {
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={handleConfirmPayment}
-                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && !changeMethodId) || hasMissingCxcReference}
+                  disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && needsBsChange && !changeMethodId) || hasMissingCxcReference}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 w-full md:w-auto justify-center"
                 >
                   {processing ? <Loader2 className="animate-spin" size={16} /> : <DollarSign size={16} />}
@@ -3020,7 +3100,7 @@ export default function POSPage() {
                     Aparcar
                   </button>
                   <button
-                    onClick={() => { setPayments([]); setChangeMethodId(null); setPayModalOpen(true); }}
+                    onClick={() => { setPayments([]); setChangeMethodId(null); setChangeUsdCash(0); setPayModalOpen(true); }}
                     disabled={cart.length === 0 || processing}
                     className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >

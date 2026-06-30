@@ -25,6 +25,19 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 87 (2026-06-30) — POS: vuelto en efectivo USD (ayuda de calculo) + fix base IGTF sobre sobrepago (SIN DESPLEGAR)
+
+> Dos cambios en el cobro del POS (`sales/pos/page.tsx`) + backend de IGTF (`invoices.service.ts`). Probado en local con copia de la BD de prod.
+
+**1. Vuelto en efectivo USD** (pedido de Diego): cuando el cliente paga en divisa y sobra, el cajero podia antes dar TODO el vuelto en Bs. Ahora puede dar **parte en billetes USD** y solo el resto en Bs (ej. factura $17.63, paga $20, da $2 USD + $0.37 en Bs). 
+- **Enfoque (decidido con Diego): ayuda de calculo que guarda el NETO, sin campo nuevo ni migracion ni cambio de backend.** A la caja entran $18 (20 − 2), no $20. Al confirmar, el frontend **resta el vuelto USD al pago en divisa** antes de enviar; la logica de vuelto existente calcula sola el resto en Bs. La caja cuadra exacto (+$18 USD − Bs del resto = total) reutilizando el arqueo actual.
+- UI: input "Vuelto en efectivo USD" topado al vuelto total + boton "Todo USD"; muestra el Bs restante; el "Metodo de vuelto (Bs)" solo se exige si queda resto en Bs. Limpieza de pagos en $0 tras la reduccion (evita pagos fantasma).
+- Tradeoff aceptado: no se guarda el bruto ("$20 entregados"); en la factura el pago USD figura como el neto. Correcto para arqueo/reportes.
+
+**2. Fix IGTF sobre sobrepago** (bug pre-existente detectado por Diego): el IGTF (3%) se calculaba sobre el monto entregado en divisa (`firstForeignPayment.amountUsd`), asi que cobraba 3% tambien del vuelto. Ahora la base se topa a lo que realmente paga la factura: `baseIGTF = max(0, min(divisaPagada, totalBienesIVA − otrosMetodos))`. Ej: factura $17.61 pagada con $20 → IGTF pasa de $0.60 (sobre $20) a **$0.53** (sobre $17.61). Aplicado **identico en frontend (display) y backend (autoritativo)**. Maneja pago mixto (IGTF solo sobre la porcion en divisa).
+
+- API + Web typecheck 0 errores. Sin cambios de schema. **Pendiente probar en caja fiscal real** antes de confiar el IGTF en produccion.
+
 ## Sesion 86 (2026-06-30) — Movimientos de Stock: quitar "Referencia", agregar "Precio venta" + "Descuento" (SIN DESPLEGAR)
 
 > Pedido de Diego: en `/inventory/movements` las columnas "Motivo" y "Referencia" eran casi lo mismo (ej. reason "Venta factura X-001" / reference "X-001", y el numero ya esta dentro del Motivo + la columna "Origen" enlaza al documento). Se **elimino "Referencia"** (se dejo "Motivo", la mas descriptiva) y se agregaron dos columnas para auditar descuentos de cajeros: **"Precio venta"** y **"Descuento"**.
