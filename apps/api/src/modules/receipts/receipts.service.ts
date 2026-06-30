@@ -97,11 +97,14 @@ export class ReceiptsService {
       throw new BadRequestException('Debe incluir al menos un documento');
     }
 
-    // Get today's exchange rate
+    // Tasa efectiva para los Bs "de hoy" y el diferencial: la enviada en el recibo
+    // (cobro = tasa de la fecha elegida; pago = tasa manual del proveedor) o, si no se
+    // envia, la tasa del dia registrada.
     const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) {
-      throw new BadRequestException('No hay tasa de cambio registrada para hoy. Registre la tasa antes de crear el recibo.');
+    const todayRate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    const effectiveRate = dto.exchangeRate && dto.exchangeRate > 0 ? dto.exchangeRate : todayRate?.rate;
+    if (!effectiveRate || effectiveRate <= 0) {
+      throw new BadRequestException('No hay tasa de cambio. Registre la tasa del dia o ingrese una tasa en el recibo.');
     }
 
     // Build items
@@ -134,7 +137,7 @@ export class ReceiptsService {
         // Historic Bs: proportional to the original Bs amount
         const proportion = amountUsd / receivable.amountUsd;
         const amountBsHistoric = this.round2(receivable.amountBs * proportion);
-        const amountBsToday = this.round2(amountUsd * rate.rate);
+        const amountBsToday = this.round2(amountUsd * effectiveRate);
 
         items.push({
           itemType: 'RECEIVABLE',
@@ -158,7 +161,7 @@ export class ReceiptsService {
         const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
         const proportion = amountUsd / payable.netPayableUsd;
         const amountBsHistoric = this.round2(payable.netPayableBs * proportion);
-        const amountBsToday = this.round2(amountUsd * rate.rate);
+        const amountBsToday = this.round2(amountUsd * effectiveRate);
 
         items.push({
           itemType: 'PAYABLE',
@@ -182,7 +185,7 @@ export class ReceiptsService {
         const isCredit = ['NCV', 'NCC'].includes(note.type);
         const amountUsd = note.totalUsd;
         const amountBsHistoric = note.totalBs;
-        const amountBsToday = this.round2(amountUsd * rate.rate);
+        const amountBsToday = this.round2(amountUsd * effectiveRate);
 
         items.push({
           itemType: isCredit ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
@@ -208,7 +211,7 @@ export class ReceiptsService {
           description: `Ret. IVA ${retention.number} (${retention.purchaseOrder?.number || ''})`,
           amountUsd: retention.retentionUsd,
           amountBsHistoric: retention.retentionBs,
-          amountBsToday: this.round2(retention.retentionUsd * rate.rate),
+          amountBsToday: this.round2(retention.retentionUsd * effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -227,7 +230,7 @@ export class ReceiptsService {
           description: `Ret. IVA ${retention.number} (${retention.invoice?.number || ''})`,
           amountUsd: retention.retentionUsd,
           amountBsHistoric: retention.retentionBs,
-          amountBsToday: this.round2(retention.retentionUsd * rate.rate),
+          amountBsToday: this.round2(retention.retentionUsd * effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -291,7 +294,7 @@ export class ReceiptsService {
           totalUsd,
           totalBsHistoric,
           totalBsToday,
-          exchangeRate: rate.rate,
+          exchangeRate: effectiveRate,
           differentialBs,
           hasDifferential,
           notes: dto.notes || null,
@@ -347,11 +350,12 @@ export class ReceiptsService {
       throw new BadRequestException('Solo se pueden procesar recibos en borrador');
     }
 
-    // Get today's rate for payment records
+    // Usar la tasa del recibo (editable: cobro por fecha / pago manual). Fallback a la de hoy.
     const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) {
-      throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    const todayRate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+    const postRate = receipt.exchangeRate && receipt.exchangeRate > 0 ? receipt.exchangeRate : todayRate?.rate;
+    if (!postRate || postRate <= 0) {
+      throw new BadRequestException('No hay tasa de cambio para procesar el recibo');
     }
 
     // Validate payments total
@@ -367,9 +371,18 @@ export class ReceiptsService {
       // Process each item
       for (const item of receipt.items) {
         if (item.itemType === 'RECEIVABLE' && item.receivableId && item.receivable) {
-          const receivable = item.receivable;
+          // Releer fresco dentro de la tx y validar saldo: evita doble-cobro si otro recibo
+          // (otro borrador del mismo documento) ya lo cobro antes de postear este.
+          const receivable = await tx.receivable.findUnique({ where: { id: item.receivableId } });
+          if (!receivable) throw new BadRequestException('La cuenta por cobrar ya no existe');
           const payAmount = item.amountUsd;
-          const amountBs = this.round2(payAmount * rate.rate);
+          const balanceUsd = this.round2(receivable.amountUsd - receivable.paidAmountUsd);
+          if (payAmount > balanceUsd + 0.01) {
+            throw new BadRequestException(
+              `'${item.description}' ya no tiene saldo suficiente (saldo: $${balanceUsd.toFixed(2)}). Posiblemente ya fue cobrado por otro recibo.`,
+            );
+          }
+          const amountBs = this.round2(payAmount * postRate);
           const newPaidUsd = this.round2(receivable.paidAmountUsd + payAmount);
           const newPaidBs = this.round2(receivable.paidAmountBs + amountBs);
           const isPaid = newPaidUsd >= receivable.amountUsd - 0.01;
@@ -380,7 +393,7 @@ export class ReceiptsService {
               receiptId: receipt.id,
               amountUsd: payAmount,
               amountBs,
-              exchangeRate: rate.rate,
+              exchangeRate: postRate,
               methodId: dto.payments[0]?.methodId, // use first payment method as reference
               reference: `Recibo ${receipt.number}`,
               cashSessionId: dto.cashSessionId || null,
@@ -399,9 +412,18 @@ export class ReceiptsService {
             },
           });
         } else if (item.itemType === 'PAYABLE' && item.payableId && item.payable) {
-          const payable = item.payable;
+          // Releer fresco dentro de la tx y validar saldo: evita doble-pago si otro recibo
+          // (otro borrador del mismo documento) ya lo pago antes de postear este.
+          const payable = await tx.payable.findUnique({ where: { id: item.payableId } });
+          if (!payable) throw new BadRequestException('El documento por pagar ya no existe');
           const payAmount = item.amountUsd;
-          const amountBs = this.round2(payAmount * rate.rate);
+          const balanceUsd = this.round2(payable.netPayableUsd - payable.paidAmountUsd);
+          if (payAmount > balanceUsd + 0.01) {
+            throw new BadRequestException(
+              `'${item.description}' ya no tiene saldo suficiente (saldo: $${balanceUsd.toFixed(2)}). Posiblemente ya fue pagado por otro recibo.`,
+            );
+          }
+          const amountBs = this.round2(payAmount * postRate);
           const newPaidUsd = this.round2(payable.paidAmountUsd + payAmount);
           const newPaidBs = this.round2(payable.paidAmountBs + amountBs);
           const isPaid = newPaidUsd >= payable.netPayableUsd - 0.01;
@@ -412,7 +434,7 @@ export class ReceiptsService {
               receiptId: receipt.id,
               amountUsd: payAmount,
               amountBs,
-              exchangeRate: rate.rate,
+              exchangeRate: postRate,
               methodId: dto.payments[0]?.methodId,
               reference: `Recibo ${receipt.number}`,
               notes: `Aplicado via recibo ${receipt.number}`,
@@ -459,7 +481,7 @@ export class ReceiptsService {
             methodId: payment.methodId,
             amountUsd: payment.amountUsd,
             amountBs: payment.amountBs,
-            exchangeRate: rate.rate,
+            exchangeRate: postRate,
             reference: payment.reference || null,
           },
         });
@@ -472,8 +494,8 @@ export class ReceiptsService {
             cashSessionId: dto.cashSessionId,
             type: 'EXPENSE',
             amountUsd: Math.abs(this.round2(receipt.totalUsd)),
-            amountBs: Math.abs(this.round2(receipt.totalUsd * rate.rate)),
-            exchangeRate: rate.rate,
+            amountBs: Math.abs(this.round2(receipt.totalUsd * postRate)),
+            exchangeRate: postRate,
             currency: 'USD',
             reason: `Reintegro recibo ${receipt.number}`,
             isManual: false,
@@ -525,6 +547,24 @@ export class ReceiptsService {
     });
   }
 
+  // Eliminar (borrar de verdad) un recibo NO procesado (borrador o anulado), para que no ocupe
+  // espacio. Un recibo en borrador no tiene pagos aplicados, asi que es seguro borrarlo.
+  async remove(id: string) {
+    const receipt = await this.prisma.receipt.findUnique({
+      where: { id },
+      select: { id: true, status: true, number: true },
+    });
+    if (!receipt) throw new NotFoundException('Recibo no encontrado');
+    if (receipt.status === 'POSTED') {
+      throw new BadRequestException('No se puede eliminar un recibo procesado. Solo borradores o anulados.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.receiptItem.deleteMany({ where: { receiptId: id } }),
+      this.prisma.receipt.delete({ where: { id } }),
+    ]);
+    return { message: `Recibo ${receipt.number} eliminado` };
+  }
+
   async getPendingDocuments(query: QueryPendingDocumentsDto) {
     // Legacy support: type=PAYMENT + entityId → flat array of payables + notes
     if (query.type === 'PAYMENT' && query.entityId) {
@@ -567,12 +607,23 @@ export class ReceiptsService {
         orderBy: { createdAt: 'asc' },
       }) : [];
 
-      const payableDocs = payables.map((p) => ({
+      // Excluir payables que ya estan en un recibo en BORRADOR (evita crear borradores
+      // duplicados del mismo documento, como paso con RPG-0001/2/3 al mismo doc).
+      const draftPayableItems = await this.prisma.receiptItem.findMany({
+        where: { payableId: { in: payables.map((p) => p.id) }, receipt: { status: 'DRAFT' } },
+        select: { payableId: true },
+      });
+      const draftPayableIds = new Set(
+        draftPayableItems.map((it) => it.payableId).filter(Boolean) as string[],
+      );
+
+      const payableDocs = payables.filter((p) => !draftPayableIds.has(p.id)).map((p) => ({
         id: p.id,
         documentType: 'CxP',
         payableId: p.id,
         description: p.purchaseOrder?.number || (p as any).documentNumber || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,
+        dueDate: p.dueDate,
         amountUsd: p.netPayableUsd,
         amountBsHistoric: p.netPayableBs,
         exchangeRate: p.exchangeRate,
@@ -689,8 +740,18 @@ export class ReceiptsService {
       });
     }
 
+    // Excluir receivables que ya estan en un recibo en BORRADOR (evita borradores duplicados)
+    const draftReceivableItems = await this.prisma.receiptItem.findMany({
+      where: { receivableId: { in: receivables.map((r) => r.id) }, receipt: { status: 'DRAFT' } },
+      select: { receivableId: true },
+    });
+    const draftReceivableIds = new Set(
+      draftReceivableItems.map((it) => it.receivableId).filter(Boolean) as string[],
+    );
+    const visibleReceivables = receivables.filter((r) => !draftReceivableIds.has(r.id));
+
     return {
-      receivables: receivables.map((r) => ({
+      receivables: visibleReceivables.map((r) => ({
         id: r.id,
         type: r.type,
         platformName: r.platformName,

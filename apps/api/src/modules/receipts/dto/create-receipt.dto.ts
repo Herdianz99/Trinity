@@ -55,4 +55,10 @@ export class CreateReceiptDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Tasa a usar para los Bs "de hoy" y el diferencial. Cobro: tasa del dia segun la fecha
+  // elegida; Pago: tasa manual del proveedor. Si no se envia, se usa la tasa del dia.
+  @IsOptional()
+  @IsNumber()
+  exchangeRate?: number;
 }

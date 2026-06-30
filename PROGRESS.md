@@ -1,5 +1,21 @@
 # Trinity ERP — Progreso
 
+## Sesion 97 (2026-06-30) — Recibos (cobro/pago): fix bug duplicados + tasa editable + eliminar + lista pendientes (SIN DESPLEGAR)
+
+> Bloque grande pedido por Diego tras detectar en prod 3 recibos de pago al MISMO documento (RPG-0001/2/3: 0003 procesado, 0001/0002 borradores). Se trajo copia fresca de prod a local para investigar y probar (prod intacto).
+
+**Bug recibos duplicados (lo critico):** la causa era doble — (1) `getPendingDocuments` no excluia documentos ya incluidos en un recibo en BORRADOR, asi que se podian crear varios borradores del mismo doc; (2) `post` sumaba el pago al `paidAmountUsd` sin validar saldo, asi que postear un borrador viejo doble-pagaba. Fix:
+- `post`: re-lee el doc fresco dentro de la tx y RECHAZA si `payAmount > saldo` ("ya no tiene saldo suficiente, posiblemente ya fue pagado por otro recibo"). Para receivables y payables.
+- `getPendingDocuments`: excluye payables/receivables que ya estan en un recibo DRAFT (consultando `ReceiptItem` con `receipt.status='DRAFT'`).
+
+**Eliminar recibos borrador:** nuevo `remove(id)` en service + `@Delete(':id')` en controller. Borra el recibo y sus items SOLO si NO esta POSTED (borradores/anulados). Botones de Trash en las listas de Cobro y Pago (status DRAFT o CANCELLED). Verificado: borrar un POSTED -> 400.
+
+**Tasa editable** (`create-receipt.dto` gana `exchangeRate?`): `create` usa la tasa enviada (o la de hoy como fallback) para los Bs "de hoy" y el diferencial, y la guarda en `Receipt.exchangeRate`; `post` usa la tasa del recibo (no la de hoy) para los pagos. Frontend (`new/page.tsx`): estado `rate` editable + `rateDate`. COBRO: selector de fecha que trae la tasa de ese dia (`/exchange-rate/by-date`) + editable. PAGO: tasa manual (proveedor). Recalcula los Bs de los docs al cambiar la tasa; envia `exchangeRate`.
+
+**Lista de pendientes:** columnas Fecha (documento) y Vence (con `dueDate` agregado al mapping de payables en el backend); "Total de la deuda" abajo (suma de saldos CxC/CxP de los PENDIENTES, decrece al sacar docs); ordenados por fecha de vencimiento ascendente (los que vencen primero, arriba); fecha "Vence" en ROJO si esta vencida.
+
+- Probado E2E en la copia de prod: by-date OK (607/623), DELETE protege POSTED, post valida saldo. API + Web typecheck 0 errores. Sin cambios de schema. **Importante**: probar bien el flujo completo de cobro/pago antes de desplegar (afecta CxC/CxP y diferencial cambiario).
+
 ## Sesion 96 (2026-06-30) — Proveedores: buscador (como en clientes) (SIN DESPLEGAR)
 
 > Pedido de Diego: filtro en `/catalog/suppliers` como el de `/sales/customers`. Solo frontend (`catalog/suppliers/page.tsx`): el backend (`suppliers.service findAll`) YA soportaba `?search=` (name + rif, case-insensitive), solo faltaba cablearlo.

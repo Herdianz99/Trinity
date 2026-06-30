@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Search, Loader2, ChevronLeft, ChevronRight, Plus, Eye,
+  FileText, Search, Loader2, ChevronLeft, ChevronRight, Plus, Eye, Trash2,
 } from 'lucide-react';
 
 interface Receipt {
@@ -64,6 +64,14 @@ export default function ReceiptsCollectionPage() {
 
   useEffect(() => { document.title = 'Recibos de Cobro | Trinity ERP'; }, []);
   useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
+
+  async function handleDelete(id: string, number: string) {
+    if (!confirm(`Eliminar el recibo ${number}? Se borrara permanentemente.`)) return;
+    try {
+      const res = await fetch(`/api/proxy/receipts/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchReceipts();
+    } catch { /* ignore */ }
+  }
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -171,12 +179,24 @@ export default function ReceiptsCollectionPage() {
                       {new Date(r.createdAt).toLocaleDateString('es-VE')}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/receipts/${r.id}`); }}
-                        className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
-                      >
-                        <Eye size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); router.push(`/receipts/${r.id}`); }}
+                          className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
+                          title="Ver"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {(r.status === 'DRAFT' || r.status === 'CANCELLED') && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(r.id, r.number); }}
+                            className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-slate-400 hover:text-red-400"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -18,6 +18,7 @@ interface PendingDoc {
   description: string;
   reference?: string | null;
   date: string;
+  dueDate?: string | null;
   amountUsd: number;
   amountBsHistoric: number;
   exchangeRate: number;
@@ -100,7 +101,9 @@ export default function NewReceiptPage() {
   const [loadingDocs, setLoadingDocs] = useState(false);
 
   // Exchange rate
-  const [todayRate, setTodayRate] = useState<number>(0);
+  const [todayRate, setTodayRate] = useState<number>(0); // tasa del dia cargada (base/guard)
+  const [rate, setRate] = useState<number>(0); // tasa EFECTIVA editable usada en los calculos
+  const [rateDate, setRateDate] = useState<string>(new Date().toLocaleDateString('en-CA')); // cobro: fecha de la tasa
   const [rateLoading, setRateLoading] = useState(true);
 
   // Notes
@@ -137,6 +140,31 @@ export default function NewReceiptPage() {
       setRateLoading(false);
     })();
   }, []);
+
+  // Inicializar la tasa efectiva con la del dia (solo la primera vez)
+  useEffect(() => {
+    if (todayRate > 0) setRate((prev) => (prev > 0 ? prev : todayRate));
+  }, [todayRate]);
+
+  // Recalcular los Bs "de hoy" de los documentos seleccionados cuando cambia la tasa efectiva
+  useEffect(() => {
+    if (rate <= 0) return;
+    setSelectedDocs((prev) => prev.map((d) => ({
+      ...d,
+      amountBsToday: Math.round(d.selectedAmountUsd * rate * 100) / 100,
+    })));
+  }, [rate]);
+
+  // Cobro: traer la tasa registrada para la fecha elegida
+  const fetchRateForDate = async (date: string) => {
+    try {
+      const res = await fetch(`/api/proxy/exchange-rate/by-date?date=${date}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.rate) setRate(data.rate);
+      }
+    } catch { /* ignore */ }
+  };
 
   // Debounced entity search
   useEffect(() => {
@@ -255,7 +283,7 @@ export default function NewReceiptPage() {
             status: receivable.status,
           };
           const sign = 1;
-          const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
+          const amountBsToday = Math.round(doc.balanceUsd * rate * 100) / 100;
           setSelectedDocs([{
             ...doc,
             sign,
@@ -286,7 +314,7 @@ export default function NewReceiptPage() {
             status: payable.status,
           };
           const sign = 1;
-          const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
+          const amountBsToday = Math.round(doc.balanceUsd * rate * 100) / 100;
           setSelectedDocs([{
             ...doc,
             sign,
@@ -351,7 +379,7 @@ export default function NewReceiptPage() {
   const addDoc = (doc: PendingDoc) => {
     // Use sign from API for notes, otherwise: CxC/CxP = +1, CREDIT_NOTE = -1, DEBIT_NOTE = +1
     const sign = doc.sign ?? (doc.documentType === 'CxC' || doc.documentType === 'CxP' ? 1 : doc.documentType === 'DEBIT_NOTE' ? 1 : -1);
-    const amountBsToday = Math.round(doc.balanceUsd * todayRate * 100) / 100;
+    const amountBsToday = Math.round(doc.balanceUsd * rate * 100) / 100;
     setSelectedDocs((prev) => [...prev, {
       ...doc,
       sign,
@@ -375,7 +403,7 @@ export default function NewReceiptPage() {
       return {
         ...d,
         selectedAmountUsd: clamped,
-        amountBsToday: Math.round(clamped * todayRate * 100) / 100,
+        amountBsToday: Math.round(clamped * rate * 100) / 100,
       };
     }));
   };
@@ -389,6 +417,21 @@ export default function NewReceiptPage() {
   const totalBsToday = selectedDocs.reduce((sum, d) => sum + d.amountBsToday * d.sign, 0);
   const differentialBs = Math.round((totalBsToday - totalBsHistoric) * 100) / 100;
   const hasDifferential = Math.abs(differentialBs) >= 0.01;
+
+  // Total de la deuda que queda en la lista de pendientes (CxC/CxP). Decrece a medida que se
+  // sacan documentos hacia la seleccion, para ver cuanto falta por gestionar.
+  const totalDebtUsd = pendingDocs
+    .filter((d) => d.documentType === 'CxC' || d.documentType === 'CxP')
+    .reduce((s, d) => s + (d.balanceUsd || 0), 0);
+
+  // Pendientes ordenados por fecha de vencimiento (los que vencen primero, arriba). Los que no
+  // tienen vencimiento (notas, retenciones) quedan al final.
+  const sortedPendingDocs = [...pendingDocs].sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+  });
 
   // Save draft
   const saveDraft = async () => {
@@ -408,6 +451,7 @@ export default function NewReceiptPage() {
           amountUsd: d.selectedAmountUsd,
         })),
         notes,
+        exchangeRate: rate,
       };
       if (isCollection && sourceTab === 'platform') {
         body.platformName = selectedPlatform;
@@ -450,6 +494,7 @@ export default function NewReceiptPage() {
           amountUsd: d.selectedAmountUsd,
         })),
         notes,
+        exchangeRate: rate,
       };
       if (isCollection && sourceTab === 'platform') {
         body.platformName = selectedPlatform;
@@ -477,7 +522,7 @@ export default function NewReceiptPage() {
         methodName: '',
         isDivisa: false,
         amountUsd: netAbsUsd,
-        amountBs: Math.round(netAbsUsd * todayRate * 100) / 100,
+        amountBs: Math.round(netAbsUsd * rate * 100) / 100,
         reference: '',
       }]);
       setPayModalOpen(true);
@@ -528,7 +573,7 @@ export default function NewReceiptPage() {
       const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
       const usedUsd = prev.reduce((s, l) => s + l.amountUsd, 0);
       const remainingUsd = Math.max(0, Math.round((netAbsUsd - usedUsd) * 100) / 100);
-      const remainingBs = Math.round(remainingUsd * todayRate * 100) / 100;
+      const remainingBs = Math.round(remainingUsd * rate * 100) / 100;
       return [...prev, { methodId: '', methodName: '', isDivisa: false, amountUsd: remainingUsd, amountBs: remainingBs, reference: '' }];
     });
   };
@@ -557,15 +602,15 @@ export default function NewReceiptPage() {
           updated.methodName = method.name;
           updated.isDivisa = method.isDivisa;
           if (method.isDivisa) {
-            updated.amountBs = Math.round(updated.amountUsd * todayRate * 100) / 100;
+            updated.amountBs = Math.round(updated.amountUsd * rate * 100) / 100;
           }
         }
       }
       if (field === 'amountUsd' && updated.isDivisa) {
-        updated.amountBs = Math.round(Number(value) * todayRate * 100) / 100;
+        updated.amountBs = Math.round(Number(value) * rate * 100) / 100;
       }
       if (field === 'amountBs' && !updated.isDivisa) {
-        updated.amountUsd = todayRate > 0 ? Math.round(Number(value) / todayRate * 100) / 100 : 0;
+        updated.amountUsd = todayRate > 0 ? Math.round(Number(value) / rate * 100) / 100 : 0;
       }
       return updated;
     }));
@@ -629,9 +674,34 @@ export default function NewReceiptPage() {
           <h1 className="text-2xl font-bold text-white">
             Nuevo {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'}
           </h1>
-          <p className="text-slate-400 mt-0.5">
-            Tasa del dia: <span className="text-white font-mono">{fmtRate(todayRate)} Bs/$</span>
-          </p>
+          <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            {isCollection && (
+              <label className="flex items-center gap-2">
+                <span>Fecha tasa:</span>
+                <input
+                  type="date"
+                  value={rateDate}
+                  onChange={(e) => { setRateDate(e.target.value); fetchRateForDate(e.target.value); }}
+                  className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-2 py-1 text-sm"
+                />
+              </label>
+            )}
+            <label className="flex items-center gap-2">
+              <span>Tasa{isCollection ? '' : ' (manual)'}:</span>
+              <input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={rate || ''}
+                onChange={(e) => setRate(Number(e.target.value) || 0)}
+                className="w-28 bg-slate-700 border border-slate-600 text-white font-mono rounded-lg px-2 py-1 text-sm"
+              />
+              <span className="text-slate-500">Bs/$</span>
+            </label>
+            {todayRate > 0 && Math.abs(rate - todayRate) > 0.0001 && (
+              <span className="text-[11px] text-amber-400">Tasa de hoy: {fmtRate(todayRate)}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -793,6 +863,8 @@ export default function NewReceiptPage() {
                     <tr className="border-b border-slate-700/50">
                       <th className="text-left px-3 py-2 text-slate-500">Tipo</th>
                       <th className="text-left px-3 py-2 text-slate-500">Documento</th>
+                      <th className="text-left px-3 py-2 text-slate-500 hidden sm:table-cell">Fecha</th>
+                      <th className="text-left px-3 py-2 text-slate-500 hidden sm:table-cell">Vence</th>
                       <th className="text-right px-3 py-2 text-slate-500">USD</th>
                       <th className="text-right px-3 py-2 text-slate-500">Bs hist.</th>
                       <th className="text-right px-3 py-2 text-slate-500">Saldo</th>
@@ -800,7 +872,7 @@ export default function NewReceiptPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingDocs.map((doc) => (
+                    {sortedPendingDocs.map((doc) => (
                       <tr
                         key={doc.id}
                         className={`border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors ${
@@ -826,6 +898,8 @@ export default function NewReceiptPage() {
                             <span className="block text-[10px] text-slate-500">Ref: {doc.reference}</span>
                           )}
                         </td>
+                        <td className="px-3 py-2 text-slate-400 hidden sm:table-cell whitespace-nowrap">{doc.date ? new Date(doc.date).toLocaleDateString('es-VE') : '—'}</td>
+                        <td className={`px-3 py-2 hidden sm:table-cell whitespace-nowrap ${doc.dueDate && new Date(doc.dueDate) < new Date(new Date().toDateString()) ? 'text-red-400 font-medium' : 'text-slate-400'}`}>{doc.dueDate ? new Date(doc.dueDate).toLocaleDateString('es-VE') : '—'}</td>
                         <td className="px-3 py-2 text-right text-white font-mono">${fmt(doc.amountUsd)}</td>
                         <td className="px-3 py-2 text-right text-slate-400 font-mono">{fmt(doc.amountBsHistoric)}</td>
                         <td className="px-3 py-2 text-right text-amber-400 font-mono">${fmt(doc.balanceUsd)}</td>
@@ -843,6 +917,13 @@ export default function NewReceiptPage() {
                 </table>
               </div>
             )}
+            {/* Total de la deuda con esta entidad */}
+            <div className="px-4 py-3 border-t border-slate-700/50 flex items-center justify-between bg-slate-900/40">
+              <span className="text-xs text-slate-400 uppercase tracking-wider">
+                Total de la deuda {isCollection ? '(por cobrar)' : '(por pagar)'}
+              </span>
+              <span className="text-base font-bold text-amber-400 font-mono">${fmt(totalDebtUsd)}</span>
+            </div>
           </div>
 
           {/* Right: Selected documents */}
@@ -933,7 +1014,7 @@ export default function NewReceiptPage() {
               </div>
               <div className="border-t border-slate-700/50 pt-3 flex justify-between">
                 <span className="text-slate-400">Tasa del dia:</span>
-                <span className="text-white">{fmtRate(todayRate)} Bs/$</span>
+                <span className="text-white">{fmtRate(rate)} Bs/$</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Total Bs a tasa hoy:</span>
@@ -1037,7 +1118,7 @@ export default function NewReceiptPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa:</span>
-                  <span className="text-slate-300">{fmtRate(todayRate)} Bs/$</span>
+                  <span className="text-slate-300">{fmtRate(rate)} Bs/$</span>
                 </div>
               </div>
 
