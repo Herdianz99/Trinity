@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## Sesion 93 (2026-06-30) — Inventario/Stock: KPIs arriba + toggle Costo/Brecha en valuacion (SIN DESPLEGAR)
+
+> Dos pedidos de Diego en `/inventory/stock` (solo frontend, `inventory/stock/page.tsx`).
+- **KPIs arriba**: el "Reporte Valorizado" (Productos, Unidades, Valor USD, Valor Bs) se movio de DESPUES de la tabla a ARRIBA (debajo del selector de almacen), para verlo sin scrollear toda la lista.
+- **Toggle Costo / Brecha**: en la cabecera del reporte. "Costo" = costo puro; "Brecha" = costo + brecha (`bregaGlobalPct` global) sumada SOLO a productos con `bregaApplies`. **Arranca en "Brecha" por defecto** (la valuacion que el negocio mira). Afecta el total USD/Bs y las columnas Costo USD + Valor USD por fila (coherente: stock x costo = valor). Muestra "Brecha +X%" cuando esta activo.
+- Sin backend: el endpoint de stock ya devolvia `bregaApplies` (include product:true); solo se trajo `bregaGlobalPct` del `/config`. Web typecheck 0 errores.
+
 ## Sesion 92 (2026-06-30) — POS: autorizar venta sin stock con clave de supervisor al agregar (SIN DESPLEGAR)
 
 > Pedido de Diego (2da iteracion; la 1ra se revirtio). El 1er intento pedia la clave AL COBRAR, pero el vendedor no se enteraba de que no habia stock hasta el final. Este enfoque autoriza **al agregar el producto**: el vendedor ve "Sin stock" al instante y un boton discreto "Autorizar" que pide la clave del supervisor (que esta ahi mismo).

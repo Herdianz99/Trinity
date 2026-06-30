@@ -18,6 +18,7 @@ interface StockItem {
     costUsd: number;
     minStock: number;
     priceDetal: number;
+    bregaApplies?: boolean;
     category?: { name: string } | null;
   };
   warehouse: { id: string; name: string };
@@ -36,6 +37,7 @@ interface GlobalStock {
     name: string;
     costUsd: number;
     minStock: number;
+    bregaApplies?: boolean;
     category?: { name: string } | null;
   };
   totalStock: number;
@@ -50,6 +52,10 @@ export default function StockPage() {
   const [globalStock, setGlobalStock] = useState<GlobalStock[]>([]);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [exchangeRate, setExchangeRate] = useState(0);
+  const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
+  // Valorar el inventario con el costo solo, o con costo + brecha (en productos que llevan brecha).
+  // Por defecto arranca en "brecha" (costo + brecha), que es la valuacion que el negocio mira.
+  const [valuationMode, setValuationMode] = useState<'cost' | 'costBrega'>('costBrega');
   const [loading, setLoading] = useState(true);
   const [adjustModal, setAdjustModal] = useState<{ productId: string; productName: string; currentStock: number } | null>(null);
   const [adjustForm, setAdjustForm] = useState({ warehouseId: '', type: 'ADJUSTMENT_IN' as string, quantity: 0, reason: '' });
@@ -99,6 +105,10 @@ export default function StockPage() {
       const text = await res.text();
       if (text) { try { const data = JSON.parse(text); setExchangeRate(data.rate || 0); } catch {} }
     }
+    const cfgRes = await fetch('/api/proxy/config');
+    if (cfgRes.ok) {
+      try { const cfg = await cfgRes.json(); setBregaGlobalPct(cfg?.bregaGlobalPct || 0); } catch {}
+    }
   }, []);
 
   useEffect(() => { document.title = 'Inventario | Trinity ERP'; }, []);
@@ -146,10 +156,18 @@ export default function StockPage() {
     }
   }
 
+  // Costo efectivo segun el modo: "costo + brecha" suma la brecha SOLO a productos que la llevan
+  function effectiveCost(product: { costUsd?: number; bregaApplies?: boolean }) {
+    const base = product.costUsd || 0;
+    return valuationMode === 'costBrega' && product.bregaApplies
+      ? base * (1 + bregaGlobalPct / 100)
+      : base;
+  }
+
   // Compute valuation
   const totalValuationUsd = selectedWarehouse === 'all'
-    ? globalStock.reduce((sum, item) => sum + item.totalStock * (item.product.costUsd || 0), 0)
-    : stockItems.reduce((sum, item) => sum + item.quantity * (item.product.costUsd || 0), 0);
+    ? globalStock.reduce((sum, item) => sum + item.totalStock * effectiveCost(item.product), 0)
+    : stockItems.reduce((sum, item) => sum + item.quantity * effectiveCost(item.product), 0);
   const totalValuationBs = totalValuationUsd * exchangeRate;
 
   function getStockStatus(qty: number, minStock: number) {
@@ -224,6 +242,59 @@ export default function StockPage() {
         </div>
       </div>
 
+      {/* Reporte Valorizado (KPIs arriba, para verlos sin scrollear toda la lista) */}
+      <div className="card p-4 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Reporte Valorizado</h3>
+          <div className="flex items-center gap-2">
+            {valuationMode === 'costBrega' && bregaGlobalPct > 0 && (
+              <span className="text-[11px] text-amber-400">Brecha +{bregaGlobalPct}%</span>
+            )}
+            <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+              <button
+                onClick={() => setValuationMode('cost')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${valuationMode === 'cost' ? 'bg-green-500/20 text-green-400' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Costo
+              </button>
+              <button
+                onClick={() => setValuationMode('costBrega')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${valuationMode === 'costBrega' ? 'bg-green-500/20 text-green-400' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Brecha
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <p className="text-xs text-slate-500 uppercase">Productos</p>
+            <p className="text-xl font-bold text-white font-mono">
+              {selectedWarehouse === 'all' ? globalStock.length : stockItems.length}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase">Unidades totales</p>
+            <p className="text-xl font-bold text-white font-mono">
+              {selectedWarehouse === 'all'
+                ? globalStock.reduce((s, i) => s + i.totalStock, 0).toLocaleString()
+                : stockItems.reduce((s, i) => s + i.quantity, 0).toLocaleString()
+              }
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase">Valor Total USD</p>
+            <p className="text-xl font-bold text-green-400 font-mono">${totalValuationUsd.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase">Valor Total Bs</p>
+            <p className="text-xl font-bold text-blue-400 font-mono">
+              {exchangeRate > 0 ? `Bs ${totalValuationBs.toFixed(2)}` : '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Stock table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -260,8 +331,8 @@ export default function StockPage() {
                       <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{item.product.category?.name || '—'}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{item.totalStock}</td>
                       <td className="px-4 py-3 text-right text-slate-400 font-mono hidden md:table-cell">{item.minStock}</td>
-                      <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${item.product.costUsd.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.totalStock * item.product.costUsd).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${effectiveCost(item.product).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.totalStock * effectiveCost(item.product)).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
                       </td>
@@ -300,8 +371,8 @@ export default function StockPage() {
                       <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{item.product.category?.name || '—'}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{item.quantity}</td>
                       <td className="px-4 py-3 text-right text-slate-400 font-mono hidden md:table-cell">{item.product.minStock}</td>
-                      <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${item.product.costUsd.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.quantity * item.product.costUsd).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${effectiveCost(item.product).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.quantity * effectiveCost(item.product)).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
                       </td>
@@ -329,38 +400,6 @@ export default function StockPage() {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* Valuation summary */}
-      <div className="card p-4 mt-6">
-        <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Reporte Valorizado</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs text-slate-500 uppercase">Productos</p>
-            <p className="text-xl font-bold text-white font-mono">
-              {selectedWarehouse === 'all' ? globalStock.length : stockItems.length}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase">Unidades totales</p>
-            <p className="text-xl font-bold text-white font-mono">
-              {selectedWarehouse === 'all'
-                ? globalStock.reduce((s, i) => s + i.totalStock, 0).toLocaleString()
-                : stockItems.reduce((s, i) => s + i.quantity, 0).toLocaleString()
-              }
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase">Valor Total USD</p>
-            <p className="text-xl font-bold text-green-400 font-mono">${totalValuationUsd.toFixed(2)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase">Valor Total Bs</p>
-            <p className="text-xl font-bold text-blue-400 font-mono">
-              {exchangeRate > 0 ? `Bs ${totalValuationBs.toFixed(2)}` : '—'}
-            </p>
-          </div>
         </div>
       </div>
 
