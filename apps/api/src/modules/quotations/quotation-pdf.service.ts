@@ -129,6 +129,18 @@ export class QuotationPdfService {
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 10;
 
+      // Firma y Sello (a la izquierda de los totales) para darle mas seriedad al informe
+      const totalsTopY = y;
+      if (config?.stampImage) {
+        try {
+          const stampData = config.stampImage.replace(/^data:image\/\w+;base64,/, '');
+          const stampBuffer = Buffer.from(stampData, 'base64');
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#555555').text('Firma y Sello', 40, totalsTopY);
+          doc.image(stampBuffer, 40, totalsTopY + 12, { fit: [170, 75] });
+          doc.fillColor('#000000');
+        } catch { /* sello invalido: se omite */ }
+      }
+
       // IVA breakdown
       const ivaByType: Record<string, number> = {};
       for (const item of quotation.items) {
@@ -153,6 +165,9 @@ export class QuotationPdfService {
       y += 5;
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text('TOTAL USD:', totalsX, y); doc.text(`$${quotation.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 20;
+
+      // Si el sello quedo mas abajo que los totales, bajar el cursor para no encimar la nota
+      if (config?.stampImage) y = Math.max(y, totalsTopY + 95);
 
       // Note
       y += 10;

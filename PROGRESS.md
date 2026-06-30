@@ -1,5 +1,12 @@
 # Trinity ERP — Progreso
 
+## Sesion 95 (2026-06-30) — Cotizaciones: compartir PDF en movil (WhatsApp/correo) + Firma y Sello en el PDF (SIN DESPLEGAR)
+
+> Dos pedidos de Diego sobre el PDF de cotizacion (continuacion de S94).
+- **Compartir en movil** (`quotations/page.tsx`, `handlePrint` ahora async): antes `window.open` solo dejaba VER el PDF en movil (no compartir). Ahora, si es movil (UA Android/iPhone) y soporta `navigator.canShare`, baja el PDF como `File` y abre el **menu nativo de compartir** (`navigator.share({files})`) → WhatsApp, correo, Drive. En desktop o sin Web Share: `window.open` (ver/imprimir), como antes. Cae con gracia si cancela (AbortError) o no soporta archivos. Modal renombrado a "Imprimir / Compartir".
+- **Firma y Sello en el PDF** (`quotation-pdf.service.ts`): se renderiza `config.stampImage` (campo "Firma y Sello (Retenciones)" de Configuracion) a la IZQUIERDA de los totales, con rotulo "Firma y Sello", para darle seriedad. Mismo patron base64→Buffer que el logo, guardado en try/catch. Ajusta el cursor `y = max(y, totalsTopY+95)` para no encimar la nota.
+- Probado: PDF genera 200 valido en todos los modos; el sello se embebe sin error (probado con sello temporal, restaurado a NULL). La copia LOCAL tiene `stampImage` NULL, asi que el sello solo se ve en prod (donde esta configurado) o si se carga en Config. API + Web typecheck 0 errores. Sin cambios de schema.
+
 ## Sesion 94 (2026-06-30) — Cotizaciones: PDF con opcion "Sin IVA" (vendedor elige al imprimir) (SIN DESPLEGAR)
 
 > Pedido de Diego: poder mandar la cotizacion sin que el reporte muestre el IVA, para que el vendedor elija cual ver/enviar. Decision (confirmada): "sin IVA" = MISMO total, solo se oculta el impuesto (precios finales, el cliente paga lo mismo), NO precios netos.

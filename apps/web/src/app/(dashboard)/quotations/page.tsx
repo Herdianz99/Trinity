@@ -97,8 +97,38 @@ export default function QuotationsPage() {
     }
   }
 
-  function handlePrint(id: string, hideIva = false) {
-    window.open(`/api/proxy/quotations/${id}/pdf${hideIva ? '?hideIva=true' : ''}`, '_blank');
+  async function handlePrint(id: string, hideIva = false) {
+    setPrintChoiceId(null);
+    const url = `/api/proxy/quotations/${id}/pdf${hideIva ? '?hideIva=true' : ''}`;
+    const number = quotations.find(q => q.id === id)?.number || 'cotizacion';
+    const filename = `Cotizacion-${number}.pdf`;
+
+    // En desktop (o navegadores sin Web Share): abrir el PDF en pestana nueva para ver/imprimir.
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile || typeof navigator === 'undefined' || !navigator.canShare) {
+      window.open(url, '_blank');
+      return;
+    }
+
+    // En movil: bajar el PDF y abrir el menu nativo de compartir (WhatsApp, correo, etc.)
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch');
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename, text: `Cotizacion ${number}` });
+      } else {
+        // soporta compartir pero no archivos: abrir el PDF
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+    } catch (err: any) {
+      // Si el usuario cancela el menu de compartir, no hacer nada
+      if (err?.name === 'AbortError') return;
+      window.open(url, '_blank'); // fallback
+    }
   }
 
   async function handleChangeStatus(id: string, newStatus: string) {
@@ -460,7 +490,7 @@ export default function QuotationsPage() {
                 <Printer className="text-green-400" size={20} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Imprimir cotizacion</h3>
+                <h3 className="text-lg font-bold text-white">Imprimir / Compartir</h3>
                 <p className="text-sm text-slate-400">Elige el formato del PDF</p>
               </div>
             </div>
