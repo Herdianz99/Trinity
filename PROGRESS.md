@@ -25,6 +25,14 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 91 (2026-06-30) — POS: navegacion con teclado en buscadores de producto y cliente (SIN DESPLEGAR)
+
+> Continuacion de la S90: mismo patron de teclado replicado en el POS (`sales/pos/page.tsx`) para consistencia. Solo las vistas DESKTOP (lista de una columna); la grilla movil de productos (2 columnas, tactil) se dejo como estaba.
+- Estados `productHighlight` / `customerHighlight`. Helpers `pickProduct` (sin stock → venta perdida, con stock → carrito) y `pickCustomer` (asigna cliente), reusados en click y Enter.
+- `onKeyDown` en los inputs desktop de producto y cliente: ArrowDown/ArrowUp (mueve y topa), Enter (selecciona el resaltado + preventDefault), Escape (cierra resultados). Resaltado visual + `scrollIntoView({block:'nearest'})` + `onMouseEnter` unifica mouse/teclado.
+- Reset del indice a 0 al teclear y al llegar resultados (producto async con debounce; cliente via useEffect de `customerSearch`).
+- Lector de codigo de barras sin conflicto: si Enter llega antes de cargar resultados (`length===0`), el handler retorna sin hacer nada (igual que antes). Solo frontend, Web typecheck 0 errores.
+
 ## Sesion 90 (2026-06-30) — Compras: navegacion con teclado en buscadores de proveedor y producto (SIN DESPLEGAR)
 
 > Pedido de Diego: los usuarios venian de un sistema donde buscaban el proveedor y bajaban con las flechas del teclado para seleccionar sin mouse. Se agrego navegacion con teclado a los dos autocompletes de `purchases/new/page.tsx`.

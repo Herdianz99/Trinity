@@ -232,6 +232,9 @@ export default function POSPage() {
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
   const searchTimeout = useRef<any>(null);
   const customerSearchInputRef = useRef<HTMLInputElement>(null);
+  // Indices resaltados para navegar los buscadores con el teclado (flechas + Enter)
+  const [productHighlight, setProductHighlight] = useState(0);
+  const [customerHighlight, setCustomerHighlight] = useState(0);
 
   // Price override state
   const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
@@ -503,6 +506,7 @@ export default function POSPage() {
   // Product search with debounce
   const handleProductSearch = useCallback((query: string) => {
     setSearchQuery(query);
+    setProductHighlight(0);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!query.trim()) { setSearchResults([]); setSearchTotal(0); return; }
     searchTimeout.current = setTimeout(async () => {
@@ -514,6 +518,7 @@ export default function POSPage() {
         const data = await res.json();
         setSearchResults(data.data || []);
         setSearchTotal(data.total || 0);
+        setProductHighlight(0);
       } catch {} finally {
         setSearching(false);
       }
@@ -522,12 +527,14 @@ export default function POSPage() {
 
   // Customer search
   useEffect(() => {
+    setCustomerHighlight(0);
     if (!customerSearch.trim()) { setCustomerResults([]); return; }
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=5&isActive=true`);
         const data = await res.json();
         setCustomerResults(data.data || []);
+        setCustomerHighlight(0);
       } catch {}
     }, 300);
     return () => clearTimeout(t);
@@ -661,6 +668,27 @@ export default function POSPage() {
     setSearchQuery('');
     setSearchResults([]);
     setSearchTotal(0);
+  }
+
+  // Selecciona un producto de los resultados (click o Enter): sin stock -> venta perdida,
+  // con stock -> al carrito. Mismo comportamiento que el listado desktop.
+  function pickProduct(product: any) {
+    const prodStock = product.stock?.[0]?.quantity || 0;
+    const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+    if (blockNoStock) {
+      setLostSalePreset({ id: product.id, code: product.code, name: product.name });
+      setShowLostSale(true);
+    } else {
+      addToCart(product);
+    }
+  }
+
+  function pickCustomer(c: any) {
+    setCustomerId(c.id);
+    setCustomerName(c.name);
+    setCustomerSearch('');
+    setCustomerResults([]);
+    setShowCustomerSearch(false);
   }
 
   function updateQuantity(productId: string, delta: number) {
@@ -2761,6 +2789,22 @@ export default function POSPage() {
                 placeholder="Buscar producto por nombre, codigo o codigo de barras..."
                 value={searchQuery}
                 onChange={e => handleProductSearch(e.target.value)}
+                onKeyDown={e => {
+                  if (searchResults.length === 0) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setProductHighlight(i => Math.min(i + 1, searchResults.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setProductHighlight(i => Math.max(i - 1, 0));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const p = searchResults[productHighlight];
+                    if (p) pickProduct(p);
+                  } else if (e.key === 'Escape') {
+                    setSearchResults([]);
+                  }
+                }}
                 className="input-field pl-9 !py-2.5 text-sm"
                 autoFocus
               />
@@ -2784,7 +2828,7 @@ export default function POSPage() {
         {/* Search results */}
         {searchResults.length > 0 && (
           <div className="card mb-3 max-h-80 overflow-y-auto">
-            {searchResults.map(product => {
+            {searchResults.map((product, pIdx) => {
               const prodStock = product.stock?.[0]?.quantity || 0;
               const reserved = reservedStock[product.id] || 0;
               const available = prodStock - reserved;
@@ -2792,16 +2836,11 @@ export default function POSPage() {
               return (
               <button
                 key={product.id}
-                onClick={() => {
-                  if (blockNoStock) {
-                    setLostSalePreset({ id: product.id, code: product.code, name: product.name });
-                    setShowLostSale(true);
-                  } else {
-                    addToCart(product);
-                  }
-                }}
+                ref={pIdx === productHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                onMouseEnter={() => setProductHighlight(pIdx)}
+                onClick={() => pickProduct(product)}
                 title={blockNoStock ? 'Sin stock — clic para registrar venta perdida' : undefined}
-                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${blockNoStock ? 'hover:bg-amber-500/5' : 'hover:bg-slate-700/40'}`}
+                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${pIdx === productHighlight ? (blockNoStock ? 'bg-amber-500/5' : 'bg-slate-700/40') : ''}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -2911,20 +2950,33 @@ export default function POSPage() {
                       value={customerSearch}
                       onChange={e => { setCustomerSearch(e.target.value); setShowCustomerSearch(true); }}
                       onFocus={() => setShowCustomerSearch(true)}
+                      onKeyDown={e => {
+                        if (customerResults.length === 0) return;
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setCustomerHighlight(i => Math.min(i + 1, customerResults.length - 1));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setCustomerHighlight(i => Math.max(i - 1, 0));
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const c = customerResults[customerHighlight];
+                          if (c) pickCustomer(c);
+                        } else if (e.key === 'Escape') {
+                          setShowCustomerSearch(false);
+                        }
+                      }}
                       className="input-field !py-2 text-sm"
                     />
                     {showCustomerSearch && customerResults.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 max-h-40 overflow-y-auto">
-                        {customerResults.map(c => (
+                        {customerResults.map((c, cIdx) => (
                           <button
                             key={c.id}
-                            onClick={() => {
-                              setCustomerId(c.id);
-                              setCustomerName(c.name);
-                              setCustomerSearch('');
-                              setShowCustomerSearch(false);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-slate-700/40 text-sm text-white border-b border-slate-700/30 last:border-0"
+                            ref={cIdx === customerHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                            onMouseEnter={() => setCustomerHighlight(cIdx)}
+                            onClick={() => pickCustomer(c)}
+                            className={`w-full text-left px-3 py-2 text-sm text-white border-b border-slate-700/30 last:border-0 transition-colors ${cIdx === customerHighlight ? 'bg-slate-700/40' : ''}`}
                           >
                             {c.name} {c.rif && <span className="text-slate-500 text-xs">({c.documentType || 'V'}-{c.rif})</span>}
                           </button>
