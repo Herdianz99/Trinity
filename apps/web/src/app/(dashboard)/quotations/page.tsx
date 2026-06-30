@@ -221,7 +221,7 @@ export default function QuotationsPage() {
         ) : quotations.length === 0 ? (
           <p className="text-center py-12 text-slate-500 text-sm">No se encontraron cotizaciones</p>
         ) : quotations.map(q => (
-          <button key={q.id} onClick={() => openDetail(q.id)} className="card p-4 w-full text-left active:scale-[0.98] transition-transform">
+          <div key={q.id} onClick={() => openDetail(q.id)} className="card p-4 w-full text-left active:scale-[0.98] transition-transform cursor-pointer">
             <div className="flex items-start justify-between mb-2">
               <span className="font-mono text-green-400 text-sm font-bold">{q.number}</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STATUS_COLORS[q.status] || ''}`}>
@@ -233,8 +233,16 @@ export default function QuotationsPage() {
               <span className="text-xs text-slate-500">{new Date(q.createdAt).toLocaleDateString('es-VE')}</span>
               <span className="text-base font-bold text-white">${q.totalUsd.toFixed(2)}</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">{q._count.items} items</p>
-          </button>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs text-slate-500">{q._count.items} items</p>
+              <button
+                onClick={(e) => { e.stopPropagation(); handlePrint(q.id); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700/50 text-slate-300 hover:text-green-400 active:scale-95 transition-transform"
+              >
+                <Printer size={14} /> Imprimir
+              </button>
+            </div>
+          </div>
         ))}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-1 py-2">

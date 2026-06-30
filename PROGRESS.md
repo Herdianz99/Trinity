@@ -25,6 +25,11 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 89 (2026-06-30) — Cotizaciones: boton de imprimir en la vista movil (SIN DESPLEGAR)
+
+> El listado de cotizaciones (`quotations/page.tsx`) tenia boton de imprimir PDF en cada fila del desktop, pero la vista movil (tarjetas) no lo tenia (ni el modal de detalle). Se agrego un boton "Imprimir" a cada tarjeta movil.
+- La tarjeta era un `<button>` (abria el detalle); se convirtio en `<div>` clickeable (no se puede anidar un boton dentro de otro). El boton de imprimir usa `e.stopPropagation()` para imprimir sin abrir el detalle. Misma accion `handlePrint` (abre `/quotations/:id/pdf`). Solo frontend, Web typecheck 0 errores.
+
 ## Sesion 88 (2026-06-30) — Emails de usuario estandarizados + tasa de cambio a 4 decimales (SIN DESPLEGAR)
 
 > Dos pedidos chicos de Diego. Probado en local con copia de la BD de prod.
