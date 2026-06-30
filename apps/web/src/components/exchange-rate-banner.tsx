@@ -42,7 +42,7 @@ export default function ExchangeRateBanner() {
         if (data.rate) {
           setNewRate(data.rate.toString());
           setRateFromBcv(true);
-          setBcvMessage(`Tasa obtenida del BCV: Bs ${data.rate.toFixed(2)}`);
+          setBcvMessage(`Tasa obtenida del BCV: Bs ${data.rate.toFixed(4)}`);
         } else {
           setBcvMessage(data.error || 'No se pudo obtener la tasa. Ingresa manualmente.');
         }

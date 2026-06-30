@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import {
   Monitor, FileText, Landmark, Wallet, Package, ArrowLeftRight,
@@ -155,7 +156,7 @@ export default function HomeDashboardPage() {
         </div>
         {homeData?.exchangeRate && (
           <p className="text-xs text-slate-500">
-            Tasa BCV: <span className="text-slate-300 font-medium">Bs {fmt(homeData.exchangeRate)}</span>
+            Tasa BCV: <span className="text-slate-300 font-medium">Bs {fmtRate(homeData.exchangeRate)}</span>
           </p>
         )}
       </div>

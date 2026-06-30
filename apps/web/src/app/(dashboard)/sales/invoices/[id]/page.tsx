@@ -621,7 +621,7 @@ export default function InvoiceDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase">Tasa del dia</p>
-                <p className="text-white font-mono">Bs {invoice.exchangeRate?.toFixed(2)}</p>
+                <p className="text-white font-mono">Bs {invoice.exchangeRate?.toFixed(4)}</p>
               </div>
             </div>
 
@@ -802,7 +802,7 @@ export default function InvoiceDetailPage() {
                         <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
                         <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs?.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">{p.exchangeRate?.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">{p.exchangeRate?.toFixed(4)}</td>
                         <td className="px-4 py-3 text-slate-400 text-xs hidden md:table-cell">{p.reference || '—'}</td>
                         {invoice.payments.some(pp => pp.igtfUsd > 0) && (
                           <td className="px-4 py-3 text-right font-mono text-amber-400">{p.igtfUsd > 0 ? `$${p.igtfUsd.toFixed(2)}` : '—'}</td>

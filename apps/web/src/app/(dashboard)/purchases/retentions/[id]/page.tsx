@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft, Shield, Loader2, CheckCircle, Ban, Calendar, X,
@@ -314,7 +315,7 @@ export default function RetentionVoucherDetailPage() {
           </div>
           <div>
             <p className="text-xs text-slate-500">Tasa</p>
-            <p className="text-slate-300 font-mono">{fmt(voucher.exchangeRate)}</p>
+            <p className="text-slate-300 font-mono">{fmtRate(voucher.exchangeRate)}</p>
           </div>
           {voucher.serie && (
             <div>

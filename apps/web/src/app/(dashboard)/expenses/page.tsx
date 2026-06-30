@@ -651,7 +651,7 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                   {todayRate > 0 && (
-                    <p className="text-xs text-slate-500">Tasa del dia: {todayRate.toFixed(2)} Bs/USD</p>
+                    <p className="text-xs text-slate-500">Tasa del dia: {todayRate.toFixed(4)} Bs/USD</p>
                   )}
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Notas</label>

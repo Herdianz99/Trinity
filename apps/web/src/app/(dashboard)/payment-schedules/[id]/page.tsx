@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
   CalendarClock,
@@ -421,7 +422,7 @@ export default function PaymentScheduleDetailPage() {
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
           <p className="text-xs text-slate-500">Tasa del dia</p>
-          <p className="text-sm text-slate-200 font-medium">Bs {fmt(schedule.exchangeRate)}</p>
+          <p className="text-sm text-slate-200 font-medium">Bs {fmtRate(schedule.exchangeRate)}</p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
           <p className="text-xs text-slate-500">Creado por</p>

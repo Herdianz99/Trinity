@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X,
@@ -362,7 +363,7 @@ export default function ReceiptDetailPage() {
                 </div>
                 <div>
                   <span className="text-slate-500 block">Tasa del dia</span>
-                  <span className="text-white font-mono">{fmt(receipt.exchangeRate)} Bs/$</span>
+                  <span className="text-white font-mono">{fmtRate(receipt.exchangeRate)} Bs/$</span>
                 </div>
               </div>
               {receipt.notes && (
@@ -545,7 +546,7 @@ export default function ReceiptDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa:</span>
-                  <span className="text-slate-300">{fmt(todayRate)} Bs/$</span>
+                  <span className="text-slate-300">{fmtRate(todayRate)} Bs/$</span>
                 </div>
               </div>
 

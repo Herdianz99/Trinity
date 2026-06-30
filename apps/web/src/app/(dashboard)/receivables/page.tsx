@@ -697,7 +697,7 @@ export default function ReceivablesPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa al crear</span>
-                  <span className="text-slate-200">Bs {selectedReceivable.exchangeRate.toFixed(2)}</span>
+                  <span className="text-slate-200">Bs {selectedReceivable.exchangeRate.toFixed(4)}</span>
                 </div>
                 <div className="border-t border-slate-700/50 pt-2 mt-2">
                   <div className="flex justify-between">
@@ -839,7 +839,7 @@ export default function ReceivablesPage() {
                     setAdvanceForm(f => ({ ...f, amountBs: bs, amountUsd: usd }));
                   }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.01" min="0.01" placeholder="0.00" />
-                  {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1">Tasa: {exchangeRate.toFixed(2)} Bs/$</p>}
+                  {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1">Tasa: {exchangeRate.toFixed(4)} Bs/$</p>}
                 </div>
               </div>
               <div>

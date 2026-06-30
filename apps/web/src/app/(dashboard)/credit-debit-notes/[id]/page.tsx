@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, FileX2, Loader2, CheckCircle, Ban, Printer, ExternalLink, AlertTriangle, Save,
@@ -410,7 +411,7 @@ export default function CreditDebitNoteDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase">Tasa</p>
-                <p className="text-white font-mono">Bs {fmt(note.exchangeRate)}</p>
+                <p className="text-white font-mono">Bs {fmtRate(note.exchangeRate)}</p>
               </div>
               {note.serie && (
                 <div>

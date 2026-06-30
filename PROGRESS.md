@@ -25,6 +25,22 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 88 (2026-06-30) — Emails de usuario estandarizados + tasa de cambio a 4 decimales (SIN DESPLEGAR)
+
+> Dos pedidos chicos de Diego. Probado en local con copia de la BD de prod.
+
+**1. Emails estandarizados** (Diego no podia entrar por poner una mayuscula sin querer). Helper nuevo `apps/api/src/common/email.ts` → `normalizeEmail()` (trim + lowercase).
+- Al **crear/editar** usuario se guarda el email normalizado (`users.service.ts`).
+- **Login** y chequeos de duplicado: busqueda **case-insensitive** (`findFirst` + `mode: 'insensitive'`), asi el casing nunca bloquea el acceso aunque el email guardado tenga mayusculas (`auth.service.ts`, `users.service.ts`). Verificado en local: login con `ROXANA@gmail.com` (mayusculas) → 401 por clave, no 500 → la query insensitive corre OK.
+- Datos existentes: pasado a lower() el unico email con mayusculas en la copia local (`Roxana@gmail.com`). **En prod**, al desplegar correr una vez: `UPDATE "User" SET email = lower(email) WHERE email <> lower(email);` (opcional: el login ya es case-insensitive, asi que nadie queda bloqueado sin esto).
+
+**2. Tasa de cambio con 4 decimales** en TODOS los sitios donde se muestra el VALOR de la tasa (no montos en Bs). Helper nuevo `apps/web/src/lib/format.ts` → `fmtRate()` (4 dec, es-VE).
+- `.toFixed(2)` → `.toFixed(4)` en displays de tasa; `fmt(tasa)` → `fmtRate(tasa)` (con import). Cubre POS, config (tasa de hoy + historial), banner BCV, gastos, dashboard home, facturas (detalle + listado + tabla de pagos), CxC/CxP, recibos, notas credito/debito, cronogramas de pago, retenciones ISLR, y el **ticket termico impreso** (`print-receipt.ts`, helper local `fmtRate4` estilo VE). 22 archivos + 2 helpers.
+- Los montos en Bs (`monto × tasa`) se dejaron en 2 decimales a proposito.
+- Sweep mecanico hecho con subagente bajo reglas estrictas (solo valor de tasa, nunca montos, no tocar `fmt`); revisado y verificado typecheck 0 errores.
+
+- Sin cambios de schema. API + Web typecheck 0 errores.
+
 ## Sesion 87 (2026-06-30) — POS: vuelto en efectivo USD (ayuda de calculo) + fix base IGTF sobre sobrepago (SIN DESPLEGAR)
 
 > Dos cambios en el cobro del POS (`sales/pos/page.tsx`) + backend de IGTF (`invoices.service.ts`). Probado en local con copia de la BD de prod.

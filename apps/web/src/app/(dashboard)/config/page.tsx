@@ -301,7 +301,7 @@ export default function ConfigPage() {
         if (data.rate) {
           setNewRate(data.rate.toString());
           setRateFromBcv(true);
-          setMessage({ type: 'success', text: `Tasa obtenida del BCV: Bs ${data.rate.toFixed(2)} — Confirma y registra` });
+          setMessage({ type: 'success', text: `Tasa obtenida del BCV: Bs ${data.rate.toFixed(4)} — Confirma y registra` });
         } else {
           setMessage({ type: 'error', text: data.error || 'No se pudo obtener la tasa del BCV. Ingresa manualmente.' });
         }
@@ -431,7 +431,7 @@ export default function ConfigPage() {
             {todayRate ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-slate-400">Tasa de hoy:</span>
-                <span className="text-xl font-bold text-green-400 font-mono">{todayRate.rate.toFixed(2)} Bs/USD</span>
+                <span className="text-xl font-bold text-green-400 font-mono">{todayRate.rate.toFixed(4)} Bs/USD</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{todayRate.source}</span>
               </div>
             ) : (
@@ -482,7 +482,7 @@ export default function ConfigPage() {
                 {rateHistory.slice(0, 15).map((r: any) => (
                   <div key={r.id} className="flex items-center justify-between text-sm py-1">
                     <span className="text-slate-400">{new Date(r.date).toLocaleDateString('es-VE', { timeZone: 'UTC' })}</span>
-                    <span className="font-mono text-white">{r.rate.toFixed(2)} Bs</span>
+                    <span className="font-mono text-white">{r.rate.toFixed(4)} Bs</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{r.source}</span>
                   </div>
                 ))}

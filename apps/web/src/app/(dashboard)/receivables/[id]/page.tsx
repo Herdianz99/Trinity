@@ -350,7 +350,7 @@ export default function ReceivableDetailPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa al crear</span>
-                  <span className="text-white font-mono">Bs {receivable.exchangeRate?.toFixed(2)}</span>
+                  <span className="text-white font-mono">Bs {receivable.exchangeRate?.toFixed(4)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Fecha creacion</span>

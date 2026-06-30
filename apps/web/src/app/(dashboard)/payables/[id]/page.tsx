@@ -346,7 +346,7 @@ export default function PayableDetailPage() {
                 <Field label="Fecha recepción" value={payable.receptionDate ? fmtDateOnly(payable.receptionDate) : null} />
                 <Field label="Fecha vencimiento" value={payable.dueDate ? fmtDateOnly(payable.dueDate) : null} />
                 <Field label="Forma de pago" value={payable.paymentTerms ? payable.paymentTerms.replace(/_/g, ' ') : null} />
-                <Field label="Tasa al crear" value={`Bs ${payable.exchangeRate?.toFixed(2)}`} mono />
+                <Field label="Tasa al crear" value={`Bs ${payable.exchangeRate?.toFixed(4)}`} mono />
                 <Field label="Fecha de creación" value={fmtDate(payable.createdAt)} />
               </div>
             </section>

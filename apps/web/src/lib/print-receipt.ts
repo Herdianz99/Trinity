@@ -41,6 +41,14 @@ function fmtPct(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
+// Tasa de cambio con 4 decimales, estilo Venezuela (1.234,5600)
+function fmtRate4(n: number): string {
+  const fixed = Math.abs(n).toFixed(4);
+  const [intPart, decPart] = fixed.split('.');
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${n < 0 ? '-' : ''}${withThousands},${decPart}`;
+}
+
 type Currency = 'BS' | 'USD';
 
 interface ReceiptLine {
@@ -241,7 +249,7 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   html += `<div class="row bold" style="font-size:15px;"><span>TOTAL ${sym}:</span><span>${curFmt(cur, calc.total)}</span></div>`;
 
   if (exchangeRate > 0) {
-    html += `<div class="center" style="font-size:11px;">Tasa: ${fmtBs(exchangeRate)} Bs/USD</div>`;
+    html += `<div class="center" style="font-size:11px;">Tasa: ${fmtRate4(exchangeRate)} Bs/USD</div>`;
   }
 
   html += `<div class="separator"></div>`;
@@ -342,7 +350,7 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   // Total (IVA incluido). IGTF aparte solo si aplica.
   if (calc.igtf > 0) lines.push(pad('IGTF:', `${curFmt(cur, calc.igtf)} ${sym}`));
   lines.push(`{{BOLD}}${pad(`TOTAL ${sym}:`, curFmt(cur, calc.total))}{{/BOLD}}`);
-  if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmtBs(exchangeRate)} Bs/USD{{/CENTER}}`);
+  if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmtRate4(exchangeRate)} Bs/USD{{/CENTER}}`);
   lines.push('{{LINE}}');
 
   // Forma de pago (en la moneda elegida)
@@ -437,7 +445,7 @@ export function buildReturnReceiptText(note: any, invoice: any, company: Company
   if (exchangeRate > 0) {
     const totalBs = note.totalBs || (note.totalUsd * exchangeRate);
     lines.push(pad('Total Bs:', `Bs ${fmt(totalBs)}`));
-    lines.push(`{{CENTER}}Tasa: ${fmt(exchangeRate)} Bs/USD{{/CENTER}}`);
+    lines.push(`{{CENTER}}Tasa: ${fmtRate4(exchangeRate)} Bs/USD{{/CENTER}}`);
   }
   lines.push('{{LINE}}');
 

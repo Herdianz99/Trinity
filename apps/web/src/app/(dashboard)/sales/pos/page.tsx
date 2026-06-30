@@ -1988,7 +1988,7 @@ export default function POSPage() {
                 <div className="flex gap-4 mt-1">
                   <span className="text-sm text-green-400 font-medium">${grandTotalUsd.toFixed(2)} USD</span>
                   <span className="text-sm text-slate-400">Bs {grandTotalBs.toFixed(2)}</span>
-                  <span className="text-xs text-slate-500">Tasa: {exchangeRate.toFixed(2)}</span>
+                  <span className="text-xs text-slate-500">Tasa: {exchangeRate.toFixed(4)}</span>
                 </div>
               </div>
               <button onClick={() => setPayModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
@@ -2158,7 +2158,7 @@ export default function POSPage() {
                     <div className="text-right">
                       <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
                       <span className="text-slate-400 mx-2">×</span>
-                      <span className="text-sm text-slate-400">{exchangeRate.toFixed(2)} Bs/$</span>
+                      <span className="text-sm text-slate-400">{exchangeRate.toFixed(4)} Bs/$</span>
                       <span className="text-slate-400 mx-2">=</span>
                       <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
                     </div>
@@ -2729,7 +2729,7 @@ export default function POSPage() {
           )}
           {exchangeRate > 0 && (
             <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
-              Tasa: Bs {exchangeRate.toFixed(2)}
+              Tasa: Bs {exchangeRate.toFixed(4)}
             </span>
           )}
           {/* Pending invoices button */}
@@ -3153,7 +3153,7 @@ export default function POSPage() {
                     setAdvanceAmount(bs && exchangeRate > 0 ? (Number(bs) / exchangeRate).toFixed(2) : '');
                   }} step="0.01" min="0.01"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" placeholder="0.00" />
-                  {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1">Tasa: {exchangeRate.toFixed(2)} Bs/$</p>}
+                  {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1">Tasa: {exchangeRate.toFixed(4)} Bs/$</p>}
                 </div>
               </div>
               <div>

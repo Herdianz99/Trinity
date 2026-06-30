@@ -423,7 +423,7 @@ export default function InvoicesPage() {
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <div><span className="text-slate-500 block">Cliente</span><span className="text-white">{detail.customer?.name || 'Sin cliente'}</span></div>
-                <div><span className="text-slate-500 block">Tasa</span><span className="text-white">Bs {detail.exchangeRate?.toFixed(2)}</span></div>
+                <div><span className="text-slate-500 block">Tasa</span><span className="text-white">Bs {detail.exchangeRate?.toFixed(4)}</span></div>
                 <div><span className="text-slate-500 block">Fecha</span><span className="text-white">{new Date(detail.createdAt).toLocaleDateString('es-VE')}</span></div>
                 <div><span className="text-slate-500 block">Caja</span><span className="text-white">{detail.cashRegister?.code}</span></div>
               </div>

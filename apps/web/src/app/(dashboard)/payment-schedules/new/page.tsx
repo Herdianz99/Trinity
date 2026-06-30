@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import {
   CalendarClock,
@@ -101,7 +102,7 @@ export default function NewPaymentSchedulePage() {
         <div>
           <h1 className="text-xl font-bold text-slate-100">Nueva Programacion de Pagos</h1>
           {todayRate > 0 && (
-            <p className="text-sm text-slate-500">Tasa del dia: Bs {fmt(todayRate)}</p>
+            <p className="text-sm text-slate-500">Tasa del dia: Bs {fmtRate(todayRate)}</p>
           )}
         </div>
       </div>

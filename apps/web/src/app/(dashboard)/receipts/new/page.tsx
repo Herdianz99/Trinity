@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fmtRate } from '@/lib/format';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, Save, CreditCard, X, Search,
@@ -629,7 +630,7 @@ export default function NewReceiptPage() {
             Nuevo {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'}
           </h1>
           <p className="text-slate-400 mt-0.5">
-            Tasa del dia: <span className="text-white font-mono">{fmt(todayRate)} Bs/$</span>
+            Tasa del dia: <span className="text-white font-mono">{fmtRate(todayRate)} Bs/$</span>
           </p>
         </div>
       </div>
@@ -932,7 +933,7 @@ export default function NewReceiptPage() {
               </div>
               <div className="border-t border-slate-700/50 pt-3 flex justify-between">
                 <span className="text-slate-400">Tasa del dia:</span>
-                <span className="text-white">{fmt(todayRate)} Bs/$</span>
+                <span className="text-white">{fmtRate(todayRate)} Bs/$</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Total Bs a tasa hoy:</span>
@@ -1036,7 +1037,7 @@ export default function NewReceiptPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa:</span>
-                  <span className="text-slate-300">{fmt(todayRate)} Bs/$</span>
+                  <span className="text-slate-300">{fmtRate(todayRate)} Bs/$</span>
                 </div>
               </div>
 

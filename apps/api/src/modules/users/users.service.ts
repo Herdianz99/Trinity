@@ -5,6 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { PermissionKey } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { normalizeEmail } from '../../common/email';
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -20,7 +21,10 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateUserDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = normalizeEmail(dto.email);
+    const existing = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
     if (existing) throw new ConflictException('El email ya esta registrado');
 
     const tempPassword = dto.password || generateTempPassword();
@@ -28,7 +32,7 @@ export class UsersService {
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
-        email: dto.email,
+        email,
         password: hashedPassword,
         role: dto.role,
         isActive: dto.isActive ?? true,
@@ -68,20 +72,24 @@ export class UsersService {
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findFirst({
+      where: { email: { equals: normalizeEmail(email), mode: 'insensitive' } },
+    });
   }
 
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
     if (dto.email) {
-      const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      const existing = await this.prisma.user.findFirst({
+        where: { email: { equals: normalizeEmail(dto.email), mode: 'insensitive' } },
+      });
       if (existing && existing.id !== id) {
         throw new ConflictException('El email ya esta registrado');
       }
     }
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.email !== undefined) data.email = dto.email;
+    if (dto.email !== undefined) data.email = normalizeEmail(dto.email);
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     const user = await this.prisma.user.update({ where: { id }, data });

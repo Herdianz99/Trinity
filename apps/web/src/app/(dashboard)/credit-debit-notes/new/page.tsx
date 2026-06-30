@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, FileX2, Loader2, Save, CheckCircle, AlertTriangle } from 'lucide-react';
+import { fmtRate } from '@/lib/format';
 
 interface ReturnSummaryItem {
   itemId: string;
@@ -318,7 +319,7 @@ export default function NewCreditDebitNotePage() {
             </div>
             <div>
               <p className="text-slate-500">Tasa hoy</p>
-              <p className="text-white font-mono">Bs {fmt(exchangeRate)}</p>
+              <p className="text-white font-mono">Bs {fmtRate(exchangeRate)}</p>
             </div>
           </div>
         </div>

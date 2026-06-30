@@ -636,7 +636,7 @@ export default function PayablesPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-slate-400">Tasa al crear</span>
-                  <span className="text-slate-200">Bs {selectedPayable.exchangeRate.toFixed(2)}</span>
+                  <span className="text-slate-200">Bs {selectedPayable.exchangeRate.toFixed(4)}</span>
                 </div>
                 <div className="border-t border-slate-700/50 pt-2 mt-2">
                   <div className="flex justify-between">
@@ -805,7 +805,7 @@ export default function PayablesPage() {
                 </div>
               </div>
               {exchangeRate > 0 && (
-                <p className="text-xs text-slate-500">Tasa: Bs {exchangeRate.toFixed(2)} / USD</p>
+                <p className="text-xs text-slate-500">Tasa: Bs {exchangeRate.toFixed(4)} / USD</p>
               )}
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Metodo de pago *</label>

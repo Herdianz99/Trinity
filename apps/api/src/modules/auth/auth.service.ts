@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolePermissionsService } from '../role-permissions/role-permissions.service';
+import { normalizeEmail } from '../../common/email';
 
 @Injectable()
 export class AuthService {
@@ -15,8 +16,9 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+    // Busqueda case-insensitive: el casing del email no debe impedir entrar.
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizeEmail(email), mode: 'insensitive' } },
     });
     if (!user) {
       throw new UnauthorizedException('Credenciales invalidas');
