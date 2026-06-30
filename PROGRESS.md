@@ -25,6 +25,13 @@ Se desplegó a produccion todo lo que estaba en `main` (server paso de `80ad634`
 
 ---
 
+## Sesion 90 (2026-06-30) — Compras: navegacion con teclado en buscadores de proveedor y producto (SIN DESPLEGAR)
+
+> Pedido de Diego: los usuarios venian de un sistema donde buscaban el proveedor y bajaban con las flechas del teclado para seleccionar sin mouse. Se agrego navegacion con teclado a los dos autocompletes de `purchases/new/page.tsx`.
+- **Proveedor** (dropdown sincronico, lista `filteredSuppliers`): estado `supplierHighlight`; `onKeyDown` en el input con ArrowDown/ArrowUp (mueve y topa el indice), Enter (selecciona el resaltado + `preventDefault` para no enviar el form), Escape (cierra). Resaltado visual del item activo, `scrollIntoView({block:'nearest'})` para auto-scroll, y `onMouseEnter` unifica mouse+teclado. Reset del indice a 0 en onChange/onFocus.
+- **Productos** (busqueda async con debounce, lista `productResults` por fila `activeSearchRow`): estado `productHighlight`; misma logica en `onKeyDown` del input de producto (guard `activeSearchRow === idx`), Enter llama `selectProduct`, Escape limpia resultados. Reset del indice a 0 al teclear y al llegar los resultados async.
+- Solo frontend, Web typecheck 0 errores. Mismo patron reusable para POS (cliente/producto) si lo piden.
+
 ## Sesion 89 (2026-06-30) — Cotizaciones: boton de imprimir en la vista movil (SIN DESPLEGAR)
 
 > El listado de cotizaciones (`quotations/page.tsx`) tenia boton de imprimir PDF en cada fila del desktop, pero la vista movil (tarjetas) no lo tenia (ni el modal de detalle). Se agrego un boton "Imprimir" a cada tarjeta movil.

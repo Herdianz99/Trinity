@@ -122,6 +122,8 @@ export default function NewPurchaseBillPage() {
   const [supplierId, setSupplierId] = useState('');
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  // Indice resaltado para navegar el dropdown de proveedores con el teclado (flechas + Enter)
+  const [supplierHighlight, setSupplierHighlight] = useState(0);
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [supplierSerialNumber, setSupplierSerialNumber] = useState('');
@@ -141,6 +143,8 @@ export default function NewPurchaseBillPage() {
   const [productResults, setProductResults] = useState<ProductSearchResult[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
+  // Indice resaltado para navegar los resultados de productos con el teclado (flechas + Enter)
+  const [productHighlight, setProductHighlight] = useState(0);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---- Modales crear/editar proveedor y producto ----
@@ -259,6 +263,7 @@ export default function NewPurchaseBillPage() {
   function handleProductSearch(q: string, rowIdx: number) {
     setProductSearch(q);
     setActiveSearchRow(rowIdx);
+    setProductHighlight(0);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (q.length < 2) {
       setProductResults([]);
@@ -271,6 +276,7 @@ export default function NewPurchaseBillPage() {
         if (res.ok) {
           const data = await res.json();
           setProductResults(Array.isArray(data) ? data : []);
+          setProductHighlight(0);
         }
       } catch { /* ignore */ } finally {
         setSearchingProducts(false);
@@ -689,10 +695,39 @@ export default function NewPurchaseBillPage() {
                   onChange={(e) => {
                     setSupplierSearch(e.target.value);
                     setSupplierDropdownOpen(true);
+                    setSupplierHighlight(0);
                   }}
                   onFocus={() => {
                     setSupplierDropdownOpen(true);
                     setSupplierSearch('');
+                    setSupplierHighlight(0);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!supplierDropdownOpen) {
+                      if (e.key === 'ArrowDown') {
+                        setSupplierDropdownOpen(true);
+                        setSupplierSearch('');
+                        setSupplierHighlight(0);
+                      }
+                      return;
+                    }
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSupplierHighlight((i) => Math.min(i + 1, filteredSuppliers.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSupplierHighlight((i) => Math.max(i - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const s = filteredSuppliers[supplierHighlight];
+                      if (s) {
+                        setSupplierId(s.id);
+                        setSupplierDropdownOpen(false);
+                        setSupplierSearch('');
+                      }
+                    } else if (e.key === 'Escape') {
+                      setSupplierDropdownOpen(false);
+                    }
                   }}
                   className="input-field !py-1 text-sm pl-9"
                   placeholder="Buscar proveedor..."
@@ -716,16 +751,20 @@ export default function NewPurchaseBillPage() {
                   {filteredSuppliers.length === 0 ? (
                     <div className="px-3 py-3 text-sm text-slate-400">Sin resultados</div>
                   ) : (
-                    filteredSuppliers.map((s) => (
+                    filteredSuppliers.map((s, index) => (
                       <button
                         key={s.id}
                         type="button"
+                        ref={index === supplierHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                        onMouseEnter={() => setSupplierHighlight(index)}
                         onClick={() => {
                           setSupplierId(s.id);
                           setSupplierDropdownOpen(false);
                           setSupplierSearch('');
                         }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          index === supplierHighlight ? 'bg-slate-600' : ''
+                        } ${
                           s.id === supplierId ? 'bg-green-500/10 text-green-400' : 'text-white'
                         }`}
                       >
@@ -983,6 +1022,22 @@ export default function NewPurchaseBillPage() {
                             value={activeSearchRow === idx ? productSearch : ''}
                             onChange={(e) => handleProductSearch(e.target.value, idx)}
                             onFocus={() => setActiveSearchRow(idx)}
+                            onKeyDown={(e) => {
+                              if (activeSearchRow !== idx || productResults.length === 0) return;
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setProductHighlight((i) => Math.min(i + 1, productResults.length - 1));
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setProductHighlight((i) => Math.max(i - 1, 0));
+                              } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const p = productResults[productHighlight];
+                                if (p) selectProduct(p, idx);
+                              } else if (e.key === 'Escape') {
+                                setProductResults([]);
+                              }
+                            }}
                             className="input-field !py-1.5 text-sm pl-7 !bg-slate-900/40"
                             placeholder="Buscar producto..."
                           />
@@ -991,12 +1046,16 @@ export default function NewPurchaseBillPage() {
                           )}
                           {activeSearchRow === idx && productResults.length > 0 && (
                             <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                              {productResults.map((p) => (
+                              {productResults.map((p, pIdx) => (
                                 <button
                                   key={p.id}
                                   type="button"
+                                  ref={pIdx === productHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                                  onMouseEnter={() => setProductHighlight(pIdx)}
                                   onClick={() => selectProduct(p, idx)}
-                                  className="w-full text-left px-3 py-2 text-sm hover:bg-slate-600 text-white flex justify-between items-center"
+                                  className={`w-full text-left px-3 py-2 text-sm text-white flex justify-between items-center transition-colors ${
+                                    pIdx === productHighlight ? 'bg-slate-600' : ''
+                                  }`}
                                 >
                                   <span>
                                     <span className="font-mono text-green-400 text-xs mr-1.5">
