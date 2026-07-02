@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { QueryNotesDto } from './dto/query-notes.dto';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
+import { buildPrintAreaGroups } from '../print-jobs/print-area-grouping';
 
 @Injectable()
 export class CreditDebitNotesService {
@@ -661,6 +662,61 @@ export class CreditDebitNotesService {
     return this.findOne(id);
   }
 
+  // Encola comandas de despacho de una devolución de venta (NCV mercancía) por área.
+  // NO imprime ni toca lo fiscal: solo crea PrintJobs que las PCs de despacho levantan
+  // por su zona. Idempotente: si ya se procesaron, rechaza. Marca la nota para bloquear
+  // su eliminación.
+  async processComandas(id: string, userId: string) {
+    const note = await this.prisma.creditDebitNote.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!note) throw new NotFoundException('Nota no encontrada');
+    if (note.type !== 'NCV' || note.origin !== 'MERCHANDISE') {
+      throw new BadRequestException(
+        'Solo las devoluciones de venta de mercancía generan comandas',
+      );
+    }
+    if (note.status !== 'POSTED') {
+      throw new BadRequestException('Confirma la nota antes de procesar las comandas');
+    }
+    if (note.comandasProcessedAt) {
+      throw new BadRequestException('Las comandas de esta nota ya fueron procesadas');
+    }
+
+    const zones = await this.prisma.$transaction(async (tx) => {
+      const groups = await buildPrintAreaGroups(
+        tx,
+        note.items
+          .filter((i) => i.productId)
+          .map((i) => ({
+            productId: i.productId as string,
+            productName: i.productName,
+            quantity: i.quantity,
+          })),
+      );
+      for (const group of groups) {
+        await tx.printJob.create({
+          data: {
+            creditDebitNoteId: id,
+            printAreaId: group.printAreaId,
+            items: group.items,
+          },
+        });
+      }
+      // Solo se marca procesada (y se bloquea el borrado) si de verdad salió algo.
+      if (groups.length > 0) {
+        await tx.creditDebitNote.update({
+          where: { id },
+          data: { comandasProcessedAt: new Date(), comandasProcessedById: userId },
+        });
+      }
+      return groups.length;
+    });
+
+    return { zones };
+  }
+
   async getInvoiceReturnSummary(invoiceId: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
@@ -758,6 +814,9 @@ export class CreditDebitNotesService {
     if (!note) throw new NotFoundException('Nota no encontrada');
     if (note.fiscalPrinted) {
       throw new BadRequestException('No se puede eliminar: la nota ya fue impresa por la maquina fiscal');
+    }
+    if (note.comandasProcessedAt) {
+      throw new BadRequestException('No se puede eliminar: ya se procesaron las comandas de despacho');
     }
     if (note.appliedAt || (note.paidAmountUsd || 0) > 0) {
       throw new BadRequestException('No se puede eliminar: la nota ya fue cruzada/aplicada en un recibo');

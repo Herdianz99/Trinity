@@ -59,6 +59,11 @@ export class CreditDebitNotesController {
     return this.service.post(id, userId);
   }
 
+  @Post(':id/process-comandas')
+  processComandas(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.service.processComandas(id, userId);
+  }
+
   @Patch(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.service.cancel(id);
