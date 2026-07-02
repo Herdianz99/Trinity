@@ -2163,3 +2163,27 @@ CREATE INDEX IF NOT EXISTS "Product_searchVector_idx" ON "Product" USING GIN ("s
 -- 'BREGA' por defecto.
 -- =============================================================================
 ALTER TABLE "InventoryAdjustment" ADD COLUMN IF NOT EXISTS "costMode" TEXT NOT NULL DEFAULT 'BREGA';
+
+-- =============================================================================
+-- COMANDAS DE DEVOLUCION (Session 104)
+-- PrintJob puede colgar de una nota (creditDebitNoteId); invoiceId opcional.
+-- CreditDebitNote registra cuando se procesaron sus comandas (bloquea borrado).
+-- PrintArea puede marcarse como "por defecto" (fallback de ruteo).
+-- =============================================================================
+ALTER TABLE "PrintJob" ALTER COLUMN "invoiceId" DROP NOT NULL;
+ALTER TABLE "PrintJob" ADD COLUMN IF NOT EXISTS "creditDebitNoteId" TEXT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'PrintJob_creditDebitNoteId_fkey'
+  ) THEN
+    ALTER TABLE "PrintJob"
+      ADD CONSTRAINT "PrintJob_creditDebitNoteId_fkey"
+      FOREIGN KEY ("creditDebitNoteId") REFERENCES "CreditDebitNote"("id")
+      ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
+ALTER TABLE "CreditDebitNote" ADD COLUMN IF NOT EXISTS "comandasProcessedAt" TIMESTAMP(3);
+ALTER TABLE "CreditDebitNote" ADD COLUMN IF NOT EXISTS "comandasProcessedById" TEXT;
+ALTER TABLE "PrintArea" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;

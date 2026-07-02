@@ -404,6 +404,7 @@ model PrintArea {
   name        String
   description String?
   isActive    Boolean    @default(true)
+  isDefault   Boolean    @default(false)
   categories  Category[]
   printJobs   PrintJob[]
   createdAt   DateTime   @default(now())
@@ -1397,18 +1398,20 @@ enum PrintStatus {
 }
 
 model PrintJob {
-  id            String      @id @default(cuid())
-  invoiceId     String
-  invoice       Invoice     @relation(fields: [invoiceId], references: [id])
-  printAreaId   String
-  printArea     PrintArea   @relation(fields: [printAreaId], references: [id])
-  status        PrintStatus @default(PENDING)
-  items         Json
-  isReprint     Boolean     @default(false)
-  reprintOfId   String?
-  failureReason String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                String           @id @default(cuid())
+  invoiceId         String?
+  invoice           Invoice?         @relation(fields: [invoiceId], references: [id])
+  creditDebitNoteId String?
+  creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  printAreaId       String
+  printArea         PrintArea        @relation(fields: [printAreaId], references: [id])
+  status            PrintStatus      @default(PENDING)
+  items             Json
+  isReprint         Boolean          @default(false)
+  reprintOfId       String?
+  failureReason     String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 // ============================================
@@ -1492,6 +1495,9 @@ model CreditDebitNote {
   paidAmountUsd        Float                 @default(0)
   appliedAt            DateTime?
   items                CreditDebitNoteItem[]
+  comandasProcessedAt   DateTime?
+  comandasProcessedById String?
+  printJobs            PrintJob[]
   receiptItems         ReceiptItem[]
   paymentScheduleItems PaymentScheduleItem[]
   createdById          String
