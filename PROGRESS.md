@@ -7,6 +7,15 @@ Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por S
 - **Pendiente de avisar al equipo:** la clave de Configuracion de crédito dejo de servir; los supervisores autorizan crédito con la clave dinamica "admi" (o la que definan en `/settings/dynamic-keys`).
 - **Verificaciones rapidas del cliente en prod:** flete a una factura sin autorizacion (S98); credito con clave dinamica + log en `/settings/dynamic-keys` (S99); libro de compras PDF con retenciones numeradas sin huecos (S100); ajuste con toggle Costo/Brecha y su PDF (S101); modal de precios de compra con Brecha/Sin IVA + teclear decimales con punto (S102).
 
+## Sesion 103 (2026-07-02) — Maquina fiscal: boton de lectura U0Z (ultimo Z, solo lectura) para calibrar offsets (PENDIENTE PROBAR)
+
+> El "Reporte Z + Libro" (S84) no guarda bien: lee `U0X` (acumuladores VIVOS) ANTES de cerrar con offsets **adivinados** (el codigo admite "require calibration with a real printer"). Idea de Diego: la factura/NC obtiene sus valores con una **lectura posterior** (`S1` despues de imprimir), no del comando de impresion. Analogia correcta -> mejor diseño: cerrar con `I0Z` (confiable) y **leer despues** el Z ya cerrado. Paso previo: poder **leer sin cerrar ni imprimir** para calibrar posiciones contra el manual.
+
+- **Comando `U0Z`** (manual The Factory HKA V8.5.0 §21, **Tabla 65** = impresoras Familia A: SRP812, DT230, **HKA80**, P3100DL, PP9, **PP9-PLUS**, TD1140): extrae el **ultimo Z ya cerrado** de memoria. **Solo lectura** — no cierra ni imprime. (Distinto de `U0X`, que lee los acumuladores vivos.)
+- **`readLastZReport()`** (`apps/web/src/lib/fiscal-printer.ts`): manda `U0Z` con el protocolo multi-paquete ETB/EOT ya existente y devuelve la respuesta **cruda** + dos interpretaciones para calibrar: (a) `slicedFields` por las posiciones fijas del manual ("Protocolo Directo", montos de 18 chars, mapeadas campo por campo: proximo Z, ult. factura/NC/ND, 30 acumulados de bases/impuestos/IGTF), y (b) `fieldsByNewline` (split por `\n`, como hace `S1`). Incluye `rawEscaped` (JSON.stringify) para ver separadores/control chars y el largo total.
+- **Boton en el tab "Maquina fiscal"** (`settings/series/[id]/page.tsx`), debajo de "Enviar comando manual": **"Leer ultimo Z (U0Z)"**. Muestra modelo/serial/largo/#campos, una tabla con cada posicion del manual (crudo + entero + monto) y un textarea copiable con la respuesta cruda para validar el mapeo.
+- **Por definir con datos reales** (lo resuelve el raw capturado): si la impresora antepone un eco del comando (`U0Z...`) y si usa ancho-fijo contiguo o separadores `\n`. Una vez validado -> reescribir el flujo del "Z + Libro" a `I0Z` (cerrar) + `U0Z` (leer). Solo frontend, sin schema/backend. Web typecheck 0 errores.
+
 ## Sesion 102 (2026-07-01) — Compras: modal de precios con Brecha/Sin IVA + fix del punto decimal (DESPLEGADA 2026-07-01)
 
 > Dos pedidos de Diego sobre el modal "Actualizar precios" al procesar una compra (`purchases/[id]/page.tsx`, solo frontend).

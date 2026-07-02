@@ -1295,3 +1295,134 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
     return data;
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// U0Z — lectura del ULTIMO reporte Z ya cerrado (solo lectura, no cierra)
+//
+// Manual The Factory HKA V8.5.0 §21, Tabla 65 (impresoras SRP812, DT230,
+// HKA80, P3100DL, PP9, PP9-PLUS, TD1140 → todas Familia A en este codigo).
+// Se usa el layout "Protocolo Directo": campos de ANCHO FIJO contiguos
+// (sin separadores), montos de 18 chars. Longitud total ~595.
+//
+// A diferencia de U0X (acumuladores VIVOS antes de cerrar), U0Z devuelve el
+// Z ANTERIOR ya consolidado en memoria — ideal para calibrar sin imprimir.
+// ═══════════════════════════════════════════════════════════════════
+
+/** Layout "Protocolo Directo" de U0Z para Familia A (Tabla 65). from = offset 0-indexado, len = ancho. */
+const U0Z_FAMILY_A_LAYOUT: { label: string; from: number; len: number; kind: 'num' | 'date' | 'money' }[] = [
+  // --- Cabecera (numeros de documento / fechas) ---
+  { label: 'nroProximoZ',        from: 0,   len: 4,  kind: 'num'  },
+  { label: 'fechaUltimoZ',       from: 4,   len: 6,  kind: 'date' },
+  { label: 'horaUltimoZ',        from: 10,  len: 4,  kind: 'num'  },
+  { label: 'nroUltimaFactura',   from: 14,  len: 8,  kind: 'num'  },
+  { label: 'fechaUltimaFactura', from: 22,  len: 6,  kind: 'date' },
+  { label: 'horaUltimaFactura',  from: 28,  len: 4,  kind: 'num'  },
+  { label: 'nroUltimaNC',        from: 32,  len: 8,  kind: 'num'  },
+  { label: 'nroUltimaND',        from: 40,  len: 8,  kind: 'num'  },
+  { label: 'nroUltimoDNF',       from: 48,  len: 8,  kind: 'num'  },
+  // --- Acumulados de Ventas ---
+  { label: 'ventasExento',       from: 56,  len: 18, kind: 'money' },
+  { label: 'ventasBaseTasa1',    from: 74,  len: 18, kind: 'money' },
+  { label: 'ventasImpuestoTasa1',from: 92,  len: 18, kind: 'money' },
+  { label: 'ventasBaseTasa2',    from: 110, len: 18, kind: 'money' },
+  { label: 'ventasImpuestoTasa2',from: 128, len: 18, kind: 'money' },
+  { label: 'ventasBaseTasa3',    from: 146, len: 18, kind: 'money' },
+  { label: 'ventasImpuestoTasa3',from: 164, len: 18, kind: 'money' },
+  // --- Acumulados Nota de Debito ---
+  { label: 'ndExento',           from: 182, len: 18, kind: 'money' },
+  { label: 'ndBaseTasa1',        from: 200, len: 18, kind: 'money' },
+  { label: 'ndImpuestoTasa1',    from: 218, len: 18, kind: 'money' },
+  { label: 'ndBaseTasa2',        from: 236, len: 18, kind: 'money' },
+  { label: 'ndImpuestoTasa2',    from: 254, len: 18, kind: 'money' },
+  { label: 'ndBaseTasa3',        from: 272, len: 18, kind: 'money' },
+  { label: 'ndImpuestoTasa3',    from: 290, len: 18, kind: 'money' },
+  // --- Acumulados Nota de Credito ---
+  { label: 'ncExento',           from: 308, len: 18, kind: 'money' },
+  { label: 'ncBaseTasa1',        from: 326, len: 18, kind: 'money' },
+  { label: 'ncImpuestoTasa1',    from: 344, len: 18, kind: 'money' },
+  { label: 'ncBaseTasa2',        from: 362, len: 18, kind: 'money' },
+  { label: 'ncImpuestoTasa2',    from: 380, len: 18, kind: 'money' },
+  { label: 'ncBaseTasa3',        from: 398, len: 18, kind: 'money' },
+  { label: 'ncImpuestoTasa3',    from: 416, len: 18, kind: 'money' },
+  // --- IGTF ---
+  { label: 'igtfBaseVentas',     from: 434, len: 18, kind: 'money' },
+  { label: 'igtfImpPercibVentas',from: 452, len: 18, kind: 'money' },
+  { label: 'igtfImpPercibDebito',from: 470, len: 18, kind: 'money' },
+  { label: 'igtfImpPercibCredito',from: 488,len: 18, kind: 'money' },
+  { label: 'igtfValorVentas',    from: 506, len: 18, kind: 'money' },
+  { label: 'igtfBaseNC',         from: 524, len: 18, kind: 'money' },
+  { label: 'igtfValorNC',        from: 542, len: 18, kind: 'money' },
+  { label: 'igtfBaseND',         from: 560, len: 18, kind: 'money' },
+  { label: 'igtfValorND',        from: 578, len: 18, kind: 'money' },
+];
+
+export interface ZReportRawSlice {
+  label: string;
+  from: number;
+  len: number;
+  kind: 'num' | 'date' | 'money';
+  raw: string;       // substring crudo en esas posiciones
+  asInt: number;     // parseado como entero
+  asMoney: number;   // parseado como monto (entero / 100)
+}
+
+export interface ZReportRawResult {
+  modelCode: string;
+  modelName: string;
+  family: 'A' | 'B';
+  machineSerial: string;
+  raw: string;                 // respuesta cruda completa de U0Z
+  rawLength: number;
+  rawEscaped: string;          // JSON.stringify(raw) — deja ver \n y control chars
+  fieldsByNewline: string[];   // interpretacion alternativa: split por \n
+  slicedFields: ZReportRawSlice[]; // interpretacion por posiciones del manual (Tabla 65)
+}
+
+/**
+ * Lee el ULTIMO reporte Z ya cerrado con U0Z (solo lectura — NO cierra ni imprime).
+ * Devuelve la respuesta cruda + dos interpretaciones (por posiciones fijas del
+ * manual y por split de \n) para poder calibrar los offsets con una impresora real.
+ */
+export async function readLastZReport(): Promise<ZReportRawResult> {
+  return withFiscalPrinter(async (io, model) => {
+    // Serial de la maquina (opcional, para referencia)
+    let machineSerial = '';
+    try {
+      const s1 = await readStatusS1(io, model.family);
+      machineSerial = s1.machineSerial;
+    } catch (err: any) {
+      console.warn('[FISCAL] No se pudo leer S1 antes de U0Z:', err.message);
+    }
+
+    // Lectura multi-paquete (ETB/EOT) — mismo protocolo que U0X
+    await waitForReady(io);
+    const raw = await sendReportReadCommand(io, 'U0Z');
+    console.log('[FISCAL] U0Z raw:', JSON.stringify(raw));
+    console.log(`[FISCAL] U0Z length=${raw.length}, family=${model.family}`);
+
+    const slicedFields: ZReportRawSlice[] = U0Z_FAMILY_A_LAYOUT.map((f) => {
+      const rawSlice = raw.substr(f.from, f.len);
+      return {
+        label: f.label,
+        from: f.from,
+        len: f.len,
+        kind: f.kind,
+        raw: rawSlice,
+        asInt: pInt(rawSlice),
+        asMoney: pMoney(rawSlice),
+      };
+    });
+
+    return {
+      modelCode: model.modelCode,
+      modelName: model.modelName,
+      family: model.family,
+      machineSerial,
+      raw,
+      rawLength: raw.length,
+      rawEscaped: JSON.stringify(raw),
+      fieldsByNewline: raw.split('\n'),
+      slicedFields,
+    };
+  });
+}

@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import {
   readPrinterStatus, sendRawFiscalCommand, sendMultipleFiscalCommands, isFiscalPrinterSupported,
-  type FiscalStatusResult, type PrinterModelInfo,
+  readLastZReport,
+  type FiscalStatusResult, type PrinterModelInfo, type ZReportRawResult,
 } from '@/lib/fiscal-printer';
 import { FISCAL_PAYMENT_POSITIONS } from '@/lib/fiscal-payment-codes';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -58,6 +59,9 @@ export default function SerieDetailPage() {
   const [resettingFlags, setResettingFlags] = useState(false);
   const [resetFlagsProgress, setResetFlagsProgress] = useState('');
   const [resetFlagsResult, setResetFlagsResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [readingZ, setReadingZ] = useState(false);
+  const [zRawResult, setZRawResult] = useState<ZReportRawResult | null>(null);
+  const [zRawError, setZRawError] = useState('');
 
   const fetchSerie = useCallback(async () => {
     setLoading(true);
@@ -715,6 +719,114 @@ export default function SerieDetailPage() {
                     <span className="font-mono text-slate-400">I0X</span>=Reporte X,{' '}
                     <span className="font-mono text-slate-400">I0Z</span>=Cierre Z
                   </p>
+                </div>
+
+                {/* Leer ultimo Reporte Z (solo lectura — U0Z) */}
+                <div className="border-t border-slate-700/50 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-200 mb-1 flex items-center gap-2">
+                    <Terminal size={16} className="text-blue-400" />
+                    Leer último Reporte Z (solo lectura)
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-3 leading-relaxed max-w-xl">
+                    Envía <span className="font-mono text-slate-400">U0Z</span> y lee el
+                    <b> último Z ya cerrado</b> de la memoria de la impresora.
+                    <b> No imprime ni cierra nada</b> — es solo lectura para calibrar las posiciones.
+                    Copia el resultado y envíamelo para validar el mapeo del manual (Tabla 65).
+                  </p>
+                  <button
+                    type="button"
+                    disabled={readingZ}
+                    onClick={async () => {
+                      const support = isFiscalPrinterSupported();
+                      if (!support.supported) {
+                        setZRawError(support.reason || 'Web Serial API no disponible.');
+                        return;
+                      }
+                      setReadingZ(true);
+                      setZRawError('');
+                      setZRawResult(null);
+                      try {
+                        const result = await readLastZReport();
+                        setZRawResult(result);
+                      } catch (err: any) {
+                        setZRawError(err.message || 'Error desconocido');
+                      } finally {
+                        setReadingZ(false);
+                      }
+                    }}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                  >
+                    {readingZ ? <Loader2 className="animate-spin" size={16} /> : <Terminal size={16} />}
+                    {readingZ ? 'Leyendo U0Z...' : 'Leer último Z (U0Z)'}
+                  </button>
+
+                  {zRawError && (
+                    <div className="mt-3 p-3 rounded-lg border text-sm flex items-start gap-2 bg-red-500/10 border-red-500/20 text-red-400">
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                      {zRawError}
+                    </div>
+                  )}
+
+                  {zRawResult && (
+                    <div className="mt-3 space-y-3">
+                      <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-sm text-slate-300 flex flex-wrap gap-x-6 gap-y-1">
+                        <span>Impresora: <b className="text-white">{zRawResult.modelName}</b> ({zRawResult.modelCode}) · Familia {zRawResult.family}</span>
+                        <span>Serial: <b className="text-white font-mono">{zRawResult.machineSerial || '—'}</b></span>
+                        <span>Largo respuesta: <b className="text-white font-mono">{zRawResult.rawLength}</b> chars</span>
+                        <span>Campos por \n: <b className="text-white font-mono">{zRawResult.fieldsByNewline.length}</b></span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 mb-1 font-semibold">Interpretación por posiciones del manual (Tabla 65 · Protocolo Directo):</p>
+                        <div className="max-h-64 overflow-auto rounded-lg border border-slate-700/50">
+                          <table className="w-full text-xs font-mono">
+                            <thead className="sticky top-0 bg-slate-800 text-slate-400">
+                              <tr>
+                                <th className="text-left px-2 py-1">Campo</th>
+                                <th className="text-right px-2 py-1">Pos</th>
+                                <th className="text-left px-2 py-1">Crudo</th>
+                                <th className="text-right px-2 py-1">Entero</th>
+                                <th className="text-right px-2 py-1">Monto</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {zRawResult.slicedFields.map((f) => (
+                                <tr key={f.label} className="border-t border-slate-700/30 text-slate-300">
+                                  <td className="px-2 py-0.5">{f.label}</td>
+                                  <td className="px-2 py-0.5 text-right text-slate-500">{f.from}:{f.len}</td>
+                                  <td className="px-2 py-0.5 text-amber-300">{f.raw || '∅'}</td>
+                                  <td className="px-2 py-0.5 text-right">{f.asInt}</td>
+                                  <td className="px-2 py-0.5 text-right">{f.asMoney}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 mb-1 font-semibold">Respuesta cruda completa (copiar y enviar para calibrar):</p>
+                        <textarea
+                          readOnly
+                          value={JSON.stringify(
+                            {
+                              modelCode: zRawResult.modelCode,
+                              modelName: zRawResult.modelName,
+                              family: zRawResult.family,
+                              machineSerial: zRawResult.machineSerial,
+                              rawLength: zRawResult.rawLength,
+                              rawEscaped: zRawResult.rawEscaped,
+                              fieldsByNewline: zRawResult.fieldsByNewline,
+                            },
+                            null,
+                            2,
+                          )}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="input-field !py-2 text-xs font-mono w-full h-40"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
           </div>
         </TabsContent>
