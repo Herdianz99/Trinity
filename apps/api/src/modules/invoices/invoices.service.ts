@@ -10,6 +10,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { UserRole } from '@prisma/client';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { buildPrintAreaGroups } from '../print-jobs/print-area-grouping';
 
 const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -986,31 +987,16 @@ export class InvoicesService {
         },
       });
 
-      // Create PrintJobs grouped by print area
-      const productsWithCategory = await tx.product.findMany({
-        where: { id: { in: invoice.items.map(i => i.productId) } },
-        include: { category: { include: { printArea: true } } },
-      });
-      const productMap = new Map(productsWithCategory.map(p => [p.id, p]));
-
-      const printAreaGroups: Record<string, { printAreaId: string; items: any[] }> = {};
-      for (const item of invoice.items) {
-        const product = productMap.get(item.productId);
-        const printAreaId = product?.category?.printAreaId;
-        if (!printAreaId) continue;
-
-        if (!printAreaGroups[printAreaId]) {
-          printAreaGroups[printAreaId] = { printAreaId, items: [] };
-        }
-        printAreaGroups[printAreaId].items.push({
-          code: product!.code,
-          supplierRef: product!.supplierRef || '',
-          name: item.productName,
-          quantity: item.quantity,
-        });
-      }
-
-      for (const group of Object.values(printAreaGroups)) {
+      // Create PrintJobs grouped by print area (con fallback al área por defecto)
+      const printGroups = await buildPrintAreaGroups(
+        tx,
+        invoice.items.map((i) => ({
+          productId: i.productId,
+          productName: i.productName,
+          quantity: i.quantity,
+        })),
+      );
+      for (const group of printGroups) {
         await tx.printJob.create({
           data: {
             invoiceId: id,
