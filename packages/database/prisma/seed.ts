@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, IvaType, DynamicKeyPerm } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedIslrTypes } from './seed-islr-types';
 
 const prisma = new PrismaClient();
 
@@ -783,6 +784,9 @@ async function main() {
   console.log('Clientes: 10');
   console.log('Clave dinamica: 1 (clave: 1234)');
   console.log(`Productos: ${productsData.length} con stock inicial`);
+  const islrCount = await seedIslrTypes(prisma);
+  console.log(`Tipos de retencion ISLR: ${islrCount}`);
+
   console.log('\n--- Credenciales ---');
   console.log('admin@trinity.com / Admin1234!');
   console.log('supervisor@trinity.com / Super1234!');
