@@ -26,6 +26,16 @@ export class PrintAreasService {
 
   async update(id: string, dto: UpdatePrintAreaDto) {
     await this.findOne(id);
+    // Solo puede haber una área por defecto: al marcar una, se limpian las demás.
+    if (dto.isDefault === true) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.printArea.updateMany({
+          where: { isDefault: true, id: { not: id } },
+          data: { isDefault: false },
+        });
+        return tx.printArea.update({ where: { id }, data: dto });
+      });
+    }
     return this.prisma.printArea.update({ where: { id }, data: dto });
   }
 

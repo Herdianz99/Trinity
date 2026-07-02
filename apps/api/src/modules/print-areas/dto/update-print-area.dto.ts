@@ -8,4 +8,9 @@ export class UpdatePrintAreaDto extends PartialType(CreatePrintAreaDto) {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
 }
