@@ -15,6 +15,8 @@ interface PendingDoc {
   creditDebitNoteId?: string;
   ivaRetentionId?: string;
   customerIvaRetentionId?: string;
+  retentionVoucherId?: string;
+  islrRetentionVoucherId?: string;
   description: string;
   reference?: string | null;
   date: string;
@@ -447,6 +449,8 @@ export default function NewReceiptPage() {
           creditDebitNoteId: d.creditDebitNoteId,
           ivaRetentionId: d.ivaRetentionId,
           customerIvaRetentionId: d.customerIvaRetentionId,
+          retentionVoucherId: d.retentionVoucherId,
+          islrRetentionVoucherId: d.islrRetentionVoucherId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -490,6 +494,8 @@ export default function NewReceiptPage() {
           creditDebitNoteId: d.creditDebitNoteId,
           ivaRetentionId: d.ivaRetentionId,
           customerIvaRetentionId: d.customerIvaRetentionId,
+          retentionVoucherId: d.retentionVoucherId,
+          islrRetentionVoucherId: d.islrRetentionVoucherId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -877,7 +883,7 @@ export default function NewReceiptPage() {
                         key={doc.id}
                         className={`border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors ${
                           doc.documentType === 'CxC' ? 'bg-green-500/5'
-                          : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION') ? 'bg-purple-500/5'
+                          : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION' || doc.documentType === 'PURCHASE_ISLR_RETENTION') ? 'bg-purple-500/5'
                           : 'bg-red-500/5'
                         }`}
                       >
@@ -885,11 +891,13 @@ export default function NewReceiptPage() {
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             doc.documentType === 'CxC'
                               ? 'bg-green-500/20 text-green-400'
-                              : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION')
+                              : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION' || doc.documentType === 'PURCHASE_ISLR_RETENTION')
                               ? 'bg-purple-500/20 text-purple-400'
                               : 'bg-red-500/20 text-red-400'
                           }`}>
-                            {(doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION') ? 'Ret. IVA' : doc.documentType}
+                            {(doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION') ? 'Ret. IVA'
+                             : doc.documentType === 'PURCHASE_ISLR_RETENTION' ? 'Ret. ISLR'
+                             : doc.documentType}
                           </span>
                         </td>
                         <td className="px-3 py-2">
