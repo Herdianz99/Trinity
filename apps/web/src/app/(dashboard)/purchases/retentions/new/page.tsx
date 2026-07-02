@@ -16,17 +16,17 @@ interface Supplier {
 }
 
 interface AvailablePO {
+  docType: 'PURCHASE_ORDER' | 'PAYABLE';
   id: string;
   number: string;
-  purchaseNumber: number;
   invoiceDate: string | null;
-  totalIvaUsd: number;
-  totalIvaBs: number;
+  ivaUsd: number;
+  ivaBs: number;
   totalUsd: number;
   totalBs: number;
   exchangeRate: number;
-  supplierControlNumber: string | null;
-  supplierInvoiceNumber: string | null;
+  controlNumber: string | null;
+  invoiceNumber: string | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,10 +101,10 @@ export default function NewRetentionVoucherPage() {
     if (!sid) { setAvailablePOs([]); return; }
     setLoadingPOs(true);
     try {
-      const res = await fetch(`/api/proxy/retention-vouchers/available-orders/${sid}`);
-      if (!res.ok) throw new Error('Error al cargar facturas');
+      const res = await fetch(`/api/proxy/retention-vouchers/available-documents/${sid}`);
+      if (!res.ok) throw new Error('Error al cargar documentos');
       const data = await res.json();
-      setAvailablePOs(data);
+      setAvailablePOs(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message);
       setAvailablePOs([]);
@@ -149,8 +149,8 @@ export default function NewRetentionVoucherPage() {
 
   const selectedOrders = availablePOs.filter(p => selectedPOs.has(p.id));
 
-  const totalIvaUsd = selectedOrders.reduce((s, p) => s + p.totalIvaUsd, 0);
-  const totalIvaBs = selectedOrders.reduce((s, p) => s + p.totalIvaBs, 0);
+  const totalIvaUsd = selectedOrders.reduce((s, p) => s + p.ivaUsd, 0);
+  const totalIvaBs = selectedOrders.reduce((s, p) => s + p.ivaBs, 0);
   const totalRetUsd = round2(totalIvaUsd * (retentionPct / 100));
   const totalRetBs = round2(totalIvaBs * (retentionPct / 100));
 
@@ -181,7 +181,7 @@ export default function NewRetentionVoucherPage() {
         retentionPct,
         notes: notes || undefined,
         lines: selectedOrders.map(po => ({
-          purchaseOrderId: po.id,
+          ...(po.docType === 'PAYABLE' ? { payableId: po.id } : { purchaseOrderId: po.id }),
           retentionPct,
         })),
       };
@@ -311,7 +311,7 @@ export default function NewRetentionVoucherPage() {
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-700/50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-300">
-              Facturas disponibles
+              Documentos disponibles (facturas de compra y CxP)
               {availablePOs.length > 0 && <span className="ml-2 text-xs text-slate-500">({availablePOs.length})</span>}
             </h2>
             {availablePOs.length > 0 && (
@@ -347,7 +347,7 @@ export default function NewRetentionVoucherPage() {
                 <tbody>
                   {availablePOs.map(po => {
                     const isSelected = selectedPOs.has(po.id);
-                    const retUsd = round2(po.totalIvaUsd * (retentionPct / 100));
+                    const retUsd = round2(po.ivaUsd * (retentionPct / 100));
                     return (
                       <tr key={po.id}
                         onClick={() => togglePO(po.id)}
@@ -357,12 +357,19 @@ export default function NewRetentionVoucherPage() {
                             {isSelected && <Check size={12} className="text-white" />}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-blue-400 font-mono text-xs">{po.number}</td>
-                        <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{po.supplierInvoiceNumber || '--'}</td>
-                        <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{po.supplierControlNumber || '--'}</td>
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="text-blue-400">{po.number}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${po.docType === 'PAYABLE' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-slate-600/30 text-slate-300 border-slate-500/30'}`}>
+                              {po.docType === 'PAYABLE' ? 'CxP' : 'FC'}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{po.invoiceNumber || '--'}</td>
+                        <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{po.controlNumber || '--'}</td>
                         <td className="px-3 py-2.5 text-slate-300 text-xs">{fmtDate(po.invoiceDate)}</td>
                         <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(po.totalUsd)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(po.totalIvaUsd)}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(po.ivaUsd)}</td>
                         <td className="px-3 py-2.5 text-right text-purple-400 font-mono font-bold">${fmt(retUsd)}</td>
                       </tr>
                     );
