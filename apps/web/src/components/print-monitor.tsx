@@ -11,12 +11,16 @@ interface PrintJobItem {
 
 interface PrintJob {
   id: string;
-  invoiceId: string;
+  invoiceId: string | null;
   invoice: {
     number: string;
     customer?: { name: string } | null;
     seller?: { name: string } | null;
-  };
+  } | null;
+  creditDebitNote?: {
+    number: string;
+    invoice?: { number: string; customer?: { name: string } | null } | null;
+  } | null;
   printAreaId: string;
   printArea: { name: string };
   status: string;
@@ -85,8 +89,19 @@ export default function PrintMonitor() {
     const totalUnits = job.items.reduce((s, i) => s + i.quantity, 0);
     const lines: string[] = [];
 
-    // Encabezado: titulo COMANDA + zona destacada
-    lines.push('{{CENTER}}{{BIG}}COMANDA{{/BIG}}{{/CENTER}}');
+    // Devolucion (comanda de nota de credito) vs comanda de venta
+    const isReturn = !!job.creditDebitNote;
+    const title = isReturn ? 'DEVOLUCION' : 'COMANDA';
+    const docNumber = isReturn ? job.creditDebitNote!.number : (job.invoice?.number || 'S/N');
+    const affectedInvoice = isReturn ? (job.creditDebitNote!.invoice?.number || '') : '';
+    const customerName = isReturn
+      ? (job.creditDebitNote!.invoice?.customer?.name || 'Contado')
+      : (job.invoice?.customer?.name || 'Contado');
+    const sellerName = isReturn ? '' : (job.invoice?.seller?.name || '');
+    const signLabel = isReturn ? 'Recibido por (firma)' : 'Despachado por (firma)';
+
+    // Encabezado: titulo + zona destacada
+    lines.push(`{{CENTER}}{{BIG}}${title}{{/BIG}}{{/CENTER}}`);
     lines.push(`{{CENTER}}{{BOLD}}${job.printArea.name}{{/BOLD}}{{/CENTER}}`);
     lines.push('{{LINE}}');
 
@@ -96,12 +111,17 @@ export default function PrintMonitor() {
       lines.push('{{LINE}}');
     }
 
-    // Datos de la factura + cliente y vendedor (despacho los necesita)
-    lines.push(`{{BOLD}}Factura: ${job.invoice.number || 'S/N'}{{/BOLD}}`);
+    // Datos del documento + cliente y vendedor (despacho los necesita)
+    if (isReturn) {
+      lines.push(`{{BOLD}}Nota: ${docNumber}{{/BOLD}}`);
+      if (affectedInvoice) lines.push(`Factura afectada: ${affectedInvoice}`);
+    } else {
+      lines.push(`{{BOLD}}Factura: ${docNumber}{{/BOLD}}`);
+    }
     lines.push(`${dateStr} ${timeStr}`);
-    lines.push(`{{BOLD}}Cliente:{{/BOLD}} ${job.invoice.customer?.name || 'Contado'}`);
-    if (job.invoice.seller?.name) {
-      lines.push(`{{BOLD}}Vendedor:{{/BOLD}} ${job.invoice.seller.name}`);
+    lines.push(`{{BOLD}}Cliente:{{/BOLD}} ${customerName}`);
+    if (sellerName) {
+      lines.push(`{{BOLD}}Vendedor:{{/BOLD}} ${sellerName}`);
     }
     lines.push('{{LINE}}');
 
@@ -116,10 +136,10 @@ export default function PrintMonitor() {
     lines.push('{{LINE}}');
     lines.push(`{{BOLD}}Renglones: ${job.items.length}  |  Unidades: ${totalUnits}{{/BOLD}}`);
 
-    // Seccion de firma de quien despacha
+    // Seccion de firma de quien despacha / recibe
     lines.push('{{FEED:3}}');
     lines.push('________________________________');
-    lines.push('{{BOLD}}Despachado por (firma){{/BOLD}}');
+    lines.push(`{{BOLD}}${signLabel}{{/BOLD}}`);
     lines.push('{{FEED:1}}');
     lines.push('{{CUT}}');
 
@@ -308,16 +328,27 @@ export default function PrintMonitor() {
 
           {/* Header */}
           <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '5px', marginBottom: '6px' }}>
-            <div style={{ fontSize: '26px', fontWeight: 'bold', letterSpacing: '2px' }}>COMANDA</div>
+            <div style={{ fontSize: '26px', fontWeight: 'bold', letterSpacing: '2px' }}>
+              {currentJob.creditDebitNote ? 'DEVOLUCION' : 'COMANDA'}
+            </div>
             <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
               {currentJob.printArea.name}
             </div>
             {currentJob.isReprint && (
               <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '2px' }}>** REIMPRESION **</div>
             )}
-            <div style={{ fontSize: '16px', marginTop: '4px' }}>
-              Factura: {currentJob.invoice.number || 'S/N'}
-            </div>
+            {currentJob.creditDebitNote ? (
+              <>
+                <div style={{ fontSize: '16px', marginTop: '4px' }}>Nota: {currentJob.creditDebitNote.number}</div>
+                {currentJob.creditDebitNote.invoice?.number && (
+                  <div style={{ fontSize: '13px' }}>Factura afectada: {currentJob.creditDebitNote.invoice.number}</div>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: '16px', marginTop: '4px' }}>
+                Factura: {currentJob.invoice?.number || 'S/N'}
+              </div>
+            )}
             <div style={{ fontSize: '13px' }}>
               {new Date(currentJob.createdAt).toLocaleString('es-VE', { hour12: false })}
             </div>
@@ -325,8 +356,8 @@ export default function PrintMonitor() {
 
           {/* Cliente y vendedor (despacho los necesita) */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>
-            <div>Cliente: {currentJob.invoice.customer?.name || 'Contado'}</div>
-            {currentJob.invoice.seller?.name && (
+            <div>Cliente: {(currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.customer?.name : currentJob.invoice?.customer?.name) || 'Contado'}</div>
+            {!currentJob.creditDebitNote && currentJob.invoice?.seller?.name && (
               <div>Vendedor: {currentJob.invoice.seller.name}</div>
             )}
           </div>
@@ -361,7 +392,7 @@ export default function PrintMonitor() {
           {/* Seccion de firma de quien despacha */}
           <div style={{ marginTop: '28px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold' }}>
             <div style={{ borderTop: '1px solid #000', paddingTop: '3px', margin: '0 auto', width: '85%' }}>
-              Despachado por (firma)
+              {currentJob.creditDebitNote ? 'Recibido por (firma)' : 'Despachado por (firma)'}
             </div>
           </div>
         </div>
