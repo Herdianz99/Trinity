@@ -22,6 +22,18 @@ export class PrintJobsService {
             seller: { select: { name: true } },
           },
         },
+        creditDebitNote: {
+          select: {
+            id: true,
+            number: true,
+            invoice: {
+              select: {
+                number: true,
+                customer: { select: { name: true } },
+              },
+            },
+          },
+        },
         printArea: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -90,6 +102,7 @@ export class PrintJobsService {
       where,
       include: {
         invoice: { select: { id: true, number: true } },
+        creditDebitNote: { select: { id: true, number: true } },
         printArea: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
