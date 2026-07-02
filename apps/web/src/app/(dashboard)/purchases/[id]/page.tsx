@@ -305,6 +305,9 @@ export default function PurchaseBillDetailPage() {
   const [processModal, setProcessModal] = useState(false);
   const [suggestedPrices, setSuggestedPrices] = useState<SuggestedPrice[]>([]);
   const [priceEdits, setPriceEdits] = useState<Record<string, { gananciaPct: number; gananciaMayorPct: number; priceDetal: number; priceMayor: number }>>({});
+  // Texto crudo de los inputs editables (Gan.% y P. Nuevo Detal) mientras el usuario escribe.
+  // Necesario para poder teclear el punto decimal: con type=number, "30." se sanitiza a "" y borraba lo escrito.
+  const [rawEdits, setRawEdits] = useState<Record<string, { gananciaPct?: string; priceDetal?: string }>>({});
   const [processing, setProcessing] = useState(false);
 
   // Lazy-loaded tab data
@@ -496,80 +499,65 @@ export default function PurchaseBillDetailPage() {
         setSuggestedPrices([]);
         setPriceEdits({});
       }
+      setRawEdits({});
 
       setProcessModal(true);
     } catch {
       setSuggestedPrices([]);
       setPriceEdits({});
+      setRawEdits({});
       setProcessModal(true);
     } finally {
       setProcessing(false);
     }
   }
 
-  function handleGananciaChange(productId: string, field: 'gananciaPct' | 'gananciaMayorPct', value: number) {
-    const sp = suggestedPrices.find((p) => p.productId === productId);
-    if (!sp) return;
-    const cost = sp.newCostUsd;
-    const base = cost * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
-    const prev = priceEdits[productId] || {
-      gananciaPct: sp.currentGananciaPct,
-      gananciaMayorPct: sp.currentGananciaMayorPct,
-      priceDetal: sp.suggestedPriceDetal,
-      priceMayor: sp.suggestedPriceMayor,
-    };
-    if (field === 'gananciaPct') {
-      setPriceEdits({
-        ...priceEdits,
-        [productId]: {
-          ...prev,
-          gananciaPct: value,
-          priceDetal: Math.round(base * (1 + value / 100) * 100) / 100,
-        },
-      });
-    } else {
-      setPriceEdits({
-        ...priceEdits,
-        [productId]: {
-          ...prev,
-          gananciaMayorPct: value,
-          priceMayor: Math.round(base * (1 + value / 100) * 100) / 100,
-        },
-      });
+  // Solo digitos y un punto decimal, para poder teclear "30.5" sin que se borre.
+  function sanitizeDecimal(s: string): string {
+    s = s.replace(/[^0-9.]/g, '');
+    const dot = s.indexOf('.');
+    if (dot !== -1) {
+      s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '');
     }
+    return s;
   }
 
-  function handlePriceChange(productId: string, field: 'priceDetal' | 'priceMayor', value: number) {
+  function editsFor(sp: SuggestedPrice) {
+    return (
+      priceEdits[sp.productId] || {
+        gananciaPct: sp.currentGananciaPct,
+        gananciaMayorPct: sp.currentGananciaMayorPct,
+        priceDetal: sp.suggestedPriceDetal,
+        priceMayor: sp.suggestedPriceMayor,
+      }
+    );
+  }
+
+  // Usuario edita la Ganancia %: recalcula el P. Nuevo Detal (guarda el texto crudo para el punto decimal).
+  function handleGananciaInput(productId: string, rawInput: string) {
     const sp = suggestedPrices.find((p) => p.productId === productId);
     if (!sp) return;
-    const cost = sp.newCostUsd;
-    const base = cost * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
-    const ganancia = base > 0 ? ((value / base) - 1) * 100 : 0;
-    const prev = priceEdits[productId] || {
-      gananciaPct: sp.currentGananciaPct,
-      gananciaMayorPct: sp.currentGananciaMayorPct,
-      priceDetal: sp.suggestedPriceDetal,
-      priceMayor: sp.suggestedPriceMayor,
-    };
-    if (field === 'priceDetal') {
-      setPriceEdits({
-        ...priceEdits,
-        [productId]: {
-          ...prev,
-          priceDetal: value,
-          gananciaPct: Math.round(ganancia * 100) / 100,
-        },
-      });
-    } else {
-      setPriceEdits({
-        ...priceEdits,
-        [productId]: {
-          ...prev,
-          priceMayor: value,
-          gananciaMayorPct: Math.round(ganancia * 100) / 100,
-        },
-      });
-    }
+    const raw = sanitizeDecimal(rawInput);
+    const g = parseFloat(raw) || 0;
+    const base = sp.newCostUsd * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
+    const newPrice = Math.round(base * (1 + g / 100) * 100) / 100;
+    const prev = editsFor(sp);
+    setPriceEdits({ ...priceEdits, [productId]: { ...prev, gananciaPct: g, priceDetal: newPrice } });
+    setRawEdits({ ...rawEdits, [productId]: { ...rawEdits[productId], gananciaPct: raw, priceDetal: String(newPrice) } });
+  }
+
+  // Usuario edita el P. Nuevo Detal: recalcula la Ganancia % (guarda el texto crudo para el punto decimal).
+  function handlePriceInput(productId: string, rawInput: string) {
+    const sp = suggestedPrices.find((p) => p.productId === productId);
+    if (!sp) return;
+    const raw = sanitizeDecimal(rawInput);
+    const price = parseFloat(raw) || 0;
+    const base = sp.newCostUsd * (1 + sp.bregaPct / 100) * sp.ivaMultiplier;
+    const ganancia = base > 0 ? ((price / base) - 1) * 100 : 0;
+    const gRounded = Math.round(ganancia * 100) / 100;
+    const prev = editsFor(sp);
+    setPriceEdits({ ...priceEdits, [productId]: { ...prev, priceDetal: price, gananciaPct: gRounded } });
+    setRawEdits({ ...rawEdits, [productId]: { ...rawEdits[productId], priceDetal: raw, gananciaPct: String(gRounded) } });
   }
 
   // ---- Cash payment helpers ----
@@ -1436,13 +1424,12 @@ export default function PurchaseBillDetailPage() {
                         <th className="text-left px-2 py-2 text-slate-400 font-medium text-xs">Codigo</th>
                         <th className="text-left px-2 py-2 text-slate-400 font-medium text-xs">Producto</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo ant.</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo nuevo</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Actual Detal</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Costo nuevo</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs" title="Brecha aplicada al costo (solo si el producto lleva brecha)">Brecha</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Detal</th>
+                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs" title="Precio de venta sin IVA">Sin IVA</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Nuevo Detal</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Actual Mayor</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">Gan.% Mayor</th>
-                        <th className="text-right px-2 py-2 text-slate-400 font-medium text-xs">P. Nuevo Mayor</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1464,6 +1451,9 @@ export default function PurchaseBillDetailPage() {
                             <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
                               ${sp.currentCostUsd.toFixed(2)}
                             </td>
+                            <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
+                              ${sp.currentPriceDetal.toFixed(2)}
+                            </td>
                             <td
                               className={`px-2 py-2 text-right font-mono text-xs font-bold ${
                                 costUp ? 'text-red-400' : costDown ? 'text-green-400' : 'text-white'
@@ -1471,57 +1461,32 @@ export default function PurchaseBillDetailPage() {
                             >
                               ${sp.newCostUsd.toFixed(2)}
                             </td>
-                            <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
-                              ${sp.currentPriceDetal.toFixed(2)}
+                            {/* Brecha (solo lectura): % aplicado al costo. La formula es
+                                Costo x (1+Brecha) x (1+Ganancia) x (1+IVA) */}
+                            <td className="px-2 py-2 text-right font-mono text-slate-300 text-xs" title="Brecha aplicada al costo">
+                              {sp.bregaPct > 0 ? `${sp.bregaPct}%` : '—'}
                             </td>
                             <td className="px-2 py-2 text-right">
                               <input
-                                type="number"
-                                step="0.1"
-                                value={edits.gananciaPct}
-                                onChange={(e) =>
-                                  handleGananciaChange(sp.productId, 'gananciaPct', Number(e.target.value))
-                                }
+                                type="text"
+                                inputMode="decimal"
+                                value={rawEdits[sp.productId]?.gananciaPct ?? String(edits.gananciaPct)}
+                                onChange={(e) => handleGananciaInput(sp.productId, e.target.value)}
                                 className="input-field !py-0.5 text-xs w-16 text-right font-mono"
                               />
+                            </td>
+                            {/* Sin IVA (solo lectura): precio de venta sin el IVA */}
+                            <td className="px-2 py-2 text-right font-mono text-slate-300 text-xs" title="Precio de venta sin IVA">
+                              ${(sp.ivaMultiplier > 0 ? edits.priceDetal / sp.ivaMultiplier : 0).toFixed(2)}
                             </td>
                             <td className={`px-2 py-2 text-right font-mono text-xs font-bold ${
                               edits.priceDetal > sp.currentPriceDetal ? 'text-red-400' : edits.priceDetal < sp.currentPriceDetal ? 'text-green-400' : 'text-white'
                             }`}>
                               <input
-                                type="number"
-                                step="0.01"
-                                value={edits.priceDetal}
-                                onChange={(e) =>
-                                  handlePriceChange(sp.productId, 'priceDetal', Number(e.target.value))
-                                }
-                                className="input-field !py-0.5 text-xs w-20 text-right font-mono"
-                              />
-                            </td>
-                            <td className="px-2 py-2 text-right font-mono text-slate-400 text-xs">
-                              ${sp.currentPriceMayor.toFixed(2)}
-                            </td>
-                            <td className="px-2 py-2 text-right">
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={edits.gananciaMayorPct}
-                                onChange={(e) =>
-                                  handleGananciaChange(sp.productId, 'gananciaMayorPct', Number(e.target.value))
-                                }
-                                className="input-field !py-0.5 text-xs w-16 text-right font-mono"
-                              />
-                            </td>
-                            <td className={`px-2 py-2 text-right font-mono text-xs font-bold ${
-                              edits.priceMayor > sp.currentPriceMayor ? 'text-red-400' : edits.priceMayor < sp.currentPriceMayor ? 'text-green-400' : 'text-white'
-                            }`}>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={edits.priceMayor}
-                                onChange={(e) =>
-                                  handlePriceChange(sp.productId, 'priceMayor', Number(e.target.value))
-                                }
+                                type="text"
+                                inputMode="decimal"
+                                value={rawEdits[sp.productId]?.priceDetal ?? String(edits.priceDetal)}
+                                onChange={(e) => handlePriceInput(sp.productId, e.target.value)}
                                 className="input-field !py-0.5 text-xs w-20 text-right font-mono"
                               />
                             </td>

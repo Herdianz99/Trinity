@@ -1,12 +1,18 @@
 ﻿# Trinity ERP — Progreso
 
-## ⏳ PENDIENTE DE DEPLOY — Sesiones 98 a 101 (2026-07-01)
+## ⏳ PENDIENTE DE DEPLOY — Sesiones 98 a 102 (2026-07-01)
 
-Cuatro cambios hechos en local (copia de prod), **sin desplegar todavia**. Probados con typecheck 0 errores.
+Cinco cambios hechos en local (copia de prod), **sin desplegar todavia**. Probados con typecheck 0 errores.
 
 **Requisito ANTES de desplegar (S99, critico):** debe existir al menos **una clave dinamica ACTIVA con permiso "Facturar a credito" (`ALLOW_CREDIT_INVOICE`)** en `/settings/dynamic-keys`, porque el crédito deja de usar la clave de Configuracion y ya no hay fallback. En la copia de prod ya existe la clave "admi" con ese permiso — **confirmar en prod** y avisar a los supervisores cual es la clave.
 
 **Schema (S101):** migracion `20260701170000_adjustment_cost_mode` (ADD COLUMN IF NOT EXISTS) + linea en `deploy/fix-schema.sql`. Columna nueva `InventoryAdjustment.costMode` (default 'BREGA').
+
+## Sesion 102 (2026-07-01) — Compras: modal de precios con Brecha/Sin IVA + fix del punto decimal (NO DESPLEGADA)
+
+> Dos pedidos de Diego sobre el modal "Actualizar precios" al procesar una compra (`purchases/[id]/page.tsx`, solo frontend).
+- **Columnas Brecha y Sin IVA (solo lectura)**: se quitaron las 3 columnas de Mayor (*P. Actual Mayor · Gan.% Mayor · P. Nuevo Mayor*) y se agregaron **Brecha** (% aplicado al costo, `—` si no lleva) y **Sin IVA** (precio de venta sin IVA = `P. Nuevo Detal ÷ ivaMultiplier`), ordenadas en el orden de la formula: `Costo nuevo → Brecha → Gan.% Detal → Sin IVA → P. Nuevo Detal`. Se movio "P. Actual Detal" junto a "Costo ant." para que la cadena quede contigua. Usa datos que el backend ya enviaba (`bregaPct`, `ivaMultiplier`); sin backend ni schema. El precio **mayor** se sigue recalculando solo (con su ganancia actual) al procesar.
+- **Fix punto decimal**: los inputs Gan.% Detal y P. Nuevo Detal eran `type=number` con valor numerico; al teclear "30." el navegador devolvia "" y `Number('')=0` borraba lo escrito. Ahora son `type=text` + `inputMode=decimal` con un estado `rawEdits` que guarda el texto crudo mientras se calcula el numero por detras (helper `sanitizeDecimal`: solo digitos y un punto). Editar un campo refresca el texto del otro; `rawEdits` se resetea al abrir el modal.
 
 ## Sesion 101 (2026-07-01) — Ajustes de inventario: elegir costo (Costo / Brecha) para el reporte (NO DESPLEGADA)
 
