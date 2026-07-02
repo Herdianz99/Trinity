@@ -29,6 +29,7 @@ interface NoteDetail {
   fiscalNumber: string | null;
   machineSerial: string | null;
   fiscalPrinted: boolean;
+  comandasProcessedAt: string | null;
   manualAmountUsd: number | null;
   manualPct: number | null;
   supplierDocNumber: string | null;
@@ -103,6 +104,7 @@ export default function CreditDebitNoteDetailPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [posting, setPosting] = useState(false);
+  const [processingComandas, setProcessingComandas] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [editSupplierDoc, setEditSupplierDoc] = useState('');
@@ -149,6 +151,29 @@ export default function CreditDebitNoteDetailPage() {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setSavingSupplierDoc(false);
+    }
+  }
+
+  async function handleProcessComandas() {
+    if (!confirm('¿Procesar las comandas de despacho de esta devolución? Se enviarán a las áreas de impresión y la nota ya no se podrá eliminar.')) return;
+    setProcessingComandas(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/credit-debit-notes/${id}/process-comandas`, {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Error al procesar comandas');
+      if ((data.zones ?? 0) === 0) {
+        setMessage({ type: 'error', text: 'No hay áreas de impresión configuradas; no se generaron comandas' });
+      } else {
+        setMessage({ type: 'success', text: `Comandas enviadas a ${data.zones} área(s) de despacho` });
+      }
+      fetchNote();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setProcessingComandas(false);
     }
   }
 
@@ -323,7 +348,7 @@ export default function CreditDebitNoteDetailPage() {
 
   const isSale = ['NCV', 'NDV'].includes(note.type);
   // Se puede eliminar si no fue impresa por la maquina fiscal ni cruzada/aplicada en un recibo
-  const canDelete = note.status !== 'CANCELLED' && !note.fiscalPrinted && !note.appliedAt && (note.paidAmountUsd || 0) === 0;
+  const canDelete = note.status !== 'CANCELLED' && !note.fiscalPrinted && !note.comandasProcessedAt && !note.appliedAt && (note.paidAmountUsd || 0) === 0;
 
   return (
     <div>
@@ -361,6 +386,16 @@ export default function CreditDebitNoteDetailPage() {
                 <button onClick={handleReturnTicketPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors">
                   <Printer size={14} /> Imprimir Ticket
                 </button>
+              )}
+              {note.type === 'NCV' && note.origin === 'MERCHANDISE' && !note.comandasProcessedAt && (
+                <button onClick={handleProcessComandas} disabled={processingComandas} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 transition-colors">
+                  {processingComandas ? <Loader2 className="animate-spin" size={14} /> : <Printer size={14} />} Procesar comandas
+                </button>
+              )}
+              {note.type === 'NCV' && note.origin === 'MERCHANDISE' && note.comandasProcessedAt && (
+                <span className="text-xs px-2.5 py-1 rounded-full border text-blue-400 border-blue-500/30 bg-blue-500/10 flex items-center gap-1">
+                  <CheckCircle size={12} /> Comandas procesadas
+                </span>
               )}
               <button onClick={() => window.open(`/api/proxy/credit-debit-notes/${id}/pdf`, '_blank')} className="btn-secondary text-sm flex items-center gap-1.5">
                 <Printer size={14} /> Imprimir PDF
