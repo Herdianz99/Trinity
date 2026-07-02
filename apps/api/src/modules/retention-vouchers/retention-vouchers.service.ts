@@ -36,6 +36,13 @@ export class RetentionVouchersService {
             supplierInvoiceNumber: true,
           },
         },
+        payable: {
+          select: {
+            id: true, number: true, documentNumber: true, originalDate: true,
+            totalIvaUsd: true, totalIvaBs: true, amountUsd: true, amountBs: true,
+            exchangeRate: true, controlFiscal: true,
+          },
+        },
       },
       orderBy: { createdAt: 'asc' as const },
     },
@@ -113,57 +120,38 @@ export class RetentionVouchersService {
     });
     const defaultPct = dto.retentionPct ?? config?.ivaRetentionPct ?? 75;
 
-    // Validate all POs belong to the same supplier and are processed
-    const poIds = dto.lines.map((l) => l.purchaseOrderId);
-    const orders = await this.prisma.purchaseOrder.findMany({
-      where: { id: { in: poIds } },
-      select: {
-        id: true,
-        number: true,
-        supplierId: true,
-        status: true,
-        totalIvaUsd: true,
-        totalIvaBs: true,
-        totalUsd: true,
-        totalBs: true,
-        exchangeRate: true,
-        invoiceDate: true,
-        supplierControlNumber: true,
-        supplierInvoiceNumber: true,
-      },
-    });
-
-    if (orders.length !== poIds.length) {
-      throw new BadRequestException(
-        'Una o más facturas no existen',
-      );
-    }
-
-    for (const po of orders) {
-      if (po.supplierId !== dto.supplierId) {
-        throw new BadRequestException(
-          `La factura ${po.number} no pertenece al proveedor seleccionado`,
-        );
+    // Resolver cada linea a un documento: factura de compra (FC) o cuenta por pagar (CxP)
+    const resolved = await Promise.all(dto.lines.map(async (l) => {
+      if (l.purchaseOrderId) {
+        const po = await this.prisma.purchaseOrder.findUnique({ where: { id: l.purchaseOrderId } });
+        if (!po) throw new BadRequestException('Factura de compra no encontrada');
+        if (po.supplierId !== dto.supplierId) throw new BadRequestException(`La factura ${po.number} no pertenece al proveedor seleccionado`);
+        if (po.status !== 'PROCESSED') throw new BadRequestException(`La factura ${po.number} no está procesada`);
+        return { line: l, kind: 'PO' as const, id: po.id, totalUsd: po.totalUsd, totalBs: po.totalBs, ivaUsd: po.totalIvaUsd, ivaBs: po.totalIvaBs, exchangeRate: po.exchangeRate, invoiceDate: po.invoiceDate, controlNumber: po.supplierControlNumber, invoiceNumber: po.supplierInvoiceNumber };
       }
-      if (po.status !== 'PROCESSED') {
-        throw new BadRequestException(
-          `La factura ${po.number} no está procesada`,
-        );
+      if (l.payableId) {
+        const p = await this.prisma.payable.findUnique({ where: { id: l.payableId } });
+        if (!p) throw new BadRequestException('Cuenta por pagar no encontrada');
+        if (p.supplierId !== dto.supplierId) throw new BadRequestException(`La CxP ${p.number} no pertenece al proveedor seleccionado`);
+        return { line: l, kind: 'PAY' as const, id: p.id, totalUsd: p.amountUsd, totalBs: p.amountBs, ivaUsd: p.totalIvaUsd, ivaBs: p.totalIvaBs, exchangeRate: p.exchangeRate, invoiceDate: p.originalDate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
       }
-    }
+      throw new BadRequestException('Cada linea debe referir una factura de compra o una CxP');
+    }));
 
-    // Check no PO is already in another active retention voucher
+    // No duplicar en un comprobante IVA activo (FC o CxP)
+    const poIds = resolved.filter((rr) => rr.kind === 'PO').map((rr) => rr.id);
+    const payIds = resolved.filter((rr) => rr.kind === 'PAY').map((rr) => rr.id);
     const existingLines = await this.prisma.retentionVoucherLine.findMany({
       where: {
-        purchaseOrderId: { in: poIds },
         retentionVoucher: { status: { not: 'CANCELLED' } },
+        OR: [{ purchaseOrderId: { in: poIds } }, { payableId: { in: payIds } }],
       },
-      select: { purchaseOrderId: true, retentionVoucher: { select: { number: true } } },
+      select: { retentionVoucher: { select: { number: true } } },
     });
     if (existingLines.length > 0) {
       const nums = existingLines.map((l) => l.retentionVoucher.number).join(', ');
       throw new BadRequestException(
-        `Algunas facturas ya tienen retención activa: ${nums}`,
+        `Algunos documentos ya tienen retención IVA activa: ${nums}`,
       );
     }
 
@@ -176,51 +164,50 @@ export class RetentionVouchersService {
       let totalRetBs = 0;
       let headerExchangeRate = 0;
 
-      const ordersMap = new Map(orders.map((o) => [o.id, o]));
       const lineData: any[] = [];
 
-      for (const lineDto of dto.lines) {
-        const po = ordersMap.get(lineDto.purchaseOrderId)!;
-        const linePct = lineDto.retentionPct ?? defaultPct;
-        const isManual = lineDto.isManual ?? false;
+      for (const rdoc of resolved) {
+        const linePct = rdoc.line.retentionPct ?? defaultPct;
+        const isManual = rdoc.line.isManual ?? false;
 
         let retUsd: number;
         let retBs: number;
 
-        if (isManual && lineDto.retentionAmountUsd != null) {
-          retUsd = round2(lineDto.retentionAmountUsd);
+        if (isManual && rdoc.line.retentionAmountUsd != null) {
+          retUsd = round2(rdoc.line.retentionAmountUsd);
           retBs =
-            lineDto.retentionAmountBs != null
-              ? round2(lineDto.retentionAmountBs)
-              : round2(retUsd * po.exchangeRate);
+            rdoc.line.retentionAmountBs != null
+              ? round2(rdoc.line.retentionAmountBs)
+              : round2(retUsd * rdoc.exchangeRate);
         } else {
-          retUsd = round2(po.totalIvaUsd * (linePct / 100));
-          retBs = round2(po.totalIvaBs * (linePct / 100));
+          retUsd = round2(rdoc.ivaUsd * (linePct / 100));
+          retBs = round2(rdoc.ivaBs * (linePct / 100));
         }
 
         // taxable base = total - IVA
-        const taxBaseUsd = round2(po.totalUsd - po.totalIvaUsd);
-        const taxBaseBs = round2(po.totalBs - po.totalIvaBs);
+        const taxBaseUsd = round2(rdoc.totalUsd - rdoc.ivaUsd);
+        const taxBaseBs = round2(rdoc.totalBs - rdoc.ivaBs);
 
         totalRetUsd += retUsd;
         totalRetBs += retBs;
-        if (!headerExchangeRate) headerExchangeRate = po.exchangeRate;
+        if (!headerExchangeRate) headerExchangeRate = rdoc.exchangeRate;
 
         lineData.push({
-          purchaseOrderId: po.id,
-          supplierInvoiceNumber: po.supplierInvoiceNumber,
-          supplierControlNumber: po.supplierControlNumber,
-          invoiceDate: po.invoiceDate,
-          invoiceTotalUsd: po.totalUsd,
-          invoiceTotalBs: po.totalBs,
+          purchaseOrderId: rdoc.kind === 'PO' ? rdoc.id : null,
+          payableId: rdoc.kind === 'PAY' ? rdoc.id : null,
+          supplierInvoiceNumber: rdoc.invoiceNumber,
+          supplierControlNumber: rdoc.controlNumber,
+          invoiceDate: rdoc.invoiceDate,
+          invoiceTotalUsd: rdoc.totalUsd,
+          invoiceTotalBs: rdoc.totalBs,
           taxableBaseUsd: taxBaseUsd,
           taxableBaseBs: taxBaseBs,
-          ivaAmountUsd: po.totalIvaUsd,
-          ivaAmountBs: po.totalIvaBs,
+          ivaAmountUsd: rdoc.ivaUsd,
+          ivaAmountBs: rdoc.ivaBs,
           retentionPct: linePct,
           retentionAmountUsd: retUsd,
           retentionAmountBs: retBs,
-          exchangeRate: po.exchangeRate,
+          exchangeRate: rdoc.exchangeRate,
           isManual,
         });
       }
@@ -424,7 +411,8 @@ export class RetentionVouchersService {
       for (const line of updated.lines) {
         await tx.purchaseBookEntry.create({
           data: {
-            purchaseOrderId: line.purchaseOrderId,
+            purchaseOrderId: line.purchaseOrderId || null,
+            payableId: line.payableId || null,
             entryDate: issueDateObj,
             supplierControlNumber: line.supplierControlNumber || null,
             supplierInvoiceNumber: line.supplierInvoiceNumber || null,
@@ -507,6 +495,34 @@ export class RetentionVouchersService {
 
   async getPdfData(id: string) {
     return this.findOne(id);
+  }
+
+  /** FCs procesadas + CxP fiscales con IVA, sin retencion IVA activa, del proveedor. */
+  async getAvailableDocuments(supplierId: string) {
+    const usedLines = await this.prisma.retentionVoucherLine.findMany({
+      where: { retentionVoucher: { supplierId, status: { not: 'CANCELLED' } } },
+      select: { purchaseOrderId: true, payableId: true },
+    });
+    const usedPo = usedLines.map((l) => l.purchaseOrderId).filter((x): x is string => !!x);
+    const usedPay = usedLines.map((l) => l.payableId).filter((x): x is string => !!x);
+
+    const [orders, payables] = await Promise.all([
+      this.prisma.purchaseOrder.findMany({
+        where: { supplierId, status: 'PROCESSED', totalIvaUsd: { gt: 0 }, ...(usedPo.length ? { id: { notIn: usedPo } } : {}) },
+        select: { id: true, number: true, invoiceDate: true, totalIvaUsd: true, totalIvaBs: true, totalUsd: true, totalBs: true, exchangeRate: true, supplierControlNumber: true, supplierInvoiceNumber: true },
+        orderBy: { invoiceDate: 'desc' },
+      }),
+      this.prisma.payable.findMany({
+        where: { supplierId, totalIvaUsd: { gt: 0 }, serie: { isFiscal: true }, ...(usedPay.length ? { id: { notIn: usedPay } } : {}) },
+        select: { id: true, number: true, documentNumber: true, originalDate: true, totalIvaUsd: true, totalIvaBs: true, amountUsd: true, amountBs: true, exchangeRate: true, controlFiscal: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return [
+      ...orders.map((o) => ({ docType: 'PURCHASE_ORDER' as const, id: o.id, number: o.number, invoiceDate: o.invoiceDate, ivaUsd: o.totalIvaUsd, ivaBs: o.totalIvaBs, totalUsd: o.totalUsd, totalBs: o.totalBs, exchangeRate: o.exchangeRate, controlNumber: o.supplierControlNumber, invoiceNumber: o.supplierInvoiceNumber })),
+      ...payables.map((p) => ({ docType: 'PAYABLE' as const, id: p.id, number: p.documentNumber || p.number, invoiceDate: p.originalDate, ivaUsd: p.totalIvaUsd, ivaBs: p.totalIvaBs, totalUsd: p.amountUsd, totalBs: p.amountBs, exchangeRate: p.exchangeRate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber })),
+    ];
   }
 
   // Generate next retention number YYYYMM + 8-digit global sequence

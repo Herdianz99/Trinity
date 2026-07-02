@@ -46,6 +46,11 @@ export class RetentionVouchersController {
     return this.service.getAvailablePurchaseOrders(supplierId);
   }
 
+  @Get('available-documents/:supplierId')
+  availableDocuments(@Param('supplierId') supplierId: string) {
+    return this.service.getAvailableDocuments(supplierId);
+  }
+
   @Get('txt')
   async exportTxt(
     @Query('from') from: string,
