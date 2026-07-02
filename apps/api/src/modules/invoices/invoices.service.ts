@@ -9,7 +9,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { UserRole } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
@@ -453,8 +452,17 @@ export class InvoicesService {
       });
       const stockMap = new Map(stocks.map(s => [s.productId, s]));
 
+      // Los servicios (flete, mano de obra...) no manejan inventario: se excluyen del
+      // chequeo de stock, para que un vendedor pueda facturarlos sin autorizacion.
+      const serviceProducts = await this.prisma.product.findMany({
+        where: { id: { in: productIds }, isService: true },
+        select: { id: true },
+      });
+      const serviceIds = new Set(serviceProducts.map(p => p.id));
+
       const insufficientItems: string[] = [];
       for (const item of invoice.items) {
+        if (serviceIds.has(item.productId)) continue;
         const stockRecord = stockMap.get(item.productId);
         const available = stockRecord?.quantity ?? 0;
         if (available < item.quantity) {
@@ -558,16 +566,9 @@ export class InvoicesService {
 
     // Credit validation
     if (dto.isCredit) {
-      if (!config?.creditAuthPassword) {
-        throw new BadRequestException('No hay clave de autorización de crédito configurada');
-      }
-      if (!dto.creditAuthPassword) {
-        throw new BadRequestException('Se requiere la clave de autorización para crédito');
-      }
-      const isValid = await bcrypt.compare(dto.creditAuthPassword, config.creditAuthPassword);
-      if (!isValid) {
-        throw new ForbiddenException('Clave de autorización incorrecta');
-      }
+      // La autorizacion de la venta a credito la hace el POS con una clave dinamica
+      // (permiso ALLOW_CREDIT_INVOICE, validada contra /dynamic-keys/validate con log de
+      // auditoria), igual que SELL_NEGATIVE_STOCK. No se re-valida clave aqui (frontend-gated).
 
       // Check customer credit limit
       if (invoice.customer) {

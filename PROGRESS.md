@@ -1,5 +1,42 @@
 ﻿# Trinity ERP — Progreso
 
+## ⏳ PENDIENTE DE DEPLOY — Sesiones 98 a 101 (2026-07-01)
+
+Cuatro cambios hechos en local (copia de prod), **sin desplegar todavia**. Probados con typecheck 0 errores.
+
+**Requisito ANTES de desplegar (S99, critico):** debe existir al menos **una clave dinamica ACTIVA con permiso "Facturar a credito" (`ALLOW_CREDIT_INVOICE`)** en `/settings/dynamic-keys`, porque el crédito deja de usar la clave de Configuracion y ya no hay fallback. En la copia de prod ya existe la clave "admi" con ese permiso — **confirmar en prod** y avisar a los supervisores cual es la clave.
+
+**Schema (S101):** migracion `20260701170000_adjustment_cost_mode` (ADD COLUMN IF NOT EXISTS) + linea en `deploy/fix-schema.sql`. Columna nueva `InventoryAdjustment.costMode` (default 'BREGA').
+
+## Sesion 101 (2026-07-01) — Ajustes de inventario: elegir costo (Costo / Brecha) para el reporte (NO DESPLEGADA)
+
+> Pedido de Diego: al crear un ajuste en `/inventory/adjustments/new`, poder elegir con que costo salen los articulos en el reporte: costo puro o costo + brecha. Toggle con **Brecha preseleccionado**.
+- **Schema**: `InventoryAdjustment.costMode String @default("BREGA")` ('COST' | 'BREGA'). Migracion `20260701170000_adjustment_cost_mode` + `fix-schema.sql`.
+- **Backend**: `create-inventory-adjustment.dto` gana `costMode` (`IsIn(['COST','BREGA'])`); el service lo guarda (default 'BREGA'). El **reporte PDF** (`inventory-adjustments-pdf.service`) trae `bregaApplies` + `bregaGlobalPct` del config y calcula el costo efectivo: en 'BREGA', `costo × (1 + brecha%)` solo a productos con `bregaApplies` (misma formula que precios); en 'COST', costo puro. Afecta columna Costo, Importe y TOTAL; la cabecera muestra "Costo usado: Costo + Brecha (X%)" o "Costo".
+- **Frontend** (`adjustments/new/page.tsx`): toggle Costo/Brecha (Brecha por defecto) + nota; envia `costMode`.
+- **Alcance intencional**: solo afecta el **reporte**. El costo del StockMovement al procesar sigue siendo el costo puro (no altera valuacion de inventario). API + Web typecheck 0 errores.
+
+## Sesion 100 (2026-07-01) — Libro de compras: numerar TODAS las filas del PDF (incl. retenciones IVA) (NO DESPLEGADA)
+
+> Bug reportado por Diego: en el PDF del libro de compras, la columna "Oper. Nro." dejaba **en blanco** las filas de retencion y la fila siguiente tomaba el numero que seguia. Cada fila del libro debe llevar su numero correlativo.
+- **Causa raiz** (`fiscal/libro-compras/page.tsx`): `rowNum++` se hacia solo en las filas de factura; la rama de retencion IVA retornaba antes con la celda vacia.
+- **Fix**: se movio `rowNum++` al inicio del loop para que **toda fila que se imprime** (factura + retencion IVA) reciba su numero. Se aplico lo mismo a la tabla en pantalla (preview) para que coincida con el PDF.
+- **Respetado a proposito**: las lineas **ISLR** siguen sin numero (estan "fuera del libro por ahora", `return ''`, no generan fila ni consumen numero). Solo frontend, Web typecheck 0 errores.
+
+## Sesion 99 (2026-07-01) — Venta a credito con clave dinamica + auditoria (y quitada de Configuracion) (NO DESPLEGADA)
+
+> Pedido de Diego (opcion B): que el credito use las claves dinamicas de `/settings/dynamic-keys` (con log de quien autorizo) en vez de la clave de Configuracion, y eliminar esa clave de la Configuracion de empresa. `ALLOW_CREDIT_INVOICE` existia en el enum y en la UI de claves pero **no estaba conectada a nada** (opcion muerta); ahora si.
+- **Backend** (`invoices.service` pay): eliminada la validacion contra `config.creditAuthPassword`. El credito es ahora *frontend-gated* por la clave dinamica (mismo patron que `SELL_NEGATIVE_STOCK`, sin re-validar clave en el backend); se conservo el chequeo de limite de credito del cliente. Removido el import muerto de `bcrypt`. `pay-invoice.dto` pierde `creditAuthPassword`.
+- **Backend config**: `update-company-config.dto` y `company-config.service` pierden `creditAuthPassword` (y su hasheo). La columna `CompanyConfig.creditAuthPassword` queda **huerfana** en la BD (inofensiva, Prisma la ignora); no se dropea para evitar migracion.
+- **Frontend POS** (`sales/pos/page.tsx`): el modal de credito ya no pide contraseña de texto; "Confirmar credito" abre el `DynamicKeyModal` con permiso `ALLOW_CREDIT_INVOICE` (entityType Customer). Al autorizar, se procesa el credito y queda log en `DynamicKeyLog` (trazabilidad que antes no existia).
+- **Frontend config** (`config/page.tsx`): eliminada la tarjeta "Ventas a Credito" + su estado/imports (`Eye/EyeOff`). API + Web typecheck 0 errores.
+
+## Sesion 98 (2026-07-01) — POS: los articulos de servicio no piden autorizacion de stock negativo (NO DESPLEGADA)
+
+> Bug reportado por Diego tras la S92: con "Permitir ventas sin stock" apagado, los articulos de **servicio** (FLETE, RECUPERACION DE GASTOS...) pedian clave de supervisor porque no manejan inventario (siempre "sin stock"), asi que un vendedor no podia meter un flete a la factura.
+- **Frontend** (`sales/pos/page.tsx`): el bloqueo `blockNoStock` ahora exige ademas `!product.isService` en los 4 puntos (`addToCart`, `pickProduct`, grid desktop, lista de resultados). Un servicio ya no muestra "Sin stock · Autorizar" ni pide clave. Los productos fisicos siguen igual.
+- **Backend** (`invoices.service` pay, red de seguridad): la validacion de stock salta los items de servicio (consulta `isService: true` y los excluye del chequeo), asi el cobro no falla aunque un servicio quede en una factura con el bloqueo activo. API + Web typecheck 0 errores. Sin cambios de schema.
+
 ## ✅ DEPLOY a PRODUCCION — 2026-06-30 (tarde) — commit `c7f76cd`
 
 Desplegadas las **Sesiones 92 a 97** (segundo deploy del dia, hecho por Diego). Incluye: autorizar venta sin stock con clave de supervisor al agregar (S92, migracion `SELL_NEGATIVE_STOCK`), inventario KPIs arriba + toggle Costo/Brecha (S93), cotizacion PDF "Sin IVA" (S94), cotizacion compartible en movil + Firma y Sello en el PDF (S95), buscador en proveedores (S96), y el bloque grande de recibos: fix duplicados/doble-pago + tasa editable + eliminar borradores + lista de pendientes con fechas/total/orden por vencimiento (S97).

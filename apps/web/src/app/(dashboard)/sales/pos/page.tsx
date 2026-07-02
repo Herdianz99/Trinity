@@ -216,7 +216,7 @@ export default function POSPage() {
   const [payments, setPayments] = useState<PaymentLine[]>([]);
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [isCredit, setIsCredit] = useState(false);
-  const [creditAuthPassword, setCreditAuthPassword] = useState('');
+  const [creditKeyOpen, setCreditKeyOpen] = useState(false); // modal de clave dinamica para autorizar el credito
   const [creditDays, setCreditDays] = useState(30);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -647,7 +647,8 @@ export default function POSPage() {
 
   function addToCart(product: any, authorizedNegative = false) {
     const stockQty = product.stock?.[0]?.quantity || 0;
-    const blockNoStock = companyConfig?.allowNegativeStock === false;
+    // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
+    const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
 
     // Bloquea sin stock SALVO que un supervisor lo haya autorizado (clave dinamica)
     if (blockNoStock && stockQty <= 0 && !authorizedNegative) return;
@@ -682,7 +683,7 @@ export default function POSPage() {
   // con stock -> al carrito. Mismo comportamiento que el listado desktop.
   function pickProduct(product: any) {
     const prodStock = product.stock?.[0]?.quantity || 0;
-    const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+    const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
     if (blockNoStock) {
       setLostSalePreset({ id: product.id, code: product.code, name: product.name });
       setShowLostSale(true);
@@ -994,10 +995,6 @@ export default function POSPage() {
       setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' });
       return;
     }
-    if (!creditAuthPassword) {
-      setMessage({ type: 'error', text: 'Debe ingresar la clave de autorizacion' });
-      return;
-    }
     setProcessing(true);
     setMessage(null);
     try {
@@ -1036,7 +1033,6 @@ export default function POSPage() {
         body: JSON.stringify({
           payments: [],
           isCredit: true,
-          creditAuthPassword,
           creditDays,
           cashRegisterId: selectedCashRegister?.id || undefined,
           negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
@@ -1093,7 +1089,6 @@ export default function POSPage() {
       setCart([]);
       setCustomerId(null);
       setCustomerName('');
-      setCreditAuthPassword('');
       setCreditModalOpen(false);
       setExistingInvoiceId(null);
       setMessage({ type: 'success', text: `Factura ${result.number} registrada a credito` });
@@ -1706,7 +1701,7 @@ export default function POSPage() {
                   const prodStock = product.stock?.[0]?.quantity || 0;
                   const reserved = reservedStock[product.id] || 0;
                   const available = prodStock - reserved;
-                  const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+                  const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
                   return (
                     <button
                       key={product.id}
@@ -2317,18 +2312,6 @@ export default function POSPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-slate-300 mb-1.5 block flex items-center gap-1.5">
-                    <Lock size={14} /> Clave de autorizacion
-                  </label>
-                  <input
-                    type="password"
-                    value={creditAuthPassword}
-                    onChange={e => setCreditAuthPassword(e.target.value)}
-                    className="input-field !py-3 md:!py-2"
-                    placeholder="Ingrese la clave de autorizacion"
-                  />
-                </div>
-                <div>
                   <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito</label>
                   <input
                     type="number"
@@ -2338,13 +2321,19 @@ export default function POSPage() {
                     min="1"
                   />
                 </div>
+                <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <Lock size={13} /> Al confirmar se pedira la clave de un supervisor para autorizar el credito.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button onClick={() => setCreditModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
-                  onClick={handleConfirmCredit}
-                  disabled={processing || !customerId || !creditAuthPassword}
+                  onClick={() => {
+                    if (!customerId) { setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' }); return; }
+                    setCreditKeyOpen(true);
+                  }}
+                  disabled={processing || !customerId}
                   className="!py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 transition-colors"
                 >
                   {processing ? <Loader2 className="animate-spin" size={16} /> : <CreditCard size={16} />}
@@ -2745,6 +2734,19 @@ export default function POSPage() {
         title="Autorizar venta sin stock"
         description={negKeyProduct ? `Clave de supervisor para agregar "${negKeyProduct.name}" sin stock` : 'Clave de supervisor'}
       />
+
+      {/* Autorizar venta a credito (clave de supervisor con permiso ALLOW_CREDIT_INVOICE) */}
+      <DynamicKeyModal
+        isOpen={creditKeyOpen}
+        onClose={() => setCreditKeyOpen(false)}
+        onAuthorized={() => { setCreditKeyOpen(false); handleConfirmCredit(); }}
+        permission="ALLOW_CREDIT_INVOICE"
+        action="Autorizar venta a credito"
+        entityType="Customer"
+        entityId={customerId || undefined}
+        title="Autorizar venta a credito"
+        description={customerName ? `Clave de supervisor para facturar a credito a "${customerName}"` : 'Clave de supervisor para venta a credito'}
+      />
     </>
   );
 
@@ -2854,7 +2856,7 @@ export default function POSPage() {
               const prodStock = product.stock?.[0]?.quantity || 0;
               const reserved = reservedStock[product.id] || 0;
               const available = prodStock - reserved;
-              const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0;
+              const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
               return (
               <button
                 key={product.id}
@@ -3192,7 +3194,7 @@ export default function POSPage() {
                     <DollarSign size={16} /> Cobrar
                   </button>
                   <button
-                    onClick={() => { setCreditAuthPassword(''); setCreditDays(30); setCreditModalOpen(true); }}
+                    onClick={() => { setCreditDays(30); setCreditModalOpen(true); }}
                     disabled={cart.length === 0 || processing}
                     className="!py-3 px-3 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
                     title="Facturar a credito"

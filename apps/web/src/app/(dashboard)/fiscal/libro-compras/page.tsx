@@ -381,14 +381,18 @@ export default function LibroComprasPage() {
     const fmtNum = (n: number) => n ? formatVe(n) : '';
     let rowNum = 0;
     const tableRows = entries.map((r) => {
-      // ISLR fuera del libro por ahora (decision del usuario)
+      // ISLR fuera del libro por ahora (decision del usuario): no genera fila ni consume numero
       if (r.isIslrRetentionLine) return '';
       const fecha = fmtFiscalDate(r.documentDate || r.entryDate);
+
+      // Toda fila que se imprime en el libro lleva su Nro. de operacion correlativo,
+      // incluidas las lineas de retencion IVA (antes salian sin numero).
+      rowNum++;
 
       // Fila de retencion IVA: repite proveedor y factura, muestra retencion + comprobante
       if (r.isRetentionLine) {
         return `<tr>
-          <td class="fit"></td>
+          <td class="fit">${rowNum}</td>
           <td class="fit">${fecha}</td>
           <td class="fit">${r.supplierRif || ''}</td>
           <td>${r.supplierName || ''}</td>
@@ -410,7 +414,6 @@ export default function LibroComprasPage() {
         </tr>`;
       }
 
-      rowNum++;
       const isNCC = r.documentType === 'NCC';
       const isNDC = r.documentType === 'NDC';
       const isFactura = !isNCC && !isNDC;
@@ -746,7 +749,7 @@ export default function LibroComprasPage() {
                         entry.isRetentionLine ? 'bg-purple-500/5' : entry.isIslrRetentionLine ? 'bg-amber-500/5' : ''
                       }`}>
                         <td className="px-2 py-2 text-slate-400">
-                          {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : i + 1 - entries.slice(0, i).filter(e => e.isRetentionLine || e.isIslrRetentionLine).length}
+                          {entry.isIslrRetentionLine ? '' : i + 1 - entries.slice(0, i).filter(e => e.isIslrRetentionLine).length}
                         </td>
                         <td className="px-2 py-2 text-slate-300" style={(entry.isRetentionLine || entry.isIslrRetentionLine) ? { fontSize: '10px' } : {}}>
                           {(entry.isRetentionLine || entry.isIslrRetentionLine) ? '' : fmtFiscalDate(entry.documentDate || entry.entryDate)}

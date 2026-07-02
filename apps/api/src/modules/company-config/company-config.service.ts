@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateCompanyConfigDto } from './dto/update-company-config.dto';
 import { IvaType } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -29,11 +28,6 @@ export class CompanyConfigService {
 
   async update(dto: UpdateCompanyConfigDto) {
     const data: any = { ...dto };
-
-    // Hash creditAuthPassword before saving
-    if (data.creditAuthPassword) {
-      data.creditAuthPassword = await bcrypt.hash(data.creditAuthPassword, 10);
-    }
 
     const bregaChanged = dto.bregaGlobalPct !== undefined;
 

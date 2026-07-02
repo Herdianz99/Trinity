@@ -2156,3 +2156,10 @@ CREATE INDEX IF NOT EXISTS "InvoiceItem_invoiceId_idx" ON "InvoiceItem"("invoice
 -- re-crea y evita que vuelva a faltar. Acelera Product.searchVector @@ tsquery.
 -- =============================================================================
 CREATE INDEX IF NOT EXISTS "Product_searchVector_idx" ON "Product" USING GIN ("searchVector");
+
+-- =============================================================================
+-- MODO DE COSTO DEL AJUSTE DE INVENTARIO (Session 101)
+-- Elige si el REPORTE del ajuste usa costo puro ('COST') o costo + brecha ('BREGA').
+-- 'BREGA' por defecto.
+-- =============================================================================
+ALTER TABLE "InventoryAdjustment" ADD COLUMN IF NOT EXISTS "costMode" TEXT NOT NULL DEFAULT 'BREGA';

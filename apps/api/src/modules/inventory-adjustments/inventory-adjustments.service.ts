@@ -42,6 +42,7 @@ export class InventoryAdjustmentsService {
       data: {
         warehouseId: dto.warehouseId,
         type: dto.type,
+        costMode: dto.costMode || 'BREGA',
         description: dto.description,
         customerId: dto.customerId || null,
         supplierId: dto.supplierId || null,

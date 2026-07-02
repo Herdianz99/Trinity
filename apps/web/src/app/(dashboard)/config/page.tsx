@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, Save, Loader2, Printer, Eye, EyeOff, Upload, Trash2, ImageIcon, Search, UserCheck, X, Stamp } from 'lucide-react';
+import { Settings, Save, Loader2, Printer, Upload, Trash2, ImageIcon, Search, UserCheck, X, Stamp } from 'lucide-react';
 
 interface CompanyConfig {
   companyName: string;
@@ -63,10 +63,6 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Credit auth password
-  const [creditAuthPassword, setCreditAuthPassword] = useState('');
-  const [showCreditPassword, setShowCreditPassword] = useState(false);
 
   // Exchange rate state
   const [todayRate, setTodayRate] = useState<{ rate: number; source: string } | null>(null);
@@ -274,7 +270,6 @@ export default function ConfigPage() {
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
           islrRetentionNextNumber: Number(config.islrRetentionNextNumber),
-          ...(creditAuthPassword ? { creditAuthPassword } : {}),
           ...(logoChanged ? { logo } : {}),
           ...(stampChanged ? { stampImage } : {}),
         }),
@@ -885,36 +880,6 @@ export default function ConfigPage() {
                   <p className="text-xs text-slate-500">Si esta desactivado, no se podran facturar productos con stock insuficiente</p>
                 </div>
               </label>
-            </div>
-          </div>
-
-          {/* Credit auth */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-white mb-2">Ventas a Credito</h2>
-            <p className="text-sm text-slate-400 mb-4">
-              Clave de autorizacion para aprobar ventas a credito desde el POS.
-            </p>
-            <div className="w-full md:w-80">
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                Clave de autorizacion
-              </label>
-              <div className="relative">
-                <input
-                  type={showCreditPassword ? 'text' : 'password'}
-                  value={creditAuthPassword}
-                  onChange={(e) => setCreditAuthPassword(e.target.value)}
-                  className="input-field pr-10"
-                  placeholder="Dejar vacio para no cambiar"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCreditPassword(!showCreditPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300"
-                >
-                  {showCreditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Se pedira esta clave al cajero cuando intente facturar a credito</p>
             </div>
           </div>
 

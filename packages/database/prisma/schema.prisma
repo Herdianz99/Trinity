@@ -624,6 +624,9 @@ model InventoryAdjustment {
   type          AdjustmentType
   status        AdjustmentStatus     @default(DRAFT)
   description   String?
+  // Costo usado en el REPORTE del ajuste: "COST" = costo puro, "BREGA" = costo + brecha global
+  // (solo a productos con bregaApplies). Elegido al crear el ajuste; "BREGA" por defecto.
+  costMode      String               @default("BREGA")
   customerId    String?
   customer      Customer?            @relation(fields: [customerId], references: [id])
   supplierId    String?

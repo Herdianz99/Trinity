@@ -20,7 +20,7 @@ export class InventoryAdjustmentsPdfService {
         items: {
           include: {
             product: {
-              select: { code: true, name: true, supplierRef: true, costUsd: true },
+              select: { code: true, name: true, supplierRef: true, costUsd: true, bregaApplies: true },
             },
           },
           orderBy: { product: { name: 'asc' } },
@@ -29,6 +29,22 @@ export class InventoryAdjustmentsPdfService {
     });
 
     if (!adjustment) throw new NotFoundException('Ajuste no encontrado');
+
+    // Modo de costo del reporte: 'BREGA' suma la brecha global a los productos con bregaApplies;
+    // 'COST' usa el costo puro. La brecha es la misma que se usa al calcular precios.
+    const useBrega = adjustment.costMode !== 'COST';
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { bregaGlobalPct: true },
+    });
+    const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
+    const effectiveCost = (p: { costUsd: number; bregaApplies: boolean }): number => {
+      const bregaPct = useBrega && p.bregaApplies ? bregaGlobalPct : 0;
+      return p.costUsd * (1 + bregaPct / 100);
+    };
+    const costModeLabel = useBrega
+      ? `Costo + Brecha (${bregaGlobalPct}%)`
+      : 'Costo';
 
     const typeLabel = adjustment.type === 'IN' ? 'Entrada' : 'Salida';
     const statusLabel =
@@ -52,7 +68,7 @@ export class InventoryAdjustmentsPdfService {
       let totalImporte = 0;
       let totalUnidades = 0;
       for (const item of adjustment.items) {
-        totalImporte += item.quantity * item.product.costUsd;
+        totalImporte += item.quantity * effectiveCost(item.product);
         totalUnidades += item.quantity;
       }
 
@@ -92,6 +108,7 @@ export class InventoryAdjustmentsPdfService {
           y += 14;
         }
         doc.text(`Total de productos: ${adjustment.items.length}`, 40, y);
+        doc.text(`Costo usado: ${costModeLabel}`, 350, y);
         y += 18;
         doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#999999');
         y += 8;
@@ -154,7 +171,8 @@ export class InventoryAdjustmentsPdfService {
             doc.fontSize(7.5).font('Helvetica');
           }
 
-          const importe = item.quantity * item.product.costUsd;
+          const unitCost = effectiveCost(item.product);
+          const importe = item.quantity * unitCost;
 
           doc.fillColor('#000000');
           doc.text(String(idx + 1), col.num, y, { width: colWidths.num, align: 'center' });
@@ -165,7 +183,7 @@ export class InventoryAdjustmentsPdfService {
             width: colWidths.qty,
             align: 'right',
           });
-          doc.text(`$${item.product.costUsd.toFixed(2)}`, col.cost, y, {
+          doc.text(`$${unitCost.toFixed(2)}`, col.cost, y, {
             width: colWidths.cost,
             align: 'right',
           });

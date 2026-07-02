@@ -45,11 +45,6 @@ export class PayInvoiceDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsString()
-  creditAuthPassword?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
   @IsNumber()
   creditDays?: number;
 

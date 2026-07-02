@@ -14,6 +14,7 @@ export default function NewInventoryAdjustmentPage() {
   const [suppliers, setSuppliers] = useState<Person[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState<'IN' | 'OUT'>('IN');
+  const [costMode, setCostMode] = useState<'COST' | 'BREGA'>('BREGA'); // costo del reporte: Brecha por defecto
   const [recipientType, setRecipientType] = useState<'' | 'customer' | 'supplier'>('');
   const [customerId, setCustomerId] = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -53,6 +54,7 @@ export default function NewInventoryAdjustmentPage() {
       const body: any = {
         warehouseId,
         type,
+        costMode,
         description: description || undefined,
       };
       if (recipientType === 'customer' && customerId) {
@@ -112,6 +114,38 @@ export default function NewInventoryAdjustmentPage() {
               <option value="IN">Entrada (agrega stock)</option>
               <option value="OUT">Salida (resta stock)</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Costo del reporte *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCostMode('COST')}
+                className={`!py-2.5 text-sm rounded-lg border transition-colors ${
+                  costMode === 'COST'
+                    ? 'border-green-500/50 bg-green-500/10 text-green-300 font-medium'
+                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                }`}
+              >
+                Costo
+              </button>
+              <button
+                type="button"
+                onClick={() => setCostMode('BREGA')}
+                className={`!py-2.5 text-sm rounded-lg border transition-colors ${
+                  costMode === 'BREGA'
+                    ? 'border-green-500/50 bg-green-500/10 text-green-300 font-medium'
+                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                }`}
+              >
+                Brecha
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {costMode === 'BREGA'
+                ? 'El reporte usara el costo + brecha (solo productos con brecha).'
+                : 'El reporte usara el costo puro, sin brecha.'}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Almacen *</label>
