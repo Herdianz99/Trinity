@@ -309,14 +309,95 @@ export class PayablesService {
           },
         });
 
-        // Update payable retention fields
-        await tx.payable.update({
-          where: { id: payable.id },
+        // NOTA: la retencion NO reduce el neto de la CxP. El neteo se hace en el recibo
+        // de pago seleccionando la CxP (+) y este comprobante (-). El neto queda = monto.
+      }
+
+      // Retencion ISLR inline (documento aparte, NO reduce el neto)
+      const islrBaseCurr = exemptBase + taxableBase8 + taxableBase16 + taxableBase31;
+      if (dto.createIslrRetention && dto.islrRetentionTypeId && isFiscal && userId && islrBaseCurr > 0) {
+        const tipo = await tx.islrRetentionType.findUnique({ where: { id: dto.islrRetentionTypeId } });
+        if (!tipo) throw new BadRequestException('Tipo de retencion ISLR no encontrado');
+
+        const valorUT = (config as any)?.unidadTributaria ?? 43;
+        const baseUsd = toUsd(islrBaseCurr);
+        const baseBs = toBs(islrBaseCurr);
+
+        let sustraendoBs = 0;
+        if (tipo.sustraendoUt > 0 && supplier.supplierType === 'NATURAL_RESIDENTE') {
+          sustraendoBs = Math.round(tipo.sustraendoUt * valorUT * 100) / 100;
+        }
+        const baseAjustadaBs = baseBs * (tipo.baseImponiblePct / 100);
+        const retBs = Math.max(0, Math.round((baseAjustadaBs * (tipo.retentionPct / 100) - sustraendoBs) * 100) / 100);
+        const baseAjustadaUsd = baseUsd * (tipo.baseImponiblePct / 100);
+        const sustraendoUsd = r > 0 ? Math.round((sustraendoBs / r) * 100) / 100 : 0;
+        const retUsd = Math.max(0, Math.round((baseAjustadaUsd * (tipo.retentionPct / 100) - sustraendoUsd) * 100) / 100);
+
+        const islrNext = (config as any)?.islrRetentionNextNumber || 1;
+        const now2 = new Date();
+        const yyyymm2 = `${now2.getFullYear()}${(now2.getMonth() + 1).toString().padStart(2, '0')}`;
+        const islrNumber = `${yyyymm2}${islrNext.toString().padStart(8, '0')}`;
+        await tx.companyConfig.update({
+          where: { id: 'singleton' },
+          data: { islrRetentionNextNumber: islrNext + 1 } as any,
+        });
+
+        const islrVoucher = await tx.islrRetentionVoucher.create({
           data: {
-            retentionUsd: retAmountUsd,
-            retentionBs: retAmountBs,
-            netPayableUsd: Math.round((amountUsd - retAmountUsd) * 100) / 100,
-            netPayableBs: Math.round((amountBs - retAmountBs) * 100) / 100,
+            number: islrNumber,
+            supplierId: dto.supplierId,
+            serieId: dto.serieId || null,
+            status: 'ISSUED',
+            issueDate: receptionDate || originalDate || new Date(),
+            retentionAmountUsd: retUsd,
+            retentionAmountBs: retBs,
+            exchangeRate: r,
+            unidadTributaria: valorUT,
+            notes: `Retencion ISLR sobre CxP ${number}`,
+            createdById: userId,
+            lines: {
+              create: {
+                payableId: payable.id,
+                islrRetentionTypeId: tipo.id,
+                supplierInvoiceNumber: dto.documentNumber || null,
+                supplierControlNumber: dto.controlFiscal || null,
+                invoiceDate: originalDate || new Date(),
+                invoiceTotalUsd: amountUsd,
+                invoiceTotalBs: amountBs,
+                taxableBaseUsd: baseUsd,
+                taxableBaseBs: baseBs,
+                baseImponiblePct: tipo.baseImponiblePct,
+                retentionPct: tipo.retentionPct,
+                sustraendoUt: tipo.sustraendoUt,
+                sustraendoBs,
+                retentionAmountUsd: retUsd,
+                retentionAmountBs: retBs,
+                exchangeRate: r,
+                isManual: false,
+              },
+            },
+          },
+        });
+
+        await tx.purchaseBookEntry.create({
+          data: {
+            islrRetentionVoucherId: islrVoucher.id,
+            islrRetentionVoucherNumber: islrNumber,
+            payableId: payable.id,
+            entryDate: receptionDate || originalDate || new Date(),
+            documentDate: originalDate || receptionDate || new Date(),
+            supplierControlNumber: dto.controlFiscal || null,
+            supplierInvoiceNumber: dto.documentNumber || number,
+            supplierName: supplier.name,
+            supplierRif: supplier.rif || '',
+            exemptAmountBs: 0,
+            taxableBaseBs: 0,
+            ivaAmountBs: 0,
+            islrRetentionAmountBs: retBs,
+            totalBs: -retBs,
+            isIslrRetentionLine: true,
+            isManual: true,
+            createdById: userId,
           },
         });
       }

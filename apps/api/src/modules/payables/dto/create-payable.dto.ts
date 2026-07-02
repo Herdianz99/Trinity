@@ -87,6 +87,15 @@ export class CreatePayableDto {
   @Min(0)
   retentionPct?: number;
 
+  // Retencion ISLR (crea IslrRetentionVoucher documento)
+  @IsOptional()
+  @IsBoolean()
+  createIslrRetention?: boolean;
+
+  @IsOptional()
+  @IsString()
+  islrRetentionTypeId?: string;
+
   @IsOptional()
   @IsString()
   description?: string;
