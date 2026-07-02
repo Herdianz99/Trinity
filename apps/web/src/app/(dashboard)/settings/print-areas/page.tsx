@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Printer, Plus, Edit2, Trash2, Loader2, X, ToggleLeft, ToggleRight
+  Printer, Plus, Edit2, Trash2, Loader2, X, ToggleLeft, ToggleRight, Star
 } from 'lucide-react';
 
 interface PrintArea {
@@ -10,6 +10,7 @@ interface PrintArea {
   name: string;
   description: string | null;
   isActive: boolean;
+  isDefault: boolean;
   _count: { categories: number };
   createdAt: string;
 }
@@ -106,6 +107,26 @@ export default function PrintAreasPage() {
     }
   }
 
+  async function handleSetDefault(area: PrintArea) {
+    if (area.isDefault) return;
+    try {
+      const res = await fetch(`/api/proxy/print-areas/${area.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (res.ok) {
+        fetchAreas();
+        setMessage({ type: 'success', text: `"${area.name}" es ahora el área por defecto` });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMessage({ type: 'error', text: err.message || 'Error al marcar por defecto' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error al marcar por defecto' });
+    }
+  }
+
   async function handleDelete(area: PrintArea) {
     if (area._count.categories > 0) {
       setMessage({ type: 'error', text: `No se puede eliminar "${area.name}" porque tiene ${area._count.categories} categoria(s) asignada(s)` });
@@ -172,7 +193,16 @@ export default function PrintAreasPage() {
                 </td></tr>
               ) : areas.map(area => (
                 <tr key={area.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors group">
-                  <td className="px-4 py-3 text-white font-medium">{area.name}</td>
+                  <td className="px-4 py-3 text-white font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {area.name}
+                      {area.isDefault && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <Star size={10} className="fill-amber-400" /> Por defecto
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-400 hidden md:table-cell">{area.description || '—'}</td>
                   <td className="px-4 py-3 text-center text-slate-400">{area._count.categories}</td>
                   <td className="px-4 py-3 text-center">
@@ -184,6 +214,18 @@ export default function PrintAreasPage() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleSetDefault(area)}
+                        disabled={area.isDefault}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          area.isDefault
+                            ? 'text-amber-400 cursor-default'
+                            : 'hover:bg-slate-700 text-slate-400 hover:text-amber-400'
+                        }`}
+                        title={area.isDefault ? 'Área por defecto' : 'Marcar como área por defecto'}
+                      >
+                        <Star size={14} className={area.isDefault ? 'fill-amber-400' : ''} />
+                      </button>
                       <button
                         onClick={() => handleToggleActive(area)}
                         className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
