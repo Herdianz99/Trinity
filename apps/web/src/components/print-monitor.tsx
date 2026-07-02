@@ -19,7 +19,11 @@ interface PrintJob {
   } | null;
   creditDebitNote?: {
     number: string;
-    invoice?: { number: string; customer?: { name: string } | null } | null;
+    invoice?: {
+      number: string;
+      customer?: { name: string } | null;
+      seller?: { name: string } | null;
+    } | null;
   } | null;
   printAreaId: string;
   printArea: { name: string };
@@ -97,7 +101,9 @@ export default function PrintMonitor() {
     const customerName = isReturn
       ? (job.creditDebitNote!.invoice?.customer?.name || 'Contado')
       : (job.invoice?.customer?.name || 'Contado');
-    const sellerName = isReturn ? '' : (job.invoice?.seller?.name || '');
+    const sellerName = isReturn
+      ? (job.creditDebitNote!.invoice?.seller?.name || '')
+      : (job.invoice?.seller?.name || '');
     const signLabel = isReturn ? 'Recibido por (firma)' : 'Despachado por (firma)';
 
     // Encabezado: titulo + zona destacada
@@ -357,8 +363,8 @@ export default function PrintMonitor() {
           {/* Cliente y vendedor (despacho los necesita) */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>
             <div>Cliente: {(currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.customer?.name : currentJob.invoice?.customer?.name) || 'Contado'}</div>
-            {!currentJob.creditDebitNote && currentJob.invoice?.seller?.name && (
-              <div>Vendedor: {currentJob.invoice.seller.name}</div>
+            {(currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.seller?.name : currentJob.invoice?.seller?.name) && (
+              <div>Vendedor: {currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.seller?.name : currentJob.invoice?.seller?.name}</div>
             )}
           </div>
 

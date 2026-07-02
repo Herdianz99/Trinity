@@ -30,6 +30,7 @@ export class PrintJobsService {
               select: {
                 number: true,
                 customer: { select: { name: true } },
+                seller: { select: { name: true } },
               },
             },
           },
