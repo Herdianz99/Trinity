@@ -109,12 +109,14 @@ export class ReceiptsService {
 
     // Build items
     const items: Array<{
-      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION' | 'SALES_IVA_RETENTION';
+      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION' | 'SALES_IVA_RETENTION' | 'PURCHASE_IVA_RETENTION' | 'PURCHASE_ISLR_RETENTION';
       receivableId?: string;
       payableId?: string;
       creditDebitNoteId?: string;
       ivaRetentionId?: string;
       customerIvaRetentionId?: string;
+      retentionVoucherId?: string;
+      islrRetentionVoucherId?: string;
       description: string;
       amountUsd: number;
       amountBsHistoric: number;
@@ -215,6 +217,36 @@ export class ReceiptsService {
           differentialBs: 0,
           sign: item.sign,
         });
+      } else if (item.retentionVoucherId) {
+        const v = await this.prisma.retentionVoucher.findUnique({ where: { id: item.retentionVoucherId } });
+        if (!v) throw new BadRequestException(`Retencion IVA ${item.retentionVoucherId} no encontrada`);
+        if (v.status !== 'ISSUED') throw new BadRequestException(`La retencion IVA ${v.number} no esta emitida`);
+        if (v.appliedAt) throw new BadRequestException(`La retencion IVA ${v.number} ya fue aplicada`);
+        items.push({
+          itemType: 'PURCHASE_IVA_RETENTION',
+          retentionVoucherId: item.retentionVoucherId,
+          description: `Ret. IVA ${v.number}`,
+          amountUsd: v.retentionAmountUsd,
+          amountBsHistoric: v.retentionAmountBs,
+          amountBsToday: this.round2(v.retentionAmountUsd * effectiveRate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
+      } else if (item.islrRetentionVoucherId) {
+        const v = await this.prisma.islrRetentionVoucher.findUnique({ where: { id: item.islrRetentionVoucherId } });
+        if (!v) throw new BadRequestException(`Retencion ISLR ${item.islrRetentionVoucherId} no encontrada`);
+        if (v.status !== 'ISSUED') throw new BadRequestException(`La retencion ISLR ${v.number} no esta emitida`);
+        if (v.appliedAt) throw new BadRequestException(`La retencion ISLR ${v.number} ya fue aplicada`);
+        items.push({
+          itemType: 'PURCHASE_ISLR_RETENTION',
+          islrRetentionVoucherId: item.islrRetentionVoucherId,
+          description: `Ret. ISLR ${v.number}`,
+          amountUsd: v.retentionAmountUsd,
+          amountBsHistoric: v.retentionAmountBs,
+          amountBsToday: this.round2(v.retentionAmountUsd * effectiveRate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
       } else if (item.customerIvaRetentionId) {
         const retention = await this.prisma.customerIvaRetention.findUnique({
           where: { id: item.customerIvaRetentionId },
@@ -307,6 +339,8 @@ export class ReceiptsService {
               creditDebitNoteId: item.creditDebitNoteId || null,
               ivaRetentionId: item.ivaRetentionId || null,
               customerIvaRetentionId: item.customerIvaRetentionId || null,
+              retentionVoucherId: item.retentionVoucherId || null,
+              islrRetentionVoucherId: item.islrRetentionVoucherId || null,
               description: item.description,
               amountUsd: item.amountUsd,
               amountBsHistoric: item.amountBsHistoric,
@@ -469,6 +503,10 @@ export class ReceiptsService {
             where: { id: item.customerIvaRetentionId },
             data: { appliedAt: new Date() },
           });
+        } else if (item.itemType === 'PURCHASE_IVA_RETENTION' && item.retentionVoucherId) {
+          await tx.retentionVoucher.update({ where: { id: item.retentionVoucherId }, data: { appliedAt: new Date() } });
+        } else if (item.itemType === 'PURCHASE_ISLR_RETENTION' && item.islrRetentionVoucherId) {
+          await tx.islrRetentionVoucher.update({ where: { id: item.islrRetentionVoucherId }, data: { appliedAt: new Date() } });
         }
         // DIFFERENTIAL items don't generate CxC/CxP movements
       }
@@ -645,31 +683,45 @@ export class ReceiptsService {
         sign: n.type === 'NCC' ? -1 : 1, // NCC reduces payable, NDC adds
       })).filter((n) => n.balanceUsd > 0.01);
 
-      // Fetch pending IVA retentions for this supplier
-      const ivaRetentions = await this.prisma.ivaRetention.findMany({
-        where: {
-          supplierId: query.entityId,
-          appliedAt: null,
-        },
-        include: {
-          purchaseOrder: { select: { number: true } },
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const retentionDocs = ivaRetentions.map((r) => ({
-        id: r.id,
-        documentType: 'IVA_RETENTION',
-        ivaRetentionId: r.id,
-        description: `Ret. IVA ${r.number} (${r.purchaseOrder?.number || ''})`,
-        date: r.createdAt,
-        amountUsd: r.retentionUsd,
-        amountBsHistoric: r.retentionBs,
-        exchangeRate: r.exchangeRate,
-        balanceUsd: r.retentionUsd,
-        status: 'POSTED',
-        sign: -1,
-      }));
+      // Comprobantes de retencion (IVA + ISLR) emitidos y no aplicados: documentos negativos
+      const [ivaVouchers, islrVouchers] = await Promise.all([
+        this.prisma.retentionVoucher.findMany({
+          where: { supplierId: query.entityId, status: 'ISSUED', appliedAt: null },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.islrRetentionVoucher.findMany({
+          where: { supplierId: query.entityId, status: 'ISSUED', appliedAt: null },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]);
+      const retentionDocs = [
+        ...ivaVouchers.map((v) => ({
+          id: v.id,
+          documentType: 'PURCHASE_IVA_RETENTION',
+          retentionVoucherId: v.id,
+          description: `Ret. IVA ${v.number}`,
+          date: v.createdAt,
+          amountUsd: v.retentionAmountUsd,
+          amountBsHistoric: v.retentionAmountBs,
+          exchangeRate: v.exchangeRate,
+          balanceUsd: v.retentionAmountUsd,
+          status: 'POSTED',
+          sign: -1,
+        })),
+        ...islrVouchers.map((v) => ({
+          id: v.id,
+          documentType: 'PURCHASE_ISLR_RETENTION',
+          islrRetentionVoucherId: v.id,
+          description: `Ret. ISLR ${v.number}`,
+          date: v.createdAt,
+          amountUsd: v.retentionAmountUsd,
+          amountBsHistoric: v.retentionAmountBs,
+          exchangeRate: v.exchangeRate,
+          balanceUsd: v.retentionAmountUsd,
+          status: 'POSTED',
+          sign: -1,
+        })),
+      ];
 
       return [...payableDocs, ...noteDocs, ...retentionDocs];
     }

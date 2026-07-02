@@ -22,6 +22,14 @@ class ReceiptItemDto {
   @IsString()
   customerIvaRetentionId?: string;
 
+  @IsOptional()
+  @IsString()
+  retentionVoucherId?: string;
+
+  @IsOptional()
+  @IsString()
+  islrRetentionVoucherId?: string;
+
   @IsNumber()
   @IsIn([1, -1])
   sign: number;
