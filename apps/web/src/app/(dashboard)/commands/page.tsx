@@ -10,8 +10,9 @@ interface PrintArea {
 
 interface PrintJob {
   id: string;
-  invoiceId: string;
-  invoice: { id: string; number: string | null };
+  invoiceId: string | null;
+  invoice: { id: string; number: string | null } | null;
+  creditDebitNote?: { id: string; number: string } | null;
   printArea: { id: string; name: string };
   status: 'PENDING' | 'PRINTING' | 'PRINTED' | 'FAILED';
   items: { code: string; name: string; quantity: number }[];
@@ -99,7 +100,7 @@ export default function CommandsPage() {
 
   async function handleReprint(job: PrintJob) {
     const ok = window.confirm(
-      `Reimprimir la factura ${job.invoice.number || 'S/N'}? Se enviara a todas sus zonas.`,
+      `Reimprimir la factura ${job.invoice?.number || 'S/N'}? Se enviara a todas sus zonas.`,
     );
     if (!ok) return;
 
@@ -223,23 +224,36 @@ export default function CommandsPage() {
                         <p className="text-[11px] text-red-400/80 mt-1">{job.failureReason}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium text-white">{job.invoice.number || 'S/N'}</td>
+                    <td className="px-4 py-3 font-medium text-white">
+                      {job.creditDebitNote ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {job.creditDebitNote.number}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">DEVOL.</span>
+                        </span>
+                      ) : (
+                        job.invoice?.number || 'S/N'
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-300">{job.printArea.name}</td>
                     <td className="px-4 py-3 text-slate-300">{job.items.length} reng. / {units} und.</td>
                     <td className="px-4 py-3 text-slate-400">{formatTime(job.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleReprint(job)}
-                        disabled={reprinting === job.invoiceId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {reprinting === job.invoiceId ? (
-                          <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
-                        ) : (
-                          <RotateCw size={13} />
-                        )}
-                        Reimprimir
-                      </button>
+                      {job.invoiceId ? (
+                        <button
+                          onClick={() => handleReprint(job)}
+                          disabled={reprinting === job.invoiceId}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {reprinting === job.invoiceId ? (
+                            <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                          ) : (
+                            <RotateCw size={13} />
+                          )}
+                          Reimprimir
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-500">—</span>
+                      )}
                     </td>
                   </tr>
                 );
