@@ -45,6 +45,15 @@ export default function NewPayablePage() {
 
   const [createRetention, setCreateRetention] = useState(false);
   const [retentionPct, setRetentionPct] = useState(75);
+  const [createIslr, setCreateIslr] = useState(false);
+  const [islrTypeId, setIslrTypeId] = useState('');
+  const [islrTypes, setIslrTypes] = useState<{ id: string; codigo: number; descripcion: string; retentionPct: number }[]>([]);
+  useEffect(() => {
+    fetch('/api/proxy/islr-retention-types?active=true')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setIslrTypes(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
 
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
@@ -152,6 +161,7 @@ export default function NewPayablePage() {
       if (taxableBase31 > 0) body.taxableBase31 = taxableBase31;
       if (igtfPct > 0) body.igtfPct = igtfPct;
       if (createRetention && isFiscal) { body.createRetention = true; body.retentionPct = retentionPct; }
+      if (createIslr && isFiscal && islrTypeId) { body.createIslrRetention = true; body.islrRetentionTypeId = islrTypeId; }
       if (description.trim()) body.description = description.trim();
       if (notes.trim()) body.notes = notes.trim();
 
@@ -428,6 +438,24 @@ export default function NewPayablePage() {
                   )}
                 </div>
               )}
+
+              <div className="mt-4 pt-3 border-t border-slate-700/50">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={createIslr} onChange={e => setCreateIslr(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 text-orange-500 focus:ring-orange-500" />
+                  <span className="text-xs font-medium text-slate-300">Crear retencion ISLR</span>
+                </label>
+                {createIslr && (
+                  <select value={islrTypeId} onChange={e => setIslrTypeId(e.target.value)}
+                    className="input-field !py-1 text-xs mt-2 w-full">
+                    <option value="">Selecciona concepto ISLR…</option>
+                    {islrTypes.map(t => (
+                      <option key={t.id} value={t.id}>{t.codigo} - {t.descripcion} ({t.retentionPct}%)</option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1.5">La retencion es un documento aparte; no descuenta el neto de la CxP (se netea en el recibo de pago).</p>
+              </div>
             </div>
           )}
 
