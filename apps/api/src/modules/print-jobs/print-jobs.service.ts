@@ -151,4 +151,45 @@ export class PrintJobsService {
 
     return { zones: originals.length };
   }
+
+  /**
+   * Reimprime TODAS las comandas de una nota de crédito (devolución). Igual que
+   * reprintByInvoice pero por `creditDebitNoteId`: por cada zona toma la comanda
+   * más reciente y crea un clon nuevo (isReprint=true, status=PENDING).
+   */
+  async reprintByNote(creditDebitNoteId: string): Promise<{ zones: number }> {
+    const jobs = await this.prisma.printJob.findMany({
+      where: { creditDebitNoteId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (jobs.length === 0) {
+      throw new NotFoundException('Esta nota no tiene comandas');
+    }
+
+    // Una comanda (la más reciente) por zona
+    const byArea = new Map<string, (typeof jobs)[number]>();
+    for (const job of jobs) {
+      if (!byArea.has(job.printAreaId)) byArea.set(job.printAreaId, job);
+    }
+
+    const originals = Array.from(byArea.values());
+
+    await this.prisma.$transaction(
+      originals.map((job) =>
+        this.prisma.printJob.create({
+          data: {
+            creditDebitNoteId: job.creditDebitNoteId,
+            printAreaId: job.printAreaId,
+            items: job.items as any,
+            isReprint: true,
+            reprintOfId: job.id,
+            status: 'PENDING',
+          },
+        }),
+      ),
+    );
+
+    return { zones: originals.length };
+  }
 }

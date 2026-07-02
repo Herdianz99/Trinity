@@ -49,4 +49,9 @@ export class PrintJobsController {
   reprint(@Param('invoiceId') invoiceId: string) {
     return this.service.reprintByInvoice(invoiceId);
   }
+
+  @Post('reprint-note/:noteId')
+  reprintNote(@Param('noteId') noteId: string) {
+    return this.service.reprintByNote(noteId);
+  }
 }

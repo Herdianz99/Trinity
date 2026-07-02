@@ -99,14 +99,20 @@ export default function CommandsPage() {
   }, [toast]);
 
   async function handleReprint(job: PrintJob) {
-    const ok = window.confirm(
-      `Reimprimir la factura ${job.invoice?.number || 'S/N'}? Se enviara a todas sus zonas.`,
-    );
+    const isNote = !!job.creditDebitNote;
+    const label = isNote
+      ? `la devolucion ${job.creditDebitNote!.number}`
+      : `la factura ${job.invoice?.number || 'S/N'}`;
+    const ok = window.confirm(`Reimprimir ${label}? Se enviara a todas sus zonas.`);
     if (!ok) return;
 
-    setReprinting(job.invoiceId);
+    const key = job.invoiceId ?? job.creditDebitNote?.id ?? null;
+    const url = isNote
+      ? `/api/proxy/print-jobs/reprint-note/${job.creditDebitNote!.id}`
+      : `/api/proxy/print-jobs/reprint/${job.invoiceId}`;
+    setReprinting(key);
     try {
-      const res = await fetch(`/api/proxy/print-jobs/reprint/${job.invoiceId}`, {
+      const res = await fetch(url, {
         method: 'POST',
       });
       if (res.ok) {
@@ -209,6 +215,7 @@ export default function CommandsPage() {
               {jobs.map((job) => {
                 const meta = STATUS_META[job.status];
                 const units = job.items.reduce((s, i) => s + (i.quantity || 0), 0);
+                const reprintKey = job.invoiceId ?? job.creditDebitNote?.id ?? null;
                 return (
                   <tr key={job.id} className="border-b border-slate-800 hover:bg-slate-800/40">
                     <td className="px-4 py-3">
@@ -238,13 +245,13 @@ export default function CommandsPage() {
                     <td className="px-4 py-3 text-slate-300">{job.items.length} reng. / {units} und.</td>
                     <td className="px-4 py-3 text-slate-400">{formatTime(job.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
-                      {job.invoiceId ? (
+                      {reprintKey ? (
                         <button
                           onClick={() => handleReprint(job)}
-                          disabled={reprinting === job.invoiceId}
+                          disabled={reprinting === reprintKey}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {reprinting === job.invoiceId ? (
+                          {reprinting === reprintKey ? (
                             <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
                           ) : (
                             <RotateCw size={13} />
