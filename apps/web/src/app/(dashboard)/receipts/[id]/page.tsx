@@ -410,6 +410,8 @@ export default function ReceiptDetailPage() {
                             item.itemType === 'DEBIT_NOTE' ? 'bg-purple-500/20 text-purple-400' :
                             item.itemType === 'IVA_RETENTION' ? 'bg-indigo-500/20 text-indigo-400' :
                             item.itemType === 'SALES_IVA_RETENTION' ? 'bg-purple-500/20 text-purple-400' :
+                            item.itemType === 'PURCHASE_IVA_RETENTION' ? 'bg-indigo-500/20 text-indigo-400' :
+                            item.itemType === 'PURCHASE_ISLR_RETENTION' ? 'bg-orange-500/20 text-orange-400' :
                             'bg-amber-500/20 text-amber-400'
                           }`}>
                             {item.itemType === 'RECEIVABLE' ? 'CxC' :
@@ -418,6 +420,8 @@ export default function ReceiptDetailPage() {
                              item.itemType === 'DEBIT_NOTE' ? 'Nota Débito' :
                              item.itemType === 'IVA_RETENTION' ? 'Ret. IVA' :
                              item.itemType === 'SALES_IVA_RETENTION' ? 'Ret. IVA Cliente' :
+                             item.itemType === 'PURCHASE_IVA_RETENTION' ? 'Ret. IVA' :
+                             item.itemType === 'PURCHASE_ISLR_RETENTION' ? 'Ret. ISLR' :
                              'Diferencial'}
                           </span>
                         </td>
