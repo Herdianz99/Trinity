@@ -1,20 +1,19 @@
 ﻿# Trinity ERP — Progreso
 
-## ⏳ PENDIENTE DE DEPLOY — Sesiones 98 a 102 (2026-07-01)
+## ✅ DEPLOY a PRODUCCION — 2026-07-01 — commit `f5ef0aa`
 
-Cinco cambios hechos en local (copia de prod), **sin desplegar todavia**. Probados con typecheck 0 errores.
+Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por SSH: health `ok` + `database: ok`, PM2 (`trinity-api`/`trinity-web`) online y estable, migracion `20260701170000_adjustment_cost_mode` aplicada y columna `InventoryAdjustment.costMode` presente (default 'BREGA'). **Clave de credito confirmada**: la clave dinamica "admi" (activa) tiene el permiso `ALLOW_CREDIT_INVOICE`, asi que la venta a credito (S99) sigue funcionando tras quitar la clave de Configuracion. Sin incidentes.
 
-**Requisito ANTES de desplegar (S99, critico):** debe existir al menos **una clave dinamica ACTIVA con permiso "Facturar a credito" (`ALLOW_CREDIT_INVOICE`)** en `/settings/dynamic-keys`, porque el crédito deja de usar la clave de Configuracion y ya no hay fallback. En la copia de prod ya existe la clave "admi" con ese permiso — **confirmar en prod** y avisar a los supervisores cual es la clave.
+- **Pendiente de avisar al equipo:** la clave de Configuracion de crédito dejo de servir; los supervisores autorizan crédito con la clave dinamica "admi" (o la que definan en `/settings/dynamic-keys`).
+- **Verificaciones rapidas del cliente en prod:** flete a una factura sin autorizacion (S98); credito con clave dinamica + log en `/settings/dynamic-keys` (S99); libro de compras PDF con retenciones numeradas sin huecos (S100); ajuste con toggle Costo/Brecha y su PDF (S101); modal de precios de compra con Brecha/Sin IVA + teclear decimales con punto (S102).
 
-**Schema (S101):** migracion `20260701170000_adjustment_cost_mode` (ADD COLUMN IF NOT EXISTS) + linea en `deploy/fix-schema.sql`. Columna nueva `InventoryAdjustment.costMode` (default 'BREGA').
-
-## Sesion 102 (2026-07-01) — Compras: modal de precios con Brecha/Sin IVA + fix del punto decimal (NO DESPLEGADA)
+## Sesion 102 (2026-07-01) — Compras: modal de precios con Brecha/Sin IVA + fix del punto decimal (DESPLEGADA 2026-07-01)
 
 > Dos pedidos de Diego sobre el modal "Actualizar precios" al procesar una compra (`purchases/[id]/page.tsx`, solo frontend).
 - **Columnas Brecha y Sin IVA (solo lectura)**: se quitaron las 3 columnas de Mayor (*P. Actual Mayor · Gan.% Mayor · P. Nuevo Mayor*) y se agregaron **Brecha** (% aplicado al costo, `—` si no lleva) y **Sin IVA** (precio de venta sin IVA = `P. Nuevo Detal ÷ ivaMultiplier`), ordenadas en el orden de la formula: `Costo nuevo → Brecha → Gan.% Detal → Sin IVA → P. Nuevo Detal`. Se movio "P. Actual Detal" junto a "Costo ant." para que la cadena quede contigua. Usa datos que el backend ya enviaba (`bregaPct`, `ivaMultiplier`); sin backend ni schema. El precio **mayor** se sigue recalculando solo (con su ganancia actual) al procesar.
 - **Fix punto decimal**: los inputs Gan.% Detal y P. Nuevo Detal eran `type=number` con valor numerico; al teclear "30." el navegador devolvia "" y `Number('')=0` borraba lo escrito. Ahora son `type=text` + `inputMode=decimal` con un estado `rawEdits` que guarda el texto crudo mientras se calcula el numero por detras (helper `sanitizeDecimal`: solo digitos y un punto). Editar un campo refresca el texto del otro; `rawEdits` se resetea al abrir el modal.
 
-## Sesion 101 (2026-07-01) — Ajustes de inventario: elegir costo (Costo / Brecha) para el reporte (NO DESPLEGADA)
+## Sesion 101 (2026-07-01) — Ajustes de inventario: elegir costo (Costo / Brecha) para el reporte (DESPLEGADA 2026-07-01)
 
 > Pedido de Diego: al crear un ajuste en `/inventory/adjustments/new`, poder elegir con que costo salen los articulos en el reporte: costo puro o costo + brecha. Toggle con **Brecha preseleccionado**.
 - **Schema**: `InventoryAdjustment.costMode String @default("BREGA")` ('COST' | 'BREGA'). Migracion `20260701170000_adjustment_cost_mode` + `fix-schema.sql`.
@@ -22,14 +21,14 @@ Cinco cambios hechos en local (copia de prod), **sin desplegar todavia**. Probad
 - **Frontend** (`adjustments/new/page.tsx`): toggle Costo/Brecha (Brecha por defecto) + nota; envia `costMode`.
 - **Alcance intencional**: solo afecta el **reporte**. El costo del StockMovement al procesar sigue siendo el costo puro (no altera valuacion de inventario). API + Web typecheck 0 errores.
 
-## Sesion 100 (2026-07-01) — Libro de compras: numerar TODAS las filas del PDF (incl. retenciones IVA) (NO DESPLEGADA)
+## Sesion 100 (2026-07-01) — Libro de compras: numerar TODAS las filas del PDF (incl. retenciones IVA) (DESPLEGADA 2026-07-01)
 
 > Bug reportado por Diego: en el PDF del libro de compras, la columna "Oper. Nro." dejaba **en blanco** las filas de retencion y la fila siguiente tomaba el numero que seguia. Cada fila del libro debe llevar su numero correlativo.
 - **Causa raiz** (`fiscal/libro-compras/page.tsx`): `rowNum++` se hacia solo en las filas de factura; la rama de retencion IVA retornaba antes con la celda vacia.
 - **Fix**: se movio `rowNum++` al inicio del loop para que **toda fila que se imprime** (factura + retencion IVA) reciba su numero. Se aplico lo mismo a la tabla en pantalla (preview) para que coincida con el PDF.
 - **Respetado a proposito**: las lineas **ISLR** siguen sin numero (estan "fuera del libro por ahora", `return ''`, no generan fila ni consumen numero). Solo frontend, Web typecheck 0 errores.
 
-## Sesion 99 (2026-07-01) — Venta a credito con clave dinamica + auditoria (y quitada de Configuracion) (NO DESPLEGADA)
+## Sesion 99 (2026-07-01) — Venta a credito con clave dinamica + auditoria (y quitada de Configuracion) (DESPLEGADA 2026-07-01)
 
 > Pedido de Diego (opcion B): que el credito use las claves dinamicas de `/settings/dynamic-keys` (con log de quien autorizo) en vez de la clave de Configuracion, y eliminar esa clave de la Configuracion de empresa. `ALLOW_CREDIT_INVOICE` existia en el enum y en la UI de claves pero **no estaba conectada a nada** (opcion muerta); ahora si.
 - **Backend** (`invoices.service` pay): eliminada la validacion contra `config.creditAuthPassword`. El credito es ahora *frontend-gated* por la clave dinamica (mismo patron que `SELL_NEGATIVE_STOCK`, sin re-validar clave en el backend); se conservo el chequeo de limite de credito del cliente. Removido el import muerto de `bcrypt`. `pay-invoice.dto` pierde `creditAuthPassword`.
@@ -37,7 +36,7 @@ Cinco cambios hechos en local (copia de prod), **sin desplegar todavia**. Probad
 - **Frontend POS** (`sales/pos/page.tsx`): el modal de credito ya no pide contraseña de texto; "Confirmar credito" abre el `DynamicKeyModal` con permiso `ALLOW_CREDIT_INVOICE` (entityType Customer). Al autorizar, se procesa el credito y queda log en `DynamicKeyLog` (trazabilidad que antes no existia).
 - **Frontend config** (`config/page.tsx`): eliminada la tarjeta "Ventas a Credito" + su estado/imports (`Eye/EyeOff`). API + Web typecheck 0 errores.
 
-## Sesion 98 (2026-07-01) — POS: los articulos de servicio no piden autorizacion de stock negativo (NO DESPLEGADA)
+## Sesion 98 (2026-07-01) — POS: los articulos de servicio no piden autorizacion de stock negativo (DESPLEGADA 2026-07-01)
 
 > Bug reportado por Diego tras la S92: con "Permitir ventas sin stock" apagado, los articulos de **servicio** (FLETE, RECUPERACION DE GASTOS...) pedian clave de supervisor porque no manejan inventario (siempre "sin stock"), asi que un vendedor no podia meter un flete a la factura.
 - **Frontend** (`sales/pos/page.tsx`): el bloqueo `blockNoStock` ahora exige ademas `!product.isService` en los 4 puntos (`addToCart`, `pickProduct`, grid desktop, lista de resultados). Un servicio ya no muestra "Sin stock · Autorizar" ni pide clave. Los productos fisicos siguen igual.
