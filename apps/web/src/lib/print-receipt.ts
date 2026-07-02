@@ -313,17 +313,23 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
     return `${label}${' '.repeat(space)}${value}`;
   };
 
-  // Header
-  lines.push(`{{CENTER}}{{BIG}}${company.companyName || 'EMPRESA'}{{/BIG}}{{/CENTER}}`);
-  if (company.rif) lines.push(`{{CENTER}}RIF: ${company.rif}{{/CENTER}}`);
-  if (company.address) lines.push(`{{CENTER}}${company.address}{{/CENTER}}`);
-  if (company.phone) lines.push(`{{CENTER}}Telf: ${company.phone}{{/CENTER}}`);
+  // Centrado por espacios: la tickera ignora el comando de alineacion ESC a ({{CENTER}}),
+  // pero SI respeta los espacios (igual que pad() con los totales). Asi el encabezado
+  // queda centrado en cualquier impresora, sin depender de ESC a.
+  const center = (text: string) =>
+    text.length >= w ? text : ' '.repeat(Math.floor((w - text.length) / 2)) + text;
+
+  // Header — nombre en negrita tamaño normal (sin {{BIG}}) para que centre limpio y no se parta
+  lines.push(`{{BOLD}}${center(company.companyName || 'EMPRESA')}{{/BOLD}}`);
+  if (company.rif) lines.push(center(`RIF: ${company.rif}`));
+  if (company.address) lines.push(center(company.address));
+  if (company.phone) lines.push(center(`Telf: ${company.phone}`));
   lines.push('{{LINE}}');
 
   // Invoice info
-  lines.push(`{{CENTER}}{{BOLD}}FACTURA: ${invoice.number || 'S/N'}{{/BOLD}}{{/CENTER}}`);
-  lines.push(`{{CENTER}}${fmtDate(invoice.paidAt || invoice.createdAt)}{{/CENTER}}`);
-  if (cashRegister) lines.push(`{{CENTER}}Caja: ${cashRegister.name || cashRegister.code}{{/CENTER}}`);
+  lines.push(`{{BOLD}}${center(`FACTURA: ${invoice.number || 'S/N'}`)}{{/BOLD}}`);
+  lines.push(center(fmtDate(invoice.paidAt || invoice.createdAt)));
+  if (cashRegister) lines.push(center(`Caja: ${cashRegister.name || cashRegister.code}`));
   lines.push('{{LINE}}');
 
   // Seller / Cashier / Customer
@@ -350,7 +356,7 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   // Total (IVA incluido). IGTF aparte solo si aplica.
   if (calc.igtf > 0) lines.push(pad('IGTF:', `${curFmt(cur, calc.igtf)} ${sym}`));
   lines.push(`{{BOLD}}${pad(`TOTAL ${sym}:`, curFmt(cur, calc.total))}{{/BOLD}}`);
-  if (exchangeRate > 0) lines.push(`{{CENTER}}Tasa: ${fmtRate4(exchangeRate)} Bs/USD{{/CENTER}}`);
+  if (exchangeRate > 0) lines.push(center(`Tasa: ${fmtRate4(exchangeRate)} Bs/USD`));
   lines.push('{{LINE}}');
 
   // Forma de pago (en la moneda elegida)
@@ -378,14 +384,14 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
   // Credito
   if (isCredit) {
     lines.push('{{LINE}}');
-    lines.push('{{CENTER}}{{BOLD}}*** VENTA A CREDITO ***{{/BOLD}}{{/CENTER}}');
-    if (invoice.creditDays) lines.push(`{{CENTER}}Plazo: ${invoice.creditDays} dias{{/CENTER}}`);
-    if (invoice.dueDate) lines.push(`{{CENTER}}Vence: ${fmtDate(invoice.dueDate)}{{/CENTER}}`);
+    lines.push(`{{BOLD}}${center('*** VENTA A CREDITO ***')}{{/BOLD}}`);
+    if (invoice.creditDays) lines.push(center(`Plazo: ${invoice.creditDays} dias`));
+    if (invoice.dueDate) lines.push(center(`Vence: ${fmtDate(invoice.dueDate)}`));
   }
 
   lines.push('{{LINE}}');
-  lines.push('{{CENTER}}Gracias por su compra{{/CENTER}}');
-  lines.push('{{CENTER}}*** No constituye factura fiscal ***{{/CENTER}}');
+  lines.push(center('Gracias por su compra'));
+  lines.push(center('*** No constituye factura fiscal ***'));
   lines.push('{{FEED:3}}');
   lines.push('{{CUT}}');
 
