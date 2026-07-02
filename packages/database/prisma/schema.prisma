@@ -203,6 +203,8 @@ enum ReceiptItemType {
   DEBIT_NOTE
   IVA_RETENTION
   SALES_IVA_RETENTION
+  PURCHASE_IVA_RETENTION
+  PURCHASE_ISLR_RETENTION
 }
 
 enum DynamicKeyPerm {
@@ -1257,6 +1259,7 @@ model Payable {
   paymentScheduleItems   PaymentScheduleItem[]
   purchaseBookEntries    PurchaseBookEntry[]
   retentionVoucherLines  RetentionVoucherLine[]
+  islrRetentionVoucherLines IslrRetentionVoucherLine[]
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 }
@@ -1323,6 +1326,10 @@ model ReceiptItem {
   ivaRetention      IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
   customerIvaRetentionId String?
   customerIvaRetention   CustomerIvaRetention? @relation(fields: [customerIvaRetentionId], references: [id])
+  retentionVoucherId     String?
+  retentionVoucher       RetentionVoucher?     @relation(fields: [retentionVoucherId], references: [id])
+  islrRetentionVoucherId String?
+  islrRetentionVoucher   IslrRetentionVoucher? @relation(fields: [islrRetentionVoucherId], references: [id])
   description       String
   amountUsd         Float            @default(0)
   amountBsHistoric  Float            @default(0)
@@ -1696,6 +1703,8 @@ model RetentionVoucher {
   notes              String?
   lines              RetentionVoucherLine[]
   bookEntries        PurchaseBookEntry[]
+  appliedAt          DateTime?
+  receiptItems       ReceiptItem[]
   createdById        String
   createdBy          User                   @relation("RetentionVoucherCreator", fields: [createdById], references: [id])
   createdAt          DateTime               @default(now())
@@ -1876,6 +1885,8 @@ model IslrRetentionVoucher {
   notes              String?
   lines              IslrRetentionVoucherLine[]
   bookEntries        PurchaseBookEntry[]
+  appliedAt          DateTime?
+  receiptItems       ReceiptItem[]
   createdById        String
   createdBy          User                         @relation("IslrRetentionVoucherCreator", fields: [createdById], references: [id])
   createdAt          DateTime                     @default(now())
@@ -1888,6 +1899,8 @@ model IslrRetentionVoucherLine {
   islrRetentionVoucher     IslrRetentionVoucher  @relation(fields: [islrRetentionVoucherId], references: [id], onDelete: Cascade)
   purchaseOrderId          String?
   purchaseOrder            PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  payableId                String?
+  payable                  Payable?              @relation(fields: [payableId], references: [id])
   islrRetentionTypeId      String
   islrRetentionType        IslrRetentionType     @relation(fields: [islrRetentionTypeId], references: [id])
   supplierInvoiceNumber    String?

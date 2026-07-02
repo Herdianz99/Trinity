@@ -2187,3 +2187,31 @@ END $$;
 ALTER TABLE "CreditDebitNote" ADD COLUMN IF NOT EXISTS "comandasProcessedAt" TIMESTAMP(3);
 ALTER TABLE "CreditDebitNote" ADD COLUMN IF NOT EXISTS "comandasProcessedById" TEXT;
 ALTER TABLE "PrintArea" ADD COLUMN IF NOT EXISTS "isDefault" BOOLEAN NOT NULL DEFAULT false;
+
+-- =============================================================================
+-- RETENCIONES SOBRE CUENTAS POR PAGAR (Session 106)
+-- Comprobantes de retencion (IVA/ISLR) seleccionables en el recibo de pago.
+-- NOTA: el UPDATE de "marcar aplicados los viejos" va SOLO en la migracion, NO aqui.
+-- =============================================================================
+ALTER TABLE "ReceiptItem" ADD COLUMN IF NOT EXISTS "retentionVoucherId" TEXT;
+ALTER TABLE "ReceiptItem" ADD COLUMN IF NOT EXISTS "islrRetentionVoucherId" TEXT;
+ALTER TABLE "IslrRetentionVoucherLine" ADD COLUMN IF NOT EXISTS "payableId" TEXT;
+ALTER TABLE "RetentionVoucher" ADD COLUMN IF NOT EXISTS "appliedAt" TIMESTAMP(3);
+ALTER TABLE "IslrRetentionVoucher" ADD COLUMN IF NOT EXISTS "appliedAt" TIMESTAMP(3);
+ALTER TYPE "ReceiptItemType" ADD VALUE IF NOT EXISTS 'PURCHASE_IVA_RETENTION';
+ALTER TYPE "ReceiptItemType" ADD VALUE IF NOT EXISTS 'PURCHASE_ISLR_RETENTION';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'ReceiptItem_retentionVoucherId_fkey') THEN
+    ALTER TABLE "ReceiptItem" ADD CONSTRAINT "ReceiptItem_retentionVoucherId_fkey"
+      FOREIGN KEY ("retentionVoucherId") REFERENCES "RetentionVoucher"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'ReceiptItem_islrRetentionVoucherId_fkey') THEN
+    ALTER TABLE "ReceiptItem" ADD CONSTRAINT "ReceiptItem_islrRetentionVoucherId_fkey"
+      FOREIGN KEY ("islrRetentionVoucherId") REFERENCES "IslrRetentionVoucher"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'IslrRetentionVoucherLine_payableId_fkey') THEN
+    ALTER TABLE "IslrRetentionVoucherLine" ADD CONSTRAINT "IslrRetentionVoucherLine_payableId_fkey"
+      FOREIGN KEY ("payableId") REFERENCES "Payable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
