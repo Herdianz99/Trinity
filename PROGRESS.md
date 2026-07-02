@@ -17,7 +17,8 @@ Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por S
 - **Recibo de pago** (`receipts.service`): `create` acepta items `retentionVoucherId`/`islrRetentionVoucherId` (valida EMITIDO+no-aplicado, signo −1); `post` marca `appliedAt`; `getPendingDocuments` (pago) reemplaza el modelo muerto `IvaRetention` por los comprobantes `RetentionVoucher`/`IslrRetentionVoucher` emitidos y no aplicados. El total netea con `sign`.
 - **Libro de compras**: sin cambios (ya era generico por `payableId`/`purchaseOrderId` y `isRetentionLine`/`isIslrRetentionLine`).
 - **Desviaciones del plan**: `cancel` del recibo no revierte `appliedAt` (solo opera en borradores, que no aplican nada — igual que el codigo actual). El `update` de los comprobantes standalone aun no soporta lineas por CxP (el flujo primario es crear+emitir; editar un comprobante con CxP daria error, no corrompe).
-- API typecheck 0 errores; API bootea con las rutas `available-documents` mapeadas. **Pendiente**: Plan 2 (frontend) + prueba funcional end-to-end + deploy.
+- **Frontend (Plan 2) LISTO** (`docs/superpowers/plans/2026-07-02-retenciones-cxp-frontend.md`): pantallas `retentions/new` e `islr-retentions/new` listan FC+CxP mezcladas (badge FC/CxP, submit por `payableId`/`purchaseOrderId`); formulario `payables/new` con toggle "Crear retencion ISLR" + concepto (aclara que no reduce el neto); `receipts/new` pasa `retentionVoucherId`/`islrRetentionVoucherId` y etiqueta los tipos nuevos (Ret. IVA / Ret. ISLR); `receipts/[id]` etiqueta los itemTypes nuevos. El detalle de CxP ya degrada bien (retencion 0 -> no muestra, neto = monto). `receipts/payment` solo enlaza a `receipts/new`.
+- API + Web typecheck 0 errores; API bootea con rutas `available-documents`. **Pendiente**: prueba funcional end-to-end en la UI y **deploy** (backend + frontend juntos).
 
 ## Sesion 105 (2026-07-02) — Recibo de venta del agente: centrar encabezado por espacios (PENDIENTE DEPLOY)
 
