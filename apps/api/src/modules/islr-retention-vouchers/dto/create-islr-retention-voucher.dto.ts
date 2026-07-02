@@ -2,8 +2,13 @@ import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, IsBoolean } fr
 import { Type } from 'class-transformer';
 
 export class CreateIslrRetentionVoucherLineDto {
+  @IsOptional()
   @IsString()
-  purchaseOrderId: string;
+  purchaseOrderId?: string;
+
+  @IsOptional()
+  @IsString()
+  payableId?: string;
 
   @IsString()
   islrRetentionTypeId: string;

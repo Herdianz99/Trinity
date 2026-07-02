@@ -36,6 +36,12 @@ export class IslrRetentionVouchersService {
             supplierInvoiceNumber: true,
           },
         },
+        payable: {
+          select: {
+            id: true, number: true, documentNumber: true, originalDate: true,
+            amountUsd: true, amountBs: true, exchangeRate: true, controlFiscal: true,
+          },
+        },
         islrRetentionType: {
           select: {
             id: true,
@@ -120,55 +126,40 @@ export class IslrRetentionVouchersService {
     });
     const valorUT = config?.unidadTributaria ?? 43;
 
-    // Validate all POs
-    const poIds = dto.lines.map((l) => l.purchaseOrderId);
-    const orders = await this.prisma.purchaseOrder.findMany({
-      where: { id: { in: poIds } },
-      select: {
-        id: true,
-        number: true,
-        supplierId: true,
-        status: true,
-        subtotalUsd: true,
-        subtotalBs: true,
-        totalUsd: true,
-        totalBs: true,
-        exchangeRate: true,
-        invoiceDate: true,
-        supplierControlNumber: true,
-        supplierInvoiceNumber: true,
-      },
-    });
-
-    if (orders.length !== poIds.length) {
-      throw new BadRequestException('Una o más facturas no existen');
-    }
-
-    for (const po of orders) {
-      if (po.supplierId !== dto.supplierId) {
-        throw new BadRequestException(
-          `La factura ${po.number} no pertenece al proveedor seleccionado`,
-        );
+    // Resolver cada linea a un documento: FC (base = subtotal sin IVA) o CxP (base = exento+gravables)
+    const resolved = await Promise.all(dto.lines.map(async (l) => {
+      if (l.purchaseOrderId) {
+        const po = await this.prisma.purchaseOrder.findUnique({ where: { id: l.purchaseOrderId } });
+        if (!po) throw new BadRequestException('Factura de compra no encontrada');
+        if (po.supplierId !== dto.supplierId) throw new BadRequestException(`La factura ${po.number} no pertenece al proveedor seleccionado`);
+        if (po.status !== 'PROCESSED') throw new BadRequestException(`La factura ${po.number} no está procesada`);
+        return { line: l, kind: 'PO' as const, id: po.id, baseUsd: po.subtotalUsd, baseBs: po.subtotalBs, totalUsd: po.totalUsd, totalBs: po.totalBs, exchangeRate: po.exchangeRate, invoiceDate: po.invoiceDate, controlNumber: po.supplierControlNumber, invoiceNumber: po.supplierInvoiceNumber };
       }
-      if (po.status !== 'PROCESSED') {
-        throw new BadRequestException(
-          `La factura ${po.number} no está procesada`,
-        );
+      if (l.payableId) {
+        const p = await this.prisma.payable.findUnique({ where: { id: l.payableId } });
+        if (!p) throw new BadRequestException('Cuenta por pagar no encontrada');
+        if (p.supplierId !== dto.supplierId) throw new BadRequestException(`La CxP ${p.number} no pertenece al proveedor seleccionado`);
+        const baseUsd = round2(p.exemptBaseUsd + p.taxableBase8Usd + p.taxableBase16Usd + p.taxableBase31Usd);
+        const baseBs = round2(p.exemptBaseBs + p.taxableBase8Bs + p.taxableBase16Bs + p.taxableBase31Bs);
+        return { line: l, kind: 'PAY' as const, id: p.id, baseUsd, baseBs, totalUsd: p.amountUsd, totalBs: p.amountBs, exchangeRate: p.exchangeRate, invoiceDate: p.originalDate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
       }
-    }
+      throw new BadRequestException('Cada linea debe referir una factura de compra o una CxP');
+    }));
 
-    // Check no PO is already in another active ISLR voucher
+    // No duplicar en un comprobante ISLR activo (FC o CxP)
+    const poIds = resolved.filter((rr) => rr.kind === 'PO').map((rr) => rr.id);
+    const payIds = resolved.filter((rr) => rr.kind === 'PAY').map((rr) => rr.id);
     const existingLines = await this.prisma.islrRetentionVoucherLine.findMany({
       where: {
-        purchaseOrderId: { in: poIds },
         islrRetentionVoucher: { status: { not: 'CANCELLED' } },
+        OR: [{ purchaseOrderId: { in: poIds } }, { payableId: { in: payIds } }],
       },
-      select: { purchaseOrderId: true, islrRetentionVoucher: { select: { number: true } } },
+      select: { islrRetentionVoucher: { select: { number: true } } },
     });
     if (existingLines.length > 0) {
       const nums = existingLines.map((l) => l.islrRetentionVoucher.number).join(', ');
       throw new BadRequestException(
-        `Algunas facturas ya tienen retención ISLR activa: ${nums}`,
+        `Algunos documentos ya tienen retención ISLR activa: ${nums}`,
       );
     }
 
@@ -192,28 +183,26 @@ export class IslrRetentionVouchersService {
       let totalRetBs = 0;
       let headerExchangeRate = 0;
 
-      const ordersMap = new Map(orders.map((o) => [o.id, o]));
       const lineData: any[] = [];
 
-      for (const lineDto of dto.lines) {
-        const po = ordersMap.get(lineDto.purchaseOrderId)!;
-        const tipo = typesMap.get(lineDto.islrRetentionTypeId)!;
-        const isManual = lineDto.isManual ?? false;
+      for (const rdoc of resolved) {
+        const tipo = typesMap.get(rdoc.line.islrRetentionTypeId)!;
+        const isManual = rdoc.line.isManual ?? false;
 
-        // Base imponible = subtotal (sin IVA)
-        const taxableBaseUsd = po.subtotalUsd;
-        const taxableBaseBs = po.subtotalBs;
+        // Base imponible = subtotal sin IVA (FC: subtotal; CxP: exento + gravables)
+        const taxableBaseUsd = rdoc.baseUsd;
+        const taxableBaseBs = rdoc.baseBs;
 
         let retUsd: number;
         let retBs: number;
         let sustraendoBs = 0;
 
-        if (isManual && lineDto.retentionAmountUsd != null) {
-          retUsd = round2(lineDto.retentionAmountUsd);
+        if (isManual && rdoc.line.retentionAmountUsd != null) {
+          retUsd = round2(rdoc.line.retentionAmountUsd);
           retBs =
-            lineDto.retentionAmountBs != null
-              ? round2(lineDto.retentionAmountBs)
-              : round2(retUsd * po.exchangeRate);
+            rdoc.line.retentionAmountBs != null
+              ? round2(rdoc.line.retentionAmountBs)
+              : round2(retUsd * rdoc.exchangeRate);
         } else {
           // Formula: ret = (base * baseImponiblePct/100 * retentionPct/100) - sustraendo
           const baseAjustadaBs = taxableBaseBs * (tipo.baseImponiblePct / 100);
@@ -225,25 +214,25 @@ export class IslrRetentionVouchersService {
 
           retBs = Math.max(0, round2(retencionBrutaBs - sustraendoBs));
 
-          // Calculate USD equivalent
           const baseAjustadaUsd = taxableBaseUsd * (tipo.baseImponiblePct / 100);
           const retencionBrutaUsd = baseAjustadaUsd * (tipo.retentionPct / 100);
-          const sustraendoUsd = po.exchangeRate > 0 ? round2(sustraendoBs / po.exchangeRate) : 0;
+          const sustraendoUsd = rdoc.exchangeRate > 0 ? round2(sustraendoBs / rdoc.exchangeRate) : 0;
           retUsd = Math.max(0, round2(retencionBrutaUsd - sustraendoUsd));
         }
 
         totalRetUsd += retUsd;
         totalRetBs += retBs;
-        if (!headerExchangeRate) headerExchangeRate = po.exchangeRate;
+        if (!headerExchangeRate) headerExchangeRate = rdoc.exchangeRate;
 
         lineData.push({
-          purchaseOrderId: po.id,
+          purchaseOrderId: rdoc.kind === 'PO' ? rdoc.id : null,
+          payableId: rdoc.kind === 'PAY' ? rdoc.id : null,
           islrRetentionTypeId: tipo.id,
-          supplierInvoiceNumber: po.supplierInvoiceNumber,
-          supplierControlNumber: po.supplierControlNumber,
-          invoiceDate: po.invoiceDate,
-          invoiceTotalUsd: po.totalUsd,
-          invoiceTotalBs: po.totalBs,
+          supplierInvoiceNumber: rdoc.invoiceNumber,
+          supplierControlNumber: rdoc.controlNumber,
+          invoiceDate: rdoc.invoiceDate,
+          invoiceTotalUsd: rdoc.totalUsd,
+          invoiceTotalBs: rdoc.totalBs,
           taxableBaseUsd,
           taxableBaseBs,
           baseImponiblePct: tipo.baseImponiblePct,
@@ -252,7 +241,7 @@ export class IslrRetentionVouchersService {
           sustraendoBs,
           retentionAmountUsd: retUsd,
           retentionAmountBs: retBs,
-          exchangeRate: po.exchangeRate,
+          exchangeRate: rdoc.exchangeRate,
           isManual,
         });
       }
@@ -468,7 +457,8 @@ export class IslrRetentionVouchersService {
       for (const line of updated.lines) {
         await tx.purchaseBookEntry.create({
           data: {
-            purchaseOrderId: line.purchaseOrderId,
+            purchaseOrderId: line.purchaseOrderId || null,
+            payableId: line.payableId || null,
             entryDate: issueDateObj,
             supplierControlNumber: line.supplierControlNumber || null,
             supplierInvoiceNumber: line.supplierInvoiceNumber || null,
@@ -552,6 +542,40 @@ export class IslrRetentionVouchersService {
     ]);
 
     return { orders, defaultConceptId: supplier?.islrConceptId || null };
+  }
+
+  /** FCs procesadas + CxP fiscales con base sin IVA, sin retencion ISLR activa. */
+  async getAvailableDocuments(supplierId: string) {
+    const usedLines = await this.prisma.islrRetentionVoucherLine.findMany({
+      where: { islrRetentionVoucher: { supplierId, status: { not: 'CANCELLED' } } },
+      select: { purchaseOrderId: true, payableId: true },
+    });
+    const usedPo = usedLines.map((l) => l.purchaseOrderId).filter((x): x is string => !!x);
+    const usedPay = usedLines.map((l) => l.payableId).filter((x): x is string => !!x);
+
+    const [orders, payables, supplier] = await Promise.all([
+      this.prisma.purchaseOrder.findMany({
+        where: { supplierId, status: 'PROCESSED', subtotalUsd: { gt: 0 }, ...(usedPo.length ? { id: { notIn: usedPo } } : {}) },
+        select: { id: true, number: true, invoiceDate: true, subtotalUsd: true, subtotalBs: true, totalUsd: true, totalBs: true, exchangeRate: true, supplierControlNumber: true, supplierInvoiceNumber: true },
+        orderBy: { invoiceDate: 'desc' },
+      }),
+      this.prisma.payable.findMany({
+        where: { supplierId, serie: { isFiscal: true }, ...(usedPay.length ? { id: { notIn: usedPay } } : {}) },
+        select: { id: true, number: true, documentNumber: true, originalDate: true, exemptBaseUsd: true, exemptBaseBs: true, taxableBase8Usd: true, taxableBase8Bs: true, taxableBase16Usd: true, taxableBase16Bs: true, taxableBase31Usd: true, taxableBase31Bs: true, amountUsd: true, amountBs: true, exchangeRate: true, controlFiscal: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.supplier.findUnique({ where: { id: supplierId }, select: { islrConceptId: true } }),
+    ]);
+
+    const docs = [
+      ...orders.map((o) => ({ docType: 'PURCHASE_ORDER' as const, id: o.id, number: o.number, invoiceDate: o.invoiceDate, baseUsd: o.subtotalUsd, baseBs: o.subtotalBs, totalUsd: o.totalUsd, totalBs: o.totalBs, exchangeRate: o.exchangeRate, controlNumber: o.supplierControlNumber, invoiceNumber: o.supplierInvoiceNumber })),
+      ...payables.map((p) => {
+        const baseUsd = round2(p.exemptBaseUsd + p.taxableBase8Usd + p.taxableBase16Usd + p.taxableBase31Usd);
+        const baseBs = round2(p.exemptBaseBs + p.taxableBase8Bs + p.taxableBase16Bs + p.taxableBase31Bs);
+        return { docType: 'PAYABLE' as const, id: p.id, number: p.documentNumber || p.number, invoiceDate: p.originalDate, baseUsd, baseBs, totalUsd: p.amountUsd, totalBs: p.amountBs, exchangeRate: p.exchangeRate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
+      }).filter((p) => p.baseUsd > 0),
+    ];
+    return { documents: docs, defaultConceptId: supplier?.islrConceptId || null };
   }
 
   // Generate next ISLR retention number: YYYYMM + 8-digit global sequence
