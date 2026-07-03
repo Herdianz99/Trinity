@@ -581,16 +581,15 @@ export class IslrRetentionVouchersService {
     return { documents: docs, defaultConceptId: supplier?.islrConceptId || null };
   }
 
-  // Generate next ISLR retention number: YYYYMM + 8-digit global sequence
+  // Numero de retencion ISLR: secuencia "pelada" (ej. 24, 25, 26...). A diferencia del
+  // comprobante de IVA, el de ISLR no exige el formato AAAAMM+consecutivo del SENIAT.
   async generateNumber(tx: any): Promise<{ number: string; nextSeq: number }> {
-    const now = new Date();
-    const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const config = await tx.companyConfig.findUnique({
       where: { id: 'singleton' },
     });
     const seq = config?.islrRetentionNextNumber || 1;
     return {
-      number: `${prefix}${String(seq).padStart(8, '0')}`,
+      number: `${seq}`,
       nextSeq: seq + 1,
     };
   }

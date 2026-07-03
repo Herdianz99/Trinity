@@ -336,9 +336,9 @@ export class PayablesService {
         const retUsd = Math.max(0, Math.round((baseAjustadaUsd * (tipo.retentionPct / 100) - sustraendoUsd) * 100) / 100);
 
         const islrNext = (config as any)?.islrRetentionNextNumber || 1;
-        const now2 = new Date();
-        const yyyymm2 = `${now2.getFullYear()}${(now2.getMonth() + 1).toString().padStart(2, '0')}`;
-        const islrNumber = `${yyyymm2}${islrNext.toString().padStart(8, '0')}`;
+        // Numero de retencion ISLR: secuencia "pelada". A diferencia del comprobante de IVA,
+        // el de ISLR no exige el formato AAAAMM+consecutivo del SENIAT.
+        const islrNumber = `${islrNext}`;
         await tx.companyConfig.update({
           where: { id: 'singleton' },
           data: { islrRetentionNextNumber: islrNext + 1 } as any,
