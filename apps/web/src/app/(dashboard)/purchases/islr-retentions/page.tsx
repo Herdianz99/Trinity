@@ -11,7 +11,8 @@ import {
 
 interface IslrVoucherLine {
   id: string;
-  purchaseOrderId: string;
+  purchaseOrderId: string | null;
+  payableId?: string | null;
   supplierInvoiceNumber: string | null;
   supplierControlNumber: string | null;
   invoiceDate: string | null;
@@ -30,7 +31,12 @@ interface IslrVoucherLine {
     id: string;
     number: string;
     purchaseNumber: number;
-  };
+  } | null;
+  payable?: {
+    id: string;
+    number: string | null;
+    documentNumber: string | null;
+  } | null;
   islrRetentionType: {
     id: string;
     codigo: number;
@@ -290,9 +296,9 @@ export default function IslrRetentionsPage() {
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col gap-0.5">
                         {v.lines.slice(0, 3).map((line) => (
-                          <a key={line.id} href={`/purchases/${line.purchaseOrder.id}`}
+                          <a key={line.id} href={line.purchaseOrder ? `/purchases/${line.purchaseOrder.id}` : `/payables/${line.payableId}`}
                             className="text-blue-400 hover:text-blue-300 font-mono text-xs">
-                            {line.purchaseOrder.number}
+                            {line.purchaseOrder ? line.purchaseOrder.number : (line.payable?.documentNumber || line.payable?.number || 'CxP')}
                           </a>
                         ))}
                         {v.lines.length > 3 && (
@@ -497,9 +503,9 @@ export default function IslrRetentionsPage() {
                       {detailModal.lines.map((line) => (
                         <tr key={line.id} className="border-b border-slate-700/20">
                           <td className="px-3 py-2">
-                            <a href={`/purchases/${line.purchaseOrder.id}`}
+                            <a href={line.purchaseOrder ? `/purchases/${line.purchaseOrder.id}` : `/payables/${line.payableId}`}
                               className="text-blue-400 hover:text-blue-300 font-mono">
-                              {line.purchaseOrder.number}
+                              {line.purchaseOrder ? line.purchaseOrder.number : (line.payable?.documentNumber || line.payable?.number || 'CxP')}
                             </a>
                             <div className="text-slate-600">{fmtDate(line.invoiceDate)}</div>
                           </td>
