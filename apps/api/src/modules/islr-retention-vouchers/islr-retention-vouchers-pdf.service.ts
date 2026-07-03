@@ -15,7 +15,10 @@ function fmtPct(n: number): string {
 function fmtDate(d: Date | string | null): string {
   if (!d) return '';
   const date = new Date(d);
-  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  // Campos date-only (invoiceDate, issueDate) se guardan a medianoche UTC. Formatear con
+  // getters UTC para que el dia salga correcto sin importar el timezone del servidor
+  // (prod corre en UTC, pero en un server UTC-4 los getters locales mostrarian el dia anterior).
+  return `${date.getUTCDate().toString().padStart(2, '0')}/${(date.getUTCMonth() + 1).toString().padStart(2, '0')}/${date.getUTCFullYear()}`;
 }
 
 function fmtHora(d: Date): string {
