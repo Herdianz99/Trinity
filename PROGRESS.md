@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ DEPLOY a PRODUCCION — 2026-07-02 — commit `b9973c4`
+
+Desplegadas las **Sesiones 103 a 106** (deploy hecho por Diego, sin incidentes). Migraciones aplicadas: `20260702170000_return_comandas` (comandas de devolucion) y `20260702190000_retenciones_cxp` (retenciones sobre CxP). Los **86 tipos de retencion ISLR** se cargaron en prod aparte (SQL upsert por SSH, la tabla estaba en 0).
+
+- **Verificaciones del cliente en prod:** (S104) devolucion NCV -> "Procesar comandas" saca comandas a las areas + marcar un area por defecto en Config; (S105) recibo de venta del agente con encabezado centrado; (S106) CxP con retencion IVA+ISLR como documentos -> recibo de pago neteando los 3 documentos -> libro de compras; retenciones ISLR sobre CxP viejas por `/purchases/islr-retentions`.
+- **Recordatorio de convivencia (S106):** las CxP **viejas** ya tienen el neto reducido por IVA (y su comprobante quedo marcado "aplicado" para no doble-descontar en el recibo); las **nuevas** van a monto completo con la retencion como documento aparte. Ambas netean bien al pagar.
+- **Pendiente de probar (S103):** boton "Leer ultimo Z (U0Z)" en la caja fiscal (solo lectura) para calibrar el reporte Z.
+
 ## ✅ DEPLOY a PRODUCCION — 2026-07-01 — commit `f5ef0aa`
 
 Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por SSH: health `ok` + `database: ok`, PM2 (`trinity-api`/`trinity-web`) online y estable, migracion `20260701170000_adjustment_cost_mode` aplicada y columna `InventoryAdjustment.costMode` presente (default 'BREGA'). **Clave de credito confirmada**: la clave dinamica "admi" (activa) tiene el permiso `ALLOW_CREDIT_INVOICE`, asi que la venta a credito (S99) sigue funcionando tras quitar la clave de Configuracion. Sin incidentes.
@@ -7,7 +15,7 @@ Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por S
 - **Pendiente de avisar al equipo:** la clave de Configuracion de crédito dejo de servir; los supervisores autorizan crédito con la clave dinamica "admi" (o la que definan en `/settings/dynamic-keys`).
 - **Verificaciones rapidas del cliente en prod:** flete a una factura sin autorizacion (S98); credito con clave dinamica + log en `/settings/dynamic-keys` (S99); libro de compras PDF con retenciones numeradas sin huecos (S100); ajuste con toggle Costo/Brecha y su PDF (S101); modal de precios de compra con Brecha/Sin IVA + teclear decimales con punto (S102).
 
-## Sesion 106 (2026-07-02) — Retenciones (IVA+ISLR) sobre CxP: BACKEND (Plan 1) (FRONTEND pendiente / PENDIENTE DEPLOY)
+## Sesion 106 (2026-07-02) — Retenciones (IVA+ISLR) sobre CxP como documentos del recibo (DESPLEGADA 2026-07-02)
 
 > Las cuentas por pagar (facturas "solo montos") ahora pueden tener retencion de IVA **e ISLR** como **documentos aparte** (comprobantes), no como un dato que resta el neto. El neteo se hace en el **recibo de pago** seleccionando la CxP (+) y las retenciones (−). Spec: `docs/superpowers/specs/2026-07-02-retenciones-cxp-design.md`; plan: `docs/superpowers/plans/2026-07-02-retenciones-cxp-backend.md`. **Este commit es solo BACKEND (Plan 1)**; el frontend (formularios/pantallas/recibo) es el Plan 2.
 
@@ -20,14 +28,14 @@ Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por S
 - **Frontend (Plan 2) LISTO** (`docs/superpowers/plans/2026-07-02-retenciones-cxp-frontend.md`): pantallas `retentions/new` e `islr-retentions/new` listan FC+CxP mezcladas (badge FC/CxP, submit por `payableId`/`purchaseOrderId`); formulario `payables/new` con toggle "Crear retencion ISLR" + concepto (aclara que no reduce el neto); `receipts/new` pasa `retentionVoucherId`/`islrRetentionVoucherId` y etiqueta los tipos nuevos (Ret. IVA / Ret. ISLR); `receipts/[id]` etiqueta los itemTypes nuevos. El detalle de CxP ya degrada bien (retencion 0 -> no muestra, neto = monto). `receipts/payment` solo enlaza a `receipts/new`.
 - API + Web typecheck 0 errores; API bootea con rutas `available-documents`. **Pendiente**: prueba funcional end-to-end en la UI y **deploy** (backend + frontend juntos).
 
-## Sesion 105 (2026-07-02) — Recibo de venta del agente: centrar encabezado por espacios (PENDIENTE DEPLOY)
+## Sesion 105 (2026-07-02) — Recibo de venta del agente: centrar encabezado por espacios (DESPLEGADA 2026-07-02)
 
 > Diego prefiere el recibo del navegador (window.print, centrado) sobre el del agente (ESC/POS, que salia TODO a la izquierda con el nombre de empresa gigante y partido). Foto real de produccion confirmo la causa: **la tickera obedece el comando de TAMAÑO (`GS !`) pero IGNORA el de ALINEACION (`ESC a`)** — por eso `{{BIG}}` funciona pero `{{CENTER}}` no hace nada. El codigo y el agente SI soportan CENTER; es la impresora la que lo ignora (comun en termicas economicas).
 - **Fix** (`apps/web/src/lib/print-receipt.ts`, solo `buildReceiptText`): se centra el encabezado/pie **con espacios** (helper `center()` al ancho 42, el mismo que ya usa `pad()` para los totales de items — mecanismo ya probado en la misma tickera), en vez de depender de `{{CENTER}}`. Se quito `{{BIG}}` del nombre de la empresa (queda negrita tamaño normal, centra limpio y no se parte). Se centran: empresa, RIF, Telf, FACTURA, fecha, Caja, Tasa, "VENTA A CREDITO"/Plazo/Vence y el pie. Se quitaron los `{{CENTER}}` de esas lineas para no doble-centrar en impresoras que SI respeten ESC a.
 - **Seguro y portable**: los espacios son caracteres normales (cero riesgo de firmware); funciona igual en impresoras que ignoran o respetan la alineacion. La direccion, si es >42, sigue a la izquierda/envuelta (no cabe centrada).
 - **Sin tocar** la comanda (print-monitor) ni el recibo de devolucion — se puede aplicar el mismo centrado ahi si se quiere. Solo web, deploy normal (NO requiere reinstalar el agente). Web typecheck 0 errores. Preview en `recibo-nuevo-agente.pdf` (mockup); la prueba real es en la tickera tras deploy.
 
-## Sesion 104 (2026-07-02) — Comandas de devolucion (NCV) (PENDIENTE DEPLOY / prueba en despacho)
+## Sesion 104 (2026-07-02) — Comandas de devolucion (NCV) (DESPLEGADA 2026-07-02 / probar en despacho)
 
 > Pedido de Diego: que las devoluciones de cliente (NCV mercancia) generen comandas a las areas de despacho como soporte de lo que ENTRA, **aparte** de la impresion fiscal de la NC (que NO se toco). El vendedor crea la nota y se equivoca (borra/recrea); por eso las comandas NO salen al crear: hay un paso nuevo y separado **"Procesar comandas"** que exige la nota **confirmada (POSTED)** y que **bloquea el borrado** una vez procesada. Spec: `docs/superpowers/specs/2026-07-02-comandas-devoluciones-design.md`; plan: `docs/superpowers/plans/2026-07-02-comandas-devoluciones.md`.
 
@@ -39,7 +47,7 @@ Desplegadas las **Sesiones 98 a 102** (deploy hecho por Diego). Verificado por S
 - **Sin tocar**: impresion fiscal de la NC (`sendToFiscalPrinter`) ni recibo de devolucion al cliente (`printReturnReceipt`). Quedan afuera (deferidos): unificar el render agente vs navegador (Tema 1), comandas para NCC/compras.
 - API + Web typecheck 0 errores; probado a nivel UI en local. **Pendiente**: (1) **deploy** (trae migracion `20260702170000_return_comandas` — el `deploy.sh` la aplica); (2) **marcar un area por defecto** (⭐ en Config → Areas de Impresion) tras desplegar — es lo que garantiza que toda comanda salga por algun lado; (3) prueba real de impresion en despacho (tickera 80mm).
 
-## Sesion 103 (2026-07-02) — Maquina fiscal: boton de lectura U0Z (ultimo Z, solo lectura) para calibrar offsets (PENDIENTE PROBAR)
+## Sesion 103 (2026-07-02) — Maquina fiscal: boton de lectura U0Z (ultimo Z, solo lectura) para calibrar offsets (DESPLEGADA 2026-07-02 — PENDIENTE PROBAR en caja)
 
 > El "Reporte Z + Libro" (S84) no guarda bien: lee `U0X` (acumuladores VIVOS) ANTES de cerrar con offsets **adivinados** (el codigo admite "require calibration with a real printer"). Idea de Diego: la factura/NC obtiene sus valores con una **lectura posterior** (`S1` despues de imprimir), no del comando de impresion. Analogia correcta -> mejor diseño: cerrar con `I0Z` (confiable) y **leer despues** el Z ya cerrado. Paso previo: poder **leer sin cerrar ni imprimir** para calibrar posiciones contra el manual.
 
