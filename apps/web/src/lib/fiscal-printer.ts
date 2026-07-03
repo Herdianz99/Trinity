@@ -492,7 +492,21 @@ class SerialIO {
         this.pending.shift();
         break;
       }
-      // Descarta ruido / bytes sueltos (ACK/NAK/etc) hasta encontrar un STX
+      // La impresora pide "adelante" con ENQ antes de volcar el reporte -> responder ACK
+      // para completar el handshake (los comandos de lectura S1/SV usan el mismo ENQ/ACK).
+      if (this.pending[0] === ENQ) {
+        this.pending.shift();
+        await this.write(new Uint8Array([ACK]));
+        continue;
+      }
+      // NAK = la impresora rechazo el comando -> abortar con mensaje claro (no esperar timeout)
+      if (this.pending[0] === NAK) {
+        this.pending.shift();
+        throw new Error(
+          `La impresora rechazó el comando de lectura de reporte (NAK). RAW hasta aqui: ${hex(rawAll)}`,
+        );
+      }
+      // Descarta ruido / bytes sueltos hasta encontrar un STX
       if (this.pending[0] !== STX) {
         this.pending.shift();
         continue;
