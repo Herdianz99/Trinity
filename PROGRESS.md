@@ -28,7 +28,7 @@ El cliente quiere montar la empresa grande el lunes. Se preparo un **preview com
   - **Metodos de pago (33)** en grupos con codigo fiscal: **DIVISA**(20: BINANCE/DOLAR/ZELLE), **Punto de Venta**(02, 10 bancos), **Transferencia**(03, 7), **Pago Movil**(04, 8); sueltos EFECTIVO(01), BIOPAGO(05), DESC Y RETEN(07), CASHEA(08), CREDIAGRO(09).
 - **Estrategia go-live:** entrenar en el sandbox local (serie NO fiscal, data desechable) — NUNCA en produccion (las facturas fiscales no se deshacen). Cargar data REAL final el **domingo PM** (sin movimientos), preservando la config. El import del domingo debe ser modo **"conserva config"** (upsert categorias/proveedores por nombre, recarga solo productos/stock).
 - **Scripts de trabajo (untracked):** `packages/database/prisma/_import-grande.ts`, `_cat-codes.ts`, `_pay-methods.ts`, `_pm-*.ts`; `apps/api/_analyze-excel.js`, `_reports-excel.js`. Reportes: `REPORTE-duplicados.xlsx` (115 nombres), `REPORTE-sin-precio-huerfanos.xlsx`.
-- **Pendiente:** usuarios reales (20-40), RIF de proveedores, costo de 391 productos, revisar duplicados, agentes+impresoras fiscales por caja, tasa de cambio diaria, decidir/comprar servidor, dump local -> restore al servidor.
+- **Pendiente:** usuarios reales (20-40); **arreglar bien los datos de los 87 proveedores** (hoy solo el nombre — falta RIF, telefono, direccion, tipo, agente de retencion, concepto ISLR); costo de 391 productos; revisar duplicados; agentes+impresoras fiscales por caja; tasa de cambio diaria; decidir/comprar servidor; dump local -> restore al servidor.
 
 ## ✅ DEPLOY a PRODUCCION — 2026-07-02 — commit `b9973c4`
 
