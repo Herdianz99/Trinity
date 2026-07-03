@@ -314,7 +314,9 @@ export class PayablesService {
       }
 
       // Retencion ISLR inline (documento aparte, NO reduce el neto)
-      const islrBaseCurr = exemptBase + taxableBase8 + taxableBase16 + taxableBase31;
+      // Base imponible ISLR = solo bases gravables (sin exento ni IVA). El exento no es
+      // ingreso del proveedor por el concepto (ej. valor nominal de tickets de alimentacion).
+      const islrBaseCurr = taxableBase8 + taxableBase16 + taxableBase31;
       if (dto.createIslrRetention && dto.islrRetentionTypeId && isFiscal && userId && islrBaseCurr > 0) {
         const tipo = await tx.islrRetentionType.findUnique({ where: { id: dto.islrRetentionTypeId } });
         if (!tipo) throw new BadRequestException('Tipo de retencion ISLR no encontrado');
