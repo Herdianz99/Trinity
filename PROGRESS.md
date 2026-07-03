@@ -1,5 +1,35 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ DEPLOY a PRODUCCION — 2026-07-03 — commits `fd83f43` → `d294fda`
+
+Desplegada la **Sesion 107** (deploy hecho por Diego, sin incidentes). Solo codigo (sin migraciones de schema). Ademas se corrio en prod el script de datos `deploy/migracion-islr-pelado.sql` (con respaldo previo por SSH).
+
+### Sesion 107 (2026-07-03) — Retenciones ISLR: base sin exento + numeracion "pelada" + PDF fecha UTC + lectura Z (DESPLEGADA 2026-07-03)
+
+**Contexto:** revisando la CxP `CXP/26-000014` (Cestaticket) la retencion ISLR `20260700000028` salio inflada (14,42 en vez de 0,42).
+
+- **Base imponible ISLR = solo bases gravables (sin exento ni IVA).** Tomaba exento+gravables, inflando la retencion en CxP con exento pass-through (ej. valor nominal de tickets de alimentacion). Corregido en los dos caminos: `payables.service.ts` (retencion inline al crear la CxP) e `islr-retention-vouchers.service.ts` (creacion aparte + preview de docs). Commit `fd83f43`.
+- **Numeracion ISLR "pelada"** (24, 25, 26...): el comprobante ISLR NO usa el formato AAAAMM+consecutivo del SENIAT (eso es solo IVA). `generateNumber` emite solo la secuencia, en los dos caminos. Commit `8da208f`.
+- **PDF retencion ISLR: fechas con getters UTC** (`getUTCDate/Month/FullYear`). invoiceDate/issueDate se guardan a medianoche UTC; en un server UTC-4 (dev local) mostraban el dia anterior. Prod (UTC) salia bien, se endurecio. Commit `2dcc6e3`.
+- **Lectura reporte Z (U0Z/U0X): handshake ENQ/ACK + timeout por inactividad + diagnostico de bytes crudos.** Con impresora real (HKA80/Z7C) el U0Z respondia ENQ (0x05) esperando acuse y luego NAK (0x15). Ahora `readReportData` responde ACK al ENQ, acepta trama ETX ademas de ETB/EOT, e incluye el RAW en el error. Commit `d294fda`. **PENDIENTE PROBAR en caja** (Diego no tenia acceso a la PC).
+
+**Datos en prod (via SSH, con respaldo):** anulado/regenerado el `20260700000028` con base correcta (0,42). El script renombro `20260700000027/028` -> `27`/`28` (pelado) y cargo el historico de junio (`24`, `25`, `26` = Cestaticket x2 + Grupo Cashea) declarado en el sistema anterior, **sin** asiento en libro de compras (junio queda declarado alla). Contador ISLR en 29.
+
+## 🏗️ Preparacion 2da empresa (grande) — 2026-07-03 — PREVIEW LOCAL (go-live objetivo: lunes 2026-07-06)
+
+El cliente quiere montar la empresa grande el lunes. Se preparo un **preview completo en local** (copia desechable) para validar la migracion de data ANTES de comprar el servidor. **Nada de esto esta en produccion aun.**
+
+- **Infra recomendada:** droplet nueva **4 vCPU / 8 GB + swap** (~US$48/mes) para la grande; la chica se queda en su droplet actual. **Subdominio** (no dominio nuevo) + SSL Let's Encrypt. **Una instancia por empresa** (BD separada) — Trinity es mono-empresa; dos empresas a la vez = dos pestañas. Perfil: 3 cajas (->6), 20-40 usuarios, 10.000 SKUs, ~300 facturas/dia.
+- **Import inventario (Wensoft):** 9.212 productos desde `datos-articulos.xlsx` + `precios.xlsx` (2 filas/tarifa: ULTIMO COSTO DIVISA / PVP-2) + `articulos exentos.xlsx`. Cruce por `N/ Referencia` al 99,96%.
+  - **Precios CALCULADOS** (`manualPrice=false`): se deriva `gananciaPct` desde costo sin IVA + PVP con IVA. Formula Trinity: `precio = costo × (1+brecha) × (1+ganancia) × mult_IVA` (GENERAL 1.16 / EXEMPT 1). Reproduce el PVP real (dif max 0,005). 391 sin costo -> precio manual.
+  - **Brecha 45%** (`CompanyConfig.bregaGlobalPct`) a GRUPO DIVISA + sin grupo; BCV sin brecha (7.532 con brecha). **IVA** 16% salvo 247 exentos. Desactivados (149) importados como inactivos.
+  - **Categorias (30) con codigo** asignado. **Areas de impresion:** Despacho Externo (15 cat.) / Despacho Interno (15).
+  - Limpieza de placeholders del seed (10 clientes, 5 proveedores, 29 categorias, 20 marcas). Quedan CLIENTE FINAL + 87 proveedores reales (sin RIF).
+  - **Metodos de pago (33)** en grupos con codigo fiscal: **DIVISA**(20: BINANCE/DOLAR/ZELLE), **Punto de Venta**(02, 10 bancos), **Transferencia**(03, 7), **Pago Movil**(04, 8); sueltos EFECTIVO(01), BIOPAGO(05), DESC Y RETEN(07), CASHEA(08), CREDIAGRO(09).
+- **Estrategia go-live:** entrenar en el sandbox local (serie NO fiscal, data desechable) — NUNCA en produccion (las facturas fiscales no se deshacen). Cargar data REAL final el **domingo PM** (sin movimientos), preservando la config. El import del domingo debe ser modo **"conserva config"** (upsert categorias/proveedores por nombre, recarga solo productos/stock).
+- **Scripts de trabajo (untracked):** `packages/database/prisma/_import-grande.ts`, `_cat-codes.ts`, `_pay-methods.ts`, `_pm-*.ts`; `apps/api/_analyze-excel.js`, `_reports-excel.js`. Reportes: `REPORTE-duplicados.xlsx` (115 nombres), `REPORTE-sin-precio-huerfanos.xlsx`.
+- **Pendiente:** usuarios reales (20-40), RIF de proveedores, costo de 391 productos, revisar duplicados, agentes+impresoras fiscales por caja, tasa de cambio diaria, decidir/comprar servidor, dump local -> restore al servidor.
+
 ## ✅ DEPLOY a PRODUCCION — 2026-07-02 — commit `b9973c4`
 
 Desplegadas las **Sesiones 103 a 106** (deploy hecho por Diego, sin incidentes). Migraciones aplicadas: `20260702170000_return_comandas` (comandas de devolucion) y `20260702190000_retenciones_cxp` (retenciones sobre CxP). Los **86 tipos de retencion ISLR** se cargaron en prod aparte (SQL upsert por SSH, la tabla estaba en 0).
