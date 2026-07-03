@@ -446,25 +446,42 @@ class SerialIO {
    * Es lo que faltaba: los comandos de extraccion (U0X/U0Z) usan ESTE protocolo,
    * no la trama simple terminada en ETX que entiende readFrame().
    */
-  async readReportData(timeoutMs: number): Promise<string> {
-    const deadline = Date.now() + timeoutMs;
+  async readReportData(idleTimeoutMs: number): Promise<string> {
+    // idleTimeoutMs = maximo tiempo SIN recibir bytes (se reinicia con cada chunk), no un
+    // tope total fijo: asi un volcado lento desde memoria fiscal (U0Z) no falla mientras
+    // siga llegando data. Tope duro de seguridad de 60 s.
+    const hardDeadline = Date.now() + 60000;
+    let idleDeadline = Date.now() + idleTimeoutMs;
     const decoder = new TextDecoder();
     let data = '';
     let packets = 0;
+    const rawAll: number[] = []; // diagnostico: todo lo que envio la impresora
+    const hex = (arr: number[]) => arr.map((b) => b.toString(16).padStart(2, '0')).join(' ');
+    const timeoutErr = () =>
+      new Error(
+        `Timeout leyendo datos del reporte fiscal (recibidos ${rawAll.length} bytes, ${packets} paquete(s)). RAW: ${hex(rawAll) || '(nada)'}`,
+      );
 
     const pump = async () => {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new Error('Timeout leyendo datos del reporte fiscal');
+      const remaining = Math.min(idleDeadline, hardDeadline) - Date.now();
+      if (remaining <= 0) throw timeoutErr();
       const result = await Promise.race([
         this.reader.read(),
         new Promise<null>((r) => setTimeout(() => r(null), remaining)),
       ]);
-      if (result === null) throw new Error('Timeout leyendo datos del reporte fiscal');
+      if (result === null) throw timeoutErr();
       if ((result as ReadableStreamReadResult<Uint8Array>).done) {
         throw new Error('Puerto serial cerrado');
       }
       const value = (result as ReadableStreamReadResult<Uint8Array>).value;
-      if (value) for (let j = 0; j < value.length; j++) this.pending.push(value[j]);
+      if (value && value.length) {
+        idleDeadline = Date.now() + idleTimeoutMs; // llego data -> reinicia inactividad
+        for (let j = 0; j < value.length; j++) {
+          this.pending.push(value[j]);
+          rawAll.push(value[j]);
+        }
+        console.log(`[FISCAL] reporte chunk +${value.length}B:`, hex(Array.from(value)));
+      }
     };
 
     while (true) {
@@ -481,25 +498,32 @@ class SerialIO {
         continue;
       }
 
-      // Busca el ETB que cierra este paquete
-      let etbIdx = this.pending.indexOf(ETB, 1);
-      while (etbIdx < 0) {
+      // Cierre de paquete: ETB (multi-paquete, Tabla 11) o ETX (trama simple). Aceptamos
+      // ambos por si la HKA80 responde U0Z con trama unica en vez de la secuencia ETB/EOT.
+      const findTerm = () => {
+        const iEtb = this.pending.indexOf(ETB, 1);
+        const iEtx = this.pending.indexOf(ETX, 1);
+        if (iEtb < 0) return { idx: iEtx, term: ETX };
+        if (iEtx < 0) return { idx: iEtb, term: ETB };
+        return iEtb < iEtx ? { idx: iEtb, term: ETB } : { idx: iEtx, term: ETX };
+      };
+      let t = findTerm();
+      while (t.idx < 0) {
         await pump();
-        etbIdx = this.pending.indexOf(ETB, 1);
+        t = findTerm();
       }
-      // Necesita el ETB + 1 byte de LRC
-      const frameLen = etbIdx + 2;
+      // Necesita el terminador + 1 byte de LRC
+      const frameLen = t.idx + 2;
       while (this.pending.length < frameLen) await pump();
       const frame = this.pending.splice(0, frameLen);
-      // DATA = entre STX (0) y ETB (etbIdx)
-      const dataBytes = frame.slice(1, etbIdx);
+      const dataBytes = frame.slice(1, t.idx);
       data += decoder.decode(new Uint8Array(dataBytes));
       packets++;
-      // ACK para solicitar el siguiente paquete
       await this.write(new Uint8Array([ACK]));
+      if (t.term === ETX) break; // trama simple: un solo paquete terminado en ETX
     }
 
-    console.log(`[FISCAL] readReportData: ${packets} paquete(s), ${data.length} chars`);
+    console.log(`[FISCAL] readReportData: ${packets} paquete(s), ${data.length} chars. RAW(${rawAll.length}B): ${hex(rawAll)}`);
     return data;
   }
 
@@ -770,7 +794,7 @@ async function sendReadCommand(io: SerialIO, cmd: string): Promise<string> {
 async function sendReportReadCommand(io: SerialIO, cmd: string): Promise<string> {
   const frame = buildFrame(cmd);
   await io.write(frame);
-  return io.readReportData(10000);
+  return io.readReportData(15000);
 }
 
 // ─── Printer model detection — SV (MEJORA 2) ────────────────────
