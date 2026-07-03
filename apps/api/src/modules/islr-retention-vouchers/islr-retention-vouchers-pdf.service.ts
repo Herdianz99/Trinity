@@ -161,12 +161,8 @@ export class IslrRetentionVouchersPdfService {
         const hH = 26;
         doc.rect(L, hTop, pageWidth, hH).lineWidth(0.5).fillAndStroke('#e8e8e8', '#333333');
         doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
-        // Grupo "Datos factura" sobre Nº factura + Cont. fiscal
-        const grpX = cols.factura.x;
-        const grpW = cols.control.x + cols.control.w - cols.factura.x;
-        doc.text('Datos factura', grpX, hTop + 3, { width: grpW, align: 'center', lineBreak: false });
-        // Etiquetas de columna (banda inferior)
-        const lblY = hTop + 12;
+        // Etiquetas de columna (centradas verticalmente)
+        const lblY = hTop + 7;
         const put = (c: { x: number; w: number; align: 'center' | 'right' | 'left' }, text: string) => {
           const parts = text.split('\n');
           parts.forEach((p, i) => doc.text(p, c.x + 2, lblY + i * 6.5, { width: c.w - 4, align: c.align, lineBreak: false }));
