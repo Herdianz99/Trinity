@@ -51,6 +51,20 @@ export class IslrRetentionVouchersController {
     return this.service.getAvailableDocuments(supplierId);
   }
 
+  @Get('xml')
+  async exportXml(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const { content, filename } = await this.service.generateIslrXml(from, to);
+    res.set({
+      'Content-Type': 'application/xml; charset=windows-1252',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(Buffer.from(content, 'latin1'));
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

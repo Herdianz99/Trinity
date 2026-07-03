@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Loader2, Search, CheckCircle, Ban, Eye, X, Calendar,
-  Plus, ChevronLeft, ChevronRight,
+  Plus, ChevronLeft, ChevronRight, Download,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -169,6 +169,20 @@ export default function IslrRetentionsPage() {
     }
   }
 
+  function handleExportXml() {
+    // Rango de exportacion: usa los filtros de fecha; si estan vacios, defaultea al mes actual.
+    let from = fromDate;
+    let to = toDate;
+    if (!from || !to) {
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      from = toLocalDateStr(new Date(y, m, 1));
+      to = toLocalDateStr(new Date(y, m + 1, 0));
+    }
+    const params = new URLSearchParams({ from, to });
+    window.open(`/api/proxy/islr-retention-vouchers/xml?${params}`, '_blank');
+  }
+
   async function handleCancel(id: string) {
     if (!confirm('¿Anular este comprobante de retención ISLR?')) return;
     try {
@@ -196,13 +210,23 @@ export default function IslrRetentionsPage() {
             <p className="text-sm text-slate-400">Gestión de comprobantes ISLR por compras</p>
           </div>
         </div>
-        <button
-          onClick={() => router.push('/purchases/islr-retentions/new')}
-          className="px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-medium text-sm flex items-center gap-2 transition-colors"
-        >
-          <Plus size={18} />
-          Nueva retención ISLR
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportXml}
+            title="Descarga el XML de retenciones ISLR (RelacionRetencionesISLR) para el portal SENIAT, con las retenciones emitidas en el rango de fechas filtrado (o el mes actual si no hay filtro)."
+            className="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm flex items-center gap-2 transition-colors"
+          >
+            <Download size={18} />
+            Exportar XML SENIAT
+          </button>
+          <button
+            onClick={() => router.push('/purchases/islr-retentions/new')}
+            className="px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-medium text-sm flex items-center gap-2 transition-colors"
+          >
+            <Plus size={18} />
+            Nueva retención ISLR
+          </button>
+        </div>
       </div>
 
       {/* Status counters */}

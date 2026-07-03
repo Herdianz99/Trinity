@@ -581,6 +581,100 @@ export class IslrRetentionVouchersService {
     return { documents: docs, defaultConceptId: supplier?.islrConceptId || null };
   }
 
+  // Normaliza un RIF al formato del SENIAT: letra + 9 digitos, sin guiones. Ej. "J-00327444-5" -> "J003274445".
+  private normalizeRif(rif?: string | null): string {
+    if (!rif) return '';
+    const clean = rif.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const m = clean.match(/^([A-Z]?)(\d+)$/);
+    if (!m) return clean;
+    const letter = m[1] || 'J';
+    return `${letter}${m[2].padStart(9, '0')}`;
+  }
+
+  private escapeXml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  // Formatea un numero sin ceros decimales sobrantes (ej. 232.859000 -> "232.859", 5 -> "5").
+  private trimNum(n: number): string {
+    return n.toFixed(6).replace(/\.?0+$/, '');
+  }
+
+  // XML de retenciones de ISLR para el portal SENIAT (RelacionRetencionesISLR), declaracion mensual.
+  // Una fila (DetalleRetencion) por cada factura del comprobante emitido en el rango.
+  // Reproduce el formato de Wensoft: sin declaracion <?xml?>, saltos CRLF, indentado con tabs.
+  // OJO: <MontoOperacion> = monto retenido BRUTO (base x baseImpPct% x retPct%) SIN redondear,
+  // no la base imponible. Asi lo emite Wensoft (verificado contra comprobantes 24/25/26).
+  async generateIslrXml(
+    from: string,
+    to: string,
+  ): Promise<{ content: string; filename: string }> {
+    const fromDate = new Date(from);
+    fromDate.setUTCHours(0, 0, 0, 0);
+    const toDate = new Date(to);
+    toDate.setUTCHours(23, 59, 59, 999);
+
+    const config = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+    });
+    const agentRif = this.normalizeRif(config?.rif);
+    const period = `${fromDate.getUTCFullYear()}${String(fromDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    // Comprobantes emitidos cuya fecha de emision (fecha de operacion) cae en el rango.
+    const vouchers = await this.prisma.islrRetentionVoucher.findMany({
+      where: {
+        status: 'ISSUED',
+        issueDate: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        supplier: { select: { rif: true } },
+        lines: {
+          include: { islrRetentionType: { select: { codigo: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { issueDate: 'asc' },
+    });
+
+    const detalles: string[] = [];
+    for (const v of vouchers) {
+      const supplierRif = this.normalizeRif(v.supplier?.rif);
+      const fecha = v.issueDate
+        ? `${v.issueDate.getUTCDate()}/${v.issueDate.getUTCMonth() + 1}/${v.issueDate.getUTCFullYear()}`
+        : '';
+      for (const line of v.lines) {
+        // Monto retenido bruto (sin sustraendo, sin redondeo) = base x baseImpPct% x retPct%.
+        const montoOperacion =
+          (line.taxableBaseBs * line.baseImponiblePct * line.retentionPct) / 10000;
+        const codigo = String(line.islrRetentionType?.codigo ?? '').padStart(3, '0');
+        detalles.push(
+          [
+            '\t<DetalleRetencion>',
+            `\t\t<RifRetenido>${this.escapeXml(supplierRif)}</RifRetenido>`,
+            `\t\t<NumeroFactura>${this.escapeXml(line.supplierInvoiceNumber || '')}</NumeroFactura>`,
+            `\t\t<NumeroControl>${this.escapeXml(v.number)}</NumeroControl>`,
+            `\t\t<FechaOperacion>${fecha}</FechaOperacion>`,
+            `\t\t<CodigoConcepto>${this.escapeXml(codigo)}</CodigoConcepto>`,
+            `\t\t<MontoOperacion>${this.trimNum(montoOperacion)}</MontoOperacion>`,
+            `\t\t<PorcentajeRetencion>${this.trimNum(line.retentionPct)}</PorcentajeRetencion>`,
+            '\t</DetalleRetencion>',
+          ].join('\r\n'),
+        );
+      }
+    }
+
+    const content =
+      `<RelacionRetencionesISLR RifAgente="${this.escapeXml(agentRif)}" Periodo="${period}">\r\n` +
+      (detalles.length ? detalles.join('\r\n') + '\r\n' : '') +
+      `</RelacionRetencionesISLR>\r\n`;
+
+    const filename = `retenciones_islr_${period}.xml`;
+    return { content, filename };
+  }
+
   // Numero de retencion ISLR: secuencia "pelada" (ej. 24, 25, 26...). A diferencia del
   // comprobante de IVA, el de ISLR no exige el formato AAAAMM+consecutivo del SENIAT.
   async generateNumber(tx: any): Promise<{ number: string; nextSeq: number }> {
