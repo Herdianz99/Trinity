@@ -16,24 +16,24 @@ app.use((_req, res, next) => {
   next();
 });
 
-// CORS: permitir localhost:3000, eltrebol.app y cualquier origen local
+// CORS: permitir localhost, eltrebol.app y CUALQUIER subdominio de eltrebol.app.
+// Cada empresa usa su propio subdominio (ej: inversiones.eltrebol.app); antes la lista
+// era fija con eltrebol.app, asi que los subdominios nuevos daban CORS bloqueado ->
+// isAgentRunning() false -> la factura caia a window.print() (cuadro del navegador).
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    const allowed = [
-      'http://localhost:3000',
-      'https://localhost:3000',
-      'https://eltrebol.app',
-      'http://eltrebol.app',
-    ];
-    if (
-      allowed.includes(origin) ||
-      origin.startsWith('http://localhost:') ||
-      origin.startsWith('http://127.0.0.1:')
-    ) {
-      return callback(null, true);
+    try {
+      const { hostname } = new URL(origin);
+      const ok =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === 'eltrebol.app' ||
+        hostname.endsWith('.eltrebol.app');
+      return callback(null, ok);
+    } catch {
+      return callback(null, false);
     }
-    return callback(null, false);
   },
   credentials: true,
 }));
@@ -44,7 +44,7 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    version: '1.1.3',
+    version: '1.1.4',
     thermalEnabled: config.thermalEnabled,
     printerName: config.thermalPrinterName,
   });
@@ -80,7 +80,7 @@ app.post('/print-ticket', async (req, res) => {
 // Iniciar servidor
 app.listen(config.port, () => {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║       TRINITY AGENT v1.1.3              ║');
+  console.log('║       TRINITY AGENT v1.1.4              ║');
   console.log('╠══════════════════════════════════════════╣');
   console.log(`║  Puerto: ${config.port}                          ║`);
   console.log(`║  Impresora: ${config.thermalEnabled ? 'ACTIVA' : 'DESACTIVADA'}                  ║`);
