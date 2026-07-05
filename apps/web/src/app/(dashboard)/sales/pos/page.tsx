@@ -3228,7 +3228,7 @@ export default function POSPage() {
                     <DollarSign size={16} /> Cobrar
                   </button>
                   <button
-                    onClick={() => { setCreditDays(30); setCreditModalOpen(true); }}
+                    onClick={() => setCreditModalOpen(true)}
                     disabled={cart.length === 0 || processing}
                     className="!py-3 px-3 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
                     title="Facturar a credito"
