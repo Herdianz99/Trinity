@@ -121,6 +121,7 @@ export default function ReceivablesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [overdue, setOverdue] = useState(false);
+  const [employeeOnly, setEmployeeOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -159,6 +160,7 @@ export default function ReceivablesPage() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (overdue) params.set('overdue', 'true');
+      if (employeeOnly) params.set('employeeOnly', 'true');
       const res = await fetch(`/api/proxy/receivables?${params}`);
       const data = await res.json();
       setReceivables(data.data || []);
@@ -169,7 +171,7 @@ export default function ReceivablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, type, status, reference, from, to, overdue]);
+  }, [page, type, status, reference, from, to, overdue, employeeOnly]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -453,6 +455,11 @@ export default function ReceivablesPage() {
             <input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setPage(1); }}
               className="rounded border-slate-600" />
             Solo vencidas
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
+            <input type="checkbox" checked={employeeOnly} onChange={e => { setEmployeeOnly(e.target.checked); setPage(1); }}
+              className="rounded border-slate-600" />
+            Solo empleados
           </label>
         </div>
       </div>
