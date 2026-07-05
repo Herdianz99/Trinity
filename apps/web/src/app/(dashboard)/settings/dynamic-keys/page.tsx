@@ -44,6 +44,7 @@ const PERM_LABELS: Record<string, string> = {
   ALLOW_CREDIT_INVOICE: 'Facturar a credito',
   MANUAL_CASH_MOVEMENT: 'Movimiento manual caja',
   SELL_NEGATIVE_STOCK: 'Vender sin stock (negativo)',
+  OVERRIDE_CREDIT_BLOCK: 'Autorizar credito con vencidos / sobre cupo',
 };
 
 const ALL_PERMS = Object.keys(PERM_LABELS);

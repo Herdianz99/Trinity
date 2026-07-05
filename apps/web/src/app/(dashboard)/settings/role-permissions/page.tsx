@@ -70,6 +70,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
     items: [
       { key: 'MANAGE_EXPENSES', label: 'Gestionar gastos' },
       { key: 'MANAGE_EXCHANGE_RATE', label: 'Actualizar tasa de cambio' },
+      { key: 'MANAGE_CUSTOMER_CREDIT', label: 'Gestionar credito de clientes' },
     ],
   },
 ];

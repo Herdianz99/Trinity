@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { RolePermissionsService } from '../role-permissions/role-permissions.service';
 
 const SENIAT_BASE = 'http://contribuyente.seniat.gob.ve/BuscaRif';
 
@@ -59,7 +60,10 @@ function extractCookies(headers: http.IncomingHttpHeaders): string {
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rolePermissions: RolePermissionsService,
+  ) {}
 
   async findAll(filters: { search?: string; isActive?: string; page?: number; limit?: number }) {
     const page = filters.page || 1;
@@ -162,14 +166,14 @@ export class CustomersService {
     }
   }
 
-  // Solo usuarios con el permiso MANAGE_CUSTOMER_CREDIT (o ADMIN) pueden editar el credito del cliente.
+  // Solo roles con el permiso MANAGE_CUSTOMER_CREDIT (o ADMIN) pueden editar el credito del cliente.
+  // Los permisos son POR ROL (RolePermission.modules), no por usuario — misma fuente que /auth/me.
   private async assertCanEditCredit(userId: string) {
-    const perm = await this.prisma.userPermission.findFirst({
-      where: { userId, permissionKey: 'MANAGE_CUSTOMER_CREDIT' },
-    });
-    if (perm) return;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-    if (user?.role !== 'ADMIN') {
+    if (!user) throw new ForbiddenException('Usuario no encontrado');
+    if (user.role === 'ADMIN') return;
+    const perms = await this.rolePermissions.getModulesForRole(user.role);
+    if (!perms.includes('MANAGE_CUSTOMER_CREDIT')) {
       throw new ForbiddenException('No tiene permiso para editar el credito del cliente (MANAGE_CUSTOMER_CREDIT)');
     }
   }
