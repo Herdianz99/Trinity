@@ -1,5 +1,22 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔒 Respaldos certificados (ambos servers) + spec/plan de fotos de productos — 2026-07-05
+
+Sesion de trabajo previa a la migracion de existencias/costos/precios de la 2da empresa. **Sin cambios de codigo desplegados**; solo infra de respaldos + documentos de diseño.
+
+### Respaldos: certificados en AMBOS servers (antes NO existian en la chica)
+- **inversiones (grande, pg16):** ya tenia cron 3AM Caracas + retencion 7 dias. Se **CERTIFICO** el restore del respaldo automatico de anoche: se bajo el dump a local, se restauro en contenedor `postgres:16-alpine` aislado (5433) → `pg_restore` 0 errores, 9.212 productos / 24 usuarios / transaccional en cero / 98 migraciones limpias, y **API + login vivo** contra la copia. 100% aislado, sin tocar prod.
+- **ferre/eltrebol (chica, pg15):** ⚠️ **NO tenia NINGUN respaldo** pese a meses con transacciones reales. Se monto el mismo `backup-db.sh` + cron `0 7 * * *` (3AM Caracas) + retencion 7 dias (patron `trebol_db-*.dump`; los `baseline-ferre-*` quedan protegidos). Baseline manual bajado off-server a `Escritorio\respaldos-ferre`. Restore **CERTIFICADO** (0 errores, 2.381 productos + data real: 1.033 facturas/1.189 pagos/36 cajas, API+login vivo).
+- **⚠️ GOTCHA de ferre:** la BD corre en Docker `postgres:15-alpine` (pg15) pero el HOST tiene cliente **pg16.14** → `pg_dump` genera formato **v1.15 que pg15 NO puede restaurar**. **El respaldo de ferre se restaura SOLO con herramientas pg16+**, nunca pg15. El host de ferre ya tiene pg16 → el runbook in-place funciona.
+- **Runbook de recuperacion validado:** `DROP/CREATE DATABASE` (llamadas psql separadas) → `pg_restore --no-owner --no-acl` → `pm2 restart trinity-api`.
+
+### Fotos de productos: spec + plan de Fase 1 (SIN implementar aun)
+- Feature nueva a futuro: fotos para guia del vendedor en el POS (ver que vende + mostrar al cliente) y la web futura. Hoy Trinity no tiene fotos (`Product` sin campo imagen; solo `stampImage` base64, anti-patron a NO replicar).
+- **Decision de arquitectura: DigitalOcean Spaces + CDN** (~$5/mes por empresa, plano y predecible). Se descarto Cloudinary (creditos que suspenden la cuenta) y nginx-en-droplet (compite con el API, engorda respaldo). Optimizacion automatica al subir con `sharp` (miniatura 150px + grande 800px WebP); binarios en Spaces, **nunca en Postgres** (respaldos livianos).
+- **Spec:** `docs/superpowers/specs/2026-07-05-fotos-productos-design.md`. **Plan Fase 1 (MVP):** `docs/superpowers/plans/2026-07-05-fotos-productos-fase1.md` (10 tareas). Fase 1 = modelo `ProductImage` + denormalizacion `primaryImage(Thumb/Medium)Url` + pipeline Spaces + endpoints + miniatura en POS + lightbox + pantalla movil "sesion de fotos" (flujo B). **Fase 2 (plan aparte):** flujo C (carga masiva por code/supplierRef), flujo A (galeria en producto), multi-foto en UI, web.
+- **Desviaciones del spec (por realidad del codigo):** transporte base64→JSON (el proxy de Next no reenvia multipart) pero el binario igual va a Spaces; gate por ROL (ADMIN+WAREHOUSE) en vez de permiso granular (no hay guard de permisos); downscale en cliente a 1600px antes de subir.
+- **Prerrequisito antes de implementar:** crear el Space + CDN en DO por empresa y cargar `SPACES_*` en el `.env` de cada server. Sin eso el codigo se puede escribir pero NO probar end-to-end.
+
 ## 🚀 2da empresa (grande) EN PRODUCCION — 2026-07-04 — server nuevo desplegado (SIN cambios de codigo)
 
 Se monto el **servidor de la empresa grande** y se dejo lista para el go-live del lunes. **NO hubo deploy de codigo** (no se toco el repo): fue provision de infraestructura + carga de datos directo en el server nuevo. Ambos servers corren el mismo codigo ya desplegado.
