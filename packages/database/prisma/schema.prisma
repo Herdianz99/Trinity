@@ -95,6 +95,7 @@ enum PermissionKey {
   CREDIT_NOTE_PURCHASE
   DEBIT_NOTE_PURCHASE
   MANAGE_EXPENSES
+  MANAGE_CUSTOMER_CREDIT
 }
 
 enum SerieType {
@@ -225,6 +226,7 @@ enum DynamicKeyPerm {
   ALLOW_CREDIT_INVOICE
   MANUAL_CASH_MOVEMENT
   SELL_NEGATIVE_STOCK
+  OVERRIDE_CREDIT_BLOCK
 }
 
 enum CashMovementType {
@@ -801,6 +803,9 @@ model Customer {
   isActive     Boolean      @default(true)
   isSpecialTaxpayer Boolean @default(false)
   isGroupCompany    Boolean @default(false) // Empresa del grupo: sus facturas no comisionan
+  isEmployee        Boolean  @default(false) // Cliente empleado (para reportes / cobro por sueldo)
+  creditAuthorizedBy String?                 // Quien aprobo la linea de credito (administracion)
+  creditReviewedAt   DateTime?               // Fecha del ultimo analisis de credito (auto-sellada)
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]
