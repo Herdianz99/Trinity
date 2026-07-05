@@ -238,6 +238,9 @@ export class ReceivablesService {
       where.dueDate = { lt: now };
       where.status = { in: ['PENDING', 'PARTIAL'] };
     }
+    if (query.employeeOnly) {
+      where.customer = { ...(where.customer || {}), isEmployee: true };
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.receivable.findMany({

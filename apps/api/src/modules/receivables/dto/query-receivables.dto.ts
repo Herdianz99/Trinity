@@ -44,6 +44,12 @@ export class QueryReceivablesDto {
   @IsBoolean()
   overdue?: boolean;
 
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  employeeOnly?: boolean;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @Transform(({ value }) => parseInt(value))
