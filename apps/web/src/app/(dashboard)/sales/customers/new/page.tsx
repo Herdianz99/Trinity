@@ -7,7 +7,7 @@ import SeniatModal from '@/components/seniat-modal';
 
 const defaultForm = {
   name: '', documentType: 'V', rif: '', phone: '', email: '', address: '',
-  creditLimit: 0, creditDays: 0, isGroupCompany: false,
+  creditLimit: 0, creditDays: 0, isGroupCompany: false, isEmployee: false, creditAuthorizedBy: '',
 };
 
 export default function NewCustomerPage() {
@@ -17,6 +17,14 @@ export default function NewCustomerPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [seniatOpen, setSeniatOpen] = useState(false);
   const [rifWarning, setRifWarning] = useState('');
+  const [canEditCredit, setCanEditCredit] = useState(false);
+
+  // Solo administracion (permiso MANAGE_CUSTOMER_CREDIT o ADMIN) puede editar el credito.
+  useEffect(() => {
+    fetch('/api/proxy/auth/me').then(r => r.json()).then(u => {
+      setCanEditCredit(u.role === 'ADMIN' || (u.permissions || []).includes('MANAGE_CUSTOMER_CREDIT'));
+    }).catch(() => {});
+  }, []);
 
   // Check for duplicate RIF
   useEffect(() => {
@@ -50,6 +58,12 @@ export default function NewCustomerPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (Number(form.creditLimit) > 0 && (!Number(form.creditDays) || Number(form.creditDays) <= 0)) {
+      setMessage({ type: 'error', text: 'Con limite de credito, los dias de credito son obligatorios' }); return;
+    }
+    if (Number(form.creditLimit) > 0 && !form.creditAuthorizedBy.trim()) {
+      setMessage({ type: 'error', text: 'Con limite de credito, "Autorizado por" es obligatorio' }); return;
+    }
     setSaving(true); setMessage(null);
     try {
       const res = await fetch('/api/proxy/customers', {
@@ -138,13 +152,20 @@ export default function NewCustomerPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Limite de Credito USD</label>
-            <input type="number" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
+            <input type="number" value={form.creditLimit} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" min="0" step="0.01" />
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Dias de Credito</label>
-            <input type="number" value={form.creditDays} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
+            <label className="text-xs text-slate-400 mb-1 block">Dias de Credito {form.creditLimit > 0 && <span className="text-red-400">*</span>}</label>
+            <input type="number" value={form.creditDays} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" min="0" />
           </div>
         </div>
+        <div>
+          <label className="text-xs text-slate-400 mb-1 block">Autorizado por {form.creditLimit > 0 && <span className="text-red-400">*</span>}</label>
+          <input type="text" value={form.creditAuthorizedBy} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditAuthorizedBy: e.target.value }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Quien aprobo la linea de credito" />
+        </div>
+        {!canEditCredit && (
+          <p className="text-xs text-amber-400">Solo administracion puede editar el credito del cliente.</p>
+        )}
         <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
           <input
             type="checkbox"
@@ -156,6 +177,20 @@ export default function NewCustomerPage() {
             <span className="text-sm text-slate-200 block">Empresa del grupo</span>
             <span className="text-xs text-slate-500">
               Sus facturas se muestran en el reporte de comisiones pero no generan comision para el vendedor.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
+          <input
+            type="checkbox"
+            checked={form.isEmployee}
+            onChange={e => setForm(f => ({ ...f, isEmployee: e.target.checked }))}
+            className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+          />
+          <span>
+            <span className="text-sm text-slate-200 block">Es empleado</span>
+            <span className="text-xs text-slate-500">
+              Marca al cliente como empleado (para reportes / cobro por sueldo).
             </span>
           </span>
         </label>

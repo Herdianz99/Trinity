@@ -14,6 +14,9 @@ interface Customer {
   phone: string | null; email: string | null; address: string | null;
   creditLimit: number; creditDays: number; isActive: boolean;
   isGroupCompany?: boolean;
+  isEmployee?: boolean;
+  creditAuthorizedBy?: string | null;
+  creditReviewedAt?: string | null;
   pendingDebt: number; availableCredit: number;
   invoices: { id: string; number: string; status: string; totalUsd: number; totalBs: number; createdAt: string }[];
 }
@@ -76,6 +79,14 @@ export default function CustomerDetailPage() {
   // Duplicate RIF warning
   const [rifWarning, setRifWarning] = useState('');
 
+  // Permiso para editar el credito (MANAGE_CUSTOMER_CREDIT o ADMIN)
+  const [canEditCredit, setCanEditCredit] = useState(false);
+  useEffect(() => {
+    fetch('/api/proxy/auth/me').then(r => r.json()).then(u => {
+      setCanEditCredit(u.role === 'ADMIN' || (u.permissions || []).includes('MANAGE_CUSTOMER_CREDIT'));
+    }).catch(() => {});
+  }, []);
+
   function handleSeniatResult(data: { name: string; documentType: string; documentNumber: string }) {
     setForm((f: any) => ({
       ...f,
@@ -105,6 +116,8 @@ export default function CustomerDetailPage() {
         rif: data.rif || '', phone: data.phone || '', email: data.email || '',
         address: data.address || '', creditLimit: data.creditLimit, creditDays: data.creditDays,
         isGroupCompany: data.isGroupCompany ?? false,
+        isEmployee: data.isEmployee ?? false,
+        creditAuthorizedBy: data.creditAuthorizedBy || '',
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -165,6 +178,12 @@ export default function CustomerDetailPage() {
 
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
     if (e) e.preventDefault();
+    if (Number(form.creditLimit) > 0 && (!Number(form.creditDays) || Number(form.creditDays) <= 0)) {
+      setSaveMsg({ type: 'error', text: 'Con limite de credito, los dias de credito son obligatorios' }); return false;
+    }
+    if (Number(form.creditLimit) > 0 && !String(form.creditAuthorizedBy || '').trim()) {
+      setSaveMsg({ type: 'error', text: 'Con limite de credito, "Autorizado por" es obligatorio' }); return false;
+    }
     setSaving(true); setSaveMsg(null);
     try {
       const res = await fetch(`/api/proxy/customers/${id}`, {
@@ -303,13 +322,23 @@ export default function CustomerDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Limite de Credito USD</label>
-                <input type="number" value={form.creditLimit ?? 0} onChange={e => setForm((f: any) => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
+                <input type="number" value={form.creditLimit ?? 0} disabled={!canEditCredit} onChange={e => setForm((f: any) => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" min="0" step="0.01" />
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Dias de Credito</label>
-                <input type="number" value={form.creditDays ?? 0} onChange={e => setForm((f: any) => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" />
+                <label className="text-xs text-slate-400 mb-1 block">Dias de Credito {Number(form.creditLimit) > 0 && <span className="text-red-400">*</span>}</label>
+                <input type="number" value={form.creditDays ?? 0} disabled={!canEditCredit} onChange={e => setForm((f: any) => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" min="0" />
               </div>
             </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Autorizado por {Number(form.creditLimit) > 0 && <span className="text-red-400">*</span>}</label>
+              <input type="text" value={form.creditAuthorizedBy || ''} disabled={!canEditCredit} onChange={e => setForm((f: any) => ({ ...f, creditAuthorizedBy: e.target.value }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Quien aprobo la linea de credito" />
+              {customer.creditReviewedAt && (
+                <p className="text-xs text-slate-500 mt-1">Credito analizado: {fmtDate(customer.creditReviewedAt)}</p>
+              )}
+            </div>
+            {!canEditCredit && (
+              <p className="text-xs text-amber-400">Solo administracion puede editar el credito del cliente.</p>
+            )}
             <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
               <input
                 type="checkbox"
@@ -321,6 +350,20 @@ export default function CustomerDetailPage() {
                 <span className="text-sm text-slate-200 block">Empresa del grupo</span>
                 <span className="text-xs text-slate-500">
                   Sus facturas se muestran en el reporte de comisiones pero no generan comision para el vendedor.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={form.isEmployee ?? false}
+                onChange={e => setForm((f: any) => ({ ...f, isEmployee: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500"
+              />
+              <span>
+                <span className="text-sm text-slate-200 block">Es empleado</span>
+                <span className="text-xs text-slate-500">
+                  Marca al cliente como empleado (para reportes / cobro por sueldo).
                 </span>
               </span>
             </label>
