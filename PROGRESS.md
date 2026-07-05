@@ -1,5 +1,18 @@
 ﻿# Trinity ERP — Progreso
 
+## 🏗️ Credito pre-aprobado y blindado — 2026-07-05 (implementado, EN main, PENDIENTE DEPLOY)
+
+Rediseno del flujo de ventas a credito: el credito pasa a ser una **propiedad pre-aprobada del cliente** (administracion dicta cupo/dias por adelantado), la caja solo lo usa, y el **backend hace cumplir** las barreras. Spec: `docs/superpowers/specs/2026-07-05-credito-blindado-design.md`; plan: `docs/superpowers/plans/2026-07-05-credito-blindado.md`. Implementado en rama `desarrollo` -> merge a `main` (8 tareas + fixes). Typechecks 0, probado en local por Diego.
+
+- **Modelo:** `Customer` gana `isEmployee`, `creditAuthorizedBy`, `creditReviewedAt` (auto-sellada al cambiar cupo/dias). Enums: `PermissionKey.MANAGE_CUSTOMER_CREDIT` + `DynamicKeyPerm.OVERRIDE_CREDIT_BLOCK`. Migracion `20260705200000_credito_blindado` + fix-schema.
+- **Editar el credito del cliente** = accion controlada por el permiso **`MANAGE_CUSTOMER_CREDIT`**. OJO: los permisos son **por ROL** (`RolePermission.modules`, misma fuente que `/auth/me`), NO por `UserPermission` — el chequeo del backend usa `rolePermissions.getModulesForRole(role)`. Se agrego a `VALID_MODULES` (backend) y a la UI `/settings/role-permissions` (grupo Administracion). ADMIN siempre puede.
+- **Validacion:** si `creditLimit > 0` -> `creditDays` (>0) y `creditAuthorizedBy` obligatorios (front + back).
+- **POS:** dias **fijos** del cliente (no editables; se quito el `setCreditDays(30)` que los pisaba). Venta a credito normal **sin clave** (se elimino el gate por-venta `ALLOW_CREDIT_INVOICE` de la S99). `dueDate` de factura y CxC homologado desde `customer.creditDays`.
+- **Blindaje backend (`invoices.service.pay`):** bloquea venta a credito si **excede el cupo** o el cliente **tiene facturas vencidas** (`OVERDUE` o `dueDate < caracasDateKey()`); solo se salta con la clave dinamica **`OVERRIDE_CREDIT_BLOCK`** (una sola clave para ambas excepciones; flag `overrideCreditBlockAuthorized`). Verificado en BD: las CxC se crean con los dias reales del cliente.
+- **`isEmployee`:** toggle en el form de cliente + filtro "Solo empleados" en Cuentas por Cobrar.
+- **PENDIENTE DE DEPLOY + config en prod:** (1) en `/settings/role-permissions` marcar **"Gestionar credito de clientes"** a los roles de administracion; (2) en `/settings/dynamic-keys` crear una clave con **"Autorizar credito con vencidos / sobre cupo"** (`OVERRIDE_CREDIT_BLOCK`); (3) avisar al equipo que **ya no se pide clave por cada venta a credito** (solo en excepciones). Deploy trae la migracion (deploy.sh la aplica).
+- **Futuro (fase aparte):** sistema de puntos/scoring por buen pago; endurecer los overrides a validacion de clave en el backend (hoy frontend-gated).
+
 ## ✅ MIGRACION existencias/costos/precios a PRODUCCION (inversiones grande) — 2026-07-05 noche
 
 Migracion de inventario desde Wensoft a Trinity, la noche antes del go-live (lunes). Prod cerrado, 0 transaccional. **EXITOSA y en vivo.**
