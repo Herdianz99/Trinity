@@ -54,4 +54,14 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsBoolean()
   isGroupCompany?: boolean;
+
+  @ApiProperty({ default: false, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isEmployee?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  creditAuthorizedBy?: string;
 }

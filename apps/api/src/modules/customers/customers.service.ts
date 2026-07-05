@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import * as http from 'http';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -162,16 +162,67 @@ export class CustomersService {
     }
   }
 
-  async create(dto: CreateCustomerDto) {
-    await this.checkDuplicateRif(dto.rif, dto.documentType);
-    return this.prisma.customer.create({ data: dto });
+  // Solo usuarios con el permiso MANAGE_CUSTOMER_CREDIT (o ADMIN) pueden editar el credito del cliente.
+  private async assertCanEditCredit(userId: string) {
+    const perm = await this.prisma.userPermission.findFirst({
+      where: { userId, permissionKey: 'MANAGE_CUSTOMER_CREDIT' },
+    });
+    if (perm) return;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') {
+      throw new ForbiddenException('No tiene permiso para editar el credito del cliente (MANAGE_CUSTOMER_CREDIT)');
+    }
   }
 
-  async update(id: string, dto: UpdateCustomerDto) {
+  // Si hay cupo (> 0), dias y autorizado-por son obligatorios.
+  private validateCreditFields(creditLimit: number, creditDays: number | undefined | null, authBy: string | undefined | null) {
+    if (creditLimit > 0) {
+      if (!creditDays || creditDays <= 0) {
+        throw new BadRequestException('Si el limite de credito es mayor a 0, los dias de credito son obligatorios');
+      }
+      if (!authBy || !authBy.trim()) {
+        throw new BadRequestException('Si el limite de credito es mayor a 0, "Autorizado por" es obligatorio');
+      }
+    }
+  }
+
+  async create(dto: CreateCustomerDto, userId: string) {
+    await this.checkDuplicateRif(dto.rif, dto.documentType);
+    const creditLimit = dto.creditLimit ?? 0;
+    if (creditLimit > 0) {
+      await this.assertCanEditCredit(userId);
+      this.validateCreditFields(creditLimit, dto.creditDays, dto.creditAuthorizedBy);
+    }
+    return this.prisma.customer.create({
+      data: { ...dto, creditReviewedAt: creditLimit > 0 ? new Date() : null },
+    });
+  }
+
+  async update(id: string, dto: UpdateCustomerDto, userId: string) {
     const exists = await this.prisma.customer.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Cliente no encontrado');
     await this.checkDuplicateRif(dto.rif ?? exists.rif, dto.documentType ?? exists.documentType, id);
-    return this.prisma.customer.update({ where: { id }, data: dto });
+
+    const nextLimit = dto.creditLimit ?? exists.creditLimit;
+    const nextDays = dto.creditDays ?? exists.creditDays;
+    const nextAuth = dto.creditAuthorizedBy ?? exists.creditAuthorizedBy;
+
+    const touchesCredit =
+      (dto.creditLimit !== undefined && dto.creditLimit !== exists.creditLimit) ||
+      (dto.creditDays !== undefined && dto.creditDays !== exists.creditDays) ||
+      (dto.creditAuthorizedBy !== undefined && dto.creditAuthorizedBy !== exists.creditAuthorizedBy);
+
+    if (touchesCredit) await this.assertCanEditCredit(userId);
+    if (nextLimit > 0) this.validateCreditFields(nextLimit, nextDays, nextAuth);
+
+    const creditChanged =
+      (dto.creditLimit !== undefined && dto.creditLimit !== exists.creditLimit) ||
+      (dto.creditDays !== undefined && dto.creditDays !== exists.creditDays);
+
+    return this.prisma.customer.update({
+      where: { id },
+      data: { ...dto, ...(creditChanged ? { creditReviewedAt: new Date() } : {}) },
+    });
   }
 
   parseSeniatHtml(html: string) {

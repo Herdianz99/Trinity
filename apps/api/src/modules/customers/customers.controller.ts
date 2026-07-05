@@ -14,6 +14,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
@@ -58,13 +59,13 @@ export class CustomersController {
   }
 
   @Post()
-  create(@Body() dto: CreateCustomerDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateCustomerDto, @CurrentUser('id') userId: string) {
+    return this.service.create(dto, userId);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto, @CurrentUser('id') userId: string) {
+    return this.service.update(id, dto, userId);
   }
 
   @Delete(':id')
