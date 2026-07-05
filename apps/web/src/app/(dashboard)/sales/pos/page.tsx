@@ -217,7 +217,8 @@ export default function POSPage() {
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [isCredit, setIsCredit] = useState(false);
   const [creditKeyOpen, setCreditKeyOpen] = useState(false); // modal de clave dinamica para autorizar el credito
-  const [creditDays, setCreditDays] = useState(30);
+  const [creditDays, setCreditDays] = useState(30); // dias fijos del cliente (definidos por administracion)
+  const [creditStatus, setCreditStatus] = useState<{ availableCredit: number; totalOverdue: number } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [userId, setUserId] = useState('');
@@ -575,18 +576,28 @@ export default function POSPage() {
 
   useEffect(() => { refreshCreditBalance(); }, [refreshCreditBalance]);
 
-  // Fetch contribuyente especial / cliente default flags when customer changes
+  // Fetch contribuyente especial / cliente default flags + dias de credito when customer changes
   useEffect(() => {
-    if (!customerId) { setCustomerIsSpecial(false); setCustomerIsDefault(false); return; }
+    if (!customerId) { setCustomerIsSpecial(false); setCustomerIsDefault(false); setCreditDays(30); return; }
     fetch(`/api/proxy/customers/${customerId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data) {
           setCustomerIsSpecial(!!data.isSpecialTaxpayer);
           setCustomerIsDefault(!!data.isDefault);
+          setCreditDays(data.creditDays ?? 0); // dias fijos definidos por administracion
         }
       })
       .catch(() => { /* ignore */ });
+  }, [customerId]);
+
+  // Estado de credito del cliente (cupo disponible + vencidos) para el flujo de credito
+  useEffect(() => {
+    if (!customerId) { setCreditStatus(null); return; }
+    fetch(`/api/proxy/receivables/customer/${customerId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCreditStatus({ availableCredit: data.availableCredit ?? 0, totalOverdue: data.totalOverdue ?? 0 }); })
+      .catch(() => setCreditStatus(null));
   }, [customerId]);
 
   const toggleSpecialTaxpayer = async () => {
@@ -990,7 +1001,20 @@ export default function POSPage() {
     }
   }
 
-  async function handleConfirmCredit() {
+  // onConfirmCreditClick decide: si el cliente tiene vencidos o excede el cupo, pide la clave
+  // dinamica OVERRIDE_CREDIT_BLOCK; si no, procesa directo (credito pre-aprobado, sin clave).
+  function onConfirmCreditClick() {
+    if (!customerId) { setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' }); return; }
+    const overdue = (creditStatus?.totalOverdue || 0) > 0.01;
+    const overLimit = creditStatus ? totalUsd > (creditStatus.availableCredit + 0.01) : false;
+    if (overdue || overLimit) {
+      setCreditKeyOpen(true); // pedira OVERRIDE_CREDIT_BLOCK
+    } else {
+      handleConfirmCredit(false);
+    }
+  }
+
+  async function handleConfirmCredit(override = false) {
     if (!customerId) {
       setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' });
       return;
@@ -1033,9 +1057,9 @@ export default function POSPage() {
         body: JSON.stringify({
           payments: [],
           isCredit: true,
-          creditDays,
           cashRegisterId: selectedCashRegister?.id || undefined,
           negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
+          overrideCreditBlockAuthorized: override || undefined,
         }),
       });
       if (!payRes.ok) {
@@ -2312,27 +2336,36 @@ export default function POSPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito</label>
+                  <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito (definidos por administracion)</label>
                   <input
                     type="number"
                     value={creditDays}
-                    onChange={e => setCreditDays(Number(e.target.value))}
-                    className="input-field !py-3 md:!py-2"
-                    min="1"
+                    readOnly
+                    disabled
+                    className="input-field !py-3 md:!py-2 opacity-70 cursor-not-allowed"
                   />
                 </div>
-                <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                  <Lock size={13} /> Al confirmar se pedira la clave de un supervisor para autorizar el credito.
-                </p>
+                {creditStatus && (
+                  <div className="text-xs text-slate-400">
+                    Cupo disponible: <span className={`font-medium ${creditStatus.availableCredit >= totalUsd ? 'text-green-400' : 'text-red-400'}`}>${creditStatus.availableCredit.toFixed(2)}</span>
+                    {creditStatus.totalOverdue > 0.01 && <span className="text-red-400"> &middot; Vencido: ${creditStatus.totalOverdue.toFixed(2)}</span>}
+                  </div>
+                )}
+                {((creditStatus?.totalOverdue || 0) > 0.01 || (!!creditStatus && totalUsd > creditStatus.availableCredit + 0.01)) ? (
+                  <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                    <Lock size={13} /> El cliente tiene facturas vencidas o excede su cupo. Se pedira clave de supervisor.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <CreditCard size={13} /> Credito pre-aprobado. Al confirmar se procesa directo.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button onClick={() => setCreditModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
-                  onClick={() => {
-                    if (!customerId) { setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' }); return; }
-                    setCreditKeyOpen(true);
-                  }}
+                  onClick={onConfirmCreditClick}
                   disabled={processing || !customerId}
                   className="!py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 transition-colors"
                 >
@@ -2735,17 +2768,18 @@ export default function POSPage() {
         description={negKeyProduct ? `Clave de supervisor para agregar "${negKeyProduct.name}" sin stock` : 'Clave de supervisor'}
       />
 
-      {/* Autorizar venta a credito (clave de supervisor con permiso ALLOW_CREDIT_INVOICE) */}
+      {/* Autorizar EXCEPCION de credito (vencidos o sobre cupo) con clave OVERRIDE_CREDIT_BLOCK.
+          El credito normal (pre-aprobado, dentro de cupo y sin vencidos) NO pide clave. */}
       <DynamicKeyModal
         isOpen={creditKeyOpen}
         onClose={() => setCreditKeyOpen(false)}
-        onAuthorized={() => { setCreditKeyOpen(false); handleConfirmCredit(); }}
-        permission="ALLOW_CREDIT_INVOICE"
-        action="Autorizar venta a credito"
+        onAuthorized={() => { setCreditKeyOpen(false); handleConfirmCredit(true); }}
+        permission="OVERRIDE_CREDIT_BLOCK"
+        action="Autorizar credito con vencidos o sobre cupo"
         entityType="Customer"
         entityId={customerId || undefined}
-        title="Autorizar venta a credito"
-        description={customerName ? `Clave de supervisor para facturar a credito a "${customerName}"` : 'Clave de supervisor para venta a credito'}
+        title="Autorizar excepcion de credito"
+        description={customerName ? `El cliente "${customerName}" tiene facturas vencidas o excede su cupo. Clave de supervisor para autorizar.` : 'Clave de supervisor para autorizar la excepcion de credito'}
       />
     </>
   );
