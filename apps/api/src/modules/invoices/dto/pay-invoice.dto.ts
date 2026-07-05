@@ -67,4 +67,11 @@ export class PayInvoiceDto {
   @IsOptional()
   @IsBoolean()
   negativeStockAuthorized?: boolean;
+
+  // El POS marca esto cuando un supervisor autorizo (clave dinamica OVERRIDE_CREDIT_BLOCK)
+  // una venta a credito pese a que el cliente excede su cupo y/o tiene facturas vencidas.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  overrideCreditBlockAuthorized?: boolean;
 }

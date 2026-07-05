@@ -565,28 +565,46 @@ export class InvoicesService {
       );
     }
 
-    // Credit validation
-    if (dto.isCredit) {
-      // La autorizacion de la venta a credito la hace el POS con una clave dinamica
-      // (permiso ALLOW_CREDIT_INVOICE, validada contra /dynamic-keys/validate con log de
-      // auditoria), igual que SELL_NEGATIVE_STOCK. No se re-valida clave aqui (frontend-gated).
+    // Credit validation — BLINDAJE (backend-enforced): el credito viene pre-aprobado en el
+    // cliente (cupo/dias). El backend bloquea si se pasa del cupo o si el cliente tiene facturas
+    // vencidas. Solo se salta con la clave dinamica OVERRIDE_CREDIT_BLOCK (frontend-gated, se pasa
+    // el flag overrideCreditBlockAuthorized), reservada a excepciones que autoriza administracion.
+    if (dto.isCredit && invoice.customer) {
+      // 1) Cupo
+      const pendingReceivables = await this.prisma.receivable.aggregate({
+        where: {
+          customerId: invoice.customerId,
+          status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+        },
+        _sum: { amountUsd: true },
+      });
+      const currentDebt = pendingReceivables._sum.amountUsd || 0;
+      const availableCredit = invoice.customer.creditLimit - currentDebt;
+      const overLimit = effectiveTotalUsd > availableCredit + 0.01;
 
-      // Check customer credit limit
-      if (invoice.customer) {
-        const pendingReceivables = await this.prisma.receivable.aggregate({
-          where: {
-            customerId: invoice.customerId,
-            status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-          },
-          _sum: { amountUsd: true },
-        });
-        const currentDebt = pendingReceivables._sum.amountUsd || 0;
-        const availableCredit = invoice.customer.creditLimit - currentDebt;
-        if (effectiveTotalUsd > availableCredit + 0.01) {
-          throw new BadRequestException(
-            `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)}, Requerido: $${effectiveTotalUsd.toFixed(2)}`,
+      // 2) Vencidos: status OVERDUE (marcado por el cron a las 00:01) O dueDate < hoy (Caracas)
+      // aun sin marcar — cubre el desfase del cron.
+      const overdueCount = await this.prisma.receivable.count({
+        where: {
+          customerId: invoice.customerId,
+          OR: [
+            { status: 'OVERDUE' },
+            { status: { in: ['PENDING', 'PARTIAL'] }, dueDate: { lt: caracasDateKey() } },
+          ],
+        },
+      });
+      const hasOverdue = overdueCount > 0;
+
+      if ((overLimit || hasOverdue) && !dto.overrideCreditBlockAuthorized) {
+        const reasons: string[] = [];
+        if (overLimit)
+          reasons.push(
+            `excede el cupo (disponible $${availableCredit.toFixed(2)}, requerido $${effectiveTotalUsd.toFixed(2)})`,
           );
-        }
+        if (hasOverdue) reasons.push('tiene facturas vencidas');
+        throw new BadRequestException(
+          `No se puede facturar a credito: el cliente ${reasons.join(' y ')}. Requiere autorizacion de supervisor.`,
+        );
       }
     }
 
@@ -829,7 +847,8 @@ export class InvoicesService {
 
       // Create credit receivable (uses totals with IGTF included)
       if (dto.isCredit && invoice.customerId) {
-        const creditDays = dto.creditDays || invoice.customer?.creditDays || 30;
+        // Dias fijos definidos por administracion en el cliente (fuente unica de verdad).
+        const creditDays = invoice.customer?.creditDays ?? dto.creditDays ?? 30;
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + creditDays);
 
@@ -956,9 +975,9 @@ export class InvoicesService {
           status: 'PAID',
           paymentType: dto.isCredit ? 'CREDIT' : 'CASH',
           isCredit: dto.isCredit || false,
-          creditDays: dto.creditDays || 0,
+          creditDays: dto.isCredit ? (invoice.customer?.creditDays ?? dto.creditDays ?? 30) : 0,
           dueDate: dto.isCredit
-            ? new Date(Date.now() + (dto.creditDays || 30) * 86400000)
+            ? new Date(Date.now() + (invoice.customer?.creditDays ?? dto.creditDays ?? 30) * 86400000)
             : null,
           paidAt: new Date(),
           cashierId: user.id,
