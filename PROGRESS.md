@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ MIGRACION existencias/costos/precios a PRODUCCION (inversiones grande) — 2026-07-05 noche
+
+Migracion de inventario desde Wensoft a Trinity, la noche antes del go-live (lunes). Prod cerrado, 0 transaccional. **EXITOSA y en vivo.**
+
+- **Datos:** de `nuevo-excel.xlsx` (Wensoft, 2 filas/ref: `ULTIMO COSTO DIVISA`=costo sin IVA / `PVP-2`=precio) + `nuevo-datos.xlsx` (proveedor/familia=categoria/marca/grupo/codigo alterno=Ref.Prov). **Cruce por `code`** (= Referencia Wensoft; 99.5% match; supplierRef solo 0.09% — NO se usa).
+- **Qué se hizo:** 9.209 productos **actualizados** (existencia/costo/precio; el sync deriva ganancia del PVP usando la brecha existente, reproduce el PVP exacto) + **46 nuevos creados** (38 con categoria/marca/proveedor/Ref.Prov; 8 ausentes de nuevo-datos quedaron sin clasificar). Reconciliacion final Trinity vs Wensoft: **9.255 refs, 0 diferencias** en existencia/costo/precio. Los "sin costo" (391) quedan as-is (vienen asi de Wensoft). 3 productos en Trinity que no estan en el Excel (ELE12760/PLO04146/PLO00271) se dejan intactos (desactivados en Wensoft).
+- **Metodo (clave):** TODO se monto y valido en una **copia local pg16** (restaurada del respaldo pre-migracion), y se subio a prod por **wholesale + rename-swap** (dump local -> restaurar en `trinity_db_migrado` en prod -> `pm2 stop trinity-api` -> `ALTER DATABASE trinity_db RENAME TO trinity_db_prev` + `trinity_db_migrado -> trinity_db` -> `pm2 restart`). ~10s downtime. Scripts scratch (untracked): `packages/database/prisma/_sync-nuevo.ts`, `_create-nuevos.ts`, `_enrich-apply.ts`, `_reconcile.ts`, `_check-grupo.ts`.
+- **Prod (inversiones `134.209.164.59`):** `trinity_db` = 9.258 productos, 0 transaccional, health ok, dominio publico ok.
+- **OJO infra:** el user `trinity` NO tiene CREATEDB -> crear/renombrar BD requiere `sudo -u postgres psql`.
+- **Red de seguridad:** BD vieja como `trinity_db_prev` (rollback via rename) + respaldos `pre-migracion-...1735.dump` / `pre-swap-...1915.dump` (server y local). `migrado.dump` queda en `/root`.
+- **PENDIENTE:** (1) completar los **8 nuevos sin datos** (categoria/proveedor + costo): FER04307-10, CON02727, ELE12624, HRA00241, PLO03215; (2) 2 productos con flag brecha desactualizado dejados as-is (ELE01939 BCV, PLO00736 DIVISA); (3) borrar `trinity_db_prev` + `migrado.dump` cuando Diego confirme (dia siguiente); (4) apagar/limpiar contenedor local `trinity-migracion`.
+
 ## 🔒 Respaldos certificados (ambos servers) + spec/plan de fotos de productos — 2026-07-05
 
 Sesion de trabajo previa a la migracion de existencias/costos/precios de la 2da empresa. **Sin cambios de codigo desplegados**; solo infra de respaldos + documentos de diseño.
