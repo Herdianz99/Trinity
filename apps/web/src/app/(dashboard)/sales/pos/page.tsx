@@ -26,6 +26,7 @@ import {
   Percent,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   PackageX,
 } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
@@ -272,6 +273,7 @@ export default function POSPage() {
   const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [pendingFilterMine, setPendingFilterMine] = useState(true);
+  const [pendingSearch, setPendingSearch] = useState(''); // filtro por nombre / cedula del cliente
 
   // Seller state
   const [sellers, setSellers] = useState<any[]>([]);
@@ -301,9 +303,21 @@ export default function POSPage() {
   const hasMissingCxcReference = payments.some(p => p.createsReceivable && !p.reference.trim());
 
   // Drawer de facturas en espera: filtro "mis facturas" (solo si el usuario tiene vendedor propio)
-  const visiblePendingInvoices = (mySellerId && pendingFilterMine)
-    ? pendingInvoices.filter(inv => inv.seller?.id === mySellerId)
-    : pendingInvoices;
+  // + buscador por nombre o cedula del cliente (la cedula matchea ignorando el prefijo V-/E-).
+  const pendingSearchTrim = pendingSearch.trim().toLowerCase();
+  const pendingSearchDigits = pendingSearchTrim.replace(/\D/g, '');
+  const visiblePendingInvoices = pendingInvoices
+    .filter(inv => (mySellerId && pendingFilterMine) ? inv.seller?.id === mySellerId : true)
+    .filter(inv => {
+      if (!pendingSearchTrim) return true;
+      const name = (inv.customer?.name || '').toLowerCase();
+      const rif = (inv.customer?.rif || '').toLowerCase();
+      return (
+        name.includes(pendingSearchTrim) ||
+        rif.includes(pendingSearchTrim) ||
+        (pendingSearchDigits.length > 0 && rif.replace(/\D/g, '').includes(pendingSearchDigits))
+      );
+    });
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -1323,6 +1337,10 @@ export default function POSPage() {
   }
 
   async function handleSaveClient(isEdit: boolean) {
+    if (!clientForm.phone.trim()) {
+      setMessage({ type: 'error', text: 'El telefono del cliente es obligatorio' });
+      return;
+    }
     setSavingClient(true);
     try {
       const url = isEdit ? `/api/proxy/customers/${customerId}` : '/api/proxy/customers';
@@ -1910,6 +1928,25 @@ export default function POSPage() {
       {/* Tira de agregados (solo en la vista de busqueda) */}
       {mobileView === 'search' && cart.length > 0 && (
         <div className="fixed bottom-14 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50">
+          {/* Cliente (visible mientras se cargan articulos; tocar para cambiarlo) */}
+          <button
+            onClick={() => setShowCustomerSearch(true)}
+            className="w-full flex items-center gap-2 px-4 py-2 border-b border-slate-700/40 text-left"
+          >
+            <User size={14} className="text-green-400 shrink-0" />
+            <span className={`text-xs truncate min-w-0 ${customerIsDefault ? 'text-amber-400' : 'text-white font-medium'}`}>
+              {customerName || 'Cliente final'}
+            </span>
+            {!customerIsDefault && creditStatus && (
+              <span className={`text-[11px] font-medium shrink-0 ${creditStatus.availableCredit >= totalUsd ? 'text-green-400' : 'text-red-400'}`}>
+                Cupo: ${creditStatus.availableCredit.toFixed(2)}
+              </span>
+            )}
+            <span className="ml-auto text-[10px] text-slate-500 shrink-0 flex items-center gap-1">
+              Cambiar <ChevronRight size={12} />
+            </span>
+          </button>
+
           {/* Cabecera / toggle */}
           <button
             onClick={() => setCartStripCollapsed(c => !c)}
@@ -2465,7 +2502,7 @@ export default function POSPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Telefono</label>
+                  <label className="text-xs text-slate-500 mb-1 block">Telefono <span className="text-red-400">*</span></label>
                   <input
                     type="text"
                     value={clientForm.phone}
@@ -2479,7 +2516,7 @@ export default function POSPage() {
                 <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={() => handleSaveClient(showEditClient)}
-                  disabled={savingClient || !clientForm.name.trim()}
+                  disabled={savingClient || !clientForm.name.trim() || !clientForm.phone.trim()}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
                 >
                   {savingClient && <Loader2 className="animate-spin" size={14} />}
@@ -2663,9 +2700,32 @@ export default function POSPage() {
               </div>
             )}
 
+            {/* Buscador por nombre o cedula del cliente */}
+            <div className="px-4 md:px-5 py-2.5 border-b border-slate-700/50">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  value={pendingSearch}
+                  onChange={e => setPendingSearch(e.target.value)}
+                  placeholder="Buscar por cliente o cedula..."
+                  className="input-field !py-2 text-sm pl-9 pr-9 w-full"
+                />
+                {pendingSearch && (
+                  <button
+                    onClick={() => setPendingSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-white"
+                    aria-label="Limpiar busqueda"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {visiblePendingInvoices.length === 0 ? (
-                <div className="text-center py-12 text-slate-600 text-sm">{mySellerId && pendingFilterMine ? 'No tienes facturas en espera' : 'No hay facturas en espera'}</div>
+                <div className="text-center py-12 text-slate-600 text-sm">{pendingSearchTrim ? 'Ninguna factura coincide con la busqueda' : (mySellerId && pendingFilterMine ? 'No tienes facturas en espera' : 'No hay facturas en espera')}</div>
               ) : visiblePendingInvoices.map(inv => {
                 const lockedByOther = inv.lockedById && inv.lockedById !== userId;
                 const lockedByMe = inv.lockedById && inv.lockedById === userId;
