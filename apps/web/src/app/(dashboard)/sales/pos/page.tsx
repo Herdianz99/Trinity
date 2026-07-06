@@ -233,6 +233,10 @@ export default function POSPage() {
   const [lostSalePreset, setLostSalePreset] = useState<{ id: string; code: string; name: string } | null>(null);
   // Producto sin stock pendiente de autorizar con clave de supervisor para agregarlo en negativo
   const [negKeyProduct, setNegKeyProduct] = useState<any | null>(null);
+  // Autorizacion de venta sin stock AL COBRAR: si el backend bloquea por stock (p. ej. el
+  // flag se perdio al mover la factura de una PC/caja a otra), se pide la clave y se reintenta.
+  const [negStockKeyOpen, setNegStockKeyOpen] = useState(false);
+  const negStockRetryRef = useRef<null | (() => void)>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
@@ -1028,7 +1032,7 @@ export default function POSPage() {
     }
   }
 
-  async function handleConfirmCredit(override = false) {
+  async function handleConfirmCredit(override = false, forceNegAuth = false, retryInvoiceId?: string) {
     if (!customerId) {
       setMessage({ type: 'error', text: 'Debe asignar un cliente para facturar a credito' });
       return;
@@ -1036,7 +1040,7 @@ export default function POSPage() {
     setProcessing(true);
     setMessage(null);
     try {
-      let targetInvoiceId = existingInvoiceId;
+      let targetInvoiceId = retryInvoiceId || existingInvoiceId;
 
       if (!targetInvoiceId) {
         const createRes = await fetch('/api/proxy/invoices', {
@@ -1072,12 +1076,20 @@ export default function POSPage() {
           payments: [],
           isCredit: true,
           cashRegisterId: selectedCashRegister?.id || undefined,
-          negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
+          negativeStockAuthorized: forceNegAuth || cart.some(i => i.authorizedNegative) || undefined,
           overrideCreditBlockAuthorized: override || undefined,
         }),
       });
       if (!payRes.ok) {
         const err = await payRes.json().catch(() => ({}));
+        // Bloqueo por stock negativo: pedir la clave SELL_NEGATIVE_STOCK y reintentar el cobro
+        // reutilizando la MISMA factura (capturada), para no duplicarla.
+        if (!forceNegAuth && (err.code === 'NEGATIVE_STOCK' || /stock insuficiente/i.test(err.message || ''))) {
+          const capturedId = targetInvoiceId || undefined;
+          negStockRetryRef.current = () => handleConfirmCredit(override, true, capturedId);
+          setNegStockKeyOpen(true);
+          return;
+        }
         throw new Error(err.message || 'Error al procesar credito');
       }
       const result = await payRes.json();
@@ -1138,7 +1150,7 @@ export default function POSPage() {
     }
   }
 
-  async function handleConfirmPayment() {
+  async function handleConfirmPayment(forceNegAuth = false, retryInvoiceId?: string) {
     if (payments.length === 0) return;
 
     // Build final payments adjusting last one to close tiny USD/Bs rounding gaps.
@@ -1204,7 +1216,7 @@ export default function POSPage() {
     setProcessing(true);
     setMessage(null);
     try {
-      let targetInvoiceId = existingInvoiceId;
+      let targetInvoiceId = retryInvoiceId || existingInvoiceId;
 
       if (!targetInvoiceId) {
         const createRes = await fetch('/api/proxy/invoices', {
@@ -1241,11 +1253,19 @@ export default function POSPage() {
           isCredit: false,
           changeMethodId: hasChange && needsBsChange ? changeMethodId : undefined,
           cashRegisterId: selectedCashRegister?.id || undefined,
-          negativeStockAuthorized: cart.some(i => i.authorizedNegative) || undefined,
+          negativeStockAuthorized: forceNegAuth || cart.some(i => i.authorizedNegative) || undefined,
         }),
       });
       if (!payRes.ok) {
         const err = await payRes.json().catch(() => ({}));
+        // Bloqueo por stock negativo: pedir la clave SELL_NEGATIVE_STOCK y reintentar el cobro
+        // reutilizando la MISMA factura (capturada), para no duplicarla.
+        if (!forceNegAuth && (err.code === 'NEGATIVE_STOCK' || /stock insuficiente/i.test(err.message || ''))) {
+          const capturedId = targetInvoiceId || undefined;
+          negStockRetryRef.current = () => handleConfirmPayment(true, capturedId);
+          setNegStockKeyOpen(true);
+          return;
+        }
         throw new Error(err.message || 'Error al procesar pago');
       }
       const result = await payRes.json();
@@ -2324,7 +2344,7 @@ export default function POSPage() {
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button onClick={() => setPayModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
-                  onClick={handleConfirmPayment}
+                  onClick={() => handleConfirmPayment()}
                   disabled={processing || (!hasChange && remaining > 0.01) || (hasChange && needsBsChange && !changeMethodId) || hasMissingCxcReference}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50 w-full md:w-auto justify-center"
                 >
@@ -2826,6 +2846,18 @@ export default function POSPage() {
         entityId={negKeyProduct?.id}
         title="Autorizar venta sin stock"
         description={negKeyProduct ? `Clave de supervisor para agregar "${negKeyProduct.name}" sin stock` : 'Clave de supervisor'}
+      />
+
+      {/* Autorizar venta sin stock AL COBRAR (si el backend bloqueo por stock; p. ej. el flag
+          se perdio al mover la factura de una PC/caja a otra). Reintenta el cobro autorizado. */}
+      <DynamicKeyModal
+        isOpen={negStockKeyOpen}
+        onClose={() => { setNegStockKeyOpen(false); negStockRetryRef.current = null; }}
+        onAuthorized={() => { setNegStockKeyOpen(false); const fn = negStockRetryRef.current; negStockRetryRef.current = null; fn?.(); }}
+        permission="SELL_NEGATIVE_STOCK"
+        action="Autorizar venta sin stock al cobrar"
+        title="Venta sin stock"
+        description="Uno o mas productos no tienen stock suficiente. Ingresa la clave de supervisor para autorizar y cobrar la factura."
       />
 
       {/* Autorizar EXCEPCION de credito (vencidos o sobre cupo) con clave OVERRIDE_CREDIT_BLOCK.

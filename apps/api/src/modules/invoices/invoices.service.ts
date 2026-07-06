@@ -474,7 +474,13 @@ export class InvoicesService {
       }
 
       if (insufficientItems.length > 0) {
-        throw new BadRequestException(insufficientItems.join('. '));
+        // code: para que el POS lo detecte y ofrezca autorizar la venta sin stock
+        // (clave SELL_NEGATIVE_STOCK) y reintente, incluso si el flag se perdio al
+        // mover la factura de una PC/caja a otra (el flag vive solo en el navegador).
+        throw new BadRequestException({
+          message: insufficientItems.join('. '),
+          code: 'NEGATIVE_STOCK',
+        });
       }
     }
 
