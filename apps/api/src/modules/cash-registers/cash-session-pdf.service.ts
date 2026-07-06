@@ -459,4 +459,147 @@ export class CashSessionPdfService {
 
     return this.toBuffer(doc);
   }
+
+  /**
+   * Reporte RESUMIDO de movimientos de caja: NO lista cada movimiento, solo
+   * totaliza cobros por metodo de pago (+ por caja) y el neto de los movimientos
+   * manuales. Respeta los mismos filtros que la pantalla. Carta vertical.
+   */
+  async generateGlobalSummaryReport(filters: {
+    cashRegisterId?: string;
+    userId?: string;
+    from?: string;
+    to?: string;
+    methodIds?: string[];
+  }): Promise<Buffer> {
+    const { rows, summary, meta } = await this.cashService.getGlobalMovementsData(filters);
+
+    const config = await this.prisma.companyConfig.findFirst();
+    const company = config?.companyName || 'Trinity ERP';
+
+    const RIGHT = 555;
+    const payments = rows.filter((r) => r.kind === 'PAYMENT');
+
+    // Columnas del resumen (carta vertical, area util 40..555)
+    const SUM_COLS = [
+      { label: 'Metodo de pago', x: 40, width: 250 },
+      { label: 'Movs', x: 300, width: 50, align: 'right' },
+      { label: 'Total USD', x: 356, width: 95, align: 'right' },
+      { label: 'Total Bs', x: 455, width: 100, align: 'right' },
+    ];
+    const CAJA_COLS = [
+      { label: 'Caja', x: 40, width: 250 },
+      { label: 'Movs', x: 300, width: 50, align: 'right' },
+      { label: 'Total USD', x: 356, width: 95, align: 'right' },
+      { label: 'Total Bs', x: 455, width: 100, align: 'right' },
+    ];
+
+    // Agrupar cobros por metodo (mayor monto primero)
+    const byMethod = new Map<string, { name: string; count: number; usd: number; bs: number }>();
+    for (const p of payments) {
+      const k = p.methodName || '—';
+      const g = byMethod.get(k) || { name: k, count: 0, usd: 0, bs: 0 };
+      g.count++; g.usd += p.amountUsd; g.bs += p.amountBs;
+      byMethod.set(k, g);
+    }
+    const methodGroups = Array.from(byMethod.values()).sort((a, b) => b.usd - a.usd);
+
+    // Agrupar cobros por caja
+    const byCaja = new Map<string, { name: string; count: number; usd: number; bs: number }>();
+    for (const p of payments) {
+      const k = p.cashRegisterName || '—';
+      const g = byCaja.get(k) || { name: k, count: 0, usd: 0, bs: 0 };
+      g.count++; g.usd += p.amountUsd; g.bs += p.amountBs;
+      byCaja.set(k, g);
+    }
+    const cajaGroups = Array.from(byCaja.values()).sort((a, b) => b.usd - a.usd);
+
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
+
+    // Encabezado
+    doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
+    doc.fontSize(12).font('Helvetica-Bold').text('Resumen de movimientos de caja', 40, 60);
+    doc.fontSize(9).font('Helvetica').fillColor('#334155');
+    const period = meta.from || meta.to ? `${meta.from || '...'}  a  ${meta.to || '...'}` : 'Todas las fechas';
+    const filtros: string[] = [`Periodo: ${period}`, `Caja: ${meta.registerName || 'Todas'}`, `Cajero: ${meta.cashierName || 'Todos'}`];
+    if (meta.methodNames && meta.methodNames.length) filtros.push(`Metodos: ${meta.methodNames.join(', ')}`);
+    doc.text(filtros.join('     '), 40, 80, { width: RIGHT - 40 });
+    doc.text(`Generado: ${this.dateTime(new Date())}`, 40, 94);
+    doc.fillColor('#000');
+    doc.moveTo(40, 110).lineTo(RIGHT, 110).stroke('#94a3b8');
+    let y = 118;
+
+    // ═══ Cobros por metodo de pago ═══
+    doc.fontSize(10).font('Helvetica-Bold').text('COBROS POR METODO DE PAGO', 40, y);
+    y += 18;
+    if (methodGroups.length === 0) {
+      doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('No hay cobros con los filtros aplicados.', 40, y);
+      doc.fillColor('#000');
+      y += 16;
+    } else {
+      y = this.drawTableHeader(doc, y, SUM_COLS, RIGHT);
+      for (const g of methodGroups) {
+        y = this.checkPage(doc, y, 24);
+        if (y === 40) y = this.drawTableHeader(doc, y, SUM_COLS, RIGHT);
+        y = this.drawRow(doc, y, SUM_COLS, [g.name, String(g.count), `$${this.fmt(g.usd)}`, this.fmt(g.bs)]);
+      }
+      // Total cobros (barra oscura)
+      y += 2;
+      doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
+      doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
+      doc.text(`TOTAL COBROS  (${summary.paymentCount})`, 46, y + 1, { width: 250, lineBreak: false });
+      doc.text(`$${this.fmt(summary.paymentUsd)}   /   Bs ${this.fmt(summary.paymentBs)}`, 300, y + 1, { width: RIGHT - 300 - 6, align: 'right' });
+      doc.fillColor('#000');
+      y += 26;
+    }
+
+    // ═══ Movimientos manuales (solo si no se filtro por metodo) ═══
+    if (!(filters.methodIds && filters.methodIds.length)) {
+      y = this.checkPage(doc, y, 70);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('MOVIMIENTOS MANUALES DE CAJA', 40, y);
+      y += 18;
+      if (summary.movementCount === 0) {
+        doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('Sin movimientos manuales con los filtros aplicados.', 40, y);
+        doc.fillColor('#000');
+        y += 16;
+      } else {
+        y = this.drawTableHeader(doc, y, SUM_COLS, RIGHT);
+        const netoUsd = summary.incomeUsd - summary.expenseUsd;
+        const netoBs = summary.incomeBs - summary.expenseBs;
+        y = this.drawRow(doc, y, SUM_COLS, [`Ingresos (${summary.movementCount} movs)`, '', `$${this.fmt(summary.incomeUsd)}`, this.fmt(summary.incomeBs)]);
+        y = this.drawRow(doc, y, SUM_COLS, ['Egresos', '', `-$${this.fmt(summary.expenseUsd)}`, `-${this.fmt(summary.expenseBs)}`]);
+        doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#cbd5e1');
+        y += 3;
+        y = this.drawRow(doc, y, SUM_COLS, ['Neto manual', '', `$${this.fmt(netoUsd)}`, this.fmt(netoBs)], true);
+        y += 12;
+      }
+    }
+
+    // ═══ Cobros por caja (solo si hay mas de una) ═══
+    if (cajaGroups.length > 1) {
+      y = this.checkPage(doc, y, 60);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('COBROS POR CAJA', 40, y);
+      y += 18;
+      y = this.drawTableHeader(doc, y, CAJA_COLS, RIGHT);
+      for (const g of cajaGroups) {
+        y = this.checkPage(doc, y, 24);
+        if (y === 40) y = this.drawTableHeader(doc, y, CAJA_COLS, RIGHT);
+        y = this.drawRow(doc, y, CAJA_COLS, [g.name, String(g.count), `$${this.fmt(g.usd)}`, this.fmt(g.bs)]);
+      }
+    }
+
+    // Paginacion al pie
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const oldBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc.fontSize(8).font('Helvetica').fillColor('#64748b')
+        .text(`Pagina ${i + 1} de ${range.count}`, 40, doc.page.height - 28, { align: 'center', width: doc.page.width - 80 });
+      doc.fillColor('#000');
+      doc.page.margins.bottom = oldBottom;
+    }
+
+    return this.toBuffer(doc);
+  }
 }

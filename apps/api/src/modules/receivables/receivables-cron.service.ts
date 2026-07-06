@@ -8,7 +8,9 @@ export class ReceivablesCronService {
 
   constructor(private readonly receivablesService: ReceivablesService) {}
 
-  @Cron('0 1 0 * * *') // Every day at 00:01
+  // 00:01 hora Caracas (el server corre en UTC; sin timeZone dispararia 8 PM Caracas
+  // del dia anterior y marcaria los vencidos con ~1 dia de retraso).
+  @Cron('0 1 0 * * *', { timeZone: 'America/Caracas' })
   async handleOverdueCheck() {
     this.logger.log('Checking for overdue receivables...');
     const count = await this.receivablesService.markOverdue();

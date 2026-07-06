@@ -417,11 +417,7 @@ export class PayablesService {
     return { nextNumber: `CXP/${yearSuffix}-${nextNum.toString().padStart(6, '0')}` };
   }
 
-  async findAll(query: QueryPayablesDto) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const skip = (page - 1) * limit;
-
+  private buildWhere(query: QueryPayablesDto): any {
     const where: any = {};
 
     if (query.supplierId) {
@@ -440,10 +436,29 @@ export class PayablesService {
       }
     }
     if (query.overdue) {
+      // Vencida = fecha pasada y aun no pagada. Incluye OVERDUE (ya marcada por el cron)
+      // Y las PENDING/PARTIAL que el cron todavia no marco, para no dejar ninguna fuera.
       const now = caracasDateKey();
       where.dueDate = { lt: now };
+      where.status = { in: ['PENDING', 'PARTIAL', 'OVERDUE'] };
+    } else if (query.dueWithinDays !== undefined && query.dueWithinDays !== null && !Number.isNaN(query.dueWithinDays)) {
+      // Proximas a vencer: dueDate entre el inicio de hoy y el fin del dia (hoy+N) en
+      // hora Caracas (aun no vencidas, no pagadas). El dueDate lleva hora, por eso se
+      // usan los limites de dia-Caracas (no la medianoche-UTC de caracasDateKey).
+      const start = caracasDayStart();
+      const end = caracasDayEnd(new Date(Date.now() + query.dueWithinDays * 24 * 60 * 60 * 1000));
+      where.dueDate = { gte: start, lte: end };
       where.status = { in: ['PENDING', 'PARTIAL'] };
     }
+    return where;
+  }
+
+  async findAll(query: QueryPayablesDto) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildWhere(query);
 
     const [data, total] = await Promise.all([
       this.prisma.payable.findMany({
@@ -470,6 +485,23 @@ export class PayablesService {
     }));
 
     return { data: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  // Todos los registros que matchean el filtro (sin paginar), para el reporte PDF.
+  async findAllForReport(query: QueryPayablesDto) {
+    const where = this.buildWhere(query);
+    const data = await this.prisma.payable.findMany({
+      where,
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        supplier: { select: { id: true, name: true } },
+        purchaseOrder: { select: { id: true, number: true } },
+      },
+    });
+    return data.map((p) => ({
+      ...p,
+      balanceUsd: Math.round((p.netPayableUsd - p.paidAmountUsd) * 100) / 100,
+    }));
   }
 
   async findOne(id: string) {
@@ -514,12 +546,15 @@ export class PayablesService {
     let totalOverdueUsd = 0;
     let totalRetentionUsd = 0;
     const supplierMap: Record<string, { supplierName: string; totalUsd: number; count: number }> = {};
+    // Vencida = fecha de vencimiento ya pasada (no depende del status OVERDUE del cron),
+    // asi la tarjeta coincide con el filtro "Solo vencidas".
+    const todayKey = caracasDateKey();
 
     for (const p of pending) {
       const balance = p.netPayableUsd - p.paidAmountUsd;
       totalPendingUsd += balance;
 
-      if (p.status === 'OVERDUE') {
+      if (p.dueDate && p.dueDate < todayKey) {
         totalOverdueUsd += balance;
       }
 
@@ -574,8 +609,10 @@ export class PayablesService {
       ['PENDING', 'PARTIAL', 'OVERDUE'].includes(p.status),
     );
     const totalDebt = pending.reduce((sum, p) => sum + (p.netPayableUsd - p.paidAmountUsd), 0);
+    // Vencida = fecha pasada y no pagada (coincide con la tarjeta y el filtro).
+    const todayKey = caracasDateKey();
     const totalOverdue = pending
-      .filter((p) => p.status === 'OVERDUE')
+      .filter((p) => p.dueDate && p.dueDate < todayKey)
       .reduce((sum, p) => sum + (p.netPayableUsd - p.paidAmountUsd), 0);
     const totalRetention = pending.reduce((sum, p) => sum + p.retentionUsd, 0);
 

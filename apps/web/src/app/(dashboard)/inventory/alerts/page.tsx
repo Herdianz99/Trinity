@@ -93,10 +93,10 @@ export default function InventoryAlertsPage() {
 
   function exportExcel() {
     const aoa: (string | number)[][] = [
-      ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', 'Última entrada', 'Días', 'Estado'],
+      ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'],
       ...filtered.map((it) => [
         it.productCode, it.productName, it.supplierName, it.currentStock, it.minStock,
-        fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
+        it.periodSales, fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
       ]),
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -143,7 +143,7 @@ export default function InventoryAlertsPage() {
 
         {/* Period (relevant for excess) */}
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-slate-500">Período (exceso):</span>
+          <span className="text-xs text-slate-500">Período (ventas / exceso):</span>
           {(['30', '60', '90'] as const).map((d) => (
             <button
               key={d}
@@ -192,6 +192,7 @@ export default function InventoryAlertsPage() {
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Proveedor</th>
                   <th className="text-right px-3 py-3 text-slate-400 font-medium">Stock</th>
                   <th className="text-right px-3 py-3 text-slate-400 font-medium">Mín.</th>
+                  <th className="text-right px-3 py-3 text-slate-400 font-medium" title={`Unidades vendidas en los últimos ${period} días`}>Ventas ({period}d)</th>
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Últ. entrada</th>
                   <th className="text-right px-3 py-3 text-slate-400 font-medium">Días</th>
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Estado</th>
@@ -199,7 +200,7 @@ export default function InventoryAlertsPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
                 ) : filtered.map((it) => (
                   <tr key={it.productId} className="border-b border-slate-700/30 hover:bg-slate-800/40">
                     <td className="px-3 py-2.5 font-mono text-xs text-emerald-400">{it.productCode}</td>
@@ -207,6 +208,7 @@ export default function InventoryAlertsPage() {
                     <td className="px-3 py-2.5 text-slate-400 text-xs">{it.supplierName}</td>
                     <td className={`px-3 py-2.5 text-right font-mono ${it.currentStock <= it.minStock ? 'text-red-400' : 'text-slate-300'}`}>{it.currentStock}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-slate-500">{it.minStock}</td>
+                    <td className={`px-3 py-2.5 text-right font-mono ${it.periodSales > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>{it.periodSales}</td>
                     <td className="px-3 py-2.5 text-slate-400 text-xs">
                       {fmtDate(it.lastEntryDate)}{it.lastEntrySource === 'CREATED' && <span className="text-slate-600"> (creado)</span>}
                     </td>

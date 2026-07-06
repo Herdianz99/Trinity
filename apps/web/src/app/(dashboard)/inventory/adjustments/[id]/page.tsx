@@ -15,6 +15,8 @@ interface AdjustmentItem {
     id: string;
     code: string;
     name: string;
+    costUsd: number;
+    bregaApplies: boolean;
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
   };
@@ -23,9 +25,11 @@ interface AdjustmentItem {
 
 interface AdjustmentDetail {
   id: string;
+  number: string | null;
   warehouse: { id: string; name: string };
   type: 'IN' | 'OUT';
   status: 'DRAFT' | 'PROCESSED' | 'CANCELLED';
+  costMode: 'COST' | 'BREGA';
   description: string | null;
   customer: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
@@ -33,6 +37,8 @@ interface AdjustmentDetail {
   processedAt: string | null;
   createdAt: string;
 }
+
+interface Party { id: string; name: string; creditDays?: number }
 
 interface SearchResult {
   id: string;
@@ -86,6 +92,15 @@ export default function InventoryAdjustmentDetailPage() {
   const [quantityValues, setQuantityValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
+  // Process modal + generacion de CxC/CxP
+  const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
+  const [customers, setCustomers] = useState<Party[]>([]);
+  const [suppliers, setSuppliers] = useState<Party[]>([]);
+  const [showProcessModal, setShowProcessModal] = useState(false);
+  const [genAccount, setGenAccount] = useState(false);
+  const [procEntityId, setProcEntityId] = useState('');
+  const [procDueDate, setProcDueDate] = useState('');
+
   // ── Data fetching ──────────────────────────────────
   const fetchAdjustment = useCallback(async () => {
     setLoading(true);
@@ -111,11 +126,38 @@ export default function InventoryAdjustmentDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchAdjustment(); }, [fetchAdjustment]);
+
+  // Datos para el modal de proceso: brecha global (para el total) + clientes + proveedores
+  useEffect(() => {
+    fetch('/api/proxy/config').then(r => r.ok ? r.json() : null).then(d => { if (d) setBregaGlobalPct(d.bregaGlobalPct || 0); }).catch(() => {});
+    fetch('/api/proxy/customers?limit=500').then(r => r.ok ? r.json() : null).then(d => { if (d) setCustomers(Array.isArray(d) ? d : d.data || []); }).catch(() => {});
+    fetch('/api/proxy/suppliers').then(r => r.ok ? r.json() : null).then(d => { if (d) setSuppliers(Array.isArray(d) ? d : d.data || []); }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (adjustment) {
-      document.title = `Ajuste - ${adjustment.warehouse.name} | Trinity ERP`;
+      document.title = `${adjustment.number || 'Ajuste'} - ${adjustment.warehouse.name} | Trinity ERP`;
     }
   }, [adjustment]);
+
+  // ── Costo total del ajuste (mismo calculo que el reporte PDF) ──
+  const totalCost = adjustment
+    ? adjustment.items.reduce((sum, it) => {
+        const qty = quantityValues[it.productId] ?? it.quantity;
+        const bregaPct = adjustment.costMode !== 'COST' && it.product.bregaApplies ? bregaGlobalPct : 0;
+        return sum + qty * (it.product.costUsd * (1 + bregaPct / 100));
+      }, 0)
+    : 0;
+
+  // Fecha de vencimiento por defecto = hoy + dias de credito de la entidad
+  function dueDateFor(entityId: string, type: 'IN' | 'OUT'): string {
+    const list = type === 'OUT' ? customers : suppliers;
+    const days = list.find(p => p.id === entityId)?.creditDays ?? 0;
+    if (!days || days <= 0) return '';
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
 
   // ── Click outside to close dropdown ────────────────
   useEffect(() => {
@@ -264,15 +306,24 @@ export default function InventoryAdjustmentDetailPage() {
     }
   }
 
-  // ── Process adjustment ─────────────────────────────
-  async function handleProcess() {
+  // ── Abrir modal de proceso (pre-llena entidad y vencimiento) ──
+  function openProcessModal() {
     if (!adjustment) return;
-    const typeLabel = adjustment.type === 'IN' ? 'ENTRADA (se sumara stock)' : 'SALIDA (se restara stock)';
-    if (!confirm(`Procesar este ajuste de ${typeLabel}?\nSe actualizara el stock de ${adjustment.items.length} producto(s).\nEsta accion no se puede deshacer.`)) return;
+    const entId = adjustment.type === 'OUT' ? (adjustment.customer?.id || '') : (adjustment.supplier?.id || '');
+    setProcEntityId(entId);
+    setGenAccount(!!entId); // si ya tiene entidad, por defecto proponemos generar la cuenta
+    setProcDueDate(entId ? dueDateFor(entId, adjustment.type) : '');
+    setMessage(null);
+    setShowProcessModal(true);
+  }
+
+  // ── Confirmar proceso (guarda cantidades + procesa + genera cuenta si aplica) ──
+  async function confirmProcess() {
+    if (!adjustment) return;
     setSaving(true);
     setMessage(null);
     try {
-      // Save pending quantities before processing
+      // Guardar cantidades pendientes antes de procesar
       const items = adjustment.items.map(item => ({
         productId: item.productId,
         quantity: Number(quantityValues[item.productId] ?? 0),
@@ -289,14 +340,30 @@ export default function InventoryAdjustmentDetailPage() {
         }
       }
 
-      const res = await fetch(`/api/proxy/inventory-adjustments/${id}/process`, { method: 'PATCH' });
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Ajuste procesado y stock actualizado' });
-        fetchAdjustment();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Error');
+      const body: any = { generateAccount: genAccount };
+      if (genAccount) {
+        if (adjustment.type === 'OUT') body.customerId = procEntityId;
+        else body.supplierId = procEntityId;
+        if (procDueDate) body.dueDate = new Date(procDueDate + 'T12:00:00').toISOString();
       }
+
+      const res = await fetch(`/api/proxy/inventory-adjustments/${id}/process`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Error');
+
+      const acc = data.generatedAccount;
+      setMessage({
+        type: 'success',
+        text: acc
+          ? `Ajuste procesado. Se genero ${acc.kind === 'CXC' ? 'CxC' : 'CxP'} ${acc.number} por $${(acc.amountUsd ?? 0).toFixed(2)}.`
+          : 'Ajuste procesado y stock actualizado',
+      });
+      setShowProcessModal(false);
+      fetchAdjustment();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -345,6 +412,9 @@ export default function InventoryAdjustmentDetailPage() {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
+            {adjustment.number && (
+              <span className="font-mono text-lg font-bold text-green-400">{adjustment.number}</span>
+            )}
             <h1 className="text-2xl font-bold text-white">{adjustment.warehouse.name}</h1>
             <span className={`text-xs px-2.5 py-0.5 rounded-full border ${TYPE_BADGES[adjustment.type]}`}>
               {TYPE_LABELS[adjustment.type]}
@@ -520,7 +590,7 @@ export default function InventoryAdjustmentDetailPage() {
                   Guardar
                 </button>
                 <button
-                  onClick={handleProcess}
+                  onClick={openProcessModal}
                   disabled={saving}
                   className="btn-primary !py-2.5 text-sm flex items-center gap-2"
                 >
@@ -607,6 +677,91 @@ export default function InventoryAdjustmentDetailPage() {
           </button>
         </div>
       )}
+
+      {/* ═══ Modal de proceso ═══ */}
+      {showProcessModal && adjustment && (() => {
+        const isOut = adjustment.type === 'OUT';
+        const accKind = isOut ? 'CxC' : 'CxP';
+        const entityLabel = isOut ? 'Cliente' : 'Proveedor';
+        const entities = isOut ? customers : suppliers;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !saving && setShowProcessModal(false)}>
+            <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-slate-700">
+                <h2 className="text-lg font-semibold text-white">Procesar ajuste</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isOut ? 'SALIDA — se restara stock' : 'ENTRADA — se sumara stock'} de {adjustment.items.length} producto(s). No se puede deshacer.
+                </p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Toggle generar cuenta */}
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={genAccount}
+                    onChange={(e) => setGenAccount(e.target.checked)}
+                    className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                  />
+                  <span className="text-sm text-slate-200">Generar {accKind} por el costo del ajuste</span>
+                </label>
+
+                {genAccount && (
+                  <div className="space-y-3 pl-1">
+                    {/* Total */}
+                    <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2">
+                      <span className="text-xs text-slate-400">Monto ({adjustment.costMode === 'COST' ? 'costo' : 'costo + brecha'})</span>
+                      <span className="text-lg font-bold text-green-400 font-mono">${totalCost.toFixed(2)}</span>
+                    </div>
+
+                    {/* Entidad */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">{entityLabel} *</label>
+                      <select
+                        value={procEntityId}
+                        onChange={(e) => { setProcEntityId(e.target.value); setProcDueDate(dueDateFor(e.target.value, adjustment.type)); }}
+                        className="input-field !py-2 text-sm"
+                      >
+                        <option value="">Seleccionar {entityLabel.toLowerCase()}...</option>
+                        {entities.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Vencimiento */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Vencimiento (opcional)</label>
+                      <input
+                        type="date"
+                        value={procDueDate}
+                        onChange={(e) => setProcDueDate(e.target.value)}
+                        className="input-field !py-2 text-sm"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">Se pre-llena con los dias de credito de la entidad. Vacio = sin vencimiento.</p>
+                    </div>
+
+                    {!procEntityId && (
+                      <p className="text-xs text-amber-400">Selecciona un {entityLabel.toLowerCase()} para generar la {accKind}.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
+                <button type="button" onClick={() => setShowProcessModal(false)} disabled={saving} className="btn-secondary !py-2 text-sm">Cancelar</button>
+                <button
+                  type="button"
+                  onClick={confirmProcess}
+                  disabled={saving || (genAccount && !procEntityId)}
+                  className="btn-primary !py-2 text-sm flex items-center gap-2"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  Procesar{genAccount ? ` y generar ${accKind}` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

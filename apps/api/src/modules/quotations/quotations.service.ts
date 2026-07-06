@@ -431,16 +431,27 @@ export class QuotationsService {
     return result.count;
   }
 
-  async cancelOldPendingInvoices() {
+  // Elimina (hard-delete) las pre-facturas PENDING de dias anteriores que nunca se
+  // cobraron. El filtro status='PENDING' garantiza que NUNCA toca facturas pagadas
+  // (una pagada nunca esta PENDING); ademas estas pre-facturas tienen number=null,
+  // no mueven stock ni generan CxC, asi que borrarlas no deja huecos ni descuadres.
+  // Se borran items + pagos + factura en transaccion (igual que el delete manual).
+  async deleteOldPendingInvoices() {
     const today = caracasDayStart();
 
-    const result = await this.prisma.invoice.updateMany({
-      where: {
-        status: 'PENDING',
-        createdAt: { lt: today },
-      },
-      data: { status: 'CANCELLED' },
+    const stale = await this.prisma.invoice.findMany({
+      where: { status: 'PENDING', createdAt: { lt: today } },
+      select: { id: true },
     });
-    return result.count;
+    if (stale.length === 0) return 0;
+    const ids = stale.map((i) => i.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: { in: ids } } });
+      await tx.payment.deleteMany({ where: { invoiceId: { in: ids } } });
+      await tx.invoice.deleteMany({ where: { id: { in: ids }, status: 'PENDING' } });
+    });
+
+    return ids.length;
   }
 }

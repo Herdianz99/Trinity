@@ -23,6 +23,7 @@ import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.
 import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
 import { RemoveItemsDto } from './dto/remove-items.dto';
+import { ProcessAdjustmentDto } from './dto/process-adjustment.dto';
 
 @ApiTags('Inventory Adjustments')
 @ApiBearerAuth()
@@ -104,9 +105,10 @@ export class InventoryAdjustmentsController {
   @Patch(':id/process')
   process(
     @Param('id') id: string,
+    @Body() dto: ProcessAdjustmentDto,
     @CurrentUser() user: { id: string; email: string; role: UserRole },
   ) {
-    return this.inventoryAdjustmentsService.process(id, user.id);
+    return this.inventoryAdjustmentsService.process(id, user.id, dto);
   }
 
   @Patch(':id/cancel')

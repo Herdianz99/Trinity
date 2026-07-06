@@ -6,7 +6,7 @@ import SeniatModal from '@/components/seniat-modal';
 
 const defaultForm = {
   name: '', rif: '', phone: '', email: '', address: '', contactName: '',
-  isRetentionAgent: false, isActive: true,
+  creditDays: 0, isRetentionAgent: false, isActive: true,
 };
 
 interface Props {
@@ -37,6 +37,7 @@ export default function SupplierFormModal({ open, mode, supplierId, onClose, onS
           if (s) setForm({
             name: s.name || '', rif: s.rif || '', phone: s.phone || '', email: s.email || '',
             address: s.address || '', contactName: s.contactName || '',
+            creditDays: s.creditDays ?? 0,
             isRetentionAgent: !!s.isRetentionAgent, isActive: s.isActive !== false,
           });
         })
@@ -81,6 +82,7 @@ export default function SupplierFormModal({ open, mode, supplierId, onClose, onS
         name: form.name, rif: form.rif || undefined, phone: form.phone || undefined,
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
+        creditDays: Number(form.creditDays) || 0,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
       };
       const url = mode === 'edit' && supplierId ? `/api/proxy/suppliers/${supplierId}` : '/api/proxy/suppliers';
@@ -143,6 +145,11 @@ export default function SupplierFormModal({ open, mode, supplierId, onClose, onS
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Persona de contacto</label>
                 <input type="text" value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Dias de credito</label>
+                <input type="number" min="0" step="1" value={form.creditDays || ''} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" placeholder="0" />
+                <p className="text-[10px] text-slate-500 mt-1">Al cargar una compra, si es &gt; 0 se marca credito y se autorellenan los dias.</p>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-slate-400 mb-1">Direccion</label>

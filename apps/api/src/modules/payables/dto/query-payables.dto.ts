@@ -23,6 +23,11 @@ export class QueryPayablesDto {
   @IsBoolean()
   overdue?: boolean;
 
+  // Proximas a vencer: dueDate entre hoy y hoy+N (no vencidas, no pagadas)
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value, 10))
+  dueWithinDays?: number;
+
   @IsOptional()
   @Transform(({ value }) => parseInt(value, 10))
   page?: number;

@@ -6,6 +6,7 @@ import { PackagePlus, Plus, Loader2 } from 'lucide-react';
 
 interface InventoryAdjustment {
   id: string;
+  number: string | null;
   warehouseId: string;
   warehouse: { id: string; name: string };
   type: 'IN' | 'OUT';
@@ -113,6 +114,7 @@ export default function InventoryAdjustmentsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50">
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">N°</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Tipo</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Almacen</th>
@@ -124,15 +126,16 @@ export default function InventoryAdjustmentsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
+                <tr><td colSpan={8} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
               ) : adjustments.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-500">No hay ajustes de inventario</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-500">No hay ajustes de inventario</td></tr>
               ) : adjustments.map(a => (
                 <tr
                   key={a.id}
                   onClick={() => router.push(`/inventory/adjustments/${a.id}`)}
                   className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer"
                 >
+                  <td className="px-4 py-3 font-mono text-xs text-green-400">{a.number || '—'}</td>
                   <td className="px-4 py-3 text-slate-300 text-xs">{new Date(a.createdAt).toLocaleDateString('es-VE')}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${TYPE_BADGES[a.type]}`}>

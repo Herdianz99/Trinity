@@ -8,6 +8,7 @@ type AlertItem = {
   supplierRef: string;
   currentStock: number;
   minStock: number;
+  periodSales: number;
   daysSinceEntry: number;
   daysOfInventory: number;
   lastEntryDate: string;
@@ -49,7 +50,7 @@ export class InventoryAlertsPdfService {
     // Header
     doc.fontSize(16).font('Helvetica-Bold').text(company, 40, 40);
     doc.fontSize(12).font('Helvetica-Bold').text(title, 40, 60);
-    doc.fontSize(9).font('Helvetica').text(period ? `Periodo (exceso): ${period}` : '', 40, 76);
+    doc.fontSize(9).font('Helvetica').text(period ? `Periodo (ventas / exceso): ${period}` : '', 40, 76);
     doc.text(`Generado: ${new Date().toLocaleDateString('es-VE')}  |  ${items.length} articulos`, 40, 88);
     doc.moveTo(40, 104).lineTo(doc.page.width - 40, 104).stroke('#94a3b8');
 
@@ -57,12 +58,13 @@ export class InventoryAlertsPdfService {
     // el codigo del articulo + Ref. Proveedor van juntos en la primera columna.
     const columns = [
       { label: 'Codigo / Ref.', x: 40, width: 90 },
-      { label: 'Producto', x: 132, width: 180 },
-      { label: 'Stock', x: 314, width: 40, align: 'right' as const },
-      { label: 'Min', x: 356, width: 32, align: 'right' as const },
-      { label: 'Ult. entrada', x: 390, width: 70 },
-      { label: 'Dias', x: 462, width: 28, align: 'right' as const },
-      { label: 'Estado', x: 492, width: 80 },
+      { label: 'Producto', x: 132, width: 146 },
+      { label: 'Stock', x: 280, width: 36, align: 'right' as const },
+      { label: 'Min', x: 318, width: 30, align: 'right' as const },
+      { label: 'Ventas', x: 350, width: 40, align: 'right' as const },
+      { label: 'Ult. entrada', x: 392, width: 66 },
+      { label: 'Dias', x: 460, width: 26, align: 'right' as const },
+      { label: 'Estado', x: 488, width: 84 },
     ];
 
     let y = 114;
@@ -87,6 +89,7 @@ export class InventoryAlertsPdfService {
         it.productName,
         String(it.currentStock),
         String(it.minStock),
+        String(it.periodSales),
         this.fmtDate(it.lastEntryDate),
         String(it.daysSinceEntry),
         estado,

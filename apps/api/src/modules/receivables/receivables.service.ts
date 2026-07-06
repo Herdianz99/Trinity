@@ -202,11 +202,7 @@ export class ReceivablesService {
     return { nextNumber: `CXC/${yearSuffix}-${nextNum.toString().padStart(6, '0')}` };
   }
 
-  async findAll(query: QueryReceivablesDto) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const skip = (page - 1) * limit;
-
+  private buildWhere(query: QueryReceivablesDto): any {
     const where: any = {};
 
     if (query.type) {
@@ -234,13 +230,32 @@ export class ReceivablesService {
       }
     }
     if (query.overdue) {
+      // Vencida = fecha pasada y aun no pagada. Incluye OVERDUE (ya marcada por el cron)
+      // Y las PENDING/PARTIAL que el cron todavia no marco, para no dejar ninguna fuera.
       const now = caracasDateKey();
       where.dueDate = { lt: now };
+      where.status = { in: ['PENDING', 'PARTIAL', 'OVERDUE'] };
+    } else if (query.dueWithinDays !== undefined && query.dueWithinDays !== null && !Number.isNaN(query.dueWithinDays)) {
+      // Proximas a vencer: dueDate entre el inicio de hoy y el fin del dia (hoy+N) en
+      // hora Caracas (aun no vencidas, no pagadas). El dueDate lleva hora, por eso se
+      // usan los limites de dia-Caracas (no la medianoche-UTC de caracasDateKey).
+      const start = caracasDayStart();
+      const end = caracasDayEnd(new Date(Date.now() + query.dueWithinDays * 24 * 60 * 60 * 1000));
+      where.dueDate = { gte: start, lte: end };
       where.status = { in: ['PENDING', 'PARTIAL'] };
     }
     if (query.employeeOnly) {
       where.customer = { ...(where.customer || {}), isEmployee: true };
     }
+    return where;
+  }
+
+  async findAll(query: QueryReceivablesDto) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildWhere(query);
 
     const [data, total] = await Promise.all([
       this.prisma.receivable.findMany({
@@ -250,7 +265,9 @@ export class ReceivablesService {
         orderBy: { createdAt: 'desc' },
         include: {
           customer: { select: { id: true, name: true, documentType: true, rif: true } },
-          invoice: { select: { id: true, number: true } },
+          // Cliente de la factura: para CxC de plataforma (Cashea) el customerId es null
+          // pero la factura original si tiene cliente; asi mostramos nombre + cedula en la lista.
+          invoice: { select: { id: true, number: true, customer: { select: { id: true, name: true, documentType: true, rif: true } } } },
           serie: { select: { id: true, name: true, isFiscal: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
@@ -267,6 +284,23 @@ export class ReceivablesService {
     }));
 
     return { data: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  // Todos los registros que matchean el filtro (sin paginar), para el reporte PDF.
+  async findAllForReport(query: QueryReceivablesDto) {
+    const where = this.buildWhere(query);
+    const data = await this.prisma.receivable.findMany({
+      where,
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        customer: { select: { id: true, name: true, rif: true } },
+        invoice: { select: { id: true, number: true } },
+      },
+    });
+    return data.map((r) => ({
+      ...r,
+      balanceUsd: Math.round((r.amountUsd - r.paidAmountUsd) * 100) / 100,
+    }));
   }
 
   async findOne(id: string) {
@@ -302,11 +336,14 @@ export class ReceivablesService {
     const platformMap: Record<string, { totalUsd: number; count: number }> = {};
     const statusMap: Record<string, { count: number; totalUsd: number }> = {};
 
+    // Vencida = fecha de vencimiento ya pasada (no depende del status OVERDUE que
+    // pinta el cron), asi la tarjeta coincide con el filtro "Solo vencidas".
+    const todayKey = caracasDateKey();
     for (const r of pending) {
       const balance = r.amountUsd - r.paidAmountUsd;
       totalPendingUsd += balance;
 
-      if (r.status === 'OVERDUE') {
+      if (r.dueDate && r.dueDate < todayKey) {
         totalOverdueUsd += balance;
       }
 
@@ -376,8 +413,10 @@ export class ReceivablesService {
       ['PENDING', 'PARTIAL', 'OVERDUE'].includes(r.status),
     );
     const totalDebt = pending.reduce((sum, r) => sum + (r.amountUsd - r.paidAmountUsd), 0);
+    // Vencida = fecha pasada y no pagada (coincide con la tarjeta y el filtro).
+    const todayKey = caracasDateKey();
     const totalOverdue = pending
-      .filter((r) => r.status === 'OVERDUE')
+      .filter((r) => r.dueDate && r.dueDate < todayKey)
       .reduce((sum, r) => sum + (r.amountUsd - r.paidAmountUsd), 0);
 
     return {

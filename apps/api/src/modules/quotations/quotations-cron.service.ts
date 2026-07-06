@@ -8,7 +8,9 @@ export class QuotationsCronService {
 
   constructor(private readonly quotationsService: QuotationsService) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // Medianoche hora Caracas (el server corre en UTC; sin timeZone dispararia a las
+  // 8 PM Caracas del dia anterior y limpiaria con ~1 dia de desfase).
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'America/Caracas' })
   async handleDailyCleanup() {
     this.logger.log('Running daily quotation/invoice cleanup...');
 
@@ -17,9 +19,9 @@ export class QuotationsCronService {
       this.logger.log(`Expired ${expiredCount} quotation(s)`);
     }
 
-    const cancelledCount = await this.quotationsService.cancelOldPendingInvoices();
-    if (cancelledCount > 0) {
-      this.logger.log(`Cancelled ${cancelledCount} pending invoice(s) from previous days`);
+    const deletedCount = await this.quotationsService.deleteOldPendingInvoices();
+    if (deletedCount > 0) {
+      this.logger.log(`Deleted ${deletedCount} pending invoice(s) from previous days`);
     }
 
     this.logger.log('Daily cleanup complete');

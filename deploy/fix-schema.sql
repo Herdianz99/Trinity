@@ -2224,3 +2224,14 @@ ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "creditAuthorizedBy" TEXT;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "creditReviewedAt" TIMESTAMP(3);
 ALTER TYPE "PermissionKey" ADD VALUE IF NOT EXISTS 'MANAGE_CUSTOMER_CREDIT';
 ALTER TYPE "DynamicKeyPerm" ADD VALUE IF NOT EXISTS 'OVERRIDE_CREDIT_BLOCK';
+
+-- =============================================================================
+-- Dias de credito por defecto del proveedor (2026-07-06)
+-- =============================================================================
+ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "creditDays" INTEGER NOT NULL DEFAULT 0;
+
+-- =============================================================================
+-- Correlativo visible para ajustes de inventario ADJ-0001 (2026-07-06)
+-- =============================================================================
+ALTER TABLE "InventoryAdjustment" ADD COLUMN IF NOT EXISTS "number" TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS "InventoryAdjustment_number_key" ON "InventoryAdjustment"("number");

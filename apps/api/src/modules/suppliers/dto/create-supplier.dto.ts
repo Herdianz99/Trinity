@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsEmail, MinLength, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsEmail, MinLength, IsEnum, IsInt, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { SupplierType } from '@prisma/client';
 
@@ -32,6 +32,12 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsString()
   contactName?: string;
+
+  @ApiProperty({ required: false, default: 0, description: 'Dias de credito por defecto del proveedor' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  creditDays?: number;
 
   @ApiProperty({ required: false, default: false })
   @IsOptional()

@@ -115,6 +115,8 @@ export default function PayablesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [overdue, setOverdue] = useState(false);
+  const [dueSoon, setDueSoon] = useState(false);
+  const [dueSoonDays, setDueSoonDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -149,6 +151,7 @@ export default function PayablesPage() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (overdue) params.set('overdue', 'true');
+      else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
       const res = await fetch(`/api/proxy/payables?${params}`);
       const data = await res.json();
       setPayables(data.data || []);
@@ -159,7 +162,19 @@ export default function PayablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, supplierId, status, from, to, overdue]);
+  }, [page, supplierId, status, from, to, overdue, dueSoon, dueSoonDays]);
+
+  // Abre el reporte PDF con TODOS los registros del filtro actual (sin paginacion)
+  function openReportPdf() {
+    const params = new URLSearchParams();
+    if (supplierId) params.set('supplierId', supplierId);
+    if (status) params.set('status', status);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (overdue) params.set('overdue', 'true');
+    else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
+    window.open(`/api/proxy/payables/report/pdf?${params}`, '_blank');
+  }
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -307,6 +322,13 @@ export default function PayablesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={openReportPdf}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+            title="Ver todas las cuentas por pagar del filtro actual en PDF"
+          >
+            <FileText size={16} /> Reporte PDF
+          </button>
+          <button
             onClick={() => { setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
           >
@@ -420,10 +442,24 @@ export default function PayablesPage() {
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
-            <input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setPage(1); }}
+            <input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); if (e.target.checked) setDueSoon(false); setPage(1); }}
               className="rounded border-slate-600" />
             Solo vencidas
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
+            <input type="checkbox" checked={dueSoon} onChange={e => { setDueSoon(e.target.checked); if (e.target.checked) setOverdue(false); setPage(1); }}
+              className="rounded border-slate-600" />
+            Proximas a vencer
+          </label>
+          {dueSoon && (
+            <div className="flex items-center gap-1.5 pb-2">
+              <span className="text-xs text-slate-400">en los proximos</span>
+              <input type="number" min="0" value={dueSoonDays}
+                onChange={e => { setDueSoonDays(Math.max(0, Number(e.target.value))); setPage(1); }}
+                className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 w-16 text-center" />
+              <span className="text-xs text-slate-400">dias</span>
+            </div>
+          )}
         </div>
       </div>
 

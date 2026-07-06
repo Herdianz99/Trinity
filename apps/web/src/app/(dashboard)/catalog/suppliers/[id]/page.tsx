@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 interface Supplier {
   id: string; name: string; rif: string | null; phone: string | null;
   email: string | null; address: string | null; contactName: string | null;
+  creditDays: number;
   isRetentionAgent: boolean; isActive: boolean; supplierType: string | null;
   islrConceptId: string | null;
   islrConcept: { id: string; codigo: number; descripcion: string } | null;
@@ -85,6 +86,7 @@ export default function SupplierDetailPage() {
         name: data.name, rif: data.rif || '', phone: data.phone || '',
         email: data.email || '', address: data.address || '',
         contactName: data.contactName || '',
+        creditDays: data.creditDays ?? 0,
         isRetentionAgent: data.isRetentionAgent, isActive: data.isActive,
         supplierType: data.supplierType || '',
         islrConceptId: data.islrConceptId || '',
@@ -142,6 +144,7 @@ export default function SupplierDetailPage() {
         name: form.name, rif: form.rif || undefined, phone: form.phone || undefined,
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
+        creditDays: Number(form.creditDays) || 0,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
         supplierType: form.supplierType || null,
         islrConceptId: form.islrConceptId || null,
@@ -234,6 +237,11 @@ export default function SupplierDetailPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Persona de contacto</label>
                 <input type="text" value={form.contactName || ''} onChange={e => setForm((f: any) => ({ ...f, contactName: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Dias de credito</label>
+                <input type="number" min="0" step="1" value={form.creditDays ?? ''} onChange={e => setForm((f: any) => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" placeholder="0" />
+                <p className="text-[10px] text-slate-500 mt-1">Al cargar una compra, si es &gt; 0 se marca credito y se autorellenan los dias.</p>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-slate-400 mb-1">Direccion</label>

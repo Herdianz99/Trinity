@@ -78,7 +78,13 @@ export class InventoryAdjustmentsPdfService {
           width: pageWidth,
           align: 'center',
         });
-        y += 20;
+        y += 18;
+
+        if (adjustment.number) {
+          doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
+          doc.text(adjustment.number, 40, y, { width: pageWidth, align: 'center' });
+          y += 16;
+        }
 
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
         doc.text(`Almacen: ${adjustment.warehouse.name}`, 40, y);

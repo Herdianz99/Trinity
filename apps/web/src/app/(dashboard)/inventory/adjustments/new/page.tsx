@@ -15,7 +15,6 @@ export default function NewInventoryAdjustmentPage() {
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState<'IN' | 'OUT'>('IN');
   const [costMode, setCostMode] = useState<'COST' | 'BREGA'>('BREGA'); // costo del reporte: Brecha por defecto
-  const [recipientType, setRecipientType] = useState<'' | 'customer' | 'supplier'>('');
   const [customerId, setCustomerId] = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [description, setDescription] = useState('');
@@ -57,10 +56,11 @@ export default function NewInventoryAdjustmentPage() {
         costMode,
         description: description || undefined,
       };
-      if (recipientType === 'customer' && customerId) {
+      // Entidad dependiente del tipo: Salida -> Cliente (para CxC), Entrada -> Proveedor (para CxP)
+      if (type === 'OUT' && customerId) {
         body.customerId = customerId;
       }
-      if (recipientType === 'supplier' && supplierId) {
+      if (type === 'IN' && supplierId) {
         body.supplierId = supplierId;
       }
       const res = await fetch('/api/proxy/inventory-adjustments', {
@@ -107,7 +107,7 @@ export default function NewInventoryAdjustmentPage() {
             <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de ajuste *</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as 'IN' | 'OUT')}
+              onChange={(e) => { setType(e.target.value as 'IN' | 'OUT'); setCustomerId(''); setSupplierId(''); }}
               className="input-field !py-2.5 text-sm"
               required
             >
@@ -160,52 +160,37 @@ export default function NewInventoryAdjustmentPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Destinatario</label>
-            <select
-              value={recipientType}
-              onChange={(e) => {
-                setRecipientType(e.target.value as '' | 'customer' | 'supplier');
-                setCustomerId('');
-                setSupplierId('');
-              }}
-              className="input-field !py-2.5 text-sm"
-            >
-              <option value="">Sin destinatario</option>
-              <option value="customer">Cliente</option>
-              <option value="supplier">Proveedor</option>
-            </select>
-          </div>
-          {recipientType === 'customer' && (
+          {/* Entidad dependiente del tipo: Salida -> Cliente (CxC), Entrada -> Proveedor (CxP).
+              Opcional aqui; al procesar se puede confirmar/cambiar y decidir si generar la cuenta. */}
+          {type === 'OUT' ? (
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Cliente *</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Cliente (para CxC)</label>
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
                 className="input-field !py-2.5 text-sm"
-                required
               >
-                <option value="">Seleccionar cliente...</option>
+                <option value="">Sin cliente (elegir al procesar)</option>
                 {customers.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              <p className="text-xs text-slate-500 mt-1">Al procesar podrás generar una CxC a este cliente por el costo total.</p>
             </div>
-          )}
-          {recipientType === 'supplier' && (
+          ) : (
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Proveedor *</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Proveedor (para CxP)</label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
                 className="input-field !py-2.5 text-sm"
-                required
               >
-                <option value="">Seleccionar proveedor...</option>
+                <option value="">Sin proveedor (elegir al procesar)</option>
                 {suppliers.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              <p className="text-xs text-slate-500 mt-1">Al procesar podrás generar una CxP a este proveedor por el costo total.</p>
             </div>
           )}
           <div>

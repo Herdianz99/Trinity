@@ -166,4 +166,30 @@ export class CashRegistersController {
     });
     res.end(buffer);
   }
+
+  /** PDF RESUMIDO de la vista global: solo totales por metodo de pago (+ por caja), respetando filtros */
+  @Get('cash/movements-summary')
+  async getGlobalMovementsSummary(
+    @Res() res: Response,
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const buffer = await this.pdfService.generateGlobalSummaryReport({
+      cashRegisterId,
+      userId,
+      from,
+      to,
+      methodIds: ids,
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="resumen-caja.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 }

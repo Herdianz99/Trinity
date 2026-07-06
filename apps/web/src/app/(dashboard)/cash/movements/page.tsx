@@ -97,6 +97,10 @@ export default function CashMovementsPage() {
     window.open(`/api/proxy/cash/movements-report?${buildParams(false)}`, '_blank');
   };
 
+  const openSummaryPdf = () => {
+    window.open(`/api/proxy/cash/movements-summary?${buildParams(false)}`, '_blank');
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
@@ -106,9 +110,14 @@ export default function CashMovementsPage() {
           </div>
           <h1 className="text-2xl font-bold text-white">Movimientos de caja</h1>
         </div>
-        <button onClick={openPdf} className="btn-secondary flex items-center gap-2 text-sm">
-          <FileText size={16} /> Reporte PDF
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={openSummaryPdf} className="btn-secondary flex items-center gap-2 text-sm">
+            <FileText size={16} /> Resumen PDF
+          </button>
+          <button onClick={openPdf} className="btn-secondary flex items-center gap-2 text-sm">
+            <FileText size={16} /> Reporte detallado
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}

@@ -449,6 +449,7 @@ model Supplier {
   email             String?
   address           String?
   contactName       String?
+  creditDays        Int                @default(0)
   isRetentionAgent  Boolean            @default(false)
   supplierType      SupplierType?
   islrConceptId     String?
@@ -624,6 +625,7 @@ model InventoryCountItem {
 
 model InventoryAdjustment {
   id            String               @id @default(cuid())
+  number        String?              @unique // ADJ-0001 (correlativo visible; nullable para ajustes viejos)
   warehouseId   String
   warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
   type          AdjustmentType

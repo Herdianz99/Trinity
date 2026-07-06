@@ -8,6 +8,8 @@ import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.
 import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
 import { RemoveItemsDto } from './dto/remove-items.dto';
+import { ProcessAdjustmentDto } from './dto/process-adjustment.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 const INCLUDE_LIST = {
   warehouse: true,
@@ -37,19 +39,34 @@ const INCLUDE_DETAIL = {
 export class InventoryAdjustmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Correlativo ADJ-0001 con SELECT FOR UPDATE (regla de correlativos). */
+  private async generateNumber(tx: any): Promise<string> {
+    const result = await tx.$queryRaw<{ max: number | null }[]>`
+      SELECT MAX(CAST(SPLIT_PART("number", '-', 2) AS INTEGER)) as max FROM (
+        SELECT "number" FROM "InventoryAdjustment" WHERE "number" IS NOT NULL FOR UPDATE
+      ) sub
+    `;
+    const next = (result[0]?.max || 0) + 1;
+    return `ADJ-${next.toString().padStart(4, '0')}`;
+  }
+
   async create(dto: CreateInventoryAdjustmentDto, userId: string) {
-    return this.prisma.inventoryAdjustment.create({
-      data: {
-        warehouseId: dto.warehouseId,
-        type: dto.type,
-        costMode: dto.costMode || 'BREGA',
-        description: dto.description,
-        customerId: dto.customerId || null,
-        supplierId: dto.supplierId || null,
-        status: 'DRAFT',
-        createdById: userId,
-      },
-      include: INCLUDE_LIST,
+    return this.prisma.$transaction(async (tx) => {
+      const number = await this.generateNumber(tx);
+      return tx.inventoryAdjustment.create({
+        data: {
+          number,
+          warehouseId: dto.warehouseId,
+          type: dto.type,
+          costMode: dto.costMode || 'BREGA',
+          description: dto.description,
+          customerId: dto.customerId || null,
+          supplierId: dto.supplierId || null,
+          status: 'DRAFT',
+          createdById: userId,
+        },
+        include: INCLUDE_LIST,
+      });
     });
   }
 
@@ -248,7 +265,7 @@ export class InventoryAdjustmentsService {
     });
   }
 
-  async process(id: string, userId: string) {
+  async process(id: string, userId: string, dto?: ProcessAdjustmentDto) {
     const adjustment = await this.prisma.inventoryAdjustment.findUnique({
       where: { id },
       include: { items: { include: { product: true } } },
@@ -271,6 +288,72 @@ export class InventoryAdjustmentsService {
       throw new BadRequestException(
         'Todos los productos deben tener cantidad mayor a 0',
       );
+    }
+
+    // ── Generacion de CxC (salida) / CxP (entrada) al costo total del ajuste ──
+    // El monto es el mismo total del reporte PDF: cantidad * costo efectivo,
+    // donde costo efectivo = costo + brecha global (solo productos con brecha) si
+    // costMode='BREGA'. Se crea DENTRO de la misma transaccion del proceso (atomico).
+    let accountPlan:
+      | null
+      | {
+          kind: 'CXC' | 'CXP';
+          customerId?: string;
+          supplierId?: string;
+          amountUsd: number;
+          amountBs: number;
+          rate: number;
+          dueDate: Date | null;
+        } = null;
+
+    if (dto?.generateAccount) {
+      const config = await this.prisma.companyConfig.findUnique({
+        where: { id: 'singleton' },
+        select: { bregaGlobalPct: true },
+      });
+      const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
+      const useBrega = adjustment.costMode !== 'COST';
+      const effectiveCost = (p: { costUsd: number; bregaApplies: boolean }) =>
+        p.costUsd * (1 + (useBrega && p.bregaApplies ? bregaGlobalPct : 0) / 100);
+      const totalUsd =
+        Math.round(
+          adjustment.items.reduce(
+            (s, it) => s + it.quantity * effectiveCost(it.product),
+            0,
+          ) * 100,
+        ) / 100;
+
+      if (totalUsd <= 0) {
+        throw new BadRequestException(
+          'El costo total del ajuste es 0; no se puede generar la cuenta. Verifica que los productos tengan costo.',
+        );
+      }
+
+      const rateRow = await this.prisma.exchangeRate.findFirst({
+        where: { date: caracasDateKey() },
+      });
+      if (!rateRow) {
+        throw new BadRequestException(
+          'No hay tasa de cambio registrada para hoy; registrala antes de generar la cuenta.',
+        );
+      }
+      const rate = rateRow.rate;
+      const amountBs = Math.round(totalUsd * rate * 100) / 100;
+      const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+
+      if (adjustment.type === 'OUT') {
+        const customerId = dto.customerId || adjustment.customerId;
+        if (!customerId) {
+          throw new BadRequestException('Selecciona un cliente para generar la CxC.');
+        }
+        accountPlan = { kind: 'CXC', customerId, amountUsd: totalUsd, amountBs, rate, dueDate };
+      } else {
+        const supplierId = dto.supplierId || adjustment.supplierId;
+        if (!supplierId) {
+          throw new BadRequestException('Selecciona un proveedor para generar la CxP.');
+        }
+        accountPlan = { kind: 'CXP', supplierId, amountUsd: totalUsd, amountBs, rate, dueDate };
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -314,8 +397,8 @@ export class InventoryAdjustmentsService {
             quantity: quantityDelta,
             costUsd: item.product.costUsd,
             stockAfter: updatedStock?.quantity ?? 0,
-            reason: adjustment.description || `Ajuste de inventario #${adjustment.id.slice(0, 8)}`,
-            reference: `ADJ-${adjustment.id.slice(0, 8)}`,
+            reason: adjustment.description || `Ajuste de inventario ${adjustment.number || '#' + adjustment.id.slice(0, 8)}`,
+            reference: adjustment.number || `ADJ-${adjustment.id.slice(0, 8)}`,
             sourceType: 'INVENTORY_ADJUSTMENT',
             sourceId: adjustment.id,
             createdById: userId,
@@ -323,15 +406,77 @@ export class InventoryAdjustmentsService {
         });
       }
 
-      return tx.inventoryAdjustment.update({
+      // Crear la CxC/CxP (si se pidio) con correlativo propio, dentro de la misma tx.
+      let generatedAccount: { kind: 'CXC' | 'CXP'; id: string; number: string; amountUsd: number } | null = null;
+      if (accountPlan) {
+        const yy = new Date().getFullYear().toString().slice(-2);
+        // Correlativo visible del ajuste (ADJ-0001). Fallback al id para ajustes viejos sin numero.
+        const adjRef = adjustment.number || `ADJ-${adjustment.id.slice(0, 8)}`;
+        const desc = `Ajuste de inventario (${adjustment.type === 'OUT' ? 'salida' : 'entrada'}) - ${adjRef}`;
+        const cfg = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+
+        if (accountPlan.kind === 'CXC') {
+          const next = ((cfg as any)?.receivableNextNumber as number) || 1;
+          const number = `CXC/${yy}-${next.toString().padStart(6, '0')}`;
+          await tx.companyConfig.update({
+            where: { id: 'singleton' },
+            data: { receivableNextNumber: next + 1 } as any,
+          });
+          const rec = await tx.receivable.create({
+            data: {
+              number,
+              type: 'MANUAL',
+              customerId: accountPlan.customerId!,
+              amountUsd: accountPlan.amountUsd,
+              amountBs: accountPlan.amountBs,
+              exchangeRate: accountPlan.rate,
+              dueDate: accountPlan.dueDate,
+              description: desc,
+              notes: adjustment.description || null,
+              createdById: userId,
+            },
+          });
+          generatedAccount = { kind: 'CXC', id: rec.id, number, amountUsd: accountPlan.amountUsd };
+        } else {
+          const next = ((cfg as any)?.payableNextNumber as number) || 1;
+          const number = `CXP/${yy}-${next.toString().padStart(6, '0')}`;
+          await tx.companyConfig.update({
+            where: { id: 'singleton' },
+            data: { payableNextNumber: next + 1 } as any,
+          });
+          const pay = await tx.payable.create({
+            data: {
+              number,
+              supplierId: accountPlan.supplierId!,
+              amountUsd: accountPlan.amountUsd,
+              amountBs: accountPlan.amountBs,
+              exchangeRate: accountPlan.rate,
+              netPayableUsd: accountPlan.amountUsd,
+              netPayableBs: accountPlan.amountBs,
+              dueDate: accountPlan.dueDate,
+              description: desc,
+              notes: adjustment.description || null,
+              createdById: userId,
+            },
+          });
+          generatedAccount = { kind: 'CXP', id: pay.id, number, amountUsd: accountPlan.amountUsd };
+        }
+      }
+
+      const updated = await tx.inventoryAdjustment.update({
         where: { id },
         data: {
           status: 'PROCESSED',
           processedById: userId,
           processedAt: new Date(),
+          // Reflejar en el ajuste la entidad usada al procesar (por si la cambio/olvido)
+          ...(accountPlan?.kind === 'CXC' ? { customerId: accountPlan.customerId } : {}),
+          ...(accountPlan?.kind === 'CXP' ? { supplierId: accountPlan.supplierId } : {}),
         },
         include: INCLUDE_DETAIL,
       });
+
+      return { ...updated, generatedAccount };
     });
   }
 

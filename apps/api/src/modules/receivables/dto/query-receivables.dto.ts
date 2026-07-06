@@ -50,6 +50,14 @@ export class QueryReceivablesDto {
   @IsBoolean()
   employeeOnly?: boolean;
 
+  // Proximas a vencer: dueDate entre hoy y hoy+N (no vencidas, no pagadas)
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsInt()
+  @Min(0)
+  dueWithinDays?: number;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @Transform(({ value }) => parseInt(value))

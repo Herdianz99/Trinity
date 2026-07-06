@@ -8,7 +8,8 @@ export class PayablesCronService {
 
   constructor(private readonly payablesService: PayablesService) {}
 
-  @Cron('0 2 0 * * *') // Daily at 00:02
+  // 00:02 hora Caracas (el server corre en UTC; ver nota en ReceivablesCronService).
+  @Cron('0 2 0 * * *', { timeZone: 'America/Caracas' })
   async handleOverduePayables() {
     const count = await this.payablesService.markOverdue();
     if (count > 0) {

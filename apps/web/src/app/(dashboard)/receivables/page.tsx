@@ -27,7 +27,7 @@ interface Receivable {
   platformName: string | null;
   reference: string | null;
   invoiceId: string | null;
-  invoice: { id: string; number: string } | null;
+  invoice: { id: string; number: string; customer: { id: string; name: string; documentType: string; rif: string | null } | null } | null;
   documentNumber: string | null;
   description: string | null;
   amountUsd: number;
@@ -121,6 +121,8 @@ export default function ReceivablesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [overdue, setOverdue] = useState(false);
+  const [dueSoon, setDueSoon] = useState(false);
+  const [dueSoonDays, setDueSoonDays] = useState(7);
   const [employeeOnly, setEmployeeOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -160,6 +162,7 @@ export default function ReceivablesPage() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (overdue) params.set('overdue', 'true');
+      else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
       if (employeeOnly) params.set('employeeOnly', 'true');
       const res = await fetch(`/api/proxy/receivables?${params}`);
       const data = await res.json();
@@ -171,7 +174,21 @@ export default function ReceivablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, type, status, reference, from, to, overdue, employeeOnly]);
+  }, [page, type, status, reference, from, to, overdue, dueSoon, dueSoonDays, employeeOnly]);
+
+  // Abre el reporte PDF con TODOS los registros del filtro actual (sin paginacion)
+  function openReportPdf() {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+    if (reference) params.set('reference', reference);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (overdue) params.set('overdue', 'true');
+    else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
+    if (employeeOnly) params.set('employeeOnly', 'true');
+    window.open(`/api/proxy/receivables/report/pdf?${params}`, '_blank');
+  }
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -331,6 +348,13 @@ export default function ReceivablesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={openReportPdf}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+            title="Ver todas las cuentas por cobrar del filtro actual en PDF"
+          >
+            <FileText size={16} /> Reporte PDF
+          </button>
+          <button
             onClick={() => { setAdvanceForm({ customerId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
           >
@@ -452,10 +476,24 @@ export default function ReceivablesPage() {
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
-            <input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); setPage(1); }}
+            <input type="checkbox" checked={overdue} onChange={e => { setOverdue(e.target.checked); if (e.target.checked) setDueSoon(false); setPage(1); }}
               className="rounded border-slate-600" />
             Solo vencidas
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
+            <input type="checkbox" checked={dueSoon} onChange={e => { setDueSoon(e.target.checked); if (e.target.checked) setOverdue(false); setPage(1); }}
+              className="rounded border-slate-600" />
+            Proximas a vencer
+          </label>
+          {dueSoon && (
+            <div className="flex items-center gap-1.5 pb-2">
+              <span className="text-xs text-slate-400">en los proximos</span>
+              <input type="number" min="0" value={dueSoonDays}
+                onChange={e => { setDueSoonDays(Math.max(0, Number(e.target.value))); setPage(1); }}
+                className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 w-16 text-center" />
+              <span className="text-xs text-slate-400">dias</span>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
             <input type="checkbox" checked={employeeOnly} onChange={e => { setEmployeeOnly(e.target.checked); setPage(1); }}
               className="rounded border-slate-600" />
@@ -500,7 +538,15 @@ export default function ReceivablesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-200">
-                      {r.customer ? r.customer.name : r.platformName || '-'}
+                      {r.customer?.name || r.invoice?.customer?.name || r.platformName || '-'}
+                      {/* Cedula/RIF del cliente debajo del nombre (tambien para CxC de plataforma,
+                          tomandola de la factura). El nombre de la plataforma ya sale en la columna Tipo. */}
+                      {(() => {
+                        const c = r.customer || r.invoice?.customer;
+                        return c?.rif ? (
+                          <span className="block text-[10px] text-slate-500 font-mono">{c.documentType}-{c.rif}</span>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">
                       <Link href={`/receivables/${r.id}`} className="text-green-400 hover:text-green-300 hover:underline">

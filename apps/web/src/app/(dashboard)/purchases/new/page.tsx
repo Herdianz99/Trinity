@@ -24,6 +24,7 @@ interface Supplier {
   name: string;
   rif: string | null;
   isRetentionAgent: boolean;
+  creditDays?: number;
 }
 
 interface Warehouse {
@@ -146,6 +147,9 @@ export default function NewPurchaseBillPage() {
   // Indice resaltado para navegar los resultados de productos con el teclado (flechas + Enter)
   const [productHighlight, setProductHighlight] = useState(0);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs a los inputs de busqueda de cada fila, para enfocar la nueva linea (Ctrl+Enter)
+  const searchInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [pendingFocusRow, setPendingFocusRow] = useState<number | null>(null);
 
   // ---- Modales crear/editar proveedor y producto ----
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
@@ -248,6 +252,21 @@ export default function NewPurchaseBillPage() {
     [suppliers, supplierId],
   );
 
+  // Autorellenar forma de pago segun los dias de credito del proveedor.
+  // Si el proveedor tiene dias de credito > 0: marca "Credito" y precarga los dias.
+  // Keyed solo por supplierId para no re-forzar el credito si el usuario lo cambia a mano.
+  useEffect(() => {
+    if (!selectedSupplier) return;
+    const cd = selectedSupplier.creditDays ?? 0;
+    if (cd > 0) {
+      setIsCredit(true);
+      setCreditDays(cd);
+    } else {
+      setIsCredit(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supplierId]);
+
   // ---- Supplier filtering ----
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch.trim()) return suppliers;
@@ -318,6 +337,7 @@ export default function NewPurchaseBillPage() {
   }
 
   function addEmptyRow() {
+    const newIdx = items.length;
     setItems([
       ...items,
       {
@@ -331,6 +351,24 @@ export default function NewPurchaseBillPage() {
         isService: false,
       },
     ]);
+    // Enfocar la busqueda de la nueva fila para seguir cargando sin usar el mouse
+    setActiveSearchRow(newIdx);
+    setPendingFocusRow(newIdx);
+  }
+
+  // Enfoca el input de busqueda de la fila recien agregada (una vez renderizada)
+  useEffect(() => {
+    if (pendingFocusRow == null) return;
+    searchInputRefs.current[pendingFocusRow]?.focus();
+    setPendingFocusRow(null);
+  }, [pendingFocusRow, items]);
+
+  // Tecla rapida: F9 agrega una nueva linea desde cualquier campo
+  function handleGridKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'F9') {
+      e.preventDefault();
+      addEmptyRow();
+    }
   }
 
   function removeRow(idx: number) {
@@ -591,7 +629,7 @@ export default function NewPurchaseBillPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onKeyDown={handleGridKeyDown}>
       {/* ═══ Header ═══ */}
       <div className="flex items-center gap-3">
         <button
@@ -968,8 +1006,10 @@ export default function NewPurchaseBillPage() {
               type="button"
               onClick={addEmptyRow}
               className="flex items-center gap-1.5 text-sm text-green-400 hover:text-green-300 transition-colors"
+              title="Agregar una linea nueva (Ctrl+Enter)"
             >
               <Plus size={16} /> Agregar linea
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-slate-700/70 border border-slate-600 text-[10px] text-slate-300 font-mono">F9</kbd>
             </button>
           </div>
         </div>
@@ -1019,6 +1059,7 @@ export default function NewPurchaseBillPage() {
                           <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
                           <input
                             type="text"
+                            ref={(el) => { searchInputRefs.current[idx] = el; }}
                             value={activeSearchRow === idx ? productSearch : ''}
                             onChange={(e) => handleProductSearch(e.target.value, idx)}
                             onFocus={() => setActiveSearchRow(idx)}

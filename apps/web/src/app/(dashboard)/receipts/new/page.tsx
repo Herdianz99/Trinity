@@ -101,6 +101,10 @@ export default function NewReceiptPage() {
   const [pendingDocs, setPendingDocs] = useState<PendingDoc[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<SelectedDoc[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  // Ref con la seleccion actual, para excluirla al re-fetchear pendientes (ej. al filtrar)
+  // sin borrar lo que el usuario ya paso a la derecha.
+  const selectedDocsRef = useRef<SelectedDoc[]>([]);
+  useEffect(() => { selectedDocsRef.current = selectedDocs; }, [selectedDocs]);
 
   // Exchange rate
   const [todayRate, setTodayRate] = useState<number>(0); // tasa del dia cargada (base/guard)
@@ -270,9 +274,9 @@ export default function NewReceiptPage() {
             setSourceTab('platform');
             setSelectedPlatform(receivable.platformName);
           }
-          // Auto-add document to selected
+          // Auto-add document to selected (id crudo = el mismo que devuelve el backend en pendientes)
           const doc: PendingDoc = {
-            id: `recv-${receivable.id}`,
+            id: receivable.id,
             documentType: 'CxC',
             receivableId: receivable.id,
             description: `Factura ${receivable.invoice?.number || '-'}`,
@@ -302,9 +306,9 @@ export default function NewReceiptPage() {
             setEntityName(payable.supplier.name);
             setComboQuery(payable.supplier.name);
           }
-          // Auto-add document to selected
+          // Auto-add document to selected (id crudo = el mismo que devuelve el backend en pendientes)
           const doc: PendingDoc = {
-            id: `pay-${payable.id}`,
+            id: payable.id,
             documentType: 'CxP',
             payableId: payable.id,
             description: `Orden ${payable.purchaseOrder?.number || '-'}`,
@@ -352,18 +356,20 @@ export default function NewReceiptPage() {
     try {
       const res = await fetch(`/api/proxy/receipts/pending-documents?${params}`);
       const json = await res.json();
+      // Excluir los documentos que el usuario ya paso a la derecha (seleccionados),
+      // para que un re-fetch (ej. al filtrar) no los duplique ni pise la seleccion.
+      const selIds = new Set(selectedDocsRef.current.map((d) => d.id));
       // New API returns { receivables: [...], notes: [...], payables: [] } for COLLECTION
       // and flat array for PAYMENT
       if (Array.isArray(json)) {
-        setPendingDocs(json);
+        setPendingDocs(json.filter((d: PendingDoc) => !selIds.has(d.id)));
       } else if (json.receivables) {
         // Merge receivables and notes (NCV/NDV) into a single list
         const allDocs = [...json.receivables, ...(json.notes || []), ...(json.retentions || [])];
-        setPendingDocs(allDocs);
+        setPendingDocs(allDocs.filter((d: PendingDoc) => !selIds.has(d.id)));
       } else {
         setPendingDocs([]);
       }
-      setSelectedDocs([]);
     } catch { /* ignore */ }
     setLoadingDocs(false);
   }, [isCollection, sourceTab, selectedPlatform, entityId]);
@@ -630,6 +636,9 @@ export default function NewReceiptPage() {
 
   // Select entity from combobox
   const selectEntity = (entity: Customer | Supplier) => {
+    // Cambiar de entidad reinicia la seleccion (los docs de la derecha eran de la anterior).
+    // El fetch de pendientes ya NO limpia la seleccion, por eso se hace aqui.
+    setSelectedDocs([]);
     setEntityId(entity.id);
     setEntityName(entity.name);
     setComboQuery(entity.name);
