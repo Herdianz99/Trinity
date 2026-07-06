@@ -69,16 +69,14 @@ export class RolePermissionsService {
       throw new BadRequestException('No se pueden modificar los permisos del rol ADMIN');
     }
 
-    // Validate modules
-    const invalid = modules.filter((m) => !VALID_MODULES.includes(m));
-    if (invalid.length > 0) {
-      throw new BadRequestException(`Modulos invalidos: ${invalid.join(', ')}`);
-    }
+    // Filtrar modulos desconocidos (ej. keys legacy como 'reports' que quedaron guardados en un
+    // rol) en vez de rechazar TODO el guardado con 400. Se conservan solo los validos.
+    const cleaned = modules.filter((m) => VALID_MODULES.includes(m));
 
     const updated = await this.prisma.rolePermission.upsert({
       where: { role },
-      update: { modules },
-      create: { role, modules },
+      update: { modules: cleaned },
+      create: { role, modules: cleaned },
     });
 
     // Invalidate cache for this role
