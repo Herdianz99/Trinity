@@ -1,5 +1,42 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧰 Jornada de mejoras (POS, CxC/CxP, ajustes, proveedores) — 2026-07-06 (EN main, SIN desplegar)
+
+Varias mejoras/correcciones pedidas por Diego. Commits `37f53ab`, `aeb1fef`, `f6a3db5` en `main`. Typechecks 0 (API+Web), probado en local. **NO desplegado aun.** Trae **2 migraciones** (`20260706120000_supplier_credit_days`, `20260706170000_inventory_adjustment_number`) y cambios de **backend** (reiniciar API en el deploy). Aplica a AMBAS empresas.
+
+### Proveedores / Compras
+- **Proveedor gana `creditDays`** (dias de credito): campo en `/catalog/suppliers` (nuevo+edicion) y en el modal de proveedor del POS de compras. Migracion `20260706120000_supplier_credit_days` + fix-schema.
+- **`/purchases/new`:** al elegir un proveedor con `creditDays > 0` se **marca "Credito" y autorellena los dias** (editable). Tecla **F9** para agregar linea nueva (enfoca la busqueda de la fila).
+
+### Inventario
+- **`/inventory/alerts`:** nueva columna **"Ventas (Nd)"** (unidades vendidas en el periodo) en vista, Excel y PDF. El periodo (30/60/90) controla ventas + exceso.
+- **`/inventory/adjustments`:** al **procesar** se puede **generar CxC (salida) o CxP (entrada)** por el **costo total** (mismo calculo del reporte PDF: costo o costo+brecha), a un cliente/proveedor elegido en `/new` y confirmable/editable al procesar, con vencimiento por los dias de credito de la entidad (editable). CxC/CxP **MANUAL, no fiscal**, a la tasa del dia, **atomico** dentro de la transaccion del proceso. Ademas: **correlativo propio `ADJ-0001`** (campo `number`, `SELECT FOR UPDATE`; migracion `20260706170000_inventory_adjustment_number`), visible en listado/detalle/PDF; la descripcion de la CxC/CxP usa ese correlativo.
+
+### Cuentas por Cobrar / Pagar
+- **Filtro "Proximas a vencer"** con dias configurables (backend `dueWithinDays`, busca en TODA la data, no solo la pagina) en CxC y CxP.
+- **Reporte PDF** que lista **todos** los registros del filtro actual (sin paginacion), en CxC y CxP (`receivables-pdf.service.ts` / `payables-pdf.service.ts`).
+- **FIX definicion de "vencida":** la tarjeta "Vencidas" contaba por `status=OVERDUE` (marca del cron) y el filtro "Solo vencidas" por `dueDate<hoy AND status PENDING/PARTIAL` → **conjuntos disjuntos** (a Diego le daba $58.70 en la tarjeta y $7.90 en el filtro). Ahora AMBOS son **por fecha** (`dueDate<hoy`, sin depender del status del cron) y coinciden. Aplicado en summary + filtro + estado de cuenta, CxC y CxP.
+- **`/receivables`:** en CxC de **plataforma (Cashea)** se muestra el **cliente + cedula** de la factura (antes solo "Cashea", que ya sale en la columna Tipo).
+
+### Crons — zona horaria + comportamiento
+- El server corre en **UTC**; sin `timeZone` los crons disparaban a las **8 PM Caracas del dia anterior** → marcaban con ~1 dia de retraso. Se les puso **`{ timeZone: 'America/Caracas' }`** a `receivables-cron` (00:01), `payables-cron` (00:02) y `quotations-cron` (limpieza diaria). Confirmado por logs que los crons **SI corren** en ambas empresas.
+- **Limpieza nocturna (`quotations-cron`):** las pre-facturas **PENDING de dias anteriores** ahora se **ELIMINAN** (hard-delete: items+pagos+factura, en transaccion) en vez de cancelarse. Seguro: `status=PENDING` nunca toca pagadas y esas pre-facturas tienen `number=null` (no dejan hueco). Verificado end-to-end en local.
+
+### Recibos
+- **`/receipts/new` FIX:** al **filtrar** documentos ya **no se borra la seleccion** de la derecha (pasaba en cliente, plataforma y pago). Causa: el fetch de pendientes hacia `setSelectedDocs([])`; ahora excluye los ya seleccionados y solo se limpia al **cambiar de entidad**. Se unificaron los ids de la preseleccion con los del backend.
+
+### Caja
+- **`/cash/movements`:** nuevo **"Resumen PDF"** (totales por metodo de pago + por caja, con neto de movimientos manuales; sin listar cada movimiento), aparte del "Reporte detallado" existente.
+
+### POS
+- **Modal de cliente:** **telefono obligatorio** (label con `*` rojo, boton deshabilitado y validacion al guardar). Modal unico responsivo (movil full-screen / escritorio tarjeta).
+- **Movil:** en la tira **"En esta factura"** se ve el **cliente** (tocable para cambiarlo) con el **"Cupo disponible"** al lado (verde/rojo segun alcance el total; misma logica del modal de credito).
+- **"Facturas en espera":** **buscador por cliente o cedula** (la cedula matchea ignorando el prefijo V-/E-).
+- **FIX venta sin stock al cobrar:** el flag de autorizacion en negativo vive solo en el navegador; al mover/recargar la factura de una PC/caja a otra se perdia y el cobro quedaba trancado. Ahora el backend marca el error con `code: NEGATIVE_STOCK` y el POS (contado y credito) **pide la clave `SELL_NEGATIVE_STOCK` al cobrar y reintenta** (reusa la MISMA factura, sin duplicar). Si el flag no se perdio, no molesta. (Nota: el add-time solo pide clave con stock ≤ 0; el paracaidas al cobrar cubre tambien stock positivo-insuficiente.)
+
+### Operativo (produccion inversiones, sin codigo)
+- Diego habia hecho **pruebas fiscales en produccion** (2 facturas + 2 cajas + 1 anticipo $10). Se limpio con **borrado quirurgico** (NO restore, para conservar usuarios reales creados ese dia + claves): se borraron facturas/pagos/libro/printjobs/mov-caja/2-cajas y se repuso el stock. Go-live **pospuesto** (era 07-06). Se dejo un **respaldo-base limpio** en `/root/snapshots/respaldo-base-20260706-1708.dump` (verificado) para restaurar antes de cargar la data real; los usuarios pueden probar mientras tanto.
+
 ## ✅ Credito pre-aprobado y blindado — 2026-07-05 (DESPLEGADO a produccion)
 
 Rediseno del flujo de ventas a credito: el credito pasa a ser una **propiedad pre-aprobada del cliente** (administracion dicta cupo/dias por adelantado), la caja solo lo usa, y el **backend hace cumplir** las barreras. Spec: `docs/superpowers/specs/2026-07-05-credito-blindado-design.md`; plan: `docs/superpowers/plans/2026-07-05-credito-blindado.md`. Implementado en rama `desarrollo` -> merge a `main` (8 tareas + fixes). Typechecks 0, probado en local por Diego.
