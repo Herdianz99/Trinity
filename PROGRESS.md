@@ -1,6 +1,6 @@
 ﻿# Trinity ERP — Progreso
 
-## 🏗️ Credito pre-aprobado y blindado — 2026-07-05 (implementado, EN main, PENDIENTE DEPLOY)
+## ✅ Credito pre-aprobado y blindado — 2026-07-05 (DESPLEGADO a produccion)
 
 Rediseno del flujo de ventas a credito: el credito pasa a ser una **propiedad pre-aprobada del cliente** (administracion dicta cupo/dias por adelantado), la caja solo lo usa, y el **backend hace cumplir** las barreras. Spec: `docs/superpowers/specs/2026-07-05-credito-blindado-design.md`; plan: `docs/superpowers/plans/2026-07-05-credito-blindado.md`. Implementado en rama `desarrollo` -> merge a `main` (8 tareas + fixes). Typechecks 0, probado en local por Diego.
 
@@ -10,7 +10,8 @@ Rediseno del flujo de ventas a credito: el credito pasa a ser una **propiedad pr
 - **POS:** dias **fijos** del cliente (no editables; se quito el `setCreditDays(30)` que los pisaba). Venta a credito normal **sin clave** (se elimino el gate por-venta `ALLOW_CREDIT_INVOICE` de la S99). `dueDate` de factura y CxC homologado desde `customer.creditDays`.
 - **Blindaje backend (`invoices.service.pay`):** bloquea venta a credito si **excede el cupo** o el cliente **tiene facturas vencidas** (`OVERDUE` o `dueDate < caracasDateKey()`); solo se salta con la clave dinamica **`OVERRIDE_CREDIT_BLOCK`** (una sola clave para ambas excepciones; flag `overrideCreditBlockAuthorized`). Verificado en BD: las CxC se crean con los dias reales del cliente.
 - **`isEmployee`:** toggle en el form de cliente + filtro "Solo empleados" en Cuentas por Cobrar.
-- **PENDIENTE DE DEPLOY + config en prod:** (1) en `/settings/role-permissions` marcar **"Gestionar credito de clientes"** a los roles de administracion; (2) en `/settings/dynamic-keys` crear una clave con **"Autorizar credito con vencidos / sobre cupo"** (`OVERRIDE_CREDIT_BLOCK`); (3) avisar al equipo que **ya no se pide clave por cada venta a credito** (solo en excepciones). Deploy trae la migracion (deploy.sh la aplica).
+- **FIX permisos por rol (durante la config):** algunos roles (SUPERVISOR/ACCOUNTANT/AUDITOR) tenian guardado un modulo legacy `reports` que ya no esta en `VALID_MODULES`; al guardar el rol, el backend rechazaba TODO con 400 ("Modulos invalidos: reports"). Se cambio `role-permissions.service.update` para **filtrar** los modulos desconocidos en vez de rechazar (se auto-corrige al guardar). Commit `7a92c13`.
+- **DESPLEGADO 2026-07-05** (deploy.sh trae la migracion `20260705200000_credito_blindado`). **Config post-deploy en CADA empresa:** (1) en `/settings/role-permissions` marcar **"Gestionar credito de clientes"** a los roles de administracion; (2) en `/settings/dynamic-keys` crear una clave con **"Autorizar credito con vencidos / sobre cupo"** (`OVERRIDE_CREDIT_BLOCK`); (3) avisar al equipo que **ya no se pide clave por cada venta a credito** (solo en excepciones).
 - **Futuro (fase aparte):** sistema de puntos/scoring por buen pago; endurecer los overrides a validacion de clave en el backend (hoy frontend-gated).
 
 ## ✅ MIGRACION existencias/costos/precios a PRODUCCION (inversiones grande) — 2026-07-05 noche
