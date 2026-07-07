@@ -7,11 +7,11 @@
 - Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
 - Script preservar fotos al restaurar el respaldo base (día de la migración).
 
-## 🛒 TIENDA ONLINE — Parte A (export del catálogo al CDN) — 2026-07-07 (EN rama `tienda-online`, SIN desplegar)
+## 🛒 TIENDA ONLINE — Parte A (export del catálogo al CDN) — 2026-07-07 (✅ DESPLEGADO a inversiones, verificado)
 
 Arquitectura elegida con Diego: **Snapshot al CDN (Trinity = única fuente de verdad)**. Trinity exporta el catálogo como JSON a Spaces; la vitrina (repo aparte `trebol-shop`, Vercel) lo lee del mismo CDN → **cero carga al POS al navegar**. Descartado el enfoque "overlay/live-API". Spec: `docs/superpowers/specs/2026-07-07-tienda-snapshot-cdn-design.md`; plan: `docs/superpowers/plans/2026-07-07-tienda-snapshot-cdn.md` (Partes A-D).
 
-**Parte A (backend Trinity) — COMPLETA en rama `tienda-online`, typechecks 0, lógica verificada vs BD local. FALTA deploy.**
+**Parte A (backend Trinity) — ✅ DESPLEGADA a inversiones (commit `e0b91c1`) y VERIFICADA end-to-end.** El cron corrió a las 23:50 UTC y publicó `store/catalog.json` + `store/meta.json` en el CDN (`products:[]` porque aún no hay productos marcados; tasa y estructura OK). Typechecks 0, lógica verificada vs BD local antes del deploy.
 - **Schema:** `Product` gana `showInStore` / `storeFeatured`. Migración `20260707180000_product_store_flags` (IF NOT EXISTS) + espejo en `deploy/fix-schema.sql`.
 - **`SpacesService.uploadJson()`**: sube JSON con cache corto (60s), distinto del `uploadPublic` de las fotos (immutable 1 año).
 - **`StoreExportService` + `store-export.builder.ts`** (lógica pura separada, testeable): arma `store/catalog.json` (productos publicados: slug, code, precio USD/Bs, `stockStatus` en **3 niveles** disponible/pocas/agotado con umbral 5, foto, categoría/marca) + `store/meta.json` (categorías/marcas/tasa). Solo `isActive && showInStore`. Slug = `slugify(nombre)-code`.
@@ -19,7 +19,7 @@ Arquitectura elegida con Diego: **Snapshot al CDN (Trinity = única fuente de ve
 - **UI:** checkboxes "Mostrar en tienda online" / "Destacado en tienda" en el form de producto (+ campos en el DTO).
 - **NO probado local a propósito:** el upload real a Spaces (el `.env` local apunta al bucket prod `trinity-inversiones` con data de la chica → se prueba limpio en el deploy a inversiones).
 
-**Pendiente:** deploy a inversiones (Diego) → verificar `POST /store-export/run` + `GET $CDN/store/catalog.json`; luego Parte B (reconectar la vitrina) y Parte C (pedidos `OnlineOrder`).
+**Pendiente:** (1) marcar productos con `showInStore` (checkbox en el form) para poblar el snapshot; (2) Parte B — reconectar la vitrina `trebol-shop` (leer del CDN, borrar su BD/admin, stock 3 niveles); (3) Parte C — pedidos `OnlineOrder` (`POST /public/orders` + pantalla de verificación). eltrebol recibirá la Parte A en su próximo deploy (no la necesita aún).
 
 ## 📸 FOTOS DE PRODUCTO + CÓDIGOS DE BARRA — 2026-07-07 (DESPLEGADO a AMBAS empresas, verificado)
 
