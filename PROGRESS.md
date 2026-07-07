@@ -7,6 +7,20 @@
 - Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
 - Script preservar fotos al restaurar el respaldo base (día de la migración).
 
+## 🛒 TIENDA ONLINE — Parte A (export del catálogo al CDN) — 2026-07-07 (EN rama `tienda-online`, SIN desplegar)
+
+Arquitectura elegida con Diego: **Snapshot al CDN (Trinity = única fuente de verdad)**. Trinity exporta el catálogo como JSON a Spaces; la vitrina (repo aparte `trebol-shop`, Vercel) lo lee del mismo CDN → **cero carga al POS al navegar**. Descartado el enfoque "overlay/live-API". Spec: `docs/superpowers/specs/2026-07-07-tienda-snapshot-cdn-design.md`; plan: `docs/superpowers/plans/2026-07-07-tienda-snapshot-cdn.md` (Partes A-D).
+
+**Parte A (backend Trinity) — COMPLETA en rama `tienda-online`, typechecks 0, lógica verificada vs BD local. FALTA deploy.**
+- **Schema:** `Product` gana `showInStore` / `storeFeatured`. Migración `20260707180000_product_store_flags` (IF NOT EXISTS) + espejo en `deploy/fix-schema.sql`.
+- **`SpacesService.uploadJson()`**: sube JSON con cache corto (60s), distinto del `uploadPublic` de las fotos (immutable 1 año).
+- **`StoreExportService` + `store-export.builder.ts`** (lógica pura separada, testeable): arma `store/catalog.json` (productos publicados: slug, code, precio USD/Bs, `stockStatus` en **3 niveles** disponible/pocas/agotado con umbral 5, foto, categoría/marca) + `store/meta.json` (categorías/marcas/tasa). Solo `isActive && showInStore`. Slug = `slugify(nombre)-code`.
+- **`POST /store-export/run`** (solo ADMIN, trigger manual) + **cron cada 10 min** (timeZone Caracas).
+- **UI:** checkboxes "Mostrar en tienda online" / "Destacado en tienda" en el form de producto (+ campos en el DTO).
+- **NO probado local a propósito:** el upload real a Spaces (el `.env` local apunta al bucket prod `trinity-inversiones` con data de la chica → se prueba limpio en el deploy a inversiones).
+
+**Pendiente:** deploy a inversiones (Diego) → verificar `POST /store-export/run` + `GET $CDN/store/catalog.json`; luego Parte B (reconectar la vitrina) y Parte C (pedidos `OnlineOrder`).
+
 ## 📸 FOTOS DE PRODUCTO + CÓDIGOS DE BARRA — 2026-07-07 (DESPLEGADO a AMBAS empresas, verificado)
 
 Jornada completa: se montó la **Fase 0/1 de fotos** (cimiento de la tienda online) y una pantalla de **captura de códigos de barra**, y se desplegó y verificó en **inversiones (grande)** y **eltrebol (chica)**. El equipo (rol MARKETING/AUDITOR) ya puede cargar fotos y barcodes en ambas.
@@ -71,9 +85,9 @@ El jefe de la grande quiere **tienda online lo antes posible** (la grande va a p
 
 **Secuencia acordada:** grande a produccion esta semana → desplegar lo del 06-jul → **construir la funcion de fotos** (da valor al POS de una vez) → el personal **carga fotos en paralelo** (lo mas largo, es manual) → mientras, montar API publica + reconectar vitrina. **Proximo paso: Fase 0 (fotos).**
 
-## 🧰 Jornada de mejoras (POS, CxC/CxP, ajustes, proveedores) — 2026-07-06 (EN main, SIN desplegar)
+## 🧰 Jornada de mejoras (POS, CxC/CxP, ajustes, proveedores) — 2026-07-06 (✅ DESPLEGADO a AMBAS empresas)
 
-Varias mejoras/correcciones pedidas por Diego. Commits `37f53ab`, `aeb1fef`, `f6a3db5` en `main`. Typechecks 0 (API+Web), probado en local. **NO desplegado aun.** Trae **2 migraciones** (`20260706120000_supplier_credit_days`, `20260706170000_inventory_adjustment_number`) y cambios de **backend** (reiniciar API en el deploy). Aplica a AMBAS empresas.
+Varias mejoras/correcciones pedidas por Diego. Commits `37f53ab`, `aeb1fef`, `f6a3db5` en `main`. Typechecks 0 (API+Web), probado en local. **✅ DESPLEGADO a AMBAS empresas (2026-07-07)** — incluyó las **2 migraciones** (`20260706120000_supplier_credit_days`, `20260706170000_inventory_adjustment_number`) y el reinicio del API.
 
 ### Proveedores / Compras
 - **Proveedor gana `creditDays`** (dias de credito): campo en `/catalog/suppliers` (nuevo+edicion) y en el modal de proveedor del POS de compras. Migracion `20260706120000_supplier_credit_days` + fix-schema.
