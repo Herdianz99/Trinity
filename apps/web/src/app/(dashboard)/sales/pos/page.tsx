@@ -2094,6 +2094,14 @@ export default function POSPage() {
   // ── Shared Modals (rendered in both mobile & desktop) ─────────────────
   const renderSharedModals = () => (
     <>
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+        >
+          <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
+        </div>
+      )}
       {showLostSale && (
         <LostSaleModal
           initialProduct={lostSalePreset}
@@ -3421,15 +3429,6 @@ export default function POSPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {lightboxUrl && (
-        <div
-          onClick={() => setLightboxUrl(null)}
-          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
-        >
-          <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
         </div>
       )}
     </div>
