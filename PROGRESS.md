@@ -1,5 +1,49 @@
 ﻿# Trinity ERP — Progreso
 
+## 📋 PENDIENTES
+
+### Otros pendientes de fotos (Fase 2)
+- Carga masiva por lote (Flujo C: cruzar por código/supplierRef), galería en la ficha del producto.
+- Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
+- Script preservar fotos al restaurar el respaldo base (día de la migración).
+
+## 📸 FOTOS DE PRODUCTO + CÓDIGOS DE BARRA — 2026-07-07 (DESPLEGADO a AMBAS empresas, verificado)
+
+Jornada completa: se montó la **Fase 0/1 de fotos** (cimiento de la tienda online) y una pantalla de **captura de códigos de barra**, y se desplegó y verificó en **inversiones (grande)** y **eltrebol (chica)**. El equipo (rol MARKETING/AUDITOR) ya puede cargar fotos y barcodes en ambas.
+
+### Infraestructura — DigitalOcean Spaces (object storage + CDN)
+- **1 suscripción de $5/mes** (cuota por cuenta: 250 GiB + 1 TiB compartidos entre buckets) → **2 buckets nyc3 con CDN**: `trinity-inversiones` y `trinity-eltrebol`. Llave `trinity-erp` (Limited Access, Read/Write/Delete sobre ambos). Detalle y env vars en la memoria `spaces-fotos-infra`.
+- **Env por server (OJO):** el API lee **`apps/api/.env`** (PM2 corre con cwd=`apps/api`), NO el `.env` raíz. Las `SPACES_*` van ahí en cada server (memoria `api-carga-env-cwd`).
+
+### Feature de fotos (Fase 1) — modelo, backend, POS, móvil
+- **Modelo:** `ProductImage` (thumbKey/mediumKey/isPrimary/sortOrder/bytes/w/h) + denormalización `Product.primaryImageThumbUrl/primaryImageMediumUrl`. Migración `20260705180000_product_images` + espejo en `fix-schema.sql`. Los binarios viven en Spaces (por `productId`), la BD solo guarda punteros → respaldos livianos.
+- **Backend** (`apps/api/src/modules/product-images/`): `SpacesService` (cliente S3-compatible, upload público con `public-read`+CacheControl, delete, cdnUrl), pipeline `sharp` (thumb ~150px + medium ~800px WebP), transporte **base64→JSON** (el proxy de Next no reenvía multipart). Endpoints `POST/GET/DELETE /products/:id/images` + `PATCH /:imageId/primary`. `list()` devuelve las URLs del CDN.
+- **POS:** miniatura junto al producto (desktop grid + móvil lista) vía `primaryImageThumbUrl` (sin query extra) + **lightbox** para mostrar la foto grande al cliente. Miniatura expuesta también en `/products/search`.
+- **Pantalla móvil `/catalog/photo-session`:** buscar/**escanear** artículo → cámara (`capture=environment`) → downscale a 1600px en canvas → subir. **Galería gestionable:** ver todas las fotos, **borrar**, **marcar principal**, lightbox. Botón pasa a "Agregar otra foto".
+- **Escáner en la Sesión de fotos:** reusa el motor del POS (BarcodeDetector nativo + ZXing). Resuelve el producto por **barcode, código O Ref. Proveedor** (supplierRef solo si es inequívoco). El buscador de texto ya cubría los 4 campos.
+- **Subida sin huérfanos:** si la BD falla tras subir a Spaces, se borran los objetos (compensación). Nota: `products.remove` es **soft-delete** (no hard-delete) → no hay huérfanos por "borrar producto".
+
+### Sesión de códigos de barras — pantalla nueva `/catalog/barcode-session`
+- Flujo rápido: buscar artículo (código/nombre/Ref.Proveedor) → **escanear con cámara → confirmar escaneando de nuevo (deben coincidir)** → **guardar y siguiente**. Badge "Con código / Sin código" en resultados.
+- Backend: `PATCH /products/:id/barcode` — valida **unicidad** (`barcode` es `@unique`); si el código ya es de otro producto, error claro ("Ese código ya está asignado a X - Y"); reemplaza con aviso si el producto ya tenía uno.
+
+### Permisos — FIX del 403 (importante)
+- Los endpoints de fotos/barcode estaban gateados por `@Roles(ADMIN, WAREHOUSE)`, pero el **menú** (sidebar, CATÁLOGO) los muestra por el **módulo `catalog`**. Resultado: roles con `catalog` (BUYER/SUPERVISOR/**AUDITOR**) veían el menú pero la API los rechazaba con **403** (el usuario MARKETING es rol AUDITOR → daba 403 en el entrenamiento).
+- **Fix:** se gatean por **`@RequireModule('catalog')`** (mismo criterio que el menú, configurable en Ajustes → Permisos por rol). WAREHOUSE no tenía `catalog` (no veía el menú) → sin regresión práctica. Roles con catalog en prod: ADMIN, SUPERVISOR, BUYER, AUDITOR.
+
+### Bugs encontrados en pruebas (y corregidos)
+- **`sharp` no callable** con `import sharp from 'sharp'` bajo la config CommonJS del proyecto (`allowSyntheticDefaultImports` sin `esModuleInterop`) → `require('sharp')` + tipo del default. Tumbó el 1er intento de deploy hasta arreglarlo.
+- **Lightbox no abría en POS móvil:** el móvil hace `return` anticipado con `renderMobileLayout()`; el modal estaba solo en el árbol de escritorio → se movió a `renderSharedModals()` (ambas ramas).
+- **`deploy.sh` saltaba `pnpm install`:** compara `BEFORE..AFTER` pero como el comando hace `git pull` ANTES, el pull interno del script no ve cambios → install saltado → **API caído por `MODULE_NOT_FOUND`** (sharp/aws-sdk) en el 1er deploy a inversiones. Recuperado (`pnpm install` + restart) y **arreglado a install incondicional**. Receta de recuperación en memoria `deploy-install-y-recuperacion`.
+
+### Infra / seguridad
+- **Resiliencia a reboot:** eltrebol tenía postgres/redis en Docker con `restart=no` → tras un reinicio no volvían (API sin BD). Corregido a `restart=unless-stopped` (en vivo con `docker update` + reflejado en compose). inversiones usa **Postgres/Redis nativos (systemd, enabled)** → ya resiliente. (El bug de "API caída" en local durante la jornada fue el proxy de Docker Desktop/WSL2 colgado — exclusivo de Windows, NO puede pasar en prod.)
+- **`docker-compose.yml`:** postgres/redis bindeados a **`127.0.0.1`** (no exponer BD/Redis a internet). eltrebol ya lo tenía a mano (chocaba con git al pullear) → codificado en el repo.
+
+### Despliegues (los hizo Diego)
+- **inversiones:** desplegado y verificado (subida real a `trinity-inversiones`, migración, health). Commit final `fcb16ab`.
+- **eltrebol:** desplegado y verificado (subida real a `trinity-eltrebol`, migración, BD sigue en 127.0.0.1, health). Commit final `25ddad6`. Se resolvió el conflicto del compose con `git checkout -- docker-compose.yml` antes del pull.
+
 ## 🛒 PLAN Tienda online (empresa grande / inversiones) — 2026-07-06 (conversado, SIN codigo aun)
 
 El jefe de la grande quiere **tienda online lo antes posible** (la grande va a produccion esta semana). Charla de arquitectura con Diego (solo diseño, nada implementado). Retomar por la **Fase 0 (fotos)** cuando la grande este en prod y este pago Spaces.
