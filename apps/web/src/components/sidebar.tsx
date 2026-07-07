@@ -52,6 +52,7 @@ import {
   Tags,
   PackageX,
   Camera,
+  Barcode,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -107,6 +108,7 @@ const menuSections: MenuSection[] = [
       { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={18} /> },
       { label: 'Ajuste de precios', href: '/catalog/price-adjustment', icon: <SlidersHorizontal size={18} /> },
       { label: 'Sesion de fotos', href: '/catalog/photo-session', icon: <Camera size={18} /> },
+      { label: 'Sesion de codigos de barras', href: '/catalog/barcode-session', icon: <Barcode size={18} /> },
     ],
   },
   {

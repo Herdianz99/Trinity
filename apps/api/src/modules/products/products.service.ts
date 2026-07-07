@@ -362,6 +362,32 @@ export class ProductsService {
     return { message: 'Producto desactivado' };
   }
 
+  // Asigna/reemplaza el codigo de barras de un producto validando unicidad (para la Sesion de codigos de barras).
+  async setBarcode(id: string, rawBarcode: string) {
+    const barcode = (rawBarcode || '').trim();
+    if (!barcode) throw new BadRequestException('El código de barras no puede estar vacío');
+
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      select: { id: true, code: true, name: true, barcode: true },
+    });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+
+    const clash = await this.prisma.product.findFirst({
+      where: { barcode, NOT: { id } },
+      select: { code: true, name: true },
+    });
+    if (clash) {
+      throw new ConflictException(`Ese código ya está asignado a ${clash.code} - ${clash.name}`);
+    }
+
+    return this.prisma.product.update({
+      where: { id },
+      data: { barcode },
+      select: { id: true, code: true, name: true, barcode: true },
+    });
+  }
+
   async importProducts(products: CreateProductDto[]) {
     const results = { created: 0, errors: [] as string[] };
 

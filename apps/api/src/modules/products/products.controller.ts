@@ -11,6 +11,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
+import { SetBarcodeDto } from './dto/set-barcode.dto';
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -71,6 +72,13 @@ export class ProductsController {
     @Query('limit') limit?: number,
   ) {
     return this.productsService.findPurchaseHistory(id, Number(page) || 1, Number(limit) || 20);
+  }
+
+  @Patch(':id/barcode')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  setBarcode(@Param('id') id: string, @Body() dto: SetBarcodeDto) {
+    return this.productsService.setBarcode(id, dto.barcode);
   }
 
   @Patch(':id')
