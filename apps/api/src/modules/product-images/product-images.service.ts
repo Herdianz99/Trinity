@@ -11,10 +11,39 @@ export class ProductImagesService {
   ) {}
 
   async list(productId: string) {
-    return this.prisma.productImage.findMany({
+    const images = await this.prisma.productImage.findMany({
       where: { productId },
       orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
+    return images.map((img) => ({
+      ...img,
+      thumbUrl: this.spaces.cdnUrl(img.thumbKey),
+      mediumUrl: this.spaces.cdnUrl(img.mediumKey),
+    }));
+  }
+
+  async setPrimary(productId: string, imageId: string) {
+    const image = await this.prisma.productImage.findFirst({ where: { id: imageId, productId } });
+    if (!image) throw new NotFoundException('Imagen no encontrada');
+
+    await this.prisma.$transaction([
+      this.prisma.productImage.updateMany({ where: { productId }, data: { isPrimary: false } }),
+      this.prisma.productImage.update({ where: { id: imageId }, data: { isPrimary: true } }),
+      this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          primaryImageThumbUrl: this.spaces.cdnUrl(image.thumbKey),
+          primaryImageMediumUrl: this.spaces.cdnUrl(image.mediumKey),
+        },
+      }),
+    ]);
+
+    return {
+      ...image,
+      isPrimary: true,
+      thumbUrl: this.spaces.cdnUrl(image.thumbKey),
+      mediumUrl: this.spaces.cdnUrl(image.mediumKey),
+    };
   }
 
   async upload(productId: string, dataUri: string, userId: string) {

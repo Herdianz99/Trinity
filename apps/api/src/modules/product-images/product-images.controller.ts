@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '@prisma/client';
@@ -29,6 +29,13 @@ export class ProductImagesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.service.upload(productId, dto.image, userId);
+  }
+
+  @Patch(':imageId/primary')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  setPrimary(@Param('productId') productId: string, @Param('imageId') imageId: string) {
+    return this.service.setPrimary(productId, imageId);
   }
 
   @Delete(':imageId')

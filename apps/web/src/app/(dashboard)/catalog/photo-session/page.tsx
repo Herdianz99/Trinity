@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Loader2, Check, X, Image as ImageIcon } from 'lucide-react';
+import { Camera, Search, Loader2, X, Image as ImageIcon, Trash2, Star } from 'lucide-react';
 
 interface FoundProduct {
   id: string;
@@ -9,6 +9,13 @@ interface FoundProduct {
   name: string;
   barcode?: string | null;
   primaryImageThumbUrl?: string | null;
+}
+
+interface ProductImg {
+  id: string;
+  thumbUrl: string;
+  mediumUrl: string;
+  isPrimary: boolean;
 }
 
 // Reduce la imagen a maxSize px (lado mayor) y devuelve un data URI JPEG.
@@ -40,10 +47,26 @@ export default function PhotoSessionPage() {
   const [selected, setSelected] = useState<FoundProduct | null>(null);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [images, setImages] = useState<ProductImg[]>([]);
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { document.title = 'Sesión de fotos | Trinity ERP'; }, []);
+
+  const loadImages = useCallback(async (productId: string) => {
+    setLoadingImages(true);
+    try {
+      const res = await fetch(`/api/proxy/products/${productId}/images`);
+      setImages(res.ok ? await res.json() : []);
+    } catch { setImages([]); }
+    finally { setLoadingImages(false); }
+  }, []);
+
+  useEffect(() => {
+    if (selected) loadImages(selected.id); else setImages([]);
+  }, [selected, loadImages]);
 
   const doSearch = useCallback((q: string) => {
     setQuery(q);
@@ -72,9 +95,9 @@ export default function PhotoSessionPage() {
         body: JSON.stringify({ image: dataUri }),
       });
       if (res.ok) {
-        const img = await res.json();
+        await res.json();
         setMsg({ type: 'ok', text: `Foto guardada para ${selected.code}` });
-        setSelected({ ...selected, primaryImageThumbUrl: selected.primaryImageThumbUrl || img.thumbUrl });
+        loadImages(selected.id);
       } else {
         const err = await res.json().catch(() => ({}));
         setMsg({ type: 'err', text: err.message || 'Error al subir la foto' });
@@ -84,6 +107,20 @@ export default function PhotoSessionPage() {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function deleteImage(imageId: string) {
+    if (!selected || !confirm('¿Borrar esta foto? No se puede deshacer.')) return;
+    const res = await fetch(`/api/proxy/products/${selected.id}/images/${imageId}`, { method: 'DELETE' });
+    if (res.ok) { setMsg({ type: 'ok', text: 'Foto borrada' }); loadImages(selected.id); }
+    else setMsg({ type: 'err', text: 'No se pudo borrar la foto' });
+  }
+
+  async function makePrimary(imageId: string) {
+    if (!selected) return;
+    const res = await fetch(`/api/proxy/products/${selected.id}/images/${imageId}/primary`, { method: 'PATCH' });
+    if (res.ok) { setMsg({ type: 'ok', text: 'Foto principal actualizada' }); loadImages(selected.id); }
+    else setMsg({ type: 'err', text: 'No se pudo marcar como principal' });
   }
 
   return (
@@ -141,22 +178,59 @@ export default function PhotoSessionPage() {
             <button onClick={() => { setSelected(null); setMsg(null); }} className="text-slate-400 hover:text-white"><X size={20} /></button>
           </div>
 
-          {selected.primaryImageThumbUrl && (
-            <div className="mb-4 flex items-center gap-2 text-sm text-green-400">
-              <Check size={16} /> Ya tiene foto principal
-              <img src={selected.primaryImageThumbUrl} alt="" className="w-12 h-12 rounded object-cover ml-auto border border-slate-700" />
-            </div>
-          )}
+          <div className="mb-4">
+            {loadingImages ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={16} className="animate-spin" /> Cargando fotos...</div>
+            ) : images.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-slate-500 py-2"><ImageIcon size={16} /> Sin fotos todavía</div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img) => (
+                  <div key={img.id} className="relative">
+                    <img
+                      src={img.thumbUrl}
+                      alt=""
+                      onClick={() => setLightboxUrl(img.mediumUrl || img.thumbUrl)}
+                      className={`w-full aspect-square rounded-lg object-cover border cursor-zoom-in ${img.isPrimary ? 'border-green-500' : 'border-slate-700'}`}
+                    />
+                    {img.isPrimary && (
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-green-500 text-white text-[10px] font-medium flex items-center gap-0.5">
+                        <Star size={9} className="fill-white" /> Principal
+                      </span>
+                    )}
+                    <div className="absolute bottom-1 right-1 flex gap-1">
+                      {!img.isPrimary && (
+                        <button onClick={() => makePrimary(img.id)} title="Marcar como principal"
+                          className="p-1.5 rounded bg-slate-900/80 text-slate-200 hover:text-green-400">
+                          <Star size={13} />
+                        </button>
+                      )}
+                      <button onClick={() => deleteImage(img.id)} title="Borrar foto"
+                        className="p-1.5 rounded bg-slate-900/80 text-slate-200 hover:text-red-400">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
           <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
             className="btn-primary w-full flex items-center justify-center gap-2 py-3">
-            {uploading ? <><Loader2 size={20} className="animate-spin" /> Subiendo...</> : <><Camera size={20} /> Tomar / elegir foto</>}
+            {uploading ? <><Loader2 size={20} className="animate-spin" /> Subiendo...</> : <><Camera size={20} /> {images.length > 0 ? 'Agregar otra foto' : 'Tomar / elegir foto'}</>}
           </button>
 
           <button onClick={() => { setSelected(null); setMsg(null); }} className="btn-secondary w-full mt-2">
             Siguiente producto
           </button>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl(null)} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
         </div>
       )}
     </div>
