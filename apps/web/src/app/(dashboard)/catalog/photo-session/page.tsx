@@ -8,6 +8,7 @@ interface FoundProduct {
   code: string;
   name: string;
   barcode?: string | null;
+  supplierRef?: string | null;
   primaryImageThumbUrl?: string | null;
 }
 
@@ -108,12 +109,21 @@ export default function PhotoSessionPage() {
       const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(code)}&limit=10`);
       const data = await res.json();
       const list: FoundProduct[] = data.data || [];
-      const exact = list.find((p) => p.barcode === code) || (list.length === 1 ? list[0] : null);
+      // Auto-selecciona por match EXACTO. barcode/código son únicos; supplierRef NO,
+      // así que por Ref. Proveedor solo si es inequívoco (un único producto).
+      const bySupplierRef = list.filter((p) => p.supplierRef === code);
+      const exact =
+        list.find((p) => p.barcode === code) ||
+        list.find((p) => p.code === code) ||
+        (bySupplierRef.length === 1 ? bySupplierRef[0] : null) ||
+        (list.length === 1 ? list[0] : null);
       if (exact) { setSelected(exact); setResults([]); setQuery(''); setMsg(null); }
       else {
         setQuery(code);
         setResults(list);
-        if (list.length === 0) setMsg({ type: 'err', text: `Sin resultados para "${code}"` });
+        setMsg(list.length === 0
+          ? { type: 'err', text: `Sin resultados para "${code}"` }
+          : { type: 'ok', text: `Varios coinciden con "${code}" — elige el correcto` });
       }
     } catch { setQuery(code); }
   }
@@ -294,7 +304,7 @@ export default function PhotoSessionPage() {
                   ? <img src={p.primaryImageThumbUrl} alt="" className="w-10 h-10 rounded object-cover border border-slate-700" />
                   : <div className="w-10 h-10 rounded bg-slate-800 border border-slate-700 flex items-center justify-center"><ImageIcon size={16} className="text-slate-600" /></div>}
                 <div className="min-w-0">
-                  <div className="text-xs font-mono text-slate-500">{p.code}</div>
+                  <div className="text-xs font-mono text-slate-500">{p.code}{p.supplierRef ? ` · ${p.supplierRef}` : ''}</div>
                   <div className="text-sm text-white truncate">{p.name}</div>
                 </div>
               </button>
