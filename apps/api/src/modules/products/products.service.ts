@@ -212,6 +212,7 @@ export class ProductsService {
 
     const results = await this.prisma.$queryRaw<any[]>`
       SELECT p.id, p.code, p.name, p."priceDetal", p."priceMayor", p."isService",
+        p."primaryImageThumbUrl",
         COALESCE((SELECT SUM(s.quantity) FROM "Stock" s WHERE s."productId" = p.id), 0) as "totalStock"
       FROM "Product" p
       WHERE p."isActive" = true
@@ -239,6 +240,7 @@ export class ProductsService {
       priceMayor: Number(r.priceMayor),
       totalStock: Number(r.totalStock),
       isService: r.isService,
+      primaryImageThumbUrl: r.primaryImageThumbUrl ?? null,
     }));
   }
 
