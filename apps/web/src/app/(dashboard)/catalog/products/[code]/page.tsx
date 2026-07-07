@@ -34,6 +34,8 @@ interface Product {
   priceMayor: number;
   minStock: number;
   isActive: boolean;
+  showInStore?: boolean;
+  storeFeatured?: boolean;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
@@ -167,6 +169,8 @@ export default function ProductDetailPage() {
         ivaType: data.ivaType,
         minStock: data.minStock,
         isActive: data.isActive,
+        showInStore: data.showInStore ?? false,
+        storeFeatured: data.storeFeatured ?? false,
       });
     } catch (err: any) {
       setError(err.message);
@@ -286,6 +290,8 @@ export default function ProductDetailPage() {
         conversionFactor: Number(form.conversionFactor),
         minStock: Number(form.minStock),
         isActive: form.isActive,
+        showInStore: form.showInStore,
+        storeFeatured: form.storeFeatured,
       };
       const res = await fetch(`/api/proxy/products/${product.id}`, {
         method: 'PATCH',
@@ -651,6 +657,18 @@ export default function ProductDetailPage() {
                   <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
                     <input type="checkbox" checked={form.isActive ?? true} onChange={e => setForm((f: any) => ({ ...f, isActive: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
                     Producto activo
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                    <input type="checkbox" checked={form.showInStore ?? false} onChange={e => setForm((f: any) => ({ ...f, showInStore: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" />
+                    Mostrar en tienda online
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                    <input type="checkbox" checked={form.storeFeatured ?? false} onChange={e => setForm((f: any) => ({ ...f, storeFeatured: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" disabled={!form.showInStore} />
+                    Destacado en tienda
                   </label>
                 </div>
               </div>

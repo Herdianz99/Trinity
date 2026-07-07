@@ -22,6 +22,7 @@ const defaultForm = {
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
   costUsd: '0', bregaApplies: true, gananciaPct: '0', gananciaMayorPct: '0',
   ivaType: 'GENERAL', minStock: 0, isActive: true, isService: false,
+  showInStore: false, storeFeatured: false,
 };
 
 export default function NewProductPage() {
@@ -102,6 +103,8 @@ export default function NewProductPage() {
         minStock: Number(form.minStock),
         isActive: form.isActive,
         isService: form.isService,
+        showInStore: form.showInStore,
+        storeFeatured: form.storeFeatured,
       };
       if (form.code) body.code = form.code;
 
@@ -314,6 +317,16 @@ export default function NewProductPage() {
               <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
                 <input type="checkbox" checked={form.isService} onChange={e => setForm(f => ({ ...f, isService: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40" />
                 Articulo de servicio
+              </label>
+            </div>
+            <div className="flex items-end gap-6">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                <input type="checkbox" checked={form.showInStore} onChange={e => setForm(f => ({ ...f, showInStore: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" />
+                Mostrar en tienda online
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
+                <input type="checkbox" checked={form.storeFeatured} onChange={e => setForm(f => ({ ...f, storeFeatured: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" disabled={!form.showInStore} />
+                Destacado en tienda
               </label>
             </div>
             {form.isService && (
