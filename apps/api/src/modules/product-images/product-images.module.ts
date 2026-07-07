@@ -6,6 +6,6 @@ import { SpacesService } from './spaces.service';
 @Module({
   controllers: [ProductImagesController],
   providers: [ProductImagesService, SpacesService],
-  exports: [ProductImagesService],
+  exports: [ProductImagesService, SpacesService],
 })
 export class ProductImagesModule {}
