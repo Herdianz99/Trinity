@@ -1,16 +1,15 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { UserRole } from '@prisma/client';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProductImagesService } from './product-images.service';
 import { UploadProductImageDto } from './dto/upload-product-image.dto';
 
 @ApiTags('ProductImages')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), ModuleGuard)
 @Controller('products/:productId/images')
 export class ProductImagesController {
   constructor(private service: ProductImagesService) {}
@@ -21,8 +20,7 @@ export class ProductImagesController {
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  @RequireModule('catalog')
   upload(
     @Param('productId') productId: string,
     @Body() dto: UploadProductImageDto,
@@ -32,15 +30,13 @@ export class ProductImagesController {
   }
 
   @Patch(':imageId/primary')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  @RequireModule('catalog')
   setPrimary(@Param('productId') productId: string, @Param('imageId') imageId: string) {
     return this.service.setPrimary(productId, imageId);
   }
 
   @Delete(':imageId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  @RequireModule('catalog')
   remove(@Param('productId') productId: string, @Param('imageId') imageId: string) {
     return this.service.remove(productId, imageId);
   }

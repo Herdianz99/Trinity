@@ -4,6 +4,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '@prisma/client';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ModuleGuard } from '../../common/guards/module.guard';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -75,8 +77,8 @@ export class ProductsController {
   }
 
   @Patch(':id/barcode')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.WAREHOUSE)
+  @UseGuards(AuthGuard('jwt'), ModuleGuard)
+  @RequireModule('catalog')
   setBarcode(@Param('id') id: string, @Body() dto: SetBarcodeDto) {
     return this.productsService.setBarcode(id, dto.barcode);
   }
