@@ -1,4 +1,7 @@
-import sharp from 'sharp';
+// sharp 0.35 tipa la funcion como default export, pero bajo CommonJS `require('sharp')`
+// devuelve la funcion directamente (module.exports = sharp, sin `.default`). Usamos require
+// para el runtime y el tipo del default export para el typecheck.
+const sharp = require('sharp') as typeof import('sharp').default;
 
 export interface ProcessedImage {
   thumb: Buffer;
