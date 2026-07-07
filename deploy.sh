@@ -58,13 +58,14 @@ else
 fi
 
 # ── 2. Instalar dependencias ──
+# Incondicional a proposito: el diff BEFORE..AFTER queda vacio cuando se hace
+# `git pull` ANTES de `bash deploy.sh` (deploy.sh vuelve a pullear en el paso 1
+# y no ve cambios), lo que saltaba el install y dejaba el API sin deps nuevas
+# (ej. sharp/aws-sdk -> MODULE_NOT_FOUND, API caido). pnpm install es idempotente
+# y rapido cuando el lockfile ya esta al dia.
 log "Instalando dependencias..."
-if git diff "$BEFORE".."$AFTER" --name-only 2>/dev/null | grep -qE 'package\.json|pnpm-lock'; then
-  pnpm install --no-frozen-lockfile 2>&1 | tail -5
-  ok "Dependencias actualizadas"
-else
-  ok "Sin cambios en dependencias (saltado)"
-fi
+pnpm install --no-frozen-lockfile 2>&1 | tail -5
+ok "Dependencias actualizadas"
 
 # ── 3. Migraciones de base de datos ──
 log "Aplicando migraciones de base de datos..."
