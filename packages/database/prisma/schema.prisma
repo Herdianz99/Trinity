@@ -509,8 +509,28 @@ model Product {
   replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
   lostSales        LostSale[]
+  images                ProductImage[]
+  primaryImageThumbUrl  String?
+  primaryImageMediumUrl String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+}
+
+model ProductImage {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  thumbKey    String
+  mediumKey   String
+  isPrimary   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  bytes       Int?
+  width       Int?
+  height      Int?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
 }
 
 // ============================================
