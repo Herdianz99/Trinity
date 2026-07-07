@@ -51,6 +51,7 @@ import {
   PackageSearch,
   Tags,
   PackageX,
+  Camera,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -105,6 +106,7 @@ const menuSections: MenuSection[] = [
       { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={18} /> },
       { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={18} /> },
       { label: 'Ajuste de precios', href: '/catalog/price-adjustment', icon: <SlidersHorizontal size={18} /> },
+      { label: 'Sesion de fotos', href: '/catalog/photo-session', icon: <Camera size={18} /> },
     ],
   },
   {
