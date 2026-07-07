@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronRight,
   PackageX,
+  Image as ImageIcon,
 } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
 import { LostSaleModal } from '@/components/lost-sale-modal';
@@ -200,6 +201,7 @@ export default function POSPage() {
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1770,9 +1772,18 @@ export default function POSPage() {
                       onClick={() => blockNoStock ? setNegKeyProduct(product) : addToCart(product)}
                       className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
                     >
-                      <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center mb-2">
-                        <ShoppingCart size={16} className="text-slate-500" />
-                      </div>
+                      {product.primaryImageThumbUrl ? (
+                        <img
+                          src={product.primaryImageThumbUrl}
+                          alt=""
+                          onClick={(e) => { e.stopPropagation(); setLightboxUrl(product.primaryImageMediumUrl || product.primaryImageThumbUrl); }}
+                          className="w-10 h-10 rounded-lg object-cover border border-slate-700 mb-2 cursor-zoom-in"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center mb-2">
+                          <ImageIcon size={16} className="text-slate-600" />
+                        </div>
+                      )}
                       <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</p>
                       <div className="flex items-center justify-between mt-1">
@@ -2992,6 +3003,18 @@ export default function POSPage() {
                 title={blockNoStock ? 'Sin stock — clic para registrar venta perdida' : undefined}
                 className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${pIdx === productHighlight ? (blockNoStock ? 'bg-amber-500/5' : 'bg-slate-700/40') : ''}`}
               >
+                {product.primaryImageThumbUrl ? (
+                  <img
+                    src={product.primaryImageThumbUrl}
+                    alt=""
+                    onClick={(e) => { e.stopPropagation(); setLightboxUrl(product.primaryImageMediumUrl || product.primaryImageThumbUrl); }}
+                    className="w-10 h-10 rounded object-cover border border-slate-700 flex-shrink-0 mr-3 cursor-zoom-in"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded bg-slate-800 border border-slate-700 flex-shrink-0 mr-3 flex items-center justify-center">
+                    <ImageIcon size={16} className="text-slate-600" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-slate-500">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</span>
@@ -3398,6 +3421,15 @@ export default function POSPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+        >
+          <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
         </div>
       )}
     </div>
