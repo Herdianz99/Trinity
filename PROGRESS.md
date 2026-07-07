@@ -1,5 +1,32 @@
 ﻿# Trinity ERP — Progreso
 
+## 🛒 PLAN Tienda online (empresa grande / inversiones) — 2026-07-06 (conversado, SIN codigo aun)
+
+El jefe de la grande quiere **tienda online lo antes posible** (la grande va a produccion esta semana). Charla de arquitectura con Diego (solo diseño, nada implementado). Retomar por la **Fase 0 (fotos)** cuando la grande este en prod y este pago Spaces.
+
+**Contexto que aporto Diego:** ya tiene la **vitrina hecha en Next.js, hospedada en Vercel (gratis)**; antes cargaba data por su propia BD via Excel (poco practico) pero **el diseño gusto** → se reusa. Pagos: al inicio **pedido + verificar Pago Movil a mano**; a futuro API de banco para verificar automatico. Fotos: aun no empiezan; algunos proveedores mandaran las suyas.
+
+**Arquitectura decidida (principio: UNA fuente de verdad + proteger el POS del trafico publico):**
+- **Datos:** la tienda NO tiene BD propia ni copia productos. Lee **en vivo** de Trinity (grande) via una **API publica nueva** (`/public/...`), solo-lectura, con CORS al dominio de la tienda + rate-limit + cache Redis. Asi precio/stock siempre al dia. Reemplaza el viejo "cargar por Excel".
+- **Vitrina:** su Next.js en **Vercel** (aisla el trafico publico del droplet del ERP; CDN). Se reconecta al API de Trinity (mismo diseño).
+- **Fotos:** **DigitalOcean Spaces (~$5/mes, CDN incluido)**. La MISMA foto sirve al POS (miniatura, guia del vendedor) y a la tienda — un solo lugar, un solo pago, dos usos.
+- **Servidor:** se **reusa el droplet actual de la grande** (4vCPU/8GB, tiene margen) — $0 extra. Si la tienda crece mucho, recien ahi aislar/agrandar.
+
+**Costos:** **~$5/mes** para lanzar (solo Spaces). Vercel gratis al inicio (OJO: Hobby es no-comercial en sus terminos → posible **$20/mes Pro** a futuro si crece/lo exigen). Dominio: **gratis** si es subdominio de `eltrebol.app` (ej. `tienda.eltrebol.app`); solo se paga (~$10-15/año) si quieren un dominio propio nuevo.
+
+**Plan por fases:**
+- **Fase 0 (cimientos):** funcion de **fotos** en Trinity (modelo `ProductImage` + subida a Spaces thumb/medium + flag **`mostrarEnTienda`** + UI para subir/marcar) — ya hay spec+plan (`docs/superpowers/.../2026-07-05-fotos-productos-*`) + **API publica** (catalogo/detalle/precio/**disponibilidad**/categorias).
+- **Fase 1 (MVP vendible):** reconectar la vitrina Next.js al API; **checkout → pedido** que reserva stock y guarda contacto (nombre, **telefono** —ya obligatorio—, cedula) + retiro/delivery + "Pago Movil por verificar"; **pantalla de pedidos online** en Trinity para verificar el pago a mano y confirmar → despacho/facturacion normal.
+- **Fase 2:** API de banco (Pago Movil auto), pagos online, cuentas de cliente, delivery.
+
+**⚠️ Decisiones de diseño criticas (antes de codear la Fase 1):**
+1. **El pedido online NO puede ser una pre-factura PENDING comun** → el cron nocturno (`quotations-cron`) BORRA las PENDING viejas, y un pedido esperando verificacion de pago se borraria de madrugada. Debe ser un **concepto/modelo aparte** (`Pedido`/`OrdenOnline`) con estado propio ("por verificar pago" → "confirmado").
+2. Solo salen a la tienda los productos con flag `mostrarEnTienda` (y probablemente solo los que tengan foto).
+3. Mostrar **"disponible / agotado"**, no el numero exacto de stock.
+4. Definir categorias de la tienda (reusar las de Trinity vs taxonomia propia).
+
+**Secuencia acordada:** grande a produccion esta semana → desplegar lo del 06-jul → **construir la funcion de fotos** (da valor al POS de una vez) → el personal **carga fotos en paralelo** (lo mas largo, es manual) → mientras, montar API publica + reconectar vitrina. **Proximo paso: Fase 0 (fotos).**
+
 ## 🧰 Jornada de mejoras (POS, CxC/CxP, ajustes, proveedores) — 2026-07-06 (EN main, SIN desplegar)
 
 Varias mejoras/correcciones pedidas por Diego. Commits `37f53ab`, `aeb1fef`, `f6a3db5` en `main`. Typechecks 0 (API+Web), probado en local. **NO desplegado aun.** Trae **2 migraciones** (`20260706120000_supplier_credit_days`, `20260706170000_inventory_adjustment_number`) y cambios de **backend** (reiniciar API en el deploy). Aplica a AMBAS empresas.
