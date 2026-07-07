@@ -7,7 +7,8 @@ services:
       POSTGRES_USER: trebol
       POSTGRES_PASSWORD: ${DB_PASSWORD:-trebol_secret_2024}
     ports:
-      - "5432:5432"
+      # Solo localhost: la BD NO se expone a internet (los servers son droplets públicos)
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +21,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # Solo localhost (no exponer Redis a internet)
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
