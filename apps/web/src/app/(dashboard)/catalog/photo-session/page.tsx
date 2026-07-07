@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Loader2, X, Image as ImageIcon, Trash2, Star } from 'lucide-react';
+import { Camera, Search, Loader2, X, Image as ImageIcon, Trash2, Star, ScanLine } from 'lucide-react';
 
 interface FoundProduct {
   id: string;
@@ -41,6 +41,11 @@ function downscaleToDataUri(file: File, maxSize = 1600, quality = 0.85): Promise
   });
 }
 
+const NATIVE_BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+const SCANNER_VIDEO_CONSTRAINTS: MediaStreamConstraints = {
+  video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+};
+
 export default function PhotoSessionPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoundProduct[]>([]);
@@ -50,8 +55,12 @@ export default function PhotoSessionPage() {
   const [images, setImages] = useState<ProductImg[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [scannerActive, setScannerActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const lastScanRef = useRef<{ code: string; count: number }>({ code: '', count: 0 });
 
   useEffect(() => { document.title = 'Sesión de fotos | Trinity ERP'; }, []);
 
@@ -80,6 +89,116 @@ export default function PhotoSessionPage() {
       } catch { /* ignore */ }
     }, 300);
   }, []);
+
+  // ── Escáner de código de barras (reusa el patrón del POS: detector nativo + ZXing) ──
+  function stopScanner() {
+    if (scannerControlsRef.current) { scannerControlsRef.current.stop(); scannerControlsRef.current = null; }
+    lastScanRef.current = { code: '', count: 0 };
+  }
+
+  // Exige 2 lecturas iguales seguidas (mata falsos positivos)
+  function confirmScan(code: string): boolean {
+    if (lastScanRef.current.code === code) lastScanRef.current.count += 1;
+    else lastScanRef.current = { code, count: 1 };
+    return lastScanRef.current.count >= 2;
+  }
+
+  async function resolveScanned(code: string) {
+    try {
+      const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(code)}&limit=10`);
+      const data = await res.json();
+      const list: FoundProduct[] = data.data || [];
+      const exact = list.find((p) => p.barcode === code) || (list.length === 1 ? list[0] : null);
+      if (exact) { setSelected(exact); setResults([]); setQuery(''); setMsg(null); }
+      else {
+        setQuery(code);
+        setResults(list);
+        if (list.length === 0) setMsg({ type: 'err', text: `Sin resultados para "${code}"` });
+      }
+    } catch { setQuery(code); }
+  }
+
+  function finishScan(code: string) {
+    setScannerActive(false);
+    stopScanner();
+    resolveScanned(code);
+  }
+
+  async function startNativeDetector(): Promise<boolean> {
+    const BD = (window as any).BarcodeDetector;
+    if (!BD) return false;
+    let formats = NATIVE_BARCODE_FORMATS;
+    try {
+      const supported: string[] = await BD.getSupportedFormats();
+      formats = NATIVE_BARCODE_FORMATS.filter((f) => supported.includes(f));
+      if (formats.length === 0) return false;
+    } catch { /* usar lista por defecto */ }
+    const detector = new BD({ formats });
+    const stream = await navigator.mediaDevices.getUserMedia(SCANNER_VIDEO_CONSTRAINTS);
+    if (!videoRef.current) { stream.getTracks().forEach((t) => t.stop()); return false; }
+    videoRef.current.srcObject = stream;
+    await videoRef.current.play().catch(() => {});
+    let stopped = false;
+    let rafId = 0;
+    const tick = async () => {
+      if (stopped || !videoRef.current) return;
+      try {
+        const codes = await detector.detect(videoRef.current);
+        if (codes && codes.length > 0) {
+          const code = codes[0].rawValue as string;
+          if (code && confirmScan(code)) { finishScan(code); return; }
+        }
+      } catch { /* frame no listo */ }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    scannerControlsRef.current = {
+      stop: () => {
+        stopped = true;
+        cancelAnimationFrame(rafId);
+        stream.getTracks().forEach((t) => t.stop());
+        if (videoRef.current) videoRef.current.srcObject = null;
+      },
+    };
+    return true;
+  }
+
+  async function startZxingScanner() {
+    const { BrowserMultiFormatReader } = await import('@zxing/browser');
+    const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+    const hints = new Map<number, any>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+    ]);
+    const codeReader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
+    if (!videoRef.current) throw new Error('No se pudo inicializar el video');
+    const controls = await codeReader.decodeFromConstraints(SCANNER_VIDEO_CONSTRAINTS, videoRef.current, (result) => {
+      if (result) { const code = result.getText(); if (code && confirmScan(code)) finishScan(code); }
+    });
+    scannerControlsRef.current = { stop: () => controls.stop() };
+  }
+
+  async function toggleScanner() {
+    if (scannerActive) { setScannerActive(false); stopScanner(); return; }
+    if (typeof window !== 'undefined' && !window.isSecureContext) { setMsg({ type: 'err', text: 'La cámara requiere conexión HTTPS.' }); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { setMsg({ type: 'err', text: 'Este navegador no soporta la cámara' }); return; }
+    try {
+      lastScanRef.current = { code: '', count: 0 };
+      setMsg(null);
+      setScannerActive(true);
+      await new Promise((r) => setTimeout(r, 100));
+      const nativeOk = await startNativeDetector();
+      if (!nativeOk) await startZxingScanner();
+    } catch (err) {
+      setMsg({ type: 'err', text: err instanceof DOMException && err.name === 'NotAllowedError' ? 'Permiso de cámara denegado.' : 'No se pudo acceder a la cámara' });
+      setScannerActive(false);
+      stopScanner();
+    }
+  }
+
+  // Apagar el escáner al elegir producto o al salir de la pantalla
+  useEffect(() => { if (selected) { setScannerActive(false); stopScanner(); } }, [selected]);
+  useEffect(() => () => stopScanner(), []);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -143,16 +262,30 @@ export default function PhotoSessionPage() {
 
       {!selected ? (
         <>
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => doSearch(e.target.value)}
-              placeholder="Código, nombre o código de barras..."
-              className="input-field pl-10 w-full"
-            />
+          <div className="flex gap-2 mb-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => doSearch(e.target.value)}
+                placeholder="Código, nombre o código de barras..."
+                className="input-field pl-10 w-full"
+              />
+            </div>
+            <button
+              onClick={toggleScanner}
+              title="Escanear código de barras"
+              className={`px-3 rounded-lg border flex items-center justify-center transition-colors ${scannerActive ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:text-white'}`}
+            >
+              <ScanLine size={20} />
+            </button>
           </div>
+          {scannerActive && (
+            <div className="mb-3 rounded-lg overflow-hidden border border-slate-700">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-48 object-cover" />
+            </div>
+          )}
           <div className="card divide-y divide-slate-700/40">
             {results.map((p) => (
               <button key={p.id} onClick={() => { setSelected(p); setResults([]); setQuery(''); }}

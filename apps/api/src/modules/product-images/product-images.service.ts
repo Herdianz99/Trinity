@@ -64,31 +64,37 @@ export class ProductImagesService {
       this.spaces.uploadPublic(mediumKey, processed.medium, 'image/webp'),
     ]);
 
-    const existingCount = await this.prisma.productImage.count({ where: { productId } });
-    const isPrimary = existingCount === 0;
+    try {
+      const existingCount = await this.prisma.productImage.count({ where: { productId } });
+      const isPrimary = existingCount === 0;
 
-    const image = await this.prisma.productImage.create({
-      data: {
-        productId,
-        thumbKey,
-        mediumKey,
-        isPrimary,
-        sortOrder: existingCount,
-        bytes: processed.bytes,
-        width: processed.width,
-        height: processed.height,
-        createdById: userId,
-      },
-    });
-
-    if (isPrimary) {
-      await this.prisma.product.update({
-        where: { id: productId },
-        data: { primaryImageThumbUrl: thumbUrl, primaryImageMediumUrl: mediumUrl },
+      const image = await this.prisma.productImage.create({
+        data: {
+          productId,
+          thumbKey,
+          mediumKey,
+          isPrimary,
+          sortOrder: existingCount,
+          bytes: processed.bytes,
+          width: processed.width,
+          height: processed.height,
+          createdById: userId,
+        },
       });
-    }
 
-    return { ...image, thumbUrl, mediumUrl };
+      if (isPrimary) {
+        await this.prisma.product.update({
+          where: { id: productId },
+          data: { primaryImageThumbUrl: thumbUrl, primaryImageMediumUrl: mediumUrl },
+        });
+      }
+
+      return { ...image, thumbUrl, mediumUrl };
+    } catch (e) {
+      // Compensacion: si la BD falla despues de subir, borrar los objetos para no dejar huerfanos en Spaces.
+      await Promise.all([this.spaces.delete(thumbKey), this.spaces.delete(mediumKey)]);
+      throw e;
+    }
   }
 
   async remove(productId: string, imageId: string) {
