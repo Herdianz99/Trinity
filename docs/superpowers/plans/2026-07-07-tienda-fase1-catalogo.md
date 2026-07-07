@@ -1,5 +1,7 @@
 # Tienda Online — Fase 1 (catálogo en vivo) — Plan de Implementación
 
+> ⚠️ **REEMPLAZADO (2026-07-07).** Este plan usaba la arquitectura **Overlay** (la tienda conserva su BD y Trinity superpone 3 datos en vivo). Se decidió con Diego cambiar a la arquitectura **Snapshot al CDN (Trinity = única fuente de verdad)**. Ver el plan vigente: `docs/superpowers/plans/2026-07-07-tienda-snapshot-cdn.md` y el diseño `docs/superpowers/specs/2026-07-07-tienda-snapshot-cdn-design.md`. Se conserva por historial.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Que la vitrina existente (`trebol-shop`, Next.js en Vercel) muestre **precio, disponibilidad y foto en vivo desde Trinity** (empresa grande / inversiones), en vez de datos cargados por Excel — sin tocar el diseño ni el checkout.

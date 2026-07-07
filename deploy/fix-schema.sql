@@ -2259,3 +2259,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "primaryImageThumbUrl" TEXT;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "primaryImageMediumUrl" TEXT;
+-- Tienda online: flags de publicacion (Parte A)
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "showInStore" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "storeFeatured" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "Product_showInStore_idx" ON "Product" ("showInStore");

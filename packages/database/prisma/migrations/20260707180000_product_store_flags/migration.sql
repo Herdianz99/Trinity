@@ -1,0 +1,3 @@
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "showInStore" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "storeFeatured" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "Product_showInStore_idx" ON "Product" ("showInStore");

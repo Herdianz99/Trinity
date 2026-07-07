@@ -37,6 +37,22 @@ export class SpacesService {
     return this.cdnUrl(key);
   }
 
+  /** Sube un JSON público con cache corto (para snapshots que cambian). Devuelve su URL de CDN. */
+  async uploadJson(key: string, data: unknown, maxAgeSeconds = 60): Promise<string> {
+    const body = Buffer.from(JSON.stringify(data), 'utf-8');
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: 'application/json; charset=utf-8',
+        ACL: 'public-read',
+        CacheControl: `public, max-age=${maxAgeSeconds}, s-maxage=${maxAgeSeconds}`,
+      }),
+    );
+    return this.cdnUrl(key);
+  }
+
   async delete(key: string): Promise<void> {
     try {
       await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));

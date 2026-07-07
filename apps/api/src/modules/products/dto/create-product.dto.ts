@@ -119,4 +119,14 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false, default: false, description: 'Mostrar en la tienda online' })
+  @IsOptional()
+  @IsBoolean()
+  showInStore?: boolean;
+
+  @ApiProperty({ required: false, default: false, description: 'Destacado en la tienda online' })
+  @IsOptional()
+  @IsBoolean()
+  storeFeatured?: boolean;
 }

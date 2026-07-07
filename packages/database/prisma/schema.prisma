@@ -499,6 +499,8 @@ model Product {
   priceMayor       Float                    @default(0)
   minStock         Float                    @default(0)
   isActive         Boolean                  @default(true)
+  showInStore      Boolean                  @default(false)
+  storeFeatured    Boolean                  @default(false)
   searchVector     Unsupported("tsvector")?
   stock            Stock[]
   movements        StockMovement[]
