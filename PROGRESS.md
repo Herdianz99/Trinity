@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🏷️ POS: descuento en lote a todas las líneas — 2026-07-08
+
+Diego pidió poder aplicar el **mismo descuento a todos los ítems** de la factura de una sola vez (con 10+ ítems ponerlo uno por uno es fastidioso). Implementado en `sales/pos/page.tsx`.
+
+- **Control "Descuento a todos"** en la cabecera del carrito (aparece con **2+ ítems**): input de % + botón **"Aplicar a todos"** (Enter también aplica en desktop) + botón **"Quitar"** (resetea a 0). En desktop y en la vista móvil del carrito.
+- Como cada línea **sigue siendo editable**, el caso "seleccionable" queda cubierto: se aplica a todos y se pone 0 a las que no aplican.
+- **100% frontend, sin backend ni migración.** Solo escribe el `discountPct` por línea que **ya viajaba** a todos los payloads. Sin tope ni clave dinámica (coherente con el descuento por línea existente).
+- **Verificado end-to-end** que el descuento se refleja bien: el backend recalcula subtotal, IVA sobre la base descontada, montos en Bs y guarda `discountPct` + totales descontados en `InvoiceItem`; los reportes (período/vendedor/cliente/producto/margen), dashboard, libros y el PDF de factura leen esos totales guardados → todo con descuento.
+- **⚠️ Excepción conocida y ACEPTADA por Diego (Opción A):** el **reporte de comisiones** calcula la base sobre `unitPriceWithoutIva` = precio **sin** descuento (`sellers.service.ts:210`), así que la comisión del vendedor **NO baja** al dar descuento (el descuento lo absorbe la empresa). El "Total vendido" de ese mismo reporte sí refleja el descuento. Comportamiento pre-existente, se deja así a propósito.
+
 ## 🛒 Tienda online: mejoras de checkout + captura de pago + plan de tasa BCV — 2026-07-08
 
 Jornada sobre la tienda (`trebol-shop`, corre local en :3005 apuntando a **prod inversiones**). Diego revisó la tienda y pidió mejoras; se implementaron y la **captura de pago se desplegó a inversiones**.
