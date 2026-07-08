@@ -6,6 +6,7 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { IvaType, Prisma } from '@prisma/client';
+import { StoreExportService } from '../store-export/store-export.service';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -16,7 +17,10 @@ const IVA_MULTIPLIERS: Record<IvaType, number> = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storeExport: StoreExportService,
+  ) {}
 
   private async calculatePrices(
     costUsd: number,
@@ -95,7 +99,7 @@ export class ProductsService {
       priceMayor = prices.priceMayor;
     }
 
-    return this.prisma.product.create({
+    const created = await this.prisma.product.create({
       data: {
         ...dto,
         code,
@@ -111,6 +115,8 @@ export class ProductsService {
         stock: { include: { warehouse: true } },
       },
     });
+    this.storeExport.scheduleExport(); // republica el snapshot de la tienda
+    return created;
   }
 
   async findAll(query: QueryProductsDto) {
@@ -337,7 +343,7 @@ export class ProductsService {
       priceMayor = prices.priceMayor;
     }
 
-    return this.prisma.product.update({
+    const updated = await this.prisma.product.update({
       where: { id },
       data: {
         ...updateData,
@@ -351,6 +357,8 @@ export class ProductsService {
         stock: { include: { warehouse: true } },
       },
     });
+    this.storeExport.scheduleExport(); // republica el snapshot de la tienda
+    return updated;
   }
 
   async remove(id: string) {
@@ -463,7 +471,7 @@ export class ProductsService {
         ? { id: { in: dto.productIds }, isActive: true }
         : this.buildPriceAdjustmentWhere(dto.filters);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where });
 
       if (products.length === 0) {
@@ -523,6 +531,8 @@ export class ProductsService {
 
       return { productsAffected: products.length, log };
     }, { timeout: 60000 });
+    this.storeExport.scheduleExport(); // republica el snapshot tras el ajuste masivo
+    return result;
   }
 
   async getPriceAdjustmentHistory() {

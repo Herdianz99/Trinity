@@ -6,11 +6,28 @@ import { buildSnapshotData, type RawProduct, type SnapshotBuild } from './store-
 @Injectable()
 export class StoreExportService {
   private readonly logger = new Logger(StoreExportService.name);
+  private exportTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private prisma: PrismaService,
     private spaces: SpacesService,
   ) {}
+
+  /**
+   * Programa un export en `delayMs` (debounced). Colapsa ráfagas de cambios (ej. un
+   * ajuste masivo de precios) en un solo export, ~8s después del último cambio.
+   * Se llama desde los puntos donde cambian precio/stock/showInStore.
+   */
+  scheduleExport(delayMs = 8000): void {
+    if (this.exportTimer) clearTimeout(this.exportTimer);
+    this.exportTimer = setTimeout(() => {
+      this.exportTimer = null;
+      this.exportCatalog().catch((e) =>
+        this.logger.error(`Export por evento falló: ${(e as Error).message}`),
+      );
+    }, delayMs);
+    this.exportTimer.unref?.(); // no mantener vivo el proceso por este timer
+  }
 
   /** Lee los productos publicables + la tasa del día (para el builder). */
   private async fetchData(): Promise<{ products: RawProduct[]; rate: number }> {
