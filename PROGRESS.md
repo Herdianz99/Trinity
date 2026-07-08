@@ -1,5 +1,34 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔜 PARA MAÑANA (2026-07-08 a primera hora) — Tienda online
+
+Se cerró la jornada del 07-jul contento con el avance. La tienda quedó **funcionalmente completa** (A+B+C desplegadas a inversiones), corriendo en local. **Falta:** el punto #3 (facturar en POS) y publicar la vitrina en Vercel.
+
+### 1. Facturar el pedido en el POS (#3 — pendiente de decisión + implementar)
+Diego probó `/store/orders` y pidió: (✅ hechos) fila clickeable + referencia de Pago Móvil editable; (⏳ pendiente) **poder facturar el pedido en el POS**. Es "Fase 2", tiene decisión de diseño. Se le hicieron 2 preguntas pero **quería aclarar algo antes de decidir → retomar la conversación**:
+- **Enfoque:** (recomendado) botón "Facturar en POS" crea una **pre-factura** con los items → aparece en "Facturas en espera" del POS → el cajero la cobra normal, pedido queda FACTURADO+enlazado. Alternativas: cargar items en el carrito del POS / dejarlo manual.
+- **Cliente:** (recomendado) crear/reusar Cliente por cédula y enlazarlo a la factura. Alternativa: sin cliente (genérico).
+- **⚠️ Caveat cron:** las pre-facturas PENDING de días anteriores se borran de madrugada → facturar el mismo día (que es lo normal). Al implementar: mapear `OnlineOrderItem.code` → `productId`; `CreateInvoiceDto` acepta `{customerId?, cashRegisterId?, sellerId?, items:[{productId,quantity,unitPrice?}]}`; marcar `OnlineOrder` FACTURADO + guardar `invoiceId`. Revisar `invoices.service.create` antes.
+
+### 2. Desplegar los fixes #1+#2 a inversiones (rápido, bajo riesgo)
+Commit `a6974a6` (fila clickeable + ref editable) está en `main` **pusheado pero SIN desplegar**. El `/store/orders` de prod todavía no tiene esos fixes. Comando (pedir OK a Diego): `ssh root@134.209.164.59 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`. Solo código, sin migración.
+
+### 3. Publicar la vitrina en Vercel (el gran final)
+La tienda (`trebol-shop`, rama `tienda-snapshot`, pusheada a GitHub) solo corre local en `:3005`. Para hacerla pública:
+- Conectar el repo `trebol-shop` a **Vercel** apuntando a la rama `tienda-snapshot` (o mergear a main primero). **Lo hace Diego** (su cuenta).
+- Env vars en Vercel: `NEXT_PUBLIC_STORE_CDN="https://trinity-inversiones.nyc3.cdn.digitaloceanspaces.com"` + `TRINITY_API_URL="https://api.inversiones.eltrebol.app"`.
+- Ajustar `CORS_ORIGIN` en el `.env` de inversiones agregando el dominio de la tienda (separado por coma).
+- Dominio: `tienda.eltrebol.app` (subdominio gratis) o uno propio. DNS lo hace Diego.
+
+### Estado y cosas a tener en cuenta
+- **Trinity `main`** (GitHub al día): A+B+C desplegadas a inversiones hasta commit `8055651`; fixes #1/#2 (`a6974a6`) pendientes de deploy.
+- **Store `trebol-shop` rama `tienda-snapshot`** (GitHub al día): Parte B + fixes + campo Pago Móvil en checkout. NO mergeada a main, NO en Vercel.
+- **Reiniciar el dev de la tienda mañana:** `cd C:\Users\Diego\Desktop\trebol-shop && PORT=3005 npm run dev` (el `.env.local` ya existe; abre `localhost:3005`).
+- **Deploy lo hace/autoriza Diego** (pedir OK para cada deploy, regla dura).
+- **Config post-deploy:** asignar módulo `store` a roles no-ADMIN en Ajustes→Permisos por rol si se quiere (ADMIN ya lo tiene).
+- **Sugerencia:** hacer un **pedido de prueba** desde la tienda local para ver el flujo end-to-end en `/store/orders` (cae real en prod; se puede cancelar).
+- **Recordatorios técnicos:** export por evento (~1 min al editar precio) + cron 10min respaldo; CDN de Spaces cachea >60s → tienda lee con cache-bust 60s; `/public/orders` recalcula precios en Trinity; en prod hay 2 productos `showInStore` (CON00076, CON00934) y CON00934 tiene galería de 3 fotos.
+
 ## 📋 PENDIENTES
 
 ### Otros pendientes de fotos (Fase 2)
