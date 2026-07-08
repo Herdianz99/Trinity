@@ -3,7 +3,7 @@ import * as https from 'https';
 import * as cheerio from 'cheerio';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExchangeRateDto } from './dto/create-exchange-rate.dto';
-import { UserRole } from '@prisma/client';
+import { UserRole, ExchangeRateSource } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
 import { RolePermissionsService } from '../role-permissions/role-permissions.service';
 
@@ -131,5 +131,28 @@ export class ExchangeRateService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Scrapea BCV y guarda la tasa bajo la fecha dada (upsert, fuente BCV).
+   * - Si BCV no responde (null) NO toca nada: se conserva la tasa existente.
+   * - Si ya hay una tasa MANUAL para esa fecha, la respeta (no la pisa).
+   * Devuelve la tasa guardada o null si no se guardó.
+   */
+  async fetchAndSave(dateKey: Date): Promise<{ rate: number; date: Date } | null> {
+    const rate = await this.fetchFromBcv();
+    if (rate === null) return null; // BCV caído o HTML cambió → dejar la existente
+
+    const existing = await this.prisma.exchangeRate.findUnique({ where: { date: dateKey } });
+    if (existing && existing.source === ExchangeRateSource.MANUAL) {
+      return null; // no pisar una corrección manual
+    }
+
+    await this.prisma.exchangeRate.upsert({
+      where: { date: dateKey },
+      create: { rate, date: dateKey, source: ExchangeRateSource.BCV },
+      update: { rate, source: ExchangeRateSource.BCV },
+    });
+    return { rate, date: dateKey };
   }
 }

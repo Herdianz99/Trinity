@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
 import { buildSnapshotData, type RawProduct, type SnapshotBuild } from './store-export.builder';
+import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
 export class StoreExportService {
@@ -31,7 +32,13 @@ export class StoreExportService {
 
   /** Lee los productos publicables + la tasa del día (para el builder). */
   private async fetchData(): Promise<{ products: RawProduct[]; rate: number }> {
-    const rateRow = await this.prisma.exchangeRate.findFirst({ orderBy: { date: 'desc' } });
+    // "Última tasa con fecha <= hoy (Caracas)": ignora una tasa futura pre-cargada
+    // por el cron (la de mañana) hasta que su fecha llegue, y si BCV falló usa la
+    // última buena (nunca Bs 0). Cambia sola a medianoche en el próximo export.
+    const rateRow = await this.prisma.exchangeRate.findFirst({
+      where: { date: { lte: caracasDateKey() } },
+      orderBy: { date: 'desc' },
+    });
     const rate = rateRow?.rate ?? 0;
 
     const rows = await this.prisma.product.findMany({

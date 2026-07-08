@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { caracasDateKey } from '../../common/timezone';
 
 // La captura del pago se comprime en el navegador antes de subir; este tope es
 // una red de seguridad para la superficie publica (sin auth).
@@ -37,7 +38,12 @@ export class PublicService {
     const codes = Array.from(new Set(dto.items.map((i) => i.code.trim()).filter(Boolean)));
     if (codes.length === 0) throw new BadRequestException('El pedido no tiene productos');
 
-    const rateRow = await this.prisma.exchangeRate.findFirst({ orderBy: { date: 'desc' } });
+    // Última tasa con fecha <= hoy (Caracas): el pedido se cobra a la tasa VIGENTE al
+    // momento de comprar (lo que vio el cliente), no a la de mañana pre-cargada por el cron.
+    const rateRow = await this.prisma.exchangeRate.findFirst({
+      where: { date: { lte: caracasDateKey() } },
+      orderBy: { date: 'desc' },
+    });
     const rate = rateRow?.rate ?? 0;
 
     const products = await this.prisma.product.findMany({
