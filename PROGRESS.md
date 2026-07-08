@@ -2,7 +2,9 @@
 
 ## 🛒 Tienda online: mejoras de checkout + captura de pago + plan de tasa BCV — 2026-07-08
 
-Jornada sobre la tienda (`trebol-shop`, rama `tienda-snapshot`, corre local en :3005 apuntando a **prod inversiones**). Diego revisó la tienda y pidió mejoras; se implementaron y la **captura de pago se desplegó a inversiones**.
+Jornada sobre la tienda (`trebol-shop`, corre local en :3005 apuntando a **prod inversiones**). Diego revisó la tienda y pidió mejoras; se implementaron y la **captura de pago se desplegó a inversiones**.
+
+**🚀 VITRINA PÚBLICA EN VERCEL (2026-07-08):** se hizo merge fast-forward `tienda-snapshot` → `main` (main tenía la tienda VIEJA con BD/NextAuth → reemplazada por la versión snapshot; se borraron `prisma/`, `next-auth`, etc.). **De aquí en adelante la tienda se trabaja en `main`** (Vercel despliega esa rama). Env vars en Vercel: `NEXT_PUBLIC_STORE_CDN` + `TRINITY_API_URL` (se limpiaron las 6 viejas de BD/NextAuth/Cloudinary). Deploy OK. **Falta solo:** conectar el dominio propio `tienda.eltrebol.app` (Vercel Domains + DNS) — hoy vive en la URL `*.vercel.app`.
 
 ### ✅ Mejoras de checkout (tienda — corren en local, PENDIENTE commitear a `tienda-snapshot`)
 - **Cantidad editable** (`components/cart/QuantityStepper.tsx`): input numérico entre los +/- en carrito lateral y checkout (para cantidades altas tipo bloques). Mínimo 1; quitar con papelera.
