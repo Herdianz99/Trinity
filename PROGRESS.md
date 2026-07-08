@@ -1,5 +1,31 @@
 ﻿# Trinity ERP — Progreso
 
+## 🛒 Tienda online: mejoras de checkout + captura de pago + plan de tasa BCV — 2026-07-08
+
+Jornada sobre la tienda (`trebol-shop`, rama `tienda-snapshot`, corre local en :3005 apuntando a **prod inversiones**). Diego revisó la tienda y pidió mejoras; se implementaron y la **captura de pago se desplegó a inversiones**.
+
+### ✅ Mejoras de checkout (tienda — corren en local, PENDIENTE commitear a `tienda-snapshot`)
+- **Cantidad editable** (`components/cart/QuantityStepper.tsx`): input numérico entre los +/- en carrito lateral y checkout (para cantidades altas tipo bloques). Mínimo 1; quitar con papelera.
+- **Layout del form a 2 columnas** en escritorio (Nombre│Teléfono, Cédula│Email), apilado en móvil; comentarios a 3 líneas → menos scroll. Se ensanchó la columna del form.
+- **Selector de entrega**: "Retiro en tienda" preseleccionado + "Delivery — Próximamente" deshabilitado. El backend ya soportaba `deliveryMethod`.
+
+### ✅ Captura de Pago Móvil — DESPLEGADO a inversiones (commit `ebcdaa8`, verificado)
+- **Backend Trinity:** `OnlineOrder.paymentProofUrl` (migración `20260708120000_online_order_payment_proof` + `fix-schema.sql`). `/public/orders` acepta `paymentProof` (base64), lo comprime en el navegador (WebP ≤1600px) y Trinity lo sube a **Spaces** (`orders/proof/<uuid>`, URL no adivinable) reusando `SpacesService`; compensación (borra el objeto) si la BD falla.
+- **Frontend:** subida opcional en el checkout (con miniatura/quitar) + en Trinity `/store/orders/[id]` se ve la miniatura con **lightbox**.
+- **Verificado en prod:** `/public/orders` ya acepta `paymentProof` (respondió "Producto no disponible", no error de whitelist). El deploy también arrastró el fix pendiente `a6974a6` (fila clickeable + ref editable).
+- ⚠️ Privacidad MVP: la captura queda en Spaces con lectura pública pero URL impredecible; blindar tras login de Trinity si se quiere más adelante.
+
+### 🔜 PRÓXIMO: precios en Bs en la tienda + tasa BCV automática (plan acordado con Diego)
+Contexto: la tienda debe mostrar USD **y** Bs como Trinity, pero nadie puede actualizar la tasa a mano en la web → automatizar.
+- **Ya existe** (no había que inventar): el snapshot ya trae `rate` + `priceBs` por producto (`store-export.builder`), y la tienda ya lee `priceBs`; solo falta mostrarlo. El **scraper BCV ya existe** (`exchange-rate.service.fetchFromBcv`, cheerio, resuelve el cert SSL del gobierno), pero **no hay cron** que lo dispare/guarde (hoy es 100% manual).
+- **Entrega A ✅ (tienda, commit `b5f93c2` en `tienda-snapshot`):** "$X / Bs Y" en tarjeta, detalle, carrito y checkout (`formatBs`). Solo si `priceBs > 0`.
+  - **FIX del carrito (commit `9c5de24`):** el carrito se persiste en localStorage con el producto (incl. `priceBs`) → mostraba la tasa del día en que se agregó el ítem (Diego lo cazó: $119 daba Bs 80.316 = tasa de ayer, cuando la de hoy es 685,94). Ahora `syncFromCatalog()` re-baja `catalog.json` (cache-bust 60s) y refresca precio/tasa/nombre/stock por `code` al montar, al abrir el carrito y al entrar al checkout. El listado/detalle ya estaban frescos; era solo el carrito.
+- **Entrega B ✅ DESPLEGADA a inversiones (commit `f63d854`, sin migración):** cron diario **8pm y 10pm Caracas** (`timeZone:'America/Caracas'`) que scrapea BCV (`ExchangeRateService.fetchAndSave`) y hace `upsert` **bajo la fecha de MAÑANA**; + **7am** red de seguridad que guarda bajo HOY si faltara. Nunca pisa una tasa MANUAL; si el scrape es `null` no toca nada. Scraper verificado en vivo (`#dolar strong` → 685,94). Va **solo en inversiones** por ahora (eltrebol lo recibe en su próximo deploy; es seguro y le quita el error matutino "registra la tasa").
+  - **Verificar esta noche (después de 8pm):** `ssh root@134.209.164.59 "sudo -u postgres psql trinity_db -c 'SELECT date, rate, source FROM \"ExchangeRate\" ORDER BY date DESC LIMIT 3;'"` → debe aparecer la fila de mañana con `source=BCV`.
+- **Cambio clave:** las 2 consultas de tasa de la tienda (`store-export.fetchData` y `public.service.createOrder`) pasan de *"la más nueva por fecha"* (`findFirst desc`) a **"la última con fecha ≤ hoy"** → auto-cambia a medianoche, NO se adelanta con la fila de mañana pre-cargada, y si BCV se cae cae a la última buena (no muestra Bs 0). **El POS NO se toca** (ya usa fecha exacta = hoy; bonus: pre-cargar mañana elimina el error matutino "registra la tasa antes de facturar").
+- **BCV/fines de semana (aclarado por Diego):** BCV publica el viernes la tasa del lunes y por ley aplica sáb/dom/lun; el cron corre TODOS los días llenando la fecha de mañana → no hay huecos. El único riesgo real es que la web se caiga → lo cubre "≤ hoy".
+- **⚠️ Pendiente para el jefe** (memoria `pedido-online-tasa-facturacion`): el pedido ya congela su tasa al crearse (`exchangeRate`/`totalUsd`/`totalBs`/`priceBs`), así cuadra con lo que pagó el cliente aunque se procese al día siguiente. Falta decidir con el jefe qué tasa usa la **factura** al facturar el pedido al día siguiente (tasa del pedido vs tasa de emisión → diferencial cambiario fiscal).
+
 ## 🔜 PARA MAÑANA (2026-07-08 a primera hora) — Tienda online
 
 Se cerró la jornada del 07-jul contento con el avance. La tienda quedó **funcionalmente completa** (A+B+C desplegadas a inversiones), corriendo en local. **Falta:** el punto #3 (facturar en POS) y publicar la vitrina en Vercel.
