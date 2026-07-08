@@ -13,8 +13,9 @@ export interface StoreProduct {
   priceUsd: number;
   priceBs: number;
   stockStatus: StockStatus;
-  image: string | null;
+  image: string | null; // foto principal (compatibilidad + tarjeta)
   thumb: string | null;
+  images: string[]; // galería completa (principal primero); [] si no tiene fotos
   categorySlug: string | null;
   brandSlug: string | null;
   featured: boolean;
@@ -29,6 +30,7 @@ export interface RawProduct {
   storeFeatured: boolean;
   primaryImageThumbUrl: string | null;
   primaryImageMediumUrl: string | null;
+  images: string[]; // URLs medium de todas las fotos (principal primero), ya resueltas a CDN
   category: { name: string } | null;
   brand: { name: string } | null;
   stock: { quantity: number }[];
@@ -105,8 +107,9 @@ export function buildSnapshotData(products: RawProduct[], rate: number, generate
       priceUsd: p.priceDetal,
       priceBs: Math.round(p.priceDetal * rate * 100) / 100,
       stockStatus,
-      image: p.primaryImageMediumUrl ?? null,
+      image: p.primaryImageMediumUrl ?? p.images[0] ?? null,
       thumb: p.primaryImageThumbUrl ?? null,
+      images: p.images,
       categorySlug,
       brandSlug,
       featured: p.storeFeatured,

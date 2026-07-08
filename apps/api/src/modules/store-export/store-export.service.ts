@@ -34,7 +34,7 @@ export class StoreExportService {
     const rateRow = await this.prisma.exchangeRate.findFirst({ orderBy: { date: 'desc' } });
     const rate = rateRow?.rate ?? 0;
 
-    const products = await this.prisma.product.findMany({
+    const rows = await this.prisma.product.findMany({
       where: { isActive: true, showInStore: true },
       select: {
         code: true,
@@ -44,12 +44,31 @@ export class StoreExportService {
         storeFeatured: true,
         primaryImageThumbUrl: true,
         primaryImageMediumUrl: true,
+        images: {
+          select: { mediumKey: true },
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+        },
         category: { select: { name: true } },
         brand: { select: { name: true } },
         stock: { select: { quantity: true } },
       },
       orderBy: { name: 'asc' },
     });
+
+    // Resuelve las keys de Spaces a URLs de CDN (la principal queda primera).
+    const products: RawProduct[] = rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      description: r.description,
+      priceDetal: r.priceDetal,
+      storeFeatured: r.storeFeatured,
+      primaryImageThumbUrl: r.primaryImageThumbUrl,
+      primaryImageMediumUrl: r.primaryImageMediumUrl,
+      images: r.images.map((i) => this.spaces.cdnUrl(i.mediumKey)),
+      category: r.category,
+      brand: r.brand,
+      stock: r.stock,
+    }));
     return { products, rate };
   }
 
