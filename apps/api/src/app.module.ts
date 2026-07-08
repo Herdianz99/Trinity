@@ -58,6 +58,7 @@ import { CustomerIvaRetentionsModule } from './modules/customer-iva-retentions/c
 import { ProductImagesModule } from './modules/product-images/product-images.module';
 import { StoreExportModule } from './modules/store-export/store-export.module';
 import { PublicModule } from './modules/public/public.module';
+import { OnlineOrdersModule } from './modules/online-orders/online-orders.module';
 
 @Module({
   imports: [
@@ -120,6 +121,7 @@ import { PublicModule } from './modules/public/public.module';
     ProductImagesModule,
     StoreExportModule,
     PublicModule,
+    OnlineOrdersModule,
   ],
 })
 export class AppModule {}

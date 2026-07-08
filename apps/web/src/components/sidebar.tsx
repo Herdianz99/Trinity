@@ -98,6 +98,15 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    key: 'store',
+    label: 'TIENDA',
+    icon: <ShoppingCart size={20} />,
+    permission: 'store',
+    items: [
+      { label: 'Pedidos online', href: '/store/orders', icon: <ShoppingCart size={18} /> },
+    ],
+  },
+  {
     key: 'catalog',
     label: 'CATALOGO',
     icon: <Package size={20} />,
