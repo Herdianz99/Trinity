@@ -22,6 +22,7 @@ interface OnlineOrder {
   deliveryMethod: string;
   address: string | null;
   paymentRef: string | null;
+  paymentProofUrl: string | null;
   notes: string | null;
   email: string | null;
   totalUsd: number;
@@ -49,6 +50,7 @@ export default function StoreOrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [ref, setRef] = useState('');
   const [savedRef, setSavedRef] = useState(false);
+  const [proofOpen, setProofOpen] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -177,8 +179,48 @@ export default function StoreOrderDetailPage() {
               <p className="text-slate-200 font-mono">{order.paymentRef || '—'}</p>
             )}
           </div>
+          {/* Captura del pago que subió el cliente */}
+          <div className="pt-1">
+            <label className="text-xs text-slate-400 mb-1 block">Captura del pago</label>
+            {order.paymentProofUrl ? (
+              <button
+                type="button"
+                onClick={() => setProofOpen(true)}
+                className="block rounded-lg overflow-hidden border border-slate-600 hover:border-blue-500 transition-colors"
+                title="Ver captura en grande"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={order.paymentProofUrl} alt="Captura del pago" className="h-28 w-full object-cover" />
+              </button>
+            ) : (
+              <p className="text-slate-500 text-sm">Sin captura adjunta</p>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Lightbox de la captura */}
+      {proofOpen && order.paymentProofUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setProofOpen(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={order.paymentProofUrl}
+            alt="Captura del pago"
+            className="max-h-[90vh] max-w-full rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setProofOpen(false)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 text-slate-200 hover:bg-slate-700"
+            aria-label="Cerrar"
+          >
+            <XCircle size={22} />
+          </button>
+        </div>
+      )}
 
       {order.notes && (
         <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 mb-4">

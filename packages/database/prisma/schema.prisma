@@ -1970,6 +1970,7 @@ model OnlineOrder {
   deliveryMethod String            @default("PICKUP") // PICKUP | DELIVERY
   address        String?
   paymentRef     String? // referencia de Pago Movil que dice el cliente
+  paymentProofUrl String? // URL en Spaces de la captura del pago que sube el cliente
   notes          String?
   email          String?
   totalUsd       Float             @default(0)

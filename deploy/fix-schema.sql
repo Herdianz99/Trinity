@@ -2299,3 +2299,4 @@ CREATE TABLE IF NOT EXISTS "OnlineOrderItem" (
   "priceBs" DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "OnlineOrderItem_orderId_idx" ON "OnlineOrderItem" ("orderId");
+ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "paymentProofUrl" TEXT;

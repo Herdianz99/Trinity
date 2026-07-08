@@ -45,6 +45,11 @@ export class CreateOrderDto {
   @IsString()
   paymentRef?: string;
 
+  // Captura del pago (data URL base64: "data:image/...;base64,...."). Opcional.
+  @IsOptional()
+  @IsString()
+  paymentProof?: string;
+
   @IsOptional()
   @IsString()
   notes?: string;
