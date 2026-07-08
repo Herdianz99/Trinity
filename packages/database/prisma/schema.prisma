@@ -1949,3 +1949,50 @@ model IslrRetentionVoucherLine {
   isManual                 Boolean               @default(false)
   createdAt                DateTime              @default(now())
 }
+
+// ============================================
+// TIENDA ONLINE — Pedidos
+// ============================================
+
+enum OnlineOrderStatus {
+  POR_VERIFICAR
+  CONFIRMADO
+  FACTURADO
+  CANCELADO
+}
+
+model OnlineOrder {
+  id             String            @id @default(cuid())
+  number         String            @unique // WEB-0001
+  customerName   String
+  phone          String
+  cedula         String?
+  deliveryMethod String            @default("PICKUP") // PICKUP | DELIVERY
+  address        String?
+  paymentRef     String? // referencia de Pago Movil que dice el cliente
+  notes          String?
+  email          String?
+  totalUsd       Float             @default(0)
+  totalBs        Float             @default(0)
+  exchangeRate   Float             @default(0)
+  status         OnlineOrderStatus @default(POR_VERIFICAR)
+  verifiedById   String?
+  verifiedAt     DateTime?
+  invoiceId      String? // se llena cuando se factura (Fase 2)
+  items          OnlineOrderItem[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model OnlineOrderItem {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  code      String // Product.code
+  name      String // snapshot del nombre
+  quantity  Float
+  priceUsd  Float // precio recalculado por Trinity
+  priceBs   Float
+
+  @@index([orderId])
+}
