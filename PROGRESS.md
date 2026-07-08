@@ -7,19 +7,18 @@
 - Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
 - Script preservar fotos al restaurar el respaldo base (día de la migración).
 
-## 🛒 TIENDA ONLINE — Parte A (export del catálogo al CDN) — 2026-07-07 (✅ DESPLEGADO a inversiones, verificado)
+## 🛒 TIENDA ONLINE — Partes A+B+C DESPLEGADAS (falta subir la vitrina a Vercel) — 2026-07-07
 
-Arquitectura elegida con Diego: **Snapshot al CDN (Trinity = única fuente de verdad)**. Trinity exporta el catálogo como JSON a Spaces; la vitrina (repo aparte `trebol-shop`, Vercel) lo lee del mismo CDN → **cero carga al POS al navegar**. Descartado el enfoque "overlay/live-API". Spec: `docs/superpowers/specs/2026-07-07-tienda-snapshot-cdn-design.md`; plan: `docs/superpowers/plans/2026-07-07-tienda-snapshot-cdn.md` (Partes A-D).
+Arquitectura elegida con Diego: **Snapshot al CDN (Trinity = única fuente de verdad)**. Trinity exporta el catálogo como JSON a Spaces; la vitrina (repo aparte `trebol-shop`, rama `tienda-snapshot`) lo lee del mismo CDN → **cero carga al POS al navegar**. Descartado el enfoque "overlay/live-API". Spec: `docs/superpowers/specs/2026-07-07-tienda-snapshot-cdn-design.md`; plan: `docs/superpowers/plans/2026-07-07-tienda-snapshot-cdn.md`.
 
-**Parte A (backend Trinity) — ✅ DESPLEGADA a inversiones (commit `e0b91c1`) y VERIFICADA end-to-end.** El cron corrió a las 23:50 UTC y publicó `store/catalog.json` + `store/meta.json` en el CDN (`products:[]` porque aún no hay productos marcados; tasa y estructura OK). Typechecks 0, lógica verificada vs BD local antes del deploy.
-- **Schema:** `Product` gana `showInStore` / `storeFeatured`. Migración `20260707180000_product_store_flags` (IF NOT EXISTS) + espejo en `deploy/fix-schema.sql`.
-- **`SpacesService.uploadJson()`**: sube JSON con cache corto (60s), distinto del `uploadPublic` de las fotos (immutable 1 año).
-- **`StoreExportService` + `store-export.builder.ts`** (lógica pura separada, testeable): arma `store/catalog.json` (productos publicados: slug, code, precio USD/Bs, `stockStatus` en **3 niveles** disponible/pocas/agotado con umbral 5, foto, categoría/marca) + `store/meta.json` (categorías/marcas/tasa). Solo `isActive && showInStore`. Slug = `slugify(nombre)-code`.
-- **`POST /store-export/run`** (solo ADMIN, trigger manual) + **cron cada 10 min** (timeZone Caracas).
-- **UI:** checkboxes "Mostrar en tienda online" / "Destacado en tienda" en el form de producto (+ campos en el DTO).
-- **NO probado local a propósito:** el upload real a Spaces (el `.env` local apunta al bucket prod `trinity-inversiones` con data de la chica → se prueba limpio en el deploy a inversiones).
+**Estado (todo en `main` de Trinity, desplegado a inversiones):**
+- **Parte A** ✅ export al CDN (`showInStore`/`storeFeatured`, `StoreExportService`+builder, `/store-export/run`, cron 10min). Mejoras posteriores: **export por evento** (debounced 8s al crear/editar/ajustar precio → tienda en ~1 min), **galería** (el snapshot manda todas las fotos), **cache-bust** (el CDN de Spaces cachea >60s; la tienda lee con bucket de 60s).
+- **Parte B** ✅ (repo `trebol-shop`, rama `tienda-snapshot`, corre local en :3005): `lib/db.ts` lee del snapshot, `store-config.ts` (curación rescatada del seed), stock 3 niveles, fotos de Spaces, **BD y admin de la tienda ELIMINADOS**. Slug descriptivo resuelto por código + redirect 308 canónico (SEO, rename-proof). Galería con miniaturas en el detalle.
+- **Parte C** ✅ pedidos: modelo `OnlineOrder`/`OnlineOrderItem` (migración `20260708010000_online_orders`, NO es pre-factura), `POST /public/orders` (recalcula precios desde Trinity, correlativo `WEB-0001`, throttler 10/min + helmet + compression, CORS por lista), pantalla `/store/orders` (módulo `store`: lista con tabs + detalle Confirmar/Cancelar). Verificado en prod (tabla OK, endpoint vivo, guard 401).
 
-**Pendiente:** (1) marcar productos con `showInStore` (checkbox en el form) para poblar el snapshot; (2) Parte B — reconectar la vitrina `trebol-shop` (leer del CDN, borrar su BD/admin, stock 3 niveles); (3) Parte C — pedidos `OnlineOrder` (`POST /public/orders` + pantalla de verificación). eltrebol recibirá la Parte A en su próximo deploy (no la necesita aún).
+**FALTA:** subir `trebol-shop` a **Vercel** (env `NEXT_PUBLIC_STORE_CDN` + `TRINITY_API_URL`) + ajustar `CORS_ORIGIN` con el dominio de la tienda. Config: asignar módulo `store` a roles no-ADMIN en Ajustes→Permisos por rol si se quiere. Fase 2 (futuro): conversión `OnlineOrder`→factura, verificación auto de Pago Móvil, revalidación on-demand (instantáneo), admin de banners.
+
+**OJO eltrebol:** recibirá todo esto en su próximo deploy. Es seguro (aditivo): exporta un snapshot vacío a su propio bucket `trinity-eltrebol`, nadie lo lee (no tiene vitrina). Ver dudas resueltas: el refresco de 60s pega al CDN (no al POS); el export por evento solo corre al editar catálogo, no al vender.
 
 ## 📸 FOTOS DE PRODUCTO + CÓDIGOS DE BARRA — 2026-07-07 (DESPLEGADO a AMBAS empresas, verificado)
 
