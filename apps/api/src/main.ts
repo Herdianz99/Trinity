@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -12,6 +14,8 @@ async function bootstrap() {
   app.useBodyParser('urlencoded', { limit: '2mb', extended: true });
 
   app.use(cookieParser());
+  app.use(helmet());
+  app.use(compression());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -22,8 +26,13 @@ async function bootstrap() {
     }),
   );
 
+  // CORS: acepta una lista separada por comas en CORS_ORIGIN (ERP web + dominio de la tienda).
+  const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: allowedOrigins,
     credentials: true,
   });
 

@@ -57,6 +57,7 @@ import { IslrRetentionVouchersModule } from './modules/islr-retention-vouchers/i
 import { CustomerIvaRetentionsModule } from './modules/customer-iva-retentions/customer-iva-retentions.module';
 import { ProductImagesModule } from './modules/product-images/product-images.module';
 import { StoreExportModule } from './modules/store-export/store-export.module';
+import { PublicModule } from './modules/public/public.module';
 
 @Module({
   imports: [
@@ -118,6 +119,7 @@ import { StoreExportModule } from './modules/store-export/store-export.module';
     CustomerIvaRetentionsModule,
     ProductImagesModule,
     StoreExportModule,
+    PublicModule,
   ],
 })
 export class AppModule {}
