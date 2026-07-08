@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OnlineOrderStatus } from '@prisma/client';
+import { UpdateOnlineOrderDto } from './dto/update-online-order.dto';
 
 @Injectable()
 export class OnlineOrdersService {
@@ -27,6 +28,21 @@ export class OnlineOrdersService {
     const order = await this.prisma.onlineOrder.findUnique({ where: { id }, include: { items: true } });
     if (!order) throw new NotFoundException('Pedido no encontrado');
     return order;
+  }
+
+  async update(id: string, dto: UpdateOnlineOrderDto) {
+    const order = await this.findOne(id);
+    if (order.status === 'FACTURADO' || order.status === 'CANCELADO') {
+      throw new BadRequestException('El pedido ya no se puede editar');
+    }
+    return this.prisma.onlineOrder.update({
+      where: { id },
+      data: {
+        paymentRef: dto.paymentRef?.trim() || null,
+        ...(dto.notes !== undefined ? { notes: dto.notes.trim() || null } : {}),
+      },
+      include: { items: true },
+    });
   }
 
   async confirm(id: string, userId: string) {

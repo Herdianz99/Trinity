@@ -47,6 +47,8 @@ export default function StoreOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ref, setRef] = useState('');
+  const [savedRef, setSavedRef] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -63,13 +65,43 @@ export default function StoreOrderDetailPage() {
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
   useEffect(() => {
     document.title = order ? `${order.number} | Trinity ERP` : 'Pedido online | Trinity ERP';
+    if (order) setRef(order.paymentRef ?? '');
   }, [order]);
+
+  async function saveRef() {
+    setActing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proxy/online-orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentRef: ref }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'No se pudo guardar');
+      setOrder(data);
+      setSavedRef(true);
+      setTimeout(() => setSavedRef(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setActing(false);
+    }
+  }
 
   async function act(action: 'confirm' | 'cancel') {
     if (action === 'cancel' && !confirm('¿Cancelar este pedido?')) return;
     setActing(true);
     setError(null);
     try {
+      // Al confirmar, guarda primero la referencia editada (si cambió).
+      if (action === 'confirm' && order && ref !== (order.paymentRef ?? '')) {
+        await fetch(`/api/proxy/online-orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentRef: ref }),
+        });
+      }
       const res = await fetch(`/api/proxy/online-orders/${id}/${action}`, { method: 'PATCH' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || 'No se pudo procesar');
@@ -123,7 +155,28 @@ export default function StoreOrderDetailPage() {
             {order.deliveryMethod === 'DELIVERY' ? 'Delivery' : 'Retiro en tienda'}
           </p>
           {order.address && <p className="text-slate-400 text-sm flex items-start gap-2"><MapPin size={15} className="text-slate-500 mt-0.5" /> {order.address}</p>}
-          <p className="text-slate-200 flex items-center gap-2"><CreditCard size={15} className="text-slate-500" /> Ref. Pago Móvil: <span className="font-mono">{order.paymentRef || '—'}</span></p>
+          <div className="pt-1">
+            <label className="text-xs text-slate-400 flex items-center gap-2 mb-1"><CreditCard size={14} className="text-slate-500" /> Ref. Pago Móvil</label>
+            {order.status === 'POR_VERIFICAR' ? (
+              <div className="flex gap-2">
+                <input
+                  value={ref}
+                  onChange={(e) => setRef(e.target.value)}
+                  placeholder="N° de referencia del banco"
+                  className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-slate-900 border border-slate-600 text-slate-100 font-mono focus:border-blue-500 outline-none"
+                />
+                <button
+                  onClick={saveRef}
+                  disabled={acting || ref === (order.paymentRef ?? '')}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-40"
+                >
+                  {savedRef ? '✓' : 'Guardar'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-slate-200 font-mono">{order.paymentRef || '—'}</p>
+            )}
+          </div>
         </div>
       </div>
 

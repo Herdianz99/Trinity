@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart, RotateCw, Phone, Truck, Store } from 'lucide-react';
 
 interface OnlineOrderItem {
@@ -48,6 +48,7 @@ function fmtDate(iso: string): string {
 }
 
 export default function StoreOrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('POR_VERIFICAR');
@@ -126,9 +127,13 @@ export default function StoreOrdersPage() {
               {orders.map((o) => {
                 const st = STATUS_META[o.status];
                 return (
-                  <tr key={o.id} className="hover:bg-slate-800/50">
+                  <tr
+                    key={o.id}
+                    onClick={() => router.push(`/store/orders/${o.id}`)}
+                    className="hover:bg-slate-800/50 cursor-pointer"
+                  >
                     <td className="px-4 py-3">
-                      <Link href={`/store/orders/${o.id}`} className="font-mono text-blue-400 hover:underline">{o.number}</Link>
+                      <span className="font-mono text-blue-400">{o.number}</span>
                       <div className="text-[11px] text-slate-500">{o.items.length} art.</div>
                     </td>
                     <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{fmtDate(o.createdAt)}</td>

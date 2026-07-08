@@ -1,10 +1,11 @@
-import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ModuleGuard } from '../../common/guards/module.guard';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { OnlineOrdersService } from './online-orders.service';
+import { UpdateOnlineOrderDto } from './dto/update-online-order.dto';
 
 @ApiTags('Online Orders')
 @ApiBearerAuth()
@@ -27,6 +28,11 @@ export class OnlineOrdersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateOnlineOrderDto) {
+    return this.service.update(id, dto);
   }
 
   @Patch(':id/confirm')
