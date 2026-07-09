@@ -1866,7 +1866,12 @@ export default function POSPage() {
                     </button>
                   )}
                 </div>
-                <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-xs text-red-400">Quitar</button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button onClick={openEditClient} className="text-xs text-blue-400 flex items-center gap-1" title="Editar cliente">
+                    <Pencil size={13} /> Editar
+                  </button>
+                  <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-xs text-red-400">Quitar</button>
+                </div>
               </div>
             ) : (
               <button
@@ -2004,24 +2009,31 @@ export default function POSPage() {
       {/* Tira de agregados (solo en la vista de busqueda) */}
       {mobileView === 'search' && cart.length > 0 && (
         <div className="fixed bottom-14 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50">
-          {/* Cliente (visible mientras se cargan articulos; tocar para cambiarlo) */}
-          <button
-            onClick={() => setShowCustomerSearch(true)}
-            className="w-full flex items-center gap-2 px-4 py-2 border-b border-slate-700/40 text-left"
-          >
-            <User size={14} className="text-green-400 shrink-0" />
-            <span className={`text-xs truncate min-w-0 ${customerIsDefault ? 'text-amber-400' : 'text-white font-medium'}`}>
-              {customerName || 'Cliente final'}
-            </span>
-            {!customerIsDefault && creditStatus && (
-              <span className={`text-[11px] font-medium shrink-0 ${creditStatus.availableCredit >= totalUsd ? 'text-green-400' : 'text-red-400'}`}>
-                Cupo: ${creditStatus.availableCredit.toFixed(2)}
+          {/* Cliente (visible mientras se cargan articulos; tocar para cambiarlo o editarlo) */}
+          <div className="w-full flex items-center gap-1 px-4 py-2 border-b border-slate-700/40">
+            <button
+              onClick={() => setShowCustomerSearch(true)}
+              className="flex items-center gap-2 flex-1 min-w-0 text-left"
+            >
+              <User size={14} className="text-green-400 shrink-0" />
+              <span className={`text-xs truncate min-w-0 ${customerIsDefault ? 'text-amber-400' : 'text-white font-medium'}`}>
+                {customerName || 'Cliente final'}
               </span>
+              {!customerIsDefault && creditStatus && (
+                <span className={`text-[11px] font-medium shrink-0 ${creditStatus.availableCredit >= totalUsd ? 'text-green-400' : 'text-red-400'}`}>
+                  Cupo: ${creditStatus.availableCredit.toFixed(2)}
+                </span>
+              )}
+              <span className="ml-auto text-[10px] text-slate-500 shrink-0 flex items-center gap-1">
+                Cambiar <ChevronRight size={12} />
+              </span>
+            </button>
+            {customerId && !customerIsDefault && (
+              <button onClick={openEditClient} className="shrink-0 p-1.5 rounded text-blue-400 active:bg-slate-700" title="Editar cliente">
+                <Pencil size={15} />
+              </button>
             )}
-            <span className="ml-auto text-[10px] text-slate-500 shrink-0 flex items-center gap-1">
-              Cambiar <ChevronRight size={12} />
-            </span>
-          </button>
+          </div>
 
           {/* Cabecera / toggle */}
           <button
