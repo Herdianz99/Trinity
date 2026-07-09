@@ -18,7 +18,7 @@ export class PrintJobsService {
           select: {
             id: true,
             number: true,
-            customer: { select: { name: true } },
+            customer: { select: { name: true, documentType: true, rif: true } },
             seller: { select: { name: true } },
           },
         },
@@ -29,7 +29,7 @@ export class PrintJobsService {
             invoice: {
               select: {
                 number: true,
-                customer: { select: { name: true } },
+                customer: { select: { name: true, documentType: true, rif: true } },
                 seller: { select: { name: true } },
               },
             },

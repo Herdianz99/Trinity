@@ -25,6 +25,8 @@ const INCLUDE_DETAIL = {
         include: {
           category: true,
           brand: true,
+          // Existencia por almacen (el front toma la del almacen del ajuste).
+          stock: { select: { warehouseId: true, quantity: true } },
         },
       },
     },

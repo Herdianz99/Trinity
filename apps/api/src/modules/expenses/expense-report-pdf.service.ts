@@ -140,11 +140,15 @@ export class ExpenseReportPdfService {
 
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
       for (const cat of byCategory) {
+        // Altura dinamica: el nombre de categoria puede ocupar 2 lineas.
+        doc.fontSize(8).font('Helvetica');
+        const nameH = doc.heightOfString(cat.name, { width: 200 });
+        const rowH = Math.max(14, nameH + 2);
         doc.text(cat.name, catColX.name, y, { width: 200 });
-        doc.text(cat.count.toString(), catColX.count, y, { width: 50, align: 'right' });
-        doc.text(`$${this.fmt(cat.totalUsd)}`, catColX.usd, y, { width: 80, align: 'right' });
-        doc.text(`Bs ${this.fmt(cat.totalBs)}`, catColX.bs, y, { width: 100, align: 'right' });
-        y += 14;
+        doc.text(cat.count.toString(), catColX.count, y, { width: 50, align: 'right', lineBreak: false });
+        doc.text(`$${this.fmt(cat.totalUsd)}`, catColX.usd, y, { width: 80, align: 'right', lineBreak: false });
+        doc.text(`Bs ${this.fmt(cat.totalBs)}`, catColX.bs, y, { width: 100, align: 'right', lineBreak: false });
+        y += rowH;
       }
 
       // Category totals
@@ -179,8 +183,14 @@ export class ExpenseReportPdfService {
       let stripe = false;
 
       for (const exp of expenses) {
+        // Altura dinamica: el nombre de categoria o la descripcion pueden ocupar 2 lineas.
+        doc.fontSize(7).font('Helvetica');
+        const catH = doc.heightOfString(exp.category.name, { width: 95 });
+        const descH = doc.heightOfString(exp.description.substring(0, 60), { width: 135 });
+        const rowH = Math.max(13, catH, descH) + 2;
+
         // Page break check
-        if (y > 700) {
+        if (y + rowH > 720) {
           doc.addPage();
           y = 40;
 
@@ -201,20 +211,20 @@ export class ExpenseReportPdfService {
         // Alternating row background
         if (stripe) {
           doc.save();
-          doc.rect(40, y - 1, pageWidth, 13).fill('#f8f9fa');
+          doc.rect(40, y - 1, pageWidth, rowH).fill('#f8f9fa');
           doc.restore();
           doc.fillColor('#000000');
         }
         stripe = !stripe;
 
         const dateStr = new Date(exp.date).toLocaleDateString('es-VE');
-        doc.text(dateStr, detColX.date, y, { width: 55 });
+        doc.text(dateStr, detColX.date, y, { width: 55, lineBreak: false });
         doc.text(exp.category.name, detColX.cat, y, { width: 95 });
-        doc.text(exp.description.substring(0, 35), detColX.desc, y, { width: 135 });
-        doc.text(exp.reference || '-', detColX.ref, y, { width: 55 });
-        doc.text(`$${this.fmt(exp.amountUsd)}`, detColX.usd, y, { width: 60, align: 'right' });
-        doc.text(`Bs ${this.fmt(exp.amountBs)}`, detColX.bs, y, { width: 70, align: 'right' });
-        y += 13;
+        doc.text(exp.description.substring(0, 60), detColX.desc, y, { width: 135 });
+        doc.text(exp.reference || '-', detColX.ref, y, { width: 55, lineBreak: false });
+        doc.text(`$${this.fmt(exp.amountUsd)}`, detColX.usd, y, { width: 60, align: 'right', lineBreak: false });
+        doc.text(`Bs ${this.fmt(exp.amountBs)}`, detColX.bs, y, { width: 70, align: 'right', lineBreak: false });
+        y += rowH;
       }
 
       // Grand total at the bottom of the detail

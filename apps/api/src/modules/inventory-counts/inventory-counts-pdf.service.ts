@@ -10,7 +10,7 @@ export class InventoryCountsPdfService {
    * Hoja de conteo fisico — para imprimir ANTES de ir a contar.
    * Columnas en blanco para escribir a mano la cantidad contada (2 conteos).
    */
-  async generateCountSheet(id: string): Promise<Buffer> {
+  async generateCountSheet(id: string, includeStock = false): Promise<Buffer> {
     const count = await this.prisma.inventoryCount.findUnique({
       where: { id },
       include: {
@@ -27,7 +27,7 @@ export class InventoryCountsPdfService {
     if (!count) throw new NotFoundException('Conteo no encontrado');
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 40 });
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margin: 40 });
       const buffers: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
@@ -58,23 +58,14 @@ export class InventoryCountsPdfService {
         return y;
       };
 
-      // Column positions (landscape LETTER = 792 x 612)
-      const col = {
-        num: 40,
-        code: 70,
-        ref: 170,
-        product: 280,
-        count1: 560,
-        count2: 660,
-      };
-      const colWidths = {
-        num: 25,
-        code: 95,
-        ref: 105,
-        product: 275,
-        count1: 90,
-        count2: 90,
-      };
+      // Column positions (portrait LETTER = 612 x 792, area util 40..572).
+      // Con existencia se comprime para encajar una columna "Exist." (stock del sistema).
+      const col: Record<string, number> = includeStock
+        ? { num: 40, code: 66, ref: 132, product: 216, exist: 386, count1: 440, count2: 500 }
+        : { num: 40, code: 66, ref: 134, product: 226, count1: 432, count2: 496 };
+      const colWidths: Record<string, number> = includeStock
+        ? { num: 22, code: 62, ref: 80, product: 166, exist: 48, count1: 56, count2: 56 }
+        : { num: 22, code: 62, ref: 88, product: 200, count1: 58, count2: 58 };
 
       const drawTableHeader = (y: number): number => {
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
@@ -82,6 +73,7 @@ export class InventoryCountsPdfService {
         doc.text('Codigo', col.code, y, { width: colWidths.code });
         doc.text('Ref. Proveedor', col.ref, y, { width: colWidths.ref });
         doc.text('Producto', col.product, y, { width: colWidths.product });
+        if (includeStock) doc.text('Exist.', col.exist, y, { width: colWidths.exist, align: 'right' });
         doc.text('Conteo 1', col.count1, y, { width: colWidths.count1, align: 'center' });
         doc.text('Conteo 2', col.count2, y, { width: colWidths.count2, align: 'center' });
         y += 14;
@@ -96,8 +88,15 @@ export class InventoryCountsPdfService {
       doc.fontSize(8).font('Helvetica').fillColor('#000000');
 
       count.items.forEach((item, idx) => {
+        // Altura dinamica: el nombre (o codigo/ref) puede ocupar 2 lineas.
+        doc.fontSize(8).font('Helvetica').fillColor('#000000');
+        const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
+        const codeH = doc.heightOfString(item.product.code, { width: colWidths.code });
+        const refH = doc.heightOfString(item.product.supplierRef || '', { width: colWidths.ref });
+        const rowH = Math.max(16, nameH, codeH, refH) + 4;
+
         // Check for page break (leave room for footer)
-        if (y > pageHeight - 80) {
+        if (y > pageHeight - 80 - rowH) {
           doc.addPage();
           y = drawHeader(40);
           y = drawTableHeader(y);
@@ -109,13 +108,16 @@ export class InventoryCountsPdfService {
         doc.text(item.product.code, col.code, rowY, { width: colWidths.code });
         doc.text(item.product.supplierRef || '', col.ref, rowY, { width: colWidths.ref });
         doc.text(item.product.name, col.product, rowY, { width: colWidths.product });
+        if (includeStock) {
+          doc.text(String(item.systemQuantity ?? 0), col.exist, rowY, { width: colWidths.exist, align: 'right' });
+        }
 
-        // Empty cells with underline for handwriting
+        // Empty cells with underline for handwriting (alineado a la 1ra linea)
         const lineY = rowY + 10;
         doc.moveTo(col.count1 + 5, lineY).lineTo(col.count1 + colWidths.count1 - 5, lineY).stroke('#cccccc');
         doc.moveTo(col.count2 + 5, lineY).lineTo(col.count2 + colWidths.count2 - 5, lineY).stroke('#cccccc');
 
-        y += 16;
+        y += rowH;
       });
 
       // Footer: signature line
@@ -268,7 +270,12 @@ export class InventoryCountsPdfService {
         doc.fontSize(7).font('Helvetica');
 
         diffItems.forEach((item, idx) => {
-          if (y > pageHeight - 100) {
+          // Altura dinamica: el nombre puede ocupar 2 lineas.
+          doc.fontSize(7).font('Helvetica');
+          const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
+          const rowH = Math.max(14, nameH + 2);
+
+          if (y > pageHeight - 100 - rowH) {
             doc.addPage();
             y = 40;
             y = drawTableHeader(y);
@@ -308,7 +315,7 @@ export class InventoryCountsPdfService {
             align: 'right',
           });
 
-          y += 14;
+          y += rowH;
         });
 
         // Summary

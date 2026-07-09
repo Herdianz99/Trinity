@@ -19,6 +19,7 @@ interface AdjustmentItem {
     bregaApplies: boolean;
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
+    stock?: { warehouseId: string; quantity: number }[];
   };
   quantity: number;
 }
@@ -398,6 +399,10 @@ export default function InventoryAdjustmentDetailPage() {
   const isProcessed = adjustment.status === 'PROCESSED';
   const isCancelled = adjustment.status === 'CANCELLED';
 
+  // Existencia actual del producto en el almacen del ajuste.
+  const warehouseStock = (item: AdjustmentItem): number =>
+    item.product.stock?.find(s => s.warehouseId === adjustment.warehouse.id)?.quantity ?? 0;
+
   return (
     <div>
       {/* Back link */}
@@ -518,6 +523,7 @@ export default function InventoryAdjustmentDetailPage() {
                       <th className="text-left px-4 py-3 text-slate-400 font-medium">Codigo</th>
                       <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
                       <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Categoria</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium">Existencias</th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
                       <th className="w-12"></th>
                     </tr>
@@ -528,6 +534,7 @@ export default function InventoryAdjustmentDetailPage() {
                         <td className="px-4 py-2.5 font-mono text-xs text-green-400">{item.product.code}</td>
                         <td className="px-4 py-2.5 text-white">{item.product.name}</td>
                         <td className="px-4 py-2.5 text-slate-400 text-xs hidden md:table-cell">{item.product.category?.name || '—'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-300">{warehouseStock(item)}</td>
                         <td className="px-4 py-2.5 text-right">
                           <input
                             type="number"

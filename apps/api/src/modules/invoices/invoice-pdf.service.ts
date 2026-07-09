@@ -272,17 +272,21 @@ export class InvoicePdfService {
       // Items
       doc.fontSize(8).font('Helvetica');
       for (const item of invoice.items) {
-        if (y > 680) {
+        // Altura dinamica: la descripcion puede ocupar 2 lineas.
+        doc.fontSize(8).font('Helvetica');
+        const descH = doc.heightOfString(item.productName, { width: 215 });
+        const rowH = Math.max(14, descH + 2);
+        if (y + rowH > 720) {
           doc.addPage();
           y = 40;
         }
         doc.text(item.productId.slice(0, 8), colX.code, y, { width: 55 });
         doc.text(item.productName, colX.desc, y, { width: 215 });
-        doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right' });
-        doc.text(`$${item.unitPrice.toFixed(2)}`, colX.price, y, { width: 50, align: 'right' });
-        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right' });
-        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' });
-        y += 14;
+        doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right', lineBreak: false });
+        doc.text(`$${item.unitPrice.toFixed(2)}`, colX.price, y, { width: 50, align: 'right', lineBreak: false });
+        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right', lineBreak: false });
+        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right', lineBreak: false });
+        y += rowH;
       }
 
       y += 5;

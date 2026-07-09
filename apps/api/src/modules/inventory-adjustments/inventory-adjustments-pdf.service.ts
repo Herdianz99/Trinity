@@ -170,7 +170,13 @@ export class InventoryAdjustmentsPdfService {
         doc.fontSize(7.5).font('Helvetica');
 
         adjustment.items.forEach((item, idx) => {
-          if (y > pageHeight - 90) {
+          // Altura dinamica: el nombre (o la ref.) puede ocupar 2 lineas.
+          doc.fontSize(7.5).font('Helvetica');
+          const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
+          const refH = doc.heightOfString(item.product.supplierRef || '', { width: colWidths.ref });
+          const rowH = Math.max(14, nameH, refH) + 2;
+
+          if (y > pageHeight - 90 - rowH) {
             doc.addPage();
             y = 40;
             y = drawTableHeader(y);
@@ -198,7 +204,7 @@ export class InventoryAdjustmentsPdfService {
             align: 'right',
           });
 
-          y += 14;
+          y += rowH;
         });
 
         // Totals row

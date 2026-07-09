@@ -1,5 +1,23 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 PDFs (vertical + texto que se montaba) y 4 ajustes menores — 2026-07-09
+
+Sesión de pulido tras el arranque de la grande.
+
+### PDFs — orientación y solapamiento de texto
+Diego notó PDFs en horizontal y que, cuando un nombre ocupa 2 líneas, se montaba sobre la fila siguiente. Se auditaron los **18 generadores** (excluidos los libros fiscales, que se exportan desde el front). **11 arreglados**:
+- **Conteo físico** (hoja) y **Movimientos de caja detallado** (`generateGlobalReport`): de horizontal a **vertical**.
+- **Altura dinámica** (se mide `heightOfString`, la fila crece, los montos quedan a la derecha en 1 línea) en: conteo físico (hoja + diferencias), movimientos de caja, **factura al cliente**, cotización, ajuste de inventario, los **7 reportes** de ventas/comisiones (un solo helper `drawTableRow`), programación de pagos, gastos, recibo cobro/pago y nota crédito/débito.
+- Sanos (ya protegidos): payables, receivables, inventory-replacements, inventory-alerts, islr, retention-vouchers, purchase-orders, labels, reporte por vendedor.
+
+### 4 ajustes menores
+1. **Cédula del cliente en las comandas** (factura y devolución): `findPending` trae `documentType`+`rif`; `print-monitor.tsx` la muestra bajo "Cliente:" en las 2 rutas (agente ESC/POS + respaldo `window.print`). **No se tocó el agente** (la comanda se arma en el navegador).
+2. **Columna Existencias** en el borrador del ajuste de inventario (`INCLUDE_DETAIL` trae stock por almacén; el front toma el del almacén del ajuste).
+3. **Hoja de conteo con/sin columna de existencia**: el botón "Imprimir hoja de conteo" abre un mini-menú de 2 opciones; el PDF y el controller aceptan `?stock=1` (muestra `systemQuantity`).
+4. **Búsqueda libre en /receivables**: el campo (antes "Ref / Orden") ahora hace **OR** por ref + nombre + cédula del cliente (directo y vía factura); aplica a la lista y al reporte PDF.
+
+**Solo backend + frontend, sin cambios de schema ni migraciones. Agente intacto.** Typecheck de API y web en verde.
+
 ## 🚀 GO-LIVE empresa grande (inversiones): migración de datos reales a producción — 2026-07-08 (arranque 09-jul)
 
 Se preparó y subió a producción (inversiones) la **data real definitiva** para el arranque del 09-jul. Todo se **ensayó y validó primero en una copia local** (contenedor `postgres:16-alpine` aislado en :5433), y solo al final se empujó a prod con freeze + respaldo de rollback + swap atómico.

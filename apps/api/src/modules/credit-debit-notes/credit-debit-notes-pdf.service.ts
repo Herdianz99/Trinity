@@ -129,17 +129,21 @@ export class CreditDebitNotesPdfService {
         // Items
         doc.font('Helvetica').fontSize(8);
         for (const item of note.items) {
-          if (y > 700) {
+          // Altura dinamica: el nombre del producto puede ocupar 2 lineas.
+          doc.font('Helvetica').fontSize(8);
+          const nameH = doc.heightOfString(item.productName, { width: 180 });
+          const rowH = Math.max(13, nameH + 2);
+          if (y + rowH > 720) {
             doc.addPage();
             y = 40;
           }
-          doc.text(item.productName.substring(0, 35), 40, y, { width: 180 });
-          doc.text(String(item.quantity), 220, y, { width: 40, align: 'right' });
-          doc.text(this.fmt(item.unitPriceUsd), 265, y, { width: 60, align: 'right' });
-          doc.text(this.fmt(item.ivaAmount), 330, y, { width: 55, align: 'right' });
-          doc.text(this.fmt(item.totalUsd), 390, y, { width: 60, align: 'right' });
-          doc.text(this.fmt(item.totalBs), 455, y, { width: 70, align: 'right' });
-          y += 13;
+          doc.text(item.productName, 40, y, { width: 180 });
+          doc.text(String(item.quantity), 220, y, { width: 40, align: 'right', lineBreak: false });
+          doc.text(this.fmt(item.unitPriceUsd), 265, y, { width: 60, align: 'right', lineBreak: false });
+          doc.text(this.fmt(item.ivaAmount), 330, y, { width: 55, align: 'right', lineBreak: false });
+          doc.text(this.fmt(item.totalUsd), 390, y, { width: 60, align: 'right', lineBreak: false });
+          doc.text(this.fmt(item.totalBs), 455, y, { width: 70, align: 'right', lineBreak: false });
+          y += rowH;
         }
         y += 5;
       } else if (note.origin === 'MANUAL') {

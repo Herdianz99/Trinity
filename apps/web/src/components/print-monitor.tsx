@@ -14,14 +14,14 @@ interface PrintJob {
   invoiceId: string | null;
   invoice: {
     number: string;
-    customer?: { name: string } | null;
+    customer?: { name: string; documentType?: string; rif?: string | null } | null;
     seller?: { name: string } | null;
   } | null;
   creditDebitNote?: {
     number: string;
     invoice?: {
       number: string;
-      customer?: { name: string } | null;
+      customer?: { name: string; documentType?: string; rif?: string | null } | null;
       seller?: { name: string } | null;
     } | null;
   } | null;
@@ -98,9 +98,13 @@ export default function PrintMonitor() {
     const title = isReturn ? 'DEVOLUCION' : 'COMANDA';
     const docNumber = isReturn ? job.creditDebitNote!.number : (job.invoice?.number || 'S/N');
     const affectedInvoice = isReturn ? (job.creditDebitNote!.invoice?.number || '') : '';
-    const customerName = isReturn
-      ? (job.creditDebitNote!.invoice?.customer?.name || 'Contado')
-      : (job.invoice?.customer?.name || 'Contado');
+    const customerObj = isReturn
+      ? job.creditDebitNote!.invoice?.customer
+      : job.invoice?.customer;
+    const customerName = customerObj?.name || 'Contado';
+    const customerCedula = customerObj?.rif
+      ? `${customerObj.documentType ? customerObj.documentType + '-' : ''}${customerObj.rif}`
+      : '';
     const sellerName = isReturn
       ? (job.creditDebitNote!.invoice?.seller?.name || '')
       : (job.invoice?.seller?.name || '');
@@ -126,6 +130,9 @@ export default function PrintMonitor() {
     }
     lines.push(`${dateStr} ${timeStr}`);
     lines.push(`{{BOLD}}Cliente:{{/BOLD}} ${customerName}`);
+    if (customerCedula) {
+      lines.push(`{{BOLD}}C.I./RIF:{{/BOLD}} ${customerCedula}`);
+    }
     if (sellerName) {
       lines.push(`{{BOLD}}Vendedor:{{/BOLD}} ${sellerName}`);
     }
@@ -363,6 +370,10 @@ export default function PrintMonitor() {
           {/* Cliente y vendedor (despacho los necesita) */}
           <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>
             <div>Cliente: {(currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.customer?.name : currentJob.invoice?.customer?.name) || 'Contado'}</div>
+            {(() => {
+              const c = currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.customer : currentJob.invoice?.customer;
+              return c?.rif ? <div>C.I./RIF: {c.documentType ? `${c.documentType}-` : ''}{c.rif}</div> : null;
+            })()}
             {(currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.seller?.name : currentJob.invoice?.seller?.name) && (
               <div>Vendedor: {currentJob.creditDebitNote ? currentJob.creditDebitNote.invoice?.seller?.name : currentJob.invoice?.seller?.name}</div>
             )}

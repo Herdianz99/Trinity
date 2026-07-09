@@ -218,7 +218,15 @@ export class ReceivablesService {
       where.platformName = query.platformName;
     }
     if (query.reference) {
-      where.reference = { contains: query.reference, mode: 'insensitive' };
+      // Busqueda libre: Ref/Orden + nombre o cedula del cliente (directo o via factura).
+      const q = query.reference;
+      where.OR = [
+        { reference: { contains: q, mode: 'insensitive' } },
+        { customer: { name: { contains: q, mode: 'insensitive' } } },
+        { customer: { rif: { contains: q, mode: 'insensitive' } } },
+        { invoice: { customer: { name: { contains: q, mode: 'insensitive' } } } },
+        { invoice: { customer: { rif: { contains: q, mode: 'insensitive' } } } },
+      ];
     }
     if (query.from || query.to) {
       where.createdAt = {};

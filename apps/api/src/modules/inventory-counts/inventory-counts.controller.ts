@@ -56,8 +56,14 @@ export class InventoryCountsController {
   }
 
   @Get(':id/pdf-count-sheet')
-  async getPdfCountSheet(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.pdfService.generateCountSheet(id);
+  @ApiQuery({ name: 'stock', required: false })
+  async getPdfCountSheet(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Query('stock') stock?: string,
+  ) {
+    const includeStock = stock === '1' || stock === 'true';
+    const buffer = await this.pdfService.generateCountSheet(id, includeStock);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="conteo-${id}.pdf"`,

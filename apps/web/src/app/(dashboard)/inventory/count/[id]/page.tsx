@@ -88,6 +88,9 @@ export default function InventoryCountDetailPage() {
   const [countValues, setCountValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
+  // Menu para elegir la hoja de conteo con o sin columna de existencia
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
+
   // ── Data fetching ──────────────────────────────────
   const fetchCount = useCallback(async () => {
     setLoading(true);
@@ -644,12 +647,33 @@ export default function InventoryCountDetailPage() {
                 <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
                   <span className="text-sm text-slate-400">{count.items.length} producto(s)</span>
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => window.open(`/api/proxy/inventory-counts/${id}/pdf-count-sheet`)}
-                      className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
-                    >
-                      <Printer size={12} /> Imprimir hoja de conteo
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowPrintMenu(v => !v)}
+                        className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+                      >
+                        <Printer size={12} /> Imprimir hoja de conteo
+                      </button>
+                      {showPrintMenu && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)} />
+                          <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl overflow-hidden">
+                            <button
+                              onClick={() => { window.open(`/api/proxy/inventory-counts/${id}/pdf-count-sheet`); setShowPrintMenu(false); }}
+                              className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors"
+                            >
+                              Sin columna de existencia
+                            </button>
+                            <button
+                              onClick={() => { window.open(`/api/proxy/inventory-counts/${id}/pdf-count-sheet?stock=1`); setShowPrintMenu(false); }}
+                              className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors border-t border-slate-700/30"
+                            >
+                              Con columna de existencia
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {isDraft && (
                       <button
                         onClick={handleRemoveAll}

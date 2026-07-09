@@ -47,13 +47,21 @@ export class ReportsPdfService {
 
   private drawTableRow(doc: any, y: number, columns: { x: number; width: number; align?: string }[], values: string[], bold = false) {
     doc.fontSize(8).font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#1e293b');
+    // Altura dinamica: las columnas de texto (no alineadas a la derecha) pueden
+    // envolver a 2+ lineas; las de monto quedan en 1 linea para no descuadrar.
+    let rowH = 11;
+    for (let i = 0; i < columns.length; i++) {
+      if (columns[i].align === 'right') continue;
+      const h = doc.heightOfString(values[i] || '', { width: columns[i].width });
+      if (h > rowH) rowH = h;
+    }
     for (let i = 0; i < columns.length; i++) {
       const opts: any = { width: columns[i].width };
-      if (columns[i].align === 'right') opts.align = 'right';
+      if (columns[i].align === 'right') { opts.align = 'right'; opts.lineBreak = false; }
       doc.text(values[i] || '', columns[i].x, y, opts);
     }
     doc.fillColor('#000');
-    return y + 14;
+    return y + Math.max(14, rowH + 2);
   }
 
   private checkPage(doc: any, y: number, needed = 30): number {

@@ -460,10 +460,10 @@ export default function ReceivablesPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Ref / Orden</label>
+            <label className="text-xs text-slate-400 mb-1 block">Buscar (Ref, cliente, cédula)</label>
             <input type="text" value={reference} onChange={e => { setReference(e.target.value); setPage(1); }}
-              placeholder="N. orden..."
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 w-36" />
+              placeholder="Ref/orden, nombre o cédula..."
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 w-56" />
           </div>
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Desde</label>

@@ -3,27 +3,28 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CashRegistersService } from './cash-registers.service';
 import * as PDFDocument from 'pdfkit';
 
-// Columnas del reporte GLOBAL de movimientos (A4 horizontal, area util 40..802)
+// Columnas del reporte GLOBAL de movimientos (A4 vertical, area util 40..555).
+// Las columnas de texto (caja/cajero/cliente/ref) envuelven a 2 lineas via drawRowWrap.
 const G_PAY_COLS = [
-  { label: 'Fecha / Hora', x: 40, width: 72 },
-  { label: 'Caja', x: 114, width: 70 },
-  { label: 'Cajero', x: 186, width: 88 },
-  { label: 'Factura', x: 276, width: 78 },
-  { label: 'Cliente', x: 356, width: 142 },
-  { label: 'Referencia', x: 500, width: 120 },
-  { label: 'USD', x: 622, width: 78, align: 'right' },
-  { label: 'Bs', x: 702, width: 100, align: 'right' },
+  { label: 'Fecha / Hora', x: 40, width: 56 },
+  { label: 'Caja', x: 98, width: 56 },
+  { label: 'Cajero', x: 156, width: 58 },
+  { label: 'Factura', x: 216, width: 46 },
+  { label: 'Cliente', x: 264, width: 92 },
+  { label: 'Ref.', x: 358, width: 58 },
+  { label: 'USD', x: 418, width: 58, align: 'right' },
+  { label: 'Bs', x: 478, width: 77, align: 'right' },
 ];
 
 const G_MOV_COLS = [
-  { label: 'Fecha / Hora', x: 40, width: 72 },
-  { label: 'Caja', x: 114, width: 70 },
-  { label: 'Cajero', x: 186, width: 88 },
-  { label: 'Tipo', x: 276, width: 60 },
-  { label: 'Concepto', x: 338, width: 160 },
-  { label: 'Usuario', x: 500, width: 120 },
-  { label: 'USD', x: 622, width: 78, align: 'right' },
-  { label: 'Bs', x: 702, width: 100, align: 'right' },
+  { label: 'Fecha / Hora', x: 40, width: 56 },
+  { label: 'Caja', x: 98, width: 56 },
+  { label: 'Cajero', x: 156, width: 54 },
+  { label: 'Tipo', x: 212, width: 42 },
+  { label: 'Concepto', x: 256, width: 100 },
+  { label: 'Usuario', x: 358, width: 58 },
+  { label: 'USD', x: 418, width: 58, align: 'right' },
+  { label: 'Bs', x: 478, width: 77, align: 'right' },
 ];
 
 // Columnas de la tabla de pagos (A4 vertical, area util 40..555)
@@ -97,6 +98,25 @@ export class CashSessionPdfService {
     }
     doc.fillColor('#000');
     return y + 13;
+  }
+
+  // Igual que drawRow pero las columnas de texto (no alineadas a la derecha)
+  // envuelven en varias lineas y la fila crece; las de monto quedan en 1 linea.
+  private drawRowWrap(doc: any, y: number, columns: any[], values: string[]): number {
+    doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
+    let rowH = 11;
+    for (let i = 0; i < columns.length; i++) {
+      if ((columns[i] as any).align === 'right') continue;
+      const h = doc.heightOfString(values[i] || '', { width: columns[i].width });
+      if (h > rowH) rowH = h;
+    }
+    for (let i = 0; i < columns.length; i++) {
+      const opts: any = { width: columns[i].width };
+      if ((columns[i] as any).align === 'right') { opts.align = 'right'; opts.lineBreak = false; }
+      doc.text(values[i] || '', columns[i].x, y, opts);
+    }
+    doc.fillColor('#000');
+    return y + rowH + 2;
   }
 
   private checkPage(doc: any, y: number, needed = 40): number {
@@ -334,7 +354,7 @@ export class CashSessionPdfService {
     const config = await this.prisma.companyConfig.findFirst();
     const company = config?.companyName || 'Trinity ERP';
 
-    const RIGHT = 802;
+    const RIGHT = 555;
     const payments = rows.filter((r) => r.kind === 'PAYMENT');
     const movements = rows.filter((r) => r.kind === 'MOVEMENT');
 
@@ -351,7 +371,7 @@ export class CashSessionPdfService {
     }
     const groups = Array.from(groupsMap.values()).sort((a, b) => a.methodName.localeCompare(b.methodName));
 
-    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
 
     // Encabezado
     doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
@@ -387,8 +407,8 @@ export class CashSessionPdfService {
       y = this.checkPage(doc, y, 60);
       doc.rect(40, y - 2, RIGHT - 40, 16).fill('#f1f5f9');
       doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
-      doc.text(`${g.methodName}  (${g.rows.length})`, 46, y + 1, { width: 400, lineBreak: false });
-      doc.text(`$${this.fmt(g.totalUsd)}   /   Bs ${this.fmt(g.totalBs)}`, 402, y + 1, { width: RIGHT - 402 - 6, align: 'right' });
+      doc.text(`${g.methodName}  (${g.rows.length})`, 46, y + 1, { width: 250, lineBreak: false });
+      doc.text(`$${this.fmt(g.totalUsd)}   /   Bs ${this.fmt(g.totalBs)}`, 300, y + 1, { width: RIGHT - 300 - 6, align: 'right' });
       doc.fillColor('#000');
       y += 20;
 
@@ -396,7 +416,7 @@ export class CashSessionPdfService {
       for (const p of g.rows) {
         y = this.checkPage(doc, y, 30);
         if (y === 40) y = this.drawTableHeader(doc, y, G_PAY_COLS, RIGHT);
-        y = this.drawRow(doc, y, G_PAY_COLS, [
+        y = this.drawRowWrap(doc, y, G_PAY_COLS, [
           this.shortDateTime(p.date),
           p.cashRegisterName || '—',
           p.cashierName || '—',
@@ -417,8 +437,8 @@ export class CashSessionPdfService {
       y = this.checkPage(doc, y, 30);
       doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
       doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
-      doc.text(`TOTAL PAGOS  (${summary.paymentCount})`, 46, y + 1, { width: 300, lineBreak: false });
-      doc.text(`$${this.fmt(summary.paymentUsd)}   /   Bs ${this.fmt(summary.paymentBs)}`, 402, y + 1, { width: RIGHT - 402 - 6, align: 'right' });
+      doc.text(`TOTAL PAGOS  (${summary.paymentCount})`, 46, y + 1, { width: 250, lineBreak: false });
+      doc.text(`$${this.fmt(summary.paymentUsd)}   /   Bs ${this.fmt(summary.paymentBs)}`, 300, y + 1, { width: RIGHT - 300 - 6, align: 'right' });
       doc.fillColor('#000');
       y += 26;
     }
@@ -439,7 +459,7 @@ export class CashSessionPdfService {
           y = this.checkPage(doc, y, 30);
           if (y === 40) y = this.drawTableHeader(doc, y, G_MOV_COLS, RIGHT);
           const isIncome = m.movementType === 'INCOME';
-          y = this.drawRow(doc, y, G_MOV_COLS, [
+          y = this.drawRowWrap(doc, y, G_MOV_COLS, [
             this.shortDateTime(m.date),
             m.cashRegisterName || '—',
             m.cashierName || '—',

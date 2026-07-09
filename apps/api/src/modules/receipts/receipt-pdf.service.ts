@@ -109,31 +109,40 @@ export class ReceiptPdfService {
       y += 5;
 
       // Items
+      // La descripcion va acotada al ancho de su columna (hasta la col. Fecha) para
+      // no invadir las demas; si es larga, la fila crece (altura dinamica).
+      const descW = colX.date - colX.desc - 5;
       doc.fontSize(8).font('Helvetica');
       let itemNum = 0;
       for (const item of receipt.items) {
-        if (y > 680) { doc.addPage(); y = 40; }
         itemNum++;
+        const isDiff = item.itemType === 'DIFFERENTIAL';
+        const descText = isDiff
+          ? 'Diferencial Cambiario'
+          : `${item.sign === 1 ? '' : '(-)'} ${item.description}`;
+        doc.fontSize(8).font('Helvetica');
+        const descH = doc.heightOfString(descText, { width: descW });
+        const rowH = Math.max(14, descH + 2);
+        if (y + rowH > 700) { doc.addPage(); y = 40; }
 
-        if (item.itemType === 'DIFFERENTIAL') {
+        if (isDiff) {
           doc.fillColor('#996600');
           doc.text(String(itemNum), colX.num, y, { width: 18, align: 'center' });
-          doc.text('Diferencial Cambiario', colX.desc, y);
-          doc.text('—', colX.usd, y, { width: 60, align: 'right' });
-          doc.text('—', colX.bsHist, y, { width: 70, align: 'right' });
-          doc.text(`${this.fmt(item.differentialBs)}`, colX.bsHoy, y, { width: 70, align: 'right' });
+          doc.text(descText, colX.desc, y, { width: descW });
+          doc.text('—', colX.usd, y, { width: 60, align: 'right', lineBreak: false });
+          doc.text('—', colX.bsHist, y, { width: 70, align: 'right', lineBreak: false });
+          doc.text(`${this.fmt(item.differentialBs)}`, colX.bsHoy, y, { width: 70, align: 'right', lineBreak: false });
           doc.fillColor('#000000');
         } else {
           const docDate = item.receivable?.invoice?.createdAt || item.payable?.purchaseOrder?.createdAt;
-          const sign = item.sign === 1 ? '' : '(-)';
           doc.text(String(itemNum), colX.num, y, { width: 18, align: 'center' });
-          doc.text(`${sign} ${item.description}`, colX.desc, y);
-          doc.text(docDate ? new Date(docDate).toLocaleDateString('es-VE') : '', colX.date, y, { width: 60, align: 'center' });
-          doc.text(`$${this.fmt(item.amountUsd)}`, colX.usd, y, { width: 60, align: 'right' });
-          doc.text(`${this.fmt(item.amountBsHistoric)}`, colX.bsHist, y, { width: 70, align: 'right' });
-          doc.text(`${this.fmt(item.amountBsToday)}`, colX.bsHoy, y, { width: 70, align: 'right' });
+          doc.text(descText, colX.desc, y, { width: descW });
+          doc.text(docDate ? new Date(docDate).toLocaleDateString('es-VE') : '', colX.date, y, { width: 60, align: 'center', lineBreak: false });
+          doc.text(`$${this.fmt(item.amountUsd)}`, colX.usd, y, { width: 60, align: 'right', lineBreak: false });
+          doc.text(`${this.fmt(item.amountBsHistoric)}`, colX.bsHist, y, { width: 70, align: 'right', lineBreak: false });
+          doc.text(`${this.fmt(item.amountBsToday)}`, colX.bsHoy, y, { width: 70, align: 'right', lineBreak: false });
         }
-        y += 14;
+        y += rowH;
       }
 
       y += 5;

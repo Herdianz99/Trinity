@@ -109,12 +109,16 @@ export class PaymentSchedulePdfService {
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 10;
 
-      // Title and notes
-      doc.fontSize(11).font('Helvetica-Bold').text(schedule.title, 40, y);
-      y += 16;
+      // Title and notes (altura dinamica: titulo/notas largos ocupan varias lineas)
+      doc.fontSize(11).font('Helvetica-Bold');
+      const titleH = doc.heightOfString(schedule.title, { width: pageWidth });
+      doc.text(schedule.title, 40, y, { width: pageWidth });
+      y += Math.max(16, titleH + 2);
       if (schedule.notes) {
-        doc.fontSize(8).font('Helvetica').text(schedule.notes, 40, y, { width: pageWidth });
-        y += 14;
+        doc.fontSize(8).font('Helvetica');
+        const notesH = doc.heightOfString(schedule.notes, { width: pageWidth });
+        doc.text(schedule.notes, 40, y, { width: pageWidth });
+        y += Math.max(14, notesH + 2);
       }
 
       // ============ BUDGET SUMMARY ============
@@ -180,7 +184,11 @@ export class PaymentSchedulePdfService {
         // Items
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         for (const item of group.items) {
-          if (y > 740) {
+          // Altura dinamica: la referencia/descripcion puede ocupar 2 lineas.
+          doc.fontSize(8).font('Helvetica');
+          const descH = doc.heightOfString(item.description, { width: 120 });
+          const rowH = Math.max(14, descH + 2);
+          if (y + rowH > 752) {
             doc.addPage();
             y = 40;
           }
@@ -191,17 +199,17 @@ export class PaymentSchedulePdfService {
             : '-';
 
           if (item.isPaid) {
-            doc.rect(45, y - 2, pageWidth - 10, 14).fill('#e8f5e9');
+            doc.rect(45, y - 2, pageWidth - 10, rowH).fill('#e8f5e9');
             doc.fillColor('#000000');
           }
 
           doc.text(item.description, colX.ref, y, { width: 120 });
-          doc.text(type, colX.type, y);
-          doc.text(dueDate, colX.due, y);
-          doc.text(`$${this.fmt(item.totalAmountUsd)}`, colX.balance, y);
-          doc.text(`$${this.fmt(item.plannedAmountUsd)}`, colX.usd, y);
-          doc.text(`Bs ${this.fmt(item.plannedAmountBs)}`, colX.bs, y);
-          y += 14;
+          doc.text(type, colX.type, y, { lineBreak: false });
+          doc.text(dueDate, colX.due, y, { lineBreak: false });
+          doc.text(`$${this.fmt(item.totalAmountUsd)}`, colX.balance, y, { lineBreak: false });
+          doc.text(`$${this.fmt(item.plannedAmountUsd)}`, colX.usd, y, { lineBreak: false });
+          doc.text(`Bs ${this.fmt(item.plannedAmountBs)}`, colX.bs, y, { lineBreak: false });
+          y += rowH;
         }
 
         // Supplier subtotal

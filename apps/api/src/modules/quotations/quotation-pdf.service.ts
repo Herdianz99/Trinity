@@ -109,20 +109,24 @@ export class QuotationPdfService {
       // Items
       doc.fontSize(8).font('Helvetica');
       for (const item of quotation.items) {
-        if (y > 680) {
+        // Altura dinamica: la descripcion puede ocupar 2 lineas.
+        doc.fontSize(8).font('Helvetica');
+        const descH = doc.heightOfString(item.productName, { width: 195 });
+        const rowH = Math.max(14, descH + 2);
+        if (y + rowH > 720) {
           doc.addPage();
           y = 40;
         }
         doc.text(item.productCode, colX.code, y, { width: 65 });
         doc.text(item.productName, colX.desc, y, { width: 195 });
-        doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right' });
+        doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right', lineBreak: false });
         // En modo "sin IVA" el precio unitario se muestra con IVA incluido (totalUsd/cant),
         // asi cant x unitario = total y todo el reporte queda consistente, sin mostrar el impuesto.
         const unitToShow = hideIva && item.quantity ? item.totalUsd / item.quantity : item.unitPriceUsd;
-        doc.text(`$${unitToShow.toFixed(2)}`, colX.price, y, { width: 55, align: 'right' });
-        if (!hideIva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right' });
-        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' });
-        y += 14;
+        doc.text(`$${unitToShow.toFixed(2)}`, colX.price, y, { width: 55, align: 'right', lineBreak: false });
+        if (!hideIva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right', lineBreak: false });
+        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right', lineBreak: false });
+        y += rowH;
       }
 
       y += 5;
