@@ -14,6 +14,7 @@ import {
   Hash,
   X,
   FileText,
+  FileDown,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -81,6 +82,7 @@ export default function ExpensesPage() {
     reference: '',
     amountUsd: '',
     amountBs: '',
+    exchangeRate: '',
     date: new Date().toISOString().split('T')[0],
     notes: '',
     cashSessionId: '',
@@ -186,19 +188,22 @@ export default function ExpensesPage() {
   function openCreateModal() {
     setEditingExpense(null);
     setModalTab('info');
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       categoryId: categories[0]?.id || '',
       description: '',
       reference: '',
       amountUsd: '',
       amountBs: '',
-      date: new Date().toISOString().split('T')[0],
+      exchangeRate: todayRate ? String(todayRate) : '',
+      date: today,
       notes: '',
       cashSessionId: '',
       methodId: '',
     });
     setModalOpen(true);
     fetchOpenSessions();
+    fetchRateForDate(today);
   }
 
   function openEditModal(exp: Expense) {
@@ -210,12 +215,33 @@ export default function ExpensesPage() {
       reference: exp.reference || '',
       amountUsd: exp.amountUsd.toString(),
       amountBs: exp.amountBs.toString(),
+      exchangeRate: exp.exchangeRate ? String(exp.exchangeRate) : '',
       date: exp.date.split('T')[0],
       notes: exp.notes || '',
       cashSessionId: '',
       methodId: '',
     });
     setModalOpen(true);
+  }
+
+  // Trae la tasa guardada de una fecha y la precarga (editable). Si no hay, deja
+  // la actual para que el usuario la escriba a mano.
+  async function fetchRateForDate(date: string) {
+    if (!date) return;
+    try {
+      const res = await fetch(`/api/proxy/exchange-rate/by-date?date=${date}`);
+      const data = res.ok ? await res.json() : null;
+      if (data?.rate) {
+        setFormData(prev => {
+          const usd = parseFloat(prev.amountUsd) || 0;
+          return {
+            ...prev,
+            exchangeRate: String(data.rate),
+            amountBs: usd ? (usd * data.rate).toFixed(2) : prev.amountBs,
+          };
+        });
+      }
+    } catch { /* ignore */ }
   }
 
   async function fetchOpenSessions() {
@@ -231,15 +257,32 @@ export default function ExpensesPage() {
   function handleAmountUsdChange(val: string) {
     setFormData(prev => {
       const usd = parseFloat(val) || 0;
-      return { ...prev, amountUsd: val, amountBs: todayRate ? (usd * todayRate).toFixed(2) : prev.amountBs };
+      const rate = parseFloat(prev.exchangeRate) || 0;
+      return { ...prev, amountUsd: val, amountBs: rate ? (usd * rate).toFixed(2) : prev.amountBs };
     });
   }
 
   function handleAmountBsChange(val: string) {
     setFormData(prev => {
       const bs = parseFloat(val) || 0;
-      return { ...prev, amountBs: val, amountUsd: todayRate ? (bs / todayRate).toFixed(2) : prev.amountUsd };
+      const rate = parseFloat(prev.exchangeRate) || 0;
+      return { ...prev, amountBs: val, amountUsd: rate ? (bs / rate).toFixed(2) : prev.amountUsd };
     });
+  }
+
+  // Al editar la tasa, re-derivar Bs desde el USD (ancla).
+  function handleRateChange(val: string) {
+    setFormData(prev => {
+      const rate = parseFloat(val) || 0;
+      const usd = parseFloat(prev.amountUsd) || 0;
+      return { ...prev, exchangeRate: val, amountBs: rate && usd ? (usd * rate).toFixed(2) : prev.amountBs };
+    });
+  }
+
+  function handleDateChange(val: string) {
+    setFormData(prev => ({ ...prev, date: val }));
+    // Al cambiar la fecha, traer la tasa guardada de ese dia (si existe).
+    fetchRateForDate(val);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -255,6 +298,7 @@ export default function ExpensesPage() {
       if (formData.notes) body.notes = formData.notes;
       if (formData.amountUsd) body.amountUsd = parseFloat(formData.amountUsd);
       if (formData.amountBs) body.amountBs = parseFloat(formData.amountBs);
+      if (formData.exchangeRate) body.exchangeRate = parseFloat(formData.exchangeRate);
       if (formData.cashSessionId) body.cashSessionId = formData.cashSessionId;
       if (formData.methodId) body.methodId = formData.methodId;
 
@@ -467,6 +511,13 @@ export default function ExpensesPage() {
                   <td className="px-4 py-3 text-slate-400">{exp.createdBy.name}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => window.open(`/api/proxy/expenses/${exp.id}/pdf`, '_blank')}
+                        className="p-1.5 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-emerald-400 transition-colors"
+                        title="PDF del gasto (para archivar)"
+                      >
+                        <FileDown size={14} />
+                      </button>
                       {(isAdmin || exp.createdById === userId) && (
                         <button onClick={() => openEditModal(exp)} className="p-1.5 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-blue-400 transition-colors" title="Editar">
                           <Pencil size={14} />
@@ -620,7 +671,7 @@ export default function ExpensesPage() {
                       <input
                         type="date"
                         value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        onChange={(e) => handleDateChange(e.target.value)}
                         required
                         className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
                       />
@@ -650,9 +701,22 @@ export default function ExpensesPage() {
                       />
                     </div>
                   </div>
-                  {todayRate > 0 && (
-                    <p className="text-xs text-slate-500">Tasa del dia: {todayRate.toFixed(4)} Bs/USD</p>
-                  )}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">
+                      Tasa a cobrar (Bs/USD)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={formData.exchangeRate}
+                      onChange={(e) => handleRateChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm font-mono"
+                      placeholder="0.0000"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Trae la tasa del dia del gasto. Editala si ese dia no tiene tasa guardada o el gasto se hizo con otra.
+                    </p>
+                  </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Notas</label>
                     <textarea

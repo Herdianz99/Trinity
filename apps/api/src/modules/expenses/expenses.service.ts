@@ -186,21 +186,18 @@ export class ExpensesService {
   }
 
   async create(dto: CreateExpenseDto, userId: string) {
-    // Get today's exchange rate
-    const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-
-    if (!rate) {
-      throw new BadRequestException('No hay tasa de cambio registrada para hoy. Registre la tasa antes de crear gastos.');
-    }
+    // Tasa del gasto: la editada por el usuario tiene prioridad; si no, la del
+    // dia de la FECHA del gasto (no la de hoy). Asi un gasto de otro dia usa su
+    // tasa real, y los dias sin tasa guardada se cubren con la tasa manual.
+    const rateVal = await this.resolveExpenseRate(dto.exchangeRate, dto.date);
 
     let amountUsd = dto.amountUsd;
     let amountBs = dto.amountBs;
 
     if (amountUsd && !amountBs) {
-      amountBs = Math.round(amountUsd * rate.rate * 100) / 100;
+      amountBs = Math.round(amountUsd * rateVal * 100) / 100;
     } else if (amountBs && !amountUsd) {
-      amountUsd = Math.round((amountBs / rate.rate) * 100) / 100;
+      amountUsd = Math.round((amountBs / rateVal) * 100) / 100;
     } else if (!amountUsd && !amountBs) {
       throw new BadRequestException('Debe proporcionar al menos un monto (USD o Bs)');
     }
@@ -221,7 +218,7 @@ export class ExpensesService {
             reference: dto.reference,
             amountUsd: amountUsd!,
             amountBs: amountBs!,
-            exchangeRate: rate.rate,
+            exchangeRate: rateVal,
             date: new Date(dto.date),
             notes: dto.notes,
             createdById: userId,
@@ -240,7 +237,7 @@ export class ExpensesService {
             type: 'EXPENSE',
             amountUsd: amountUsd!,
             amountBs: amountBs!,
-            exchangeRate: rate.rate,
+            exchangeRate: rateVal,
             currency: dto.amountUsd ? 'USD' : 'BS',
             reason: `Gasto: ${dto.description}`,
             isManual: false,
@@ -260,7 +257,7 @@ export class ExpensesService {
         reference: dto.reference,
         amountUsd: amountUsd!,
         amountBs: amountBs!,
-        exchangeRate: rate.rate,
+        exchangeRate: rateVal,
         date: new Date(dto.date),
         notes: dto.notes,
         createdById: userId,
@@ -272,8 +269,25 @@ export class ExpensesService {
     });
   }
 
+  // Resuelve la tasa de un gasto: prioriza la editada por el usuario; si no,
+  // busca la tasa guardada del dia de la FECHA del gasto. Lanza si no hay ninguna.
+  private async resolveExpenseRate(edited: number | undefined, dateStr: string): Promise<number> {
+    if (edited && edited > 0) return edited;
+    const dateKey = caracasDateKey(dateStr);
+    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: dateKey } });
+    if (!rate) {
+      throw new BadRequestException(
+        'No hay tasa de cambio guardada para la fecha del gasto. Ingrese la tasa manualmente.',
+      );
+    }
+    return rate.rate;
+  }
+
   async update(id: string, dto: Partial<CreateExpenseDto>, user: { id: string; role: UserRole }) {
-    const expense = await this.prisma.expense.findUnique({ where: { id } });
+    const expense = await this.prisma.expense.findUnique({
+      where: { id },
+      include: { cashMovement: true },
+    });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
 
     if (user.role !== UserRole.ADMIN && expense.createdById !== user.id) {
@@ -287,31 +301,59 @@ export class ExpensesService {
     if (dto.date) updateData.date = new Date(dto.date);
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
-    if (dto.amountUsd !== undefined || dto.amountBs !== undefined) {
-      const today = caracasDateKey();
-      const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-      if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
-
-      if (dto.amountUsd && dto.amountBs) {
-        updateData.amountUsd = dto.amountUsd;
-        updateData.amountBs = dto.amountBs;
-      } else if (dto.amountUsd) {
-        updateData.amountUsd = dto.amountUsd;
-        updateData.amountBs = Math.round(dto.amountUsd * rate.rate * 100) / 100;
-      } else if (dto.amountBs) {
-        updateData.amountBs = dto.amountBs;
-        updateData.amountUsd = Math.round((dto.amountBs / rate.rate) * 100) / 100;
+    // Recalcular montos/tasa si cambia alguno. Usa la tasa EDITADA o la que ya
+    // tiene el gasto (nunca la de hoy), para respetar su tasa historica.
+    const rateEdited = dto.exchangeRate !== undefined && dto.exchangeRate > 0;
+    if (dto.amountUsd !== undefined || dto.amountBs !== undefined || rateEdited) {
+      const effRate = rateEdited ? dto.exchangeRate! : expense.exchangeRate;
+      let usd = expense.amountUsd;
+      let bs = expense.amountBs;
+      if (dto.amountUsd !== undefined && dto.amountBs !== undefined) {
+        usd = dto.amountUsd;
+        bs = dto.amountBs;
+      } else if (dto.amountUsd !== undefined) {
+        usd = dto.amountUsd;
+        bs = Math.round(dto.amountUsd * effRate * 100) / 100;
+      } else if (dto.amountBs !== undefined) {
+        bs = dto.amountBs;
+        usd = Math.round((dto.amountBs / effRate) * 100) / 100;
+      } else {
+        // solo cambio la tasa -> re-derivar Bs desde el USD ancla
+        bs = Math.round(expense.amountUsd * effRate * 100) / 100;
       }
-      updateData.exchangeRate = rate.rate;
+      updateData.amountUsd = usd;
+      updateData.amountBs = bs;
+      updateData.exchangeRate = effRate;
     }
 
-    return this.prisma.expense.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: { select: { name: true } },
-        createdBy: { select: { name: true } },
-      },
+    // Actualiza el gasto y, si tiene movimiento de caja vinculado, lo sincroniza
+    // en la misma transaccion para que el arqueo/cierre no se descuadre.
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.expense.update({
+        where: { id },
+        data: updateData,
+        include: {
+          category: { select: { name: true } },
+          createdBy: { select: { name: true } },
+        },
+      });
+
+      if (expense.cashMovement) {
+        const mvData: any = {};
+        if (updateData.amountUsd !== undefined) {
+          mvData.amountUsd = updateData.amountUsd;
+          mvData.amountBs = updateData.amountBs;
+          mvData.exchangeRate = updateData.exchangeRate;
+        }
+        if (updateData.description !== undefined) {
+          mvData.reason = `Gasto: ${updated.description}`;
+        }
+        if (Object.keys(mvData).length > 0) {
+          await tx.cashMovement.update({ where: { id: expense.cashMovement.id }, data: mvData });
+        }
+      }
+
+      return updated;
     });
   }
 

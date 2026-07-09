@@ -16,6 +16,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { ExpensesService } from './expenses.service';
 import { ExpenseReportPdfService } from './expense-report-pdf.service';
+import { ExpensePdfService } from './expense-pdf.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -28,6 +29,7 @@ export class ExpensesController {
   constructor(
     private readonly service: ExpensesService,
     private readonly reportPdfService: ExpenseReportPdfService,
+    private readonly pdfService: ExpensePdfService,
   ) {}
 
   // ============ CATEGORIES ============
@@ -103,6 +105,17 @@ export class ExpensesController {
       'Content-Length': buffer.length,
     });
     res!.end(buffer);
+  }
+
+  @Get('expenses/:id/pdf')
+  async getExpensePdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateOne(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="gasto-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('expenses/:id')

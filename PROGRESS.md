@@ -1,5 +1,16 @@
 ﻿# Trinity ERP — Progreso
 
+## 💸 Gastos: tasa editable por día + PDF individual — 2026-07-09
+
+Dos de los tres cambios pedidos para gastos (el tercero, gastos a crédito → recibo/CxP, queda para diseñar):
+
+**1) Tasa a cobrar = la del día del gasto y editable.** Antes el gasto usaba SIEMPRE la tasa de HOY (create y update), y fallaba si hoy no había tasa.
+- `create` (`expenses.service.ts`): nueva `resolveExpenseRate(edited, date)` → prioriza la tasa editada; si no, busca la del día de la FECHA del gasto (`caracasDateKey(date)`). DTO: nuevo `exchangeRate?`.
+- `update`: recalcula con la tasa **editada o la ya guardada del gasto** (nunca la de hoy). Si tiene `CashMovement` vinculado, lo sincroniza en la misma transacción (arqueo no se descuadra).
+- Frontend (`expenses/page.tsx`): input **editable** "Tasa a cobrar"; al cambiar la fecha trae la tasa de ese día (`/exchange-rate/by-date`); las conversiones USD↔Bs usan la tasa del form.
+
+**2) PDF individual del gasto** (para archivar). Nuevo `ExpensePdfService.generateOne(id)` → comprobante de una página (logo/empresa, datos del gasto, caja de montos USD/tasa/Bs, notas, firmas). Endpoint `GET /expenses/:id/pdf`. Botón de descarga (📄) por fila en el listado. Typecheck API+web verde.
+
 ## 🛒 Form de EDICIÓN de compra a paridad con el de CREACIÓN — 2026-07-09
 
 Diego reportó que `/purchases/[id]/edit` no era igual al de carga (`/purchases/new`): le faltaban teclas rápidas, poder crear/editar proveedores y productos inline, etc. El de edición era una versión simplificada. Se **regeneró usando el de creación como plantilla canónica**, conservando solo su lógica propia (cargar la factura PENDING + guardar con PATCH).

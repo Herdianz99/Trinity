@@ -19,6 +19,13 @@ export class CreateExpenseDto {
   @IsNumber()
   amountBs?: number;
 
+  // Tasa de cambio del gasto. Editable: por defecto el frontend trae la del dia
+  // del gasto, pero se puede sobreescribir (dias sin tasa guardada o gasto hecho
+  // con otra tasa). Si no se envia, el backend busca la del dia de la fecha.
+  @IsOptional()
+  @IsNumber()
+  exchangeRate?: number;
+
   @IsDateString()
   date: string;
 
