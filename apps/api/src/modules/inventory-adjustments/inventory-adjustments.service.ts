@@ -256,7 +256,11 @@ export class InventoryAdjustmentsService {
 
         await tx.inventoryAdjustmentItem.update({
           where: { id: existingItem.id },
-          data: { quantity: item.quantity },
+          data: {
+            quantity: item.quantity,
+            // Costo editado a mano (si viene). undefined = no tocar el valor existente.
+            ...(item.unitCostUsd !== undefined ? { unitCostUsd: item.unitCostUsd } : {}),
+          },
         });
       }
 
@@ -315,12 +319,19 @@ export class InventoryAdjustmentsService {
       });
       const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
       const useBrega = adjustment.costMode !== 'COST';
-      const effectiveCost = (p: { costUsd: number; bregaApplies: boolean }) =>
-        p.costUsd * (1 + (useBrega && p.bregaApplies ? bregaGlobalPct : 0) / 100);
+      // Costo efectivo por item: el editado a mano manda; si no, costo (+ brecha) del producto.
+      const effectiveCost = (it: {
+        unitCostUsd: number | null;
+        product: { costUsd: number; bregaApplies: boolean };
+      }) =>
+        it.unitCostUsd != null
+          ? it.unitCostUsd
+          : it.product.costUsd *
+            (1 + (useBrega && it.product.bregaApplies ? bregaGlobalPct : 0) / 100);
       const totalUsd =
         Math.round(
           adjustment.items.reduce(
-            (s, it) => s + it.quantity * effectiveCost(it.product),
+            (s, it) => s + it.quantity * effectiveCost(it),
             0,
           ) * 100,
         ) / 100;

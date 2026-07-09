@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 💲 Ajuste de inventario: costo editable por ítem (reporte + CxC/CxP) — 2026-07-09
+
+Diego pidió poder **editar el costo por ítem** en `/inventory/adjustments`, viendo el costo según el modo elegido (costo puro o costo+brecha), y que **el reporte y la CxC/CxP tomen ese costo**.
+
+- **Modelo:** `InventoryAdjustmentItem.unitCostUsd Float?` (null = usar el costo calculado del producto; con valor = costo fijo del ajuste). Migración `20260709140000_adjustment_item_unit_cost` (aditiva, `ADD COLUMN IF NOT EXISTS`) + línea en `deploy/fix-schema.sql`.
+- **Backend:** el DTO de items acepta `unitCostUsd`; `updateItems` lo persiste; el **total de la CxC/CxP** (proceso) y el **PDF** usan `costo = unitCostUsd ?? (costo producto + brecha si modo BREGA)`. El **movimiento de stock sigue con el costo base** del producto (decisión de Diego — el costo editado solo afecta reporte + cuenta).
+- **Frontend (`adjustments/[id]`):** columna editable **"Costo $" / "Costo+brecha $"** (según `costMode`), pre-llena con el costo efectivo; el total y la CxC/CxP toman lo editado. Al guardar/procesar se persiste el costo de **todos** los ítems → **conservar lo editado** (la CxC no cambia sola aunque cambie el costo del producto después).
+- Retrocompatible (ítems viejos `unitCostUsd=null` → calculan como antes). Verificado local: migración aplicada a `trebol_db`, cliente regenerado, typecheck API+web en verde, query real OK.
+
 ## 🔒 Candado fiscal: NC de venta debe imprimirse en la misma máquina que la factura — 2026-07-09
 
 Riesgo detectado por Diego: se podía imprimir la **nota de crédito fiscal (devolución)** en una caja/máquina fiscal **distinta** a la que emitió la factura. Como la NC referencia la factura por máquina (`iI*`), imprimirla en otra máquina la registra en una memoria fiscal que **no tiene la factura** → descuadra el Z y el libro por máquina.

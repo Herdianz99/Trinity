@@ -22,6 +22,7 @@ interface AdjustmentItem {
     stock?: { warehouseId: string; quantity: number }[];
   };
   quantity: number;
+  unitCostUsd?: number | null;
 }
 
 interface AdjustmentDetail {
@@ -91,6 +92,7 @@ export default function InventoryAdjustmentDetailPage() {
 
   // Items state
   const [quantityValues, setQuantityValues] = useState<Record<string, number>>({});
+  const [costValues, setCostValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
   // Process modal + generacion de CxC/CxP
@@ -141,12 +143,21 @@ export default function InventoryAdjustmentDetailPage() {
     }
   }, [adjustment]);
 
-  // ── Costo total del ajuste (mismo calculo que el reporte PDF) ──
+  // Costo efectivo calculado del producto segun el modo del ajuste (costo, o costo+brecha).
+  function effectiveProductCost(it: AdjustmentItem, costMode: string): number {
+    const bregaPct = costMode !== 'COST' && it.product.bregaApplies ? bregaGlobalPct : 0;
+    return it.product.costUsd * (1 + bregaPct / 100);
+  }
+  // Costo a usar: el editado en pantalla > el guardado (unitCostUsd) > el calculado.
+  function resolveItemCost(it: AdjustmentItem, costMode: string): number {
+    return costValues[it.productId] ?? it.unitCostUsd ?? effectiveProductCost(it, costMode);
+  }
+
+  // ── Costo total del ajuste (mismo calculo que el reporte PDF y la CxC/CxP) ──
   const totalCost = adjustment
     ? adjustment.items.reduce((sum, it) => {
         const qty = quantityValues[it.productId] ?? it.quantity;
-        const bregaPct = adjustment.costMode !== 'COST' && it.product.bregaApplies ? bregaGlobalPct : 0;
-        return sum + qty * (it.product.costUsd * (1 + bregaPct / 100));
+        return sum + qty * resolveItemCost(it, adjustment.costMode);
       }, 0)
     : 0;
 
@@ -247,6 +258,7 @@ export default function InventoryAdjustmentDetailPage() {
       const items = adjustment.items.map(item => ({
         productId: item.productId,
         quantity: Number(quantityValues[item.productId] ?? 0),
+        unitCostUsd: Number(resolveItemCost(item, adjustment.costMode)),
       }));
       const res = await fetch(`/api/proxy/inventory-adjustments/${id}/items`, {
         method: 'PATCH',
@@ -328,6 +340,7 @@ export default function InventoryAdjustmentDetailPage() {
       const items = adjustment.items.map(item => ({
         productId: item.productId,
         quantity: Number(quantityValues[item.productId] ?? 0),
+        unitCostUsd: Number(resolveItemCost(item, adjustment.costMode)),
       }));
       if (items.length > 0) {
         const saveRes = await fetch(`/api/proxy/inventory-adjustments/${id}/items`, {
@@ -524,6 +537,9 @@ export default function InventoryAdjustmentDetailPage() {
                       <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
                       <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Categoria</th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium">Existencias</th>
+                      <th className="text-right px-4 py-3 text-slate-400 font-medium">
+                        {adjustment.costMode === 'COST' ? 'Costo $' : 'Costo+brecha $'}
+                      </th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium">Cantidad</th>
                       <th className="w-12"></th>
                     </tr>
@@ -535,6 +551,20 @@ export default function InventoryAdjustmentDetailPage() {
                         <td className="px-4 py-2.5 text-white">{item.product.name}</td>
                         <td className="px-4 py-2.5 text-slate-400 text-xs hidden md:table-cell">{item.product.category?.name || '—'}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-slate-300">{warehouseStock(item)}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={resolveItemCost(item, adjustment.costMode)}
+                            onChange={(e) => setCostValues(v => ({
+                              ...v,
+                              [item.productId]: Number(e.target.value),
+                            }))}
+                            className="input-field !py-1 text-sm w-24 text-right font-mono"
+                            title="Costo efectivo para este ajuste (reporte + CxC/CxP)"
+                          />
+                        </td>
                         <td className="px-4 py-2.5 text-right">
                           <input
                             type="number"

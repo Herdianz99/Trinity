@@ -2308,3 +2308,6 @@ CREATE INDEX IF NOT EXISTS "idx_customer_name_trgm" ON "Customer" USING gin ("na
 CREATE INDEX IF NOT EXISTS "idx_customer_rif_trgm" ON "Customer" USING gin ("rif" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "idx_customer_phone_trgm" ON "Customer" USING gin ("phone" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "idx_customer_email_trgm" ON "Customer" USING gin ("email" gin_trgm_ops);
+
+-- Costo editable por item del ajuste de inventario (reporte + CxC/CxP).
+ALTER TABLE "InventoryAdjustmentItem" ADD COLUMN IF NOT EXISTS "unitCostUsd" DOUBLE PRECISION;

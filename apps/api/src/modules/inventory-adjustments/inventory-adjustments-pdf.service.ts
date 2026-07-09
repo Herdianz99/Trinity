@@ -38,9 +38,14 @@ export class InventoryAdjustmentsPdfService {
       select: { bregaGlobalPct: true },
     });
     const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
-    const effectiveCost = (p: { costUsd: number; bregaApplies: boolean }): number => {
-      const bregaPct = useBrega && p.bregaApplies ? bregaGlobalPct : 0;
-      return p.costUsd * (1 + bregaPct / 100);
+    // Costo efectivo por item: el editado a mano (unitCostUsd) manda; si no, costo (+ brecha).
+    const effectiveCost = (it: {
+      unitCostUsd: number | null;
+      product: { costUsd: number; bregaApplies: boolean };
+    }): number => {
+      if (it.unitCostUsd != null) return it.unitCostUsd;
+      const bregaPct = useBrega && it.product.bregaApplies ? bregaGlobalPct : 0;
+      return it.product.costUsd * (1 + bregaPct / 100);
     };
     const costModeLabel = useBrega
       ? `Costo + Brecha (${bregaGlobalPct}%)`
@@ -68,7 +73,7 @@ export class InventoryAdjustmentsPdfService {
       let totalImporte = 0;
       let totalUnidades = 0;
       for (const item of adjustment.items) {
-        totalImporte += item.quantity * effectiveCost(item.product);
+        totalImporte += item.quantity * effectiveCost(item);
         totalUnidades += item.quantity;
       }
 
@@ -183,7 +188,7 @@ export class InventoryAdjustmentsPdfService {
             doc.fontSize(7.5).font('Helvetica');
           }
 
-          const unitCost = effectiveCost(item.product);
+          const unitCost = effectiveCost(item);
           const importe = item.quantity * unitCost;
 
           doc.fillColor('#000000');
