@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## 🛒 Form de EDICIÓN de compra a paridad con el de CREACIÓN — 2026-07-09
+
+Diego reportó que `/purchases/[id]/edit` no era igual al de carga (`/purchases/new`): le faltaban teclas rápidas, poder crear/editar proveedores y productos inline, etc. El de edición era una versión simplificada. Se **regeneró usando el de creación como plantilla canónica**, conservando solo su lógica propia (cargar la factura PENDING + guardar con PATCH).
+
+Lo que ahora tiene el de edición (antes solo estaba en creación):
+- **Teclas rápidas**: F9 agrega línea (y enfoca su buscador); flechas ↑/↓ + Enter + Esc para navegar el dropdown de proveedores y los resultados de productos.
+- **Proveedor**: botones "Nuevo"/"Editar" con `SupplierFormModal` inline + navegación con teclado y scroll al resaltado.
+- **Productos**: botón "Nuevo articulo" y lápiz "Editar" por fila con `ProductFormModal` inline; auto-foco en la fila nueva.
+- **Cálculo**: se incorporó `serieIsVatExempt` (serie exenta → ítems exentos), que faltaba en edición.
+- **Omisión deliberada**: NO se portó el auto-relleno de condiciones de crédito por proveedor (keyed a `supplierId`), porque al cargar la factura sobreescribiría los días de crédito ya guardados. Se documentó en el código.
+- Lógica de edición intacta: solo edita facturas `PENDING`, PATCH a `/purchases/:id`, vuelve al detalle. Typecheck web verde.
+
 ## 🔒 Costo manual por producto (no lo tocan compras ni reemplazos) — 2026-07-09
 
 Diego pidió un flag por producto para **congelar el costo**: si está tildado, ninguna operación automática le cambia el `costUsd`. Replica el patrón existente de `manualPrice` pero para el costo.

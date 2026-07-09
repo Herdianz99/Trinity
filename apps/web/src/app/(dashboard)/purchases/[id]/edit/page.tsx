@@ -10,7 +10,10 @@ import {
   Search,
   X,
   Plus,
+  Pencil,
 } from 'lucide-react';
+import SupplierFormModal from '@/components/supplier-form-modal';
+import ProductFormModal from '@/components/product-form-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +24,7 @@ interface Supplier {
   name: string;
   rif: string | null;
   isRetentionAgent: boolean;
+  creditDays?: number;
 }
 
 interface Warehouse {
@@ -122,7 +126,7 @@ export default function EditPurchaseBillPage() {
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean }[]>([]);
+  const [series, setSeries] = useState<{ id: string; name: string; prefix: string; isFiscal: boolean; isVatExempt: boolean }[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingBill, setLoadingBill] = useState(true);
@@ -132,6 +136,8 @@ export default function EditPurchaseBillPage() {
   const [supplierId, setSupplierId] = useState('');
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  // Indice resaltado para navegar el dropdown de proveedores con el teclado (flechas + Enter)
+  const [supplierHighlight, setSupplierHighlight] = useState(0);
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [supplierSerialNumber, setSupplierSerialNumber] = useState('');
@@ -151,7 +157,20 @@ export default function EditPurchaseBillPage() {
   const [productResults, setProductResults] = useState<ProductSearchResult[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
+  // Indice resaltado para navegar los resultados de productos con el teclado (flechas + Enter)
+  const [productHighlight, setProductHighlight] = useState(0);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs a los inputs de busqueda de cada fila, para enfocar la nueva linea (F9)
+  const searchInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [pendingFocusRow, setPendingFocusRow] = useState<number | null>(null);
+
+  // ---- Modales crear/editar proveedor y producto ----
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productModalMode, setProductModalMode] = useState<'create' | 'edit'>('create');
+  const [productModalId, setProductModalId] = useState<string | null>(null);
+  const [productModalRow, setProductModalRow] = useState<number | null>(null);
 
   // ---- Fiscal totals ----
   const [surchargeUsd, setSurchargeUsd] = useState<number>(0);
@@ -170,7 +189,7 @@ export default function EditPurchaseBillPage() {
 
   // ---- Title ----
   useEffect(() => {
-    document.title = `Editar ${billNumber} | Trinity ERP`;
+    document.title = `Editar ${billNumber || 'Factura de Compra'} | Trinity ERP`;
   }, [billNumber]);
 
   // ---- Load bootstrap data ----
@@ -310,6 +329,10 @@ export default function EditPurchaseBillPage() {
     [suppliers, supplierId],
   );
 
+  // NOTA: a diferencia del form de creacion, aqui NO auto-rellenamos las condiciones
+  // de credito segun el proveedor: la factura ya trae sus dias de credito guardados y
+  // un auto-relleno keyed por supplierId los sobreescribiria al cargar.
+
   // ---- Supplier filtering ----
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch.trim()) return suppliers;
@@ -325,6 +348,7 @@ export default function EditPurchaseBillPage() {
   function handleProductSearch(q: string, rowIdx: number) {
     setProductSearch(q);
     setActiveSearchRow(rowIdx);
+    setProductHighlight(0);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (q.length < 2) {
       setProductResults([]);
@@ -337,6 +361,7 @@ export default function EditPurchaseBillPage() {
         if (res.ok) {
           const data = await res.json();
           setProductResults(Array.isArray(data) ? data : []);
+          setProductHighlight(0);
         }
       } catch { /* ignore */ } finally {
         setSearchingProducts(false);
@@ -378,6 +403,7 @@ export default function EditPurchaseBillPage() {
   }
 
   function addEmptyRow() {
+    const newIdx = items.length;
     setItems([
       ...items,
       {
@@ -391,10 +417,75 @@ export default function EditPurchaseBillPage() {
         isService: false,
       },
     ]);
+    // Enfocar la busqueda de la nueva fila para seguir cargando sin usar el mouse
+    setActiveSearchRow(newIdx);
+    setPendingFocusRow(newIdx);
+  }
+
+  // Enfoca el input de busqueda de la fila recien agregada (una vez renderizada)
+  useEffect(() => {
+    if (pendingFocusRow == null) return;
+    searchInputRefs.current[pendingFocusRow]?.focus();
+    setPendingFocusRow(null);
+  }, [pendingFocusRow, items]);
+
+  // Tecla rapida: F9 agrega una nueva linea desde cualquier campo
+  function handleGridKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'F9') {
+      e.preventDefault();
+      addEmptyRow();
+    }
   }
 
   function removeRow(idx: number) {
     setItems(items.filter((_, i) => i !== idx));
+  }
+
+  // ---- Modales crear/editar proveedor y producto ----
+  function openNewSupplier() { setSupplierModalMode('create'); setSupplierModalOpen(true); }
+  function openEditSupplier() { if (supplierId) { setSupplierModalMode('edit'); setSupplierModalOpen(true); } }
+  function openNewProduct() { setProductModalMode('create'); setProductModalId(null); setProductModalRow(null); setProductModalOpen(true); }
+  function openEditProduct(rowIdx: number, prodId: string) { setProductModalMode('edit'); setProductModalId(prodId); setProductModalRow(rowIdx); setProductModalOpen(true); }
+
+  async function handleSupplierSaved(saved: any) {
+    try {
+      const res = await fetch('/api/proxy/suppliers?isActive=true');
+      if (res.ok) { const data = await res.json(); setSuppliers(Array.isArray(data) ? data : data.data || []); }
+    } catch { /* ignore */ }
+    if (saved?.id) { setSupplierId(saved.id); setSupplierSearch(''); setSupplierDropdownOpen(false); }
+    setSupplierModalOpen(false);
+  }
+
+  async function handleProductSaved(saved: any) {
+    setProductModalOpen(false);
+    if (!saved?.id) { setProductModalId(null); setProductModalRow(null); return; }
+    // Leer el detalle autoritativo del producto (codigo/nombre/costo/IVA)
+    let prod: any = saved;
+    try {
+      const res = await fetch(`/api/proxy/products/${saved.id}`);
+      if (res.ok) prod = await res.json();
+    } catch { /* usa lo que devolvio el guardado */ }
+    const costUsd = prod.costUsd || 0;
+    const costValue = currency === 'BS' ? Math.round(costUsd * exchangeRate * 100) / 100 : costUsd;
+    const filled: FormItem = {
+      productId: prod.id, code: prod.code || '', name: prod.name || '',
+      quantity: 1, costUsd: costValue, discountPct: 0,
+      ivaType: prod.ivaType || 'GENERAL', isService: prod.isService || false,
+    };
+    if (productModalMode === 'create') {
+      setItems(prev => [...prev, filled]);
+    } else if (productModalRow != null) {
+      const rowIdx = productModalRow;
+      setItems(prev => {
+        const next = [...prev];
+        const q = next[rowIdx]?.quantity || 1;
+        const d = next[rowIdx]?.discountPct || 0;
+        next[rowIdx] = { ...filled, quantity: q, discountPct: d };
+        return next;
+      });
+    }
+    setProductModalId(null);
+    setProductModalRow(null);
   }
 
   function updateItem(idx: number, field: keyof FormItem, value: any) {
@@ -413,6 +504,8 @@ export default function EditPurchaseBillPage() {
   }, [items, surchargeTouched]);
 
   // ---- Real-time calculations ----
+  const serieIsVatExempt = series.find(s => s.id === serieId)?.isVatExempt === true;
+
   const calculations = useMemo(() => {
     const isBs = currency === 'BS';
 
@@ -421,11 +514,12 @@ export default function EditPurchaseBillPage() {
       const lineBruto = item.costUsd * item.quantity;
       const lineDiscount = lineBruto * (item.discountPct / 100);
       const importePrimario = lineBruto - lineDiscount; // in the selected currency
-      const ivaRate = IVA_RATES[item.ivaType] || 0;
+      const effectiveIvaType = serieIsVatExempt ? 'EXEMPT' : item.ivaType;
+      const ivaRate = IVA_RATES[effectiveIvaType] || 0;
       // importeUsd / importeBs depending on currency
       const importeUsd = isBs ? importePrimario / exchangeRate : importePrimario;
       const importeBs = isBs ? importePrimario : importePrimario * exchangeRate;
-      return { ...item, lineBruto, lineDiscount, importeUsd, importeBs, importePrimario, ivaRate };
+      return { ...item, lineBruto, lineDiscount, importeUsd, importeBs, importePrimario, ivaRate, effectiveIvaType };
     });
 
     const subtotalPrimario = itemCalcs.reduce((sum, i) => sum + i.importePrimario, 0);
@@ -439,7 +533,7 @@ export default function EditPurchaseBillPage() {
 
     // Prorate global discount per item for exempt/taxable split
     const exemptPrimario = itemCalcs.reduce((sum, i) => {
-      if (i.ivaType !== 'EXEMPT') return sum;
+      if (i.effectiveIvaType !== 'EXEMPT') return sum;
       const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
       return sum + i.importePrimario - globalDiscountPrimario * proportion;
     }, 0);
@@ -452,7 +546,7 @@ export default function EditPurchaseBillPage() {
 
     // IVA per item (with global discount prorated)
     const totalIvaPrimario = itemCalcs.reduce((sum, i) => {
-      if (i.ivaType === 'EXEMPT') return sum;
+      if (i.effectiveIvaType === 'EXEMPT') return sum;
       const proportion = subtotalPrimario > 0 ? i.importePrimario / subtotalPrimario : 0;
       const itemAfterGlobalDiscount = i.importePrimario - globalDiscountPrimario * proportion;
       return sum + itemAfterGlobalDiscount * i.ivaRate;
@@ -496,7 +590,7 @@ export default function EditPurchaseBillPage() {
       netPayableUsd,
       netPayableBs,
     };
-  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier, currency]);
+  }, [items, discountGlobalPct, surchargeUsd, exchangeRate, selectedSupplier, currency, serieIsVatExempt]);
 
   // ---- Validation ----
   function validate(): string | null {
@@ -599,8 +693,8 @@ export default function EditPurchaseBillPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6" onKeyDown={handleGridKeyDown}>
+      {/* ═══ Header ═══ */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.push(`/purchases/${id}`)}
@@ -617,7 +711,7 @@ export default function EditPurchaseBillPage() {
         </div>
       </div>
 
-      {/* Message */}
+      {/* ═══ Message ═══ */}
       {message && (
         <div
           className={`px-4 py-3 rounded-lg text-sm border ${
@@ -630,7 +724,7 @@ export default function EditPurchaseBillPage() {
         </div>
       )}
 
-      {/* Form Header */}
+      {/* ═══ Form Header ═══ */}
       <div className="card p-6 relative z-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:1fr_2fr_1fr_1fr] gap-4">
           {/* Col 1: Numeros del proveedor (stacked) */}
@@ -676,9 +770,19 @@ export default function EditPurchaseBillPage() {
           {/* Col 2: Proveedor + Almacen + Responsable (stacked) */}
           <div className="space-y-1.5">
             <div ref={supplierRef} className="relative">
-              <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
-                Proveedor *
-              </label>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="block text-[10px] font-medium text-slate-400">Proveedor *</label>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={openNewSupplier} className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5" title="Nuevo proveedor">
+                    <Plus size={11} /> Nuevo
+                  </button>
+                  {supplierId && (
+                    <button type="button" onClick={openEditSupplier} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5" title="Editar proveedor seleccionado">
+                      <Pencil size={11} /> Editar
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
@@ -693,10 +797,39 @@ export default function EditPurchaseBillPage() {
                   onChange={(e) => {
                     setSupplierSearch(e.target.value);
                     setSupplierDropdownOpen(true);
+                    setSupplierHighlight(0);
                   }}
                   onFocus={() => {
                     setSupplierDropdownOpen(true);
                     setSupplierSearch('');
+                    setSupplierHighlight(0);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!supplierDropdownOpen) {
+                      if (e.key === 'ArrowDown') {
+                        setSupplierDropdownOpen(true);
+                        setSupplierSearch('');
+                        setSupplierHighlight(0);
+                      }
+                      return;
+                    }
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSupplierHighlight((i) => Math.min(i + 1, filteredSuppliers.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSupplierHighlight((i) => Math.max(i - 1, 0));
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const s = filteredSuppliers[supplierHighlight];
+                      if (s) {
+                        setSupplierId(s.id);
+                        setSupplierDropdownOpen(false);
+                        setSupplierSearch('');
+                      }
+                    } else if (e.key === 'Escape') {
+                      setSupplierDropdownOpen(false);
+                    }
                   }}
                   className="input-field !py-1 text-sm pl-9"
                   placeholder="Buscar proveedor..."
@@ -720,16 +853,20 @@ export default function EditPurchaseBillPage() {
                   {filteredSuppliers.length === 0 ? (
                     <div className="px-3 py-3 text-sm text-slate-400">Sin resultados</div>
                   ) : (
-                    filteredSuppliers.map((s) => (
+                    filteredSuppliers.map((s, index) => (
                       <button
                         key={s.id}
                         type="button"
+                        ref={index === supplierHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                        onMouseEnter={() => setSupplierHighlight(index)}
                         onClick={() => {
                           setSupplierId(s.id);
                           setSupplierDropdownOpen(false);
                           setSupplierSearch('');
                         }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          index === supplierHighlight ? 'bg-slate-600' : ''
+                        } ${
                           s.id === supplierId ? 'bg-green-500/10 text-green-400' : 'text-white'
                         }`}
                       >
@@ -779,7 +916,7 @@ export default function EditPurchaseBillPage() {
             </div>
           </div>
 
-          {/* Col 3: Divisa + Fecha factura + Forma de pago (stacked) */}
+          {/* Col 3: Divisa + Fecha factura + Serie (stacked) */}
           <div className="space-y-1.5">
             <div>
               <label className="block text-[10px] font-medium text-slate-400 mb-0.5">
@@ -914,19 +1051,31 @@ export default function EditPurchaseBillPage() {
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* ═══ Items Table ═══ */}
       <div className="card relative z-10">
         <div className="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
             Articulos
           </h3>
-          <button
-            type="button"
-            onClick={addEmptyRow}
-            className="flex items-center gap-1.5 text-sm text-green-400 hover:text-green-300 transition-colors"
-          >
-            <Plus size={16} /> Agregar linea
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={openNewProduct}
+              className="flex items-center gap-1.5 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+              title="Crear un articulo nuevo y agregarlo a la compra"
+            >
+              <Plus size={16} /> Nuevo articulo
+            </button>
+            <button
+              type="button"
+              onClick={addEmptyRow}
+              className="flex items-center gap-1.5 text-sm text-green-400 hover:text-green-300 transition-colors"
+              title="Agregar una linea nueva (F9)"
+            >
+              <Plus size={16} /> Agregar linea
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-slate-700/70 border border-slate-600 text-[10px] text-slate-300 font-mono">F9</kbd>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-visible min-w-0">
@@ -941,7 +1090,7 @@ export default function EditPurchaseBillPage() {
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-center px-3 py-3 text-slate-400 font-medium w-16">% IVA</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'USD' : 'Bs'}</th>
-                <th className="w-10"></th>
+                <th className="w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -974,9 +1123,26 @@ export default function EditPurchaseBillPage() {
                           <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
                           <input
                             type="text"
+                            ref={(el) => { searchInputRefs.current[idx] = el; }}
                             value={activeSearchRow === idx ? productSearch : ''}
                             onChange={(e) => handleProductSearch(e.target.value, idx)}
                             onFocus={() => setActiveSearchRow(idx)}
+                            onKeyDown={(e) => {
+                              if (activeSearchRow !== idx || productResults.length === 0) return;
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setProductHighlight((i) => Math.min(i + 1, productResults.length - 1));
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setProductHighlight((i) => Math.max(i - 1, 0));
+                              } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const p = productResults[productHighlight];
+                                if (p) selectProduct(p, idx);
+                              } else if (e.key === 'Escape') {
+                                setProductResults([]);
+                              }
+                            }}
                             className="input-field !py-1.5 text-sm pl-7 !bg-slate-900/40"
                             placeholder="Buscar producto..."
                           />
@@ -985,12 +1151,16 @@ export default function EditPurchaseBillPage() {
                           )}
                           {activeSearchRow === idx && productResults.length > 0 && (
                             <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                              {productResults.map((p) => (
+                              {productResults.map((p, pIdx) => (
                                 <button
                                   key={p.id}
                                   type="button"
+                                  ref={pIdx === productHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                                  onMouseEnter={() => setProductHighlight(pIdx)}
                                   onClick={() => selectProduct(p, idx)}
-                                  className="w-full text-left px-3 py-2 text-sm hover:bg-slate-600 text-white flex justify-between items-center"
+                                  className={`w-full text-left px-3 py-2 text-sm text-white flex justify-between items-center transition-colors ${
+                                    pIdx === productHighlight ? 'bg-slate-600' : ''
+                                  }`}
                                 >
                                   <span>
                                     <span className="font-mono text-green-400 text-xs mr-1.5">
@@ -1032,7 +1202,7 @@ export default function EditPurchaseBillPage() {
                       <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="any"
                         value={item.costUsd || ''}
                         onChange={(e) => updateItem(idx, 'costUsd', Number(e.target.value))}
                         className="input-field !py-1.5 text-sm w-full text-right font-mono"
@@ -1085,15 +1255,28 @@ export default function EditPurchaseBillPage() {
                       </span>
                     </td>
 
-                    {/* Remove */}
-                    <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeRow(idx)}
-                        className="p-1 text-slate-500 hover:text-red-400 transition-colors"
-                      >
-                        <X size={15} />
-                      </button>
+                    {/* Editar producto + Remove */}
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-center gap-0.5">
+                        {item.productId && (
+                          <button
+                            type="button"
+                            onClick={() => openEditProduct(idx, item.productId)}
+                            className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
+                            title="Editar este articulo"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeRow(idx)}
+                          className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Quitar linea"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1118,7 +1301,7 @@ export default function EditPurchaseBillPage() {
         </div>
       </div>
 
-      {/* Fiscal Totals Footer */}
+      {/* ═══ Fiscal Totals Footer ═══ */}
       {items.some((i) => i.productId) && (
         <div className="card p-6 space-y-4">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
@@ -1291,7 +1474,7 @@ export default function EditPurchaseBillPage() {
         </div>
       )}
 
-      {/* Action Buttons */}
+      {/* ═══ Action Buttons ═══ */}
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
@@ -1310,6 +1493,23 @@ export default function EditPurchaseBillPage() {
           Guardar
         </button>
       </div>
+
+      {/* Modales crear/editar proveedor y producto */}
+      <SupplierFormModal
+        open={supplierModalOpen}
+        mode={supplierModalMode}
+        supplierId={supplierModalMode === 'edit' ? supplierId : null}
+        onClose={() => setSupplierModalOpen(false)}
+        onSaved={handleSupplierSaved}
+      />
+      <ProductFormModal
+        open={productModalOpen}
+        mode={productModalMode}
+        productId={productModalId}
+        defaultSupplierId={supplierId || null}
+        onClose={() => { setProductModalOpen(false); setProductModalId(null); setProductModalRow(null); }}
+        onSaved={handleProductSaved}
+      />
 
     </div>
   );
