@@ -559,7 +559,7 @@ export default function POSPage() {
     if (!customerSearch.trim()) { setCustomerResults([]); return; }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=5&isActive=true`);
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(customerSearch)}&limit=50&isActive=true`);
         const data = await res.json();
         setCustomerResults(data.data || []);
         setCustomerHighlight(0);
@@ -574,7 +574,7 @@ export default function POSPage() {
     if (rif.length < 5) { setClientRifWarning(''); setClientRifMatch(null); return; }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=5&isActive=true`);
+        const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(rif)}&limit=50&isActive=true`);
         const data = await res.json();
         const match = (data.data || []).find((c: any) =>
           c.id !== customerId

@@ -1,5 +1,29 @@
 ﻿# Trinity ERP — Progreso
 
+## 🚀 GO-LIVE empresa grande (inversiones): migración de datos reales a producción — 2026-07-08 (arranque 09-jul)
+
+Se preparó y subió a producción (inversiones) la **data real definitiva** para el arranque del 09-jul. Todo se **ensayó y validó primero en una copia local** (contenedor `postgres:16-alpine` aislado en :5433), y solo al final se empujó a prod con freeze + respaldo de rollback + swap atómico.
+
+### Qué se hizo (en este orden)
+1. **Comparación respaldo base vs prod**: confirmado que restaurar el respaldo base NO servía (es anterior a las fotos/tienda → las perdía). Se optó por **borrado quirúrgico** de la data de prueba.
+2. **Borrado quirúrgico** (transacción, con reposición de stock): se eliminaron 3 facturas de prueba + pagos + caja + 2 stock movements + 4 pedidos online + comandas. Conserva fotos, usuarios/claves, config, anticipo. Validado contra base (solo diferían fotos +3, tasas +2, esquema nuevo).
+3. **Brecha 45 → 35** en CompanyConfig (hoy la cambiaron en Wensoft; los PVP del export ya venían con 35%).
+4. **Migración desde `nueva-lista.xlsx`** (export Wensoft, 9.210 refs) con script `packages/database/prisma/_golive-migracion.ts` (dry-run + apply):
+   - **SYNC 9.207** existentes: costo, precio, ganancia%, **nombre** (53 reordenados) y existencia.
+   - **3 productos nuevos** creados (FER05119, PLO04371, CON03257).
+   - **6.505 movimientos `ADJUSTMENT_IN` `reason='Carga inicial desde Wensoft'`** (uno por producto con stock>0) → **TRAZABILIDAD** (el error de cargas previas era meter existencia sin movimiento). Patrón calcado de la empresa chica.
+   - 51 "solo en BD" (servicio `0` + cables desactivados) se dejaron como estaban; Diego luego los desactivó + categorizó.
+   - 2 Excel de control: `REPORTE-nuevos-a-crear.xlsx`, `REPORTE-solo-en-BD.xlsx`.
+   - Validado: 9.210 precios = PVP del Excel (0 descuadres), invariante stock=Σmovimientos (0 descuadres), match por code correcto (nombres 99.7% iguales).
+5. **Push a prod (Opción A, reemplazo total)**: freeze (`pm2 stop trinity-api`) → respaldo rollback `/root/backups/pre-golive-20260709-0036.dump` → `DROP/CREATE trinity_db` + `pg_restore` de la copia validada → API arriba. Verificado en prod: 9.261 productos, 6.505 movimientos, 0 facturas, brecha 35, 3 fotos, precio 14111001=9.23, tasa hoy (8-jul) y mañana (9-jul).
+6. **Usuarios almacenistas (WAREHOUSE)** para las comandas: `ander19029225@gmail.com` (Anderson Acosta) y `fmariagabriela@gmail.com` (Maria Ferrer) → clave **`Almacen10`**, `mustChangePassword=false`. Login verificado 201 contra la API de prod. Solo consultan.
+7. **Migración de CLIENTES** desde `clientes_limpios.csv` (47.903 filas, export del sistema viejo ya limpio/dedup). Script `packages/database/prisma/_migrar-clientes.ts` (idempotente por `documentType+rif`, lotes con transacción + fallback fila-a-fila, dry-run por defecto, log de fallidos). Se corrió **en el server** (BD local al script) con respaldo previo `/root/backups/pre-clientes-20260709-0121.dump`. Flujo: inspección CSV → dry-run → muestra 100 → carga full. Resultado: **9 → 47.905 clientes** (47.797 creados, 106 actualizados, 0 saltados, 0 errores). Mapeo: RIF `J-003677949` → `documentType='J'` + `rif='003677949'` (texto, conserva ceros); tel/dir vacíos → `NULL`. Validado: 0 duplicados `(documentType,rif)`, encoding/acentos OK, CLIENTE FINAL (V-00000000) intacto. CSV con PII **borrado del server** tras la carga. **Hallazgos reportados (no corregidos):** conteo de vacíos del CSV difería levemente de lo indicado (tel 9.561 vs 9.664, dir 24.288 vs 24.443) y ~158 teléfonos no empiezan en 0 (100 con código país `58`, 106 con <10 dígitos) — ruido menor de la fuente, no bloqueó.
+
+### Notas
+- La clave real del admin la puso Diego en la copia antes del push (se preservó). Las claves de los otros 24 usuarios intactas.
+- Respaldo de rollback en el server; borrar en unos días si todo va bien.
+- La tasa BCV la cubre el cron 8/10pm + catch-up 7am + banner manual (código sin tocar).
+
 ## 🏷️ POS: descuento en lote a todas las líneas — 2026-07-08
 
 Diego pidió poder aplicar el **mismo descuento a todos los ítems** de la factura de una sola vez (con 10+ ítems ponerlo uno por uno es fastidioso). Implementado en `sales/pos/page.tsx`.
@@ -33,7 +57,7 @@ Contexto: la tienda debe mostrar USD **y** Bs como Trinity, pero nadie puede act
 - **Entrega A ✅ (tienda, commit `b5f93c2` en `tienda-snapshot`):** "$X / Bs Y" en tarjeta, detalle, carrito y checkout (`formatBs`). Solo si `priceBs > 0`.
   - **FIX del carrito (commit `9c5de24`):** el carrito se persiste en localStorage con el producto (incl. `priceBs`) → mostraba la tasa del día en que se agregó el ítem (Diego lo cazó: $119 daba Bs 80.316 = tasa de ayer, cuando la de hoy es 685,94). Ahora `syncFromCatalog()` re-baja `catalog.json` (cache-bust 60s) y refresca precio/tasa/nombre/stock por `code` al montar, al abrir el carrito y al entrar al checkout. El listado/detalle ya estaban frescos; era solo el carrito.
 - **Entrega B ✅ DESPLEGADA a inversiones (commit `f63d854`, sin migración):** cron diario **8pm y 10pm Caracas** (`timeZone:'America/Caracas'`) que scrapea BCV (`ExchangeRateService.fetchAndSave`) y hace `upsert` **bajo la fecha de MAÑANA**; + **7am** red de seguridad que guarda bajo HOY si faltara. Nunca pisa una tasa MANUAL; si el scrape es `null` no toca nada. Scraper verificado en vivo (`#dolar strong` → 685,94). Va **solo en inversiones** por ahora (eltrebol lo recibe en su próximo deploy; es seguro y le quita el error matutino "registra la tasa").
-  - **Verificar esta noche (después de 8pm):** `ssh root@134.209.164.59 "sudo -u postgres psql trinity_db -c 'SELECT date, rate, source FROM \"ExchangeRate\" ORDER BY date DESC LIMIT 3;'"` → debe aparecer la fila de mañana con `source=BCV`.
+  - **✅ VERIFICADO (2026-07-08, después de 8pm):** el cron corrió y guardó la fila de **2026-07-09 = 700,2249 `source=BCV`** (`createdAt` 07-09 00:00 UTC = 8 PM Caracas del 08-jul). Cron de tasa automática **confirmado funcionando en inversiones**. (Comando de chequeo: `ssh root@134.209.164.59 "sudo -u postgres psql trinity_db -c 'SELECT date, rate, source FROM \"ExchangeRate\" ORDER BY date DESC LIMIT 3;'"`.)
 - **Cambio clave:** las 2 consultas de tasa de la tienda (`store-export.fetchData` y `public.service.createOrder`) pasan de *"la más nueva por fecha"* (`findFirst desc`) a **"la última con fecha ≤ hoy"** → auto-cambia a medianoche, NO se adelanta con la fila de mañana pre-cargada, y si BCV se cae cae a la última buena (no muestra Bs 0). **El POS NO se toca** (ya usa fecha exacta = hoy; bonus: pre-cargar mañana elimina el error matutino "registra la tasa antes de facturar").
 - **BCV/fines de semana (aclarado por Diego):** BCV publica el viernes la tasa del lunes y por ley aplica sáb/dom/lun; el cron corre TODOS los días llenando la fecha de mañana → no hay huecos. El único riesgo real es que la web se caiga → lo cubre "≤ hoy".
 - **⚠️ Pendiente para el jefe** (memoria `pedido-online-tasa-facturacion`): el pedido ya congela su tasa al crearse (`exchangeRate`/`totalUsd`/`totalBs`/`priceBs`), así cuadra con lo que pagó el cliente aunque se procese al día siguiente. Falta decidir con el jefe qué tasa usa la **factura** al facturar el pedido al día siguiente (tasa del pedido vs tasa de emisión → diferencial cambiario fiscal).
