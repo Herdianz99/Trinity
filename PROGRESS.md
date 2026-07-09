@@ -1,5 +1,21 @@
 ﻿# Trinity ERP — Progreso
 
+## 💳 Corregir método de pago de una factura + fix IGTF del saldo a favor — 2026-07-09
+
+Dos cosas del POS/facturación:
+
+### Corregir método de pago (ADMIN/SUPERVISOR)
+Por la alta rotación de cajeros y la cantidad de puntos/pago móvil, a veces eligen el método equivocado. Se agregó, en el detalle de la factura (`sales/invoices/[id]`, pestaña Pagos), un botón **"Corregir métodos de pago"** (solo ADMIN/SUPERVISOR) que permite cambiar el **método + referencia** de cada pago.
+- Backend: `PATCH /invoices/:id/payments` (guard de rol) → `updatePaymentMethods` valida **mismo tipo** (`isDivisa`/`isCash`/`createsReceivable` iguales); **no toca IGTF, totales ni CxC** — solo corrige el desglose del arqueo.
+- El dropdown usa `/payment-methods/flat` (los **puntos hijos** seleccionables, no el grupo "Punto de venta").
+- Aviso si la factura ya se imprimió fiscal (se corrige la BD, no el ticket físico; el libro fiscal no usa el método).
+
+### Fix: el saldo a favor generaba IGTF en el POS
+Bug: en el POS, usar "Saldo a favor" del cliente **generaba IGTF fantasma**. Causa: el pago se creaba con `isDivisa: true` (truco para que el input fuera en USD), y ese flag lo usa el cálculo de IGTF/vuelto → lo contaba como divisa. El backend ya estaba bien (usa el flag real de la BD, `isDivisa=false`), así que había descuadre POS vs factura guardada.
+- Fix limpio (`sales/pos/page.tsx`): el pago de saldo a favor ahora es `isDivisa: false`; se agregó el predicado `usdInput` (`isDivisa || pm_saldo_favor`) para mantener el input en USD (Bs derivado) sin que cuente como divisa en IGTF ni vuelto.
+
+Ambos frontend + (el de método) un endpoint backend. Sin schema ni migraciones. Typecheck API+web en verde.
+
 ## 💲 Ajuste de inventario: costo editable por ítem (reporte + CxC/CxP) — 2026-07-09
 
 Diego pidió poder **editar el costo por ítem** en `/inventory/adjustments`, viendo el costo según el modo elegido (costo puro o costo+brecha), y que **el reporte y la CxC/CxP tomen ese costo**.

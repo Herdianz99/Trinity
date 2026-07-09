@@ -61,7 +61,8 @@ interface InvoiceItem {
 
 interface Payment {
   id: string;
-  method: { name: string } | null;
+  methodId: string;
+  method: { id: string; name: string; isDivisa: boolean; isCash: boolean; createsReceivable: boolean } | null;
   amountUsd: number;
   amountBs: number;
   exchangeRate: number;
@@ -194,6 +195,20 @@ export default function InvoiceDetailPage() {
 
   const hasPerm = (perm: string) => userRole === 'ADMIN' || userPermissions.includes(perm);
   const isAdmin = userRole === 'ADMIN';
+  const isAdminOrSupervisor = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
+
+  // Correccion de metodos de pago (solo ADMIN/SUPERVISOR, mismo tipo).
+  const [payMethods, setPayMethods] = useState<any[]>([]);
+  const [editingPayments, setEditingPayments] = useState(false);
+  const [paymentEdits, setPaymentEdits] = useState<Record<string, { methodId: string; reference: string }>>({});
+  useEffect(() => {
+    // 'flat' = lista aplanada de metodos seleccionables (los PUNTOS hijos, no el grupo padre),
+    // igual que el POS. Con /payment-methods (arbol) solo saldria "Punto de venta" (el grupo).
+    fetch('/api/proxy/payment-methods/flat').then(r => r.json()).then(d => {
+      const list = Array.isArray(d) ? d : d.data || [];
+      setPayMethods(list.filter((m: any) => m.isActive));
+    }).catch(() => {});
+  }, []);
 
   const [fiscalLoading, setFiscalLoading] = useState(false);
   const [reprintLoading, setReprintLoading] = useState(false);
@@ -375,6 +390,48 @@ export default function InvoiceDetailPage() {
       }
       setMessage({ type: 'success', text: 'Estado fiscal actualizado' });
       setEditingFiscal(false);
+      fetchInvoice();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  };
+
+  // Opciones de metodo para un pago: solo metodos del MISMO tipo (mismos flags), para
+  // no alterar IGTF/CxC. Se asegura de incluir el metodo actual aunque este desactivado.
+  const paymentMethodOptions = (p: Payment) => {
+    const cur = p.method;
+    const opts = payMethods.filter(
+      (m: any) => cur && m.isDivisa === cur.isDivisa && m.isCash === cur.isCash && m.createsReceivable === cur.createsReceivable,
+    );
+    if (cur && !opts.find((m: any) => m.id === cur.id)) opts.unshift(cur);
+    return opts;
+  };
+
+  const startEditPayments = () => {
+    if (!invoice) return;
+    const init: Record<string, { methodId: string; reference: string }> = {};
+    invoice.payments.forEach(p => { init[p.id] = { methodId: p.methodId, reference: p.reference || '' }; });
+    setPaymentEdits(init);
+    setEditingPayments(true);
+  };
+
+  const handleSavePaymentMethods = async () => {
+    if (!invoice) return;
+    setMessage(null);
+    try {
+      const payments = invoice.payments.map(p => ({
+        paymentId: p.id,
+        methodId: paymentEdits[p.id]?.methodId ?? p.methodId,
+        reference: paymentEdits[p.id]?.reference ?? (p.reference || ''),
+      }));
+      const res = await fetch(`/api/proxy/invoices/${id}/payments`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payments }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Error'); }
+      setMessage({ type: 'success', text: 'Metodos de pago corregidos' });
+      setEditingPayments(false);
       fetchInvoice();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -782,6 +839,26 @@ export default function InvoiceDetailPage() {
               <div className="text-center py-12 text-slate-500">Sin pagos registrados</div>
             ) : (
               <>
+                {isAdminOrSupervisor && (
+                  <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2 border-b border-slate-700/50">
+                    <span className="text-xs text-slate-500">
+                      {editingPayments && 'Solo métodos del mismo tipo (no cambia IGTF ni CxC).'}
+                      {editingPayments && invoice.fiscalPrinted && (
+                        <span className="text-amber-400"> Ya se imprimió fiscal: se corrige la BD, no el ticket físico.</span>
+                      )}
+                    </span>
+                    {!editingPayments ? (
+                      <button onClick={startEditPayments} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                        Corregir métodos de pago
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setEditingPayments(false)} className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors">Cancelar</button>
+                        <button onClick={handleSavePaymentMethods} className="text-xs px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-500 transition-colors">Guardar</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-700/50">
@@ -799,11 +876,30 @@ export default function InvoiceDetailPage() {
                   <tbody>
                     {invoice.payments.map(p => (
                       <tr key={p.id} className="border-b border-slate-700/30">
-                        <td className="px-4 py-3 text-slate-300">{p.method?.name || 'Metodo'}</td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {editingPayments ? (
+                            <select
+                              value={paymentEdits[p.id]?.methodId ?? p.methodId}
+                              onChange={e => setPaymentEdits(s => ({ ...s, [p.id]: { methodId: e.target.value, reference: s[p.id]?.reference ?? (p.reference || '') } }))}
+                              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm focus:border-green-500 focus:outline-none"
+                            >
+                              {paymentMethodOptions(p).map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                          ) : (p.method?.name || 'Metodo')}
+                        </td>
                         <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-400 hidden md:table-cell">{p.exchangeRate?.toFixed(4)}</td>
-                        <td className="px-4 py-3 text-slate-400 text-xs hidden md:table-cell">{p.reference || '—'}</td>
+                        <td className="px-4 py-3 text-slate-400 text-xs hidden md:table-cell">
+                          {editingPayments ? (
+                            <input
+                              value={paymentEdits[p.id]?.reference ?? (p.reference || '')}
+                              onChange={e => setPaymentEdits(s => ({ ...s, [p.id]: { methodId: s[p.id]?.methodId ?? p.methodId, reference: e.target.value } }))}
+                              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs w-full focus:border-green-500 focus:outline-none"
+                              placeholder="—"
+                            />
+                          ) : (p.reference || '—')}
+                        </td>
                         {invoice.payments.some(pp => pp.igtfUsd > 0) && (
                           <td className="px-4 py-3 text-right font-mono text-amber-400">{p.igtfUsd > 0 ? `$${p.igtfUsd.toFixed(2)}` : '—'}</td>
                         )}

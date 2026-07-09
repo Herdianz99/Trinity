@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
+import { UpdatePaymentMethodsDto } from './dto/update-payment-methods.dto';
 import { UserRole } from '@prisma/client';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { buildPrintAreaGroups } from '../print-jobs/print-area-grouping';
@@ -1281,6 +1282,62 @@ export class InvoicesService {
       where: { id },
       data: { controlNumber },
     });
+  }
+
+  // Corregir el METODO de pago (y referencia) de los pagos de una factura, sin tocar
+  // montos/IGTF/CxC. Solo permite intercambiar por metodos del MISMO tipo (isDivisa,
+  // isCash, createsReceivable iguales) para no alterar el IGTF ni la cuenta por cobrar.
+  // El uso tipico: el cajero eligio el punto / pago movil equivocado (mismo tipo).
+  // Restringido a ADMIN/SUPERVISOR en el controller.
+  async updatePaymentMethods(id: string, dto: UpdatePaymentMethodsDto) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: { payments: { include: { method: true } } },
+    });
+    if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+    const newMethodIds = [...new Set(dto.payments.map((p) => p.methodId))];
+    const methods = await this.prisma.paymentMethod.findMany({
+      where: { id: { in: newMethodIds } },
+    });
+    const methodMap = new Map(methods.map((m) => [m.id, m]));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const edit of dto.payments) {
+        const payment = invoice.payments.find((p) => p.id === edit.paymentId);
+        if (!payment) {
+          throw new BadRequestException('Un pago no pertenece a esta factura');
+        }
+        const newMethod = methodMap.get(edit.methodId);
+        if (!newMethod) throw new BadRequestException('Metodo de pago no encontrado');
+        const cur = payment.method;
+        // Mismo tipo = mismos flags que afectan IGTF (isDivisa), arqueo de efectivo
+        // (isCash) y cuenta por cobrar (createsReceivable). Si cambian, se bloquea.
+        const sameType =
+          newMethod.id === cur.id ||
+          (newMethod.isDivisa === cur.isDivisa &&
+            newMethod.isCash === cur.isCash &&
+            newMethod.createsReceivable === cur.createsReceivable);
+        if (!sameType) {
+          throw new BadRequestException(
+            `No se puede cambiar "${cur.name}" por "${newMethod.name}": son de distinto tipo ` +
+              `(divisa / efectivo / credito). Eso afectaria el IGTF o la cuenta por cobrar. ` +
+              `Solo se permite corregir entre metodos del mismo tipo.`,
+          );
+        }
+        await tx.payment.update({
+          where: { id: edit.paymentId },
+          data: {
+            methodId: edit.methodId,
+            ...(edit.reference !== undefined
+              ? { reference: edit.reference || null }
+              : {}),
+          },
+        });
+      }
+    });
+
+    return this.findOne(id);
   }
 
   async cancel(id: string, user: { id: string; role: UserRole }) {

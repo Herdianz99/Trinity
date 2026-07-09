@@ -18,7 +18,10 @@ import { InvoicesService } from './invoices.service';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
+import { UpdatePaymentMethodsDto } from './dto/update-payment-methods.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('Invoices')
 @ApiBearerAuth()
@@ -167,6 +170,18 @@ export class InvoicesController {
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
     return this.service.cancel(id, user);
+  }
+
+  // Corregir metodo de pago (y referencia) de los pagos — solo ADMIN/SUPERVISOR.
+  // Solo intercambia por metodos del mismo tipo (validado en el service); no toca IGTF/CxC.
+  @Patch(':id/payments')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  updatePaymentMethods(
+    @Param('id') id: string,
+    @Body() dto: UpdatePaymentMethodsDto,
+  ) {
+    return this.service.updatePaymentMethods(id, dto);
   }
 
   @Delete(':id')

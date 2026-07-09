@@ -869,9 +869,12 @@ export default function POSPage() {
         numValue = Math.min(numValue, creditBalance.totalUsd);
       }
       const updated = { ...p, [field]: p.methodId === 'pm_saldo_favor' && field === 'amountUsd' ? numValue : value };
-      if (field === 'amountUsd' && p.isDivisa) {
+      // El saldo a favor esta denominado en USD (aunque isDivisa=false): el monto se
+      // ingresa en USD y el Bs se deriva, igual que un pago en divisa.
+      const usdInput = p.isDivisa || p.methodId === 'pm_saldo_favor';
+      if (field === 'amountUsd' && usdInput) {
         updated.amountBs = Math.round(Number(updated.amountUsd) * exchangeRate * 100) / 100;
-      } else if (field === 'amountBs' && !p.isDivisa) {
+      } else if (field === 'amountBs' && !usdInput) {
         updated.amountUsd = exchangeRate > 0 ? Math.round(Number(value) / exchangeRate * 100) / 100 : 0;
       }
       return updated;
@@ -2224,7 +2227,9 @@ export default function POSPage() {
                       setPayments(prev => [...prev, {
                         methodId: 'pm_saldo_favor',
                         methodName: 'Saldo a Favor',
-                        isDivisa: true,
+                        // NO es divisa (coincide con la BD): asi no genera IGTF ni cuenta como
+                        // efectivo para el vuelto. El input sigue siendo en USD (ver usdInput).
+                        isDivisa: false,
                         amountUsd: Math.round(useAmount * 100) / 100,
                         amountBs: Math.round(useAmount * exchangeRate * 100) / 100,
                         reference: '',
@@ -2252,7 +2257,7 @@ export default function POSPage() {
                             value={p.amountUsd}
                             onChange={n => updatePayment(idx, 'amountUsd', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            readOnly={!p.isDivisa}
+                            readOnly={!p.isDivisa && p.methodId !== 'pm_saldo_favor'}
                           />
                         </div>
                         <div>
@@ -2261,7 +2266,7 @@ export default function POSPage() {
                             value={p.amountBs}
                             onChange={n => updatePayment(idx, 'amountBs', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            readOnly={p.isDivisa}
+                            readOnly={p.isDivisa || p.methodId === 'pm_saldo_favor'}
                           />
                         </div>
                         <div>
