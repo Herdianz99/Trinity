@@ -185,8 +185,15 @@ export class ReceiptsService {
         if (note.appliedAt) throw new BadRequestException(`Nota ${note.number} ya fue aplicada`);
 
         const isCredit = ['NCV', 'NCC'].includes(note.type);
-        const amountUsd = note.totalUsd;
-        const amountBsHistoric = note.totalBs;
+        // Saldo restante de la nota: permite aplicarla/reintegrarla PARCIALMENTE (igual que el
+        // saldo a favor del POS ya se consume parcial via paidAmountUsd). Antes se forzaba el
+        // total, asi que si parte de la nota ya se habia usado en una compra, no se podia
+        // reintegrar solo el restante.
+        const remaining = this.round2(note.totalUsd - (note.paidAmountUsd || 0));
+        if (remaining <= 0.01) throw new BadRequestException(`Nota ${note.number} ya fue aplicada completamente`);
+        const amountUsd = item.amountUsd ? Math.min(this.round2(item.amountUsd), remaining) : remaining;
+        const proportion = note.totalUsd > 0 ? amountUsd / note.totalUsd : 0;
+        const amountBsHistoric = this.round2(note.totalBs * proportion);
         const amountBsToday = this.round2(amountUsd * effectiveRate);
 
         items.push({
@@ -486,10 +493,22 @@ export class ReceiptsService {
             },
           });
         } else if ((item.itemType === 'CREDIT_NOTE' || item.itemType === 'DEBIT_NOTE') && item.creditDebitNoteId) {
-          // Mark note as applied
+          // Aplicacion PARCIAL: sumar al paidAmountUsd de la nota (no marcar todo aplicado).
+          // Re-leer fresco dentro de la tx para validar el saldo (evita doble aplicacion si
+          // otro recibo la aplico antes). Solo se marca appliedAt cuando se consume del todo.
+          const note = await tx.creditDebitNote.findUnique({ where: { id: item.creditDebitNoteId } });
+          if (!note) throw new BadRequestException('La nota ya no existe');
+          const remaining = this.round2(note.totalUsd - (note.paidAmountUsd || 0));
+          if (item.amountUsd > remaining + 0.01) {
+            throw new BadRequestException(
+              `La nota ${note.number} ya no tiene saldo suficiente (restante: $${remaining.toFixed(2)}). Posiblemente ya fue aplicada por otro recibo.`,
+            );
+          }
+          const newPaid = this.round2((note.paidAmountUsd || 0) + item.amountUsd);
+          const fullyApplied = newPaid >= this.round2(note.totalUsd) - 0.01;
           await tx.creditDebitNote.update({
             where: { id: item.creditDebitNoteId },
-            data: { appliedAt: new Date() },
+            data: { paidAmountUsd: newPaid, ...(fullyApplied ? { appliedAt: new Date() } : {}) },
           });
         } else if (item.itemType === 'IVA_RETENTION' && item.ivaRetentionId) {
           // Mark IVA retention as applied

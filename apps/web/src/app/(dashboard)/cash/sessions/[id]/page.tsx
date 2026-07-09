@@ -233,6 +233,38 @@ export default function CashSessionDetailPage() {
               </>
             )}
 
+            {summary.receiptCollectionsByMethod?.length > 0 && (
+              <>
+                <div className="my-3 border-t border-slate-700/50" />
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Cobros CxC (recibos)</h3>
+                <div className="space-y-1.5">
+                  {summary.receiptCollectionsByMethod.map((m: any) => (
+                    <div key={m.methodName} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-emerald-500/70"> · gaveta</span>}</span>
+                      <span className="text-slate-200">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Los cobros en efectivo ya estan en el efectivo esperado.</p>
+              </>
+            )}
+
+            {summary.receiptPaymentsByMethod?.length > 0 && (
+              <>
+                <div className="my-3 border-t border-slate-700/50" />
+                <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Pagos CxP (recibos)</h3>
+                <div className="space-y-1.5">
+                  {summary.receiptPaymentsByMethod.map((m: any) => (
+                    <div key={m.methodName} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-red-500/70"> · gaveta</span>}</span>
+                      <span className="text-red-300">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Los pagos en efectivo ya estan restados del efectivo esperado.</p>
+              </>
+            )}
+
             {(summary.movementsIncomeUsd > 0 || summary.movementsExpenseUsd > 0) && (
               <>
                 <div className="my-3 border-t border-slate-700/50" />

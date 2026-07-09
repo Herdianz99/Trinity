@@ -190,6 +190,20 @@ export default function CashMovementsPage() {
             <div className="text-red-400 font-semibold">-{fmtUsd(summary.expenseUsd)}</div>
             <div className="text-slate-400 text-sm">-{fmtBs(summary.expenseBs)}</div>
           </div>
+          {summary.collectionCount > 0 && (
+            <div className="card p-3">
+              <div className="text-xs text-slate-400">Cobros CxC ({summary.collectionCount})</div>
+              <div className="text-emerald-400 font-semibold">{fmtUsd(summary.collectionUsd)}</div>
+              <div className="text-slate-400 text-sm">{fmtBs(summary.collectionBs)}</div>
+            </div>
+          )}
+          {summary.cxpCount > 0 && (
+            <div className="card p-3">
+              <div className="text-xs text-slate-400">Pagos CxP ({summary.cxpCount})</div>
+              <div className="text-red-400 font-semibold">-{fmtUsd(summary.cxpUsd)}</div>
+              <div className="text-slate-400 text-sm">-{fmtBs(summary.cxpBs)}</div>
+            </div>
+          )}
           <div className="card p-3">
             <div className="text-xs text-slate-400">Registros</div>
             <div className="text-white font-semibold">{total}</div>
@@ -235,8 +249,11 @@ export default function CashMovementsPage() {
             <tbody>
               {rows.map((r, i) => {
                 const isMov = r.kind === 'MOVEMENT';
+                const isReceipt = r.kind === 'RECEIPT';
+                const isCxp = isReceipt && r.receiptType === 'PAYMENT';
                 const isExpense = isMov && r.movementType === 'EXPENSE';
-                const sign = isExpense ? '-' : '';
+                const isOutflow = isExpense || isCxp; // egreso manual o pago CxP
+                const sign = isOutflow ? '-' : '';
                 return (
                   <tr key={`${r.kind}-${r.sessionId}-${i}`} className="border-b border-slate-700/30 hover:bg-slate-800/30">
                     <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDateTime(r.date)}</td>
@@ -247,18 +264,24 @@ export default function CashMovementsPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${isExpense ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}`}>
                           {isExpense ? 'Egreso' : 'Ingreso'}
                         </span>
+                      ) : isReceipt ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${isCxp ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}`}>
+                          {isCxp ? 'Pago CxP' : 'Cobro CxC'} · {r.methodName}
+                        </span>
                       ) : (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-200">{r.methodName}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-slate-300">
-                      {isMov ? r.concept : (
+                      {isMov ? r.concept : isReceipt ? (
+                        <span><span className="text-white">{r.receiptNumber}</span> <span className="text-slate-500">·</span> {r.partyName}</span>
+                      ) : (
                         <span><span className="text-white">{r.invoiceNumber}</span> <span className="text-slate-500">·</span> {r.customerName}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-slate-400">{isMov ? (r.userName || '—') : (r.reference || '—')}</td>
-                    <td className={`px-3 py-2.5 text-right ${isExpense ? 'text-red-400' : 'text-white'}`}>{sign}{fmtUsd(r.amountUsd)}</td>
-                    <td className={`px-3 py-2.5 text-right ${isExpense ? 'text-red-400' : 'text-slate-300'}`}>{sign}{fmtBs(r.amountBs)}</td>
+                    <td className={`px-3 py-2.5 text-right ${isOutflow ? 'text-red-400' : 'text-white'}`}>{sign}{fmtUsd(r.amountUsd)}</td>
+                    <td className={`px-3 py-2.5 text-right ${isOutflow ? 'text-red-400' : 'text-slate-300'}`}>{sign}{fmtBs(r.amountBs)}</td>
                   </tr>
                 );
               })}

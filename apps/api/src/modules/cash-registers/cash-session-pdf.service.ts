@@ -207,6 +207,19 @@ export class CashSessionPdfService {
       orderBy: { createdAt: 'asc' },
     });
 
+    // Recibos CxC/CxP posteados a esta sesion (excluye reintegros que ya crean CashMovement)
+    const sessionReceipts = await this.prisma.receipt.findMany({
+      where: { cashSessionId: sessionId, status: 'POSTED', NOT: { type: 'COLLECTION', totalUsd: { lt: -0.01 } } },
+      include: {
+        payments: { include: { method: { select: { name: true } } } },
+        customer: { select: { name: true } },
+        supplier: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const collections = sessionReceipts.filter((r) => r.type === 'COLLECTION');
+    const cxpPayments = sessionReceipts.filter((r) => r.type === 'PAYMENT');
+
     // ── Render ─────────────────────────────────────────────
     const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
 
@@ -293,6 +306,37 @@ export class CashSessionPdfService {
       y += 12;
     }
 
+    // Recibos de cobro/pago (CxC/CxP) posteados a esta sesion
+    const renderReceiptGroup = (title: string, list: any[]) => {
+      if (list.length === 0) return;
+      y = this.checkPage(doc, y, 60);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text(title, 40, y);
+      y += 18;
+      y = this.drawTableHeader(doc, y, MOV_COLS);
+      let tu = 0, tb = 0;
+      for (const r of list) {
+        for (const p of r.payments) {
+          y = this.checkPage(doc, y, 30);
+          if (y === 40) y = this.drawTableHeader(doc, y, MOV_COLS);
+          tu += p.amountUsd; tb += p.amountBs;
+          y = this.drawRow(doc, y, MOV_COLS, [
+            this.time(r.createdAt),
+            r.number || '—',
+            r.customer?.name || r.supplier?.name || '—',
+            p.method?.name || '',
+            `$${this.fmt(p.amountUsd)}`,
+            this.fmt(p.amountBs),
+          ]);
+        }
+      }
+      doc.moveTo(40, y).lineTo(555, y).stroke('#cbd5e1');
+      y += 3;
+      y = this.drawRow(doc, y, MOV_COLS, ['', '', '', 'Total', `$${this.fmt(tu)}`, this.fmt(tb)], true);
+      y += 10;
+    };
+    renderReceiptGroup('COBROS CxC (recibos)', collections);
+    renderReceiptGroup('PAGOS CxP (recibos)', cxpPayments);
+
     // Seccion de movimientos de caja
     y = this.checkPage(doc, y, 70);
     doc.fontSize(10).font('Helvetica-Bold').text('MOVIMIENTOS DE CAJA (ingresos / egresos / gastos)', 40, y);
@@ -355,8 +399,10 @@ export class CashSessionPdfService {
     const company = config?.companyName || 'Trinity ERP';
 
     const RIGHT = 555;
-    const payments = rows.filter((r) => r.kind === 'PAYMENT');
+    // Los cobros CxC (recibos COLLECTION) se agrupan junto a los pagos de venta por metodo.
+    const payments = rows.filter((r) => r.kind === 'PAYMENT' || (r.kind === 'RECEIPT' && r.receiptType === 'COLLECTION'));
     const movements = rows.filter((r) => r.kind === 'MOVEMENT');
+    const cxpReceipts = rows.filter((r) => r.kind === 'RECEIPT' && r.receiptType === 'PAYMENT');
 
     // Agrupar pagos por metodo
     const groupsMap = new Map<string, any>();
@@ -420,8 +466,8 @@ export class CashSessionPdfService {
           this.shortDateTime(p.date),
           p.cashRegisterName || '—',
           p.cashierName || '—',
-          p.invoiceNumber || 'S/N',
-          p.customerName || 'Sin cliente',
+          p.invoiceNumber || p.receiptNumber || 'S/N',
+          p.customerName || p.partyName || 'Sin cliente',
           p.reference || '—',
           `$${this.fmt(p.amountUsd)}`,
           this.fmt(p.amountBs),
@@ -475,6 +521,33 @@ export class CashSessionPdfService {
         y = this.drawRow(doc, y, G_MOV_COLS, ['', '', '', '', '', 'Ingresos', `$${this.fmt(summary.incomeUsd)}`, this.fmt(summary.incomeBs)], true);
         y = this.drawRow(doc, y, G_MOV_COLS, ['', '', '', '', '', 'Egresos', `-$${this.fmt(summary.expenseUsd)}`, this.fmt(summary.expenseBs)], true);
       }
+    }
+
+    // Pagos CxP por recibo (salidas) — seccion aparte
+    if (cxpReceipts.length > 0) {
+      y = this.checkPage(doc, y, 70);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('PAGOS CxP (recibos)', 40, y);
+      y += 18;
+      y = this.drawTableHeader(doc, y, G_MOV_COLS, RIGHT);
+      let tu = 0, tb = 0;
+      for (const r of cxpReceipts) {
+        y = this.checkPage(doc, y, 30);
+        if (y === 40) y = this.drawTableHeader(doc, y, G_MOV_COLS, RIGHT);
+        tu += r.amountUsd; tb += r.amountBs;
+        y = this.drawRowWrap(doc, y, G_MOV_COLS, [
+          this.shortDateTime(r.date),
+          r.cashRegisterName || '—',
+          r.cashierName || '—',
+          'Pago CxP',
+          `${r.receiptNumber || ''}  ${r.partyName || ''}`.trim() || '—',
+          r.methodName || '',
+          `-$${this.fmt(r.amountUsd)}`,
+          `-${this.fmt(r.amountBs)}`,
+        ]);
+      }
+      doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#cbd5e1');
+      y += 3;
+      y = this.drawRow(doc, y, G_MOV_COLS, ['', '', '', '', '', 'Total CxP', `-$${this.fmt(tu)}`, this.fmt(tb)], true);
     }
 
     return this.toBuffer(doc);

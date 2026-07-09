@@ -474,6 +474,46 @@ export class CashRegistersService {
       }
     }
 
+    // ── Recibos de cobro/pago posteados a esta sesion (CxC / CxP) ───────────
+    // Un recibo POSTED es inmutable (cancel() solo permite anular DRAFT), asi que
+    // filtrar por estado basta — sin logica de reversa. Se excluyen los reintegros
+    // (COLLECTION con total negativo) que ya crean su propio CashMovement en
+    // receipts.post() (evita doble conteo).
+    const sessionReceipts = await this.prisma.receipt.findMany({
+      where: {
+        cashSessionId: sessionId,
+        status: 'POSTED',
+        NOT: { type: 'COLLECTION', totalUsd: { lt: -0.01 } },
+      },
+      include: { payments: { include: { method: true } } },
+    });
+
+    const collectionsByMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
+    const cxpByMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
+    let collectionsCashUsd = 0, collectionsCashBs = 0, cxpCashUsd = 0, cxpCashBs = 0;
+
+    for (const rc of sessionReceipts) {
+      const isCollection = rc.type === 'COLLECTION';
+      const target = isCollection ? collectionsByMethod : cxpByMethod;
+      for (const rp of rc.payments) {
+        const method = (rp as any).method;
+        const name = method?.name || rp.methodId;
+        if (!target[name]) {
+          target[name] = { methodName: name, isDivisa: !!method?.isDivisa, isCash: !!method?.isCash, count: 0, totalUsd: 0, totalBs: 0 };
+        }
+        target[name].count += 1;
+        target[name].totalUsd += rp.amountUsd;
+        target[name].totalBs += rp.amountBs;
+        if (method?.isCash) {
+          if (method.isDivisa) {
+            if (isCollection) collectionsCashUsd += rp.amountUsd; else cxpCashUsd += rp.amountUsd;
+          } else {
+            if (isCollection) collectionsCashBs += rp.amountBs; else cxpCashBs += rp.amountBs;
+          }
+        }
+      }
+    }
+
     const salesTotalUsd = invoices.reduce((s, i) => s + i.totalUsd, 0);
     const salesTotalBs = invoices.reduce((s, i) => s + i.totalBs, 0);
 
@@ -481,8 +521,8 @@ export class CashRegistersService {
     const openingBs = session?.openingBalanceBs || 0;
 
     // Efectivo fisico esperado en gaveta (lo que de verdad se arquea)
-    const cashExpectedUsd = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd) * 100) / 100;
-    const cashExpectedBs = Math.round((openingBs + cashSalesBs - cashChangeBs + movInCashBs - movOutCashBs) * 100) / 100;
+    const cashExpectedUsd = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd + collectionsCashUsd - cxpCashUsd) * 100) / 100;
+    const cashExpectedBs = Math.round((openingBs + cashSalesBs - cashChangeBs + movInCashBs - movOutCashBs + collectionsCashBs - cxpCashBs) * 100) / 100;
 
     return {
       openingBalanceUsd: openingUsd,
@@ -503,6 +543,13 @@ export class CashRegistersService {
       totalChangeBs,
       cashChangeBs: Math.round(cashChangeBs * 100) / 100,
       cashMovements,
+      // Recibos CxC/CxP posteados a esta sesion (los en efectivo ya estan en cashExpected)
+      receiptCollectionsByMethod: Object.values(collectionsByMethod),
+      receiptPaymentsByMethod: Object.values(cxpByMethod),
+      collectionsCashUsd: Math.round(collectionsCashUsd * 100) / 100,
+      collectionsCashBs: Math.round(collectionsCashBs * 100) / 100,
+      cxpCashUsd: Math.round(cxpCashUsd * 100) / 100,
+      cxpCashBs: Math.round(cxpCashBs * 100) / 100,
       movementsIncomeUsd: Math.round(movementsIncomeUsd * 100) / 100,
       movementsIncomeBs: Math.round(movementsIncomeBs * 100) / 100,
       movementsExpenseUsd: Math.round(movementsExpenseUsd * 100) / 100,
@@ -514,9 +561,9 @@ export class CashRegistersService {
    * Vista GLOBAL de movimientos de caja (cruza cajas y sesiones).
    * Solo lee y refleja lo que YA toca la caja hoy: pagos de ventas (Payment de
    * Invoice cobrada dentro de la ventana de una sesion) + movimientos manuales
-   * de gaveta (CashMovement: ingresos/egresos/gastos/anticipos). NO incluye
-   * cobros CxC / pagos CxP / compras porque hoy esos no generan CashMovement
-   * (ver pendiente en PROGRESS.md). El "cajero" es el dueno de la sesion.
+   * de gaveta (CashMovement: ingresos/egresos/gastos/anticipos) + cobros CxC /
+   * pagos CxP hechos por recibo POSTED de la sesion. NO incluye compras al contado
+   * (PayablePayment sin cashSessionId — Fase 2). El "cajero" es el dueno de la sesion.
    */
   async getGlobalMovementsData(filters: {
     cashRegisterId?: string;
@@ -563,6 +610,8 @@ export class CashRegistersService {
       paymentCount: 0, paymentUsd: 0, paymentBs: 0,
       incomeUsd: 0, incomeBs: 0, expenseUsd: 0, expenseBs: 0,
       movementCount: 0, byMethod: [] as any[],
+      collectionCount: 0, collectionUsd: 0, collectionBs: 0,
+      cxpCount: 0, cxpUsd: 0, cxpBs: 0,
     };
     if (sessions.length === 0) {
       return { rows: [] as any[], summary: emptySummary, meta };
@@ -653,6 +702,46 @@ export class CashRegistersService {
       }
     }
 
+    // 2b) Recibos CxC/CxP posteados a las sesiones seleccionadas (excluye reintegros,
+    // que ya crean su propio CashMovement). Se agregan siempre (respetando methodSet por fila).
+    const sessionReceipts = await this.prisma.receipt.findMany({
+      where: { cashSessionId: { in: sessionIds }, status: 'POSTED', NOT: { type: 'COLLECTION', totalUsd: { lt: -0.01 } } },
+      include: {
+        payments: { include: { method: { select: { id: true, name: true, isDivisa: true, isCash: true } } } },
+        customer: { select: { name: true } },
+        supplier: { select: { name: true } },
+      },
+    });
+    const sessionById = new Map(sessions.map((s) => [s.id, s]));
+    for (const rc of sessionReceipts) {
+      const session = rc.cashSessionId ? sessionById.get(rc.cashSessionId) : null;
+      if (!session) continue;
+      for (const rp of rc.payments) {
+        if (methodSet && !methodSet.has(rp.methodId)) continue;
+        const when = rp.createdAt;
+        if (fromDate && when < fromDate) continue;
+        if (toDate && when > toDate) continue;
+        rows.push({
+          kind: 'RECEIPT',
+          receiptType: rc.type, // COLLECTION | PAYMENT
+          date: when,
+          sessionId: session.id,
+          cashRegisterId: session.cashRegisterId,
+          cashRegisterName: session.cashRegister?.name || '',
+          cashierName: session.openedBy?.name || '',
+          methodId: rp.methodId,
+          methodName: (rp as any).method?.name || rp.methodId,
+          isDivisa: !!(rp as any).method?.isDivisa,
+          isCash: !!(rp as any).method?.isCash,
+          partyName: rc.customer?.name || rc.supplier?.name || '—',
+          receiptNumber: rc.number,
+          reference: rp.reference || null,
+          amountUsd: rp.amountUsd,
+          amountBs: rp.amountBs,
+        });
+      }
+    }
+
     // 2) Movimientos manuales de gaveta (solo si NO se filtra por metodo de pago)
     if (!methodSet) {
       const movements = await this.prisma.cashMovement.findMany({
@@ -699,6 +788,7 @@ export class CashRegistersService {
     const byMethod: Record<string, { methodName: string; count: number; totalUsd: number; totalBs: number }> = {};
     const summary = { ...emptySummary, byMethod: [] as any[] };
     let paymentUsd = 0, paymentBs = 0, incomeUsd = 0, incomeBs = 0, expenseUsd = 0, expenseBs = 0;
+    let collectionUsd = 0, collectionBs = 0, cxpUsd = 0, cxpBs = 0, collectionCount = 0, cxpCount = 0;
     for (const r of rows) {
       if (r.kind === 'PAYMENT') {
         summary.paymentCount += 1;
@@ -708,6 +798,18 @@ export class CashRegistersService {
         byMethod[r.methodName].count += 1;
         byMethod[r.methodName].totalUsd += r.amountUsd;
         byMethod[r.methodName].totalBs += r.amountBs;
+      } else if (r.kind === 'RECEIPT') {
+        if (r.receiptType === 'COLLECTION') {
+          collectionCount += 1; collectionUsd += r.amountUsd; collectionBs += r.amountBs;
+          // Los cobros CxC entran a byMethod (ingreso) para el cotejo "todos los Zelle"
+          // sin importar el documento. Los pagos CxP (salidas) NO entran a byMethod.
+          if (!byMethod[r.methodName]) byMethod[r.methodName] = { methodName: r.methodName, count: 0, totalUsd: 0, totalBs: 0 };
+          byMethod[r.methodName].count += 1;
+          byMethod[r.methodName].totalUsd += r.amountUsd;
+          byMethod[r.methodName].totalBs += r.amountBs;
+        } else {
+          cxpCount += 1; cxpUsd += r.amountUsd; cxpBs += r.amountBs;
+        }
       } else {
         summary.movementCount += 1;
         if (r.movementType === 'INCOME') { incomeUsd += r.amountUsd; incomeBs += r.amountBs; }
@@ -720,6 +822,12 @@ export class CashRegistersService {
     summary.incomeBs = round(incomeBs);
     summary.expenseUsd = round(expenseUsd);
     summary.expenseBs = round(expenseBs);
+    summary.collectionCount = collectionCount;
+    summary.collectionUsd = round(collectionUsd);
+    summary.collectionBs = round(collectionBs);
+    summary.cxpCount = cxpCount;
+    summary.cxpUsd = round(cxpUsd);
+    summary.cxpBs = round(cxpBs);
     summary.byMethod = Object.values(byMethod)
       .map((m) => ({ ...m, totalUsd: round(m.totalUsd), totalBs: round(m.totalBs) }))
       .sort((a, b) => a.methodName.localeCompare(b.methodName));

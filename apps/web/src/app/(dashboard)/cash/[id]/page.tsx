@@ -444,6 +444,38 @@ export default function CashDetailPage() {
                   </>
                 )}
 
+                {summary && summary.receiptCollectionsByMethod?.length > 0 && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Cobros CxC (recibos)</h3>
+                    <div className="space-y-1.5">
+                      {summary.receiptCollectionsByMethod.map((m: any) => (
+                        <div key={m.methodName} className="flex justify-between text-xs">
+                          <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-emerald-500/70"> · gaveta</span>}</span>
+                          <span className="text-slate-200">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2">Los cobros en efectivo ya estan sumados al efectivo esperado.</p>
+                  </>
+                )}
+
+                {summary && summary.receiptPaymentsByMethod?.length > 0 && (
+                  <>
+                    <div className="my-3 border-t border-slate-700/50" />
+                    <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Pagos CxP (recibos)</h3>
+                    <div className="space-y-1.5">
+                      {summary.receiptPaymentsByMethod.map((m: any) => (
+                        <div key={m.methodName} className="flex justify-between text-xs">
+                          <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-red-500/70"> · gaveta</span>}</span>
+                          <span className="text-red-300">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2">Los pagos en efectivo ya estan restados del efectivo esperado.</p>
+                  </>
+                )}
+
                 {summary && summary.changeOutflows?.length > 0 && (
                   <>
                     <div className="my-3 border-t border-slate-700/50" />
@@ -913,6 +945,34 @@ export default function CashDetailPage() {
                       </div>
                     ))}
                     <p className="text-[11px] text-slate-500 mt-2">Estos pagos no estan en la gaveta; se cuadran contra banco/plataforma.</p>
+                  </div>
+                )}
+
+                {/* Cobros CxC posteados a esta sesion (los en efectivo ya estan en la gaveta) */}
+                {closeSummary.receiptCollectionsByMethod?.length > 0 && (
+                  <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                    <h4 className="text-xs font-semibold text-emerald-400 uppercase mb-2">Cobros CxC (recibos)</h4>
+                    {closeSummary.receiptCollectionsByMethod.map((m: any) => (
+                      <div key={m.methodName} className="flex justify-between text-sm mt-1">
+                        <span className="text-slate-300">{m.methodName} ({m.count}){m.isCash && <span className="text-emerald-500/70"> · gaveta</span>}</span>
+                        <span className="text-slate-200">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 mt-2">Los cobros en efectivo ya estan sumados al efectivo esperado en gaveta.</p>
+                  </div>
+                )}
+
+                {/* Pagos CxP posteados a esta sesion (los en efectivo ya salieron de la gaveta) */}
+                {closeSummary.receiptPaymentsByMethod?.length > 0 && (
+                  <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                    <h4 className="text-xs font-semibold text-red-400 uppercase mb-2">Pagos CxP (recibos)</h4>
+                    {closeSummary.receiptPaymentsByMethod.map((m: any) => (
+                      <div key={m.methodName} className="flex justify-between text-sm mt-1">
+                        <span className="text-slate-300">{m.methodName} ({m.count}){m.isCash && <span className="text-red-500/70"> · gaveta</span>}</span>
+                        <span className="text-red-300">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 mt-2">Los pagos en efectivo ya estan restados del efectivo esperado en gaveta.</p>
                   </div>
                 )}
               </div>

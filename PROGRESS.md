@@ -1,5 +1,30 @@
 ﻿# Trinity ERP — Progreso
 
+## 💵 Reintegro parcial de nota de crédito — 2026-07-09
+
+Diego reportó un 400 al reintegrar en efectivo el **saldo restante** de una nota de crédito: cliente devolvió una factura de $119 (nota de crédito de $119), luego usó $107.10 en una compra nueva (saldo a favor) y quería reintegrar los **$11.90** restantes en efectivo — no lo dejaba.
+
+Causa: el recibo aplicaba la nota por su **total ($119)**, ignorando el `amountUsd` (restante) que el frontend ya mandaba, así que el pago exigía $119 y $11.90 < $119 → 400.
+
+Fix (backend puro, `receipts.service.ts`):
+- `create`: la nota se aplica por su **restante** (`totalUsd − paidAmountUsd`), aceptando monto parcial (Bs histórico proporcional).
+- `post`: **suma a `paidAmountUsd`** de la nota (re-lee fresco + valida saldo) y marca `appliedAt` **solo al consumirse del todo**.
+- El frontend ya mandaba el restante (`/pending-documents` lo calcula) → sin cambios de frontend, sin schema/migración. Recibos POSTED siguen inmutables (no hay reversa que descuadre).
+- **Verificado E2E** en la copia: reintegro de $11.90 → nota saldada (107.10 compra + 11.90 efectivo) + egreso de caja. Alinea el reintegro con cómo el saldo a favor del POS ya consume la nota parcial.
+
+## 🧾 Recibos CxC/CxP entran a la caja (arqueo + cierre + PDF + vista global) — 2026-07-09
+
+Diego reportó que un cobro por recibo ($2000 en DÓLAR efectivo, RCB-0001) no aparecía en la caja. Causa: la función estaba **planificada** (`docs/.../2026-06-21-recibos-afectan-caja.md`) pero **nunca implementada** — `cash-registers.service` no leía `Receipt` en ningún lado. Se implementó la **Fase 1 completa** del plan (solo lectura, sin migración):
+
+- **Arqueo** (`getSessionSalesData`): lee los `Receipt` POSTED de la sesión (excluye reintegros con total negativo, que ya crean su `CashMovement`). Los cobros CxC en **efectivo suman** a la gaveta y los pagos CxP en efectivo **restan** (`cashExpected = ... + collectionsCash − cxpCash`). Devuelve desglose por método.
+- **Cierre**: automático (`closeSession`/`getSessionSummary` reusan el helper → snapshot persistido los incluye).
+- **Vista global** (`getGlobalMovementsData`): filas `kind:'RECEIPT'`; los cobros CxC entran a `byMethod` (cotejo "todos los Zelle"); `summary` con `collection*`/`cxp*`.
+- **PDFs**: cierre (`generate`) con secciones "COBROS CxC / PAGOS CxP"; global (`generateGlobalReport`) agrupa cobros por método + sección CxP.
+- **Frontend**: bloques "Cobros CxC / Pagos CxP" en el modal de cierre, panel de sesión en vivo, detalle read-only de sesión; y filas + tarjetas en `/cash/movements`.
+- Respeta método: efectivo mueve la gaveta, electrónico solo aparece en desglose. **Sin schema ni migración.**
+- **Caveat:** sesiones ya cerradas usan snapshot persistido → no cambian retroactivamente (aplica a cierres futuros).
+- **Verificado E2E** contra la copia de prod: RCB-0001 ($2000 DÓLAR) ya suma al `cashExpectedUsd` (3278) y aparece en el summary global (collectionUsd=2000); PDFs de cierre y global generan 200/%PDF. Typecheck API+web verde.
+
 ## 💳 Corregir método de pago de una factura + fix IGTF del saldo a favor — 2026-07-09
 
 Dos cosas del POS/facturación:
