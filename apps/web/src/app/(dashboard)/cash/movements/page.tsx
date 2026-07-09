@@ -7,6 +7,10 @@ const fmtUsd = (n: number) => `$${(n || 0).toLocaleString('es-VE', { minimumFrac
 const fmtBs = (n: number) => `Bs ${(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDateTime = (d: string) => new Date(d).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+// Clave estable por fila para el marcado visual de corroboracion (solo visual, sin backend):
+// se arma con los datos y no con el indice, asi sobrevive paginar/refetch.
+const rowKey = (r: any) => `${r.kind}|${r.sessionId || ''}|${r.date}|${r.methodId || ''}|${r.amountUsd}|${r.amountBs}|${r.invoiceNumber || r.receiptNumber || r.concept || ''}`;
+
 export default function CashMovementsPage() {
   const [registers, setRegisters] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<{ id: string; name: string }[]>([]);
@@ -26,6 +30,18 @@ export default function CashMovementsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Marcado visual "ya corroborado" (solo visual, no persiste ni tiene efecto de negocio)
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const toggleChecked = (key: string) =>
+    setChecked(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const toggleAllOnPage = () =>
+    setChecked(prev => {
+      const n = new Set(prev);
+      const allOn = rows.length > 0 && rows.every(r => n.has(rowKey(r)));
+      rows.forEach(r => { const k = rowKey(r); allOn ? n.delete(k) : n.add(k); });
+      return n;
+    });
 
   useEffect(() => { document.title = 'Movimientos de caja | Trinity ERP'; }, []);
 
@@ -226,6 +242,16 @@ export default function CashMovementsPage() {
         </div>
       )}
 
+      {/* Corroboracion (solo visual): marca las filas que ya revisaste */}
+      {rows.length > 0 && (
+        <div className="flex items-center justify-end gap-3 mb-2 text-xs text-slate-400">
+          <span>{rows.filter(r => checked.has(rowKey(r))).length} de {rows.length} corroborados (esta pagina)</span>
+          {checked.size > 0 && (
+            <button onClick={() => setChecked(new Set())} className="hover:text-slate-200 underline">Limpiar marcas</button>
+          )}
+        </div>
+      )}
+
       {/* Tabla */}
       <div className="card overflow-hidden">
         {loading ? (
@@ -236,6 +262,15 @@ export default function CashMovementsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-600 bg-slate-700 cursor-pointer"
+                    title="Marcar/desmarcar toda la pagina"
+                    checked={rows.length > 0 && rows.every(r => checked.has(rowKey(r)))}
+                    onChange={toggleAllOnPage}
+                  />
+                </th>
                 <th className="px-3 py-3 font-medium">Fecha</th>
                 <th className="px-3 py-3 font-medium">Caja</th>
                 <th className="px-3 py-3 font-medium">Cajero</th>
@@ -254,8 +289,18 @@ export default function CashMovementsPage() {
                 const isExpense = isMov && r.movementType === 'EXPENSE';
                 const isOutflow = isExpense || isCxp; // egreso manual o pago CxP
                 const sign = isOutflow ? '-' : '';
+                const rk = rowKey(r);
+                const isRowChecked = checked.has(rk);
                 return (
-                  <tr key={`${r.kind}-${r.sessionId}-${i}`} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                  <tr key={`${r.kind}-${r.sessionId}-${i}`} className={`border-b border-slate-700/30 ${isRowChecked ? 'bg-emerald-500/[0.07]' : 'hover:bg-slate-800/30'}`}>
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="rounded border-slate-600 bg-slate-700 cursor-pointer"
+                        checked={isRowChecked}
+                        onChange={() => toggleChecked(rk)}
+                      />
+                    </td>
                     <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap">{fmtDateTime(r.date)}</td>
                     <td className="px-3 py-2.5 text-slate-300">{r.cashRegisterName || '—'}</td>
                     <td className="px-3 py-2.5 text-slate-300">{r.cashierName || '—'}</td>
