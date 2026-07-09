@@ -984,6 +984,10 @@ export async function sendToFiscalPrinter(
   commands: string[],
   comPort?: string,
   readStatusAfter: boolean = false,
+  guard?: {
+    expectedMachineSerial?: string | null;
+    onMismatch?: (info: { expected: string; actual: string }) => boolean | Promise<boolean>;
+  },
 ): Promise<FiscalStatusResult | null> {
   // Check Web Serial API availability
   const support = isFiscalPrinterSupported();
@@ -995,6 +999,36 @@ export async function sendToFiscalPrinter(
 
   try {
     return await withFiscalPrinter(async (io, model) => {
+      // Candado fiscal: la NC debe imprimirse en la MISMA maquina que emitio la
+      // factura. Se lee el serial de la maquina conectada (S1) y, si no coincide con
+      // el esperado, se avisa; el usuario decide si continua (por si fue un error de
+      // configuracion). No bloquea si el serial no se puede leer.
+      if (guard?.expectedMachineSerial) {
+        const expected = (guard.expectedMachineSerial || '').trim();
+        if (expected) {
+          let actual = '';
+          try {
+            const pre = await readStatusS1(io, model.family);
+            actual = (pre.machineSerial || '').trim();
+          } catch {
+            // No se pudo leer el serial: no bloquear por esto.
+          }
+          if (actual && actual !== expected) {
+            const proceed = guard.onMismatch
+              ? await guard.onMismatch({ expected, actual })
+              : false;
+            if (!proceed) {
+              const cancel: any = new Error('MACHINE_MISMATCH_CANCELLED');
+              cancel.code = 'MACHINE_MISMATCH_CANCELLED';
+              throw cancel;
+            }
+          }
+          // Se leyo el S1 (aunque coincida o el usuario decida continuar): re-asegurar
+          // que la impresora quede lista antes de enviar los comandos de impresion.
+          await waitForReady(io);
+        }
+      }
+
       // Send each command sequentially
       for (let i = 0; i < commands.length; i++) {
         const cmd = commands[i];
@@ -1025,6 +1059,9 @@ export async function sendToFiscalPrinter(
       return fiscalStatus;
     });
   } catch (err: any) {
+    // Cancelacion por maquina incorrecta: propagar limpio (sin mostrar comandos ni
+    // envolver el mensaje) para que la pantalla lo distinga de un error real.
+    if (err?.code === 'MACHINE_MISMATCH_CANCELLED') throw err;
     showFiscalCommands(commands);
     throw new Error(`Error de impresora fiscal: ${err.message}`);
   }

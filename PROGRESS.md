@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔒 Candado fiscal: NC de venta debe imprimirse en la misma máquina que la factura — 2026-07-09
+
+Riesgo detectado por Diego: se podía imprimir la **nota de crédito fiscal (devolución)** en una caja/máquina fiscal **distinta** a la que emitió la factura. Como la NC referencia la factura por máquina (`iI*`), imprimirla en otra máquina la registra en una memoria fiscal que **no tiene la factura** → descuadra el Z y el libro por máquina.
+
+**Solución (frontend, verificación por serial físico):** `sendToFiscalPrinter` (`fiscal-printer.ts`) acepta un `guard` opcional; antes de imprimir lee el serial de la máquina conectada (comando **S1**) y lo compara con `invoice.fiscalMachineSerial`. La pantalla de la nota (`credit-debit-notes/[id]`) lo pasa en sus dos rutas (confirmar+imprimir y reimprimir).
+- **Coinciden** → imprime normal. **Difieren** → **alerta grande** (a qué caja/máquina pertenece la factura vs. la conectada) con opción de **continuar** (por si el serial quedó mal configurado). **No se puede leer** → no bloquea.
+- Elegido **avisar-no-bloquear** (no bloqueo duro) porque aún no hay impresora fiscal a mano para validar; si cancela, la nota queda confirmada pero sin imprimir → se reimprime desde la caja correcta.
+- Frontend puro, retrocompatible (sin `guard` no cambia nada), y la nota ya guarda el `machineSerial` real → un override queda auditable. **Pendiente validar con la impresora fiscal real.**
+
 ## 🧾 PDFs (vertical + texto que se montaba) y 4 ajustes menores — 2026-07-09
 
 Sesión de pulido tras el arranque de la grande.

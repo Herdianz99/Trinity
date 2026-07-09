@@ -177,6 +177,28 @@ export default function CreditDebitNoteDetailPage() {
     }
   }
 
+  // Candado fiscal: arma el guard para sendToFiscalPrinter comparando el serial de la
+  // maquina conectada contra el de la factura. Si no coincide, alerta grande y deja
+  // continuar (por si el serial quedo mal configurado). Solo aplica si la factura ya
+  // tiene serial fiscal registrado.
+  function fiscalMachineGuard(inv: any) {
+    return {
+      expectedMachineSerial: inv?.fiscalMachineSerial || null,
+      onMismatch: ({ expected, actual }: { expected: string; actual: string }) =>
+        window.confirm(
+          '⚠️ ADVERTENCIA FISCAL — MAQUINA INCORRECTA\n\n' +
+          `Esta devolucion corresponde a la factura ${inv?.number || 'S/N'}, que se imprimio en la ` +
+          `maquina fiscal ${expected}` +
+          (inv?.cashRegister?.name ? ` (caja "${inv.cashRegister.name}")` : '') + '.\n\n' +
+          `La impresora conectada en esta PC es la maquina ${actual}.\n\n` +
+          'Si imprimes la nota de credito aqui, quedara registrada en la memoria fiscal de ESTA ' +
+          'maquina, que NO tiene la factura original. Eso descuadra el reporte Z y el libro fiscal.\n\n' +
+          'Lo correcto es hacer la devolucion desde la caja que emitio la factura.\n\n' +
+          '¿Deseas continuar de todos modos? (solo si estas seguro de que fue un error de configuracion)'
+        ),
+    };
+  }
+
   async function handlePost() {
     if (!confirm('¿Confirmar esta nota? Se aplicarán los efectos contables e inventario.')) return;
     setPosting(true);
@@ -203,7 +225,12 @@ export default function CreditDebitNoteDetailPage() {
             posted.invoice.customer,
             companyConfig,
           );
-          const fiscal = await sendToFiscalPrinter(commands, posted.serie?.comPort || undefined, true);
+          const fiscal = await sendToFiscalPrinter(
+            commands,
+            posted.serie?.comPort || undefined,
+            true,
+            fiscalMachineGuard(posted.invoice),
+          );
 
           // Save fiscal status obtained directly from serial port
           try {
@@ -221,7 +248,14 @@ export default function CreditDebitNoteDetailPage() {
             });
           }
         } catch (fiscalErr: any) {
-          setMessage({ type: 'error', text: `Nota confirmada, pero error fiscal: ${fiscalErr.message}` });
+          if (fiscalErr?.code === 'MACHINE_MISMATCH_CANCELLED') {
+            setMessage({
+              type: 'error',
+              text: 'Impresion fiscal cancelada: la nota quedo confirmada pero SIN imprimir. Imprimela desde la caja que emitio la factura (boton "Imprimir fiscal").',
+            });
+          } else {
+            setMessage({ type: 'error', text: `Nota confirmada, pero error fiscal: ${fiscalErr.message}` });
+          }
           fetchNote();
           return;
         }
@@ -260,7 +294,12 @@ export default function CreditDebitNoteDetailPage() {
         note.invoice.customer,
         companyConfig,
       );
-      const fiscal = await sendToFiscalPrinter(commands, note.serie?.comPort || undefined, true);
+      const fiscal = await sendToFiscalPrinter(
+        commands,
+        note.serie?.comPort || undefined,
+        true,
+        fiscalMachineGuard(note.invoice),
+      );
 
       // Save fiscal status obtained directly from serial port
       try {
@@ -281,6 +320,10 @@ export default function CreditDebitNoteDetailPage() {
       setMessage({ type: 'success', text: 'Nota fiscal impresa correctamente' });
       fetchNote();
     } catch (err: any) {
+      if (err?.code === 'MACHINE_MISMATCH_CANCELLED') {
+        setMessage({ type: 'error', text: 'Impresion cancelada: hazla desde la caja que emitio la factura.' });
+        return;
+      }
       setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
     }
   }
