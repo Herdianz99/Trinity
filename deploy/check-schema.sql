@@ -849,6 +849,26 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- 3b. CHECK INDEXES (indices trigram para busqueda rapida de clientes en el POS)
+-- =============================================================================
+DO $$
+DECLARE
+  _idx TEXT;
+  _idxs TEXT[] := ARRAY[
+    'idx_customer_name_trgm',
+    'idx_customer_rif_trgm',
+    'idx_customer_phone_trgm',
+    'idx_customer_email_trgm'
+  ];
+BEGIN
+  FOREACH _idx IN ARRAY _idxs LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = _idx) THEN
+      INSERT INTO _audit_results (msg) VALUES ('MISSING INDEX: ' || _idx);
+    END IF;
+  END LOOP;
+END $$;
+
+-- =============================================================================
 -- 4. FINAL REPORT
 -- =============================================================================
 DO $$
