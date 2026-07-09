@@ -86,8 +86,16 @@ export default function InvoicesPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [userRole, setUserRole] = useState('');
 
   useEffect(() => { document.title = 'Facturas | Trinity ERP'; }, []);
+
+  // Rol del usuario: el vendedor (SELLER) no ve el "Reporte por vendedor".
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => (r.ok ? r.json() : null)).then(u => {
+      if (u?.role) setUserRole(u.role);
+    }).catch(() => {});
+  }, []);
 
   // Debounce search input
   useEffect(() => {
@@ -206,14 +214,16 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-white">Facturas</h1>
           <p className="text-slate-400 text-sm">{total} facturas registradas</p>
         </div>
-        <button
-          onClick={handleSellerReport}
-          className="ml-auto btn-secondary !py-2.5 text-sm flex items-center gap-2"
-          title="Generar PDF de ventas agrupado por vendedor (respeta los filtros activos)"
-        >
-          <Users size={16} />
-          <span className="hidden sm:inline">Reporte por vendedor</span>
-        </button>
+        {userRole !== 'SELLER' && (
+          <button
+            onClick={handleSellerReport}
+            className="ml-auto btn-secondary !py-2.5 text-sm flex items-center gap-2"
+            title="Generar PDF de ventas agrupado por vendedor (respeta los filtros activos)"
+          >
+            <Users size={16} />
+            <span className="hidden sm:inline">Reporte por vendedor</span>
+          </button>
+        )}
       </div>
 
       {message && (
