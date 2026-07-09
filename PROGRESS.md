@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Fix crítico: parseo del reporte Z (campos corridos +1) — 2026-07-09
+
+Diego reportó que el reporte Z **sí se guardaba pero con los datos corridos**: el N° Z traía una fecha (260708 en vez de 0023), ventas exentas traía la base imponible (28154.04 en vez de 140.04), la base traía el IVA (4504.65), el IVA quedaba en 0, el total salía mal (32658.69 en vez de 32798.73) y el "comprobante final" traía una fecha (260709).
+
+Causa (confirmada con el **raw real** de una HKA80 que mandó Diego por consola): la respuesta `U0X` **no trae eco del comando** — `f[0]` ya es el primer dato (el N° Z), pero el parser asumía eco en `f[0]` y empezaba a leer en `f[1]`, corriendo **todos** los campos +1. El orden real coincide exacto con la Tabla 65 (U0Z) que ya estaba documentada en el código.
+
+Fix (`apps/web/src/lib/fiscal-printer.ts`, `extractAndPrintZReport`, Family A):
+- `zNumber` ← `f[0]`; ventas `f[9..15]`, ND `f[16..22]`, NC `f[23..29]`, IGTF `f[30..35]`.
+- Comprobantes: últ. factura `f[3]`, últ. NC `f[6]`, últ. ND `f[7]`. `U0X` no trae "primer" número ni conteos → conteos en 0 (antes tomaban números/fechas erróneos).
+- Family B: mismo desfase −1 aplicado por consistencia (mismo protocolo sin eco), **sin verificar** con printer B real (las tiendas usan HKA80/Family A).
+- **Verificado** contra el raw real: `f[0]=0023→N°Z 23`, `f[9]=140.04 exentas`, `f[10]=28154.04 base`, `f[11]=4504.65 IVA`, total 32798.73 ✓. Todos los Z guardados ANTES del deploy quedan mal en BD pero conservan `rawResponse` → se pueden re-parsear (script pendiente si Diego quiere corregirlos).
+
 ## 💵 Reintegro parcial de nota de crédito — 2026-07-09
 
 Diego reportó un 400 al reintegrar en efectivo el **saldo restante** de una nota de crédito: cliente devolvió una factura de $119 (nota de crédito de $119), luego usó $107.10 en una compra nueva (saldo a favor) y quería reintegrar los **$11.90** restantes en efectivo — no lo dejaba.

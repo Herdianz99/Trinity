@@ -1217,23 +1217,21 @@ function pMoney(s: string | undefined): number {
  *   4. Send I0Z (simple command) → prints Z report and clears accumulators
  *   5. Return parsed ZReportData
  *
- * Field layout (fields separated by \n, f[0] = command echo):
+ * Field layout (campos separados por \n). OJO: la respuesta U0X NO trae eco
+ * del comando -> f[0] YA es el primer dato (esto causaba el desfase +1 que
+ * guardaba fechas en zNumber y montos corridos un campo; corregido Sesion 68).
  *
- * Family A (~40 fields):
- *   f[1]=nextZ, f[2]=fecha(DDMMYY), f[3]=cantFacturas, f[4]=ultFactura,
- *   f[5]=cantND, f[6]=ultND(Family A only), f[7]=ultNC, f[8]=cantNC(Family A)
- *   --- Nota: f[8] es cantND en Family A, f[7] es ultNC, etc.
- *   f[10..16]=ventas(exento,base1,tax1,base2,tax2,base3,tax3)
- *   f[17..23]=ND(exento,base1,tax1,base2,tax2,base3,tax3)
- *   f[24..30]=NC(exento,base1,tax1,base2,tax2,base3,tax3)
- *   f[31..39]=IGTF(salesBase,salesTax,ncBase,ncTax,ndBase,ndTax,...)
+ * Family A (~40 fields) — CALIBRADO con HKA80 real (coincide con Tabla 65/U0Z):
+ *   f[0]=nextZ, f[1]=fechaUltZ(DDMMYY), f[2]=horaUltZ,
+ *   f[3]=ultFactura, f[4]=fechaUltFactura, f[5]=horaUltFactura,
+ *   f[6]=ultNC, f[7]=ultND, f[8]=ultDNF
+ *   f[9..15]=ventas(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[16..22]=ND(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[23..29]=NC(exento,base1,tax1,base2,tax2,base3,tax3)
+ *   f[30..35]=IGTF(salesBase,salesTax,ncBase,ncTax,ndBase,ndTax)
  *
- * Family B (~21 fields):
- *   f[1]=nextZ, f[2]=fecha, f[3]=ultFactura, f[4]=cantFacturas,
- *   f[5]=cantNC, f[6..12]=ventas, f[13..19]=NC, f[20]=ultNC
- *
- * NOTE: Exact field indices require calibration with a real printer.
- * rawResponse is saved for auditing and future adjustment.
+ * Family B (~21 fields) — mismo desfase -1 por ausencia de eco; SIN VERIFICAR
+ * con printer B real (las tiendas usan HKA80/Family A). Ajustar si aparece una.
  */
 export async function extractAndPrintZReport(): Promise<ZReportData> {
   return withFiscalPrinter(async (io, model) => {
@@ -1255,83 +1253,89 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
     let data: ZReportData;
 
     if (model.family === 'A') {
-      // Family A: ~40 fields
+      // Family A (~40 campos). CALIBRADO con raw real de HKA80 (Z7C), Sesion 68.
+      // La respuesta U0X NO trae eco del comando: f[0] YA es el primer dato.
+      // El orden coincide con la Tabla 65 (U0Z):
+      //   f[0]=nroProximoZ  f[1]=fechaUltZ  f[2]=horaUltZ
+      //   f[3]=nroUltFactura  f[4]=fechaUltFactura  f[5]=horaUltFactura
+      //   f[6]=nroUltNC  f[7]=nroUltND  f[8]=nroUltDNF
+      //   f[9..15]=ventas  f[16..22]=ND  f[23..29]=NC  f[30..35]=IGTF
       data = {
-        zNumber: pInt(f[1]),
+        zNumber: pInt(f[0]),
         reportDate: new Date().toISOString(),
         machineSerial,
         printerFamily: 'A',
 
-        // Ventas: f[10..16]
-        salesExemptBs: pMoney(f[10]),
-        salesTaxBase1Bs: pMoney(f[11]),
-        salesTax1Bs: pMoney(f[12]),
-        salesTaxBase2Bs: pMoney(f[13]),
-        salesTax2Bs: pMoney(f[14]),
-        salesTaxBase3Bs: pMoney(f[15]),
-        salesTax3Bs: pMoney(f[16]),
+        // Ventas: f[9..15]
+        salesExemptBs: pMoney(f[9]),
+        salesTaxBase1Bs: pMoney(f[10]),
+        salesTax1Bs: pMoney(f[11]),
+        salesTaxBase2Bs: pMoney(f[12]),
+        salesTax2Bs: pMoney(f[13]),
+        salesTaxBase3Bs: pMoney(f[14]),
+        salesTax3Bs: pMoney(f[15]),
 
-        // ND: f[17..23]
-        ndExemptBs: pMoney(f[17]),
-        ndTaxBase1Bs: pMoney(f[18]),
-        ndTax1Bs: pMoney(f[19]),
-        ndTaxBase2Bs: pMoney(f[20]),
-        ndTax2Bs: pMoney(f[21]),
-        ndTaxBase3Bs: pMoney(f[22]),
-        ndTax3Bs: pMoney(f[23]),
+        // ND: f[16..22]
+        ndExemptBs: pMoney(f[16]),
+        ndTaxBase1Bs: pMoney(f[17]),
+        ndTax1Bs: pMoney(f[18]),
+        ndTaxBase2Bs: pMoney(f[19]),
+        ndTax2Bs: pMoney(f[20]),
+        ndTaxBase3Bs: pMoney(f[21]),
+        ndTax3Bs: pMoney(f[22]),
 
-        // NC: f[24..30]
-        ncExemptBs: pMoney(f[24]),
-        ncTaxBase1Bs: pMoney(f[25]),
-        ncTax1Bs: pMoney(f[26]),
-        ncTaxBase2Bs: pMoney(f[27]),
-        ncTax2Bs: pMoney(f[28]),
-        ncTaxBase3Bs: pMoney(f[29]),
-        ncTax3Bs: pMoney(f[30]),
+        // NC: f[23..29]
+        ncExemptBs: pMoney(f[23]),
+        ncTaxBase1Bs: pMoney(f[24]),
+        ncTax1Bs: pMoney(f[25]),
+        ncTaxBase2Bs: pMoney(f[26]),
+        ncTax2Bs: pMoney(f[27]),
+        ncTaxBase3Bs: pMoney(f[28]),
+        ncTax3Bs: pMoney(f[29]),
 
-        // IGTF: f[31..36]
-        igtfSalesBaseBs: pMoney(f[31]),
-        igtfSalesTaxBs: pMoney(f[32]),
-        igtfNcBaseBs: pMoney(f[33]),
-        igtfNcTaxBs: pMoney(f[34]),
-        igtfNdBaseBs: pMoney(f[35]),
-        igtfNdTaxBs: pMoney(f[36]),
+        // IGTF: f[30..35]
+        igtfSalesBaseBs: pMoney(f[30]),
+        igtfSalesTaxBs: pMoney(f[31]),
+        igtfNcBaseBs: pMoney(f[32]),
+        igtfNcTaxBs: pMoney(f[33]),
+        igtfNdBaseBs: pMoney(f[34]),
+        igtfNdTaxBs: pMoney(f[35]),
 
-        // Document ranges
-        lastInvoiceNumber: f[4]?.trim() || '',
-        lastCreditNoteNumber: f[7]?.trim() || '',
-        lastDebitNoteNumber: f[6]?.trim() || '',
-        invoiceCount: pInt(f[3]),
-        creditNoteCount: pInt(f[8]),
-        debitNoteCount: pInt(f[5]),
+        // Numeros de ultimo comprobante (U0X no trae "primer" numero ni conteos)
+        lastInvoiceNumber: f[3]?.trim() || '',
+        lastCreditNoteNumber: f[6]?.trim() || '',
+        lastDebitNoteNumber: f[7]?.trim() || '',
+        invoiceCount: 0,
+        creditNoteCount: 0,
+        debitNoteCount: 0,
 
         rawResponse,
       };
     } else {
-      // Family B: ~21 fields (no ND, no IGTF)
+      // Family B: ~21 fields (no ND, no IGTF). Sin eco -> f[0] es el primer dato.
       data = {
-        zNumber: pInt(f[1]),
+        zNumber: pInt(f[0]),
         reportDate: new Date().toISOString(),
         machineSerial,
         printerFamily: 'B',
 
-        // Ventas: f[6..12]
-        salesExemptBs: pMoney(f[6]),
-        salesTaxBase1Bs: pMoney(f[7]),
-        salesTax1Bs: pMoney(f[8]),
-        salesTaxBase2Bs: pMoney(f[9]),
-        salesTax2Bs: pMoney(f[10]),
-        salesTaxBase3Bs: pMoney(f[11]),
-        salesTax3Bs: pMoney(f[12]),
+        // Ventas: f[5..11]
+        salesExemptBs: pMoney(f[5]),
+        salesTaxBase1Bs: pMoney(f[6]),
+        salesTax1Bs: pMoney(f[7]),
+        salesTaxBase2Bs: pMoney(f[8]),
+        salesTax2Bs: pMoney(f[9]),
+        salesTaxBase3Bs: pMoney(f[10]),
+        salesTax3Bs: pMoney(f[11]),
 
-        // NC: f[13..19]
-        ncExemptBs: pMoney(f[13]),
-        ncTaxBase1Bs: pMoney(f[14]),
-        ncTax1Bs: pMoney(f[15]),
-        ncTaxBase2Bs: pMoney(f[16]),
-        ncTax2Bs: pMoney(f[17]),
-        ncTaxBase3Bs: pMoney(f[18]),
-        ncTax3Bs: pMoney(f[19]),
+        // NC: f[12..18]
+        ncExemptBs: pMoney(f[12]),
+        ncTaxBase1Bs: pMoney(f[13]),
+        ncTax1Bs: pMoney(f[14]),
+        ncTaxBase2Bs: pMoney(f[15]),
+        ncTax2Bs: pMoney(f[16]),
+        ncTaxBase3Bs: pMoney(f[17]),
+        ncTax3Bs: pMoney(f[18]),
 
         // Family B: no ND
         ndExemptBs: 0,
@@ -1350,12 +1354,12 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
         igtfNdBaseBs: 0,
         igtfNdTaxBs: 0,
 
-        // Document ranges
-        lastInvoiceNumber: f[3]?.trim() || '',
-        lastCreditNoteNumber: f[20]?.trim() || '',
+        // Numeros de ultimo comprobante
+        lastInvoiceNumber: f[2]?.trim() || '',
+        lastCreditNoteNumber: f[19]?.trim() || '',
         lastDebitNoteNumber: '',
-        invoiceCount: pInt(f[4]),
-        creditNoteCount: pInt(f[5]),
+        invoiceCount: 0,
+        creditNoteCount: 0,
         debitNoteCount: 0,
 
         rawResponse,
