@@ -1,5 +1,16 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔒 Costo manual por producto (no lo tocan compras ni reemplazos) — 2026-07-09
+
+Diego pidió un flag por producto para **congelar el costo**: si está tildado, ninguna operación automática le cambia el `costUsd`. Replica el patrón existente de `manualPrice` pero para el costo.
+
+- **Schema**: `Product.manualCost Boolean @default(false)` + migración `20260709160000_product_manual_cost` (`ADD COLUMN IF NOT EXISTS`) + añadido a `deploy/fix-schema.sql`.
+- **Recepción de compra** (`purchase-orders.service.ts`): si `manualCost`, `costUsd` se congela (`newCost = product.costUsd`); el precio se recalcula sobre el costo viejo → no cambia. El **StockMovement sigue guardando el costo real de la factura** (histórico fiel).
+- **Reemplazo de inventario** (`inventory-replacements.service.ts`): mismo guard en el producto que ENTRA; la línea histórica del reemplazo conserva el costo derivado real.
+- **Importación de Excel**: NO respeta el flag a propósito (decisión de Diego) — una re-importación explícita sí sobreescribe el costo.
+- **UI** (`catalog/products/[code]`): checkbox "Costo manual 🔒" junto al costo (habilita editarlo a mano; al editarlo el precio se recalcula solo). Candadito 🔒 junto al nombre en el listado de productos.
+- Default `false` → comportamiento idéntico al actual. Typecheck API+web verde.
+
 ## 🧾 Fix crítico: parseo del reporte Z (campos corridos +1) — 2026-07-09
 
 Diego reportó que el reporte Z **sí se guardaba pero con los datos corridos**: el N° Z traía una fecha (260708 en vez de 0023), ventas exentas traía la base imponible (28154.04 en vez de 140.04), la base traía el IVA (4504.65), el IVA quedaba en 0, el total salía mal (32658.69 en vez de 32798.73) y el "comprobante final" traía una fecha (260709).

@@ -490,6 +490,7 @@ model Product {
   saleUnit         String                   @default("UNIT")
   conversionFactor Float                    @default(1)
   costUsd          Float                    @default(0)
+  manualCost       Boolean                  @default(false)
   bregaApplies     Boolean                  @default(true)
   manualPrice      Boolean                  @default(false)
   gananciaPct      Float                    @default(0)

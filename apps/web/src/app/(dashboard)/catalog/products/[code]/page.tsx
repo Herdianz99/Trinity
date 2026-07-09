@@ -25,6 +25,7 @@ interface Product {
   saleUnit: string;
   conversionFactor: number;
   costUsd: number;
+  manualCost: boolean;
   bregaApplies: boolean;
   manualPrice: boolean;
   gananciaPct: number;
@@ -160,6 +161,7 @@ export default function ProductDetailPage() {
         saleUnit: data.saleUnit,
         conversionFactor: data.conversionFactor,
         costUsd: String(data.costUsd ?? ''),
+        manualCost: data.manualCost ?? false,
         bregaApplies: data.bregaApplies,
         manualPrice: data.manualPrice ?? false,
         priceDetal: String(data.priceDetal ?? ''),
@@ -430,6 +432,7 @@ export default function ProductDetailPage() {
     try {
       const body: any = {
         costUsd: parseNum(form.costUsd),
+        manualCost: form.manualCost,
         ivaType: form.ivaType,
         bregaApplies: form.bregaApplies,
         manualPrice: form.manualPrice,
@@ -451,6 +454,7 @@ export default function ProductDetailPage() {
         setForm((f: any) => ({
           ...f,
           costUsd: String(updated.costUsd ?? ''),
+          manualCost: updated.manualCost ?? false,
           ivaType: updated.ivaType,
           bregaApplies: updated.bregaApplies,
           manualPrice: updated.manualPrice,
@@ -959,7 +963,23 @@ export default function ProductDetailPage() {
                     Precio manual
                   </label>
                 </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5" title="Si esta tildado, las compras y reemplazos NO cambian el costo. Solo lo cambias tu aqui a mano.">
+                    <input
+                      type="checkbox"
+                      checked={form.manualCost ?? false}
+                      onChange={e => setForm((f: any) => ({ ...f, manualCost: e.target.checked }))}
+                      className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/40"
+                    />
+                    Costo manual 🔒
+                  </label>
+                </div>
               </div>
+              {form.manualCost && (
+                <p className="mt-2 text-xs text-emerald-400/90">
+                  Costo congelado: las compras y reemplazos no lo actualizan. Se cambia solo desde aqui.
+                </p>
+              )}
             </div>
 
             {form.manualPrice ? (

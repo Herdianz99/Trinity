@@ -711,8 +711,10 @@ export class PurchaseOrdersService {
         // Update product cost and prices
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (product) {
-          // Costo aterrizado = costo de factura + recargo repartido (define el precio de venta)
-          const newCost = item.landedCostUsd || item.netCostUsd;
+          // Costo aterrizado = costo de factura + recargo repartido (define el precio de venta).
+          // Si el producto tiene costo manual, se congela: la compra NO le cambia el costUsd
+          // (el StockMovement de abajo sí guarda el costo real de la factura para el histórico).
+          const newCost = product.manualCost ? product.costUsd : (item.landedCostUsd || item.netCostUsd);
           const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
           const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
 

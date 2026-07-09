@@ -321,9 +321,10 @@ export class InventoryReplacementsService {
       // Actualizar costo y recalcular precio de cada articulo que ENTRA
       // (mismo criterio que una compra: costo + brega + ganancia% + IVA)
       for (const [inProductId] of enterAgg) {
-        const inCost = derivedCostOf(inProductId);
         const product = await tx.product.findUnique({ where: { id: inProductId } });
         if (!product) continue;
+        // Costo manual: se congela, el reemplazo no le cambia el costUsd (ni el precio derivado).
+        const inCost = product.manualCost ? product.costUsd : derivedCostOf(inProductId);
         const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
         const ivaMult = IVA_MULTIPLIERS[product.ivaType];
         const priceDetal = round2(

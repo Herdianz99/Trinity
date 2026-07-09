@@ -20,6 +20,7 @@ interface Product {
   priceMayor: number;
   minStock: number;
   isActive: boolean;
+  manualCost?: boolean;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
@@ -237,6 +238,14 @@ export default function ProductsPage() {
                       >
                         {product.name}
                       </Link>
+                      {product.manualCost && (
+                        <span
+                          title="Costo manual: no se actualiza con compras ni reemplazos"
+                          className="ml-2 text-xs text-emerald-400"
+                        >
+                          🔒
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{product.category?.name || '—'}</td>
                     <td className="px-4 py-3 text-slate-400 hidden lg:table-cell">{product.brand?.name || '—'}</td>

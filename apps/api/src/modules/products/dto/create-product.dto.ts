@@ -65,6 +65,11 @@ export class CreateProductDto {
   @Min(0)
   costUsd?: number;
 
+  @ApiProperty({ required: false, default: false, description: 'Costo manual: no se actualiza con compras ni reemplazos' })
+  @IsOptional()
+  @IsBoolean()
+  manualCost?: boolean;
+
   @ApiProperty({ required: false, default: true })
   @IsOptional()
   @IsBoolean()
