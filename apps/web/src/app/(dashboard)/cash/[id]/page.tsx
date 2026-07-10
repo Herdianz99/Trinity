@@ -625,34 +625,74 @@ export default function CashDetailPage() {
                 </>
                 )}
 
-                {/* ── COBROS CxC (desglose por método) ── */}
+                {/* ── COBROS CxC (recibo por recibo) ── */}
                 {detailTab === 'cobros' && (
-                  <div className="p-4 space-y-2">
-                    {cobrosMethods.length === 0 ? (
-                      <div className="text-center py-8 text-slate-500 text-sm">Sin cobros CxC en esta sesión</div>
-                    ) : cobrosMethods.map((m: any) => (
-                      <div key={m.methodName} className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-800/40">
-                        <span className="text-sm text-slate-300">{m.methodName} <span className="text-slate-500">({m.count})</span>{m.isCash && <span className="text-emerald-500/70 text-xs"> · efectivo/gaveta</span>}</span>
-                        <span className="text-sm text-emerald-400 font-medium">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
-                      </div>
-                    ))}
-                    <p className="text-[11px] text-slate-500 pt-1">Los cobros en efectivo ya están sumados al efectivo esperado en gaveta.</p>
-                  </div>
+                  (summary?.receiptCollections?.length || 0) === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">Sin cobros CxC en esta sesión</div>
+                  ) : (
+                  <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                        <th className="px-4 py-2 font-medium">Hora</th>
+                        <th className="px-4 py-2 font-medium">Recibo</th>
+                        <th className="px-4 py-2 font-medium">Cliente</th>
+                        <th className="px-4 py-2 font-medium">Metodo</th>
+                        <th className="px-4 py-2 font-medium text-right">USD</th>
+                        <th className="px-4 py-2 font-medium text-right">Bs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.receiptCollections.map((r: any) => (
+                        <tr key={r.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                          <td className="px-4 py-2 text-slate-400">{new Date(r.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-4 py-2 text-xs font-mono text-emerald-400">{r.receiptNumber || '—'}</td>
+                          <td className="px-4 py-2 text-slate-300">{r.entityName}</td>
+                          <td className="px-4 py-2 text-slate-300">{r.methodName}{r.isCash && <span className="text-emerald-500/70 text-xs"> · gaveta</span>}</td>
+                          <td className="px-4 py-2 text-right text-emerald-400 font-medium">${r.amountUsd.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-slate-300">Bs {r.amountBs.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-slate-500 px-4 py-2">Los cobros en efectivo ya están sumados al efectivo esperado en gaveta.</p>
+                  </>
+                  )
                 )}
 
-                {/* ── PAGOS CxP (desglose por método) ── */}
+                {/* ── PAGOS CxP (recibo por recibo) ── */}
                 {detailTab === 'pagos' && (
-                  <div className="p-4 space-y-2">
-                    {pagosMethods.length === 0 ? (
-                      <div className="text-center py-8 text-slate-500 text-sm">Sin pagos CxP en esta sesión</div>
-                    ) : pagosMethods.map((m: any) => (
-                      <div key={m.methodName} className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-800/40">
-                        <span className="text-sm text-slate-300">{m.methodName} <span className="text-slate-500">({m.count})</span>{m.isCash && <span className="text-red-500/70 text-xs"> · efectivo/gaveta</span>}</span>
-                        <span className="text-sm text-red-300 font-medium">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
-                      </div>
-                    ))}
-                    <p className="text-[11px] text-slate-500 pt-1">Los pagos en efectivo ya están restados del efectivo esperado en gaveta.</p>
-                  </div>
+                  (summary?.receiptPayments?.length || 0) === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">Sin pagos CxP en esta sesión</div>
+                  ) : (
+                  <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                        <th className="px-4 py-2 font-medium">Hora</th>
+                        <th className="px-4 py-2 font-medium">Recibo</th>
+                        <th className="px-4 py-2 font-medium">Proveedor</th>
+                        <th className="px-4 py-2 font-medium">Metodo</th>
+                        <th className="px-4 py-2 font-medium text-right">USD</th>
+                        <th className="px-4 py-2 font-medium text-right">Bs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.receiptPayments.map((r: any) => (
+                        <tr key={r.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                          <td className="px-4 py-2 text-slate-400">{new Date(r.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-4 py-2 text-xs font-mono text-red-400">{r.receiptNumber || '—'}</td>
+                          <td className="px-4 py-2 text-slate-300">{r.entityName}</td>
+                          <td className="px-4 py-2 text-slate-300">{r.methodName}{r.isCash && <span className="text-red-500/70 text-xs"> · gaveta</span>}</td>
+                          <td className="px-4 py-2 text-right text-red-300 font-medium">-${r.amountUsd.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-red-300">-Bs {r.amountBs.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-slate-500 px-4 py-2">Los pagos en efectivo ya están restados del efectivo esperado en gaveta.</p>
+                  </>
+                  )
                 )}
 
                 {/* ── MOVIMIENTOS de caja (manuales + gastos) ── */}

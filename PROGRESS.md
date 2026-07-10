@@ -6,8 +6,8 @@ Diego reportó que la página de la caja abierta estaba "toda regada": el detall
 
 Reorganizado (dirección elegida por Diego: **resumen a la izquierda + detalle con pestañas a la derecha**):
 - **Izquierda = Resumen del turno**: apertura, ventas (+ por método), Cobros CxC / Pagos CxP como líneas compactas, movimientos, vueltos, y **Efectivo esperado en gaveta destacado al final** (la cifra que importa para cuadrar).
-- **Derecha = Detalle con sub-pestañas**: `Ventas` (pagos de facturas + filtro/reporte), `Cobros CxC` (desglose por método), `Pagos CxP` (desglose por método), `Movimientos` (manuales + gastos). Todo el detalle en un solo lugar; las pestañas de cobros/pagos solo aparecen si hay datos.
-- La tabla de movimientos que colgaba suelta al fondo ahora vive en su pestaña. Cobros/pagos por método (sin cambios de backend, tal como pidió). Solo frontend, typecheck web verde.
+- **Derecha = Detalle con sub-pestañas**: `Ventas` (pagos de facturas + filtro/reporte), `Cobros CxC` (recibo por recibo), `Pagos CxP` (recibo por recibo), `Movimientos` (manuales + gastos). Todo el detalle en un solo lugar; las pestañas de cobros/pagos solo aparecen si hay datos.
+- La tabla de movimientos que colgaba suelta al fondo ahora vive en su pestaña. Cobros/pagos **recibo por recibo** (Hora · N° recibo · cliente/proveedor · método · USD · Bs), como la tabla de ventas — Diego pidió verlos como las facturas. Requirió un pequeño añadido en `getSessionSalesData` (arrays `receiptCollections`/`receiptPayments` con cliente/proveedor). Typecheck API+web verde.
 - Pendiente/opcional: replicar el mismo layout en la vista read-only de sesiones cerradas (`/cash/sessions/[id]`) y el modal de cierre.
 
 ## 🧾 Gastos a crédito → CxP (se pagan con recibo, como una compra a crédito) — 2026-07-09

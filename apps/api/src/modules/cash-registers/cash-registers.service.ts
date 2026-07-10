@@ -485,16 +485,26 @@ export class CashRegistersService {
         status: 'POSTED',
         NOT: { type: 'COLLECTION', totalUsd: { lt: -0.01 } },
       },
-      include: { payments: { include: { method: true } } },
+      include: {
+        payments: { include: { method: true } },
+        customer: { select: { name: true } },
+        supplier: { select: { name: true } },
+      },
     });
 
     const collectionsByMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
     const cxpByMethod: Record<string, { methodName: string; isDivisa: boolean; isCash: boolean; count: number; totalUsd: number; totalBs: number }> = {};
     let collectionsCashUsd = 0, collectionsCashBs = 0, cxpCashUsd = 0, cxpCashBs = 0;
+    // Filas por recibo (cada pago del recibo es una fila, como los pagos de factura)
+    const receiptCollections: any[] = [];
+    const receiptPayments: any[] = [];
 
     for (const rc of sessionReceipts) {
       const isCollection = rc.type === 'COLLECTION';
       const target = isCollection ? collectionsByMethod : cxpByMethod;
+      const entityName = isCollection
+        ? ((rc as any).customer?.name || 'Sin cliente')
+        : ((rc as any).supplier?.name || 'Sin proveedor');
       for (const rp of rc.payments) {
         const method = (rp as any).method;
         const name = method?.name || rp.methodId;
@@ -511,6 +521,16 @@ export class CashRegistersService {
             if (isCollection) collectionsCashBs += rp.amountBs; else cxpCashBs += rp.amountBs;
           }
         }
+        (isCollection ? receiptCollections : receiptPayments).push({
+          id: rp.id,
+          createdAt: rc.createdAt,
+          receiptNumber: rc.number,
+          entityName,
+          methodName: name,
+          isCash: !!method?.isCash,
+          amountUsd: rp.amountUsd,
+          amountBs: rp.amountBs,
+        });
       }
     }
 
@@ -546,6 +566,9 @@ export class CashRegistersService {
       // Recibos CxC/CxP posteados a esta sesion (los en efectivo ya estan en cashExpected)
       receiptCollectionsByMethod: Object.values(collectionsByMethod),
       receiptPaymentsByMethod: Object.values(cxpByMethod),
+      // Detalle recibo por recibo (cada pago = una fila)
+      receiptCollections,
+      receiptPayments,
       collectionsCashUsd: Math.round(collectionsCashUsd * 100) / 100,
       collectionsCashBs: Math.round(collectionsCashBs * 100) / 100,
       cxpCashUsd: Math.round(cxpCashUsd * 100) / 100,
