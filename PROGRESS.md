@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔢 Reporte Z: comprobantes siempre a 8 dígitos (ceros a la izquierda) — 2026-07-10
+
+Los "Comprobante Inicial/Final" del libro de ventas (campos `first/lastInvoiceNumber`, `first/lastCreditNoteNumber`, `first/lastDebitNoteNumber` de `ZReport`) son cadenas de 8 dígitos, pero se guardaban sin los ceros de relleno en dos casos: al **teclearlos a mano** en el modal (ej. `1508`) y en la **auto-derivación** del Z anterior (`String(prev + 1)` en `z-reports.service.ts` bota los ceros).
+
+- **Datos históricos (grande, prod)**: se rellenaron los 24 Z existentes con `lpad(campo, 8, '0')` solo donde el valor era numérico puro de 1-7 dígitos (69 campos: 23 fact.ini + 22 fact.fin + 14 NC.ini + 10 NC.fin; ND=0). Backup previo en `/root/backups/zreport-before-pad-*.sql`. Idempotente.
+- **Código (para que no recurra)**: nuevo helper `padDoc()` en `z-reports.service.ts` que normaliza a 8 dígitos (deja intacto null/vacío/no-numérico/ya-8). Aplicado en las 3 rutas de escritura: `create` (rama nueva + rama merge) y `update`. Typecheck API verde.
+
 ## 🧾 Reporte Z: "Comprobante final" de NC leía el campo equivocado — 2026-07-10
 
 Los reportes Z fiscales ya se registran solos en el sistema (funcionando en la empresa grande en producción). Único fallo detectado: el **Comprobante final de notas de crédito** venía vacío/cero. Con el raw real de la HKA80 (Family A) que mandó Diego por consola se vio que el bloque de números de documento va **ND antes que NC** (igual que los acumulados de montos: bloque ND en `f[16..22]`, NC en `f[23..29]`), no NC-primero como decía el manual (Tabla 65):

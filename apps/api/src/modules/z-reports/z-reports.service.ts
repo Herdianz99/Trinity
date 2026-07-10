@@ -7,6 +7,16 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+// Normaliza un numero de comprobante fiscal a la cadena de 8 digitos con ceros a
+// la izquierda (ej. "1508" -> "00001508"). Deja intacto lo demas: null/undefined,
+// cadena vacia, los que ya tienen 8+ digitos, y cualquier valor no numerico.
+function padDoc<T extends string | null | undefined>(v: T): T {
+  if (typeof v === 'string' && /^\d{1,7}$/.test(v.trim())) {
+    return v.trim().padStart(8, '0') as T;
+  }
+  return v;
+}
+
 @Injectable()
 export class ZReportsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -204,24 +214,24 @@ export class ZReportsService {
       if (dto.salesTaxBase1Bs && !existing.salesTaxBase1Bs) mergeData.salesTaxBase1Bs = dto.salesTaxBase1Bs;
       if (dto.salesTax1Bs && !existing.salesTax1Bs) mergeData.salesTax1Bs = dto.salesTax1Bs;
       if (dto.igtfSalesTaxBs && !existing.igtfSalesTaxBs) mergeData.igtfSalesTaxBs = dto.igtfSalesTaxBs;
-      if (dto.lastInvoiceNumber && !existing.lastInvoiceNumber) mergeData.lastInvoiceNumber = dto.lastInvoiceNumber;
-      if (dto.firstInvoiceNumber && !existing.firstInvoiceNumber) mergeData.firstInvoiceNumber = dto.firstInvoiceNumber;
+      if (dto.lastInvoiceNumber && !existing.lastInvoiceNumber) mergeData.lastInvoiceNumber = padDoc(dto.lastInvoiceNumber);
+      if (dto.firstInvoiceNumber && !existing.firstInvoiceNumber) mergeData.firstInvoiceNumber = padDoc(dto.firstInvoiceNumber);
       if (dto.invoiceCount && !existing.invoiceCount) mergeData.invoiceCount = dto.invoiceCount;
       // Merge NC fields
       if (dto.ncExemptBs && !existing.ncExemptBs) mergeData.ncExemptBs = dto.ncExemptBs;
       if (dto.ncTaxBase1Bs && !existing.ncTaxBase1Bs) mergeData.ncTaxBase1Bs = dto.ncTaxBase1Bs;
       if (dto.ncTax1Bs && !existing.ncTax1Bs) mergeData.ncTax1Bs = dto.ncTax1Bs;
       if (dto.igtfNcTaxBs && !existing.igtfNcTaxBs) mergeData.igtfNcTaxBs = dto.igtfNcTaxBs;
-      if (dto.lastCreditNoteNumber && !existing.lastCreditNoteNumber) mergeData.lastCreditNoteNumber = dto.lastCreditNoteNumber;
-      if (dto.firstCreditNoteNumber && !existing.firstCreditNoteNumber) mergeData.firstCreditNoteNumber = dto.firstCreditNoteNumber;
+      if (dto.lastCreditNoteNumber && !existing.lastCreditNoteNumber) mergeData.lastCreditNoteNumber = padDoc(dto.lastCreditNoteNumber);
+      if (dto.firstCreditNoteNumber && !existing.firstCreditNoteNumber) mergeData.firstCreditNoteNumber = padDoc(dto.firstCreditNoteNumber);
       if (dto.creditNoteCount && !existing.creditNoteCount) mergeData.creditNoteCount = dto.creditNoteCount;
       // Merge ND fields
       if (dto.ndExemptBs && !existing.ndExemptBs) mergeData.ndExemptBs = dto.ndExemptBs;
       if (dto.ndTaxBase1Bs && !existing.ndTaxBase1Bs) mergeData.ndTaxBase1Bs = dto.ndTaxBase1Bs;
       if (dto.ndTax1Bs && !existing.ndTax1Bs) mergeData.ndTax1Bs = dto.ndTax1Bs;
       if (dto.igtfNdTaxBs && !existing.igtfNdTaxBs) mergeData.igtfNdTaxBs = dto.igtfNdTaxBs;
-      if (dto.lastDebitNoteNumber && !existing.lastDebitNoteNumber) mergeData.lastDebitNoteNumber = dto.lastDebitNoteNumber;
-      if (dto.firstDebitNoteNumber && !existing.firstDebitNoteNumber) mergeData.firstDebitNoteNumber = dto.firstDebitNoteNumber;
+      if (dto.lastDebitNoteNumber && !existing.lastDebitNoteNumber) mergeData.lastDebitNoteNumber = padDoc(dto.lastDebitNoteNumber);
+      if (dto.firstDebitNoteNumber && !existing.firstDebitNoteNumber) mergeData.firstDebitNoteNumber = padDoc(dto.firstDebitNoteNumber);
       if (dto.debitNoteCount && !existing.debitNoteCount) mergeData.debitNoteCount = dto.debitNoteCount;
       // Notes
       if (dto.notes && !existing.notes) mergeData.notes = dto.notes;
@@ -315,14 +325,14 @@ export class ZReportsService {
         igtfNdBaseBs: dto.igtfNdBaseBs || 0,
         igtfNdTaxBs: dto.igtfNdTaxBs || 0,
 
-        lastInvoiceNumber: dto.lastInvoiceNumber || null,
-        firstInvoiceNumber,
+        lastInvoiceNumber: padDoc(dto.lastInvoiceNumber || null),
+        firstInvoiceNumber: padDoc(firstInvoiceNumber),
         invoiceCount: dto.invoiceCount || 0,
-        lastCreditNoteNumber: dto.lastCreditNoteNumber || null,
-        firstCreditNoteNumber,
+        lastCreditNoteNumber: padDoc(dto.lastCreditNoteNumber || null),
+        firstCreditNoteNumber: padDoc(firstCreditNoteNumber),
         creditNoteCount: dto.creditNoteCount || 0,
-        lastDebitNoteNumber: dto.lastDebitNoteNumber || null,
-        firstDebitNoteNumber,
+        lastDebitNoteNumber: padDoc(dto.lastDebitNoteNumber || null),
+        firstDebitNoteNumber: padDoc(firstDebitNoteNumber),
         debitNoteCount: dto.debitNoteCount || 0,
 
         isManual: dto.isManual ?? true,
@@ -381,14 +391,14 @@ export class ZReportsService {
     if (dto.igtfNdBaseBs !== undefined) data.igtfNdBaseBs = dto.igtfNdBaseBs;
     if (dto.igtfNdTaxBs !== undefined) data.igtfNdTaxBs = dto.igtfNdTaxBs;
 
-    if (dto.lastInvoiceNumber !== undefined) data.lastInvoiceNumber = dto.lastInvoiceNumber;
-    if (dto.firstInvoiceNumber !== undefined) data.firstInvoiceNumber = dto.firstInvoiceNumber;
+    if (dto.lastInvoiceNumber !== undefined) data.lastInvoiceNumber = padDoc(dto.lastInvoiceNumber);
+    if (dto.firstInvoiceNumber !== undefined) data.firstInvoiceNumber = padDoc(dto.firstInvoiceNumber);
     if (dto.invoiceCount !== undefined) data.invoiceCount = dto.invoiceCount;
-    if (dto.lastCreditNoteNumber !== undefined) data.lastCreditNoteNumber = dto.lastCreditNoteNumber;
-    if (dto.firstCreditNoteNumber !== undefined) data.firstCreditNoteNumber = dto.firstCreditNoteNumber;
+    if (dto.lastCreditNoteNumber !== undefined) data.lastCreditNoteNumber = padDoc(dto.lastCreditNoteNumber);
+    if (dto.firstCreditNoteNumber !== undefined) data.firstCreditNoteNumber = padDoc(dto.firstCreditNoteNumber);
     if (dto.creditNoteCount !== undefined) data.creditNoteCount = dto.creditNoteCount;
-    if (dto.lastDebitNoteNumber !== undefined) data.lastDebitNoteNumber = dto.lastDebitNoteNumber;
-    if (dto.firstDebitNoteNumber !== undefined) data.firstDebitNoteNumber = dto.firstDebitNoteNumber;
+    if (dto.lastDebitNoteNumber !== undefined) data.lastDebitNoteNumber = padDoc(dto.lastDebitNoteNumber);
+    if (dto.firstDebitNoteNumber !== undefined) data.firstDebitNoteNumber = padDoc(dto.firstDebitNoteNumber);
     if (dto.debitNoteCount !== undefined) data.debitNoteCount = dto.debitNoteCount;
 
     if (dto.cashRegisterId !== undefined) data.cashRegisterId = dto.cashRegisterId;
