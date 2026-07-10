@@ -1258,7 +1258,7 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
       // El orden coincide con la Tabla 65 (U0Z):
       //   f[0]=nroProximoZ  f[1]=fechaUltZ  f[2]=horaUltZ
       //   f[3]=nroUltFactura  f[4]=fechaUltFactura  f[5]=horaUltFactura
-      //   f[6]=nroUltNC  f[7]=nroUltND  f[8]=nroUltDNF
+      //   f[6]=nroUltND  f[7]=nroUltNC  f[8]=nroUltDNF   (ND antes que NC, igual que los montos)
       //   f[9..15]=ventas  f[16..22]=ND  f[23..29]=NC  f[30..35]=IGTF
       data = {
         zNumber: pInt(f[0]),
@@ -1301,10 +1301,12 @@ export async function extractAndPrintZReport(): Promise<ZReportData> {
         igtfNdBaseBs: pMoney(f[34]),
         igtfNdTaxBs: pMoney(f[35]),
 
-        // Numeros de ultimo comprobante (U0X no trae "primer" numero ni conteos)
+        // Numeros de ultimo comprobante (U0X no trae "primer" numero ni conteos).
+        // Orden real: f[6]=ultND, f[7]=ultNC, f[8]=ultDNF (ND antes que NC, como los
+        // acumulados de montos). Confirmado con raw HKA80: NC=00000104=f[7].
         lastInvoiceNumber: f[3]?.trim() || '',
-        lastCreditNoteNumber: f[6]?.trim() || '',
-        lastDebitNoteNumber: f[7]?.trim() || '',
+        lastDebitNoteNumber: f[6]?.trim() || '',
+        lastCreditNoteNumber: f[7]?.trim() || '',
         invoiceCount: 0,
         creditNoteCount: 0,
         debitNoteCount: 0,

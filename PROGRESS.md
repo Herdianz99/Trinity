@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte Z: "Comprobante final" de NC leía el campo equivocado — 2026-07-10
+
+Los reportes Z fiscales ya se registran solos en el sistema (funcionando en la empresa grande en producción). Único fallo detectado: el **Comprobante final de notas de crédito** venía vacío/cero. Con el raw real de la HKA80 (Family A) que mandó Diego por consola se vio que el bloque de números de documento va **ND antes que NC** (igual que los acumulados de montos: bloque ND en `f[16..22]`, NC en `f[23..29]`), no NC-primero como decía el manual (Tabla 65):
+- `f[6]`=últ. **ND** = `00000000` (esta empresa **no emite notas de débito**, confirmado por Diego)
+- `f[7]`=últ. **NC** = `00000104` ← lo que debía mostrar el Comprobante final NC
+- `f[8]`=últ. **DNF** = `00000212`
+
+El parser leía la NC de `f[6]` (=0) y la ND de `f[7]` (que era en realidad la NC). Fix en `apps/web/src/lib/fiscal-printer.ts` (`extractAndPrintZReport`, Family A): swap → `lastCreditNoteNumber=f[7]`, `lastDebitNoteNumber=f[6]`. Cruce de montos confirma el layout (NC hoy: base `f[24]`=21.688,87 + IVA `f[25]`=3.470,22 = 16% exacto). Typecheck web verde. Family B sin tocar (las tiendas usan HKA80/Family A).
+
 ## 🧹 Caja abierta (/cash/[id]): layout consolidado (resumen + detalle con pestañas) — 2026-07-09
 
 Diego reportó que la página de la caja abierta estaba "toda regada": el detalle repartido en 3 sitios (tabla de pagos a la derecha, tabla de movimientos suelta abajo, y bloques de cobros/pagos CxC en la columna izquierda) + el resumen en un cuarto lugar → "no sé dónde mirar".
