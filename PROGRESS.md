@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧹 Caja abierta (/cash/[id]): layout consolidado (resumen + detalle con pestañas) — 2026-07-09
+
+Diego reportó que la página de la caja abierta estaba "toda regada": el detalle repartido en 3 sitios (tabla de pagos a la derecha, tabla de movimientos suelta abajo, y bloques de cobros/pagos CxC en la columna izquierda) + el resumen en un cuarto lugar → "no sé dónde mirar".
+
+Reorganizado (dirección elegida por Diego: **resumen a la izquierda + detalle con pestañas a la derecha**):
+- **Izquierda = Resumen del turno**: apertura, ventas (+ por método), Cobros CxC / Pagos CxP como líneas compactas, movimientos, vueltos, y **Efectivo esperado en gaveta destacado al final** (la cifra que importa para cuadrar).
+- **Derecha = Detalle con sub-pestañas**: `Ventas` (pagos de facturas + filtro/reporte), `Cobros CxC` (desglose por método), `Pagos CxP` (desglose por método), `Movimientos` (manuales + gastos). Todo el detalle en un solo lugar; las pestañas de cobros/pagos solo aparecen si hay datos.
+- La tabla de movimientos que colgaba suelta al fondo ahora vive en su pestaña. Cobros/pagos por método (sin cambios de backend, tal como pidió). Solo frontend, typecheck web verde.
+- Pendiente/opcional: replicar el mismo layout en la vista read-only de sesiones cerradas (`/cash/sessions/[id]`) y el modal de cierre.
+
 ## 🧾 Gastos a crédito → CxP (se pagan con recibo, como una compra a crédito) — 2026-07-09
 
 Tercer cambio de gastos: poder registrar un gasto **a crédito** que genera una **cuenta por pagar** y se paga después con un recibo de pago, igual que una compra a crédito. Decisión de Diego: el gasto a crédito **siempre se le debe a un proveedor** → se reutiliza todo el sistema de CxP/recibos existente (mínimo código nuevo).

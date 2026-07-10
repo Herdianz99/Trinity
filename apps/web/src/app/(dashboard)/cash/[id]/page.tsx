@@ -34,6 +34,8 @@ export default function CashDetailPage() {
   const [register, setRegister] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'session' | 'history'>('session');
+  // Sub-pestana del detalle (columna derecha): ventas / cobros CxC / pagos CxP / movimientos
+  const [detailTab, setDetailTab] = useState<'ventas' | 'cobros' | 'pagos' | 'movimientos'>('ventas');
 
   // Current session state
   const [summary, setSummary] = useState<any>(null);
@@ -307,6 +309,16 @@ export default function CashDetailPage() {
 
   const hasOpenSession = register.sessions?.length > 0;
 
+  // Totales de recibos CxC/CxP (para el resumen y los contadores de pestana)
+  const cobrosMethods = summary?.receiptCollectionsByMethod || [];
+  const pagosMethods = summary?.receiptPaymentsByMethod || [];
+  const cobrosUsd = cobrosMethods.reduce((s: number, m: any) => s + m.totalUsd, 0);
+  const cobrosBs = cobrosMethods.reduce((s: number, m: any) => s + m.totalBs, 0);
+  const cobrosCount = cobrosMethods.reduce((s: number, m: any) => s + m.count, 0);
+  const pagosUsd = pagosMethods.reduce((s: number, m: any) => s + m.totalUsd, 0);
+  const pagosBs = pagosMethods.reduce((s: number, m: any) => s + m.totalBs, 0);
+  const pagosCount = pagosMethods.reduce((s: number, m: any) => s + m.count, 0);
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
@@ -423,56 +435,25 @@ export default function CashDetailPage() {
                   </>
                 )}
 
-                {summary && (summary.cashExpectedUsd != null || summary.cashExpectedBs != null) && (
+                {cobrosCount > 0 && (
                   <>
                     <div className="my-3 border-t border-slate-700/50" />
-                    <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Efectivo esperado en gaveta</h3>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-200">Efectivo USD</span>
-                        <span className="text-emerald-400">${(summary.cashExpectedUsd ?? 0).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-slate-200">Efectivo Bs</span>
-                        <span className="text-emerald-400">Bs {(summary.cashExpectedBs ?? 0).toFixed(2)}</span>
-                      </div>
-                      {summary.cashChangeBs > 0 && (
-                        <p className="text-[11px] text-amber-400/80">Incluye -Bs {summary.cashChangeBs.toFixed(2)} de vueltos dados en efectivo</p>
-                      )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-emerald-400">Cobros CxC ({cobrosCount})</span>
+                      <span className="text-emerald-400">+${cobrosUsd.toFixed(2)}{cobrosBs > 0 ? ` / Bs ${cobrosBs.toFixed(2)}` : ''}</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-2">Lo que deberia haber en la gaveta ahora (sin cerrar). Los pagos electronicos no cuentan aqui.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Desglose por método en la pestaña «Cobros CxC». Los de efectivo ya están en el efectivo esperado.</p>
                   </>
                 )}
 
-                {summary && summary.receiptCollectionsByMethod?.length > 0 && (
+                {pagosCount > 0 && (
                   <>
                     <div className="my-3 border-t border-slate-700/50" />
-                    <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Cobros CxC (recibos)</h3>
-                    <div className="space-y-1.5">
-                      {summary.receiptCollectionsByMethod.map((m: any) => (
-                        <div key={m.methodName} className="flex justify-between text-xs">
-                          <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-emerald-500/70"> · gaveta</span>}</span>
-                          <span className="text-slate-200">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
-                        </div>
-                      ))}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-red-400">Pagos CxP ({pagosCount})</span>
+                      <span className="text-red-300">-${pagosUsd.toFixed(2)}{pagosBs > 0 ? ` / Bs ${pagosBs.toFixed(2)}` : ''}</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-2">Los cobros en efectivo ya estan sumados al efectivo esperado.</p>
-                  </>
-                )}
-
-                {summary && summary.receiptPaymentsByMethod?.length > 0 && (
-                  <>
-                    <div className="my-3 border-t border-slate-700/50" />
-                    <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Pagos CxP (recibos)</h3>
-                    <div className="space-y-1.5">
-                      {summary.receiptPaymentsByMethod.map((m: any) => (
-                        <div key={m.methodName} className="flex justify-between text-xs">
-                          <span className="text-slate-400">{m.methodName} ({m.count}){m.isCash && <span className="text-red-500/70"> · gaveta</span>}</span>
-                          <span className="text-red-300">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-2">Los pagos en efectivo ya estan restados del efectivo esperado.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Desglose por método en la pestaña «Pagos CxP». Los de efectivo ya están restados del efectivo esperado.</p>
                   </>
                 )}
 
@@ -516,33 +497,70 @@ export default function CashDetailPage() {
                   </>
                 )}
 
+                {/* Efectivo esperado en gaveta — la cifra que importa para cuadrar */}
+                {summary && (summary.cashExpectedUsd != null || summary.cashExpectedBs != null) && (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 mt-1">
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Efectivo esperado en gaveta</h4>
+                    <div className="flex justify-between text-sm font-bold">
+                      <span className="text-slate-200">USD</span>
+                      <span className="text-emerald-400">${(summary.cashExpectedUsd ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold">
+                      <span className="text-slate-200">Bs</span>
+                      <span className="text-emerald-400">Bs {(summary.cashExpectedBs ?? 0).toFixed(2)}</span>
+                    </div>
+                    {summary.cashChangeBs > 0 && (
+                      <p className="text-[11px] text-amber-400/80 mt-1">Incluye -Bs {summary.cashChangeBs.toFixed(2)} de vueltos en efectivo</p>
+                    )}
+                    <p className="text-[11px] text-slate-500 mt-1.5">Lo que debería haber en la gaveta ahora. Los pagos electrónicos no cuentan aquí.</p>
+                  </div>
+                )}
+
               </div>
             </div>
 
             {/* Right column - Payments (70%) */}
             <div className="w-[70%]">
               <div className="card overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-white">Pagos ({paymentsTotal})</span>
-                  <div className="flex items-center gap-2">
+                {/* Sub-pestañas del detalle: todo el detalle del turno en un solo lugar */}
+                <div className="flex items-center gap-1 px-2 pt-1 border-b border-slate-700/50 overflow-x-auto">
+                  {([
+                    ['ventas', `Ventas (${paymentsTotal})`, true],
+                    ['cobros', `Cobros CxC (${cobrosCount})`, cobrosCount > 0],
+                    ['pagos', `Pagos CxP (${pagosCount})`, pagosCount > 0],
+                    ['movimientos', `Movimientos (${summary?.cashMovements?.length || 0})`, true],
+                  ] as [typeof detailTab, string, boolean][]).filter(t => t[2]).map(([key, label]) => (
                     <button
-                      onClick={() => window.open(`/api/proxy/cash-sessions/${sessionId}/movements-report`, '_blank')}
-                      className="btn-secondary !py-1.5 !px-3 text-xs flex items-center gap-1.5 whitespace-nowrap"
-                      title="Reporte detallado: movimientos agrupados por metodo con referencia"
+                      key={key}
+                      onClick={() => setDetailTab(key)}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${detailTab === key ? 'border-green-400 text-green-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                     >
-                      <FileText size={14} /> Reporte detallado
+                      {label}
                     </button>
-                    <select
-                      value={filterMethodId}
-                      onChange={e => { setFilterMethodId(e.target.value); setPaymentsPage(1); }}
-                      className="input-field !w-48 !py-1.5 text-xs"
-                    >
-                      <option value="">Todos los metodos</option>
-                      {paymentMethods.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  ))}
+                </div>
+
+                {/* ── VENTAS (pagos de facturas) ── */}
+                {detailTab === 'ventas' && (
+                <>
+                <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => window.open(`/api/proxy/cash-sessions/${sessionId}/movements-report`, '_blank')}
+                    className="btn-secondary !py-1.5 !px-3 text-xs flex items-center gap-1.5 whitespace-nowrap"
+                    title="Reporte detallado: movimientos agrupados por metodo con referencia"
+                  >
+                    <FileText size={14} /> Reporte detallado
+                  </button>
+                  <select
+                    value={filterMethodId}
+                    onChange={e => { setFilterMethodId(e.target.value); setPaymentsPage(1); }}
+                    className="input-field !w-48 !py-1.5 text-xs"
+                  >
+                    <option value="">Todos los metodos</option>
+                    {paymentMethods.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {loadingPayments ? (
@@ -604,62 +622,93 @@ export default function CashDetailPage() {
                     </div>
                   </div>
                 )}
+                </>
+                )}
+
+                {/* ── COBROS CxC (desglose por método) ── */}
+                {detailTab === 'cobros' && (
+                  <div className="p-4 space-y-2">
+                    {cobrosMethods.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 text-sm">Sin cobros CxC en esta sesión</div>
+                    ) : cobrosMethods.map((m: any) => (
+                      <div key={m.methodName} className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-800/40">
+                        <span className="text-sm text-slate-300">{m.methodName} <span className="text-slate-500">({m.count})</span>{m.isCash && <span className="text-emerald-500/70 text-xs"> · efectivo/gaveta</span>}</span>
+                        <span className="text-sm text-emerald-400 font-medium">{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 pt-1">Los cobros en efectivo ya están sumados al efectivo esperado en gaveta.</p>
+                  </div>
+                )}
+
+                {/* ── PAGOS CxP (desglose por método) ── */}
+                {detailTab === 'pagos' && (
+                  <div className="p-4 space-y-2">
+                    {pagosMethods.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 text-sm">Sin pagos CxP en esta sesión</div>
+                    ) : pagosMethods.map((m: any) => (
+                      <div key={m.methodName} className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-800/40">
+                        <span className="text-sm text-slate-300">{m.methodName} <span className="text-slate-500">({m.count})</span>{m.isCash && <span className="text-red-500/70 text-xs"> · efectivo/gaveta</span>}</span>
+                        <span className="text-sm text-red-300 font-medium">-{m.isDivisa ? `$${m.totalUsd.toFixed(2)}` : `Bs ${m.totalBs.toFixed(2)}`}</span>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500 pt-1">Los pagos en efectivo ya están restados del efectivo esperado en gaveta.</p>
+                  </div>
+                )}
+
+                {/* ── MOVIMIENTOS de caja (manuales + gastos) ── */}
+                {detailTab === 'movimientos' && (
+                  (summary?.cashMovements?.length || 0) === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">No hay movimientos de caja en esta sesión</div>
+                  ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                        <th className="px-4 py-2 font-medium">Hora</th>
+                        <th className="px-4 py-2 font-medium">Tipo</th>
+                        <th className="px-4 py-2 font-medium">Razon</th>
+                        <th className="px-4 py-2 font-medium">Usuario</th>
+                        <th className="px-4 py-2 font-medium text-right">USD</th>
+                        <th className="px-4 py-2 font-medium text-right">Bs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.cashMovements.map((mov: any) => (
+                        <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                          <td className="px-4 py-2 text-slate-400">{new Date(mov.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-1.5">
+                              {mov.type === 'INCOME' ? (
+                                <ArrowUpRight size={14} className="text-green-400" />
+                              ) : (
+                                <ArrowDownRight size={14} className="text-red-400" />
+                              )}
+                              <span className={mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}>
+                                {mov.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
+                              </span>
+                              {mov.isManual ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">MANUAL</span>
+                              ) : mov.expenseId ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400">GASTO</span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 text-slate-300">{mov.reason}</td>
+                          <td className="px-4 py-2 text-slate-400">{mov.createdBy?.name}</td>
+                          <td className={`px-4 py-2 text-right font-medium ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                            {mov.type === 'INCOME' ? '+' : '-'}${mov.amountUsd.toFixed(2)}
+                          </td>
+                          <td className={`px-4 py-2 text-right ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                            {mov.type === 'INCOME' ? '+' : '-'}Bs {mov.amountBs.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  )
+                )}
               </div>
             </div>
           </div>
-
-          {/* Cash movements list */}
-          {summary?.cashMovements?.length > 0 && (
-            <div className="card overflow-hidden mt-4">
-              <div className="px-4 py-3 border-b border-slate-700/50">
-                <span className="text-sm font-medium text-white">Movimientos de caja ({summary.cashMovements.length})</span>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700/50 text-slate-400 text-left">
-                    <th className="px-4 py-2 font-medium">Hora</th>
-                    <th className="px-4 py-2 font-medium">Tipo</th>
-                    <th className="px-4 py-2 font-medium">Razon</th>
-                    <th className="px-4 py-2 font-medium">Usuario</th>
-                    <th className="px-4 py-2 font-medium text-right">USD</th>
-                    <th className="px-4 py-2 font-medium text-right">Bs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.cashMovements.map((mov: any) => (
-                    <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
-                      <td className="px-4 py-2 text-slate-400">{new Date(mov.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-1.5">
-                          {mov.type === 'INCOME' ? (
-                            <ArrowUpRight size={14} className="text-green-400" />
-                          ) : (
-                            <ArrowDownRight size={14} className="text-red-400" />
-                          )}
-                          <span className={mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}>
-                            {mov.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
-                          </span>
-                          {mov.isManual ? (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">MANUAL</span>
-                          ) : mov.expenseId ? (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400">GASTO</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-slate-300">{mov.reason}</td>
-                      <td className="px-4 py-2 text-slate-400">{mov.createdBy?.name}</td>
-                      <td className={`px-4 py-2 text-right font-medium ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
-                        {mov.type === 'INCOME' ? '+' : '-'}${mov.amountUsd.toFixed(2)}
-                      </td>
-                      <td className={`px-4 py-2 text-right ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
-                        {mov.type === 'INCOME' ? '+' : '-'}Bs {mov.amountBs.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
 
           {/* Action buttons at bottom */}
           <div className="flex justify-end gap-3 mt-4">
