@@ -8,7 +8,8 @@ Reorganizado (dirección elegida por Diego: **resumen a la izquierda + detalle c
 - **Izquierda = Resumen del turno**: apertura, ventas (+ por método), Cobros CxC / Pagos CxP como líneas compactas, movimientos, vueltos, y **Efectivo esperado en gaveta destacado al final** (la cifra que importa para cuadrar).
 - **Derecha = Detalle con sub-pestañas**: `Ventas` (pagos de facturas + filtro/reporte), `Cobros CxC` (recibo por recibo), `Pagos CxP` (recibo por recibo), `Movimientos` (manuales + gastos). Todo el detalle en un solo lugar; las pestañas de cobros/pagos solo aparecen si hay datos.
 - La tabla de movimientos que colgaba suelta al fondo ahora vive en su pestaña. Cobros/pagos **recibo por recibo** (Hora · N° recibo · cliente/proveedor · método · USD · Bs), como la tabla de ventas — Diego pidió verlos como las facturas. Requirió un pequeño añadido en `getSessionSalesData` (arrays `receiptCollections`/`receiptPayments` con cliente/proveedor). Typecheck API+web verde.
-- Pendiente/opcional: replicar el mismo layout en la vista read-only de sesiones cerradas (`/cash/sessions/[id]`) y el modal de cierre.
+- **Replicado en sesiones cerradas (`/cash/sessions/[id]`) — 2026-07-10, marcado como PRUEBA**: la columna derecha de la vista read-only ahora tiene las mismas sub-pestañas (`Ventas` · `Cobros CxC` · `Pagos CxP` · `Movimientos`) recibo por recibo, reusando el mismo endpoint `/summary`. Lleva un chip **«Prueba»** (ámbar) en la barra de pestañas porque **aún no se sabe cómo lo va a pedir el cliente** — puede cambiar. La columna izquierda (resumen + arqueo) quedó igual. Typecheck web verde.
+- Pendiente/opcional: replicar el mismo layout en el **modal de cierre** (botón "Cerrar caja" en `/cash/[id]`) — se deja **como está por ahora** (cobros/pagos por método, compacto), a la espera de la decisión del cliente.
 
 ## 🧾 Gastos a crédito → CxP (se pagan con recibo, como una compra a crédito) — 2026-07-09
 

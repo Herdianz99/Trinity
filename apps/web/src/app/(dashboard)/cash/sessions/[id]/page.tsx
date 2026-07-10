@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export default function CashSessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +17,8 @@ export default function CashSessionDetailPage() {
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [filterMethodId, setFilterMethodId] = useState('');
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  // Sub-pestana del detalle (columna derecha): ventas / cobros CxC / pagos CxP / movimientos
+  const [detailTab, setDetailTab] = useState<'ventas' | 'cobros' | 'pagos' | 'movimientos'>('ventas');
 
   useEffect(() => {
     fetch('/api/proxy/payment-methods/flat')
@@ -56,6 +58,10 @@ export default function CashSessionDetailPage() {
   const session = summary?.session;
   const isClosed = session?.status === 'CLOSED';
   const fmt = (d: string) => new Date(d).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // Contadores para las sub-pestanas del detalle (recibo por recibo)
+  const cobrosCount = summary?.receiptCollections?.length || 0;
+  const pagosCount = summary?.receiptPayments?.length || 0;
 
   useEffect(() => {
     document.title = session?.cashRegister?.name
@@ -329,11 +335,38 @@ export default function CashSessionDetailPage() {
           )}
         </div>
 
-        {/* Right column - Payments */}
+        {/* Right column - Detalle con sub-pestanas */}
         <div className="lg:w-[66%]">
           <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-white">Pagos ({paymentsTotal})</span>
+            {/* Sub-pestañas del detalle: todo el detalle del turno en un solo lugar */}
+            <div className="flex items-center gap-1 px-2 pt-1 border-b border-slate-700/50 overflow-x-auto">
+              {([
+                ['ventas', `Ventas (${paymentsTotal})`, true],
+                ['cobros', `Cobros CxC (${cobrosCount})`, cobrosCount > 0],
+                ['pagos', `Pagos CxP (${pagosCount})`, pagosCount > 0],
+                ['movimientos', `Movimientos (${summary?.cashMovements?.length || 0})`, true],
+              ] as [typeof detailTab, string, boolean][]).filter(t => t[2]).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setDetailTab(key)}
+                  className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${detailTab === key ? 'border-green-400 text-green-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                >
+                  {label}
+                </button>
+              ))}
+              {/* Marcado como PRUEBA: layout nuevo (recibo por recibo) a la espera de cómo lo pida el cliente */}
+              <span
+                className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                title="Vista en prueba: el desglose recibo por recibo puede cambiar según lo pida el cliente"
+              >
+                Prueba
+              </span>
+            </div>
+
+            {/* ── VENTAS (pagos de facturas) ── */}
+            {detailTab === 'ventas' && (
+            <>
+            <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-end">
               <select
                 value={filterMethodId}
                 onChange={e => { setFilterMethodId(e.target.value); setPaymentsPage(1); }}
@@ -403,6 +436,130 @@ export default function CashSessionDetailPage() {
                   </button>
                 </div>
               </div>
+            )}
+            </>
+            )}
+
+            {/* ── COBROS CxC (recibo por recibo) ── */}
+            {detailTab === 'cobros' && (
+              (summary?.receiptCollections?.length || 0) === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm">Sin cobros CxC en esta sesión</div>
+              ) : (
+              <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                    <th className="px-4 py-2 font-medium">Hora</th>
+                    <th className="px-4 py-2 font-medium">Recibo</th>
+                    <th className="px-4 py-2 font-medium">Cliente</th>
+                    <th className="px-4 py-2 font-medium">Metodo</th>
+                    <th className="px-4 py-2 font-medium text-right">USD</th>
+                    <th className="px-4 py-2 font-medium text-right">Bs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.receiptCollections.map((r: any) => (
+                    <tr key={r.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                      <td className="px-4 py-2 text-slate-400">{new Date(r.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-2 text-xs font-mono text-emerald-400">{r.receiptNumber || '—'}</td>
+                      <td className="px-4 py-2 text-slate-300">{r.entityName}</td>
+                      <td className="px-4 py-2 text-slate-300">{r.methodName}{r.isCash && <span className="text-emerald-500/70 text-xs"> · gaveta</span>}</td>
+                      <td className="px-4 py-2 text-right text-emerald-400 font-medium">${r.amountUsd.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-slate-300">Bs {r.amountBs.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-slate-500 px-4 py-2">Los cobros en efectivo ya están sumados al efectivo esperado en gaveta.</p>
+              </>
+              )
+            )}
+
+            {/* ── PAGOS CxP (recibo por recibo) ── */}
+            {detailTab === 'pagos' && (
+              (summary?.receiptPayments?.length || 0) === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm">Sin pagos CxP en esta sesión</div>
+              ) : (
+              <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                    <th className="px-4 py-2 font-medium">Hora</th>
+                    <th className="px-4 py-2 font-medium">Recibo</th>
+                    <th className="px-4 py-2 font-medium">Proveedor</th>
+                    <th className="px-4 py-2 font-medium">Metodo</th>
+                    <th className="px-4 py-2 font-medium text-right">USD</th>
+                    <th className="px-4 py-2 font-medium text-right">Bs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.receiptPayments.map((r: any) => (
+                    <tr key={r.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                      <td className="px-4 py-2 text-slate-400">{new Date(r.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-2 text-xs font-mono text-red-400">{r.receiptNumber || '—'}</td>
+                      <td className="px-4 py-2 text-slate-300">{r.entityName}</td>
+                      <td className="px-4 py-2 text-slate-300">{r.methodName}{r.isCash && <span className="text-red-500/70 text-xs"> · gaveta</span>}</td>
+                      <td className="px-4 py-2 text-right text-red-300 font-medium">-${r.amountUsd.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-red-300">-Bs {r.amountBs.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-slate-500 px-4 py-2">Los pagos en efectivo ya están restados del efectivo esperado en gaveta.</p>
+              </>
+              )
+            )}
+
+            {/* ── MOVIMIENTOS de caja (manuales + gastos) ── */}
+            {detailTab === 'movimientos' && (
+              (summary?.cashMovements?.length || 0) === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm">No hay movimientos de caja en esta sesión</div>
+              ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700/50 text-slate-400 text-left">
+                    <th className="px-4 py-2 font-medium">Hora</th>
+                    <th className="px-4 py-2 font-medium">Tipo</th>
+                    <th className="px-4 py-2 font-medium">Razon</th>
+                    <th className="px-4 py-2 font-medium">Usuario</th>
+                    <th className="px-4 py-2 font-medium text-right">USD</th>
+                    <th className="px-4 py-2 font-medium text-right">Bs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.cashMovements.map((mov: any) => (
+                    <tr key={mov.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                      <td className="px-4 py-2 text-slate-400">{new Date(mov.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1.5">
+                          {mov.type === 'INCOME' ? (
+                            <ArrowUpRight size={14} className="text-green-400" />
+                          ) : (
+                            <ArrowDownRight size={14} className="text-red-400" />
+                          )}
+                          <span className={mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}>
+                            {mov.type === 'INCOME' ? 'Ingreso' : 'Egreso'}
+                          </span>
+                          {mov.isManual ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">MANUAL</span>
+                          ) : mov.expenseId ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400">GASTO</span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-slate-300">{mov.reason}</td>
+                      <td className="px-4 py-2 text-slate-400">{mov.createdBy?.name}</td>
+                      <td className={`px-4 py-2 text-right font-medium ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                        {mov.type === 'INCOME' ? '+' : '-'}${mov.amountUsd.toFixed(2)}
+                      </td>
+                      <td className={`px-4 py-2 text-right ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
+                        {mov.type === 'INCOME' ? '+' : '-'}Bs {mov.amountBs.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              )
             )}
           </div>
         </div>
