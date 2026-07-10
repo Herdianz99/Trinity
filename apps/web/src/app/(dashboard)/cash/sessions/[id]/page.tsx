@@ -354,13 +354,6 @@ export default function CashSessionDetailPage() {
                   {label}
                 </button>
               ))}
-              {/* Marcado como PRUEBA: layout nuevo (recibo por recibo) a la espera de cómo lo pida el cliente */}
-              <span
-                className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400"
-                title="Vista en prueba: el desglose recibo por recibo puede cambiar según lo pida el cliente"
-              >
-                Prueba
-              </span>
             </div>
 
             {/* ── VENTAS (pagos de facturas) ── */}
