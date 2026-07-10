@@ -202,6 +202,62 @@ export class ExpensesService {
       throw new BadRequestException('Debe proporcionar al menos un monto (USD o Bs)');
     }
 
+    // Gasto A CREDITO: se le debe a un proveedor. No mueve la caja ahora; genera
+    // una CxP (Payable) que luego se paga con un recibo de pago (como una compra
+    // a credito). El pago del recibo, atado a una caja, es el que mueve la gaveta.
+    if (dto.isCredit) {
+      if (!dto.supplierId) {
+        throw new BadRequestException('Un gasto a credito requiere un proveedor (a quien se le debe)');
+      }
+      const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
+      if (!supplier) throw new BadRequestException('Proveedor no encontrado');
+
+      const dueDate = new Date(dto.date);
+      dueDate.setDate(dueDate.getDate() + (dto.creditDays || 0));
+
+      return this.prisma.$transaction(async (tx) => {
+        const expense = await tx.expense.create({
+          data: {
+            categoryId: dto.categoryId,
+            description: dto.description,
+            reference: dto.reference,
+            amountUsd: amountUsd!,
+            amountBs: amountBs!,
+            exchangeRate: rateVal,
+            date: new Date(dto.date),
+            notes: dto.notes,
+            isCredit: true,
+            creditDays: dto.creditDays,
+            supplierId: dto.supplierId,
+            createdById: userId,
+          },
+          include: {
+            category: { select: { name: true } },
+            createdBy: { select: { name: true } },
+          },
+        });
+
+        await tx.payable.create({
+          data: {
+            supplierId: dto.supplierId!,
+            expenseId: expense.id,
+            description: `Gasto: ${dto.description}`,
+            documentNumber: dto.reference,
+            amountUsd: amountUsd!,
+            amountBs: amountBs!,
+            exchangeRate: rateVal,
+            netPayableUsd: amountUsd!,
+            netPayableBs: amountBs!,
+            dueDate,
+            status: 'PENDING',
+            currency: dto.amountUsd ? 'USD' : 'BS',
+          },
+        });
+
+        return expense;
+      });
+    }
+
     // If cashSessionId provided, validate session is OPEN and create CashMovement
     if (dto.cashSessionId) {
       const session = await this.prisma.cashSession.findUnique({
@@ -286,12 +342,20 @@ export class ExpensesService {
   async update(id: string, dto: Partial<CreateExpenseDto>, user: { id: string; role: UserRole }) {
     const expense = await this.prisma.expense.findUnique({
       where: { id },
-      include: { cashMovement: true },
+      include: { cashMovement: true, payable: { select: { id: true } } },
     });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
 
     if (user.role !== UserRole.ADMIN && expense.createdById !== user.id) {
       throw new ForbiddenException('Solo el creador o ADMIN puede editar este gasto');
+    }
+
+    // Gasto a credito con CxP: los montos/tasa/fecha viven en la cuenta por pagar.
+    // Solo se permiten cambios no financieros (categoria/descripcion/referencia/notas).
+    if (expense.payable && (dto.amountUsd !== undefined || dto.amountBs !== undefined || dto.exchangeRate !== undefined || dto.date !== undefined || dto.supplierId !== undefined)) {
+      throw new BadRequestException(
+        'Este gasto a credito ya genero una cuenta por pagar. Para cambiar montos, tasa, fecha o proveedor, gestiona la CxP.',
+      );
     }
 
     const updateData: any = {};
@@ -361,8 +425,19 @@ export class ExpensesService {
     if (user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Solo ADMIN puede eliminar gastos');
     }
-    const expense = await this.prisma.expense.findUnique({ where: { id } });
+    const expense = await this.prisma.expense.findUnique({
+      where: { id },
+      include: { payable: { select: { id: true, paidAmountUsd: true } } },
+    });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
+
+    // Un gasto a credito con CxP asociada no se borra directo: primero hay que
+    // gestionar la cuenta por pagar (evita dejar una CxP huerfana o borrar deuda pagada).
+    if (expense.payable) {
+      throw new BadRequestException(
+        'Este gasto a credito tiene una cuenta por pagar asociada. Gestiona/anula la CxP antes de eliminar el gasto.',
+      );
+    }
 
     return this.prisma.expense.delete({ where: { id } });
   }

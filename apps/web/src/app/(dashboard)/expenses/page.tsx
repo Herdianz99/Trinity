@@ -30,9 +30,19 @@ interface Expense {
   exchangeRate: number;
   date: string;
   notes: string | null;
+  isCredit?: boolean;
+  creditDays?: number | null;
+  supplierId?: string | null;
   createdById: string;
   createdBy: { name: string };
   createdAt: string;
+}
+
+interface SupplierOption {
+  id: string;
+  name: string;
+  rif: string | null;
+  creditDays?: number;
 }
 
 interface ExpenseCategory {
@@ -87,8 +97,12 @@ export default function ExpensesPage() {
     notes: '',
     cashSessionId: '',
     methodId: '',
+    isCredit: false,
+    supplierId: '',
+    creditDays: '30',
   });
   const [todayRate, setTodayRate] = useState<number>(0);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [processing, setProcessing] = useState(false);
   const [openSessions, setOpenSessions] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
@@ -175,6 +189,10 @@ export default function ExpensesPage() {
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setPaymentMethods(data); })
       .catch(() => {});
+    fetch('/api/proxy/suppliers?isActive=true')
+      .then(r => r.json())
+      .then(data => { const list = Array.isArray(data) ? data : data.data || []; setSuppliers(list); })
+      .catch(() => {});
   }, [fetchCategories, fetchRate]);
   useEffect(() => { fetchExpenses(); fetchSummary(); }, [fetchExpenses, fetchSummary]);
 
@@ -200,6 +218,9 @@ export default function ExpensesPage() {
       notes: '',
       cashSessionId: '',
       methodId: '',
+      isCredit: false,
+      supplierId: '',
+      creditDays: '30',
     });
     setModalOpen(true);
     fetchOpenSessions();
@@ -220,6 +241,9 @@ export default function ExpensesPage() {
       notes: exp.notes || '',
       cashSessionId: '',
       methodId: '',
+      isCredit: !!exp.isCredit,
+      supplierId: exp.supplierId || '',
+      creditDays: exp.creditDays != null ? String(exp.creditDays) : '30',
     });
     setModalOpen(true);
   }
@@ -287,6 +311,10 @@ export default function ExpensesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (formData.isCredit && !formData.supplierId) {
+      setMessage({ type: 'error', text: 'Un gasto a credito requiere seleccionar el proveedor al que se le debe' });
+      return;
+    }
     setProcessing(true);
     try {
       const body: any = {
@@ -299,8 +327,15 @@ export default function ExpensesPage() {
       if (formData.amountUsd) body.amountUsd = parseFloat(formData.amountUsd);
       if (formData.amountBs) body.amountBs = parseFloat(formData.amountBs);
       if (formData.exchangeRate) body.exchangeRate = parseFloat(formData.exchangeRate);
-      if (formData.cashSessionId) body.cashSessionId = formData.cashSessionId;
-      if (formData.methodId) body.methodId = formData.methodId;
+      if (formData.isCredit) {
+        body.isCredit = true;
+        body.supplierId = formData.supplierId;
+        body.creditDays = parseInt(formData.creditDays) || 0;
+      } else {
+        // Solo contado engancha a caja; a credito nunca toca la caja al crearse.
+        if (formData.cashSessionId) body.cashSessionId = formData.cashSessionId;
+        if (formData.methodId) body.methodId = formData.methodId;
+      }
 
       const url = editingExpense ? `/api/proxy/expenses/${editingExpense.id}` : '/api/proxy/expenses';
       const method = editingExpense ? 'PATCH' : 'POST';
@@ -504,7 +539,16 @@ export default function ExpensesPage() {
                       {exp.category.name}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-200 max-w-[200px] truncate">{exp.description}</td>
+                  <td className="px-4 py-3 text-slate-200 max-w-[220px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate">{exp.description}</span>
+                      {exp.isCredit && (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30" title="Gasto a credito (CxP)">
+                          CRÉDITO
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-400">{exp.reference || '-'}</td>
                   <td className="px-4 py-3 text-right text-red-400 font-medium">${exp.amountUsd.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-red-300">Bs {exp.amountBs.toFixed(2)}</td>
@@ -610,8 +654,8 @@ export default function ExpensesPage() {
                 <X size={18} />
               </button>
             </div>
-            {/* Tabs */}
-            {!editingExpense && (
+            {/* Tabs — el pago desde caja no aplica a gastos a credito (no sale plata ahora) */}
+            {!editingExpense && !formData.isCredit && (
               <div className="flex gap-1 mb-4 border-b border-slate-700/50">
                 <button
                   onClick={() => setModalTab('info')}
@@ -717,6 +761,59 @@ export default function ExpensesPage() {
                       Trae la tasa del dia del gasto. Editala si ese dia no tiene tasa guardada o el gasto se hizo con otra.
                     </p>
                   </div>
+
+                  {/* A credito -> genera CxP */}
+                  <div className="rounded-lg border border-slate-700/60 bg-slate-800/30 p-3 space-y-3">
+                    <label className={`flex items-center gap-2 select-none ${editingExpense ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        checked={formData.isCredit}
+                        disabled={!!editingExpense}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setFormData(prev => ({ ...prev, isCredit: on }));
+                          if (on) setModalTab('info');
+                        }}
+                        className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40"
+                      />
+                      <span className="text-sm text-slate-200">Gasto a credito (genera cuenta por pagar)</span>
+                    </label>
+                    {formData.isCredit && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs text-slate-400 mb-1">Proveedor (a quien se le debe) *</label>
+                          <select
+                            value={formData.supplierId}
+                            disabled={!!editingExpense}
+                            onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm disabled:opacity-60"
+                          >
+                            <option value="">Seleccionar...</option>
+                            {suppliers.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}{s.rif ? ` (${s.rif})` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Dias credito</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formData.creditDays}
+                            disabled={!!editingExpense}
+                            onChange={(e) => setFormData({ ...formData, creditDays: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {formData.isCredit && (
+                      <p className="text-[11px] text-amber-400/90">
+                        No sale dinero de la caja ahora. Se paga luego con un recibo de pago (CxP), como una compra a credito.
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Notas</label>
                     <textarea

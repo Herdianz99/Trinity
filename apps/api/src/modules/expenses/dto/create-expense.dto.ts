@@ -1,8 +1,21 @@
-import { IsString, IsOptional, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString, IsBoolean, IsInt } from 'class-validator';
 
 export class CreateExpenseDto {
   @IsString()
   categoryId: string;
+
+  // Gasto a credito: se le debe a un proveedor y genera una CxP (Payable).
+  @IsOptional()
+  @IsBoolean()
+  isCredit?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  creditDays?: number;
+
+  @IsOptional()
+  @IsString()
+  supplierId?: string;
 
   @IsString()
   description: string;

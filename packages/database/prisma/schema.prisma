@@ -464,6 +464,7 @@ model Supplier {
   islrRetentionVouchers IslrRetentionVoucher[]
   advances              SupplierAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
+  expenses              Expense[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -1238,6 +1239,8 @@ model Payable {
   supplier               Supplier              @relation(fields: [supplierId], references: [id])
   purchaseOrderId        String?
   purchaseOrder          PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  expenseId              String?               @unique
+  expense                Expense?              @relation(fields: [expenseId], references: [id])
   documentNumber         String?
   description            String?
   amountUsd              Float
@@ -1629,6 +1632,14 @@ model Expense {
   exchangeRate  Float
   date          DateTime
   notes         String?
+  // Gasto a credito: se le debe a un proveedor y genera una CxP (Payable) que se
+  // paga luego con un recibo de pago (como una compra a credito). Si isCredit es
+  // false, es un gasto de contado (con o sin caja) como siempre.
+  isCredit      Boolean         @default(false)
+  creditDays    Int?
+  supplierId    String?
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  payable       Payable?
   cashSessionId String?
   cashSession   CashSession?    @relation("ExpenseSession", fields: [cashSessionId], references: [id])
   methodId      String?

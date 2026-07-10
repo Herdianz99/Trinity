@@ -18,7 +18,9 @@ export class ExpensePdfService {
         category: { select: { name: true } },
         createdBy: { select: { name: true } },
         method: { select: { name: true } },
+        supplier: { select: { name: true, rif: true } },
         cashSession: { select: { cashRegister: { select: { name: true, code: true } } } },
+        payable: { select: { dueDate: true, status: true, paidAmountUsd: true, netPayableUsd: true } },
       },
     });
     if (!expense) throw new NotFoundException('Gasto no encontrado');
@@ -89,11 +91,25 @@ export class ExpensePdfService {
       row('Categoria', expense.category.name);
       row('Descripcion', expense.description);
       row('Referencia', expense.reference || '-');
-      const cajaLabel = expense.cashSession?.cashRegister
-        ? `${expense.cashSession.cashRegister.name || expense.cashSession.cashRegister.code || 'Caja'}`
-        : null;
-      if (cajaLabel) row('Pagado desde caja', cajaLabel);
-      if (expense.method?.name) row('Metodo de pago', expense.method.name);
+
+      if (expense.isCredit) {
+        row('Condicion', 'A CREDITO (cuenta por pagar)');
+        if (expense.supplier?.name) {
+          row('Proveedor', `${expense.supplier.name}${expense.supplier.rif ? ` (${expense.supplier.rif})` : ''}`);
+        }
+        if (expense.payable?.dueDate) {
+          const paid = (expense.payable.paidAmountUsd || 0) >= (expense.payable.netPayableUsd || 0) - 0.01;
+          const estado = paid ? 'PAGADO' : (expense.payable.status === 'PARTIAL' ? 'ABONADO' : 'PENDIENTE');
+          row('Vencimiento', `${new Date(expense.payable.dueDate).toLocaleDateString('es-VE', { timeZone: 'UTC' })}  —  ${estado}`);
+        }
+      } else {
+        row('Condicion', 'Contado');
+        const cajaLabel = expense.cashSession?.cashRegister
+          ? `${expense.cashSession.cashRegister.name || expense.cashSession.cashRegister.code || 'Caja'}`
+          : null;
+        if (cajaLabel) row('Pagado desde caja', cajaLabel);
+        if (expense.method?.name) row('Metodo de pago', expense.method.name);
+      }
       row('Registrado por', expense.createdBy.name);
 
       y += 8;

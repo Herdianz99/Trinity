@@ -168,7 +168,7 @@ export class ReceiptsService {
         items.push({
           itemType: 'PAYABLE',
           payableId: item.payableId,
-          description: payable.purchaseOrder?.number || payable.documentNumber || `CxP-${item.payableId.slice(-6)}`,
+          description: payable.purchaseOrder?.number || payable.description || payable.documentNumber || `CxP-${item.payableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -631,9 +631,13 @@ export class ReceiptsService {
       };
 
       if (query.search) {
-        where.purchaseOrder = {
-          number: { contains: query.search, mode: 'insensitive' },
-        };
+        // Busca por N° de orden, N° de documento o descripcion (para CxP de gasto,
+        // que no tienen orden de compra pero si descripcion "Gasto: ...").
+        where.OR = [
+          { purchaseOrder: { number: { contains: query.search, mode: 'insensitive' } } },
+          { documentNumber: { contains: query.search, mode: 'insensitive' } },
+          { description: { contains: query.search, mode: 'insensitive' } },
+        ];
       }
 
       const payables = await this.prisma.payable.findMany({
@@ -678,7 +682,7 @@ export class ReceiptsService {
         id: p.id,
         documentType: 'CxP',
         payableId: p.id,
-        description: p.purchaseOrder?.number || (p as any).documentNumber || `CxP-${p.id.slice(-6)}`,
+        description: p.purchaseOrder?.number || (p as any).description || (p as any).documentNumber || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,
         dueDate: p.dueDate,
         amountUsd: p.netPayableUsd,

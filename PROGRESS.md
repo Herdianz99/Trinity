@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Gastos a crédito → CxP (se pagan con recibo, como una compra a crédito) — 2026-07-09
+
+Tercer cambio de gastos: poder registrar un gasto **a crédito** que genera una **cuenta por pagar** y se paga después con un recibo de pago, igual que una compra a crédito. Decisión de Diego: el gasto a crédito **siempre se le debe a un proveedor** → se reutiliza todo el sistema de CxP/recibos existente (mínimo código nuevo).
+
+- **Schema**: `Expense` gana `isCredit`, `creditDays`, `supplierId` (+ relación); `Payable` gana `expenseId` (único) + relación. `Payable.purchaseOrderId` ya era opcional → un CxP de gasto es un Payable con `expenseId` + proveedor, sin orden de compra. Migración `IF NOT EXISTS` + `fix-schema.sql`.
+- **Backend `create`**: si `isCredit` → exige proveedor, **NO** crea movimiento de caja, y crea un `Payable` (PENDING, `dueDate = fecha + creditDays`, `netPayable = monto`, `description = "Gasto: …"`). El gasto queda registrado (cuenta como gasto al incurrirse, accrual); la deuda vive en la CxP.
+- **Recibos/CxP**: sin cambios de fondo — el CxP del gasto aparece bajo su proveedor en documentos pendientes y se paga con el recibo de pago normal (que, atado a una caja, mueve la gaveta vía el arqueo que lee recibos, hecho antes en esta sesión). Se ajustó la etiqueta (`payable.description` → "Gasto: …") y la búsqueda de pendientes (por descripción/documento, no solo N° de orden).
+- **Guards**: no se puede borrar un gasto con CxP asociada; no se pueden editar montos/tasa/fecha/proveedor de un gasto a crédito que ya generó CxP (se gestiona por la CxP).
+- **Frontend**: toggle "A crédito" + selector de proveedor + días en el form (oculta el tab "pago desde caja"); badge **CRÉDITO** en el listado; el PDF del gasto muestra condición/proveedor/vencimiento/estado. Typecheck API+web verde.
+
 ## 💸 Gastos: tasa editable por día + PDF individual — 2026-07-09
 
 Dos de los tres cambios pedidos para gastos (el tercero, gastos a crédito → recibo/CxP, queda para diseñar):
