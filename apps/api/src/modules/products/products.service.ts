@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
+import { productSearchTsQuery } from '../../common/product-search';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { IvaType, Prisma } from '@prisma/client';
@@ -152,15 +153,19 @@ export class ProductsService {
       ];
     }
 
-    // Full-text search using raw SQL if search term provided
+    // Full-text search using raw SQL if search term provided.
+    // to_tsquery con prefijos (palabra:*) exige TODAS las palabras en cualquier orden;
+    // el ILIKE sobre codigos queda como respaldo para busquedas exactas por codigo.
     if (search) {
+      const tsq = productSearchTsQuery(search);
+      const like = `%${search}%`;
       const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
-        WHERE "searchVector" @@ plainto_tsquery('spanish', ${search})
-        OR name ILIKE ${'%' + search + '%'}
-        OR code ILIKE ${'%' + search + '%'}
-        OR barcode ILIKE ${'%' + search + '%'}
-        OR "supplierRef" ILIKE ${'%' + search + '%'}
+        WHERE "searchVector" @@ to_tsquery('spanish', ${tsq})
+        OR code ILIKE ${like}
+        OR barcode ILIKE ${like}
+        OR "supplierRef" ILIKE ${like}
+        OR "otherCode" ILIKE ${like}
       `;
       const ids = searchResults.map((r) => r.id);
       if (ids.length === 0) {
@@ -219,6 +224,8 @@ export class ProductsService {
   async search(q: string) {
     if (!q || q.trim().length === 0) return [];
 
+    const tsq = productSearchTsQuery(q);
+    const like = `%${q}%`;
     const results = await this.prisma.$queryRaw<any[]>`
       SELECT p.id, p.code, p.name, p."priceDetal", p."priceMayor", p."isService",
         p."primaryImageThumbUrl",
@@ -226,14 +233,14 @@ export class ProductsService {
       FROM "Product" p
       WHERE p."isActive" = true
       AND (
-        p."searchVector" @@ plainto_tsquery('spanish', ${q})
-        OR p.name ILIKE ${'%' + q + '%'}
-        OR p.code ILIKE ${'%' + q + '%'}
-        OR p.barcode ILIKE ${'%' + q + '%'}
-        OR p."supplierRef" ILIKE ${'%' + q + '%'}
+        p."searchVector" @@ to_tsquery('spanish', ${tsq})
+        OR p.code ILIKE ${like}
+        OR p.barcode ILIKE ${like}
+        OR p."supplierRef" ILIKE ${like}
+        OR p."otherCode" ILIKE ${like}
       )
       ORDER BY
-        CASE WHEN p.code ILIKE ${'%' + q + '%'} THEN 0
+        CASE WHEN p.code ILIKE ${like} THEN 0
              WHEN p.barcode = ${q} THEN 0
              ELSE 1
         END,

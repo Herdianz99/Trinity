@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { productSearchTsQuery } from '../../common/product-search';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { UpdateCountItemsDto } from './dto/update-count-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
@@ -113,15 +114,16 @@ export class InventoryCountsService {
       where.supplierId = dto.supplierId;
     }
 
-    // Full-text search + ILIKE fallback
+    // Full-text search (mismo buscador normalizado que POS/compra/articulos) + ILIKE codigo
     if (dto.search) {
+      const tsq = productSearchTsQuery(dto.search);
+      const like = `%${dto.search}%`;
       const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "isActive" = true
         AND (
-          "searchVector" @@ plainto_tsquery('spanish', ${dto.search})
-          OR name ILIKE ${'%' + dto.search + '%'}
-          OR code ILIKE ${'%' + dto.search + '%'}
+          "searchVector" @@ to_tsquery('spanish', ${tsq})
+          OR code ILIKE ${like}
         )
       `;
       const ids = searchResults.map((r) => r.id);

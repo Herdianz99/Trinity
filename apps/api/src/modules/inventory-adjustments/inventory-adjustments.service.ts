@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { productSearchTsQuery } from '../../common/product-search';
 import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.dto';
 import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
@@ -137,13 +138,14 @@ export class InventoryAdjustmentsService {
     }
 
     if (dto.search) {
+      const tsq = productSearchTsQuery(dto.search);
+      const like = `%${dto.search}%`;
       const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "isActive" = true
         AND (
-          "searchVector" @@ plainto_tsquery('spanish', ${dto.search})
-          OR name ILIKE ${'%' + dto.search + '%'}
-          OR code ILIKE ${'%' + dto.search + '%'}
+          "searchVector" @@ to_tsquery('spanish', ${tsq})
+          OR code ILIKE ${like}
         )
       `;
       const ids = searchResults.map((r) => r.id);

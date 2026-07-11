@@ -2172,6 +2172,33 @@ CREATE INDEX IF NOT EXISTS "InvoiceItem_invoiceId_idx" ON "InvoiceItem"("invoice
 -- =============================================================================
 CREATE INDEX IF NOT EXISTS "Product_searchVector_idx" ON "Product" USING GIN ("searchVector");
 
+-- Funcion/trigger de busqueda NORMALIZADA (separadores P/ . - -> espacio, unaccent, +otherCode).
+-- Idempotente; mantiene la version buena aunque migre. NO hace backfill (eso va en la migracion
+-- 20260710170000). Sin esto, "asiento poceta" no encuentra "ASIENTO P/POCETA".
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE OR REPLACE FUNCTION update_product_search_vector()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW."searchVector" := to_tsvector('spanish',
+    regexp_replace(
+      unaccent(lower(
+        COALESCE(NEW.name, '') || ' ' ||
+        COALESCE(NEW.code, '') || ' ' ||
+        COALESCE(NEW.barcode, '') || ' ' ||
+        COALESCE(NEW."supplierRef", '') || ' ' ||
+        COALESCE(NEW."otherCode", '')
+      )),
+      '[^a-z0-9 ]+', ' ', 'g'
+    )
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS product_search_vector_trigger ON "Product";
+CREATE TRIGGER product_search_vector_trigger
+  BEFORE INSERT OR UPDATE ON "Product"
+  FOR EACH ROW EXECUTE FUNCTION update_product_search_vector();
+
 -- =============================================================================
 -- MODO DE COSTO DEL AJUSTE DE INVENTARIO (Session 101)
 -- Elige si el REPORTE del ajuste usa costo puro ('COST') o costo + brecha ('BREGA').

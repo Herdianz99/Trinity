@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔎 Búsqueda de artículos tolerante a "P/", tildes y orden — 2026-07-10
+
+Los clientes no encontraban productos como "ASIENTO P/POCETA BLANCA" buscando "asiento poceta", ni "PERFIL MARCO P/PUERTA..." buscando "marco puerta". Causa raíz (probada): la `/` pegaba dos palabras en un solo token del índice (`p/poceta`), así "poceta" no existía como palabra; y el `ILIKE '%asiento poceta%'` exigía la cadena literal contigua.
+
+- **Índice** (`searchVector`): el trigger ahora normaliza antes de indexar — reemplaza separadores `/ . -` (cualquier no-alfanumérico) por espacio, aplica `unaccent` (tildes/ñ) e incluye `otherCode`. Migración `20260710170000_product_search_normalize` (extensión unaccent + función + backfill de todos los productos) + réplica en `fix-schema.sql` (sin backfill).
+- **Consulta**: helper compartido `common/product-search.ts` → `productSearchTsQuery()` construye `palabra:* & palabra:*` para `to_tsquery`: exige TODAS las palabras (AND), en cualquier orden y como prefijo, sin acentos/símbolos. El `ILIKE` sobre códigos queda de respaldo.
+- **Unificado en las 5 búsquedas**: `products.service` (POS, /inventory/articulos, etiquetas, traslados, reemplazos vía `findAll`; compra vía `search()`) + `inventory-adjustments` e `inventory-counts` (agregar por filtro). Ya no queda ningún `plainto_tsquery` viejo. Ahora "asien poc", "poceta asiento", con o sin tildes, encuentran.
+
+## 🔓 /inventory/articulos: activar/bloquear venta desde el panel — 2026-07-10
+
+En el panel lateral del kardex (al hacer clic en un artículo) se agregó un **toggle "Activo para la venta"** que guarda al instante (PATCH al producto), con badge rojo "Bloqueado" y aviso si falla el guardado. Reutiliza `saleBlocked` y el componente `Toggle`.
+
 ## 🔒 Producto: bloqueo para venta + inactivo oculto + "otro código" + UI toggles — 2026-07-10
 
 Tres cosas en `Product` (+ mejoras de UI en los formularios):
