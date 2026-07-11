@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 👥 CxC nueva: crear/editar clientes inline (como los proveedores en la compra) — 2026-07-11
+
+En `/receivables/new` (Nueva Cuenta por Cobrar) ahora se puede **crear y editar clientes** sin salir del formulario, igual que la compra permite crear/editar proveedores. Se creó un **componente reutilizable** `components/customer-form-modal.tsx` (espejo de `supplier-form-modal.tsx`): nombre, tipo+número de documento con botón **SENIAT**, teléfono, email, dirección, cupo/días de crédito, toggles contribuyente especial y empresa del grupo, y **aviso de documento duplicado** (mismo tipo+número). Botones **"Nuevo"/"Editar"** junto al selector de Cliente; al guardar refresca la lista y selecciona el cliente. `POST/PATCH /customers`. Typecheck web verde. (El modal queda listo para reusar en el POS u otras pantallas si se quiere unificar más adelante.)
+
 ## 🏠 Fix: la raíz `/` con sesión abierta ya no bota al login — 2026-07-11
 
 Entrar a `http://localhost:3000/` (o el dominio) teniendo sesión abierta mandaba al **login** en vez del dashboard, obligando a re-loguearse o buscar la página en el historial. Causa: `app/page.tsx` hacía `redirect('/login')` **incondicional** (el middleware sí dejaba pasar `/` con token válido, pero la página lo botaba igual).

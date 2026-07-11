@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, HandCoins, Loader2, Save, Search, X } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Save, Search, X, Plus, Pencil } from 'lucide-react';
+import CustomerFormModal from '@/components/customer-form-modal';
 
 interface Customer {
   id: string;
@@ -47,6 +48,8 @@ export default function NewReceivablePage() {
   const [customerId, setCustomerId] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [customerModalMode, setCustomerModalMode] = useState<'create' | 'edit'>('create');
   const [serieId, setSerieId] = useState('');
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
   const [originalDate, setOriginalDate] = useState(formatLocalDate(new Date()));
@@ -108,6 +111,19 @@ export default function NewReceivablePage() {
     const base = new Date(y, m - 1, d);
     setDueDate(formatLocalDate(addDays(base, creditDays)));
   }, [creditDays, originalDate]);
+
+  function openNewCustomer() { setCustomerModalMode('create'); setCustomerModalOpen(true); }
+  function openEditCustomer() { if (customerId) { setCustomerModalMode('edit'); setCustomerModalOpen(true); } }
+
+  // Tras crear/editar un cliente: refrescar la lista y seleccionar el guardado (si fue creado/editado).
+  async function handleCustomerSaved(saved: any) {
+    try {
+      const res = await fetch('/api/proxy/customers?limit=1000');
+      if (res.ok) { const d = await res.json(); setCustomers(Array.isArray(d.data) ? d.data : []); }
+    } catch { /* ignore */ }
+    if (saved?.id) { setCustomerId(saved.id); setCustomerSearch(''); setCustomerDropdownOpen(false); }
+    setCustomerModalOpen(false);
+  }
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers;
@@ -206,7 +222,19 @@ export default function NewReceivablePage() {
               {/* Col 1: Cliente + Descripcion */}
               <div className="space-y-1.5">
                 <div ref={customerRef} className="relative">
-                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Cliente *</label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="block text-[10px] font-medium text-slate-400">Cliente *</label>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={openNewCustomer}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors">
+                        <Plus size={11} /> Nuevo
+                      </button>
+                      <button type="button" onClick={openEditCustomer} disabled={!customerId}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/50 text-slate-300 border border-slate-600 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <Pencil size={11} /> Editar
+                      </button>
+                    </div>
+                  </div>
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input type="text"
@@ -399,6 +427,15 @@ export default function NewReceivablePage() {
           </div>
         </div>
       </div>
+
+      {/* Modal crear/editar cliente (mismo patron que la compra con proveedores) */}
+      <CustomerFormModal
+        open={customerModalOpen}
+        mode={customerModalMode}
+        customerId={customerModalMode === 'edit' ? customerId : null}
+        onClose={() => setCustomerModalOpen(false)}
+        onSaved={handleCustomerSaved}
+      />
     </div>
   );
 }
