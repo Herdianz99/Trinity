@@ -164,6 +164,7 @@ const menuSections: MenuSection[] = [
       { label: 'Cajas', href: '/cash', icon: <Banknote size={18} /> },
       { label: 'Sesiones', href: '/cash/sessions', icon: <History size={18} /> },
       { label: 'Movimientos', href: '/cash/movements', icon: <ArrowLeftRight size={18} /> },
+      { label: 'Libro mayor', href: '/cash/ledger/entries', icon: <BookOpen size={18} /> },
     ],
   },
   {
