@@ -16,6 +16,10 @@ export interface CashLedgerInput {
   sourceId?: string | null;
   reason?: string | null;
   createdById?: string | null;
+  // Fecha real del movimiento. En vivo se omite (default now() = ahora, correcto). En el
+  // backfill SIEMPRE pasar la fecha del documento origen (paidAt/createdAt/postedAt) para
+  // que el filtro por fecha y el "hoy" del ledger sean reales, no la hora de reconstruccion.
+  occurredAt?: Date | null;
 }
 
 // Escribe una fila del ledger dentro de la transaccion del documento. Nunca debe dejar la
@@ -35,6 +39,7 @@ export async function writeCashLedger(tx: Prisma.TransactionClient, e: CashLedge
       sourceId: e.sourceId ?? null,
       reason: e.reason ?? null,
       createdById: e.createdById ?? null,
+      ...(e.occurredAt ? { createdAt: e.occurredAt } : {}),
     },
   });
 }

@@ -640,6 +640,7 @@ export class CashRegistersService {
             amountUsd: p.amountUsd, amountBs: p.amountBs, currency: m?.isDivisa ? 'USD' : 'BS',
             exchangeRate: p.exchangeRate, methodId: p.methodId, isCash: !!m?.isCash,
             sourceType: 'SALE_PAYMENT', sourceId: inv.id, reason: 'Pago factura (backfill)', createdById: session.openedById,
+            occurredAt: (p as any).createdAt || inv.paidAt,
           });
           if (p.changeAmountBs && p.changeAmountBs > 0) {
             const cm = p.changeMethod;
@@ -649,6 +650,7 @@ export class CashRegistersService {
               amountUsd: chUsd, amountBs: p.changeAmountBs, currency: 'BS', exchangeRate: p.exchangeRate,
               methodId: p.changeMethodId, isCash: cm ? !!cm.isCash : true,
               sourceType: 'CHANGE', sourceId: inv.id, reason: 'Vuelto (backfill)', createdById: session.openedById,
+              occurredAt: (p as any).createdAt || inv.paidAt,
             });
           }
         }
@@ -663,6 +665,7 @@ export class CashRegistersService {
           exchangeRate: mv.exchangeRate, isCash: mv.isCash !== false,
           sourceType: mv.expenseId ? 'EXPENSE' : 'MANUAL', sourceId: mv.expenseId || mv.id,
           reason: mv.reason, createdById: mv.createdById,
+          occurredAt: mv.createdAt,
         });
       }
 
@@ -681,6 +684,7 @@ export class CashRegistersService {
             exchangeRate: rp.exchangeRate, methodId: rp.methodId, isCash: !!m?.isCash,
             sourceType: rc.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
             sourceId: rc.id, reason: `Recibo ${rc.number} (backfill)`, createdById: session.openedById,
+            occurredAt: (rp as any).createdAt || rc.postedAt || rc.createdAt,
           });
         }
       }

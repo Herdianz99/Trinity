@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 Fix: el backfill del ledger guardaba la fecha de reconstrucción (no la real) — 2026-07-11
+
+El filtro por fecha del Libro mayor mostraba de más: un pago de BINANCE de ayer (cajera Andreina, que no trabajó hoy) salía en "hoy". Causa: `writeCashLedger` no fijaba `createdAt`, así que el **backfill** escribía las filas con `now()` (la hora de reconstrucción) en vez de la fecha del movimiento; el filtro `caracasDayStart/End` sobre `createdAt` estaba bien, pero la data estaba mal fechada. Los movimientos **en vivo** no tenían el bug (createdAt = ahora = correcto).
+
+- **Fix:** `CashLedgerInput.occurredAt?` opcional; si viene, el helper fija `createdAt: occurredAt`. El backfill lo pasa con la fecha real: ventas/vueltos→`invoice.paidAt` (o `payment.createdAt`), movimientos→`cashMovement.createdAt`, recibos→`receiptPayment.createdAt`/`postedAt`/`createdAt`. En vivo se omite (default `now()`). Idempotente: re-correr el backfill corrige las filas viejas.
+- Validado local: `ledger.createdAt` == `invoice.paidAt` (ms de diferencia).
+
 ## ⏳ Pendientes
 - **Devolución: aplicar el descuento del artículo al devolverlo.** Al hacer la devolución/nota de crédito, el monto a devolver debe considerar el descuento que tenía el artículo en la venta (no devolver el precio pleno). Diego lo explica bien mañana (2026-07-12).
 - (Opcional) Recalcular el snapshot de sesiones ya cerradas con arqueo malo — solo afecta reportes históricos, no la operación con el ledger hacia adelante.
