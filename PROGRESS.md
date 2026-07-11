@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 🏠 Fix: la raíz `/` con sesión abierta ya no bota al login — 2026-07-11
+
+Entrar a `http://localhost:3000/` (o el dominio) teniendo sesión abierta mandaba al **login** en vez del dashboard, obligando a re-loguearse o buscar la página en el historial. Causa: `app/page.tsx` hacía `redirect('/login')` **incondicional** (el middleware sí dejaba pasar `/` con token válido, pero la página lo botaba igual).
+
+Fix (`apps/web/src/app/page.tsx`): el root ahora hace `redirect('/dashboard')` y **el middleware decide según la sesión** — sin token → `/login`, `mustChangePassword` → `/change-password`, con token → dashboard (enruta por rol). Verificado con curl: `/` sin cookie → `/login`; `/` con token → `/dashboard`.
+
 ## ↔️ POS: divisor arrastrable entre productos y cobro (ancho ajustable) — 2026-07-11
 
 Los cajeros se quejaban de que el panel de cobro (cliente + lista de artículos + botones) era muy chico (~30% fijo en `lg:w-[420px]`) y no veían bien lo que hacían. Ahora el POS de escritorio tiene un **divisor arrastrable** entre las dos secciones (`sales/pos/page.tsx`):
