@@ -10,6 +10,7 @@ import {
   DoorOpen,
   Wifi,
   WifiOff,
+  BookOpen,
 } from 'lucide-react';
 
 interface CashRegister {
@@ -96,7 +97,11 @@ export default function CashPage() {
         <div className="p-2 rounded-xl bg-green-500/10 border border-green-500/20">
           <Banknote className="text-green-400" size={22} />
         </div>
-        <h1 className="text-2xl font-bold text-white">Cajas registradoras</h1>
+        <h1 className="text-2xl font-bold text-white flex-1">Cajas registradoras</h1>
+        <button onClick={() => router.push('/cash/ledger')}
+          className="btn-secondary !py-2 text-sm flex items-center gap-2" title="Reconstruir y comparar el libro mayor de caja">
+          <BookOpen size={15} /> Ledger
+        </button>
       </div>
 
       {message && (
