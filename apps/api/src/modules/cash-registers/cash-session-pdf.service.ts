@@ -52,15 +52,16 @@ const VUELTO_COLS = [
   { label: 'Bs', x: 482, width: 73, align: 'right' },
 ];
 
-// Columnas del reporte de la TABLA MADRE (libro mayor de caja). A4 vertical, area 40..555.
-const LEDGER_COLS = [
-  { label: 'Fecha / Hora', x: 40, width: 54 },
-  { label: 'Caja', x: 94, width: 48 },
-  { label: 'Cajero', x: 142, width: 52 },
-  { label: 'Detalle', x: 194, width: 106 },
-  { label: 'Metodo', x: 300, width: 58 },
-  { label: 'Efvo', x: 358, width: 24 },
-  { label: 'USD', x: 382, width: 80, align: 'right' },
+// Columnas del reporte de la TABLA MADRE (libro mayor de caja), AGRUPADO POR METODO.
+// El metodo es el encabezado del grupo, por eso la columna interna es "Origen". A4, area 40..555.
+const LEDGER_M_COLS = [
+  { label: 'Fecha / Hora', x: 40, width: 52 },
+  { label: 'Caja', x: 92, width: 46 },
+  { label: 'Cajero', x: 138, width: 50 },
+  { label: 'Origen', x: 188, width: 66 },
+  { label: 'Detalle', x: 254, width: 100 },
+  { label: 'Efvo', x: 354, width: 26 },
+  { label: 'USD', x: 380, width: 82, align: 'right' },
   { label: 'Bs', x: 462, width: 93, align: 'right' },
 ];
 
@@ -599,7 +600,7 @@ export class CashSessionPdfService {
 
     // Encabezado
     doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
-    doc.fontSize(12).font('Helvetica-Bold').text('Libro mayor de caja — Movimientos detallados', 40, 60);
+    doc.fontSize(12).font('Helvetica-Bold').text('Libro mayor de caja — por método de pago', 40, 60);
     doc.fontSize(9).font('Helvetica').fillColor('#334155');
     const period = meta.from || meta.to ? `${meta.from || '...'}  a  ${meta.to || '...'}` : 'Todas las fechas';
     const filtros: string[] = [`Periodo: ${period}`, `Caja: ${meta.registerName}`, `Cajero: ${meta.cashierName}`];
@@ -622,50 +623,51 @@ export class CashSessionPdfService {
     doc.fillColor('#000');
     y += 44;
 
-    // Agrupar por origen
-    const bySource = new Map<string, any[]>();
-    for (const r of rows) {
-      if (!bySource.has(r.sourceType)) bySource.set(r.sourceType, []);
-      bySource.get(r.sourceType)!.push(r);
-    }
-    // Orden conocido primero, luego cualquier origen inesperado
-    const orderedKeys = [
-      ...LEDGER_SOURCES.map((s) => s.key).filter((k) => bySource.has(k)),
-      ...Array.from(bySource.keys()).filter((k) => !LEDGER_SOURCES.some((s) => s.key === k)),
-    ];
-    const labelOf = (k: string) => LEDGER_SOURCES.find((s) => s.key === k)?.label || k;
-
     if (rows.length === 0) {
       doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('No hay movimientos en el libro mayor con los filtros aplicados.', 40, y);
       return this.toBuffer(doc);
     }
+    const labelOf = (k: string) => LEDGER_SOURCES.find((s) => s.key === k)?.label || k;
 
-    for (const key of orderedKeys) {
-      const grp = bySource.get(key)!;
+    // Agrupar por METODO DE PAGO (junta ventas, vueltos, cobros/pagos CxC-CxP, gastos,
+    // anticipos y manuales del mismo metodo). El total de cada grupo = ingresos - egresos =
+    // lo que debe haber en ese metodo (para el cuadre).
+    const byMethod = new Map<string, any[]>();
+    for (const r of rows) {
+      const key = r.methodName || '—';
+      if (!byMethod.has(key)) byMethod.set(key, []);
+      byMethod.get(key)!.push(r);
+    }
+    const methodNames = Array.from(byMethod.keys()).sort((a, b) => a.localeCompare(b));
+
+    for (const name of methodNames) {
+      const grp = byMethod.get(name)!;
       let gInUsd = 0, gOutUsd = 0, gInBs = 0, gOutBs = 0;
       for (const r of grp) {
         if (r.direction === 'IN') { gInUsd += r.amountUsd; gInBs += r.amountBs; }
         else { gOutUsd += r.amountUsd; gOutBs += r.amountBs; }
       }
+      const netU = gInUsd - gOutUsd, netB = gInBs - gOutBs;
 
-      y = this.checkPage(doc, y, 60);
+      y = this.checkPage(doc, y, 70);
       doc.rect(40, y - 2, RIGHT - 40, 16).fill('#e2e8f0');
       doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
-      doc.text(`${labelOf(key)}  (${grp.length})`, 46, y + 1, { width: 300, lineBreak: false });
+      doc.text(`${name}  (${grp.length})`, 46, y + 1, { width: 250, lineBreak: false });
+      doc.text(`Total: $${this.fmt(netU)}  /  Bs ${this.fmt(netB)}`, 300, y + 1, { width: RIGHT - 300 - 6, align: 'right' });
       doc.fillColor('#000');
       y += 20;
 
-      y = this.drawTableHeader(doc, y, LEDGER_COLS, RIGHT);
+      y = this.drawTableHeader(doc, y, LEDGER_M_COLS, RIGHT);
       for (const r of grp) {
         y = this.checkPage(doc, y, 30);
-        if (y === 40) y = this.drawTableHeader(doc, y, LEDGER_COLS, RIGHT);
+        if (y === 40) y = this.drawTableHeader(doc, y, LEDGER_M_COLS, RIGHT);
         const sign = r.direction === 'OUT' ? '-' : '';
-        y = this.drawRowWrap(doc, y, LEDGER_COLS, [
+        y = this.drawRowWrap(doc, y, LEDGER_M_COLS, [
           this.shortDateTime(r.createdAt),
           r.registerName || '—',
           r.cashierName || '—',
+          labelOf(r.sourceType),
           r.reason || '—',
-          r.methodName || '—',
           r.isCash ? 'Si' : 'No',
           `${sign}$${this.fmt(r.amountUsd)}`,
           `${sign}${this.fmt(r.amountBs)}`,
@@ -673,9 +675,13 @@ export class CashSessionPdfService {
       }
       doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#cbd5e1');
       y += 3;
-      const netU = gInUsd - gOutUsd, netB = gInBs - gOutBs;
-      y = this.drawRow(doc, y, LEDGER_COLS, ['', '', '', '', '', 'Neto', `$${this.fmt(netU)}`, this.fmt(netB)], true);
-      y += 10;
+      // Si el metodo tuvo egresos (vueltos, gastos...), mostrar ingresos y egresos por separado.
+      if (gOutUsd > 0.001 || gOutBs > 0.001) {
+        y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', 'Ingresos', '', '', `$${this.fmt(gInUsd)}`, this.fmt(gInBs)], true);
+        y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', 'Egresos', '', '', `-$${this.fmt(gOutUsd)}`, `-${this.fmt(gOutBs)}`], true);
+      }
+      y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', `TOTAL ${name}`, '', '', `$${this.fmt(netU)}`, this.fmt(netB)], true);
+      y += 12;
     }
 
     // Total global

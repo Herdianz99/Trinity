@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte del libro mayor AGRUPADO POR MÉTODO DE PAGO (para el cuadre) — 2026-07-11
+
+Se cambió el reporte del libro mayor: antes agrupaba por origen; ahora **agrupa por método de pago**. Junta en un solo grupo todo lo del mismo método sin importar de dónde venga (venta, vuelto, cobro CxC, pago CxP, gasto, anticipo, manual) y da el **total neto del método = ingresos − egresos**, que es lo que debe haber en ese método → sirve directo para el cuadre. Cada fila muestra su Origen como columna; si el método tuvo egresos (vueltos/gastos), se desglosa Ingresos/Egresos/Total. Los movimientos manuales (sin método) caen en su propio grupo "Efectivo (manual)". Validado contra la BD real (groupBy por methodId). Título del PDF: "Libro mayor de caja — por método de pago".
+
 ## 🧾 Reporte detallado (PDF) del libro mayor de caja + entrada en el menú lateral — 2026-07-11
 
 - **Menú lateral**: CAJA → **Libro mayor** (`/cash/ledger/entries`).
