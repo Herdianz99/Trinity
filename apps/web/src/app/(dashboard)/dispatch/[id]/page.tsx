@@ -6,7 +6,7 @@ import {
   ArrowLeft, Loader2, X, Phone, CheckCircle2, PackageCheck, Ban, History, RotateCw, User, FileText, Calendar,
 } from 'lucide-react';
 import {
-  DISPATCH_STATUS_META as STATUS_META, fmtQty, fmtDate, isoToDateInput, isOverdue,
+  DISPATCH_STATUS_META as STATUS_META, fmtQty, fmtDate, isoToDateInput, isOverdue, isPhoneComplete,
 } from '@/lib/dispatch';
 
 export default function DispatchDetailPage() {
@@ -44,6 +44,7 @@ export default function DispatchDetailPage() {
   const [deliverQty, setDeliverQty] = useState<Record<string, string>>({});
   const [deliverNote, setDeliverNote] = useState('');
   const [delivering, setDelivering] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState<string>('todos'); // 'todos' | printAreaId
 
   // Sincronizar el form editable cuando llega/cambia la comanda
   useEffect(() => {
@@ -71,13 +72,19 @@ export default function DispatchDetailPage() {
     finally { setSavingInfo(false); }
   }
 
+  // Llena las cantidades pendientes de los ítems VISIBLES (respeta el filtro de zona).
   function fillAllPending() {
-    const next: Record<string, string> = {};
-    for (const it of dispatch.items) {
-      const pending = Math.round((it.quantityInvoiced - it.quantityDelivered) * 1000) / 1000;
-      if (pending > 0) next[it.id] = String(pending);
-    }
-    setDeliverQty(next);
+    const list = zoneFilter === 'todos'
+      ? dispatch.items
+      : dispatch.items.filter((it: any) => (it.printAreaId || '__none__') === zoneFilter);
+    setDeliverQty(prev => {
+      const next = { ...prev };
+      for (const it of list) {
+        const pending = Math.round((it.quantityInvoiced - it.quantityDelivered) * 1000) / 1000;
+        if (pending > 0) next[it.id] = String(pending);
+      }
+      return next;
+    });
   }
 
   async function registerDelivery() {
@@ -123,6 +130,20 @@ export default function DispatchDetailPage() {
   const meta = STATUS_META[dispatch.status] || STATUS_META.PENDIENTE;
   const overdue = isOverdue(dispatch.scheduledDate, dispatch.status);
   const totalDone = dispatch.items.filter((i: any) => i.quantityDelivered >= i.quantityInvoiced - 0.001).length;
+
+  // El contacto (nombre + tel) solo se edita si el teléfono está vacío o incompleto.
+  const canEditContact = !readOnly && !isPhoneComplete(dispatch.contactPhone);
+
+  // Zonas presentes en esta comanda (para el filtro interno del despachador) + ítems visibles.
+  const zones: { id: string; name: string }[] = [];
+  const seenZones = new Set<string>();
+  for (const it of dispatch.items) {
+    const zid = it.printAreaId || '__none__';
+    if (!seenZones.has(zid)) { seenZones.add(zid); zones.push({ id: zid, name: it.printAreaName || 'Sin zona' }); }
+  }
+  const visibleItems = zoneFilter === 'todos'
+    ? dispatch.items
+    : dispatch.items.filter((it: any) => (it.printAreaId || '__none__') === zoneFilter);
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -171,11 +192,14 @@ export default function DispatchDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="sm:col-span-2">
             <label className="block text-[10px] text-slate-400 mb-0.5">Contacto (nombre)</label>
-            <input value={contactName} onChange={e => setContactName(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" />
+            <input value={contactName} onChange={e => setContactName(e.target.value)} disabled={!canEditContact} className="input-field !py-1.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
           <div>
             <label className="block text-[10px] text-slate-400 mb-0.5">Teléfono</label>
-            <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" />
+            <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} disabled={!canEditContact} className="input-field !py-1.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
+            {!readOnly && !canEditContact && (
+              <p className="text-[10px] text-slate-500 mt-0.5">Contacto bloqueado (teléfono completo). Editable solo si falta o está incompleto.</p>
+            )}
           </div>
           <div>
             <label className="block text-[10px] text-slate-400 mb-0.5">Fecha de despacho</label>
@@ -195,6 +219,17 @@ export default function DispatchDetailPage() {
         </div>
       </div>
 
+      {/* Filtro por zona (para que el despachador vea rápido lo suyo) */}
+      {zones.length > 1 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] text-slate-500 mr-1">Zona:</span>
+          <ZoneBtn active={zoneFilter === 'todos'} onClick={() => setZoneFilter('todos')}>Todas</ZoneBtn>
+          {zones.map(z => (
+            <ZoneBtn key={z.id} active={zoneFilter === z.id} onClick={() => setZoneFilter(z.id)}>{z.name}</ZoneBtn>
+          ))}
+        </div>
+      )}
+
       {/* Items + despacho */}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -209,7 +244,7 @@ export default function DispatchDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {dispatch.items.map((it: any) => {
+            {visibleItems.map((it: any) => {
               const pending = Math.round((it.quantityInvoiced - it.quantityDelivered) * 1000) / 1000;
               return (
                 <tr key={it.id} className="border-b border-slate-700/30">
@@ -280,5 +315,14 @@ export default function DispatchDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ZoneBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick}
+      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${active ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white hover:bg-slate-700/40 border border-transparent'}`}>
+      {children}
+    </button>
   );
 }

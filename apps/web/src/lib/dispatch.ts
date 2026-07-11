@@ -29,3 +29,12 @@ export function isOverdue(iso: string | null, status: string): boolean {
   if (!iso || status === 'COMPLETADO' || status === 'CANCELADO') return false;
   return iso.slice(0, 10) < todayLocal();
 }
+
+// Teléfono "completo" en Venezuela = 11 dígitos (0XXX-XXXXXXX). Si está vacío o incompleto
+// (ej. solo "0414"), se permite editar el contacto; si está completo, queda bloqueado.
+export function phoneDigits(phone: string | null | undefined): number {
+  return (phone || '').replace(/\D/g, '').length;
+}
+export function isPhoneComplete(phone: string | null | undefined): boolean {
+  return phoneDigits(phone) >= 11;
+}
