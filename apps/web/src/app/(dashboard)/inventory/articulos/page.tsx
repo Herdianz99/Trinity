@@ -5,6 +5,7 @@ import {
   PackageSearch, Search, Loader2, X, ChevronLeft, ChevronRight, Activity, ScanLine,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/barcode-scanner';
+import Toggle from '@/components/toggle';
 
 // ── Types ──
 interface StockRow { quantity: number; warehouse: { id: string; name: string }; }
@@ -16,6 +17,7 @@ interface Product {
   priceDetal: number;
   priceMayor: number;
   stock: StockRow[];
+  saleBlocked?: boolean;
 }
 interface Movement {
   id: string;
@@ -66,6 +68,8 @@ export default function InventoryArticlesPage() {
   // Kardex panel
   const [selected, setSelected] = useState<Product | null>(null);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [savingSale, setSavingSale] = useState(false);
+  const [saleErr, setSaleErr] = useState(false);
   const [kLoading, setKLoading] = useState(false);
   const [kPage, setKPage] = useState(1);
   const [kTotalPages, setKTotalPages] = useState(1);
@@ -122,12 +126,34 @@ export default function InventoryArticlesPage() {
 
   function openKardex(p: Product) {
     setSelected(p);
+    setSaleErr(false);
     setKPage(1);
     fetchKardex(p.id, 1);
   }
   function closeKardex() {
     setSelected(null);
     setMovements([]);
+  }
+  // Activar/bloquear el articulo seleccionado para la venta (guarda al instante).
+  async function toggleSaleForSelected(active: boolean) {
+    if (!selected || savingSale) return;
+    const saleBlocked = !active;
+    setSavingSale(true);
+    setSaleErr(false);
+    try {
+      const res = await fetch(`/api/proxy/products/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saleBlocked }),
+      });
+      if (!res.ok) throw new Error();
+      setSelected(s => (s ? { ...s, saleBlocked } : s));
+      setProducts(prev => prev.map(p => (p.id === selected.id ? { ...p, saleBlocked } : p)));
+    } catch {
+      setSaleErr(true); // el toggle queda en su estado real (no cambiamos selected)
+    } finally {
+      setSavingSale(false);
+    }
   }
   function changeKardexPage(p: number) {
     if (!selected) return;
@@ -282,6 +308,15 @@ export default function InventoryArticlesPage() {
                   <span>Existencias: <span className="font-mono text-slate-200">{totalStock(selected)}</span></span>
                   <span>Precio: <span className="font-mono text-slate-200">${selected.priceDetal.toFixed(2)}</span></span>
                   {rate > 0 && <span className="font-mono text-slate-500">Bs {fmtBs(selected.priceDetal * rate)}</span>}
+                </div>
+                {/* Activar/desactivar para la venta (guarda al instante) */}
+                <div className="flex items-center gap-2 mt-2.5">
+                  <Toggle checked={!selected.saleBlocked} onChange={toggleSaleForSelected} disabled={savingSale} label="Activo para la venta" />
+                  {savingSale && <Loader2 className="animate-spin text-slate-500" size={12} />}
+                  {selected.saleBlocked && !savingSale && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Bloqueado</span>
+                  )}
+                  {saleErr && <span className="text-[11px] text-red-400">No se pudo guardar</span>}
                 </div>
               </div>
               <button onClick={closeKardex} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
