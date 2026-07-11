@@ -46,6 +46,7 @@ interface ProductDetail {
   id: string;
   code: string;
   name: string;
+  supplierRef?: string;
   costUsd: number;
   ivaType: string;
   isService?: boolean;
@@ -55,6 +56,7 @@ interface FormItem {
   productId: string;
   code: string;
   name: string;
+  supplierRef?: string;
   quantity: number;
   costUsd: number;
   discountPct: number;
@@ -304,15 +306,17 @@ export default function NewPurchaseBillPage() {
   }
 
   async function selectProduct(p: ProductSearchResult, rowIdx: number) {
-    // Fetch full product detail for costUsd and ivaType
+    // Fetch full product detail for costUsd, ivaType y ref. proveedor
     let costUsd = 0;
     let ivaType = 'GENERAL';
+    let supplierRef = '';
     try {
       const res = await fetch(`/api/proxy/products/${p.id}`);
       if (res.ok) {
         const detail: ProductDetail = await res.json();
         costUsd = detail.costUsd || 0;
         ivaType = detail.ivaType || 'GENERAL';
+        supplierRef = detail.supplierRef || '';
       }
     } catch { /* use defaults */ }
 
@@ -324,6 +328,7 @@ export default function NewPurchaseBillPage() {
       productId: p.id,
       code: p.code,
       name: p.name,
+      supplierRef,
       quantity: newItems[rowIdx]?.quantity || 1,
       costUsd: costValue,
       discountPct: newItems[rowIdx]?.discountPct || 0,
@@ -1019,10 +1024,12 @@ export default function NewPurchaseBillPage() {
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-800/30">
                 <th className="text-left px-3 py-3 text-slate-400 font-medium w-20">Ref. Art.</th>
+                <th className="text-left px-3 py-3 text-slate-400 font-medium w-24">Ref. Prov.</th>
                 <th className="text-left px-3 py-3 text-slate-400 font-medium min-w-[220px]">Articulo</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Cantidad</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Precio {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-20">% Dto.</th>
+                <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Precio c/Dto</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'Bs' : 'USD'}</th>
                 <th className="text-center px-3 py-3 text-slate-400 font-medium w-16">% IVA</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'USD' : 'Bs'}</th>
@@ -1039,6 +1046,11 @@ export default function NewPurchaseBillPage() {
                       <span className="font-mono text-xs text-green-400">
                         {item.code || '-'}
                       </span>
+                    </td>
+
+                    {/* Ref Proveedor */}
+                    <td className="px-3 py-2">
+                      <span className="text-xs text-slate-400">{item.supplierRef || '-'}</span>
                     </td>
 
                     {/* Articulo (searchable) */}
@@ -1160,6 +1172,13 @@ export default function NewPurchaseBillPage() {
                       />
                     </td>
 
+                    {/* Precio con descuento (Precio - % Dto) */}
+                    <td className="px-3 py-2 text-right">
+                      <span className="font-mono text-slate-300 text-sm">
+                        {currency === 'BS' ? '' : '$'}{fmt((item.costUsd || 0) * (1 - (item.discountPct || 0) / 100))}
+                      </span>
+                    </td>
+
                     {/* Importe primario (en la moneda seleccionada) */}
                     <td className="px-3 py-2 text-right">
                       <span className="font-mono text-white text-sm">
@@ -1220,7 +1239,7 @@ export default function NewPurchaseBillPage() {
 
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-500">
+                  <td colSpan={11} className="text-center py-10 text-slate-500">
                     <p className="mb-2">No hay articulos</p>
                     <button
                       type="button"

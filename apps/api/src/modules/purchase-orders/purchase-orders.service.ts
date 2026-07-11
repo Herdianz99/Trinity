@@ -250,7 +250,7 @@ export class PurchaseOrdersService {
     items: {
       include: {
         product: {
-          select: { id: true, code: true, name: true, costUsd: true, priceDetal: true, priceMayor: true, isService: true, gananciaPct: true, gananciaMayorPct: true, ivaType: true, bregaApplies: true },
+          select: { id: true, code: true, name: true, supplierRef: true, costUsd: true, priceDetal: true, priceMayor: true, isService: true, gananciaPct: true, gananciaMayorPct: true, ivaType: true, bregaApplies: true },
         },
       },
     },
