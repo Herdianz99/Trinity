@@ -14,4 +14,10 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsBoolean()
   isShared?: boolean;
+
+  // Caja de administración: false = NO aparece en el POS (pagos de proveedores/gastos).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  showInPos?: boolean;
 }

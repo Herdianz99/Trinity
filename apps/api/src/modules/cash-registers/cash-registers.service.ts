@@ -31,6 +31,7 @@ export class CashRegistersService {
     return this.prisma.cashRegister.findMany({
       where: {
         isActive: true,
+        showInPos: true, // las cajas de administración no aparecen en el POS
         OR: [
           { sessions: { some: { status: 'OPEN', openedById: userId } } },
           { isShared: true, sessions: { some: { status: 'OPEN' } } },
@@ -79,6 +80,7 @@ export class CashRegistersService {
         code: dto.code,
         name: dto.name,
         isShared: dto.isShared ?? false,
+        showInPos: dto.showInPos ?? true,
       },
     });
   }
@@ -103,6 +105,7 @@ export class CashRegistersService {
         name: dto.name,
         code: dto.code,
         isShared: dto.isShared,
+        showInPos: dto.showInPos,
       },
     });
   }

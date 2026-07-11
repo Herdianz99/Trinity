@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🏦 Caja de administración (no aparece en el POS) — 2026-07-11
+
+Nueva opción para tener una **caja de administración** — de donde se pagan proveedores, gastos, etc. — que **no** aparece en el POS de los cajeros.
+- **Schema:** `CashRegister.showInPos Boolean @default(true)` (migración `20260711210000_cashregister_showinpos`, aditiva + `fix-schema.sql`).
+- **POS:** `findAvailable` filtra `showInPos: true` → las cajas admin no salen en el selector del POS. Se abren/cierran desde `/cash` (que lista todas).
+- **Gastos/recibos:** ya usan `/cash-sessions?status=OPEN` (todas las sesiones abiertas), así que la sesión de la caja admin aparece automáticamente en sus selectores.
+- **Settings** (`settings/cash-registers`): toggle **"Aparece en el POS"** (apagarlo = caja de administración). DTO + service `createRegister`/`updateRegister` aceptan `showInPos`. Typecheck API+web verde.
+
 ## 💵 Fix: movimientos electrónicos (gastos/anticipos por Zelle/transf.) ya no tocan la gaveta — 2026-07-11
 
 El arqueo contaba **todo** `CashMovement` como efectivo físico (solo miraba `currency`), porque la tabla no sabía si el método era efectivo o electrónico. Un **anticipo por Zelle** sumaba efectivo fantasma a la gaveta; un **gasto por transferencia/Pago Móvil/Punto** restaba de la gaveta un dinero que salió del banco → descuadre.

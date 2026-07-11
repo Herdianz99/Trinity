@@ -30,6 +30,7 @@ interface CashRegister {
   name: string;
   code: string;
   isShared: boolean;
+  showInPos?: boolean;
   isActive: boolean;
   sessions: CashRegisterSession[];
   serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
@@ -50,6 +51,7 @@ export default function CashRegistersPage() {
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
   const [formIsShared, setFormIsShared] = useState(false);
+  const [formShowInPos, setFormShowInPos] = useState(true);
   const [formSerieId, setFormSerieId] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -90,6 +92,7 @@ export default function CashRegistersPage() {
     setFormName('');
     setFormCode('');
     setFormIsShared(false);
+    setFormShowInPos(true);
     setFormSerieId('');
     setFormError('');
     setModalOpen(true);
@@ -100,6 +103,7 @@ export default function CashRegistersPage() {
     setFormName(register.name);
     setFormCode(register.code);
     setFormIsShared(register.isShared);
+    setFormShowInPos(register.showInPos !== false);
     setFormSerieId(register.serie?.id || '');
     setFormError('');
     setModalOpen(true);
@@ -111,7 +115,7 @@ export default function CashRegistersPage() {
     setSaving(true);
 
     try {
-      const body = { name: formName, code: formCode, isShared: formIsShared };
+      const body = { name: formName, code: formCode, isShared: formIsShared, showInPos: formShowInPos };
 
       const url = editingRegister
         ? `/api/proxy/cash-registers/${editingRegister.id}`
@@ -427,6 +431,23 @@ export default function CashRegistersPage() {
                 {formIsShared ? 'Si' : 'No'}
               </button>
               <span className="text-xs text-slate-500">Visible para todos en el POS</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">Aparece en el POS:</label>
+              <button
+                type="button"
+                onClick={() => setFormShowInPos(!formShowInPos)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  formShowInPos
+                    ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                }`}
+              >
+                {formShowInPos ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                {formShowInPos ? 'Si' : 'No (Administración)'}
+              </button>
+              <span className="text-xs text-slate-500">Apágalo para una caja de administración (proveedores/gastos), oculta del POS</span>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

@@ -2389,3 +2389,6 @@ DO $$ BEGIN ALTER TABLE "DispatchDelivery" ADD CONSTRAINT "DispatchDelivery_deli
 
 -- CashMovement.isCash: ¿afecta la gaveta física? (efectivo sí; electrónico no). Se deriva del método.
 ALTER TABLE "CashMovement" ADD COLUMN IF NOT EXISTS "isCash" BOOLEAN NOT NULL DEFAULT true;
+
+-- Caja de administración: showInPos=false NO aparece en el POS.
+ALTER TABLE "CashRegister" ADD COLUMN IF NOT EXISTS "showInPos" BOOLEAN NOT NULL DEFAULT true;
