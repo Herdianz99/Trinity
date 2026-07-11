@@ -14,6 +14,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   // Paginas de inventario de SOLO CONSULTA: tambien las puede ver 'inventory-consult'
   ['/inventory/articulos', ['inventory', 'inventory-consult']],
   ['/inventory/etiquetas', ['inventory', 'inventory-consult']],
+  ['/inventory/replacements', ['inventory', 'inventory-consult']],
   ['/inventory', ['inventory']],
   ['/purchases', ['purchases']],
   ['/cash', ['cash']],

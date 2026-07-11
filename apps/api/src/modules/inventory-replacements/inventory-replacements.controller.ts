@@ -29,7 +29,7 @@ import {
 @ApiTags('Inventory Replacements')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
-@RequireModule('inventory')
+@RequireModule('inventory', 'inventory-consult')
 @Controller('inventory-replacements')
 export class InventoryReplacementsController {
   constructor(
