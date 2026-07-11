@@ -92,7 +92,9 @@ export default function InventoryAdjustmentDetailPage() {
 
   // Items state
   const [quantityValues, setQuantityValues] = useState<Record<string, number>>({});
-  const [costValues, setCostValues] = useState<Record<string, number>>({});
+  // Se guarda como texto crudo para poder escribir el punto/coma decimal sin que
+  // el re-render lo borre (mismo fix que las otras cajas). Se parsea al usarlo.
+  const [costValues, setCostValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   // Process modal + generacion de CxC/CxP
@@ -150,7 +152,12 @@ export default function InventoryAdjustmentDetailPage() {
   }
   // Costo a usar: el editado en pantalla > el guardado (unitCostUsd) > el calculado.
   function resolveItemCost(it: AdjustmentItem, costMode: string): number {
-    return costValues[it.productId] ?? it.unitCostUsd ?? effectiveProductCost(it, costMode);
+    const raw = costValues[it.productId];
+    if (raw !== undefined) {
+      const n = parseFloat(String(raw).replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+    return it.unitCostUsd ?? effectiveProductCost(it, costMode);
   }
 
   // ── Costo total del ajuste (mismo calculo que el reporte PDF y la CxC/CxP) ──
@@ -553,13 +560,12 @@ export default function InventoryAdjustmentDetailPage() {
                         <td className="px-4 py-2.5 text-right font-mono text-slate-300">{warehouseStock(item)}</td>
                         <td className="px-4 py-2.5 text-right">
                           <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={resolveItemCost(item, adjustment.costMode)}
+                            type="text"
+                            inputMode="decimal"
+                            value={costValues[item.productId] ?? String(resolveItemCost(item, adjustment.costMode))}
                             onChange={(e) => setCostValues(v => ({
                               ...v,
-                              [item.productId]: Number(e.target.value),
+                              [item.productId]: e.target.value.replace(/[^0-9.,]/g, ''),
                             }))}
                             className="input-field !py-1 text-sm w-24 text-right font-mono"
                             title="Costo efectivo para este ajuste (reporte + CxC/CxP)"

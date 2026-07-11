@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🛒 Compra: columnas Ref. Proveedor + Precio c/Dto; ajuste: costo con decimales — 2026-07-10
+
+- **Factura de compra (crear y editar)**: 2 columnas nuevas en la tabla de ítems — **Ref. Prov.** (después de Ref. Art., el `supplierRef` del artículo) y **Precio c/Dto** (después de % Dto, = precio × (1 − dto%)). `supplierRef` se toma del producto al seleccionarlo; en editar se incluyó `supplierRef` en el detalle de compra del backend (`purchase-orders.service` includeDetail).
+- **Ajuste de inventario** (`/inventory/adjustments/[id]`): el campo "Costo+brecha $" era `type=number` con estado numérico → no dejaba escribir el punto decimal. Se pasó a texto crudo + sanitize (mismo fix que las otras cajas): `costValues` guarda string, `resolveItemCost` lo parsea.
+
+## 🔓 Permiso inventory-consult: acceso también a Reemplazos — 2026-07-10
+
+El rol con `inventory-consult` (solo Consultar artículos + Etiquetas) ahora también ve y usa **Reemplazos** (`/inventory/replacements`). 3 capas: menú (`sidebar.tsx`), ruta (`middleware.ts`) y API (`@RequireModule` ahora es variadic → acepta "cualquiera de estos"; el `ModuleGuard` chequea any-of; el controller de reemplazos quedó `@RequireModule('inventory','inventory-consult')`). Sigue viendo solo esas 3 opciones del módulo.
+
 ## 🔎 Búsqueda de artículos tolerante a "P/", tildes y orden — 2026-07-10
 
 Los clientes no encontraban productos como "ASIENTO P/POCETA BLANCA" buscando "asiento poceta", ni "PERFIL MARCO P/PUERTA..." buscando "marco puerta". Causa raíz (probada): la `/` pegaba dos palabras en un solo token del índice (`p/poceta`), así "poceta" no existía como palabra; y el `ILIKE '%asiento poceta%'` exigía la cadena literal contigua.
