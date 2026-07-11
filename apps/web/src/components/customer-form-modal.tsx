@@ -8,7 +8,8 @@ const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
 
 const defaultForm = {
   name: '', documentType: 'V', rif: '', phone: '', email: '', address: '',
-  creditLimit: 0, creditDays: 0, isSpecialTaxpayer: false, isGroupCompany: false, isActive: true,
+  creditLimit: 0, creditDays: 0, creditAuthorizedBy: '',
+  isSpecialTaxpayer: false, isGroupCompany: false, isActive: true,
 };
 
 interface Props {
@@ -26,6 +27,16 @@ export default function CustomerFormModal({ open, mode, customerId, onClose, onS
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
   const [rifWarning, setRifWarning] = useState('');
   const [seniatOpen, setSeniatOpen] = useState(false);
+  // Solo administracion (ADMIN o permiso MANAGE_CUSTOMER_CREDIT) puede editar el credito del cliente.
+  const [canEditCredit, setCanEditCredit] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(u => { if (u) setCanEditCredit(u.role === 'ADMIN' || (u.permissions || []).includes('MANAGE_CUSTOMER_CREDIT')); })
+      .catch(() => {});
+  }, [open]);
 
   // Cargar (editar) o limpiar (crear) al abrir
   useEffect(() => {
@@ -40,6 +51,7 @@ export default function CustomerFormModal({ open, mode, customerId, onClose, onS
             name: c.name || '', documentType: c.documentType || 'V', rif: c.rif || '',
             phone: c.phone || '', email: c.email || '', address: c.address || '',
             creditLimit: c.creditLimit ?? 0, creditDays: c.creditDays ?? 0,
+            creditAuthorizedBy: c.creditAuthorizedBy || '',
             isSpecialTaxpayer: !!c.isSpecialTaxpayer, isGroupCompany: !!c.isGroupCompany,
             isActive: c.isActive !== false,
           });
@@ -80,12 +92,24 @@ export default function CustomerFormModal({ open, mode, customerId, onClose, onS
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // Misma validacion que el formulario original (y que el backend): con cupo > 0,
+    // dias y "Autorizado por" son obligatorios.
+    const creditLimit = Number(form.creditLimit) || 0;
+    if (creditLimit > 0) {
+      if (!Number(form.creditDays) || Number(form.creditDays) <= 0) {
+        setMessage({ type: 'error', text: 'Con limite de credito, los dias de credito son obligatorios' }); return;
+      }
+      if (!form.creditAuthorizedBy.trim()) {
+        setMessage({ type: 'error', text: 'Con limite de credito, "Autorizado por" es obligatorio' }); return;
+      }
+    }
     setSaving(true); setMessage(null);
     try {
       const body: Record<string, unknown> = {
         name: form.name, documentType: form.documentType, rif: form.rif || undefined,
         phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined,
-        creditLimit: Number(form.creditLimit) || 0, creditDays: Number(form.creditDays) || 0,
+        creditLimit, creditDays: Number(form.creditDays) || 0,
+        creditAuthorizedBy: form.creditAuthorizedBy || undefined,
         isSpecialTaxpayer: form.isSpecialTaxpayer, isGroupCompany: form.isGroupCompany,
       };
       if (mode === 'edit') body.isActive = form.isActive;
@@ -155,12 +179,19 @@ export default function CustomerFormModal({ open, mode, customerId, onClose, onS
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Cupo de credito (USD)</label>
-                <input type="number" min="0" step="0.01" value={form.creditLimit || ''} onChange={e => setForm(f => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm" placeholder="0.00" />
+                <input type="number" min="0" step="0.01" value={form.creditLimit || ''} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditLimit: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0.00" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Dias de credito</label>
-                <input type="number" min="0" step="1" value={form.creditDays || ''} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm" placeholder="0" />
+                <label className="block text-xs font-medium text-slate-400 mb-1">Dias de credito {form.creditLimit > 0 && <span className="text-red-400">*</span>}</label>
+                <input type="number" min="0" step="1" value={form.creditDays || ''} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditDays: Number(e.target.value) }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0" />
               </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-slate-400 mb-1">Autorizado por {form.creditLimit > 0 && <span className="text-red-400">*</span>}</label>
+                <input type="text" value={form.creditAuthorizedBy} disabled={!canEditCredit} onChange={e => setForm(f => ({ ...f, creditAuthorizedBy: e.target.value }))} className="input-field !py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Quien aprobo la linea de credito" />
+              </div>
+              {!canEditCredit && (
+                <p className="md:col-span-2 text-xs text-amber-400">Solo administracion puede editar el credito del cliente.</p>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
