@@ -20,9 +20,12 @@ export default function DispatchPage() {
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
+  const [searchingInv, setSearchingInv] = useState(false);
   const [creating, setCreating] = useState(false);
   const searchTimer = useRef<any>(null);
+  const invTimer = useRef<any>(null);
 
   useEffect(() => { document.title = 'Por despachar | Trinity ERP'; }, []);
 
@@ -53,17 +56,33 @@ export default function DispatchPage() {
   const refresh = () => load(tab, search);
   const openDispatch = (id: string) => router.push(`/dispatch/${id}`);
 
-  async function handleCreate() {
-    if (!invoiceNumber.trim()) return;
+  // Búsqueda de facturas para crear (por trozos del número o nombre del cliente; solo pagadas)
+  useEffect(() => {
+    if (!createOpen || !invoiceSearch.trim()) { setInvoiceResults([]); return; }
+    if (invTimer.current) clearTimeout(invTimer.current);
+    invTimer.current = setTimeout(async () => {
+      setSearchingInv(true);
+      try {
+        const res = await fetch(`/api/proxy/invoices?search=${encodeURIComponent(invoiceSearch)}&limit=10&status=PAID`);
+        const data = await res.json();
+        setInvoiceResults(Array.isArray(data.data) ? data.data : []);
+      } catch { setInvoiceResults([]); }
+      finally { setSearchingInv(false); }
+    }, 250);
+    return () => { if (invTimer.current) clearTimeout(invTimer.current); };
+  }, [createOpen, invoiceSearch]);
+
+  async function handleCreate(invoiceNumber: string) {
+    if (!invoiceNumber || creating) return;
     setCreating(true); setMsg(null);
     try {
       const res = await fetch('/api/proxy/dispatches', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceNumber: invoiceNumber.trim() }),
+        body: JSON.stringify({ invoiceNumber }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Error al crear la comanda');
-      setCreateOpen(false); setInvoiceNumber('');
+      setCreateOpen(false); setInvoiceSearch(''); setInvoiceResults([]);
       router.push(`/dispatch/${json.id}`);
     } catch (err: any) {
       setMsg({ type: 'error', text: err.message });
@@ -120,24 +139,40 @@ export default function DispatchPage() {
 
       {/* Modal crear */}
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCreateOpen(false)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 pt-24" onClick={() => { setCreateOpen(false); setInvoiceSearch(''); }}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Crear comanda por retirar</h2>
-              <button onClick={() => setCreateOpen(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => { setCreateOpen(false); setInvoiceSearch(''); }} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-3">
-              <label className="block text-xs font-medium text-slate-400">N° de factura</label>
-              <input autoFocus value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
-                placeholder="Ej: FAC-01-26-00000123" className="input-field !py-2.5 text-sm w-full font-mono" />
-              <p className="text-[11px] text-slate-500">La factura debe estar pagada. Se copian sus artículos (sin servicios) con la zona de cada uno.</p>
-              <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => setCreateOpen(false)} className="btn-secondary !py-2 text-sm">Cancelar</button>
-                <button onClick={handleCreate} disabled={creating || !invoiceNumber.trim()} className="btn-primary !py-2 text-sm flex items-center gap-2 disabled:opacity-50">
-                  {creating ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Crear
-                </button>
+              <label className="block text-xs font-medium text-slate-400">Buscar factura (N° o cliente)</label>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input autoFocus value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)}
+                  placeholder="Ej: 0016  ·  Juan Pérez" className="input-field !py-2.5 text-sm w-full pl-9" />
+                {searchingInv && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" />}
               </div>
+              <p className="text-[11px] text-slate-500">Escribe parte del número (ej. "0016") o el nombre del cliente. Solo facturas pagadas.</p>
+
+              {invoiceResults.length > 0 && (
+                <div className="border border-slate-700 rounded-lg overflow-hidden divide-y divide-slate-700/60 max-h-72 overflow-y-auto">
+                  {invoiceResults.map((inv) => (
+                    <button key={inv.id} onClick={() => handleCreate(inv.number)} disabled={creating}
+                      className="w-full text-left px-3 py-2.5 hover:bg-slate-700/50 transition-colors flex items-center justify-between gap-2 disabled:opacity-50">
+                      <div className="min-w-0">
+                        <span className="text-sm text-white font-mono">{inv.number}</span>
+                        <span className="block text-[11px] text-slate-400 truncate">{inv.customer?.name || 'Sin cliente'}</span>
+                      </div>
+                      <span className="text-xs text-slate-400 font-mono shrink-0">${Number(inv.totalUsd || 0).toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {invoiceSearch.trim() && !searchingInv && invoiceResults.length === 0 && (
+                <p className="text-[11px] text-amber-400/80">Sin facturas pagadas que coincidan.</p>
+              )}
+              {creating && <p className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="animate-spin" size={12} /> Creando comanda…</p>}
             </div>
           </div>
         </div>
