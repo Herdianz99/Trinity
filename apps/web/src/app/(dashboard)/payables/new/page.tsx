@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Receipt, Loader2, Save, Search, X, Shield } from 'lucide-react';
+import { ArrowLeft, Receipt, Loader2, Save, Search, X, Shield, Plus, Pencil } from 'lucide-react';
+import SupplierFormModal from '@/components/supplier-form-modal';
 
 interface Supplier { id: string; name: string; rif: string | null; }
 interface Serie { id: string; name: string; prefix: string; type: string; isFiscal: boolean; isActive: boolean; }
@@ -26,6 +27,8 @@ export default function NewPayablePage() {
   const [supplierId, setSupplierId] = useState('');
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
   const [serieId, setSerieId] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
   const [controlFiscal, setControlFiscal] = useState('');
@@ -104,6 +107,19 @@ export default function NewPayablePage() {
     const [y, m, d] = originalDate.split('-').map(Number);
     setDueDate(localDateStr(addDays(new Date(y, m - 1, d), creditDays)));
   }, [creditDays, originalDate]);
+
+  function openNewSupplier() { setSupplierModalMode('create'); setSupplierModalOpen(true); }
+  function openEditSupplier() { if (supplierId) { setSupplierModalMode('edit'); setSupplierModalOpen(true); } }
+
+  // Tras crear/editar un proveedor: refrescar la lista y seleccionar el guardado.
+  async function handleSupplierSaved(saved: any) {
+    try {
+      const res = await fetch('/api/proxy/suppliers?limit=1000');
+      if (res.ok) { const d = await res.json(); setSuppliers(Array.isArray(d.data) ? d.data : Array.isArray(d) ? d : []); }
+    } catch { /* ignore */ }
+    if (saved?.id) { setSupplierId(saved.id); setSupplierSearch(''); setSupplierDropdownOpen(false); }
+    setSupplierModalOpen(false);
+  }
 
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch.trim()) return suppliers;
@@ -209,7 +225,19 @@ export default function NewPayablePage() {
               {/* Col 1: Proveedor + Descripcion */}
               <div className="space-y-1.5">
                 <div ref={supplierRef} className="relative">
-                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Proveedor *</label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="block text-[10px] font-medium text-slate-400">Proveedor *</label>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={openNewSupplier}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors">
+                        <Plus size={11} /> Nuevo
+                      </button>
+                      <button type="button" onClick={openEditSupplier} disabled={!supplierId}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/50 text-slate-300 border border-slate-600 hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <Pencil size={11} /> Editar
+                      </button>
+                    </div>
+                  </div>
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input type="text"
@@ -468,6 +496,15 @@ export default function NewPayablePage() {
           </button>
         </div>
       </div>
+
+      {/* Modal crear/editar proveedor (mismo componente que la compra) */}
+      <SupplierFormModal
+        open={supplierModalOpen}
+        mode={supplierModalMode}
+        supplierId={supplierModalMode === 'edit' ? supplierId : null}
+        onClose={() => setSupplierModalOpen(false)}
+        onSaved={handleSupplierSaved}
+      />
     </div>
   );
 }
