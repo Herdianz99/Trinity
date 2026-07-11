@@ -7,6 +7,7 @@ import {
   Package, XCircle, Printer,
 } from 'lucide-react';
 import CustomerSearchSelect from '@/components/customer-search-select';
+import SupplierSearchSelect from '@/components/supplier-search-select';
 
 // ── Types ──────────────────────────────────────────────
 interface AdjustmentItem {
@@ -41,7 +42,6 @@ interface AdjustmentDetail {
   createdAt: string;
 }
 
-interface Party { id: string; name: string; creditDays?: number }
 
 interface SearchResult {
   id: string;
@@ -100,7 +100,6 @@ export default function InventoryAdjustmentDetailPage() {
 
   // Process modal + generacion de CxC/CxP
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
-  const [suppliers, setSuppliers] = useState<Party[]>([]);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [genAccount, setGenAccount] = useState(false);
   const [procEntityId, setProcEntityId] = useState('');
@@ -135,8 +134,7 @@ export default function InventoryAdjustmentDetailPage() {
   // Datos para el modal de proceso: brecha global (para el total) + clientes + proveedores
   useEffect(() => {
     fetch('/api/proxy/config').then(r => r.ok ? r.json() : null).then(d => { if (d) setBregaGlobalPct(d.bregaGlobalPct || 0); }).catch(() => {});
-    // Clientes NO se cargan en bloque (empresa grande ~48k): se buscan server-side al elegir.
-    fetch('/api/proxy/suppliers').then(r => r.ok ? r.json() : null).then(d => { if (d) setSuppliers(Array.isArray(d) ? d : d.data || []); }).catch(() => {});
+    // Clientes y proveedores NO se cargan en bloque: se buscan server-side al elegir.
   }, []);
 
   useEffect(() => {
@@ -175,11 +173,13 @@ export default function InventoryAdjustmentDetailPage() {
     d.setDate(d.getDate() + days);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  // Vencimiento por defecto para una entidad (proveedores vienen de la lista cargada;
-  // los clientes se resuelven al elegirlos con el buscador server-side).
-  function dueDateFor(entityId: string, type: 'IN' | 'OUT'): string {
-    if (type === 'OUT') return dueFromDays((adjustment?.customer as any)?.creditDays);
-    return dueFromDays(suppliers.find(p => p.id === entityId)?.creditDays);
+  // Vencimiento por defecto para la entidad preseleccionada al abrir el modal
+  // (cliente/proveedor se resuelven server-side al elegirlos con el buscador).
+  function dueDateFor(_entityId: string, type: 'IN' | 'OUT'): string {
+    const days = type === 'OUT'
+      ? (adjustment?.customer as any)?.creditDays
+      : (adjustment?.supplier as any)?.creditDays;
+    return dueFromDays(days);
   }
 
   // ── Click outside to close dropdown ────────────────
@@ -770,14 +770,11 @@ export default function InventoryAdjustmentDetailPage() {
                           placeholder="Buscar cliente por nombre o cédula…"
                         />
                       ) : (
-                        <select
+                        <SupplierSearchSelect
                           value={procEntityId}
-                          onChange={(e) => { setProcEntityId(e.target.value); setProcDueDate(dueDateFor(e.target.value, adjustment.type)); }}
-                          className="input-field !py-2 text-sm"
-                        >
-                          <option value="">Seleccionar proveedor...</option>
-                          {suppliers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                          onSelect={(s) => { setProcEntityId(s?.id || ''); setProcDueDate(s ? dueFromDays(s.creditDays) : ''); }}
+                          placeholder="Buscar proveedor por nombre o RIF…"
+                        />
                       )}
                     </div>
 

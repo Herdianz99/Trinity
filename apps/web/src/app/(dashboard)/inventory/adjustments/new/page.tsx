@@ -4,14 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import CustomerSearchSelect from '@/components/customer-search-select';
+import SupplierSearchSelect from '@/components/supplier-search-select';
 
 interface Warehouse { id: string; name: string; }
-interface Person { id: string; name: string; }
 
 export default function NewInventoryAdjustmentPage() {
   const router = useRouter();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [suppliers, setSuppliers] = useState<Person[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState<'IN' | 'OUT'>('IN');
   const [costMode, setCostMode] = useState<'COST' | 'BREGA'>('BREGA'); // costo del reporte: Brecha por defecto
@@ -22,18 +21,11 @@ export default function NewInventoryAdjustmentPage() {
   const [error, setError] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [whRes, suppRes] = await Promise.all([
-      fetch('/api/proxy/warehouses'),
-      fetch('/api/proxy/suppliers'),
-    ]);
+    const whRes = await fetch('/api/proxy/warehouses');
     if (whRes.ok) {
       const data = await whRes.json();
       setWarehouses(data);
       if (data.length > 0) setWarehouseId(data[0].id);
-    }
-    if (suppRes.ok) {
-      const data = await suppRes.json();
-      setSuppliers(Array.isArray(data) ? data : data.data || []);
     }
   }, []);
 
@@ -170,16 +162,11 @@ export default function NewInventoryAdjustmentPage() {
           ) : (
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Proveedor (para CxP)</label>
-              <select
+              <SupplierSearchSelect
                 value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                className="input-field !py-2.5 text-sm"
-              >
-                <option value="">Sin proveedor (elegir al procesar)</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+                onSelect={(s) => setSupplierId(s?.id || '')}
+                placeholder="Buscar proveedor por nombre o RIF… (opcional)"
+              />
               <p className="text-xs text-slate-500 mt-1">Al procesar podrás generar una CxP a este proveedor por el costo total.</p>
             </div>
           )}
