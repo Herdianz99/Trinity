@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import {
   DollarSign, FileText, RotateCcw, Target, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package,
-  Wallet, ArrowUpRight, ArrowDownRight,
+  Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark,
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, Cell,
 } from 'recharts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +73,14 @@ interface DashboardData {
     overdueCount: number;
   };
   salesTimeline: { label: string; totalUsd: number; count: number }[];
+  financing: {
+    casheaUsd: number;
+    casheaBs: number;
+    crediagroUsd: number;
+    crediagroBs: number;
+    vsCashea: number | null;
+    vsCrediagro: number | null;
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -250,8 +258,8 @@ export default function DashboardPage() {
 
       {data && (
         <>
-          {/* ═══ Row 1: 4 KPI Cards ═══ */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* ═══ Row 1: KPI Cards ═══ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <KpiCard
               icon={<DollarSign size={20} />}
               iconBg="bg-emerald-500/15 text-emerald-400"
@@ -286,6 +294,24 @@ export default function DashboardPage() {
               value={`$${fmt(data.sales.avgTicketUsd)}`}
               sub="por factura"
               change={data.sales.vsLastPeriodAvgTicket}
+              positiveIsGood
+            />
+            <KpiCard
+              icon={<CreditCard size={20} />}
+              iconBg="bg-pink-500/15 text-pink-400"
+              label="Cashea"
+              value={`$${fmt(data.financing.casheaUsd)}`}
+              sub={`Bs ${fmt(data.financing.casheaBs)}`}
+              change={data.financing.vsCashea}
+              positiveIsGood
+            />
+            <KpiCard
+              icon={<Landmark size={20} />}
+              iconBg="bg-teal-500/15 text-teal-400"
+              label="Crediagro"
+              value={`$${fmt(data.financing.crediagroUsd)}`}
+              sub={`Bs ${fmt(data.financing.crediagroBs)}`}
+              change={data.financing.vsCrediagro}
               positiveIsGood
             />
           </div>
@@ -338,11 +364,11 @@ export default function DashboardPage() {
             {/* Sales timeline chart */}
             <div className="lg:col-span-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
               <h3 className="text-sm font-semibold text-slate-300 mb-4">
-                Ventas {period === 'today' ? 'por hora' : 'por día'} (USD)
+                Ventas (USD) y N° de facturas {period === 'today' ? 'por hora' : 'por día'}
               </h3>
               {data.salesTimeline.length > 0 && data.salesTimeline.some(t => t.totalUsd > 0) ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={data.salesTimeline} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <ComposedChart data={data.salesTimeline} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
@@ -351,14 +377,17 @@ export default function DashboardPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                     <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={{ stroke: '#475569' }} tickLine={false} />
-                    <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${fmtCompact(Number(v))}`} />
+                    <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${fmtCompact(Number(v))}`} />
+                    <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: '#94a3b8' }}
-                      formatter={(v: any) => [`$${fmt(Number(v) || 0)}`, 'Ventas']}
+                      formatter={(v: any, name: any) => name === 'Facturas' ? [`${v}`, 'Facturas'] : [`$${fmt(Number(v) || 0)}`, 'Ventas']}
                     />
-                    <Area type="monotone" dataKey="totalUsd" stroke="#10b981" strokeWidth={2} fill="url(#salesGrad)" />
-                  </AreaChart>
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area yAxisId="left" type="monotone" dataKey="totalUsd" name="Ventas" stroke="#10b981" strokeWidth={2} fill="url(#salesGrad)" />
+                    <Line yAxisId="right" type="monotone" dataKey="count" name="Facturas" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-[220px] flex items-center justify-center text-slate-500 text-sm">

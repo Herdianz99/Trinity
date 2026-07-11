@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 📊 Dashboard gerencial: KPIs Cashea/Crediagro + línea de N° de facturas en la gráfica — 2026-07-11
+
+- **2 KPIs nuevos**: **Cashea** y **Crediagro** (monto facturado por cada plataforma en el período, con comparación vs período anterior). Backend `getFinancingSales(dateRange)` suma los `Payment` de facturas cobradas (`PAID`/`PARTIAL_RETURN`, `paidAt` en rango) cuyo método contiene "cashea"/"crediagro" (tolera variantes). Devuelto en `financing` de `/dashboard/gerencial`. La grilla de KPIs pasó de 4 a **6** tarjetas (`lg:grid-cols-3`).
+- **Gráfica "Ventas por hora/día"**: ahora es un `ComposedChart` con una **segunda línea = cantidad de facturas** (eje derecho, ámbar) además del área de ventas USD (eje izquierdo). El backend ya devolvía `count` por bucket, así que la línea fue puro frontend + leyenda. Título actualizado a "Ventas (USD) y N° de facturas por hora/día".
+- Sin schema ni migración. Typecheck API+web verde.
+
 ## 🏷️ Crear producto: sugerencia de nombre (plantilla) para estandarizar nomenclatura — 2026-07-11
 
 Como en el sistema viejo del cliente: al **crear** un artículo, el campo **Nombre** ahora autocompleta desde los productos existentes. Escribes, aparece un dropdown con los nombres parecidos (`nombre · código`), eliges uno y **copia su nombre + atributos como plantilla**; el usuario solo cambia la medida. Esto mantiene los nombres de una misma familia consistentes y mejora la búsqueda.

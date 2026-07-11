@@ -47,6 +47,8 @@ export class DashboardService {
       receivables,
       payables,
       salesByHourOrDay,
+      financing,
+      prevFinancing,
     ] = await Promise.all([
       this.getSales(dateRange),
       this.getSales(prevDateRange),
@@ -59,6 +61,8 @@ export class DashboardService {
       this.getReceivables(),
       this.getPayables(),
       this.getSalesTimeline(from, to),
+      this.getFinancingSales(dateRange),
+      this.getFinancingSales(prevDateRange),
     ]);
 
     return {
@@ -90,6 +94,14 @@ export class DashboardService {
       receivables,
       payables,
       salesTimeline: salesByHourOrDay,
+      financing: {
+        casheaUsd: financing.casheaUsd,
+        casheaBs: financing.casheaBs,
+        crediagroUsd: financing.crediagroUsd,
+        crediagroBs: financing.crediagroBs,
+        vsCashea: pctChange(financing.casheaUsd, prevFinancing.casheaUsd),
+        vsCrediagro: pctChange(financing.crediagroUsd, prevFinancing.crediagroUsd),
+      },
     };
   }
 
@@ -625,6 +637,36 @@ export class DashboardService {
       .sort((a, b) => b.totalUsd - a.totalUsd)
       .slice(0, 5)
       .map(p => ({ ...p, totalUsd: round2(p.totalUsd) }));
+  }
+
+  // ── Facturado por plataformas de financiamiento (Cashea / Crediagro) ────────
+  // Suma los pagos de facturas cobradas en el periodo cuyo metodo es Cashea o Crediagro
+  // (match por nombre, tolera variantes/hijos). Es lo "facturado" via cada plataforma.
+  private async getFinancingSales(dateRange: { gte: Date; lte: Date }) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        invoice: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+        OR: [
+          { method: { name: { contains: 'cashea', mode: 'insensitive' } } },
+          { method: { name: { contains: 'crediagro', mode: 'insensitive' } } },
+        ],
+      },
+      select: { amountUsd: true, amountBs: true, method: { select: { name: true } } },
+    });
+
+    let casheaUsd = 0, casheaBs = 0, crediagroUsd = 0, crediagroBs = 0;
+    for (const p of payments) {
+      const n = (p.method?.name || '').toLowerCase();
+      if (n.includes('cashea')) { casheaUsd += p.amountUsd; casheaBs += p.amountBs; }
+      else if (n.includes('crediagro')) { crediagroUsd += p.amountUsd; crediagroBs += p.amountBs; }
+    }
+
+    return {
+      casheaUsd: round2(casheaUsd),
+      casheaBs: round2(casheaBs),
+      crediagroUsd: round2(crediagroUsd),
+      crediagroBs: round2(crediagroBs),
+    };
   }
 
   // ── Cash summary ──────────────────────────────────────────────────────────
