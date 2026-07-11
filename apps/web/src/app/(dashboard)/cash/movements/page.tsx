@@ -285,9 +285,10 @@ export default function CashMovementsPage() {
               {rows.map((r, i) => {
                 const isMov = r.kind === 'MOVEMENT';
                 const isReceipt = r.kind === 'RECEIPT';
+                const isChange = r.kind === 'CHANGE';
                 const isCxp = isReceipt && r.receiptType === 'PAYMENT';
                 const isExpense = isMov && r.movementType === 'EXPENSE';
-                const isOutflow = isExpense || isCxp; // egreso manual o pago CxP
+                const isOutflow = isExpense || isCxp || isChange; // egreso manual, pago CxP o vuelto
                 const sign = isOutflow ? '-' : '';
                 const rk = rowKey(r);
                 const isRowChecked = checked.has(rk);
@@ -305,7 +306,11 @@ export default function CashMovementsPage() {
                     <td className="px-3 py-2.5 text-slate-300">{r.cashRegisterName || '—'}</td>
                     <td className="px-3 py-2.5 text-slate-300">{r.cashierName || '—'}</td>
                     <td className="px-3 py-2.5">
-                      {isMov ? (
+                      {isChange ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
+                          Vuelto · {r.methodName}
+                        </span>
+                      ) : isMov ? (
                         <span className={`text-xs px-2 py-0.5 rounded-full ${isExpense ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}`}>
                           {isExpense ? 'Egreso' : 'Ingreso'}
                         </span>

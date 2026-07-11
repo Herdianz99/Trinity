@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 /cash/movements: mostrar los vueltos (faltaban) + prueba del arqueo con el ledger — 2026-07-11
+
+Probado con la data en vivo de la empresa grande (restaurada en local, pg16): con `useCashLedger=true` el arqueo oficial sale del `CashLedgerEntry` y da idéntico al método viejo (validado en las 10 sesiones, 0 descuadres). Y se detectó que **`/cash/movements` no mostraba los vueltos**: el ledger tenía 924 filas (896 ventas + 16 vueltos + 8 manuales + 4 cobros) pero la vista global mostraba 908 (le faltaban los 16 CHANGE).
+
+- **Backend** (`getGlobalMovementsData`): el select de pagos ahora trae `changeAmountBs`/`changeMethod`/`exchangeRate`, y por cada pago con vuelto se agrega una fila `kind:'CHANGE'` (egreso, con su método y N° de factura). Respeta el filtro por método.
+- **Frontend** (`cash/movements`): renderiza el `kind:'CHANGE'` como egreso rojo "Vuelto · {método}". Total pasa de 908 a 924.
+
 ## 🧾 Libro mayor de caja (CashLedger) — tabla madre del arqueo (detrás de flag) — 2026-07-11
 
 Se construyó el **libro mayor único de caja** (`CashLedgerEntry`), la "tabla madre" del arqueo: cada línea de pago/movimiento que toca caja escribe UNA fila, y el arqueo suma esas filas por sesión (como `StockMovement` para el inventario). Objetivo: fuente única de verdad, sin los 3 orígenes + 2 mecanismos de atribución de antes. **Va detrás de un flag `CompanyConfig.useCashLedger` (default false)** para reversa instantánea sin redeploy. Plan completo en `docs/superpowers/plans/2026-07-11-ledger-unico-de-caja.md`.

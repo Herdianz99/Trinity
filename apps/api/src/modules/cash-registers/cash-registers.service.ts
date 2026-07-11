@@ -804,8 +804,12 @@ export class CashRegistersService {
             reference: true,
             amountUsd: true,
             amountBs: true,
+            exchangeRate: true,
             createdAt: true,
             method: { select: { id: true, name: true, isDivisa: true, isCash: true } },
+            changeAmountBs: true,
+            changeMethodId: true,
+            changeMethod: { select: { id: true, name: true, isDivisa: true, isCash: true } },
           },
         },
       },
@@ -837,6 +841,30 @@ export class CashRegistersService {
           amountUsd: p.amountUsd,
           amountBs: p.amountBs,
         });
+
+        // Vuelto (egreso de caja): si el pago dio vuelto en Bs, mostrarlo como fila propia.
+        const chBs = (p as any).changeAmountBs || 0;
+        if (chBs > 0 && (!methodSet || methodSet.has((p as any).changeMethodId))) {
+          const chMethod = (p as any).changeMethod;
+          const chUsd = p.exchangeRate > 0 ? Math.round((chBs / p.exchangeRate) * 100) / 100 : 0;
+          rows.push({
+            kind: 'CHANGE',
+            date: when,
+            sessionId: session.id,
+            cashRegisterId: session.cashRegisterId,
+            cashRegisterName: session.cashRegister?.name || '',
+            cashierName: session.openedBy?.name || '',
+            methodId: (p as any).changeMethodId,
+            methodName: chMethod?.name || 'Vuelto',
+            isDivisa: !!chMethod?.isDivisa,
+            isCash: chMethod ? !!chMethod.isCash : true,
+            invoiceNumber: inv.number || 'S/N',
+            customerName: inv.customer?.name || 'Sin cliente',
+            reference: null,
+            amountUsd: chUsd,
+            amountBs: chBs,
+          });
+        }
       }
     }
 
