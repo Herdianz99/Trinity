@@ -6,6 +6,7 @@ import {
   ArrowLeft, Loader2, Search, Trash2, Check, Save,
   Package, XCircle, Printer,
 } from 'lucide-react';
+import CustomerSearchSelect from '@/components/customer-search-select';
 
 // ── Types ──────────────────────────────────────────────
 interface AdjustmentItem {
@@ -99,7 +100,6 @@ export default function InventoryAdjustmentDetailPage() {
 
   // Process modal + generacion de CxC/CxP
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
-  const [customers, setCustomers] = useState<Party[]>([]);
   const [suppliers, setSuppliers] = useState<Party[]>([]);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [genAccount, setGenAccount] = useState(false);
@@ -135,7 +135,7 @@ export default function InventoryAdjustmentDetailPage() {
   // Datos para el modal de proceso: brecha global (para el total) + clientes + proveedores
   useEffect(() => {
     fetch('/api/proxy/config').then(r => r.ok ? r.json() : null).then(d => { if (d) setBregaGlobalPct(d.bregaGlobalPct || 0); }).catch(() => {});
-    fetch('/api/proxy/customers?limit=500').then(r => r.ok ? r.json() : null).then(d => { if (d) setCustomers(Array.isArray(d) ? d : d.data || []); }).catch(() => {});
+    // Clientes NO se cargan en bloque (empresa grande ~48k): se buscan server-side al elegir.
     fetch('/api/proxy/suppliers').then(r => r.ok ? r.json() : null).then(d => { if (d) setSuppliers(Array.isArray(d) ? d : d.data || []); }).catch(() => {});
   }, []);
 
@@ -168,14 +168,18 @@ export default function InventoryAdjustmentDetailPage() {
       }, 0)
     : 0;
 
-  // Fecha de vencimiento por defecto = hoy + dias de credito de la entidad
-  function dueDateFor(entityId: string, type: 'IN' | 'OUT'): string {
-    const list = type === 'OUT' ? customers : suppliers;
-    const days = list.find(p => p.id === entityId)?.creditDays ?? 0;
+  // Fecha de vencimiento por defecto = hoy + dias de credito
+  function dueFromDays(days?: number): string {
     if (!days || days <= 0) return '';
     const d = new Date();
     d.setDate(d.getDate() + days);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  // Vencimiento por defecto para una entidad (proveedores vienen de la lista cargada;
+  // los clientes se resuelven al elegirlos con el buscador server-side).
+  function dueDateFor(entityId: string, type: 'IN' | 'OUT'): string {
+    if (type === 'OUT') return dueFromDays((adjustment?.customer as any)?.creditDays);
+    return dueFromDays(suppliers.find(p => p.id === entityId)?.creditDays);
   }
 
   // ── Click outside to close dropdown ────────────────
@@ -726,7 +730,6 @@ export default function InventoryAdjustmentDetailPage() {
         const isOut = adjustment.type === 'OUT';
         const accKind = isOut ? 'CxC' : 'CxP';
         const entityLabel = isOut ? 'Cliente' : 'Proveedor';
-        const entities = isOut ? customers : suppliers;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !saving && setShowProcessModal(false)}>
             <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -757,17 +760,25 @@ export default function InventoryAdjustmentDetailPage() {
                       <span className="text-lg font-bold text-green-400 font-mono">${totalCost.toFixed(2)}</span>
                     </div>
 
-                    {/* Entidad */}
+                    {/* Entidad: cliente con buscador server-side; proveedor con select normal */}
                     <div>
                       <label className="block text-xs font-medium text-slate-400 mb-1">{entityLabel} *</label>
-                      <select
-                        value={procEntityId}
-                        onChange={(e) => { setProcEntityId(e.target.value); setProcDueDate(dueDateFor(e.target.value, adjustment.type)); }}
-                        className="input-field !py-2 text-sm"
-                      >
-                        <option value="">Seleccionar {entityLabel.toLowerCase()}...</option>
-                        {entities.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
+                      {isOut ? (
+                        <CustomerSearchSelect
+                          value={procEntityId}
+                          onSelect={(c) => { setProcEntityId(c?.id || ''); setProcDueDate(c ? dueFromDays(c.creditDays) : ''); }}
+                          placeholder="Buscar cliente por nombre o cédula…"
+                        />
+                      ) : (
+                        <select
+                          value={procEntityId}
+                          onChange={(e) => { setProcEntityId(e.target.value); setProcDueDate(dueDateFor(e.target.value, adjustment.type)); }}
+                          className="input-field !py-2 text-sm"
+                        >
+                          <option value="">Seleccionar proveedor...</option>
+                          {suppliers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
                     </div>
 
                     {/* Vencimiento */}

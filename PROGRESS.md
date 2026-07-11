@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 Fix: ajustes de inventario solo mostraban clientes con "A" (límite 500) — 2026-07-11
+
+En la empresa grande (~48k clientes) el selector de Cliente de los ajustes solo mostraba los primeros 500 (alfabéticos → todos con "A") y no encontraba el resto ni escribiendo. Causa: cargaba `/customers?limit=500` en un `<select>` y filtraba en el front.
+
+- **Componente reutilizable `components/customer-search-select.tsx`**: selector de cliente con **búsqueda server-side** (`/customers?search=&limit=20`, por nombre/cédula), dropdown, limpiar, y trae el nombre por id si viene un valor preseleccionado. No carga todos los clientes.
+- Aplicado en **`inventory/adjustments/new`** (selector de cliente para CxC) y en **`inventory/adjustments/[id]`** (modal de proceso — cliente con buscador, proveedor sigue con select; el vencimiento se calcula de los días de crédito del cliente elegido). Se quitaron las cargas `?limit=500`. Typecheck web verde.
+- **Pendiente (mismo patrón, avisado a Diego):** `receivables/new` (limit=1000) y `receivables/page` (limit=500) tienen el mismo bug latente para la empresa grande; se pueden migrar al mismo componente si hace falta.
+
 ## 🚚 Módulo "Por despachar": comandas de retiro con despacho parcial — 2026-07-11
 
 Nuevo módulo para el problema de despacho: mercancía **pagada que el cliente retira después** (a veces por partes). Reemplaza el "folder de tickets térmicos que se borran" por una pantalla digital. **Idea y diseño acordados con Diego.**

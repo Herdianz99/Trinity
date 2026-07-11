@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import CustomerSearchSelect from '@/components/customer-search-select';
 
 interface Warehouse { id: string; name: string; }
 interface Person { id: string; name: string; }
@@ -10,7 +11,6 @@ interface Person { id: string; name: string; }
 export default function NewInventoryAdjustmentPage() {
   const router = useRouter();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [customers, setCustomers] = useState<Person[]>([]);
   const [suppliers, setSuppliers] = useState<Person[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState<'IN' | 'OUT'>('IN');
@@ -22,19 +22,14 @@ export default function NewInventoryAdjustmentPage() {
   const [error, setError] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [whRes, custRes, suppRes] = await Promise.all([
+    const [whRes, suppRes] = await Promise.all([
       fetch('/api/proxy/warehouses'),
-      fetch('/api/proxy/customers?limit=500'),
       fetch('/api/proxy/suppliers'),
     ]);
     if (whRes.ok) {
       const data = await whRes.json();
       setWarehouses(data);
       if (data.length > 0) setWarehouseId(data[0].id);
-    }
-    if (custRes.ok) {
-      const data = await custRes.json();
-      setCustomers(Array.isArray(data) ? data : data.data || []);
     }
     if (suppRes.ok) {
       const data = await suppRes.json();
@@ -165,16 +160,11 @@ export default function NewInventoryAdjustmentPage() {
           {type === 'OUT' ? (
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Cliente (para CxC)</label>
-              <select
+              <CustomerSearchSelect
                 value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className="input-field !py-2.5 text-sm"
-              >
-                <option value="">Sin cliente (elegir al procesar)</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+                onSelect={(c) => setCustomerId(c?.id || '')}
+                placeholder="Buscar cliente por nombre o cédula… (opcional)"
+              />
               <p className="text-xs text-slate-500 mt-1">Al procesar podrás generar una CxC a este cliente por el costo total.</p>
             </div>
           ) : (
