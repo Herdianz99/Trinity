@@ -435,7 +435,8 @@ export class ReceiptsService {
               amountUsd: payAmount,
               amountBs,
               exchangeRate: postRate,
-              methodId: dto.payments[0]?.methodId, // use first payment method as reference
+              // metodo de referencia; null en un cruce a cero (sin pago en efectivo)
+              methodId: dto.payments[0]?.methodId || null,
               reference: `Recibo ${receipt.number}`,
               cashSessionId: dto.cashSessionId || null,
               notes: `Aplicado via recibo ${receipt.number}`,
@@ -476,7 +477,8 @@ export class ReceiptsService {
               amountUsd: payAmount,
               amountBs,
               exchangeRate: postRate,
-              methodId: dto.payments[0]?.methodId,
+              // metodo de referencia; null en un cruce a cero (sin pago en efectivo)
+              methodId: dto.payments[0]?.methodId || null,
               reference: `Recibo ${receipt.number}`,
               notes: `Aplicado via recibo ${receipt.number}`,
               createdById: userId,

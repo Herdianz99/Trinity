@@ -2353,3 +2353,7 @@ CREATE INDEX IF NOT EXISTS "idx_customer_email_trgm" ON "Customer" USING gin ("e
 
 -- Costo editable por item del ajuste de inventario (reporte + CxC/CxP).
 ALTER TABLE "InventoryAdjustmentItem" ADD COLUMN IF NOT EXISTS "unitCostUsd" DOUBLE PRECISION;
+
+-- Metodo de pago nullable en pagos de CxC/CxP: un cruce a cero (factura <-> su nota) no tiene metodo.
+ALTER TABLE "ReceivablePayment" ALTER COLUMN "methodId" DROP NOT NULL;
+ALTER TABLE "PayablePayment" ALTER COLUMN "methodId" DROP NOT NULL;

@@ -1221,8 +1221,9 @@ model ReceivablePayment {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
-  methodId      String
-  method        PaymentMethod @relation(fields: [methodId], references: [id])
+  // Nullable: un cruce de documentos a cero (factura ↔ su nota) no tiene metodo de pago real
+  methodId      String?
+  method        PaymentMethod? @relation(fields: [methodId], references: [id])
   reference     String?
   cashSessionId String?
   notes         String?
@@ -1311,8 +1312,9 @@ model PayablePayment {
   amountUsd    Float
   amountBs     Float
   exchangeRate Float
-  methodId     String
-  method       PaymentMethod @relation(fields: [methodId], references: [id])
+  // Nullable: un cruce de documentos a cero (documento ↔ su nota) no tiene metodo de pago real
+  methodId     String?
+  method       PaymentMethod? @relation(fields: [methodId], references: [id])
   reference    String?
   notes        String?
   createdById  String

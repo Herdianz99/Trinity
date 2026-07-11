@@ -523,12 +523,27 @@ export default function NewReceiptPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Error al crear recibo');
 
+      // Cruce a cero: los documentos se compensan (factura ↔ su nota) y no hay nada que
+      // cobrar/pagar. Se procesa directo sin modal ni pago (no toca caja).
+      const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
+      if (netAbsUsd < 0.01) {
+        const postRes = await fetch(`/api/proxy/receipts/${json.id}/post`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payments: [], cashSessionId: selectedSessionId || undefined }),
+        });
+        const postJson = await postRes.json();
+        if (!postRes.ok) throw new Error(postJson.message || 'Error al procesar recibo');
+        setMessage({ type: 'success', text: `Recibo ${json.number} procesado (cruce a cero)` });
+        setTimeout(() => router.push(`/receipts/${json.id}`), 1500);
+        return;
+      }
+
       // Store draft ID for processing
       setDraftId(json.id);
       setDraftNumber(json.number);
 
       // Pre-fill payment with net amount
-      const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
       setPaymentLines([{
         methodId: '',
         methodName: '',

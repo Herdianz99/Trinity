@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔄 Recibo de cobro: permitir cruce a cero (factura ↔ su devolución) — 2026-07-11
+
+Diego reportó que si devuelve una factura a crédito y la cruza con su nota (devolución) en `/receipts/new?type=COLLECTION`, el neto queda en **cero** y el recibo **no dejaba procesarlo** (exigía una línea de pago con método y monto > 0).
+
+- **Causa**: el frontend exigía `validLines` (método + monto > 0) y el botón de procesar quedaba deshabilitado; además, en el backend `receivablePayment.methodId`/`payablePayment.methodId` eran **obligatorios** (FK), así que sin línea de pago fallaba el insert. El arqueo NO se ve afectado (lee `receiptPayment`, que queda vacío en un cruce a cero).
+- **Fix backend**: `methodId` ahora **nullable** en `ReceivablePayment` y `PayablePayment` (un cruce por documento no tiene método de pago real). Migración `20260711160000_receipt_payment_method_nullable` (`DROP NOT NULL`, no destructiva) + `fix-schema.sql`. `post()` pasa `dto.payments[0]?.methodId || null`.
+- **Fix frontend** (`receipts/new`): si el neto es **cero** (`< 0.01`), al procesar se crea el borrador y se postea **directo con `payments: []`** (sin modal ni pago, no toca caja) → cruza la factura (marca su CxC pagada) y aplica la nota. Los detalles de CxC/CxP ya mostraban `method?.name || 'Metodo'` (null-safe).
+- Typecheck API+web verde; migración aplicada y verificada en local (columnas `nullable=YES`).
+
 ## 🧾 CxC nueva: generar retención de IVA sufrida (con N° de comprobante al libro) — 2026-07-11
 
 En `/receivables/new` (Nueva CxC) se agregó, **solo para series fiscales**, la opción **"Crear retención IVA"** (retención sufrida: el cliente contribuyente especial retiene IVA de la venta), simétrica a la de la CxP. Campos: **% Retención** (default `ivaRetentionPct` de config, editable) y el **N° del comprobante** (documento que entrega el cliente) que Diego pidió.
