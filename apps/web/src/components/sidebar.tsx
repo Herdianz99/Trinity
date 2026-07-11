@@ -95,6 +95,7 @@ const menuSections: MenuSection[] = [
     permission: 'commands',
     items: [
       { label: 'Control de Comandas', href: '/commands', icon: <ClipboardList size={18} /> },
+      { label: 'Por despachar', href: '/dispatch', icon: <Truck size={18} /> },
     ],
   },
   {

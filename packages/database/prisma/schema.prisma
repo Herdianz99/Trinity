@@ -323,6 +323,8 @@ model User {
   zReports            ZReport[]           @relation("ZReportCreator")
   customerIvaRetentions   CustomerIvaRetention[] @relation("CustomerIvaRetentionCreator")
   lostSales           LostSale[]
+  dispatchesCreated   Dispatch[]          @relation("DispatchCreator")
+  dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -1092,6 +1094,7 @@ model Invoice {
   creditDebitNotes    CreditDebitNote[]
   salesBookEntries    SalesBookEntry[]
   customerIvaRetentions CustomerIvaRetention[]
+  dispatch            Dispatch?
   createdById         String
   sellerId            String?
   seller              Seller?            @relation(fields: [sellerId], references: [id])
@@ -2015,4 +2018,67 @@ model OnlineOrderItem {
   priceBs   Float
 
   @@index([orderId])
+}
+
+// ============================================
+// DESPACHOS / COMANDAS POR RETIRAR
+// Mercancia pagada que el cliente retira despues (posiblemente por partes).
+// NO toca inventario (el stock ya salio al cobrar la factura); es solo logistico.
+// ============================================
+
+enum DispatchStatus {
+  PENDIENTE
+  PARCIAL
+  COMPLETADO
+  CANCELADO
+}
+
+model Dispatch {
+  id            String         @id @default(cuid())
+  number        String         @unique // DSP-0001
+  invoiceId     String         @unique // una comanda de retiro por factura
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id])
+  status        DispatchStatus @default(PENDIENTE)
+  scheduledDate DateTime? // "fecha de despacho" que indica el cliente (ej. "vengo el sabado")
+  contactName   String? // snapshot/editable (Cliente Final puede no tener datos)
+  contactPhone  String?
+  notes         String?
+  createdById   String
+  createdBy     User           @relation("DispatchCreator", fields: [createdById], references: [id])
+  completedAt   DateTime?
+  items         DispatchItem[]
+  deliveries    DispatchDelivery[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([status])
+}
+
+model DispatchItem {
+  id                String   @id @default(cuid())
+  dispatchId        String
+  dispatch          Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  productId         String
+  productName       String // snapshot
+  productCode       String?
+  printAreaId       String? // zona de despacho (para los tabs por zona)
+  printAreaName     String?
+  quantityInvoiced  Float
+  quantityDelivered Float    @default(0) // acumulado de despachos parciales
+
+  @@index([dispatchId])
+  @@index([printAreaId])
+}
+
+model DispatchDelivery {
+  id            String   @id @default(cuid())
+  dispatchId    String
+  dispatch      Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  deliveredById String
+  deliveredBy   User     @relation("DispatchDeliverer", fields: [deliveredById], references: [id])
+  note          String?
+  lines         Json // [{ dispatchItemId, productName, qty }] — lo retirado en este evento
+  createdAt     DateTime @default(now())
+
+  @@index([dispatchId])
 }

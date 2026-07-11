@@ -6,6 +6,7 @@ const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh', '/manifes
 // More specific routes must come before less specific ones
 const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/commands', ['commands']],
+  ['/dispatch', ['commands', 'inventory']],
   ['/store', ['store']],
   ['/catalog/suppliers', ['purchases']],
   ['/quotations', ['sales']],

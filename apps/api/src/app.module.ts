@@ -59,6 +59,7 @@ import { ProductImagesModule } from './modules/product-images/product-images.mod
 import { StoreExportModule } from './modules/store-export/store-export.module';
 import { PublicModule } from './modules/public/public.module';
 import { OnlineOrdersModule } from './modules/online-orders/online-orders.module';
+import { DispatchModule } from './modules/dispatch/dispatch.module';
 
 @Module({
   imports: [
@@ -122,6 +123,7 @@ import { OnlineOrdersModule } from './modules/online-orders/online-orders.module
     StoreExportModule,
     PublicModule,
     OnlineOrdersModule,
+    DispatchModule,
   ],
 })
 export class AppModule {}

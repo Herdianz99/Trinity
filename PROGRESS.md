@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🚚 Módulo "Por despachar": comandas de retiro con despacho parcial — 2026-07-11
+
+Nuevo módulo para el problema de despacho: mercancía **pagada que el cliente retira después** (a veces por partes). Reemplaza el "folder de tickets térmicos que se borran" por una pantalla digital. **Idea y diseño acordados con Diego.**
+
+- **Modelo (migración `20260711180000_dispatch_module`, con `fix-schema.sql`):** `Dispatch` (1 por factura, N° `DSP-XXXX`, status auto PENDIENTE/PARCIAL/COMPLETADO/CANCELADO, `scheduledDate` = fecha de despacho que dice el cliente, `contactName`/`contactPhone` editables, notas) · `DispatchItem` (producto + zona `printArea` + cant. facturada + **cant. despachada acumulada**) · `DispatchDelivery` (**historial de cada retiro**: fecha, quién, líneas con cantidades, nota). Relaciones inversas en `Invoice.dispatch` y `User`.
+- **Regla clave:** NO toca inventario (el stock ya salió al **cobrar** la factura); el despacho es puramente logístico.
+- **Backend `DispatchModule`** (gateado `@RequireModule('commands','inventory')`): `POST /dispatches` (por N° factura → valida pagada, dedup, copia ítems sin servicios, deriva zona por categoría→printArea con fallback), `GET /dispatches` (lista + búsqueda), `GET /dispatches/items` (**vista por artículos de la zona** para los tabs), `GET/PATCH /dispatches/:id`, `POST /:id/deliver` (registra despacho parcial: suma a `quantityDelivered`, valida ≤ facturado, crea `DispatchDelivery`, recalcula status), `PATCH /:id/cancel`.
+- **Frontend `/dispatch`** ("Por despachar", en sidebar COMANDAS): botón "Crear comanda por retirar" (textbox N° factura), buscador (factura/cliente/cédula/tel), **tabs**: Comandas (lista de facturas por despachar, con progreso y rojo si vencida) · Todos los artículos · **una por zona** (artículos pendientes de esa zona). Modal de detalle: editar fecha/contacto/tel/notas, **despacho parcial** (input por línea + "despachar todo lo pendiente"), historial de retiros, cancelar.
+- Typecheck API+web verde; migración aplicada y validada en BD (FKs/enum). **End-to-end pendiente de que Diego lo pruebe logueado.**
+
 ## 📊 Dashboard: KPIs de ventas de contado vs crédito — 2026-07-11
 
 2 KPIs nuevos: **Ventas de contado** y **Ventas a crédito** (monto + N° de facturas + Bs, con comparación vs período anterior). Backend `getSalesByPaymentType(dateRange)` hace `groupBy` de facturas cobradas por `paymentType` (CASH/CREDIT); devuelto en `salesByType`. La grilla de KPIs pasó de 6 a **8** tarjetas (`lg:grid-cols-4`, 2 filas de 4). Sin schema ni migración. Typecheck API+web verde.
