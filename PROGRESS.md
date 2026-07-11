@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 UI de la tabla madre: /cash/ledger/entries (Libro mayor de caja) — 2026-07-11
+
+Antes solo se veía el TOTAL del ledger (página de comparación). Ahora hay una vista que **lista las filas reales del `CashLedgerEntry`** — la tabla madre — de cualquier origen y cualquier método de pago, no una reconstrucción como `/cash/movements`.
+
+- **Backend** `GET /cash/ledger-entries`: lee directo la tabla madre con joins (método, caja, cajero), paginado (50/pág), y **totales sobre todo el conjunto filtrado** vía `groupBy` (ingresos/egresos/neto por moneda + neto efectivo de gaveta). Filtros: caja, cajero, sesión, rango de fechas (Caracas), métodos (multi), origen (`sourceType`), moneda, solo-efectivo.
+- **Frontend** `/cash/ledger/entries`: tabla con badges por origen (Venta, Vuelto, Cobro CxC, Pago CxP, Gasto, Anticipo cliente/proveedor, Mov. manual, Reintegro), icono efectivo/electrónico por método, ingreso/egreso con signo y color, 4 KPIs de totales. Enlazada desde **Cajas → Ledger → "Ver movimientos"** y desde **/cash/movements → "Libro mayor"**.
+- Probado con data real: 924 filas, filtros por origen y por efectivo correctos (neto efectivo Bs 2.876.448,78).
+
 ## 🧾 /cash/movements: mostrar los vueltos (faltaban) + prueba del arqueo con el ledger — 2026-07-11
 
 Probado con la data en vivo de la empresa grande (restaurada en local, pg16): con `useCashLedger=true` el arqueo oficial sale del `CashLedgerEntry` y da idéntico al método viejo (validado en las 10 sesiones, 0 descuadres). Y se detectó que **`/cash/movements` no mostraba los vueltos**: el ledger tenía 924 filas (896 ventas + 16 vueltos + 8 manuales + 4 cobros) pero la vista global mostraba 908 (le faltaban los 16 CHANGE).

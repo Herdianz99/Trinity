@@ -118,6 +118,27 @@ export class CashRegistersController {
     return this.service.backfillAllOpenLedger();
   }
 
+  /** Tabla madre (CashLedgerEntry): TODAS las filas del libro mayor, de cualquier origen y metodo */
+  @Get('cash/ledger-entries')
+  getLedgerEntries(
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('currency') currency?: string,
+    @Query('onlyCash') onlyCash?: string,
+    @Query('page') page?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    return this.service.getLedgerEntries(
+      { cashRegisterId, userId, sessionId, from, to, methodIds: ids, sourceType, currency, onlyCash: onlyCash === 'true' },
+      parseInt(page || '1', 10),
+    );
+  }
+
   @Get('cash-sessions/:id/payments')
   findSessionPayments(
     @Param('id') id: string,

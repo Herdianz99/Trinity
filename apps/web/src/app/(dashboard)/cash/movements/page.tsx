@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeftRight, Loader2, FileText, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ArrowLeftRight, Loader2, FileText, ChevronLeft, ChevronRight, X, BookOpen } from 'lucide-react';
 
 const fmtUsd = (n: number) => `$${(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtBs = (n: number) => `Bs ${(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -127,6 +127,9 @@ export default function CashMovementsPage() {
           <h1 className="text-2xl font-bold text-white">Movimientos de caja</h1>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/cash/ledger/entries" className="btn-secondary flex items-center gap-2 text-sm" title="Ver la tabla madre (libro mayor de caja)">
+            <BookOpen size={16} /> Libro mayor
+          </a>
           <button onClick={openSummaryPdf} className="btn-secondary flex items-center gap-2 text-sm">
             <FileText size={16} /> Resumen PDF
           </button>

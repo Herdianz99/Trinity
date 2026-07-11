@@ -93,6 +93,10 @@ export default function CashLedgerPage() {
           <h1 className="text-2xl font-bold text-white">Reconstruir y comparar ledger</h1>
           <p className="text-slate-400 text-sm">Compara el arqueo del libro mayor (tabla madre) vs el método actual, por sesión abierta</p>
         </div>
+        <button onClick={() => router.push('/cash/ledger/entries')}
+          className="btn-secondary !py-2 text-sm flex items-center gap-2" title="Ver todas las filas de la tabla madre">
+          <BookOpen size={15} /> Ver movimientos
+        </button>
         <button onClick={load} className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700/50" title="Refrescar"><RotateCw size={16} /></button>
       </div>
 
