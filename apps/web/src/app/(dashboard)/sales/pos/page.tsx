@@ -335,12 +335,65 @@ export default function POSPage() {
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
   const [showSellerModal, setShowSellerModal] = useState(false);
 
+  // Layout de escritorio: ancho del panel de cobro (arrastrable). El de productos ocupa el resto.
+  const CHECKOUT_WIDTH_DEFAULT = 420;
+  const CHECKOUT_WIDTH_MIN = 360;
+  const [isLg, setIsLg] = useState(false);
+  const [checkoutWidth, setCheckoutWidth] = useState(CHECKOUT_WIDTH_DEFAULT);
+
+  // Ancho maximo del panel de cobro para dejar sitio al de productos (segun ventana).
+  const checkoutMaxWidth = () => Math.min((typeof window !== 'undefined' ? window.innerWidth : 1440) - 380, 1100);
+
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const saved = Number(localStorage.getItem('posCheckoutWidth'));
+    if (saved && !isNaN(saved)) {
+      setCheckoutWidth(Math.max(CHECKOUT_WIDTH_MIN, Math.min(saved, checkoutMaxWidth())));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const check = () => {
+      setIsMobile(window.innerWidth < 768);
+      const lg = window.innerWidth >= 1024;
+      setIsLg(lg);
+      // Al achicar la ventana, reencuadrar el panel para no aplastar el de productos.
+      if (lg) setCheckoutWidth((w) => Math.max(CHECKOUT_WIDTH_MIN, Math.min(w, checkoutMaxWidth())));
+    };
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Arrastre del divisor: mover a la IZQUIERDA agranda el panel de cobro. Usa pointer events
+  // (mouse + tactil) y persiste el ancho final en localStorage. Doble clic resetea al default.
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = checkoutWidth;
+    let latest = startWidth;
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(CHECKOUT_WIDTH_MIN, Math.min(startWidth - (ev.clientX - startX), checkoutMaxWidth()));
+      latest = next;
+      setCheckoutWidth(next);
+    };
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try { localStorage.setItem('posCheckoutWidth', String(Math.round(latest))); } catch {}
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const resetCheckoutWidth = () => {
+    setCheckoutWidth(CHECKOUT_WIDTH_DEFAULT);
+    try { localStorage.removeItem('posCheckoutWidth'); } catch {}
+  };
 
   useEffect(() => { document.title = 'POS | Trinity ERP'; }, []);
 
@@ -3178,8 +3231,30 @@ export default function POSPage() {
         )}
       </div>
 
+      {/* Divisor arrastrable (solo escritorio). Doble clic = resetear al ancho por defecto. */}
+      {isLg && (
+        <div
+          onPointerDown={startResize}
+          onDoubleClick={resetCheckoutWidth}
+          title="Arrastra para ajustar el ancho · Doble clic para restablecer"
+          className="group relative w-1.5 shrink-0 self-stretch cursor-col-resize rounded-full bg-slate-700/60 hover:bg-green-500/60 transition-colors"
+        >
+          {/* Zona de agarre ampliada (invisible) para que sea facil de tomar */}
+          <div className="absolute inset-y-0 -left-2.5 -right-2.5" />
+          {/* Grip visual */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-70 group-hover:opacity-100">
+            <span className="block w-0.5 h-1 rounded-full bg-slate-300 group-hover:bg-green-200" />
+            <span className="block w-0.5 h-1 rounded-full bg-slate-300 group-hover:bg-green-200" />
+            <span className="block w-0.5 h-1 rounded-full bg-slate-300 group-hover:bg-green-200" />
+          </div>
+        </div>
+      )}
+
       {/* RIGHT: Cart */}
-      <div className="w-full lg:w-[420px] flex flex-col min-h-0">
+      <div
+        className="w-full flex flex-col min-h-0 lg:shrink-0"
+        style={isLg ? { width: `${checkoutWidth}px` } : undefined}
+      >
         <div className="card flex-1 flex flex-col min-h-0">
           {/* Customer selector */}
           <div className="p-3 border-b border-slate-700/50">

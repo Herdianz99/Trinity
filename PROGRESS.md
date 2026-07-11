@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## ↔️ POS: divisor arrastrable entre productos y cobro (ancho ajustable) — 2026-07-11
+
+Los cajeros se quejaban de que el panel de cobro (cliente + lista de artículos + botones) era muy chico (~30% fijo en `lg:w-[420px]`) y no veían bien lo que hacían. Ahora el POS de escritorio tiene un **divisor arrastrable** entre las dos secciones (`sales/pos/page.tsx`):
+- El panel de cobro dejó de ser fijo: se arrastra la barra central (mover a la izquierda lo agranda) y el panel de productos ocupa el resto (`flex-1`). Usa **pointer events** (mouse + táctil).
+- **Persistente** por PC en `localStorage` (`posCheckoutWidth`); **doble clic** en el divisor resetea al default (420px).
+- **Límites**: mínimo 360px, máximo dejando ~380px al panel de productos; se reencuadra solo al achicar la ventana.
+- **Solo escritorio (≥1024px)**. En tablet vertical (768–1024) y móvil los paneles siguen apilados a ancho completo (ahí no aplica el divisor). Typecheck web verde.
+
 ## ⚡ Mejoras de facturación: F9 cobra, duplicar factura, devolución completa/parcial — 2026-07-11
 
 Tres mejoras chicas para agilizar el flujo de facturación (Session 69):
