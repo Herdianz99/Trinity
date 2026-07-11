@@ -8,6 +8,11 @@ export class CreateReceivableDto {
   @IsString()
   serieId?: string;
 
+  // Nro. de documento / factura, ingresado manualmente. Va al libro de ventas.
+  @IsOptional()
+  @IsString()
+  documentNumber?: string;
+
   @IsOptional()
   @IsString()
   currency?: string; // 'USD' or 'BS'

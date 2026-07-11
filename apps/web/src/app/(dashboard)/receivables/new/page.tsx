@@ -51,6 +51,7 @@ export default function NewReceivablePage() {
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [customerModalMode, setCustomerModalMode] = useState<'create' | 'edit'>('create');
   const [serieId, setSerieId] = useState('');
+  const [documentNumber, setDocumentNumber] = useState('');
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
   const [originalDate, setOriginalDate] = useState(formatLocalDate(new Date()));
   const [receptionDate, setReceptionDate] = useState(formatLocalDate(new Date()));
@@ -180,6 +181,7 @@ export default function NewReceivablePage() {
         igtfPct: igtfPct || 0,
       };
       if (serieId) body.serieId = serieId;
+      if (documentNumber.trim()) body.documentNumber = documentNumber.trim();
       if (originalDate) body.originalDate = originalDate;
       if (receptionDate) body.receptionDate = receptionDate;
       if (dueDate) body.dueDate = dueDate;
@@ -200,7 +202,7 @@ export default function NewReceivablePage() {
       router.push(`/receivables/${created.id}`);
     } catch (err: any) { setError(err.message || 'Error al guardar'); }
     finally { setSaving(false); }
-  }, [customerId, totalDoc, currency, serieId, creditDays, exchangeRate, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, createRetention, isFiscal, totalIva, retentionPct, retentionDocNumber, router]);
+  }, [customerId, totalDoc, currency, serieId, documentNumber, creditDays, exchangeRate, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, createRetention, isFiscal, totalIva, retentionPct, retentionDocNumber, router]);
 
   const numInput = useCallback((setter: (v: number) => void) => {
     return (e: React.ChangeEvent<HTMLInputElement>) => { setter(parseFloat(e.target.value) || 0); };
@@ -296,8 +298,13 @@ export default function NewReceivablePage() {
                 </div>
               </div>
 
-              {/* Col 2: Serie + Notas */}
+              {/* Col 2: Nro. Documento + Serie + Notas */}
               <div className="space-y-1.5">
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Nro. Documento</label>
+                  <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)}
+                    placeholder="N° de la factura" className="input-field !py-1 text-sm" />
+                </div>
                 <div>
                   <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Serie</label>
                   <select value={serieId} onChange={e => setSerieId(e.target.value)} className="input-field !py-1 text-sm">

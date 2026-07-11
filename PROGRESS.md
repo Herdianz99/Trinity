@@ -6,6 +6,7 @@ En `/receivables/new` (Nueva CxC) se agregó, **solo para series fiscales**, la 
 
 - **Backend** (`receivables.service.create` + `create-receivable.dto`): nuevos `createRetention`/`retentionPct`/`retentionDocNumber`. Si es fiscal y hay IVA, tras la línea `CXC` del libro de ventas crea una **segunda línea `isRetentionLine` negativa** (`documentType: 'RETENCION'`, `retentionAmountBs = ivaBs × %`, `retentionVoucherNumber = N° del comprobante`, `affectedDocNumber = N° de la CxC`). **Sin cambio de schema** (el `SalesBookEntry` ya tenía esos campos + `receivableId`).
 - **Frontend**: tarjeta de retención (naranja) en la columna derecha con % + N° comprobante + montos (IVA facturado / retenido / retenido Bs).
+- **Campo "Nro. Documento"** (número de la factura, manual): se agregó a la columna 2 del form. El `Receivable` ya tenía la columna `documentNumber` (sin migración); se guarda en la CxC y **se usa como número de factura en el libro de ventas** (`SalesBookEntry.invoiceNumber` + `affectedDocNumber` de la retención), con fallback al correlativo `CXC` si no se ingresa.
 - **Alcance/caveat honesto**: por ahora **solo declara la retención en el libro de ventas**; NO crea un `CustomerIvaRetention` neteable en el recibo de cobro (eso requeriría hacer `invoiceId` nullable + `receivableId` en ese modelo, con migración). Si Diego quiere también el neteo al cobrar, queda como follow-up. Typecheck API+web verde.
 
 ## 🏭 CxP nueva: crear/editar proveedores inline (como en la compra) — 2026-07-11

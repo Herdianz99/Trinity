@@ -123,6 +123,7 @@ export class ReceivablesService {
           type: 'MANUAL',
           customerId: dto.customerId,
           invoiceId: null,
+          documentNumber: dto.documentNumber?.trim() || null,
           description: dto.description || null,
           amountUsd,
           amountBs,
@@ -168,12 +169,14 @@ export class ReceivablesService {
         const taxableBs = toBs(taxableBase8 + taxableBase16 + taxableBase31);
         const ivaBs = toBs(totalIva);
         const igtfBs = toBs(igtf);
+        // Nro. de factura para el libro: el que ingresa el usuario, o el correlativo de la CxC.
+        const bookInvoiceNumber = dto.documentNumber?.trim() || number;
 
         await tx.salesBookEntry.create({
           data: {
             receivableId: receivable.id,
             entryDate: originalDate || new Date(),
-            invoiceNumber: number,
+            invoiceNumber: bookInvoiceNumber,
             controlNumber: null,
             customerName: customer.name,
             customerRif: customer.rif || null,
@@ -199,7 +202,7 @@ export class ReceivablesService {
             data: {
               receivableId: receivable.id,
               entryDate: originalDate || new Date(),
-              invoiceNumber: number,
+              invoiceNumber: bookInvoiceNumber,
               controlNumber: null,
               customerName: customer.name,
               customerRif: customer.rif || null,
@@ -211,7 +214,7 @@ export class ReceivablesService {
               isManual: true,
               isRetentionLine: true,
               documentType: 'RETENCION',
-              affectedDocNumber: number,
+              affectedDocNumber: bookInvoiceNumber,
               retentionAmountBs: retentionBs,
               retentionVoucherNumber: dto.retentionDocNumber?.trim() || null,
               notes: dto.retentionDocNumber?.trim() || null,
