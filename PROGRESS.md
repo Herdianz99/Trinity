@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 💸 Fix: gasto registraba la moneda del movimiento siempre en USD (descuadre de caja) — 2026-07-11
+
+El movimiento de caja de un gasto usaba `currency: dto.amountUsd ? 'USD' : 'BS'` (`expenses.service.ts` create): la moneda salía del **campo de monto lleno**, no del **método de pago**. Como el formulario autocompleta el otro monto al escribir uno, siempre se mandaba `amountUsd` → **siempre quedaba 'USD'**, así que un gasto pagado en Bs restaba del efectivo **USD** del arqueo (descuadre en ambas monedas). Fix: la moneda del `CashMovement` ahora se deriva del **`method.isDivisa`** (Efectivo USD/Zelle → USD; Efectivo Bs/Punto/Pago Móvil → Bs), como los anticipos; fallback al monto solo si no hay método. Solo afecta gastos **nuevos** (los ya registrados quedan con la moneda vieja — se corregirán con el trabajo del ledger/sesiones cerradas). Typecheck API verde.
+
+Análisis completo del descuadre de caja y plan del **libro mayor único (CashLedger)** en `docs/superpowers/plans/2026-07-11-ledger-unico-de-caja.md`.
+
 ## 🐛 Fix: selectores de cliente/proveedor cargaban con límite (empresa grande ~48k) — 2026-07-11
 
 En la empresa grande (~48k clientes) el selector de Cliente de los ajustes solo mostraba los primeros 500 (alfabéticos → todos con "A") y no encontraba el resto ni escribiendo. Causa: cargaba `/customers?limit=500` en un `<select>` y filtraba en el front. Se corrigió y se generalizó a todos los selectores con el mismo patrón.

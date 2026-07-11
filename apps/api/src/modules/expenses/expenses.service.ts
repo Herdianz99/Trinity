@@ -266,6 +266,15 @@ export class ExpensesService {
       if (!session) throw new BadRequestException('Sesion de caja no encontrada');
       if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
 
+      // Moneda del movimiento = la del METODO de pago (Efectivo USD/Zelle -> USD; Efectivo Bs/
+      // Punto/Pago Movil -> Bs), NO la del campo de monto que se llenó. Antes salía siempre 'USD'
+      // (el front autocompleta ambos montos) y el arqueo restaba del efectivo USD aunque se pagara
+      // en Bs -> descuadre. Fallback al monto solo si no hay método.
+      const method = dto.methodId
+        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true } })
+        : null;
+      const movCurrency = method ? (method.isDivisa ? 'USD' : 'BS') : (dto.amountUsd ? 'USD' : 'BS');
+
       return this.prisma.$transaction(async (tx) => {
         const expense = await tx.expense.create({
           data: {
@@ -294,7 +303,7 @@ export class ExpensesService {
             amountUsd: amountUsd!,
             amountBs: amountBs!,
             exchangeRate: rateVal,
-            currency: dto.amountUsd ? 'USD' : 'BS',
+            currency: movCurrency,
             reason: `Gasto: ${dto.description}`,
             isManual: false,
             expenseId: expense.id,
