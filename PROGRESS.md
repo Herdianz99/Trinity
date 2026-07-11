@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## ⚡ Mejoras de facturación: F9 cobra, duplicar factura, devolución completa/parcial — 2026-07-11
+
+Tres mejoras chicas para agilizar el flujo de facturación (Session 69):
+
+- **POS — F9 abre el cobro** (`sales/pos/page.tsx`): los cajeros ya están acostumbrados a esa tecla. Nuevo helper `openPayModal()` + listener global de teclado. **Guardas**: no aplica a vendedores (no cobran), ni con carrito vacío, ni con otro modal/proceso abierto (cobro, crédito, clave dinámica, caja, anticipo, cliente). Los dos botones "Cobrar" (móvil + escritorio) reusan `openPayModal`; el de escritorio muestra un badge **F9**.
+- **Duplicar factura** (backend + `sales/invoices/[id]`): nuevo `POST /invoices/:id/duplicate` que reusa `create()` pasando los ítems **sin `unitPrice`** → toma el `priceDetal` **actual** de cada producto y nace **PENDING** (queda seleccionable en el POS), conservando cliente y vendedor. **No copia el descuento por línea** a propósito (precio actual limpio). Opción "Duplicar factura" al inicio del menú "Más acciones"; al duplicar redirige al detalle de la nueva pre-factura. Caveat: usa la tasa BCV de hoy (si no hay tasa da el error habitual); si un producto quedó inactivo/bloqueado, el duplicado falla nombrándolo (misma validación que crear factura).
+- **Nota de crédito — devolver completa/parcial** (`credit-debit-notes/new`): toggle **Parcial** (default, como estaba) / **Completa**. En "Completa" autorellena cada línea con la cantidad disponible y bloquea los inputs (se generalizó el patrón que ya existía para el IGTF, que sigue forzando "Completa" y deshabilitando el toggle). Funciona para ventas y compras. Puro frontend.
+
+Typecheck API + web verde. Levantado en local y verificado (ruta `/invoices/:id/duplicate` mapeada, responde 401 sin auth). Pendiente que Diego lo pruebe en la UI.
+
 ## 🧾 Ticket 80mm (no fiscal): métodos en divisa se muestran en USD — 2026-07-10
 
 En el ticket de 80mm de la factura de venta (no fiscal, `lib/print-receipt.ts`), los métodos de pago con `method.isDivisa = true` (Zelle, efectivo $, etc.) ahora se muestran **siempre en USD**, aunque el resto del ticket vaya en Bs. Antes salían todos en Bs. El resto de métodos sigue la moneda del ticket. Aplicado en los 2 bloques de "Forma de pago" (versión HTML iframe + versión texto del agente térmico). **NO se tocó la factura fiscal** (va por `fiscal-printer.ts`, camino aparte). Pendiente: Diego lo prueba mañana (no tiene impresora en su máquina local).

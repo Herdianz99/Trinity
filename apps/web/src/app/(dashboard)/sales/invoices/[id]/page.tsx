@@ -213,6 +213,7 @@ export default function InvoiceDetailPage() {
   const [fiscalLoading, setFiscalLoading] = useState(false);
   const [reprintLoading, setReprintLoading] = useState(false);
   const [ticketLoading, setTicketLoading] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [editingFiscal, setEditingFiscal] = useState(false);
   const [editFiscalNumber, setEditFiscalNumber] = useState('');
   const [editMachineSerial, setEditMachineSerial] = useState('');
@@ -256,7 +257,31 @@ export default function InvoiceDetailPage() {
   const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
   const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
   const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
-  const hasMenuActions = canPrintPdf || canReturnInvoice || canCreditNote || canDebitNote || canRetain;
+  // Duplicar: disponible para cualquier factura con articulos (crea una pre-factura nueva a precios de hoy).
+  const canDuplicate = (invoice?.items?.length || 0) > 0;
+  const hasMenuActions = canPrintPdf || canReturnInvoice || canCreditNote || canDebitNote || canRetain || canDuplicate;
+
+  // Duplica la factura como pre-factura nueva (PENDING) a precios actuales; redirige a su detalle.
+  const handleDuplicate = async () => {
+    if (duplicating) return;
+    setDuplicating(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/invoices/${id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al duplicar la factura');
+      }
+      const created = await res.json();
+      router.push(`/sales/invoices/${created.id}`);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+      setDuplicating(false);
+    }
+  };
 
   const openRetModal = () => {
     if (!invoice) return;
@@ -524,6 +549,15 @@ export default function InvoiceDetailPage() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[210px]">
+                {canDuplicate && (
+                  <DropdownMenuItem
+                    onClick={handleDuplicate}
+                    disabled={duplicating}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    {duplicating ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} Duplicar factura
+                  </DropdownMenuItem>
+                )}
                 {canPrintPdf && (
                   <DropdownMenuItem
                     onClick={() => { if (invoice.serie?.isFiscal) { window.open(`/api/proxy/invoices/${id}/pdf`, '_blank'); } else { handleReprintTicket(); } }}

@@ -73,6 +73,8 @@ export default function NewCreditDebitNotePage() {
   // MERCHANDISE state
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   const [returnSummary, setReturnSummary] = useState<ReturnSummaryItem[]>([]);
+  // Devolucion completa (autorellena las cantidades) vs parcial (se escriben a mano, default).
+  const [returnMode, setReturnMode] = useState<'partial' | 'full'>('partial');
 
   // MANUAL state
   const [manualMode, setManualMode] = useState<'fixed' | 'pct'>('fixed');
@@ -159,10 +161,18 @@ export default function NewCreditDebitNotePage() {
   // IGTF: force full return when invoice has IGTF and origin is MERCHANDISE
   const isIgtfFullReturn = isSale && origin === 'MERCHANDISE' && (parentDoc?.igtfUsd ?? 0) > 0;
 
+  // Devolucion completa: por eleccion del usuario (returnMode) o forzada por IGTF. Bloquea
+  // las cantidades y las autorellena con lo disponible de cada linea.
+  const isFullReturn = origin === 'MERCHANDISE' && (returnMode === 'full' || isIgtfFullReturn);
+
   useEffect(() => {
-    if (!isIgtfFullReturn || !parentDoc?.items) return;
+    if (!isFullReturn) return;
+    const list: Array<{ id: string; quantity: number }> | undefined = isSale
+      ? parentDoc?.items
+      : parentDoc?.poItems;
+    if (!list) return;
     const allItems: Record<string, number> = {};
-    parentDoc.items.forEach((item) => {
+    list.forEach((item) => {
       const summary = returnSummary.find((s) => s.itemId === item.id);
       const availableQty = summary ? summary.availableQty : item.quantity;
       if (availableQty > 0) {
@@ -170,7 +180,7 @@ export default function NewCreditDebitNotePage() {
       }
     });
     setSelectedItems(allItems);
-  }, [isIgtfFullReturn, parentDoc, returnSummary]);
+  }, [isFullReturn, isSale, parentDoc, returnSummary]);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -355,6 +365,30 @@ export default function NewCreditDebitNotePage() {
         </div>
       )}
 
+      {/* Devolver completa vs parcial (solo mercancia) */}
+      {origin === 'MERCHANDISE' && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-400 mr-1">Devolución:</span>
+          <button
+            onClick={() => setReturnMode('partial')}
+            disabled={isIgtfFullReturn}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${returnMode === 'partial' && !isIgtfFullReturn ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'}`}
+          >
+            Parcial
+          </button>
+          <button
+            onClick={() => setReturnMode('full')}
+            disabled={isIgtfFullReturn}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isFullReturn ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'}`}
+          >
+            Completa
+          </button>
+          {isFullReturn && (
+            <span className="text-xs text-slate-500">Se devuelven todas las cantidades disponibles.</span>
+          )}
+        </div>
+      )}
+
       {/* MERCHANDISE tab */}
       {origin === 'MERCHANDISE' && (
         <div className="card overflow-hidden">
@@ -400,8 +434,8 @@ export default function NewCreditDebitNotePage() {
                           value={qty || ''}
                           onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, availableQty) }))}
                           className="input-field w-20 text-right"
-                          readOnly={isIgtfFullReturn}
-                          disabled={isIgtfFullReturn}
+                          readOnly={isFullReturn}
+                          disabled={isFullReturn}
                         />
                       )}
                     </td>
@@ -439,6 +473,8 @@ export default function NewCreditDebitNotePage() {
                           value={qty || ''}
                           onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item.id]: Math.min(Number(e.target.value) || 0, availableQty) }))}
                           className="input-field w-20 text-right"
+                          readOnly={isFullReturn}
+                          disabled={isFullReturn}
                         />
                       )}
                     </td>

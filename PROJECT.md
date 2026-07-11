@@ -99,7 +99,13 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
-#### Sesión 69 — Alertas de Inventario + botón "¿Cómo se calcula?"
+#### Sesión 69 (2026-07-11) — Agilizar facturación: F9 cobra, duplicar factura, devolución completa/parcial
+Tres mejoras de flujo:
+- **POS: tecla F9 abre el cobro** (`sales/pos/page.tsx`). Helper `openPayModal()` + listener global; no aplica a SELLER, carrito vacío ni con otro modal/proceso abierto. Los botones "Cobrar" (móvil + escritorio) lo reusan; el de escritorio muestra badge **F9**.
+- **Duplicar factura**: `POST /invoices/:id/duplicate` (backend) reusa `create()` con ítems **sin `unitPrice`** → precio **actual** (`priceDetal`) y estado **PENDING** (seleccionable en POS), conserva cliente/vendedor, no copia descuento por línea. Opción "Duplicar factura" en el menú "Más acciones" del detalle → redirige a la nueva pre-factura.
+- **Nota de crédito de venta/compra: toggle "Parcial / Completa"** (`credit-debit-notes/new`). "Completa" autorellena cada línea con la cantidad disponible y bloquea inputs (mismo patrón del IGTF, que sigue forzando completa). Puro frontend.
+
+#### Sesión 69b — Alertas de Inventario + botón "¿Cómo se calcula?"
 Pantalla nueva `/inventory/alerts` con 4 reportes (Agotados, Bajo mínimo, Sin rotación, Exceso) filtrables y exportables a Excel/PDF. El "stock muerto" se reclasificó por **antigüedad de la última compra** (StockMovement PURCHASE, fallback createdAt): <10 días Recién ingresado, 10-28 Nuevo sin rotación, >28 Stock muerto; una compra reciente reinicia el reloj. Botón "¿Cómo se calcula?" (modal reusable con glosario de fórmulas) en Alertas y en Análisis ABC. Umbrales fijos en código.
 - **Backend:** `getInventoryAlerts` + `GET /inventory-analysis/alerts` + `/alerts/pdf` (`inventory-alerts-pdf.service.ts`). PDF en carta vertical, sin columna proveedor (código + Ref. Proveedor), altura de fila dinámica y paginación "Página X de Y".
 - **Frontend:** `inventory/alerts/page.tsx`, `components/metrics-help-modal.tsx`, `lib/metrics-help.ts`, entrada en sidebar, botón en `purchases/analysis`.

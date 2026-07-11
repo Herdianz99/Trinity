@@ -400,6 +400,32 @@ export class InvoicesService {
     return invoice;
   }
 
+  // Duplica una factura como pre-factura NUEVA en estado PENDING: copia los articulos y sus
+  // cantidades tal cual, pero los precios se toman de los ACTUALES (priceDetal) porque no se
+  // pasa unitPrice (create() cae al precio vigente del producto). Queda seleccionable en el POS.
+  // No se copia el descuento por linea a proposito (precio actual limpio).
+  async duplicate(id: string, user: { id: string; role: UserRole }) {
+    const original = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!original) throw new NotFoundException('Factura no encontrada');
+    if (!original.items.length) {
+      throw new BadRequestException('La factura no tiene articulos para duplicar');
+    }
+
+    const dto: CreateInvoiceDto = {
+      customerId: original.customerId || undefined,
+      sellerId: original.sellerId || undefined,
+      items: original.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+      })),
+    };
+
+    return this.create(dto, user);
+  }
+
   async pay(
     id: string,
     dto: PayInvoiceDto,

@@ -400,6 +400,30 @@ export default function POSPage() {
   // SELLER role: no cash modal needed, they can't charge
   const isSeller = userRole === 'SELLER';
 
+  // Abre el modal de cobro reseteando pagos/vuelto (misma accion que el boton "Cobrar").
+  const openPayModal = useCallback(() => {
+    setPayments([]);
+    setChangeMethodId(null);
+    setChangeUsdCash(0);
+    setPayModalOpen(true);
+  }, []);
+
+  // Atajo de teclado: F9 abre el cobro (los cajeros ya estan acostumbrados a esa tecla).
+  // No aplica a vendedores (no cobran) ni con modales/otros procesos abiertos o carrito vacio.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'F9') return;
+      e.preventDefault();
+      if (isSeller || processing || cart.length === 0) return;
+      if (payModalOpen || creditModalOpen || creditKeyOpen || negStockKeyOpen ||
+          showCashModal || advanceModalOpen || showCreateClient || showEditClient) return;
+      openPayModal();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isSeller, processing, cart.length, payModalOpen, creditModalOpen, creditKeyOpen,
+      negStockKeyOpen, showCashModal, advanceModalOpen, showCreateClient, showEditClient, openPayModal]);
+
   const fetchCashRegisters = useCallback(async () => {
     try {
       const res = await fetch('/api/proxy/cash-registers/available');
@@ -2004,7 +2028,7 @@ export default function POSPage() {
                   <Clock size={16} />
                 </button>
                 <button
-                  onClick={() => { setPayments([]); setChangeMethodId(null); setChangeUsdCash(0); setPayModalOpen(true); }}
+                  onClick={openPayModal}
                   disabled={cart.length === 0 || processing}
                   className="flex-1 py-3.5 rounded-xl bg-green-500 text-white font-bold text-base disabled:opacity-50 active:scale-[0.98] transition-transform"
                 >
@@ -3446,11 +3470,13 @@ export default function POSPage() {
                     Aparcar
                   </button>
                   <button
-                    onClick={() => { setPayments([]); setChangeMethodId(null); setChangeUsdCash(0); setPayModalOpen(true); }}
+                    onClick={openPayModal}
                     disabled={cart.length === 0 || processing}
                     className="btn-primary flex-1 !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                    title="Cobrar (F9)"
                   >
                     <DollarSign size={16} /> Cobrar
+                    <span className="hidden lg:inline text-[10px] font-semibold text-white/70 border border-white/30 rounded px-1 py-0.5 leading-none">F9</span>
                   </button>
                   <button
                     onClick={() => setCreditModalOpen(true)}

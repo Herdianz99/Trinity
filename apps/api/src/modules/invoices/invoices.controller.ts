@@ -107,6 +107,14 @@ export class InvoicesController {
     return this.service.create(dto, user);
   }
 
+  @Post(':id/duplicate')
+  duplicate(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.duplicate(id, user);
+  }
+
   @Patch(':id/pay')
   pay(
     @Param('id') id: string,
