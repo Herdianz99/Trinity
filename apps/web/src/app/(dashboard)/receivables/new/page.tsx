@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, HandCoins, Loader2, Save, Search, X, Plus, Pencil, Shield } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Save, Plus, Pencil, Shield } from 'lucide-react';
 import CustomerFormModal from '@/components/customer-form-modal';
+import CustomerSearchSelect from '@/components/customer-search-select';
 
 interface Customer {
   id: string;
@@ -40,14 +41,12 @@ export default function NewReceivablePage() {
   const router = useRouter();
 
   const [exchangeRate, setExchangeRate] = useState<number>(0);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
   const [userName, setUserName] = useState('');
   const [loadingInit, setLoadingInit] = useState(true);
 
   const [customerId, setCustomerId] = useState('');
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [custKey, setCustKey] = useState(0); // fuerza refetch del nombre tras crear/editar cliente
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [customerModalMode, setCustomerModalMode] = useState<'create' | 'edit'>('create');
   const [serieId, setSerieId] = useState('');
@@ -75,22 +74,18 @@ export default function NewReceivablePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const customerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => { document.title = 'Nueva CxC | Trinity ERP'; }, []);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [rateRes, custRes, seriesRes, configRes, profileRes] = await Promise.all([
+        const [rateRes, seriesRes, configRes, profileRes] = await Promise.all([
           fetch('/api/proxy/exchange-rate/today'),
-          fetch('/api/proxy/customers?limit=1000'),
           fetch('/api/proxy/series?type=SALES'),
           fetch('/api/proxy/company-config'),
           fetch('/api/auth/me'),
         ]);
         if (rateRes.ok) { const d = await rateRes.json(); setExchangeRate(d.rate || 0); }
-        if (custRes.ok) { const d = await custRes.json(); setCustomers(Array.isArray(d.data) ? d.data : []); }
         if (seriesRes.ok) {
           const d = await seriesRes.json();
           const arr = Array.isArray(d) ? d : Array.isArray(d.data) ? d.data : [];
@@ -105,16 +100,6 @@ export default function NewReceivablePage() {
   }, []);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (customerRef.current && !customerRef.current.contains(e.target as Node)) {
-        setCustomerDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     const [y, m, d] = originalDate.split('-').map(Number);
     const base = new Date(y, m - 1, d);
     setDueDate(formatLocalDate(addDays(base, creditDays)));
@@ -123,23 +108,13 @@ export default function NewReceivablePage() {
   function openNewCustomer() { setCustomerModalMode('create'); setCustomerModalOpen(true); }
   function openEditCustomer() { if (customerId) { setCustomerModalMode('edit'); setCustomerModalOpen(true); } }
 
-  // Tras crear/editar un cliente: refrescar la lista y seleccionar el guardado (si fue creado/editado).
-  async function handleCustomerSaved(saved: any) {
-    try {
-      const res = await fetch('/api/proxy/customers?limit=1000');
-      if (res.ok) { const d = await res.json(); setCustomers(Array.isArray(d.data) ? d.data : []); }
-    } catch { /* ignore */ }
-    if (saved?.id) { setCustomerId(saved.id); setCustomerSearch(''); setCustomerDropdownOpen(false); }
+  // Tras crear/editar un cliente: seleccionarlo y forzar refetch de su nombre en el buscador.
+  function handleCustomerSaved(saved: any) {
+    if (saved?.id) setCustomerId(saved.id);
+    setCustKey(k => k + 1);
     setCustomerModalOpen(false);
   }
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers;
-    const q = customerSearch.toLowerCase();
-    return customers.filter(c => c.name.toLowerCase().includes(q) || (c.rif && c.rif.toLowerCase().includes(q)));
-  }, [customers, customerSearch]);
-
-  const selectedCustomer = useMemo(() => customers.find(c => c.id === customerId), [customers, customerId]);
   const selectedSerie = useMemo(() => series.find(s => s.id === serieId), [series, serieId]);
   const isFiscal = selectedSerie?.isFiscal ?? false;
 
@@ -243,7 +218,7 @@ export default function NewReceivablePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:[grid-template-columns:2fr_1fr_1fr] gap-4">
               {/* Col 1: Cliente + Descripcion */}
               <div className="space-y-1.5">
-                <div ref={customerRef} className="relative">
+                <div>
                   <div className="flex items-center justify-between mb-0.5">
                     <label className="block text-[10px] font-medium text-slate-400">Cliente *</label>
                     <div className="flex items-center gap-1">
@@ -257,38 +232,13 @@ export default function NewReceivablePage() {
                       </button>
                     </div>
                   </div>
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input type="text"
-                      value={customerDropdownOpen ? customerSearch : (selectedCustomer ? `${selectedCustomer.name}${selectedCustomer.rif ? ` (${selectedCustomer.documentType}-${selectedCustomer.rif})` : ''}` : '')}
-                      onChange={(e) => { setCustomerSearch(e.target.value); setCustomerDropdownOpen(true); }}
-                      onFocus={() => { setCustomerDropdownOpen(true); setCustomerSearch(''); }}
-                      className="input-field !py-1 text-sm pl-9"
-                      placeholder="Buscar por nombre o RIF..."
-                    />
-                    {customerId && !customerDropdownOpen && (
-                      <button type="button" onClick={() => { setCustomerId(''); setCustomerSearch(''); setCustomerDropdownOpen(true); }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400">
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  {customerDropdownOpen && (
-                    <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-slate-700 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {filteredCustomers.length === 0 ? (
-                        <div className="px-3 py-3 text-sm text-slate-400">Sin resultados</div>
-                      ) : (
-                        filteredCustomers.slice(0, 30).map(c => (
-                          <button key={c.id} type="button"
-                            onClick={() => { setCustomerId(c.id); setCustomerDropdownOpen(false); setCustomerSearch(''); }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 transition-colors ${c.id === customerId ? 'bg-green-500/10 text-green-400' : 'text-white'}`}>
-                            <span className="font-medium">{c.name}</span>
-                            {c.rif && <span className="ml-2 text-slate-400 text-xs">{c.documentType}-{c.rif}</span>}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  <CustomerSearchSelect
+                    key={custKey}
+                    value={customerId}
+                    onSelect={(c) => setCustomerId(c?.id || '')}
+                    placeholder="Buscar por nombre o RIF..."
+                    className="input-field !py-1 text-sm"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Descripcion *</label>

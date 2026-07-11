@@ -17,6 +17,7 @@ import {
   Plus,
   Banknote,
 } from 'lucide-react';
+import CustomerSearchSelect from '@/components/customer-search-select';
 
 interface Receivable {
   id: string;
@@ -135,7 +136,6 @@ export default function ReceivablesPage() {
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [advanceForm, setAdvanceForm] = useState({ customerId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
   const [savingAdvance, setSavingAdvance] = useState(false);
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
   const [openCashSessions, setOpenCashSessions] = useState<{ id: string; label: string }[]>([]);
 
@@ -206,14 +206,6 @@ export default function ReceivablesPage() {
       const res = await fetch('/api/proxy/config');
       const data = await res.json();
       setConfig({ overdueWarningDays: data.overdueWarningDays || 3 });
-    } catch {}
-  }, []);
-
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const res = await fetch('/api/proxy/customers?limit=500');
-      const data = await res.json();
-      setCustomers((data.data || []).map((c: any) => ({ id: c.id, name: c.name })));
     } catch {}
   }, []);
 
@@ -303,7 +295,7 @@ export default function ReceivablesPage() {
   useEffect(() => { document.title = 'Cuentas por Cobrar | Trinity ERP'; }, []);
   useEffect(() => { fetchReceivables(); }, [fetchReceivables]);
   useEffect(() => { fetchAdvances(); }, [fetchAdvances]);
-  useEffect(() => { fetchSummary(); fetchConfig(); fetchCustomers(); fetchPaymentMethods(); fetchOpenCashSessions(); fetchExchangeRate(); }, [fetchSummary, fetchConfig, fetchCustomers, fetchPaymentMethods, fetchOpenCashSessions, fetchExchangeRate]);
+  useEffect(() => { fetchSummary(); fetchConfig(); fetchPaymentMethods(); fetchOpenCashSessions(); fetchExchangeRate(); }, [fetchSummary, fetchConfig, fetchPaymentMethods, fetchOpenCashSessions, fetchExchangeRate]);
 
   function isNearDue(dueDate: string | null) {
     if (!dueDate) return false;
@@ -868,11 +860,12 @@ export default function ReceivablesPage() {
               )}
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Cliente *</label>
-                <select value={advanceForm.customerId} onChange={e => setAdvanceForm(f => ({ ...f, customerId: e.target.value }))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
-                  <option value="">Seleccionar...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <CustomerSearchSelect
+                  value={advanceForm.customerId}
+                  onSelect={(c) => setAdvanceForm(f => ({ ...f, customerId: c?.id || '' }))}
+                  placeholder="Buscar cliente por nombre o cédula…"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg !py-2 text-sm text-slate-200"
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

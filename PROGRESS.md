@@ -6,7 +6,7 @@ En la empresa grande (~48k clientes) el selector de Cliente de los ajustes solo 
 
 - **Componente reutilizable `components/customer-search-select.tsx`**: selector de cliente con **búsqueda server-side** (`/customers?search=&limit=20`, por nombre/cédula), dropdown, limpiar, y trae el nombre por id si viene un valor preseleccionado. No carga todos los clientes.
 - Aplicado en **`inventory/adjustments/new`** (selector de cliente para CxC) y en **`inventory/adjustments/[id]`** (modal de proceso — cliente con buscador, proveedor sigue con select; el vencimiento se calcula de los días de crédito del cliente elegido). Se quitaron las cargas `?limit=500`. Typecheck web verde.
-- **Pendiente (mismo patrón, avisado a Diego):** `receivables/new` (limit=1000) y `receivables/page` (limit=500) tienen el mismo bug latente para la empresa grande; se pueden migrar al mismo componente si hace falta.
+- **También migrados al componente:** `receivables/new` (selector de cliente de la CxC, conserva Nuevo/Editar — tras guardar se fuerza refetch del nombre con `key`) y `receivables/page` (selector de cliente del modal de anticipo). Se quitaron las cargas `limit=1000`/`limit=500`. Ya no queda ningún selector de cliente que cargue en bloque.
 
 ## 🚚 Módulo "Por despachar": comandas de retiro con despacho parcial — 2026-07-11
 
