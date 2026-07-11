@@ -810,7 +810,7 @@ export class CashRegistersService {
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }) {
     const where = this.ledgerWhere(filters);
-    const [rowsRaw, agg] = await Promise.all([
+    const [rowsRaw, agg, cashMethods] = await Promise.all([
       this.prisma.cashLedgerEntry.findMany({
         where,
         orderBy: { createdAt: 'asc' },
@@ -823,13 +823,21 @@ export class CashRegistersService {
         by: ['currency', 'direction', 'isCash'], where,
         _sum: { amountUsd: true, amountBs: true }, _count: { _all: true },
       }),
+      // Metodos de efectivo fisico, para fusionar los movimientos manuales (sin metodo) al
+      // efectivo de su moneda: manual Bs -> EFECTIVO, manual USD -> DOLAR.
+      this.prisma.paymentMethod.findMany({ where: { isCash: true }, select: { name: true, isDivisa: true } }),
     ]);
+    const cashUsdName = cashMethods.find((m) => m.isDivisa)?.name;
+    const cashBsName = cashMethods.find((m) => !m.isDivisa)?.name;
+    const manualCashName = (cur: string) =>
+      (cur === 'USD' ? cashUsdName : cashBsName) || 'Efectivo (manual)';
 
     const rows = rowsRaw.map((e) => ({
       createdAt: e.createdAt, direction: e.direction,
       amountUsd: e.amountUsd, amountBs: e.amountBs, currency: e.currency,
       isCash: e.isCash, sourceType: e.sourceType, reason: e.reason,
-      methodName: e.method?.name || (e.sourceType === 'MANUAL' ? 'Efectivo (manual)' : '—'),
+      // Sin metodo (movimiento manual) + efectivo -> se agrupa en el metodo de efectivo de su moneda.
+      methodName: e.method?.name || (e.isCash ? manualCashName(e.currency) : '—'),
       registerName: e.cashSession?.cashRegister?.name || '—',
       cashierName: e.cashSession?.openedBy?.name || '—',
     }));

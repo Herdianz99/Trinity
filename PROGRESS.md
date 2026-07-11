@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte por método: fusionar movimientos manuales al efectivo de su moneda — 2026-07-11
+
+Los movimientos manuales de caja no tienen método de pago. En el reporte por método ahora **se fusionan con el método de efectivo físico de su moneda**: manual Bs → EFECTIVO, manual USD → DOLAR (los dos métodos con `isCash=true`, uno por `isDivisa`). Ya no aparece el grupo aparte "Efectivo (manual)". Se busca dinámicamente el método `isCash` de cada moneda (no hardcodeado). Validado: EFECTIVO pasa a incluir el manual Bs y DOLAR los 7 manuales USD; 0 filas huérfanas.
+
 ## 🧾 Reporte del libro mayor AGRUPADO POR MÉTODO DE PAGO (para el cuadre) — 2026-07-11
 
 Se cambió el reporte del libro mayor: antes agrupaba por origen; ahora **agrupa por método de pago**. Junta en un solo grupo todo lo del mismo método sin importar de dónde venga (venta, vuelto, cobro CxC, pago CxP, gasto, anticipo, manual) y da el **total neto del método = ingresos − egresos**, que es lo que debe haber en ese método → sirve directo para el cuadre. Cada fila muestra su Origen como columna; si el método tuvo egresos (vueltos/gastos), se desglosa Ingresos/Egresos/Total. Los movimientos manuales (sin método) caen en su propio grupo "Efectivo (manual)". Validado contra la BD real (groupBy por methodId). Título del PDF: "Libro mayor de caja — por método de pago".
