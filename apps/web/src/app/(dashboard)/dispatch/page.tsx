@@ -1,42 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Truck, Plus, Search, X, Loader2, Phone, CheckCircle2, AlertTriangle,
-  ClipboardList, RotateCw, PackageCheck, Ban, History,
+  Truck, Plus, Search, X, Loader2, Phone, AlertTriangle, ClipboardList, RotateCw,
 } from 'lucide-react';
-
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  PENDIENTE:  { label: 'Pendiente',  cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  PARCIAL:    { label: 'Parcial',    cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
-  COMPLETADO: { label: 'Completado', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
-  CANCELADO:  { label: 'Cancelado',  cls: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
-};
+import { DISPATCH_STATUS_META as STATUS_META, fmtQty, fmtDate, isOverdue } from '@/lib/dispatch';
 
 interface Area { id: string; name: string; }
 
-const fmtQty = (n: number) => Number(n).toLocaleString('es-VE', { maximumFractionDigits: 3 });
-
-function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-// Fecha (date-only, guardada a medianoche UTC) -> 'YYYY-MM-DD' sin corrimiento de zona.
-function isoToDateInput(iso: string | null): string {
-  if (!iso) return '';
-  return iso.slice(0, 10);
-}
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
-function isOverdue(iso: string | null, status: string): boolean {
-  if (!iso || status === 'COMPLETADO' || status === 'CANCELADO') return false;
-  return iso.slice(0, 10) < todayLocal();
-}
-
 export default function DispatchPage() {
+  const router = useRouter();
   const [areas, setAreas] = useState<Area[]>([]);
   const [tab, setTab] = useState<string>('comandas'); // 'comandas' | 'todos' | <areaId>
   const [search, setSearch] = useState('');
@@ -48,8 +22,6 @@ export default function DispatchPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [creating, setCreating] = useState(false);
-
-  const [selected, setSelected] = useState<any | null>(null);
   const searchTimer = useRef<any>(null);
 
   useEffect(() => { document.title = 'Por despachar | Trinity ERP'; }, []);
@@ -79,13 +51,7 @@ export default function DispatchPage() {
   }, [tab, search, load]);
 
   const refresh = () => load(tab, search);
-
-  async function openDispatch(id: string) {
-    try {
-      const res = await fetch(`/api/proxy/dispatches/${id}`);
-      if (res.ok) setSelected(await res.json());
-    } catch { /* ignore */ }
-  }
+  const openDispatch = (id: string) => router.push(`/dispatch/${id}`);
 
   async function handleCreate() {
     if (!invoiceNumber.trim()) return;
@@ -98,9 +64,7 @@ export default function DispatchPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Error al crear la comanda');
       setCreateOpen(false); setInvoiceNumber('');
-      setMsg({ type: 'success', text: `Comanda ${json.number} creada` });
-      refresh();
-      setSelected(json);
+      router.push(`/dispatch/${json.id}`);
     } catch (err: any) {
       setMsg({ type: 'error', text: err.message });
     } finally { setCreating(false); }
@@ -177,16 +141,6 @@ export default function DispatchPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Modal detalle/despacho */}
-      {selected && (
-        <DispatchDetail
-          dispatch={selected}
-          onClose={() => setSelected(null)}
-          onChanged={(updated) => { setSelected(updated); refresh(); }}
-          onToast={(t) => setMsg(t)}
-        />
       )}
     </div>
   );
@@ -279,210 +233,4 @@ function ItemsList({ items, onOpen }: { items: any[]; onOpen: (id: string) => vo
 
 function Empty({ text }: { text: string }) {
   return <div className="card p-12 text-center text-slate-500 text-sm">{text}</div>;
-}
-
-// ── Detalle + despacho ───────────────────────────────────────────────────────
-function DispatchDetail({ dispatch, onClose, onChanged, onToast }: {
-  dispatch: any;
-  onClose: () => void;
-  onChanged: (updated: any) => void;
-  onToast: (t: { type: 'success' | 'error'; text: string }) => void;
-}) {
-  const [scheduledDate, setScheduledDate] = useState(isoToDateInput(dispatch.scheduledDate));
-  const [contactName, setContactName] = useState(dispatch.contactName || '');
-  const [contactPhone, setContactPhone] = useState(dispatch.contactPhone || '');
-  const [notes, setNotes] = useState(dispatch.notes || '');
-  const [savingInfo, setSavingInfo] = useState(false);
-  // Cantidades a despachar AHORA por item
-  const [deliverQty, setDeliverQty] = useState<Record<string, string>>({});
-  const [deliverNote, setDeliverNote] = useState('');
-  const [delivering, setDelivering] = useState(false);
-
-  const readOnly = dispatch.status === 'COMPLETADO' || dispatch.status === 'CANCELADO';
-  const meta = STATUS_META[dispatch.status] || STATUS_META.PENDIENTE;
-
-  async function saveInfo() {
-    setSavingInfo(true);
-    try {
-      const res = await fetch(`/api/proxy/dispatches/${dispatch.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledDate: scheduledDate || null, contactName, contactPhone, notes }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error al guardar');
-      onChanged(json);
-      onToast({ type: 'success', text: 'Datos actualizados' });
-    } catch (err: any) { onToast({ type: 'error', text: err.message }); }
-    finally { setSavingInfo(false); }
-  }
-
-  function fillAllPending() {
-    const next: Record<string, string> = {};
-    for (const it of dispatch.items) {
-      const pending = Math.round((it.quantityInvoiced - it.quantityDelivered) * 1000) / 1000;
-      if (pending > 0) next[it.id] = String(pending);
-    }
-    setDeliverQty(next);
-  }
-
-  async function registerDelivery() {
-    const lines = Object.entries(deliverQty)
-      .map(([dispatchItemId, v]) => ({ dispatchItemId, qty: parseFloat(v) || 0 }))
-      .filter((l) => l.qty > 0);
-    if (lines.length === 0) { onToast({ type: 'error', text: 'Indica al menos una cantidad a despachar' }); return; }
-    setDelivering(true);
-    try {
-      const res = await fetch(`/api/proxy/dispatches/${dispatch.id}/deliver`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines, note: deliverNote || undefined }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error al registrar el despacho');
-      onChanged(json);
-      setDeliverQty({}); setDeliverNote('');
-      onToast({ type: 'success', text: json.status === 'COMPLETADO' ? 'Despacho completado' : 'Despacho parcial registrado' });
-    } catch (err: any) { onToast({ type: 'error', text: err.message }); }
-    finally { setDelivering(false); }
-  }
-
-  async function cancelDispatch() {
-    if (!confirm('¿Cancelar esta comanda de retiro?')) return;
-    try {
-      const res = await fetch(`/api/proxy/dispatches/${dispatch.id}/cancel`, { method: 'PATCH' });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error al cancelar');
-      onChanged(json);
-      onToast({ type: 'success', text: 'Comanda cancelada' });
-    } catch (err: any) { onToast({ type: 'error', text: err.message }); }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-3xl shadow-2xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="font-mono text-white font-semibold">{dispatch.number}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
-            <span className="text-xs text-slate-500 font-mono truncate">Fact. {dispatch.invoice?.number || '—'}</span>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={18} /></button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          {/* Cliente + datos editables */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-[10px] text-slate-400 mb-0.5">Contacto (nombre)</label>
-              <input value={contactName} onChange={e => setContactName(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-400 mb-0.5">Teléfono</label>
-              <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" />
-            </div>
-            <div>
-              <label className="block text-[10px] text-slate-400 mb-0.5">Fecha de despacho</label>
-              <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" />
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-[10px] text-slate-400 mb-0.5">Notas</label>
-              <input value={notes} onChange={e => setNotes(e.target.value)} disabled={readOnly} className="input-field !py-1.5 text-sm disabled:opacity-60" placeholder="Ej: viene el sábado con camión" />
-            </div>
-            <div className="flex items-end">
-              {!readOnly && (
-                <button onClick={saveInfo} disabled={savingInfo} className="btn-secondary !py-1.5 text-xs w-full flex items-center justify-center gap-1.5">
-                  {savingInfo ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />} Guardar
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Items + despacho */}
-          <div className="card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700/50 bg-slate-800/40 text-slate-400 text-xs">
-                  <th className="text-left px-3 py-2 font-medium">Artículo</th>
-                  <th className="text-left px-3 py-2 font-medium">Zona</th>
-                  <th className="text-right px-3 py-2 font-medium">Facturado</th>
-                  <th className="text-right px-3 py-2 font-medium">Despachado</th>
-                  <th className="text-right px-3 py-2 font-medium">Pendiente</th>
-                  {!readOnly && <th className="text-right px-3 py-2 font-medium">Despachar ahora</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {dispatch.items.map((it: any) => {
-                  const pending = Math.round((it.quantityInvoiced - it.quantityDelivered) * 1000) / 1000;
-                  return (
-                    <tr key={it.id} className="border-b border-slate-700/30">
-                      <td className="px-3 py-2 text-white">{it.productName}{it.productCode && <span className="ml-2 text-[10px] text-slate-500 font-mono">{it.productCode}</span>}</td>
-                      <td className="px-3 py-2 text-slate-400 text-xs">{it.printAreaName || '—'}</td>
-                      <td className="px-3 py-2 text-right font-mono text-slate-300">{fmtQty(it.quantityInvoiced)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-green-400">{fmtQty(it.quantityDelivered)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-amber-400">{fmtQty(pending)}</td>
-                      {!readOnly && (
-                        <td className="px-3 py-2 text-right">
-                          {pending > 0 ? (
-                            <input type="number" min={0} max={pending} step="any"
-                              value={deliverQty[it.id] ?? ''} onChange={e => {
-                                const v = Math.min(parseFloat(e.target.value) || 0, pending);
-                                setDeliverQty(prev => ({ ...prev, [it.id]: e.target.value === '' ? '' : String(v) }));
-                              }}
-                              className="input-field !py-1 text-sm w-24 text-right" placeholder="0" />
-                          ) : <CheckCircle2 size={15} className="text-green-500 inline" />}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Acciones de despacho */}
-          {!readOnly && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={fillAllPending} className="btn-secondary !py-1.5 text-xs">Despachar todo lo pendiente</button>
-              <input value={deliverNote} onChange={e => setDeliverNote(e.target.value)} placeholder="Nota del despacho (opcional)" className="input-field !py-1.5 text-sm flex-1 min-w-[160px]" />
-              <button onClick={registerDelivery} disabled={delivering} className="btn-primary !py-1.5 text-sm flex items-center gap-2 disabled:opacity-50">
-                {delivering ? <Loader2 className="animate-spin" size={15} /> : <PackageCheck size={15} />} Registrar despacho
-              </button>
-            </div>
-          )}
-
-          {/* Historial de despachos */}
-          {dispatch.deliveries?.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5"><History size={13} /> Historial de despachos</h4>
-              <div className="space-y-1.5">
-                {dispatch.deliveries.map((dv: any) => (
-                  <div key={dv.id} className="text-xs bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span>{new Date(dv.createdAt).toLocaleString('es-VE')}</span>
-                      <span>{dv.deliveredBy?.name || ''}</span>
-                    </div>
-                    <div className="text-slate-300 mt-0.5">
-                      {(Array.isArray(dv.lines) ? dv.lines : []).map((l: any, i: number) => (
-                        <span key={i} className="mr-3">{l.productName}: <span className="font-mono text-amber-300">{fmtQty(l.qty)}</span></span>
-                      ))}
-                    </div>
-                    {dv.note && <p className="text-slate-500 mt-0.5 italic">{dv.note}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Cancelar */}
-          {dispatch.status !== 'COMPLETADO' && dispatch.status !== 'CANCELADO' && (
-            <div className="pt-1 border-t border-slate-700/50">
-              <button onClick={cancelDispatch} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1.5">
-                <Ban size={13} /> Cancelar comanda
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
