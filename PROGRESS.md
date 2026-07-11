@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🕐 Fix timezone: notas de crédito tomaban la tasa del día anterior — 2026-07-11
+
+Una devolución (NC) creada de noche (después de las 8 PM Caracas) quedaba con la tasa del **día anterior** (verificado en prod: NC VF-NC-26-00000007 con `documentDate` 2026-07-11 pero `exchangeRate` 709.6935 del 10-jul en vez de 721.3456). Es el bug de timezone Caracas/UTC de CLAUDE.md.
+
+- **Causa** (`credit-debit-notes.service.create`, ~línea 166-168): `const docDate = new Date(dto.date); const rateDay = caracasDateKey(docDate)`. El front manda `dto.date` como string `'YYYY-MM-DD'`; envolverlo en `new Date()` lo vuelve un **instante** (medianoche UTC = 8 PM del día anterior en Caracas), así que `caracasDateKey` resolvía el día equivocado. El helper YA respeta un string crudo `'YYYY-MM-DD'` (vía `toCaracasYmd`).
+- **Fix:** `const rateDay = caracasDateKey(dto.date || new Date())` — pasar el **string crudo**, no el Date. `docDate` se mantiene (se usa en `documentDate` y `yearToken`), que siguen correctos.
+- **Barrido de todo el API:** revisados todos los lookups de tasa (`exchangeRate.find*` + `caracasDateKey`). El único con el bug era este; **gastos** (`resolveExpenseRate`) y **exchange-rate** ya pasan el string bien; el resto usa "hoy" o la tasa editada; `purchase-orders.getRateForDate` es código muerto (no se llama). Typecheck API verde.
+
 ## 🏦 Caja de administración (no aparece en el POS) — 2026-07-11
 
 Nueva opción para tener una **caja de administración** — de donde se pagan proveedores, gastos, etc. — que **no** aparece en el POS de los cajeros.

@@ -164,8 +164,10 @@ export class CreditDebitNotesService {
 
     // Fecha del documento (editable). Si no viene, hoy.
     const docDate = dto.date ? new Date(dto.date) : new Date();
-    // Tasa de cambio del dia del documento (usa la del dia seleccionado, no siempre hoy)
-    const rateDay = caracasDateKey(docDate);
+    // Tasa de cambio del dia del documento. OJO: hay que pasar el STRING crudo 'YYYY-MM-DD'
+    // a caracasDateKey, NO new Date(dto.date): envolverlo en Date lo vuelve un instante
+    // (medianoche UTC = 8 PM del dia anterior en Caracas) y tomaria la tasa del dia equivocado.
+    const rateDay = caracasDateKey(dto.date || new Date());
     const rateRecord = await this.prisma.exchangeRate.findFirst({
       where: { date: rateDay },
     });
