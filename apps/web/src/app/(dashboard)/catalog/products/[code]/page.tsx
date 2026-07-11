@@ -6,6 +6,7 @@ import {
   ArrowLeft, Package, Save, Loader2, AlertTriangle,
   ChevronLeft, ChevronRight, ExternalLink, LogOut,
 } from 'lucide-react';
+import Toggle from '@/components/toggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getMovementSource } from '@/lib/movement-source';
 
@@ -15,6 +16,7 @@ interface Product {
   code: string;
   barcode: string | null;
   supplierRef: string | null;
+  otherCode: string | null;
   name: string;
   description: string | null;
   categoryId: string | null;
@@ -35,6 +37,7 @@ interface Product {
   priceMayor: number;
   minStock: number;
   isActive: boolean;
+  saleBlocked?: boolean;
   showInStore?: boolean;
   storeFeatured?: boolean;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
@@ -152,6 +155,7 @@ export default function ProductDetailPage() {
         name: data.name,
         barcode: data.barcode || '',
         supplierRef: data.supplierRef || '',
+        otherCode: data.otherCode || '',
         description: data.description || '',
         categoryId: data.categoryId || '',
         brandId: data.brandId || '',
@@ -171,6 +175,7 @@ export default function ProductDetailPage() {
         ivaType: data.ivaType,
         minStock: data.minStock,
         isActive: data.isActive,
+        saleBlocked: data.saleBlocked ?? false,
         showInStore: data.showInStore ?? false,
         storeFeatured: data.storeFeatured ?? false,
       });
@@ -282,6 +287,7 @@ export default function ProductDetailPage() {
         name: form.name,
         barcode: form.barcode || undefined,
         supplierRef: form.supplierRef || undefined,
+        otherCode: form.otherCode || undefined,
         description: form.description || undefined,
         categoryId: form.categoryId || undefined,
         brandId: form.brandId || undefined,
@@ -292,6 +298,7 @@ export default function ProductDetailPage() {
         conversionFactor: Number(form.conversionFactor),
         minStock: Number(form.minStock),
         isActive: form.isActive,
+        saleBlocked: form.saleBlocked,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
       };
@@ -570,7 +577,7 @@ export default function ProductDetailPage() {
             {/* Basic fields */}
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Datos basicos</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Codigo</label>
                   <input type="text" value={product.code} disabled className="input-field !py-2 text-sm opacity-60" />
@@ -582,6 +589,10 @@ export default function ProductDetailPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Ref. Proveedor</label>
                   <input type="text" value={form.supplierRef || ''} onChange={e => setForm((f: any) => ({ ...f, supplierRef: e.target.value }))} className="input-field !py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Otro codigo</label>
+                  <input type="text" value={form.otherCode || ''} onChange={e => setForm((f: any) => ({ ...f, otherCode: e.target.value }))} className="input-field !py-2 text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 mt-3">
@@ -651,29 +662,21 @@ export default function ProductDetailPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
                   <input type="number" step="1" value={form.minStock ?? ''} onChange={e => setForm((f: any) => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.isService ?? false} onChange={e => setForm((f: any) => ({ ...f, isService: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-cyan-500 focus:ring-cyan-500/40" />
-                    Es servicio (no maneja inventario)
-                  </label>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.isService ?? false} onChange={v => setForm((f: any) => ({ ...f, isService: v }))} label="Es servicio (no maneja inventario)" color="cyan" />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.isActive ?? true} onChange={e => setForm((f: any) => ({ ...f, isActive: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
-                    Producto activo
-                  </label>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.isActive ?? true} onChange={v => setForm((f: any) => ({ ...f, isActive: v }))} label="Producto activo" />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.showInStore ?? false} onChange={e => setForm((f: any) => ({ ...f, showInStore: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" />
-                    Mostrar en tienda online
-                  </label>
+                <div className="flex items-center gap-2 pb-1">
+                  <Toggle checked={!form.saleBlocked} onChange={v => setForm((f: any) => ({ ...f, saleBlocked: !v }))} label="Activo para la venta" />
+                  {form.saleBlocked && <span className="text-xs text-red-400/90">Bloqueado: no se puede facturar</span>}
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                    <input type="checkbox" checked={form.storeFeatured ?? false} onChange={e => setForm((f: any) => ({ ...f, storeFeatured: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" disabled={!form.showInStore} />
-                    Destacado en tienda
-                  </label>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.showInStore ?? false} onChange={v => setForm((f: any) => ({ ...f, showInStore: v }))} label="Mostrar en tienda online" color="blue" />
+                </div>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.storeFeatured ?? false} onChange={v => setForm((f: any) => ({ ...f, storeFeatured: v }))} label="Destacado en tienda" color="blue" disabled={!form.showInStore} />
                 </div>
               </div>
             </div>
@@ -940,39 +943,14 @@ export default function ProductDetailPage() {
                     {IVA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5">
-                    <input
-                      type="checkbox"
-                      checked={form.bregaApplies ?? true}
-                      onChange={e => handlePriceBrechaToggle(e.target.checked)}
-                      disabled={form.manualPrice}
-                      className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
-                    />
-                    Aplica brecha ({bregaGlobalPct}%)
-                  </label>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.bregaApplies ?? true} onChange={v => handlePriceBrechaToggle(v)} disabled={form.manualPrice} label={`Aplica brecha (${bregaGlobalPct}%)`} />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5">
-                    <input
-                      type="checkbox"
-                      checked={form.manualPrice ?? false}
-                      onChange={e => handlePriceManualToggle(e.target.checked)}
-                      className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40"
-                    />
-                    Precio manual
-                  </label>
+                <div className="flex items-end pb-1">
+                  <Toggle checked={form.manualPrice ?? false} onChange={v => handlePriceManualToggle(v)} color="amber" label="Precio manual" />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2.5" title="Si esta tildado, las compras y reemplazos NO cambian el costo. Solo lo cambias tu aqui a mano.">
-                    <input
-                      type="checkbox"
-                      checked={form.manualCost ?? false}
-                      onChange={e => setForm((f: any) => ({ ...f, manualCost: e.target.checked }))}
-                      className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/40"
-                    />
-                    Costo manual 🔒
-                  </label>
+                <div className="flex items-end pb-1" title="Si esta tildado, las compras y reemplazos NO cambian el costo. Solo lo cambias tu aqui a mano.">
+                  <Toggle checked={form.manualCost ?? false} onChange={v => setForm((f: any) => ({ ...f, manualCost: v }))} label="Costo manual 🔒" />
                 </div>
               </div>
               {form.manualCost && (

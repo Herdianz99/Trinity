@@ -478,6 +478,7 @@ model Product {
   code             String                   @unique
   barcode          String?                  @unique
   supplierRef      String?
+  otherCode        String?                  // "Otro codigo" — codigo alterno, sin uso funcional aun
   name             String
   description      String?
   categoryId       String?
@@ -501,6 +502,7 @@ model Product {
   priceMayor       Float                    @default(0)
   minStock         Float                    @default(0)
   isActive         Boolean                  @default(true)
+  saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
   showInStore      Boolean                  @default(false)
   storeFeatured    Boolean                  @default(false)
   searchVector     Unsupported("tsvector")?

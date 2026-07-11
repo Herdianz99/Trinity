@@ -306,6 +306,8 @@ export class InvoicesService {
     for (const item of dto.items) {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
+      if (!product.isActive) throw new BadRequestException(`El producto "${product.name}" esta desactivado y no se puede facturar`);
+      if (product.saleBlocked) throw new BadRequestException(`El producto "${product.name}" esta bloqueado para la venta`);
 
       // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;
@@ -1178,6 +1180,8 @@ export class InvoicesService {
     for (const item of dto.items) {
       const product = productMap.get(item.productId);
       if (!product) throw new BadRequestException(`Producto ${item.productId} no encontrado`);
+      if (!product.isActive) throw new BadRequestException(`El producto "${product.name}" esta desactivado y no se puede facturar`);
+      if (product.saleBlocked) throw new BadRequestException(`El producto "${product.name}" esta bloqueado para la venta`);
 
       // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;

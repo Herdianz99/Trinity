@@ -18,6 +18,11 @@ export class CreateProductDto {
   @IsString()
   supplierRef?: string;
 
+  @ApiProperty({ required: false, description: 'Otro codigo (codigo alterno, sin uso funcional aun)' })
+  @IsOptional()
+  @IsString()
+  otherCode?: string;
+
   @ApiProperty()
   @IsString()
   @MinLength(2)
@@ -124,6 +129,11 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false, default: false, description: 'Bloqueado para la venta: se muestra en POS pero no se puede facturar' })
+  @IsOptional()
+  @IsBoolean()
+  saleBlocked?: boolean;
 
   @ApiProperty({ required: false, default: false, description: 'Mostrar en la tienda online' })
   @IsOptional()

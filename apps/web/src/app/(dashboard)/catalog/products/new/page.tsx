@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Package, Loader2 } from 'lucide-react';
+import Toggle from '@/components/toggle';
 
 interface Category { id: string; name: string; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
@@ -17,11 +18,11 @@ const IVA_OPTIONS = [
 const IVA_MULTIPLIERS: Record<string, number> = { EXEMPT: 1, REDUCED: 1.08, GENERAL: 1.16, SPECIAL: 1.31 };
 
 const defaultForm = {
-  code: '', barcode: '', supplierRef: '', name: '', description: '',
+  code: '', barcode: '', supplierRef: '', otherCode: '', name: '', description: '',
   categoryId: '', brandId: '', supplierId: '',
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
   costUsd: '0', bregaApplies: true, gananciaPct: '0', gananciaMayorPct: '0',
-  ivaType: 'GENERAL', minStock: 0, isActive: true, isService: false,
+  ivaType: 'GENERAL', minStock: 0, isActive: true, saleBlocked: false, isService: false,
   showInStore: false, storeFeatured: false,
 };
 
@@ -88,6 +89,7 @@ export default function NewProductPage() {
         name: form.name,
         barcode: form.barcode || undefined,
         supplierRef: form.supplierRef || undefined,
+        otherCode: form.otherCode || undefined,
         description: form.description || undefined,
         categoryId: form.categoryId || undefined,
         brandId: form.brandId || undefined,
@@ -102,6 +104,7 @@ export default function NewProductPage() {
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
+        saleBlocked: form.saleBlocked,
         isService: form.isService,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
@@ -168,7 +171,7 @@ export default function NewProductPage() {
         {/* Basic fields */}
         <div>
           <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Datos basicos</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Codigo</label>
               <input type="text" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="input-field !py-2 text-sm" placeholder="Auto (segun categoria)" />
@@ -180,6 +183,10 @@ export default function NewProductPage() {
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Ref. Proveedor</label>
               <input type="text" value={form.supplierRef} onChange={e => setForm(f => ({ ...f, supplierRef: e.target.value }))} className="input-field !py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Otro codigo</label>
+              <input type="text" value={form.otherCode} onChange={e => setForm(f => ({ ...f, otherCode: e.target.value }))} className="input-field !py-2 text-sm" />
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 mt-3">
@@ -251,11 +258,8 @@ export default function NewProductPage() {
                 {IVA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                <input type="checkbox" checked={form.bregaApplies} onChange={e => setForm(f => ({ ...f, bregaApplies: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
-                Aplica brecha ({bregaGlobalPct}%)
-              </label>
+            <div className="flex items-end pb-2">
+              <Toggle checked={form.bregaApplies} onChange={v => setForm(f => ({ ...f, bregaApplies: v }))} label={`Aplica brecha (${bregaGlobalPct}%)`} />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
@@ -309,25 +313,17 @@ export default function NewProductPage() {
               <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
               <input type="number" step="1" value={form.minStock} onChange={e => setForm(f => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
             </div>
-            <div className="flex items-end gap-6">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40" />
-                Producto activo
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                <input type="checkbox" checked={form.isService} onChange={e => setForm(f => ({ ...f, isService: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/40" />
-                Articulo de servicio
-              </label>
+            <div className="flex items-center gap-6 pb-1">
+              <Toggle checked={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} label="Producto activo" />
+              <Toggle checked={form.isService} onChange={v => setForm(f => ({ ...f, isService: v }))} label="Articulo de servicio" color="amber" />
             </div>
-            <div className="flex items-end gap-6">
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                <input type="checkbox" checked={form.showInStore} onChange={e => setForm(f => ({ ...f, showInStore: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" />
-                Mostrar en tienda online
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none pb-2">
-                <input type="checkbox" checked={form.storeFeatured} onChange={e => setForm(f => ({ ...f, storeFeatured: e.target.checked }))} className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/40" disabled={!form.showInStore} />
-                Destacado en tienda
-              </label>
+            <div className="flex items-center gap-3 pb-1">
+              <Toggle checked={!form.saleBlocked} onChange={v => setForm(f => ({ ...f, saleBlocked: !v }))} label="Activo para la venta" />
+              {form.saleBlocked && <span className="text-xs text-red-400/90">Bloqueado: se ve en el POS pero no se puede facturar</span>}
+            </div>
+            <div className="flex items-center gap-6 pb-1">
+              <Toggle checked={form.showInStore} onChange={v => setForm(f => ({ ...f, showInStore: v }))} label="Mostrar en tienda online" color="blue" />
+              <Toggle checked={form.storeFeatured} onChange={v => setForm(f => ({ ...f, storeFeatured: v }))} label="Destacado en tienda" color="blue" disabled={!form.showInStore} />
             </div>
             {form.isService && (
               <p className="text-xs text-amber-400/80 mt-1">Los articulos de servicio no generan movimiento de inventario</p>

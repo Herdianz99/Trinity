@@ -12,6 +12,8 @@ interface Product {
   id: string;
   code: string;
   barcode: string | null;
+  otherCode: string | null;
+  saleBlocked?: boolean;
   name: string;
   categoryId: string | null;
   brandId: string | null;
@@ -55,6 +57,8 @@ export default function ProductsPage() {
       const params = new URLSearchParams();
       params.set('page', page.toString());
       params.set('limit', '20');
+      // El catalogo es el unico lugar que ve los productos desactivados (para gestionarlos).
+      params.set('includeInactive', 'true');
       if (search) params.set('search', search);
       if (filterCategory) params.set('categoryId', filterCategory);
       if (filterBrand) params.set('brandId', filterBrand);
@@ -200,6 +204,7 @@ export default function ProductsPage() {
             <thead>
               <tr className="border-b border-slate-700/50">
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Codigo</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Otro codigo</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Categoria</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Marca</th>
@@ -214,11 +219,11 @@ export default function ProductsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="text-center py-12">
+                <tr><td colSpan={12} className="text-center py-12">
                   <Loader2 className="animate-spin text-green-500 mx-auto" size={28} />
                 </td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-12 text-slate-500">
+                <tr><td colSpan={12} className="text-center py-12 text-slate-500">
                   No se encontraron productos
                 </td></tr>
               ) : products.map(product => {
@@ -231,6 +236,7 @@ export default function ProductsPage() {
                         {product.code}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-slate-400 font-mono text-xs">{product.otherCode || '—'}</td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/catalog/products/${product.code}`}
@@ -264,11 +270,16 @@ export default function ProductsPage() {
                       {isLow && <AlertTriangle size={12} className="inline ml-1 text-amber-400" />}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {product.isActive ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">Activo</span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Inactivo</span>
-                      )}
+                      <div className="flex flex-col items-center gap-1">
+                        {product.isActive ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">Activo</span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Inactivo</span>
+                        )}
+                        {product.saleBlocked && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">Bloq. venta</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>

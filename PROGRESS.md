@@ -1,5 +1,20 @@
 ﻿# Trinity ERP — Progreso
 
+## 🔒 Producto: bloqueo para venta + inactivo oculto + "otro código" + UI toggles — 2026-07-10
+
+Tres cosas en `Product` (+ mejoras de UI en los formularios):
+- **`saleBlocked`** (bool, default false): el artículo se muestra en el POS (badge rojo "Bloqueado", el vendedor ve precio/existencia) pero **no se puede facturar**. `invoices.service` (crear y editar) rechaza ítems bloqueados; el POS impide agregarlo al carrito. Sirve para "congelar" un producto durante un inventario sin ocultarlo.
+- **`isActive`**: `products.service.findAll` ahora **por defecto solo devuelve activos** (antes no filtraba salvo que se pasara el flag) → los inactivos ya no salen en POS/ventas/ajustes. El único que los ve es `/catalog/products`, que pasa `includeInactive=true` (nuevo query param).
+- **`otherCode`** (string, "Otro código"): campo/columna nuevo al lado de los códigos, sin lógica todavía (para uso futuro).
+- **UI**: los formularios de producto (crear/editar/modal) muestran los 4 códigos en una fila (grid 4 col) y todos los checkboxes son ahora **toggles** (nuevo componente `components/toggle.tsx`).
+- Schema + migración `IF NOT EXISTS` (`20260710160000_product_sale_blocked_other_code`) + `fix-schema.sql`. DTO create/update aceptan ambos campos. **Nota de bug corregido**: `saleBlocked` no se guardaba en las páginas crear/editar porque faltaba en el body del request (el modal sí lo mandaba).
+
+## 📦 /inventory/articulos: kardex enriquecido + responsive + más filas — 2026-07-10
+
+- **Kardex (panel lateral)**: 2 columnas nuevas — **Cliente/Proveedor** (cliente de la factura de venta, proveedor de la compra, o el de la NC/ND) y **Responsable** (vendedor de la factura / quien cargó la compra / usuario del movimiento en ajustes-conteos-transferencias-reemplazos). Enriquecido en `stock-movements.service.getKardex` con lookup por lote de los documentos origen (sin N+1). Se quitó la columna Almacén (no aportaba).
+- **Límite**: la lista de artículos pasó de 25 a **500** (como el POS: se scrollea).
+- **Responsive**: en móvil la tabla se oculta y se muestra **un card por artículo** con los mismos datos.
+
 ## 🔢 Reporte Z: comprobantes siempre a 8 dígitos (ceros a la izquierda) — 2026-07-10
 
 Los "Comprobante Inicial/Final" del libro de ventas (campos `first/lastInvoiceNumber`, `first/lastCreditNoteNumber`, `first/lastDebitNoteNumber` de `ZReport`) son cadenas de 8 dígitos, pero se guardaban sin los ceros de relleno en dos casos: al **teclearlos a mano** en el modal (ej. `1508`) y en la **auto-derivación** del Z anterior (`String(prev + 1)` en `z-reports.service.ts` bota los ceros).

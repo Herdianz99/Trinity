@@ -35,6 +35,12 @@ export class QueryProductsDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiProperty({ required: false, description: 'Incluir productos inactivos (solo el catalogo /catalog/products). Por defecto solo activos.' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeInactive?: boolean;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @Transform(({ value }) => parseInt(value))

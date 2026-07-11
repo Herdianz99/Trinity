@@ -680,6 +680,11 @@ export default function POSPage() {
   }
 
   function addToCart(product: any, authorizedNegative = false) {
+    // Bloqueado para la venta: se muestra en el POS pero no se puede facturar.
+    if (product.saleBlocked) {
+      setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
+      return;
+    }
     const stockQty = product.stock?.[0]?.quantity || 0;
     // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
     const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
@@ -716,6 +721,10 @@ export default function POSPage() {
   // Selecciona un producto de los resultados (click o Enter): sin stock -> venta perdida,
   // con stock -> al carrito. Mismo comportamiento que el listado desktop.
   function pickProduct(product: any) {
+    if (product.saleBlocked) {
+      setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
+      return;
+    }
     const prodStock = product.stock?.[0]?.quantity || 0;
     const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
     if (blockNoStock) {
@@ -1782,8 +1791,8 @@ export default function POSPage() {
                   return (
                     <button
                       key={product.id}
-                      onClick={() => blockNoStock ? setNegKeyProduct(product) : addToCart(product)}
-                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
+                      onClick={() => (blockNoStock && !product.saleBlocked) ? setNegKeyProduct(product) : addToCart(product)}
+                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${product.saleBlocked ? 'border-red-500/40 bg-red-500/5' : blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
                     >
                       {product.primaryImageThumbUrl ? (
                         <img
@@ -1799,6 +1808,7 @@ export default function POSPage() {
                       )}
                       <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</p>
+                      {product.saleBlocked && <p className="text-[10px] text-red-400 mt-0.5 inline-flex items-center gap-1"><Lock size={10} /> Bloqueado para venta</p>}
                       <div className="flex items-center justify-between mt-1">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-green-400">${product.priceDetal?.toFixed(2)}</p>
@@ -3086,6 +3096,7 @@ export default function POSPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-slate-500">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</span>
                     <span className="text-sm text-white font-medium truncate">{product.name}</span>
+                    {product.saleBlocked && <span className="text-[10px] px-1.5 py-0.5 rounded-full text-red-400 bg-red-500/10 border border-red-500/20 whitespace-nowrap shrink-0">Bloqueado</span>}
                   </div>
                   {product.barcode && <span className="text-xs text-slate-600">CB: {product.barcode}</span>}
                 </div>

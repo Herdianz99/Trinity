@@ -120,7 +120,7 @@ export class ProductsService {
   }
 
   async findAll(query: QueryProductsDto) {
-    const { categoryId, brandId, supplierId, search, lowStock, isActive, page = 1, limit = 20 } = query;
+    const { categoryId, brandId, supplierId, search, lowStock, isActive, includeInactive, page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ProductWhereInput = {};
@@ -128,7 +128,10 @@ export class ProductsService {
     if (categoryId) where.categoryId = categoryId;
     if (brandId) where.brandId = brandId;
     if (supplierId) where.supplierId = supplierId;
+    // Por defecto solo productos activos (POS, ventas, ajustes, etc. no ven los desactivados).
+    // El catalogo /catalog/products pasa includeInactive=true para gestionarlos; isActive explicito manda.
     if (isActive !== undefined) where.isActive = isActive;
+    else if (!includeInactive) where.isActive = true;
 
     if (lowStock) {
       where.stock = {
