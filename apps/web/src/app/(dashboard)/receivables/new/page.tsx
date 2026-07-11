@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, HandCoins, Loader2, Save, Search, X, Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Save, Search, X, Plus, Pencil, Shield } from 'lucide-react';
 import CustomerFormModal from '@/components/customer-form-modal';
 
 interface Customer {
@@ -63,6 +63,11 @@ export default function NewReceivablePage() {
   const [taxableBase31, setTaxableBase31] = useState(0);
   const [igtfPct, setIgtfPct] = useState(0);
 
+  // Retencion de IVA sufrida (cliente contribuyente especial) — solo series fiscales
+  const [createRetention, setCreateRetention] = useState(false);
+  const [retentionPct, setRetentionPct] = useState(75);
+  const [retentionDocNumber, setRetentionDocNumber] = useState('');
+
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -76,10 +81,11 @@ export default function NewReceivablePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [rateRes, custRes, seriesRes, profileRes] = await Promise.all([
+        const [rateRes, custRes, seriesRes, configRes, profileRes] = await Promise.all([
           fetch('/api/proxy/exchange-rate/today'),
           fetch('/api/proxy/customers?limit=1000'),
           fetch('/api/proxy/series?type=SALES'),
+          fetch('/api/proxy/company-config'),
           fetch('/api/auth/me'),
         ]);
         if (rateRes.ok) { const d = await rateRes.json(); setExchangeRate(d.rate || 0); }
@@ -89,6 +95,7 @@ export default function NewReceivablePage() {
           const arr = Array.isArray(d) ? d : Array.isArray(d.data) ? d.data : [];
           setSeries(arr.filter((s: Serie) => s.isActive));
         }
+        if (configRes.ok) { const d = await configRes.json(); const p = d.ivaRetentionPct ?? 75; setRetentionPct(p); }
         if (profileRes.ok) { const d = await profileRes.json(); setUserName(d.name || d.email || ''); }
       } catch { setError('Error cargando datos iniciales'); }
       finally { setLoadingInit(false); }
@@ -148,6 +155,13 @@ export default function NewReceivablePage() {
     return currency === 'USD' ? Math.round(totalDoc * exchangeRate * 100) / 100 : Math.round((totalDoc / exchangeRate) * 100) / 100;
   }, [totalDoc, exchangeRate, currency]);
 
+  const sym = currency === 'USD' ? '$' : 'Bs';
+  const retentionAmount = useMemo(() => createRetention ? Math.round(totalIva * (retentionPct / 100) * 100) / 100 : 0, [createRetention, totalIva, retentionPct]);
+  const retentionAmountBs = useMemo(() => {
+    if (!exchangeRate || !createRetention) return 0;
+    return currency === 'USD' ? Math.round(retentionAmount * exchangeRate * 100) / 100 : retentionAmount;
+  }, [retentionAmount, exchangeRate, currency, createRetention]);
+
   const handleSubmit = useCallback(async () => {
     setError('');
     if (!customerId) { setError('Debe seleccionar un cliente'); return; }
@@ -171,6 +185,12 @@ export default function NewReceivablePage() {
       if (dueDate) body.dueDate = dueDate;
       if (description.trim()) body.description = description.trim();
       if (notes.trim()) body.notes = notes.trim();
+      // Retencion de IVA sufrida: solo tiene sentido en serie fiscal con IVA
+      if (createRetention && isFiscal && totalIva > 0) {
+        body.createRetention = true;
+        body.retentionPct = retentionPct;
+        if (retentionDocNumber.trim()) body.retentionDocNumber = retentionDocNumber.trim();
+      }
 
       const res = await fetch('/api/proxy/receivables', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -180,7 +200,7 @@ export default function NewReceivablePage() {
       router.push(`/receivables/${created.id}`);
     } catch (err: any) { setError(err.message || 'Error al guardar'); }
     finally { setSaving(false); }
-  }, [customerId, totalDoc, currency, serieId, creditDays, exchangeRate, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, router]);
+  }, [customerId, totalDoc, currency, serieId, creditDays, exchangeRate, exemptBase, taxableBase8, taxableBase16, taxableBase31, igtfPct, originalDate, receptionDate, dueDate, description, notes, createRetention, isFiscal, totalIva, retentionPct, retentionDocNumber, router]);
 
   const numInput = useCallback((setter: (v: number) => void) => {
     return (e: React.ChangeEvent<HTMLInputElement>) => { setter(parseFloat(e.target.value) || 0); };
@@ -417,14 +437,59 @@ export default function NewReceivablePage() {
               </div>
             </div>
 
-            {/* Submit */}
-            <button onClick={handleSubmit}
-              disabled={saving || !customerId || totalDoc <= 0 || !description.trim()}
-              className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg px-4 py-2 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors text-sm">
-              {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-              Guardar CxC
-            </button>
           </div>
+
+          {/* Retencion IVA sufrida (solo fiscal) */}
+          {isFiscal && (
+            <div className="card p-6 border-orange-500/30">
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="text-orange-400" size={14} />
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={createRetention} onChange={e => setCreateRetention(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 text-orange-500 focus:ring-orange-500" />
+                  <span className="text-xs font-medium text-slate-300">Crear retencion IVA</span>
+                </label>
+              </div>
+              {createRetention && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 w-24 shrink-0">% Retencion</span>
+                    <input type="number" min={0} max={100} step={0.01} value={retentionPct} onChange={numInput(setRetentionPct)}
+                      className="input-field !py-0.5 text-sm font-mono w-20 text-center" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-400 mb-0.5">N° del comprobante (documento del cliente)</label>
+                    <input type="text" value={retentionDocNumber} onChange={e => setRetentionDocNumber(e.target.value)}
+                      placeholder="Ej: 20260700000001" className="input-field !py-1 text-sm font-mono" />
+                    <p className="text-[10px] text-slate-500 mt-0.5">Se registra en el libro de ventas.</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[10px] text-slate-400">IVA facturado</span>
+                    <span className="text-xs font-mono text-cyan-400">{sym} {fmt(totalIva)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400">IVA retenido</span>
+                    <span className="text-sm font-mono text-orange-400 font-semibold">{sym} {fmt(retentionAmount)}</span>
+                  </div>
+                  {currency === 'USD' && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400">IVA retenido Bs</span>
+                      <span className="text-xs font-mono text-orange-300">Bs {fmt(retentionAmountBs)}</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-700/50">Declara la retencion en el libro de ventas (linea negativa). No modifica el monto de la CxC.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button onClick={handleSubmit}
+            disabled={saving || !customerId || totalDoc <= 0 || !description.trim()}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg px-4 py-2 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors text-sm">
+            {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+            Guardar CxC
+          </button>
         </div>
       </div>
 

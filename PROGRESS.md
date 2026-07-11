@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 CxC nueva: generar retención de IVA sufrida (con N° de comprobante al libro) — 2026-07-11
+
+En `/receivables/new` (Nueva CxC) se agregó, **solo para series fiscales**, la opción **"Crear retención IVA"** (retención sufrida: el cliente contribuyente especial retiene IVA de la venta), simétrica a la de la CxP. Campos: **% Retención** (default `ivaRetentionPct` de config, editable) y el **N° del comprobante** (documento que entrega el cliente) que Diego pidió.
+
+- **Backend** (`receivables.service.create` + `create-receivable.dto`): nuevos `createRetention`/`retentionPct`/`retentionDocNumber`. Si es fiscal y hay IVA, tras la línea `CXC` del libro de ventas crea una **segunda línea `isRetentionLine` negativa** (`documentType: 'RETENCION'`, `retentionAmountBs = ivaBs × %`, `retentionVoucherNumber = N° del comprobante`, `affectedDocNumber = N° de la CxC`). **Sin cambio de schema** (el `SalesBookEntry` ya tenía esos campos + `receivableId`).
+- **Frontend**: tarjeta de retención (naranja) en la columna derecha con % + N° comprobante + montos (IVA facturado / retenido / retenido Bs).
+- **Alcance/caveat honesto**: por ahora **solo declara la retención en el libro de ventas**; NO crea un `CustomerIvaRetention` neteable en el recibo de cobro (eso requeriría hacer `invoiceId` nullable + `receivableId` en ese modelo, con migración). Si Diego quiere también el neteo al cobrar, queda como follow-up. Typecheck API+web verde.
+
 ## 🏭 CxP nueva: crear/editar proveedores inline (como en la compra) — 2026-07-11
 
 En `/payables/new` (Nueva Cuenta por Pagar) ahora se puede **crear y editar proveedores** sin salir del formulario, reutilizando el `SupplierFormModal` existente (el mismo de la compra). Botones **"Nuevo"/"Editar"** junto al selector de Proveedor ("Editar" habilitado solo con proveedor seleccionado); al guardar refresca la lista y selecciona. Los proveedores no tienen el gateo de permiso de crédito de los clientes (solo días de crédito + agente de retención), así que nada extra que restringir. Typecheck web verde. (Era lo que Diego realmente quería cuando pidió "proveedores"; el de clientes en `/receivables/new` quedó igual, bien.)

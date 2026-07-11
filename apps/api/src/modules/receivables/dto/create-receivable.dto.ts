@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
 
 export class CreateReceivableDto {
   @IsString()
@@ -63,6 +63,22 @@ export class CreateReceivableDto {
   @IsNumber()
   @Min(0.01)
   totalAmount: number;
+
+  // Retencion de IVA sufrida (cliente contribuyente especial): crea una linea negativa
+  // isRetentionLine en el libro de ventas. El numero del comprobante lo entrega el cliente.
+  @IsOptional()
+  @IsBoolean()
+  createRetention?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  retentionPct?: number;
+
+  // Numero del comprobante de retencion (documento del cliente) que va al libro de ventas.
+  @IsOptional()
+  @IsString()
+  retentionDocNumber?: string;
 
   @IsOptional()
   @IsString()

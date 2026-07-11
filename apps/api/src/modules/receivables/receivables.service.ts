@@ -187,6 +187,38 @@ export class ReceivablesService {
             createdById: userId,
           },
         });
+
+        // Retencion de IVA sufrida (cliente contribuyente especial): linea negativa en el
+        // libro de ventas con el numero del comprobante del cliente. Simetrico a la CxP.
+        // No resta el neto de la CxC (se netea al cobrar); solo declara la retencion.
+        if (dto.createRetention && totalIva > 0) {
+          const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+          const retPct = dto.retentionPct ?? (config as any)?.ivaRetentionPct ?? 75;
+          const retentionBs = Math.round(ivaBs * (retPct / 100) * 100) / 100;
+          await tx.salesBookEntry.create({
+            data: {
+              receivableId: receivable.id,
+              entryDate: originalDate || new Date(),
+              invoiceNumber: number,
+              controlNumber: null,
+              customerName: customer.name,
+              customerRif: customer.rif || null,
+              exemptAmountBs: 0,
+              taxableBaseBs: 0,
+              ivaAmountBs: 0,
+              igtfAmountBs: 0,
+              totalBs: 0,
+              isManual: true,
+              isRetentionLine: true,
+              documentType: 'RETENCION',
+              affectedDocNumber: number,
+              retentionAmountBs: retentionBs,
+              retentionVoucherNumber: dto.retentionDocNumber?.trim() || null,
+              notes: dto.retentionDocNumber?.trim() || null,
+              createdById: userId,
+            },
+          });
+        }
       }
 
       return receivable;
