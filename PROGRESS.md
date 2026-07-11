@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 📊 Dashboard: KPIs de ventas de contado vs crédito — 2026-07-11
+
+2 KPIs nuevos: **Ventas de contado** y **Ventas a crédito** (monto + N° de facturas + Bs, con comparación vs período anterior). Backend `getSalesByPaymentType(dateRange)` hace `groupBy` de facturas cobradas por `paymentType` (CASH/CREDIT); devuelto en `salesByType`. La grilla de KPIs pasó de 6 a **8** tarjetas (`lg:grid-cols-4`, 2 filas de 4). Sin schema ni migración. Typecheck API+web verde.
+
 ## 📊 Dashboard gerencial: KPIs Cashea/Crediagro + línea de N° de facturas en la gráfica — 2026-07-11
 
 - **2 KPIs nuevos**: **Cashea** y **Crediagro** (monto facturado por cada plataforma en el período, con comparación vs período anterior). Backend `getFinancingSales(dateRange)` suma los `Payment` de facturas cobradas (`PAID`/`PARTIAL_RETURN`, `paidAt` en rango) cuyo método contiene "cashea"/"crediagro" (tolera variantes). Devuelto en `financing` de `/dashboard/gerencial`. La grilla de KPIs pasó de 4 a **6** tarjetas (`lg:grid-cols-3`).

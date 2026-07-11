@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   DollarSign, FileText, RotateCcw, Target, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package,
-  Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark,
+  Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -80,6 +80,16 @@ interface DashboardData {
     crediagroBs: number;
     vsCashea: number | null;
     vsCrediagro: number | null;
+  };
+  salesByType: {
+    contadoUsd: number;
+    contadoBs: number;
+    contadoCount: number;
+    creditoUsd: number;
+    creditoBs: number;
+    creditoCount: number;
+    vsContado: number | null;
+    vsCredito: number | null;
   };
 }
 
@@ -261,7 +271,7 @@ export default function DashboardPage() {
       {data && (
         <>
           {/* ═══ Row 1: KPI Cards ═══ */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
               icon={<DollarSign size={20} />}
               iconBg="bg-emerald-500/15 text-emerald-400"
@@ -269,6 +279,24 @@ export default function DashboardPage() {
               value={`$${fmt(data.sales.totalUsd)}`}
               sub={`Bs ${fmt(data.sales.totalBs)}`}
               change={data.sales.vsLastPeriod}
+              positiveIsGood
+            />
+            <KpiCard
+              icon={<Banknote size={20} />}
+              iconBg="bg-green-500/15 text-green-400"
+              label="Ventas de contado"
+              value={`$${fmt(data.salesByType.contadoUsd)}`}
+              sub={`${data.salesByType.contadoCount} fact. · Bs ${fmt(data.salesByType.contadoBs)}`}
+              change={data.salesByType.vsContado}
+              positiveIsGood
+            />
+            <KpiCard
+              icon={<HandCoins size={20} />}
+              iconBg="bg-amber-500/15 text-amber-400"
+              label="Ventas a crédito"
+              value={`$${fmt(data.salesByType.creditoUsd)}`}
+              sub={`${data.salesByType.creditoCount} fact. · Bs ${fmt(data.salesByType.creditoBs)}`}
+              change={data.salesByType.vsCredito}
               positiveIsGood
             />
             <KpiCard

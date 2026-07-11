@@ -49,6 +49,8 @@ export class DashboardService {
       salesByHourOrDay,
       financing,
       prevFinancing,
+      salesByType,
+      prevSalesByType,
     ] = await Promise.all([
       this.getSales(dateRange),
       this.getSales(prevDateRange),
@@ -63,6 +65,8 @@ export class DashboardService {
       this.getSalesTimeline(from, to),
       this.getFinancingSales(dateRange),
       this.getFinancingSales(prevDateRange),
+      this.getSalesByPaymentType(dateRange),
+      this.getSalesByPaymentType(prevDateRange),
     ]);
 
     return {
@@ -101,6 +105,16 @@ export class DashboardService {
         crediagroBs: financing.crediagroBs,
         vsCashea: pctChange(financing.casheaUsd, prevFinancing.casheaUsd),
         vsCrediagro: pctChange(financing.crediagroUsd, prevFinancing.crediagroUsd),
+      },
+      salesByType: {
+        contadoUsd: salesByType.contadoUsd,
+        contadoBs: salesByType.contadoBs,
+        contadoCount: salesByType.contadoCount,
+        creditoUsd: salesByType.creditoUsd,
+        creditoBs: salesByType.creditoBs,
+        creditoCount: salesByType.creditoCount,
+        vsContado: pctChange(salesByType.contadoUsd, prevSalesByType.contadoUsd),
+        vsCredito: pctChange(salesByType.creditoUsd, prevSalesByType.creditoUsd),
       },
     };
   }
@@ -515,6 +529,26 @@ export class DashboardService {
       totalUsd: round2(result._sum.totalUsd || 0),
       totalBs: round2(result._sum.totalBs || 0),
       count: result._count.id || 0,
+    };
+  }
+
+  // ── Ventas de contado vs credito (por paymentType de la factura) ───────────
+  private async getSalesByPaymentType(dateRange: { gte: Date; lte: Date }) {
+    const grouped = await this.prisma.invoice.groupBy({
+      by: ['paymentType'],
+      where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+      _sum: { totalUsd: true, totalBs: true },
+      _count: { id: true },
+    });
+    const cash = grouped.find((g) => g.paymentType === 'CASH');
+    const credit = grouped.find((g) => g.paymentType === 'CREDIT');
+    return {
+      contadoUsd: round2(cash?._sum.totalUsd || 0),
+      contadoBs: round2(cash?._sum.totalBs || 0),
+      contadoCount: cash?._count.id || 0,
+      creditoUsd: round2(credit?._sum.totalUsd || 0),
+      creditoBs: round2(credit?._sum.totalBs || 0),
+      creditoCount: credit?._count.id || 0,
     };
   }
 
