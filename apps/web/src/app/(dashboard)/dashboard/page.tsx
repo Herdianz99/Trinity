@@ -124,6 +124,8 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Series ocultas en la grafica de ventas (toggle al hacer clic en la leyenda)
+  const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
 
   useEffect(() => { document.title = 'Dashboard | Trinity ERP'; }, []);
 
@@ -384,9 +386,21 @@ export default function DashboardPage() {
                       labelStyle={{ color: '#94a3b8' }}
                       formatter={(v: any, name: any) => name === 'Facturas' ? [`${v}`, 'Facturas'] : [`$${fmt(Number(v) || 0)}`, 'Ventas']}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Area yAxisId="left" type="monotone" dataKey="totalUsd" name="Ventas" stroke="#10b981" strokeWidth={2} fill="url(#salesGrad)" />
-                    <Line yAxisId="right" type="monotone" dataKey="count" name="Facturas" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, cursor: 'pointer' }}
+                      onClick={(e: any) => {
+                        const key = e?.dataKey;
+                        if (key) setHiddenSeries(prev => ({ ...prev, [key]: !prev[key] }));
+                      }}
+                      formatter={(value: any, entry: any) => (
+                        <span style={{
+                          color: hiddenSeries[entry?.dataKey] ? '#64748b' : '#cbd5e1',
+                          textDecoration: hiddenSeries[entry?.dataKey] ? 'line-through' : 'none',
+                        }}>{value}</span>
+                      )}
+                    />
+                    <Area yAxisId="left" type="monotone" dataKey="totalUsd" name="Ventas" stroke="#10b981" strokeWidth={2} fill="url(#salesGrad)" hide={!!hiddenSeries.totalUsd} />
+                    <Line yAxisId="right" type="monotone" dataKey="count" name="Facturas" stroke="#f59e0b" strokeWidth={2} dot={false} hide={!!hiddenSeries.count} />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
