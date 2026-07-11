@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { writeCashLedger } from '../../common/cash-ledger';
 import { CreateCustomerAdvanceDto } from './dto/create-customer-advance.dto';
 import { caracasDateKey } from '../../common/timezone';
 
@@ -60,6 +61,16 @@ export class CustomerAdvancesService {
           isManual: false,
           createdById: userId,
         },
+      });
+
+      await writeCashLedger(tx, {
+        cashSessionId: dto.cashSessionId,
+        direction: 'IN',
+        amountUsd: dto.amountUsd, amountBs, currency: method.isDivisa ? 'USD' : 'BS',
+        exchangeRate: rate.rate,
+        methodId: dto.methodId, isCash: method.isCash,
+        sourceType: 'CUSTOMER_ADVANCE', sourceId: advance.id,
+        reason: `Anticipo cliente: ${customer.name}`, createdById: userId,
       });
 
       return advance;

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
@@ -765,7 +766,7 @@ export class InvoicesService {
           igtfAssigned = true;
         }
 
-        await tx.payment.create({
+        const payRow = await tx.payment.create({
           data: {
             invoiceId: id,
             methodId: payment.methodId,
@@ -777,6 +778,18 @@ export class InvoicesService {
             igtfBs: paymentIgtfBs,
           },
         });
+
+        // Fila del ledger (tabla madre): pago de venta. isCash/moneda del metodo. La sesion
+        // es la caja abierta al cobrar (adios ventana de tiempo). Cashea/Crediagro = no efectivo.
+        await writeCashLedger(tx, {
+          cashSessionId: openSession.id,
+          direction: 'IN',
+          amountUsd: payment.amountUsd, amountBs: payment.amountBs,
+          currency: paymentMethod.isDivisa ? 'USD' : 'BS', exchangeRate: invoice.exchangeRate,
+          methodId: payment.methodId, isCash: paymentMethod.isCash,
+          sourceType: 'SALE_PAYMENT', sourceId: id, reason: `Pago factura`, createdById: user.id,
+        });
+        void payRow;
 
         // Create Receivable for financing platforms (Cashea, Crediagro, etc.)
         if (paymentMethod.createsReceivable) {
@@ -998,6 +1011,19 @@ export class InvoicesService {
             },
           });
         }
+        // Fila del ledger: vuelto (sale de caja). El metodo de vuelto es no-divisa (Bs).
+        // El vuelto en efectivo USD ya viene neteado de los pagos en divisa (POS).
+        const chMethod = await tx.paymentMethod.findUnique({
+          where: { id: dto.changeMethodId }, select: { isCash: true },
+        });
+        await writeCashLedger(tx, {
+          cashSessionId: openSession.id,
+          direction: 'OUT',
+          amountUsd: changeUsd, amountBs: changeBs, currency: 'BS',
+          exchangeRate: invoice.exchangeRate,
+          methodId: dto.changeMethodId, isCash: !!chMethod?.isCash,
+          sourceType: 'CHANGE', sourceId: id, reason: `Vuelto factura`, createdById: user.id,
+        });
       }
 
       // Update invoice: assign number, serie, status, IGTF, cashier, release lock

@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 import { CreateCashMovementDto } from './dto/create-cash-movement.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { writeCashLedger } from '../../common/cash-ledger';
 
 @Injectable()
 export class CashMovementsService {
@@ -54,22 +55,34 @@ export class CashMovementsService {
       amountUsd = Math.round((dto.amount / rate.rate) * 100) / 100;
     }
 
-    // 5. Create movement
-    return this.prisma.cashMovement.create({
-      data: {
+    // 5. Create movement + fila del ledger (tabla madre) en la misma transaccion
+    return this.prisma.$transaction(async (tx) => {
+      const mov = await tx.cashMovement.create({
+        data: {
+          cashSessionId: dto.cashSessionId,
+          type: dto.type,
+          amountUsd,
+          amountBs,
+          exchangeRate: rate.rate,
+          currency: dto.currency,
+          reason: dto.reason,
+          isManual: true,
+          createdById: userId,
+        },
+        include: {
+          createdBy: { select: { id: true, name: true } },
+        },
+      });
+      await writeCashLedger(tx, {
         cashSessionId: dto.cashSessionId,
-        type: dto.type,
-        amountUsd,
-        amountBs,
+        direction: dto.type === 'INCOME' ? 'IN' : 'OUT',
+        amountUsd, amountBs, currency: dto.currency as 'USD' | 'BS',
         exchangeRate: rate.rate,
-        currency: dto.currency,
-        reason: dto.reason,
-        isManual: true,
-        createdById: userId,
-      },
-      include: {
-        createdBy: { select: { id: true, name: true } },
-      },
+        isCash: true, // movimiento manual = efectivo fisico de gaveta
+        sourceType: 'MANUAL', sourceId: mov.id,
+        reason: dto.reason, createdById: userId,
+      });
+      return mov;
     });
   }
 }

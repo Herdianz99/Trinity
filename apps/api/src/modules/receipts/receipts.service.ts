@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
@@ -532,7 +533,18 @@ export class ReceiptsService {
         // DIFFERENTIAL items don't generate CxC/CxP movements
       }
 
-      // Create payment records on the receipt
+      // Reintegro = recibo de cobro con total negativo (sale dinero). Sus pagos NO se cuentan
+      // como cobro; se cuenta el egreso (como en el arqueo actual).
+      const isReintegro = receipt.type === 'COLLECTION' && receipt.totalUsd < -0.01;
+
+      // Metodos de los pagos del recibo (para isCash/moneda del ledger)
+      const rMethodIds = [...new Set(dto.payments.map((p) => p.methodId).filter(Boolean))];
+      const rMethods = rMethodIds.length
+        ? await tx.paymentMethod.findMany({ where: { id: { in: rMethodIds } }, select: { id: true, isCash: true, isDivisa: true } })
+        : [];
+      const rMethodMap = new Map(rMethods.map((m) => [m.id, m]));
+
+      // Create payment records on the receipt (+ fila del ledger por cada pago)
       for (const payment of dto.payments) {
         await tx.receiptPayment.create({
           data: {
@@ -544,22 +556,43 @@ export class ReceiptsService {
             reference: payment.reference || null,
           },
         });
+        if (dto.cashSessionId && !isReintegro) {
+          const m = rMethodMap.get(payment.methodId);
+          await writeCashLedger(tx, {
+            cashSessionId: dto.cashSessionId,
+            direction: receipt.type === 'COLLECTION' ? 'IN' : 'OUT',
+            amountUsd: payment.amountUsd, amountBs: payment.amountBs,
+            currency: m?.isDivisa ? 'USD' : 'BS', exchangeRate: postRate,
+            methodId: payment.methodId, isCash: !!m?.isCash,
+            sourceType: receipt.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
+            sourceId: receipt.id, reason: `Recibo ${receipt.number}`, createdById: userId,
+          });
+        }
       }
 
       // Recibo de cobro con total negativo = salida de dinero (reintegro de retención, etc.)
-      if (receipt.type === 'COLLECTION' && receipt.totalUsd < -0.01 && dto.cashSessionId) {
+      if (isReintegro && dto.cashSessionId) {
+        const reintUsd = Math.abs(this.round2(receipt.totalUsd));
+        const reintBs = Math.abs(this.round2(receipt.totalUsd * postRate));
         await tx.cashMovement.create({
           data: {
             cashSessionId: dto.cashSessionId,
             type: 'EXPENSE',
-            amountUsd: Math.abs(this.round2(receipt.totalUsd)),
-            amountBs: Math.abs(this.round2(receipt.totalUsd * postRate)),
+            amountUsd: reintUsd,
+            amountBs: reintBs,
             exchangeRate: postRate,
             currency: 'USD',
             reason: `Reintegro recibo ${receipt.number}`,
             isManual: false,
             createdById: userId,
           },
+        });
+        await writeCashLedger(tx, {
+          cashSessionId: dto.cashSessionId,
+          direction: 'OUT',
+          amountUsd: reintUsd, amountBs: reintBs, currency: 'USD', exchangeRate: postRate,
+          isCash: true, sourceType: 'REINTEGRO', sourceId: receipt.id,
+          reason: `Reintegro recibo ${receipt.number}`, createdById: userId,
         });
       }
 

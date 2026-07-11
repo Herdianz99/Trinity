@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Libro mayor de caja (CashLedger) — tabla madre del arqueo (detrás de flag) — 2026-07-11
+
+Se construyó el **libro mayor único de caja** (`CashLedgerEntry`), la "tabla madre" del arqueo: cada línea de pago/movimiento que toca caja escribe UNA fila, y el arqueo suma esas filas por sesión (como `StockMovement` para el inventario). Objetivo: fuente única de verdad, sin los 3 orígenes + 2 mecanismos de atribución de antes. **Va detrás de un flag `CompanyConfig.useCashLedger` (default false)** para reversa instantánea sin redeploy. Plan completo en `docs/superpowers/plans/2026-07-11-ledger-unico-de-caja.md`.
+
+- **Schema:** `CashLedgerEntry` (cashSessionId, direction IN/OUT, amountUsd/Bs, currency, methodId, isCash, sourceType, sourceId) + enum `CashDir` + `CompanyConfig.useCashLedger`. Migración `20260711220000_cash_ledger` (aditiva) + `fix-schema.sql`.
+- **Helper** `common/cash-ledger.ts` → `writeCashLedger(tx, …)`: cada documento escribe su fila dentro de su propia transacción.
+- **Puntos de escritura:** venta (`invoices.pay` — 1 fila por pago + vuelto; la sesión se estampa al cobrar, adiós ventana de tiempo), recibos (`receipts.post` — cobros/pagos + reintegro), gastos, anticipos cliente/proveedor, movimiento manual.
+- **Arqueo desde el ledger** (`getSessionSalesData`): calcula el esperado desde `CashLedgerEntry` (apertura + Σ filas isCash por moneda con signo). Expone SIEMPRE ambos (`ledgerCashExpected*` y `cashExpected*Old`); si el flag está ON, el ledger ES el arqueo oficial (y `closeSession` lo usa).
+- **Backfill** (`POST /cash-sessions/:id/backfill-ledger` y `/cash/backfill-ledger-open`, ADMIN): reconstruye el ledger desde los datos actuales (idempotente), reproduciendo el arqueo viejo por construcción, para poblar sesiones existentes antes de encender el flag.
+- **Validado local** (script con rollback): el esperado del ledger == el viejo en las sesiones abiertas de la copia de prod (diff 0). Typecheck API verde.
+- **Despliegue seguro:** con el flag en false, mañana solo se ESCRIBE el ledger (invisible, arqueo sin cambios). Se corre el backfill, se compara `ledgerCashExpected` vs `cashExpectedOld` en el resumen de cada sesión, y solo si cuadra se enciende `useCashLedger=true`. Si algo se ve raro, se apaga y vuelve al método viejo al instante.
+
 ## 🕐 Fix timezone: notas de crédito tomaban la tasa del día anterior — 2026-07-11
 
 Una devolución (NC) creada de noche (después de las 8 PM Caracas) quedaba con la tasa del **día anterior** (verificado en prod: NC VF-NC-26-00000007 con `documentDate` 2026-07-11 pero `exchangeRate` 709.6935 del 10-jul en vez de 721.3456). Es el bug de timezone Caracas/UTC de CLAUDE.md.

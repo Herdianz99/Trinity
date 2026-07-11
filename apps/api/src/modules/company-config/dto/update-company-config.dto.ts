@@ -87,6 +87,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   allowNegativeStock?: boolean;
 
+  // Interruptor del libro mayor de caja (arqueo lee del CashLedgerEntry). Reversa instantánea.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  useCashLedger?: boolean;
+
   @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

@@ -104,6 +104,20 @@ export class CashRegistersController {
     return this.service.getSessionSummary(id);
   }
 
+  // Reconstruir el libro mayor de caja de una sesion (ADMIN). Idempotente.
+  @Post('cash-sessions/:id/backfill-ledger')
+  @Roles(UserRole.ADMIN)
+  backfillLedger(@Param('id') id: string) {
+    return this.service.backfillLedger(id);
+  }
+
+  // Reconstruir el ledger de todas las sesiones abiertas (ADMIN) — antes de encender el flag.
+  @Post('cash/backfill-ledger-open')
+  @Roles(UserRole.ADMIN)
+  backfillAllOpenLedger() {
+    return this.service.backfillAllOpenLedger();
+  }
+
   @Get('cash-sessions/:id/payments')
   findSessionPayments(
     @Param('id') id: string,

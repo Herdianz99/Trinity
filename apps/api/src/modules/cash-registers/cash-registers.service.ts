@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
@@ -546,11 +547,35 @@ export class CashRegistersService {
     const openingUsd = session?.openingBalanceUsd || 0;
     const openingBs = session?.openingBalanceBs || 0;
 
-    // Efectivo fisico esperado en gaveta (lo que de verdad se arquea)
-    const cashExpectedUsd = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd + collectionsCashUsd - cxpCashUsd) * 100) / 100;
-    const cashExpectedBs = Math.round((openingBs + cashSalesBs - cashChangeBs + movInCashBs - movOutCashBs + collectionsCashBs - cxpCashBs) * 100) / 100;
+    // Efectivo fisico esperado en gaveta — metodo VIEJO (3 fuentes).
+    const cashExpectedUsdOld = Math.round((openingUsd + cashSalesUsd + movInCashUsd - movOutCashUsd + collectionsCashUsd - cxpCashUsd) * 100) / 100;
+    const cashExpectedBsOld = Math.round((openingBs + cashSalesBs - cashChangeBs + movInCashBs - movOutCashBs + collectionsCashBs - cxpCashBs) * 100) / 100;
+
+    // Efectivo esperado desde el LIBRO MAYOR (tabla madre): apertura + suma de filas isCash,
+    // por moneda, con signo por direction. Fuente unica. Se expone siempre (para comparar) y,
+    // si el flag useCashLedger esta encendido, ES el arqueo oficial.
+    const ledger = await this.prisma.cashLedgerEntry.findMany({ where: { cashSessionId: sessionId } });
+    let ledUsd = openingUsd, ledBs = openingBs;
+    for (const e of ledger) {
+      if (!e.isCash) continue;
+      const sign = e.direction === 'IN' ? 1 : -1;
+      if (e.currency === 'USD') ledUsd += sign * e.amountUsd;
+      else ledBs += sign * e.amountBs;
+    }
+    const ledgerCashExpectedUsd = Math.round(ledUsd * 100) / 100;
+    const ledgerCashExpectedBs = Math.round(ledBs * 100) / 100;
+
+    const cfg = await this.prisma.companyConfig.findFirst({ select: { useCashLedger: true } });
+    const useLedger = !!(cfg as any)?.useCashLedger;
+    const cashExpectedUsd = useLedger ? ledgerCashExpectedUsd : cashExpectedUsdOld;
+    const cashExpectedBs = useLedger ? ledgerCashExpectedBs : cashExpectedBsOld;
 
     return {
+      ledgerCashExpectedUsd,
+      ledgerCashExpectedBs,
+      cashExpectedUsdOld,
+      cashExpectedBsOld,
+      useCashLedger: useLedger,
       openingBalanceUsd: openingUsd,
       openingBalanceBs: openingBs,
       invoiceCount: invoices.length,
@@ -584,6 +609,90 @@ export class CashRegistersService {
       movementsExpenseUsd: Math.round(movementsExpenseUsd * 100) / 100,
       movementsExpenseBs: Math.round(movementsExpenseBs * 100) / 100,
     };
+  }
+
+  // Reconstruye el libro mayor de caja de una sesion desde los datos actuales (ventas,
+  // movimientos, recibos). Idempotente: borra las filas previas de la sesion y las regenera,
+  // asi la suma isCash del ledger reproduce el arqueo viejo por construccion. Sirve para
+  // poblar sesiones existentes (el ledger nace vacio) y para reparar.
+  async backfillLedger(sessionId: string) {
+    const session = await this.prisma.cashSession.findUnique({ where: { id: sessionId } });
+    if (!session) throw new NotFoundException('Sesion no encontrada');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cashLedgerEntry.deleteMany({ where: { cashSessionId: sessionId } });
+
+      // 1) Ventas (mismo query que el arqueo: por caja + ventana de tiempo)
+      const invWhere: any = {
+        cashRegisterId: session.cashRegisterId,
+        paidAt: { gte: session.openedAt, ...(session.closedAt ? { lte: session.closedAt } : {}) },
+        status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
+      };
+      const invoices = await tx.invoice.findMany({
+        where: invWhere,
+        include: { payments: { include: { method: true, changeMethod: true } } },
+      });
+      for (const inv of invoices) {
+        for (const p of inv.payments as any[]) {
+          const m = p.method;
+          await writeCashLedger(tx, {
+            cashSessionId: sessionId, direction: 'IN',
+            amountUsd: p.amountUsd, amountBs: p.amountBs, currency: m?.isDivisa ? 'USD' : 'BS',
+            exchangeRate: p.exchangeRate, methodId: p.methodId, isCash: !!m?.isCash,
+            sourceType: 'SALE_PAYMENT', sourceId: inv.id, reason: 'Pago factura (backfill)', createdById: session.openedById,
+          });
+          if (p.changeAmountBs && p.changeAmountBs > 0) {
+            const cm = p.changeMethod;
+            const chUsd = p.exchangeRate > 0 ? Math.round((p.changeAmountBs / p.exchangeRate) * 100) / 100 : 0;
+            await writeCashLedger(tx, {
+              cashSessionId: sessionId, direction: 'OUT',
+              amountUsd: chUsd, amountBs: p.changeAmountBs, currency: 'BS', exchangeRate: p.exchangeRate,
+              methodId: p.changeMethodId, isCash: cm ? !!cm.isCash : true,
+              sourceType: 'CHANGE', sourceId: inv.id, reason: 'Vuelto (backfill)', createdById: session.openedById,
+            });
+          }
+        }
+      }
+
+      // 2) Movimientos de caja (gastos, anticipos, manuales, reintegros)
+      const movs = await tx.cashMovement.findMany({ where: { cashSessionId: sessionId } });
+      for (const mv of movs as any[]) {
+        await writeCashLedger(tx, {
+          cashSessionId: sessionId, direction: mv.type === 'INCOME' ? 'IN' : 'OUT',
+          amountUsd: mv.amountUsd, amountBs: mv.amountBs, currency: mv.currency,
+          exchangeRate: mv.exchangeRate, isCash: mv.isCash !== false,
+          sourceType: mv.expenseId ? 'EXPENSE' : 'MANUAL', sourceId: mv.expenseId || mv.id,
+          reason: mv.reason, createdById: mv.createdById,
+        });
+      }
+
+      // 3) Recibos CxC/CxP posteados a la sesion (excluye reintegros: ya van via cashMovement)
+      const receipts = await tx.receipt.findMany({
+        where: { cashSessionId: sessionId, status: 'POSTED' },
+        include: { payments: { include: { method: true } } },
+      });
+      for (const rc of receipts as any[]) {
+        if (rc.type === 'COLLECTION' && rc.totalUsd < -0.01) continue;
+        for (const rp of rc.payments) {
+          const m = rp.method;
+          await writeCashLedger(tx, {
+            cashSessionId: sessionId, direction: rc.type === 'COLLECTION' ? 'IN' : 'OUT',
+            amountUsd: rp.amountUsd, amountBs: rp.amountBs, currency: m?.isDivisa ? 'USD' : 'BS',
+            exchangeRate: rp.exchangeRate, methodId: rp.methodId, isCash: !!m?.isCash,
+            sourceType: rc.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
+            sourceId: rc.id, reason: `Recibo ${rc.number} (backfill)`, createdById: session.openedById,
+          });
+        }
+      }
+    });
+    return { message: 'Ledger reconstruido', sessionId };
+  }
+
+  // Reconstruye el ledger de todas las sesiones ABIERTAS (para poblar antes de encender el flag).
+  async backfillAllOpenLedger() {
+    const open = await this.prisma.cashSession.findMany({ where: { status: 'OPEN' }, select: { id: true } });
+    for (const s of open) await this.backfillLedger(s.id);
+    return { message: 'Ledger reconstruido para sesiones abiertas', count: open.length };
   }
 
   /**

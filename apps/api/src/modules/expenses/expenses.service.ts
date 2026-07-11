@@ -4,6 +4,7 @@ import { UserRole } from '@prisma/client';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { writeCashLedger } from '../../common/cash-ledger';
 
 @Injectable()
 export class ExpensesService {
@@ -313,6 +314,16 @@ export class ExpensesService {
             expenseId: expense.id,
             createdById: userId,
           },
+        });
+
+        await writeCashLedger(tx, {
+          cashSessionId: dto.cashSessionId!,
+          direction: 'OUT',
+          amountUsd: amountUsd!, amountBs: amountBs!, currency: movCurrency as 'USD' | 'BS',
+          exchangeRate: rateVal,
+          methodId: dto.methodId || null, isCash: movIsCash,
+          sourceType: 'EXPENSE', sourceId: expense.id,
+          reason: `Gasto: ${dto.description}`, createdById: userId,
         });
 
         return expense;

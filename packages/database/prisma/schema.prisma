@@ -268,6 +268,9 @@ model CompanyConfig {
   unidadTributaria        Float    @default(43)
   receivableNextNumber    Int      @default(1)
   payableNextNumber       Int      @default(1)
+  // Interruptor del libro mayor de caja: true = el arqueo lee del CashLedgerEntry (tabla madre);
+  // false = método viejo (3 fuentes). Reversa instantánea sin redeploy si algo sale mal.
+  useCashLedger           Boolean  @default(false)
   updatedAt               DateTime @updatedAt
 }
 
@@ -953,6 +956,7 @@ model PaymentMethod {
   expenses           Expense[]
   customerAdvances   CustomerAdvance[]
   supplierAdvances   SupplierAdvance[]
+  ledgerEntries      CashLedgerEntry[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -1032,7 +1036,43 @@ model CashSession {
   openedAt          DateTime       @default(now())
   closedAt          DateTime?
   cashMovements     CashMovement[]
+  ledgerEntries     CashLedgerEntry[]
   expenses          Expense[]      @relation("ExpenseSession")
+}
+
+// ============================================
+// LIBRO MAYOR DE CAJA (tabla madre del arqueo)
+// Cada linea de pago/movimiento que toca caja escribe UNA fila aqui. El arqueo suma estas
+// filas por sesion. Fuente unica de verdad, como StockMovement para el inventario.
+// El "efectivo esperado en gaveta" = suma de filas con isCash, por moneda, con signo por direction.
+// ============================================
+enum CashDir {
+  IN
+  OUT
+}
+
+model CashLedgerEntry {
+  id            String         @id @default(cuid())
+  cashSessionId String
+  cashSession   CashSession    @relation(fields: [cashSessionId], references: [id])
+  direction     CashDir // IN = entra a caja, OUT = sale de caja
+  amountUsd     Float          @default(0)
+  amountBs      Float          @default(0)
+  currency      String // 'USD' | 'BS' — moneda fisica del movimiento
+  exchangeRate  Float          @default(0)
+  methodId      String?
+  method        PaymentMethod? @relation(fields: [methodId], references: [id])
+  isCash        Boolean        @default(true) // afecta la gaveta fisica
+  // SALE_PAYMENT | CHANGE | RECEIPT_COLLECTION | RECEIPT_PAYMENT | EXPENSE |
+  // CUSTOMER_ADVANCE | SUPPLIER_ADVANCE | MANUAL | REINTEGRO
+  sourceType    String
+  sourceId      String? // id del documento origen (factura, recibo, gasto, etc.)
+  reason        String?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+
+  @@index([cashSessionId])
+  @@index([sourceType, sourceId])
 }
 
 model CashMovement {

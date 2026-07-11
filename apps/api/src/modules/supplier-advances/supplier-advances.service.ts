@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { writeCashLedger } from '../../common/cash-ledger';
 import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
 import { caracasDateKey } from '../../common/timezone';
 
@@ -60,6 +61,16 @@ export class SupplierAdvancesService {
           isManual: false,
           createdById: userId,
         },
+      });
+
+      await writeCashLedger(tx, {
+        cashSessionId: dto.cashSessionId,
+        direction: 'OUT',
+        amountUsd: dto.amountUsd, amountBs, currency: method.isDivisa ? 'USD' : 'BS',
+        exchangeRate: rate.rate,
+        methodId: dto.methodId, isCash: method.isCash,
+        sourceType: 'SUPPLIER_ADVANCE', sourceId: advance.id,
+        reason: `Anticipo proveedor: ${supplier.name}`, createdById: userId,
       });
 
       return advance;
