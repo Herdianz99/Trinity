@@ -1043,6 +1043,10 @@ model CashMovement {
   currency      String // "USD" o "BS"
   reason        String
   isManual      Boolean          @default(true)
+  // ¿Afecta la gaveta física? Se deriva del método (efectivo sí; Zelle/transf/PdV/PagoMóvil no).
+  // Un movimiento electrónico (ej. anticipo por Zelle) NO debe restar/sumar del efectivo del arqueo.
+  // default true = comportamiento viejo para filas existentes (todo se contaba como efectivo).
+  isCash        Boolean          @default(true)
   expenseId     String?          @unique
   expense       Expense?         @relation(fields: [expenseId], references: [id])
   dynamicKeyId  String?

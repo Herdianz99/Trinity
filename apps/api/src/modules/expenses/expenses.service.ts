@@ -271,9 +271,12 @@ export class ExpensesService {
       // (el front autocompleta ambos montos) y el arqueo restaba del efectivo USD aunque se pagara
       // en Bs -> descuadre. Fallback al monto solo si no hay método.
       const method = dto.methodId
-        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true } })
+        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true, isCash: true } })
         : null;
       const movCurrency = method ? (method.isDivisa ? 'USD' : 'BS') : (dto.amountUsd ? 'USD' : 'BS');
+      // ¿Sale de la gaveta física? Solo si el método es efectivo. Un gasto por transferencia/
+      // Pago Móvil/Punto NO debe restar del efectivo del arqueo.
+      const movIsCash = method ? method.isCash : true;
 
       return this.prisma.$transaction(async (tx) => {
         const expense = await tx.expense.create({
@@ -304,6 +307,7 @@ export class ExpensesService {
             amountBs: amountBs!,
             exchangeRate: rateVal,
             currency: movCurrency,
+            isCash: movIsCash,
             reason: `Gasto: ${dto.description}`,
             isManual: false,
             expenseId: expense.id,

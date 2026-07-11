@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 💵 Fix: movimientos electrónicos (gastos/anticipos por Zelle/transf.) ya no tocan la gaveta — 2026-07-11
+
+El arqueo contaba **todo** `CashMovement` como efectivo físico (solo miraba `currency`), porque la tabla no sabía si el método era efectivo o electrónico. Un **anticipo por Zelle** sumaba efectivo fantasma a la gaveta; un **gasto por transferencia/Pago Móvil/Punto** restaba de la gaveta un dinero que salió del banco → descuadre.
+
+- **Schema:** `CashMovement.isCash Boolean @default(true)` (migración `20260711200000_cashmovement_iscash`, aditiva + `fix-schema.sql`; backfill de gastos desde el método de su gasto). `default true` = comportamiento viejo para filas existentes.
+- **Creación:** `isCash` se deriva del `method.isCash` en gastos (`expenses.service`), anticipos cliente/proveedor; manuales y reintegros quedan efectivo (default true).
+- **Arqueo** (`cash-registers.service.getSessionSalesData`): solo los movimientos con `isCash` suman/restan de la gaveta esperada; los electrónicos entran al total pero **no** a la gaveta.
+- Solo afecta cálculos **nuevos** (sesiones cerradas conservan su snapshot). Los recibos ya distinguían efectivo por método; esto lo alinea para gastos/anticipos. Typecheck API verde. Ver plan del ledger en `docs/superpowers/plans/2026-07-11-ledger-unico-de-caja.md`.
+
 ## 💸 Fix: gasto registraba la moneda del movimiento siempre en USD (descuadre de caja) — 2026-07-11
 
 El movimiento de caja de un gasto usaba `currency: dto.amountUsd ? 'USD' : 'BS'` (`expenses.service.ts` create): la moneda salía del **campo de monto lleno**, no del **método de pago**. Como el formulario autocompleta el otro monto al escribir uno, siempre se mandaba `amountUsd` → **siempre quedaba 'USD'**, así que un gasto pagado en Bs restaba del efectivo **USD** del arqueo (descuadre en ambas monedas). Fix: la moneda del `CashMovement` ahora se deriva del **`method.isDivisa`** (Efectivo USD/Zelle → USD; Efectivo Bs/Punto/Pago Móvil → Bs), como los anticipos; fallback al monto solo si no hay método. Solo afecta gastos **nuevos** (los ya registrados quedan con la moneda vieja — se corregirán con el trabajo del ledger/sesiones cerradas). Typecheck API verde.

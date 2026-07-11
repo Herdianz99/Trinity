@@ -2386,3 +2386,6 @@ DO $$ BEGIN ALTER TABLE "Dispatch" ADD CONSTRAINT "Dispatch_createdById_fkey" FO
 DO $$ BEGIN ALTER TABLE "DispatchItem" ADD CONSTRAINT "DispatchItem_dispatchId_fkey" FOREIGN KEY ("dispatchId") REFERENCES "Dispatch"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "DispatchDelivery" ADD CONSTRAINT "DispatchDelivery_dispatchId_fkey" FOREIGN KEY ("dispatchId") REFERENCES "Dispatch"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "DispatchDelivery" ADD CONSTRAINT "DispatchDelivery_deliveredById_fkey" FOREIGN KEY ("deliveredById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CashMovement.isCash: ¿afecta la gaveta física? (efectivo sí; electrónico no). Se deriva del método.
+ALTER TABLE "CashMovement" ADD COLUMN IF NOT EXISTS "isCash" BOOLEAN NOT NULL DEFAULT true;

@@ -55,6 +55,7 @@ export class CustomerAdvancesService {
           amountBs,
           exchangeRate: rate.rate,
           currency: method.isDivisa ? 'USD' : 'BS',
+          isCash: method.isCash, // Zelle/transferencia NO entra a la gaveta física
           reason: `Anticipo cliente: ${customer.name}`,
           isManual: false,
           createdById: userId,

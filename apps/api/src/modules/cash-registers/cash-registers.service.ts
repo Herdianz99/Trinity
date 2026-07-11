@@ -463,14 +463,17 @@ export class CashRegistersService {
 
     for (const mov of cashMovements) {
       const isUsd = mov.currency === 'USD';
+      // Solo el efectivo físico mueve la gaveta (arqueo). Un movimiento electrónico
+      // (ej. anticipo por Zelle, gasto por transferencia) suma/resta al total pero NO a la gaveta.
+      const affectsCash = (mov as any).isCash !== false;
       if (mov.type === 'INCOME') {
         movementsIncomeUsd += mov.amountUsd;
         movementsIncomeBs += mov.amountBs;
-        if (isUsd) movInCashUsd += mov.amountUsd; else movInCashBs += mov.amountBs;
+        if (affectsCash) { if (isUsd) movInCashUsd += mov.amountUsd; else movInCashBs += mov.amountBs; }
       } else {
         movementsExpenseUsd += mov.amountUsd;
         movementsExpenseBs += mov.amountBs;
-        if (isUsd) movOutCashUsd += mov.amountUsd; else movOutCashBs += mov.amountBs;
+        if (affectsCash) { if (isUsd) movOutCashUsd += mov.amountUsd; else movOutCashBs += mov.amountBs; }
       }
     }
 

@@ -55,6 +55,7 @@ export class SupplierAdvancesService {
           amountBs,
           exchangeRate: rate.rate,
           currency: method.isDivisa ? 'USD' : 'BS',
+          isCash: method.isCash, // transferencia/Zelle NO sale de la gaveta física
           reason: `Anticipo proveedor: ${supplier.name}`,
           isManual: false,
           createdById: userId,
