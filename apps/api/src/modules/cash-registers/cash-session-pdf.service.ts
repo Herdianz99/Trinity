@@ -52,31 +52,8 @@ const VUELTO_COLS = [
   { label: 'Bs', x: 482, width: 73, align: 'right' },
 ];
 
-// Columnas del reporte de la TABLA MADRE (libro mayor de caja), AGRUPADO POR METODO.
-// El metodo es el encabezado del grupo, por eso la columna interna es "Origen". A4, area 40..555.
-const LEDGER_M_COLS = [
-  { label: 'Fecha / Hora', x: 40, width: 52 },
-  { label: 'Caja', x: 92, width: 46 },
-  { label: 'Cajero', x: 138, width: 50 },
-  { label: 'Origen', x: 188, width: 66 },
-  { label: 'Detalle', x: 254, width: 100 },
-  { label: 'Efvo', x: 354, width: 26 },
-  { label: 'USD', x: 380, width: 82, align: 'right' },
-  { label: 'Bs', x: 462, width: 93, align: 'right' },
-];
-
-// Orden y etiquetas de los origenes (sourceType) en el reporte del libro mayor.
-const LEDGER_SOURCES: { key: string; label: string }[] = [
-  { key: 'SALE_PAYMENT', label: 'Ventas (pagos)' },
-  { key: 'CHANGE', label: 'Vueltos' },
-  { key: 'RECEIPT_COLLECTION', label: 'Cobros CxC' },
-  { key: 'RECEIPT_PAYMENT', label: 'Pagos CxP' },
-  { key: 'EXPENSE', label: 'Gastos' },
-  { key: 'CUSTOMER_ADVANCE', label: 'Anticipos de clientes' },
-  { key: 'SUPPLIER_ADVANCE', label: 'Anticipos a proveedores' },
-  { key: 'MANUAL', label: 'Movimientos manuales' },
-  { key: 'REINTEGRO', label: 'Reintegros' },
-];
+// El reporte de la TABLA MADRE (libro mayor), agrupado por metodo de pago, usa las MISMAS
+// columnas que el reporte global de movimientos: G_PAY_COLS (Fecha/Caja/Cajero/Factura/Cliente/Ref./USD/Bs).
 
 @Injectable()
 export class CashSessionPdfService {
@@ -627,7 +604,6 @@ export class CashSessionPdfService {
       doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('No hay movimientos en el libro mayor con los filtros aplicados.', 40, y);
       return this.toBuffer(doc);
     }
-    const labelOf = (k: string) => LEDGER_SOURCES.find((s) => s.key === k)?.label || k;
 
     // Agrupar por METODO DE PAGO (junta ventas, vueltos, cobros/pagos CxC-CxP, gastos,
     // anticipos y manuales del mismo metodo). El total de cada grupo = ingresos - egresos =
@@ -657,18 +633,18 @@ export class CashSessionPdfService {
       doc.fillColor('#000');
       y += 20;
 
-      y = this.drawTableHeader(doc, y, LEDGER_M_COLS, RIGHT);
+      y = this.drawTableHeader(doc, y, G_PAY_COLS, RIGHT);
       for (const r of grp) {
         y = this.checkPage(doc, y, 30);
-        if (y === 40) y = this.drawTableHeader(doc, y, LEDGER_M_COLS, RIGHT);
+        if (y === 40) y = this.drawTableHeader(doc, y, G_PAY_COLS, RIGHT);
         const sign = r.direction === 'OUT' ? '-' : '';
-        y = this.drawRowWrap(doc, y, LEDGER_M_COLS, [
+        y = this.drawRowWrap(doc, y, G_PAY_COLS, [
           this.shortDateTime(r.createdAt),
           r.registerName || '—',
           r.cashierName || '—',
-          labelOf(r.sourceType),
-          r.reason || '—',
-          r.isCash ? 'Si' : 'No',
+          r.docNumber || 'S/N',
+          r.partyName || 'Sin cliente',
+          r.reference || '—',
           `${sign}$${this.fmt(r.amountUsd)}`,
           `${sign}${this.fmt(r.amountBs)}`,
         ]);
@@ -677,10 +653,10 @@ export class CashSessionPdfService {
       y += 3;
       // Si el metodo tuvo egresos (vueltos, gastos...), mostrar ingresos y egresos por separado.
       if (gOutUsd > 0.001 || gOutBs > 0.001) {
-        y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', 'Ingresos', '', '', `$${this.fmt(gInUsd)}`, this.fmt(gInBs)], true);
-        y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', 'Egresos', '', '', `-$${this.fmt(gOutUsd)}`, `-${this.fmt(gOutBs)}`], true);
+        y = this.drawRow(doc, y, G_PAY_COLS, ['', '', '', '', 'Ingresos', '', `$${this.fmt(gInUsd)}`, this.fmt(gInBs)], true);
+        y = this.drawRow(doc, y, G_PAY_COLS, ['', '', '', '', 'Egresos', '', `-$${this.fmt(gOutUsd)}`, `-${this.fmt(gOutBs)}`], true);
       }
-      y = this.drawRow(doc, y, LEDGER_M_COLS, ['', '', '', `TOTAL ${name}`, '', '', `$${this.fmt(netU)}`, this.fmt(netB)], true);
+      y = this.drawRow(doc, y, G_PAY_COLS, ['', '', '', '', `TOTAL ${name}`, '', `$${this.fmt(netU)}`, this.fmt(netB)], true);
       y += 12;
     }
 

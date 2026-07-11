@@ -835,12 +835,82 @@ export class CashRegistersService {
     const rows = rowsRaw.map((e) => ({
       createdAt: e.createdAt, direction: e.direction,
       amountUsd: e.amountUsd, amountBs: e.amountBs, currency: e.currency,
-      isCash: e.isCash, sourceType: e.sourceType, reason: e.reason,
+      isCash: e.isCash, sourceType: e.sourceType, sourceId: e.sourceId, reason: e.reason,
+      methodId: e.methodId,
       // Sin metodo (movimiento manual) + efectivo -> se agrupa en el metodo de efectivo de su moneda.
       methodName: e.method?.name || (e.isCash ? manualCashName(e.currency) : '—'),
       registerName: e.cashSession?.cashRegister?.name || '—',
       cashierName: e.cashSession?.openedBy?.name || '—',
+      docNumber: '—' as string, partyName: '' as string, reference: '' as string,
     }));
+
+    // Enriquecer cada fila con Factura / Cliente / Ref. segun su documento origen (carga por lotes).
+    const idsOf = (types: string[]) =>
+      Array.from(new Set(rows.filter((r) => types.includes(r.sourceType) && r.sourceId).map((r) => r.sourceId as string)));
+    const [invs, rcs, exps, cas, sas, mvs] = await Promise.all([
+      (() => { const ids = idsOf(['SALE_PAYMENT', 'CHANGE', 'SALE_INVOICE']); return ids.length ? this.prisma.invoice.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, customer: { select: { name: true } }, payments: { select: { methodId: true, amountBs: true, reference: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT', 'REINTEGRO']); return ids.length ? this.prisma.receipt.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, customer: { select: { name: true } }, supplier: { select: { name: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['EXPENSE']); return ids.length ? this.prisma.expense.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, description: true, supplier: { select: { name: true } }, category: { select: { name: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['CUSTOMER_ADVANCE']); return ids.length ? this.prisma.customerAdvance.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, customer: { select: { name: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['SUPPLIER_ADVANCE']); return ids.length ? this.prisma.supplierAdvance.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, supplier: { select: { name: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['MANUAL']); return ids.length ? this.prisma.cashMovement.findMany({ where: { id: { in: ids } }, select: { id: true, reason: true } }) : []; })(),
+    ]);
+    const invMap = new Map(invs.map((i) => [i.id, i]));
+    const rcMap = new Map(rcs.map((r) => [r.id, r]));
+    const expMap = new Map(exps.map((e) => [e.id, e]));
+    const caMap = new Map(cas.map((a) => [a.id, a]));
+    const saMap = new Map(sas.map((a) => [a.id, a]));
+    const mvMap = new Map(mvs.map((m) => [m.id, m]));
+
+    for (const r of rows) {
+      switch (r.sourceType) {
+        case 'SALE_PAYMENT': case 'SALE_INVOICE': case 'CHANGE': {
+          const inv = r.sourceId ? invMap.get(r.sourceId) : null;
+          r.docNumber = inv?.number || 'S/N';
+          r.partyName = inv?.customer?.name || 'Sin cliente';
+          if (r.sourceType === 'CHANGE') r.reference = 'Vuelto';
+          else {
+            const pay = inv?.payments?.find((p) => p.methodId === r.methodId && Math.abs((p.amountBs || 0) - r.amountBs) < 0.01);
+            r.reference = pay?.reference || '';
+          }
+          break;
+        }
+        case 'RECEIPT_COLLECTION': case 'RECEIPT_PAYMENT': case 'REINTEGRO': {
+          const rc = r.sourceId ? rcMap.get(r.sourceId) : null;
+          r.docNumber = rc?.number || 'S/N';
+          r.partyName = rc?.customer?.name || rc?.supplier?.name || '';
+          r.reference = r.sourceType === 'RECEIPT_COLLECTION' ? 'Cobro' : r.sourceType === 'RECEIPT_PAYMENT' ? 'Pago' : 'Reintegro';
+          break;
+        }
+        case 'EXPENSE': {
+          const ex = r.sourceId ? expMap.get(r.sourceId) : null;
+          r.docNumber = ex?.reference || '—';
+          r.partyName = ex?.supplier?.name || ex?.description || 'Gasto';
+          r.reference = ex?.category?.name || 'Gasto';
+          break;
+        }
+        case 'CUSTOMER_ADVANCE': {
+          const a = r.sourceId ? caMap.get(r.sourceId) : null;
+          r.docNumber = a?.reference || '—';
+          r.partyName = a?.customer?.name || 'Cliente';
+          r.reference = 'Anticipo';
+          break;
+        }
+        case 'SUPPLIER_ADVANCE': {
+          const a = r.sourceId ? saMap.get(r.sourceId) : null;
+          r.docNumber = a?.reference || '—';
+          r.partyName = a?.supplier?.name || 'Proveedor';
+          r.reference = 'Anticipo';
+          break;
+        }
+        default: { // MANUAL u otros
+          const mv = r.sourceId ? mvMap.get(r.sourceId) : null;
+          r.docNumber = '—';
+          r.partyName = mv?.reason || r.reason || 'Movimiento';
+          r.reference = 'Manual';
+        }
+      }
+    }
 
     let inUsd = 0, outUsd = 0, inBs = 0, outBs = 0, cashInUsd = 0, cashOutUsd = 0, cashInBs = 0, cashOutBs = 0;
     for (const g of agg) {

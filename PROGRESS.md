@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte del libro mayor: columnas Factura/Cliente/Ref. (como movements-report) — 2026-07-11
+
+El PDF del libro mayor (agrupado por método) ahora usa las **mismas columnas que `/cash/movements-report`**: Fecha/Hora · Caja · Cajero · Factura · Cliente · Ref. · USD · Bs (reutiliza `G_PAY_COLS`). Como la tabla madre solo guarda `sourceType`+`sourceId`, se **enriquece cada fila por lotes** desde su documento origen: venta/vuelto→factura+cliente (Ref = referencia del pago o "Vuelto"), cobro/pago→N° recibo+cliente/proveedor, gasto→ref+proveedor/desc+categoría, anticipos→ref+cliente/proveedor, manual→motivo. Validado con data real (VF-26-…/Tomas Rangel, RCB-0001/JESUS LANEVE, etc.).
+
 ## 🧾 Reporte por método: fusionar movimientos manuales al efectivo de su moneda — 2026-07-11
 
 Los movimientos manuales de caja no tienen método de pago. En el reporte por método ahora **se fusionan con el método de efectivo físico de su moneda**: manual Bs → EFECTIVO, manual USD → DOLAR (los dos métodos con `isCash=true`, uno por `isDivisa`). Ya no aparece el grupo aparte "Efectivo (manual)". Se busca dinámicamente el método `isCash` de cada moneda (no hardcodeado). Validado: EFECTIVO pasa a incluir el manual Bs y DOLAR los 7 manuales USD; 0 filas huérfanas.
