@@ -148,14 +148,97 @@ export class StockMovementsService {
       take: limit,
     });
 
+    // ── Enriquecer cada movimiento con la contraparte (cliente/proveedor) y el
+    //    responsable segun el documento origen: factura de venta -> cliente + vendedor;
+    //    compra -> proveedor + quien la cargo; NC/ND -> cliente o proveedor + su creador;
+    //    ajustes/conteos/transferencias/reemplazos -> usuario que hizo el movimiento. ──
+    const idsBySource = (t: string) => [
+      ...new Set(movements.filter((m) => m.sourceType === t && m.sourceId).map((m) => m.sourceId as string)),
+    ];
+    const saleIds = idsBySource('SALE_INVOICE');
+    const poIds = idsBySource('PURCHASE_ORDER');
+    const noteIds = idsBySource('CREDIT_DEBIT_NOTE');
+
+    const [invoices, purchaseOrders, notes] = await Promise.all([
+      saleIds.length
+        ? this.prisma.invoice.findMany({
+            where: { id: { in: saleIds } },
+            select: { id: true, createdById: true, customer: { select: { name: true } }, seller: { select: { name: true } } },
+          })
+        : Promise.resolve([]),
+      poIds.length
+        ? this.prisma.purchaseOrder.findMany({
+            where: { id: { in: poIds } },
+            select: { id: true, createdById: true, supplier: { select: { name: true } } },
+          })
+        : Promise.resolve([]),
+      noteIds.length
+        ? this.prisma.creditDebitNote.findMany({
+            where: { id: { in: noteIds } },
+            select: {
+              id: true,
+              createdById: true,
+              invoice: { select: { customer: { select: { name: true } } } },
+              purchaseOrder: { select: { supplier: { select: { name: true } } } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const invoiceMap = new Map(invoices.map((i) => [i.id, i]));
+    const poMap = new Map(purchaseOrders.map((p) => [p.id, p]));
+    const noteMap = new Map(notes.map((n) => [n.id, n]));
+
+    // Usuarios a resolver por nombre: compras/notas + movimientos sin contraparte + facturas sin vendedor.
+    const userIds = new Set<string>();
+    for (const m of movements) {
+      if (m.sourceType === 'PURCHASE_ORDER' && m.sourceId) {
+        const po = poMap.get(m.sourceId);
+        if (po) userIds.add(po.createdById);
+      } else if (m.sourceType === 'CREDIT_DEBIT_NOTE' && m.sourceId) {
+        const n = noteMap.get(m.sourceId);
+        if (n) userIds.add(n.createdById);
+      } else if (m.sourceType === 'SALE_INVOICE' && m.sourceId) {
+        const inv = invoiceMap.get(m.sourceId);
+        if (inv && !inv.seller) userIds.add(inv.createdById);
+      } else {
+        userIds.add(m.createdById);
+      }
+    }
+    const users = userIds.size
+      ? await this.prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, name: true } })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u.name]));
+
     // Compute running balance for each row (descending order)
     let runningBalance = totalBalance - sumOfSkipped;
     const data = movements.map((m) => {
       const stockAfter = runningBalance;
       runningBalance -= m.quantity;
+
+      let party: string | null = null;
+      let creator: string | null = null;
+      if (m.sourceType === 'SALE_INVOICE' && m.sourceId) {
+        const inv = invoiceMap.get(m.sourceId);
+        party = inv?.customer?.name ?? null;
+        creator = inv?.seller?.name ?? (inv ? userMap.get(inv.createdById) ?? null : null);
+      } else if (m.sourceType === 'PURCHASE_ORDER' && m.sourceId) {
+        const po = poMap.get(m.sourceId);
+        party = po?.supplier?.name ?? null;
+        creator = po ? userMap.get(po.createdById) ?? null : null;
+      } else if (m.sourceType === 'CREDIT_DEBIT_NOTE' && m.sourceId) {
+        const n = noteMap.get(m.sourceId);
+        party = n?.invoice?.customer?.name ?? n?.purchaseOrder?.supplier?.name ?? null;
+        creator = n ? userMap.get(n.createdById) ?? null : null;
+      } else {
+        creator = userMap.get(m.createdById) ?? null;
+      }
+
       return {
         ...m,
         stockAfter,
+        party,
+        creator,
       };
     });
 

@@ -26,6 +26,8 @@ interface Movement {
   reference: string | null;
   createdAt: string;
   warehouse: { id: string; name: string };
+  party: string | null;   // cliente (venta) o proveedor (compra) del documento origen
+  creator: string | null;  // vendedor de la factura / quien cargo la compra / usuario del movimiento
 }
 
 const MOVEMENT_LABELS: Record<string, { label: string; color: string }> = {
@@ -87,7 +89,8 @@ export default function InventoryArticlesPage() {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '25', isActive: 'true' });
+      // Tope alto (igual que el POS): trae muchos y se scrollea, en vez de paginar de 25 en 25.
+      const params = new URLSearchParams({ page: String(page), limit: '500', isActive: 'true' });
       if (debounced) params.set('search', debounced);
       const res = await fetch(`/api/proxy/products?${params}`);
       if (res.ok) {
@@ -168,9 +171,9 @@ export default function InventoryArticlesPage() {
         </button>
       </div>
 
-      {/* Table */}
+      {/* Tabla (desktop) + Cards (movil) */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50">
@@ -208,6 +211,42 @@ export default function InventoryArticlesPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Cards (movil) — mismos datos que la fila de la tabla */}
+        <div className="md:hidden divide-y divide-slate-700/30">
+          {loading ? (
+            <div className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 text-sm">No se encontraron articulos</div>
+          ) : products.map(p => {
+            const exist = totalStock(p);
+            return (
+              <button
+                key={p.id}
+                onClick={() => openKardex(p)}
+                className="w-full text-left px-4 py-3 active:bg-slate-700/50 hover:bg-slate-700/40 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-green-400">{p.code}</span>
+                      {p.supplierRef && <span className="text-[11px] text-slate-500">Ref: {p.supplierRef}</span>}
+                    </div>
+                    <p className="text-white text-sm mt-0.5 break-words">{p.name}</p>
+                  </div>
+                  <Activity size={15} className="text-slate-500 flex-shrink-0 mt-1" />
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-2 text-xs">
+                  <span className={`font-mono ${exist <= 0 ? 'text-red-400' : 'text-slate-300'}`}>Existencias: {exist}</span>
+                  <div className="flex items-center gap-3 font-mono">
+                    <span className="text-slate-200">${p.priceDetal.toFixed(2)}</span>
+                    <span className="text-slate-400">{rate > 0 ? `Bs ${fmtBs(p.priceDetal * rate)}` : '—'}</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Pagination */}
@@ -266,7 +305,8 @@ export default function InventoryArticlesPage() {
                         <th className="text-left px-2 py-2 text-slate-400 font-medium">Tipo</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium">Cant.</th>
                         <th className="text-right px-2 py-2 text-slate-400 font-medium">Saldo</th>
-                        <th className="text-left px-2 py-2 text-slate-400 font-medium hidden sm:table-cell">Almacen</th>
+                        <th className="text-left px-2 py-2 text-slate-400 font-medium">Cliente / Proveedor</th>
+                        <th className="text-left px-2 py-2 text-slate-400 font-medium">Responsable</th>
                         <th className="text-left px-2 py-2 text-slate-400 font-medium">Referencia</th>
                       </tr>
                     </thead>
@@ -279,7 +319,8 @@ export default function InventoryArticlesPage() {
                             <td className="px-2 py-2"><span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${ml.color}`}>{ml.label}</span></td>
                             <td className={`px-2 py-2 text-right font-mono ${m.quantity >= 0 ? 'text-green-400' : 'text-red-400'}`}>{m.quantity > 0 ? '+' : ''}{m.quantity}</td>
                             <td className="px-2 py-2 text-right font-mono text-white">{m.stockAfter}</td>
-                            <td className="px-2 py-2 text-slate-400 hidden sm:table-cell">{m.warehouse.name}</td>
+                            <td className="px-2 py-2 text-slate-300">{m.party || '—'}</td>
+                            <td className="px-2 py-2 text-slate-300">{m.creator || '—'}</td>
                             <td className="px-2 py-2 text-slate-400">{m.reference || m.reason || '—'}</td>
                           </tr>
                         );
