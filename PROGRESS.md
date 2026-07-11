@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🚀 Deploy a producción: libro mayor de caja en AMBAS empresas — 2026-07-11
+
+Se desplegó todo el trabajo del libro mayor (Session 69) a las dos empresas (HEAD `8fce2a2`) y se reconstruyó el ledger histórico:
+
+- **Grande** (`134.209.164.59`): deploy OK, migraciones aplicadas ("schema up to date"), tabla `CashLedgerEntry` creada. Backfill de las **10 sesiones cerradas** → **969 filas** (ventas 940, vueltos 17, manual 8, cobros CxC 4). Fechas verificadas con el filtro real de la app: hoy 2 BINANCE (Johanny), ayer 1 (Andreina) — el desfase de fechas quedó corregido.
+- **Pequeña** (`134.209.220.233`): deploy OK, migraciones aplicadas, tabla creada. Backfill de las **48 sesiones cerradas** → **1.446 filas** (ventas 1.421, vueltos 14, cobros CxC 6, gastos 4, manual 1). `ledger.createdAt == invoice.paidAt` verificado.
+- **Flag `useCashLedger` = OFF** en ambas (el arqueo de los cajeros NO cambió; el ledger es informativo/auditable hasta encenderlo).
+- **El backfill en prod se ejecutó** vía el endpoint admin real (`POST /cash-sessions/:id/backfill-ledger`), con token firmado en el propio servidor; escribe solo filas de lectura, no toca snapshots ni arqueos. Idempotente.
+- **Próximo paso (Diego, 2026-07-12):** cuadrar las cajas del día con el nuevo **Reporte por método** del Libro mayor y, si cuadra vs el método viejo (Cajas → Ledger), encender el flag.
+
 ## 🐛 Fix: el backfill del ledger guardaba la fecha de reconstrucción (no la real) — 2026-07-11
 
 El filtro por fecha del Libro mayor mostraba de más: un pago de BINANCE de ayer (cajera Andreina, que no trabajó hoy) salía en "hoy". Causa: `writeCashLedger` no fijaba `createdAt`, así que el **backfill** escribía las filas con `now()` (la hora de reconstrucción) en vez de la fecha del movimiento; el filtro `caracasDayStart/End` sobre `createdAt` estaba bien, pero la data estaba mal fechada. Los movimientos **en vivo** no tenían el bug (createdAt = ahora = correcto).
