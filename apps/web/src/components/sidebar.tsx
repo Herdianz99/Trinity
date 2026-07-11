@@ -134,6 +134,7 @@ const menuSections: MenuSection[] = [
       { label: 'Conteo fisico', href: '/inventory/count', icon: <ClipboardCheck size={18} /> },
       { label: 'Ajustes', href: '/inventory/adjustments', icon: <PackagePlus size={18} /> },
       { label: 'Reemplazos', href: '/inventory/replacements', icon: <Repeat size={18} />, permission: 'inventory-consult' },
+      { label: 'Por despachar', href: '/dispatch', icon: <Truck size={18} />, permission: 'inventory-consult' },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
       { label: 'Etiquetas', href: '/inventory/etiquetas', icon: <Tags size={18} />, permission: 'inventory-consult' },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },

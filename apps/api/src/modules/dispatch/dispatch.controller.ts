@@ -12,7 +12,7 @@ import { DeliverDispatchDto } from './dto/deliver-dispatch.dto';
 @ApiTags('Dispatch')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), ModuleGuard)
-@RequireModule('commands', 'inventory')
+@RequireModule('commands', 'inventory', 'inventory-consult')
 @Controller('dispatches')
 export class DispatchController {
   constructor(private readonly service: DispatchService) {}
