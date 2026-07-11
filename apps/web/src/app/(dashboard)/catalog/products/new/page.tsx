@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Package, Loader2 } from 'lucide-react';
 import Toggle from '@/components/toggle';
+import ProductNameSuggest from '@/components/product-name-suggest';
 
 interface Category { id: string; name: string; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
@@ -142,6 +143,23 @@ export default function NewProductPage() {
   const previewDetal = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaPct), form.bregaApplies, form.ivaType);
   const previewMayor = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaMayorPct), form.bregaApplies, form.ivaType);
 
+  // Al elegir un articulo como plantilla: copia nombre + atributos (categoria, IVA, ganancias,
+  // brecha, unidades). NO copia codigos/costo/existencia (son propios del articulo).
+  const applyTemplate = (p: any) => {
+    setForm(f => ({
+      ...f,
+      name: p.name || f.name,
+      categoryId: p.categoryId || f.categoryId,
+      ivaType: p.ivaType || f.ivaType,
+      gananciaPct: p.gananciaPct != null ? String(p.gananciaPct) : f.gananciaPct,
+      gananciaMayorPct: p.gananciaMayorPct != null ? String(p.gananciaMayorPct) : f.gananciaMayorPct,
+      bregaApplies: p.bregaApplies != null ? !!p.bregaApplies : f.bregaApplies,
+      purchaseUnit: p.purchaseUnit || f.purchaseUnit,
+      saleUnit: p.saleUnit || f.saleUnit,
+      conversionFactor: p.conversionFactor != null ? p.conversionFactor : f.conversionFactor,
+    }));
+  };
+
   return (
     <div>
       {/* Header */}
@@ -192,7 +210,13 @@ export default function NewProductPage() {
           <div className="grid grid-cols-1 gap-3 mt-3">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Nombre *</label>
-              <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
+              <ProductNameSuggest
+                value={form.name}
+                onChange={v => setForm(f => ({ ...f, name: v }))}
+                onPickTemplate={applyTemplate}
+                className="input-field !py-2 text-sm"
+                required
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Descripcion</label>

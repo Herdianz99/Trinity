@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🏷️ Crear producto: sugerencia de nombre (plantilla) para estandarizar nomenclatura — 2026-07-11
+
+Como en el sistema viejo del cliente: al **crear** un artículo, el campo **Nombre** ahora autocompleta desde los productos existentes. Escribes, aparece un dropdown con los nombres parecidos (`nombre · código`), eliges uno y **copia su nombre + atributos como plantilla**; el usuario solo cambia la medida. Esto mantiene los nombres de una misma familia consistentes y mejora la búsqueda.
+
+- **Componente reutilizable** `components/product-name-suggest.tsx`: input de nombre con dropdown, reusa la búsqueda tolerante `/products?search=` (la de `P/`/tildes/orden), dedup por nombre exacto, navegación por teclado (↑/↓/Enter/Esc), foco al final tras elegir (para editar la medida), y no reabre justo tras elegir.
+- **Al elegir** copia: **nombre + categoría, IVA, % ganancia detal/mayor, brecha y unidades** (compra/venta/factor). NO copia códigos/costo/existencia (propios del artículo). Todo sigue editable.
+- Cableado en `product-form-modal.tsx` (solo modo **crear**; en editar es input normal) y en `catalog/products/new`. Puro frontend, sin backend ni schema. Typecheck web verde.
+
 ## 🔄 Recibo de cobro: permitir cruce a cero (factura ↔ su devolución) — 2026-07-11
 
 Diego reportó que si devuelve una factura a crédito y la cruza con su nota (devolución) en `/receipts/new?type=COLLECTION`, el neto queda en **cero** y el recibo **no dejaba procesarlo** (exigía una línea de pago con método y monto > 0).
