@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Ticket 80mm (no fiscal): métodos en divisa se muestran en USD — 2026-07-10
+
+En el ticket de 80mm de la factura de venta (no fiscal, `lib/print-receipt.ts`), los métodos de pago con `method.isDivisa = true` (Zelle, efectivo $, etc.) ahora se muestran **siempre en USD**, aunque el resto del ticket vaya en Bs. Antes salían todos en Bs. El resto de métodos sigue la moneda del ticket. Aplicado en los 2 bloques de "Forma de pago" (versión HTML iframe + versión texto del agente térmico). **NO se tocó la factura fiscal** (va por `fiscal-printer.ts`, camino aparte). Pendiente: Diego lo prueba mañana (no tiene impresora en su máquina local).
+
 ## 🛒 Compra: columnas Ref. Proveedor + Precio c/Dto; ajuste: costo con decimales — 2026-07-10
 
 - **Factura de compra (crear y editar)**: 2 columnas nuevas en la tabla de ítems — **Ref. Prov.** (después de Ref. Art., el `supplierRef` del artículo) y **Precio c/Dto** (después de % Dto, = precio × (1 − dto%)). `supplierRef` se toma del producto al seleccionarlo; en editar se incluyó `supplierRef` en el detalle de compra del backend (`purchase-orders.service` includeDetail).

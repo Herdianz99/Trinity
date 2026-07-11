@@ -259,7 +259,11 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
     html += `<div class="bold">Forma de pago:</div>`;
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
-      const amount = cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      // Los metodos en divisa (Zelle, efectivo $, etc.) SIEMPRE en USD, aunque el
+      // resto del ticket vaya en Bs. El resto de metodos siguen la moneda del ticket.
+      const amount = p.method?.isDivisa
+        ? `${fmt(p.amountUsd)} USD`
+        : cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
       html += `<div class="row"><span>${label}:</span><span>${amount}</span></div>`;
       if (p.reference) html += `<div style="font-size:10px;padding-left:8px;">Ref: ${p.reference}</div>`;
     }
@@ -364,7 +368,11 @@ function buildReceiptText(invoice: any, company: CompanyInfo): string {
     lines.push('{{BOLD}}Forma de pago:{{/BOLD}}');
     for (const p of payments) {
       const label = p.method?.name || 'Metodo';
-      const amount = cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
+      // Los metodos en divisa (Zelle, efectivo $, etc.) SIEMPRE en USD, aunque el
+      // resto del ticket vaya en Bs. El resto de metodos siguen la moneda del ticket.
+      const amount = p.method?.isDivisa
+        ? `${fmt(p.amountUsd)} USD`
+        : cur === 'BS' ? `${fmtBs(p.amountBs)} Bs` : `${fmt(p.amountUsd)} USD`;
       lines.push(pad(`${label}:`, amount));
       if (p.reference) lines.push(`  Ref: ${p.reference}`);
     }
