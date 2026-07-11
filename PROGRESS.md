@@ -1,12 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
-## 🐛 Fix: ajustes de inventario solo mostraban clientes con "A" (límite 500) — 2026-07-11
+## 🐛 Fix: selectores de cliente/proveedor cargaban con límite (empresa grande ~48k) — 2026-07-11
 
-En la empresa grande (~48k clientes) el selector de Cliente de los ajustes solo mostraba los primeros 500 (alfabéticos → todos con "A") y no encontraba el resto ni escribiendo. Causa: cargaba `/customers?limit=500` en un `<select>` y filtraba en el front.
+En la empresa grande (~48k clientes) el selector de Cliente de los ajustes solo mostraba los primeros 500 (alfabéticos → todos con "A") y no encontraba el resto ni escribiendo. Causa: cargaba `/customers?limit=500` en un `<select>` y filtraba en el front. Se corrigió y se generalizó a todos los selectores con el mismo patrón.
 
-- **Componente reutilizable `components/customer-search-select.tsx`**: selector de cliente con **búsqueda server-side** (`/customers?search=&limit=20`, por nombre/cédula), dropdown, limpiar, y trae el nombre por id si viene un valor preseleccionado. No carga todos los clientes.
-- Aplicado en **`inventory/adjustments/new`** (selector de cliente para CxC) y en **`inventory/adjustments/[id]`** (modal de proceso — cliente con buscador, proveedor sigue con select; el vencimiento se calcula de los días de crédito del cliente elegido). Se quitaron las cargas `?limit=500`. Typecheck web verde.
-- **También migrados al componente:** `receivables/new` (selector de cliente de la CxC, conserva Nuevo/Editar — tras guardar se fuerza refetch del nombre con `key`) y `receivables/page` (selector de cliente del modal de anticipo). Se quitaron las cargas `limit=1000`/`limit=500`. Ya no queda ningún selector de cliente que cargue en bloque.
+- **Componentes reutilizables** con **búsqueda server-side** (dropdown, limpiar, traen el nombre por id si viene preseleccionado; no cargan todos los registros):
+  - `components/customer-search-select.tsx` → `/customers?search=&limit=20` (por nombre/cédula).
+  - `components/supplier-search-select.tsx` → `/suppliers?search=&limit=20` (por nombre/RIF).
+- **Ajustes de inventario** (`inventory/adjustments/new` y el modal de proceso de `inventory/adjustments/[id]`): **cliente Y proveedor** con buscador server-side; el vencimiento de la CxC/CxP se calcula de los días de crédito de la entidad elegida. Se quitaron las cargas `?limit=500` y la carga en bloque de proveedores.
+- **Receivables** (`receivables/new` selector de cliente de la CxC —conserva Nuevo/Editar, refetch del nombre con `key` tras guardar—; `receivables/page` selector de cliente del modal de anticipo). Se quitaron las cargas `limit=1000`/`limit=500`.
+- Ya no queda ningún selector de cliente/proveedor que cargue en bloque. Typecheck web verde.
 
 ## 🚚 Módulo "Por despachar": comandas de retiro con despacho parcial — 2026-07-11
 
