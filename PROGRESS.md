@@ -1,5 +1,10 @@
 ﻿# Trinity ERP — Progreso
 
+## ⏳ Pendientes
+- **Devolución: aplicar el descuento del artículo al devolverlo.** Al hacer la devolución/nota de crédito, el monto a devolver debe considerar el descuento que tenía el artículo en la venta (no devolver el precio pleno). Diego lo explica bien mañana (2026-07-12).
+- (Opcional) Recalcular el snapshot de sesiones ya cerradas con arqueo malo — solo afecta reportes históricos, no la operación con el ledger hacia adelante.
+- (Opcional) "Resumen PDF" del libro mayor (solo totales por método) como el de `/cash/movements`.
+
 ## 🧾 Reporte del libro mayor: columnas Factura/Cliente/Ref. (como movements-report) — 2026-07-11
 
 El PDF del libro mayor (agrupado por método) ahora usa las **mismas columnas que `/cash/movements-report`**: Fecha/Hora · Caja · Cajero · Factura · Cliente · Ref. · USD · Bs (reutiliza `G_PAY_COLS`). Como la tabla madre solo guarda `sourceType`+`sourceId`, se **enriquece cada fila por lotes** desde su documento origen: venta/vuelto→factura+cliente (Ref = referencia del pago o "Vuelto"), cobro/pago→N° recibo+cliente/proveedor, gasto→ref+proveedor/desc+categoría, anticipos→ref+cliente/proveedor, manual→motivo. Validado con data real (VF-26-…/Tomas Rangel, RCB-0001/JESUS LANEVE, etc.).
