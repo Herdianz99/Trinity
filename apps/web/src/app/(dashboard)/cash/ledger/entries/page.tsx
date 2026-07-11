@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, BookOpen, ArrowDownCircle, ArrowUpCircle,
-  Banknote, CreditCard, RotateCw, Filter,
+  Banknote, CreditCard, RotateCw, Filter, FileText,
 } from 'lucide-react';
 
 const fmt = (n: number) => (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -98,6 +98,19 @@ export default function CashLedgerEntriesPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [filterRegister, filterCashier, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash]);
 
+  const openReport = () => {
+    const p = new URLSearchParams();
+    if (filterRegister) p.set('cashRegisterId', filterRegister);
+    if (filterCashier) p.set('userId', filterCashier);
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo) p.set('to', filterTo);
+    if (filterMethodIds.length) p.set('methodIds', filterMethodIds.join(','));
+    if (filterSource) p.set('sourceType', filterSource);
+    if (filterCurrency) p.set('currency', filterCurrency);
+    if (onlyCash) p.set('onlyCash', 'true');
+    window.open(`/api/proxy/cash/ledger-entries-report?${p.toString()}`, '_blank');
+  };
+
   const toggleMethod = (id: string) =>
     setFilterMethodIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
 
@@ -121,6 +134,9 @@ export default function CashLedgerEntriesPage() {
           <h1 className="text-2xl font-bold text-white">Libro mayor de caja</h1>
           <p className="text-slate-400 text-sm">Tabla madre: todos los movimientos que tocan caja, de cualquier origen y método de pago</p>
         </div>
+        <button onClick={openReport} className="btn-secondary flex items-center gap-2 text-sm" title="Reporte detallado en PDF (respeta los filtros)">
+          <FileText size={16} /> Reporte detallado
+        </button>
         <button onClick={load} className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700/50" title="Refrescar"><RotateCw size={16} /></button>
       </div>
 

@@ -718,21 +718,7 @@ export class CashRegistersService {
     page = 1,
   ) {
     const pageSize = 50;
-    const where: any = {};
-    if (filters.from) where.createdAt = { ...(where.createdAt || {}), gte: caracasDayStart(filters.from) };
-    if (filters.to) where.createdAt = { ...(where.createdAt || {}), lte: caracasDayEnd(filters.to) };
-    if (filters.methodIds && filters.methodIds.length) where.methodId = { in: filters.methodIds };
-    if (filters.sourceType) where.sourceType = filters.sourceType;
-    if (filters.currency) where.currency = filters.currency;
-    if (filters.onlyCash) where.isCash = true;
-    if (filters.sessionId) where.cashSessionId = filters.sessionId;
-    // Filtro por caja / cajero: via la sesion
-    if (filters.cashRegisterId || filters.userId) {
-      where.cashSession = {
-        ...(filters.cashRegisterId ? { cashRegisterId: filters.cashRegisterId } : {}),
-        ...(filters.userId ? { openedById: filters.userId } : {}),
-      };
-    }
+    const where = this.ledgerWhere(filters);
 
     const [total, rowsRaw, agg] = await Promise.all([
       this.prisma.cashLedgerEntry.count({ where }),
@@ -792,6 +778,93 @@ export class CashRegistersService {
     };
 
     return { data: rows, total, page, totalPages: Math.max(1, Math.ceil(total / pageSize)), summary };
+  }
+
+  /** Construye el `where` de la tabla madre a partir de los filtros (compartido lista/reporte). */
+  private ledgerWhere(filters: {
+    cashRegisterId?: string; userId?: string; sessionId?: string;
+    from?: string; to?: string; methodIds?: string[];
+    sourceType?: string; currency?: string; onlyCash?: boolean;
+  }) {
+    const where: any = {};
+    if (filters.from) where.createdAt = { ...(where.createdAt || {}), gte: caracasDayStart(filters.from) };
+    if (filters.to) where.createdAt = { ...(where.createdAt || {}), lte: caracasDayEnd(filters.to) };
+    if (filters.methodIds && filters.methodIds.length) where.methodId = { in: filters.methodIds };
+    if (filters.sourceType) where.sourceType = filters.sourceType;
+    if (filters.currency) where.currency = filters.currency;
+    if (filters.onlyCash) where.isCash = true;
+    if (filters.sessionId) where.cashSessionId = filters.sessionId;
+    if (filters.cashRegisterId || filters.userId) {
+      where.cashSession = {
+        ...(filters.cashRegisterId ? { cashRegisterId: filters.cashRegisterId } : {}),
+        ...(filters.userId ? { openedById: filters.userId } : {}),
+      };
+    }
+    return where;
+  }
+
+  /** TODAS las filas del ledger (sin paginar) + totales + meta — para el reporte PDF detallado. */
+  async getLedgerEntriesForReport(filters: {
+    cashRegisterId?: string; userId?: string; sessionId?: string;
+    from?: string; to?: string; methodIds?: string[];
+    sourceType?: string; currency?: string; onlyCash?: boolean;
+  }) {
+    const where = this.ledgerWhere(filters);
+    const [rowsRaw, agg] = await Promise.all([
+      this.prisma.cashLedgerEntry.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          method: { select: { name: true } },
+          cashSession: { select: { cashRegister: { select: { name: true } }, openedBy: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.cashLedgerEntry.groupBy({
+        by: ['currency', 'direction', 'isCash'], where,
+        _sum: { amountUsd: true, amountBs: true }, _count: { _all: true },
+      }),
+    ]);
+
+    const rows = rowsRaw.map((e) => ({
+      createdAt: e.createdAt, direction: e.direction,
+      amountUsd: e.amountUsd, amountBs: e.amountBs, currency: e.currency,
+      isCash: e.isCash, sourceType: e.sourceType, reason: e.reason,
+      methodName: e.method?.name || (e.sourceType === 'MANUAL' ? 'Efectivo (manual)' : '—'),
+      registerName: e.cashSession?.cashRegister?.name || '—',
+      cashierName: e.cashSession?.openedBy?.name || '—',
+    }));
+
+    let inUsd = 0, outUsd = 0, inBs = 0, outBs = 0, cashInUsd = 0, cashOutUsd = 0, cashInBs = 0, cashOutBs = 0;
+    for (const g of agg) {
+      const su = g._sum.amountUsd || 0, sb = g._sum.amountBs || 0;
+      if (g.direction === 'IN') { inUsd += su; inBs += sb; if (g.isCash) { cashInUsd += su; cashInBs += sb; } }
+      else { outUsd += su; outBs += sb; if (g.isCash) { cashOutUsd += su; cashOutBs += sb; } }
+    }
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const summary = {
+      totalRows: rows.length,
+      inUsd: r2(inUsd), outUsd: r2(outUsd), netUsd: r2(inUsd - outUsd),
+      inBs: r2(inBs), outBs: r2(outBs), netBs: r2(inBs - outBs),
+      cashNetUsd: r2(cashInUsd - cashOutUsd), cashNetBs: r2(cashInBs - cashOutBs),
+    };
+
+    // Meta para el encabezado del reporte
+    const [reg, usr, mets] = await Promise.all([
+      filters.cashRegisterId ? this.prisma.cashRegister.findUnique({ where: { id: filters.cashRegisterId }, select: { name: true } }) : null,
+      filters.userId ? this.prisma.user.findUnique({ where: { id: filters.userId }, select: { name: true } }) : null,
+      filters.methodIds && filters.methodIds.length ? this.prisma.paymentMethod.findMany({ where: { id: { in: filters.methodIds } }, select: { name: true } }) : [],
+    ]);
+    const meta = {
+      from: filters.from || null, to: filters.to || null,
+      registerName: reg?.name || 'Todas',
+      cashierName: usr?.name || 'Todos',
+      methodNames: (mets || []).map((m) => m.name),
+      sourceType: filters.sourceType || null,
+      currency: filters.currency || null,
+      onlyCash: !!filters.onlyCash,
+    };
+
+    return { rows, summary, meta };
   }
 
   /**

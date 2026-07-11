@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte detallado (PDF) del libro mayor de caja + entrada en el menú lateral — 2026-07-11
+
+- **Menú lateral**: CAJA → **Libro mayor** (`/cash/ledger/entries`).
+- **Reporte detallado (PDF)** en `/cash/ledger/entries`, análogo al de `/cash/movements`: lista TODAS las filas del `CashLedgerEntry` **agrupadas por origen** (Ventas, Vueltos, Cobros CxC, Pagos CxP, Gastos, Anticipos cliente/proveedor, Movimientos manuales, Reintegros) con subtotal (neto) por grupo, cuadro-resumen arriba (ingresos/egresos/neto por moneda + neto efectivo de gaveta) y total global. Respeta todos los filtros de la pantalla (caja, cajero, origen, moneda, fechas, métodos, solo-efectivo).
+- Backend: `GET /cash/ledger-entries-report` → `CashSessionPdfService.generateLedgerReport()` (usa `getLedgerEntriesForReport`, que trae todas las filas sin paginar + totales por `groupBy` + meta para el encabezado). Probado con data real: PDF de 924 filas OK.
+
 ## 🧾 UI de la tabla madre: /cash/ledger/entries (Libro mayor de caja) — 2026-07-11
 
 Antes solo se veía el TOTAL del ledger (página de comparación). Ahora hay una vista que **lista las filas reales del `CashLedgerEntry`** — la tabla madre — de cualquier origen y cualquier método de pago, no una reconstrucción como `/cash/movements`.

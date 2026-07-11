@@ -139,6 +139,33 @@ export class CashRegistersController {
     );
   }
 
+  /** PDF detallado de la tabla madre (libro mayor), agrupado por origen, respetando filtros */
+  @Get('cash/ledger-entries-report')
+  async getLedgerEntriesReport(
+    @Res() res: Response,
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('currency') currency?: string,
+    @Query('onlyCash') onlyCash?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const buffer = await this.pdfService.generateLedgerReport({
+      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      sourceType, currency, onlyCash: onlyCash === 'true',
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="libro-mayor-caja.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('cash-sessions/:id/payments')
   findSessionPayments(
     @Param('id') id: string,

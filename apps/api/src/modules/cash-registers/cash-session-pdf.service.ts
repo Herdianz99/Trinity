@@ -52,6 +52,31 @@ const VUELTO_COLS = [
   { label: 'Bs', x: 482, width: 73, align: 'right' },
 ];
 
+// Columnas del reporte de la TABLA MADRE (libro mayor de caja). A4 vertical, area 40..555.
+const LEDGER_COLS = [
+  { label: 'Fecha / Hora', x: 40, width: 54 },
+  { label: 'Caja', x: 94, width: 48 },
+  { label: 'Cajero', x: 142, width: 52 },
+  { label: 'Detalle', x: 194, width: 106 },
+  { label: 'Metodo', x: 300, width: 58 },
+  { label: 'Efvo', x: 358, width: 24 },
+  { label: 'USD', x: 382, width: 80, align: 'right' },
+  { label: 'Bs', x: 462, width: 93, align: 'right' },
+];
+
+// Orden y etiquetas de los origenes (sourceType) en el reporte del libro mayor.
+const LEDGER_SOURCES: { key: string; label: string }[] = [
+  { key: 'SALE_PAYMENT', label: 'Ventas (pagos)' },
+  { key: 'CHANGE', label: 'Vueltos' },
+  { key: 'RECEIPT_COLLECTION', label: 'Cobros CxC' },
+  { key: 'RECEIPT_PAYMENT', label: 'Pagos CxP' },
+  { key: 'EXPENSE', label: 'Gastos' },
+  { key: 'CUSTOMER_ADVANCE', label: 'Anticipos de clientes' },
+  { key: 'SUPPLIER_ADVANCE', label: 'Anticipos a proveedores' },
+  { key: 'MANUAL', label: 'Movimientos manuales' },
+  { key: 'REINTEGRO', label: 'Reintegros' },
+];
+
 @Injectable()
 export class CashSessionPdfService {
   constructor(
@@ -549,6 +574,119 @@ export class CashSessionPdfService {
       y += 3;
       y = this.drawRow(doc, y, G_MOV_COLS, ['', '', '', '', '', 'Total CxP', `-$${this.fmt(tu)}`, this.fmt(tb)], true);
     }
+
+    return this.toBuffer(doc);
+  }
+
+  /**
+   * Reporte DETALLADO de la TABLA MADRE (libro mayor de caja): lista TODAS las filas
+   * del CashLedgerEntry con los filtros aplicados, agrupadas por origen (venta, vuelto,
+   * cobro, gasto, anticipo, manual...) con subtotales, y un total global con neto de
+   * efectivo de gaveta. Es la fuente unica del arqueo.
+   */
+  async generateLedgerReport(filters: {
+    cashRegisterId?: string; userId?: string; sessionId?: string;
+    from?: string; to?: string; methodIds?: string[];
+    sourceType?: string; currency?: string; onlyCash?: boolean;
+  }): Promise<Buffer> {
+    const { rows, summary, meta } = await this.cashService.getLedgerEntriesForReport(filters);
+
+    const config = await this.prisma.companyConfig.findFirst();
+    const company = config?.companyName || 'Trinity ERP';
+    const RIGHT = 555;
+
+    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+
+    // Encabezado
+    doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
+    doc.fontSize(12).font('Helvetica-Bold').text('Libro mayor de caja — Movimientos detallados', 40, 60);
+    doc.fontSize(9).font('Helvetica').fillColor('#334155');
+    const period = meta.from || meta.to ? `${meta.from || '...'}  a  ${meta.to || '...'}` : 'Todas las fechas';
+    const filtros: string[] = [`Periodo: ${period}`, `Caja: ${meta.registerName}`, `Cajero: ${meta.cashierName}`];
+    if (meta.methodNames.length) filtros.push(`Metodos: ${meta.methodNames.join(', ')}`);
+    if (meta.currency) filtros.push(`Moneda: ${meta.currency}`);
+    if (meta.onlyCash) filtros.push('Solo efectivo de gaveta');
+    doc.text(filtros.join('     '), 40, 80, { width: RIGHT - 40 });
+    doc.text(`Generado: ${this.dateTime(new Date())}`, 40, 96);
+    doc.fillColor('#000');
+    doc.moveTo(40, 112).lineTo(RIGHT, 112).stroke('#94a3b8');
+    let y = 120;
+
+    // Resumen arriba
+    doc.rect(40, y - 2, RIGHT - 40, 34).fill('#f1f5f9');
+    doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
+    doc.text(`Ingresos:  $${this.fmt(summary.inUsd)}  /  Bs ${this.fmt(summary.inBs)}`, 46, y + 2);
+    doc.text(`Egresos:  $${this.fmt(summary.outUsd)}  /  Bs ${this.fmt(summary.outBs)}`, 46, y + 14);
+    doc.text(`Neto:  $${this.fmt(summary.netUsd)}  /  Bs ${this.fmt(summary.netBs)}`, 320, y + 2, { width: RIGHT - 320 - 6, align: 'right' });
+    doc.text(`Neto efectivo gaveta:  $${this.fmt(summary.cashNetUsd)}  /  Bs ${this.fmt(summary.cashNetBs)}`, 320, y + 14, { width: RIGHT - 320 - 6, align: 'right' });
+    doc.fillColor('#000');
+    y += 44;
+
+    // Agrupar por origen
+    const bySource = new Map<string, any[]>();
+    for (const r of rows) {
+      if (!bySource.has(r.sourceType)) bySource.set(r.sourceType, []);
+      bySource.get(r.sourceType)!.push(r);
+    }
+    // Orden conocido primero, luego cualquier origen inesperado
+    const orderedKeys = [
+      ...LEDGER_SOURCES.map((s) => s.key).filter((k) => bySource.has(k)),
+      ...Array.from(bySource.keys()).filter((k) => !LEDGER_SOURCES.some((s) => s.key === k)),
+    ];
+    const labelOf = (k: string) => LEDGER_SOURCES.find((s) => s.key === k)?.label || k;
+
+    if (rows.length === 0) {
+      doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('No hay movimientos en el libro mayor con los filtros aplicados.', 40, y);
+      return this.toBuffer(doc);
+    }
+
+    for (const key of orderedKeys) {
+      const grp = bySource.get(key)!;
+      let gInUsd = 0, gOutUsd = 0, gInBs = 0, gOutBs = 0;
+      for (const r of grp) {
+        if (r.direction === 'IN') { gInUsd += r.amountUsd; gInBs += r.amountBs; }
+        else { gOutUsd += r.amountUsd; gOutBs += r.amountBs; }
+      }
+
+      y = this.checkPage(doc, y, 60);
+      doc.rect(40, y - 2, RIGHT - 40, 16).fill('#e2e8f0');
+      doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
+      doc.text(`${labelOf(key)}  (${grp.length})`, 46, y + 1, { width: 300, lineBreak: false });
+      doc.fillColor('#000');
+      y += 20;
+
+      y = this.drawTableHeader(doc, y, LEDGER_COLS, RIGHT);
+      for (const r of grp) {
+        y = this.checkPage(doc, y, 30);
+        if (y === 40) y = this.drawTableHeader(doc, y, LEDGER_COLS, RIGHT);
+        const sign = r.direction === 'OUT' ? '-' : '';
+        y = this.drawRowWrap(doc, y, LEDGER_COLS, [
+          this.shortDateTime(r.createdAt),
+          r.registerName || '—',
+          r.cashierName || '—',
+          r.reason || '—',
+          r.methodName || '—',
+          r.isCash ? 'Si' : 'No',
+          `${sign}$${this.fmt(r.amountUsd)}`,
+          `${sign}${this.fmt(r.amountBs)}`,
+        ]);
+      }
+      doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#cbd5e1');
+      y += 3;
+      const netU = gInUsd - gOutUsd, netB = gInBs - gOutBs;
+      y = this.drawRow(doc, y, LEDGER_COLS, ['', '', '', '', '', 'Neto', `$${this.fmt(netU)}`, this.fmt(netB)], true);
+      y += 10;
+    }
+
+    // Total global
+    y = this.checkPage(doc, y, 40);
+    doc.rect(40, y - 2, RIGHT - 40, 30).fill('#0f172a');
+    doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
+    doc.text(`TOTAL  (${summary.totalRows} movimientos)`, 46, y + 2, { width: 250, lineBreak: false });
+    doc.text(`Ingresos $${this.fmt(summary.inUsd)} / Bs ${this.fmt(summary.inBs)}`, 250, y + 2, { width: RIGHT - 250 - 6, align: 'right' });
+    doc.text(`Egresos $${this.fmt(summary.outUsd)} / Bs ${this.fmt(summary.outBs)}`, 250, y + 14, { width: RIGHT - 250 - 6, align: 'right' });
+    doc.fillColor('#000');
+    y += 38;
 
     return this.toBuffer(doc);
   }
