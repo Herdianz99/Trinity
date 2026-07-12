@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Resumen PDF del libro mayor de caja (solo neto por método) — 2026-07-12 (Session 70)
+
+Segundo PDF del libro mayor, hermano del detallado que ya existía: NO lista cada movimiento, solo el **neto por método de pago** (ingresos − egresos = lo que debe haber en ese método, para el cuadre) + el neto de efectivo de gaveta. Mismo patrón/estilo que el detallado y misma fuente de datos.
+
+- **Backend** (`cash-session-pdf.service`): `generateLedgerSummaryReport(filters)` reutiliza `getLedgerEntriesForReport` (misma data/filtros que el detallado), agrupa las filas por método (ingresos/egresos/neto USD+Bs) y las pinta en una tabla de una fila por método (Método · Movs · Ingresos $ · Egresos $ · Neto $ · Neto Bs) + cuadro-resumen arriba + barra de total global. A4 vertical. Endpoint `GET /cash/ledger-entries-summary` (mismos query params que `ledger-entries-report`).
+- **Frontend** (`/cash/ledger/entries`): botón **"Resumen"** (icono FileBarChart2) junto a "Reporte detallado"; ambos comparten el helper `reportParams()` y respetan todos los filtros de la pantalla.
+- Typecheck API + web verde. Pendiente: prueba visual en la UI tras deploy.
+
 ## 🐛 Fix timezone: KPIs de Devoluciones y Gastos del dashboard salían en 0 — 2026-07-12 (Session 70)
 
 Diego reportó que el dashboard marcaba **0 devoluciones** aunque el 11-jul se hicieron 7 (empresa grande). **Mismo bug de timezone que el de la tasa (arreglado el 11-jul), pero en otro consumidor.** Causa raíz común: `const docDate = new Date(dto.date)` — el front manda `dto.date` como `'YYYY-MM-DD'`; `new Date()` lo vuelve **medianoche UTC = 8 PM Caracas del día anterior**. El lookup de tasa ya se había arreglado (usa `caracasDateKey(dto.date)`), pero `docDate` se dejó igual porque para el libro fiscal/`yearToken` la fecha-calendario sale bien. Lo que no se vio: el **dashboard** filtra `documentDate` con `caracasDayStart/End` (semántica de timestamp), y ahí medianoche UTC cae en el día equivocado → la devolución se contaba en el día anterior y "hoy" daba 0.

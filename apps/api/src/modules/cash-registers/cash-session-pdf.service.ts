@@ -674,6 +674,109 @@ export class CashSessionPdfService {
   }
 
   /**
+   * Reporte RESUMIDO del libro mayor de caja: NO lista cada movimiento, solo el
+   * NETO por metodo de pago (ingresos - egresos = lo que debe haber en ese metodo,
+   * para el cuadre) + el neto de efectivo de gaveta. Misma fuente de datos
+   * (getLedgerEntriesForReport) y mismos filtros que el detallado. A4 vertical.
+   */
+  async generateLedgerSummaryReport(filters: {
+    cashRegisterId?: string; userId?: string; sessionId?: string;
+    from?: string; to?: string; methodIds?: string[];
+    sourceType?: string; currency?: string; onlyCash?: boolean;
+  }): Promise<Buffer> {
+    const { rows, summary, meta } = await this.cashService.getLedgerEntriesForReport(filters);
+
+    const config = await this.prisma.companyConfig.findFirst();
+    const company = config?.companyName || 'Trinity ERP';
+    const RIGHT = 555;
+
+    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+
+    // Encabezado (mismo estilo que el detallado)
+    doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
+    doc.fontSize(12).font('Helvetica-Bold').text('Libro mayor de caja — Resumen por método de pago', 40, 60);
+    doc.fontSize(9).font('Helvetica').fillColor('#334155');
+    const period = meta.from || meta.to ? `${meta.from || '...'}  a  ${meta.to || '...'}` : 'Todas las fechas';
+    const filtros: string[] = [`Periodo: ${period}`, `Caja: ${meta.registerName}`, `Cajero: ${meta.cashierName}`];
+    if (meta.methodNames.length) filtros.push(`Metodos: ${meta.methodNames.join(', ')}`);
+    if (meta.currency) filtros.push(`Moneda: ${meta.currency}`);
+    if (meta.onlyCash) filtros.push('Solo efectivo de gaveta');
+    doc.text(filtros.join('     '), 40, 80, { width: RIGHT - 40 });
+    doc.text(`Generado: ${this.dateTime(new Date())}`, 40, 96);
+    doc.fillColor('#000');
+    doc.moveTo(40, 112).lineTo(RIGHT, 112).stroke('#94a3b8');
+    let y = 120;
+
+    // Resumen arriba (idéntico al detallado)
+    doc.rect(40, y - 2, RIGHT - 40, 34).fill('#f1f5f9');
+    doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
+    doc.text(`Ingresos:  $${this.fmt(summary.inUsd)}  /  Bs ${this.fmt(summary.inBs)}`, 46, y + 2);
+    doc.text(`Egresos:  $${this.fmt(summary.outUsd)}  /  Bs ${this.fmt(summary.outBs)}`, 46, y + 14);
+    doc.text(`Neto:  $${this.fmt(summary.netUsd)}  /  Bs ${this.fmt(summary.netBs)}`, 320, y + 2, { width: RIGHT - 320 - 6, align: 'right' });
+    doc.text(`Neto efectivo gaveta:  $${this.fmt(summary.cashNetUsd)}  /  Bs ${this.fmt(summary.cashNetBs)}`, 320, y + 14, { width: RIGHT - 320 - 6, align: 'right' });
+    doc.fillColor('#000');
+    y += 44;
+
+    if (rows.length === 0) {
+      doc.fontSize(9).font('Helvetica').fillColor('#64748b').text('No hay movimientos en el libro mayor con los filtros aplicados.', 40, y);
+      return this.toBuffer(doc);
+    }
+
+    // Agrupar por METODO: ingresos, egresos y neto (junta ventas, vueltos, cobros/pagos,
+    // gastos, anticipos y manuales del mismo metodo). Neto = ingresos - egresos = cuadre.
+    const byMethod = new Map<string, { name: string; count: number; inUsd: number; outUsd: number; inBs: number; outBs: number }>();
+    for (const r of rows) {
+      const key = r.methodName || '—';
+      const g = byMethod.get(key) || { name: key, count: 0, inUsd: 0, outUsd: 0, inBs: 0, outBs: 0 };
+      g.count += 1;
+      if (r.direction === 'IN') { g.inUsd += r.amountUsd; g.inBs += r.amountBs; }
+      else { g.outUsd += r.amountUsd; g.outBs += r.amountBs; }
+      byMethod.set(key, g);
+    }
+    const groups = Array.from(byMethod.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Tabla: una fila por metodo (A4, area util 40..555)
+    const SUM_COLS = [
+      { label: 'Metodo de pago', x: 40, width: 150 },
+      { label: 'Movs', x: 192, width: 40, align: 'right' },
+      { label: 'Ingresos $', x: 236, width: 78, align: 'right' },
+      { label: 'Egresos $', x: 318, width: 78, align: 'right' },
+      { label: 'Neto $', x: 400, width: 70, align: 'right' },
+      { label: 'Neto Bs', x: 474, width: 81, align: 'right' },
+    ];
+
+    y = this.drawTableHeader(doc, y, SUM_COLS, RIGHT);
+    for (const g of groups) {
+      y = this.checkPage(doc, y, 24);
+      if (y === 40) y = this.drawTableHeader(doc, y, SUM_COLS, RIGHT);
+      const netU = g.inUsd - g.outUsd, netB = g.inBs - g.outBs;
+      y = this.drawRow(doc, y, SUM_COLS, [
+        g.name,
+        String(g.count),
+        `$${this.fmt(g.inUsd)}`,
+        g.outUsd > 0.001 ? `-$${this.fmt(g.outUsd)}` : '—',
+        `$${this.fmt(netU)}`,
+        this.fmt(netB),
+      ]);
+    }
+
+    // Total global (barra oscura), alineado a las columnas
+    y = this.checkPage(doc, y, 30);
+    y += 2;
+    doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
+    doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
+    doc.text(`TOTAL  (${summary.totalRows} movs)`, 46, y + 1, { width: 150, lineBreak: false });
+    doc.text(`$${this.fmt(summary.inUsd)}`, 236, y + 1, { width: 78, align: 'right' });
+    doc.text(summary.outUsd > 0.001 ? `-$${this.fmt(summary.outUsd)}` : '—', 318, y + 1, { width: 78, align: 'right' });
+    doc.text(`$${this.fmt(summary.netUsd)}`, 400, y + 1, { width: 70, align: 'right' });
+    doc.text(this.fmt(summary.netBs), 474, y + 1, { width: 81, align: 'right' });
+    doc.fillColor('#000');
+    y += 26;
+
+    return this.toBuffer(doc);
+  }
+
+  /**
    * Reporte RESUMIDO de movimientos de caja: NO lista cada movimiento, solo
    * totaliza cobros por metodo de pago (+ por caja) y el neto de los movimientos
    * manuales. Respeta los mismos filtros que la pantalla. Carta vertical.

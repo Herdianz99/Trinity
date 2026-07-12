@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, BookOpen, ArrowDownCircle, ArrowUpCircle,
-  Banknote, CreditCard, RotateCw, Filter, FileText,
+  Banknote, CreditCard, RotateCw, Filter, FileText, FileBarChart2,
 } from 'lucide-react';
 
 const fmt = (n: number) => (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -98,7 +98,7 @@ export default function CashLedgerEntriesPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [filterRegister, filterCashier, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash]);
 
-  const openReport = () => {
+  const reportParams = () => {
     const p = new URLSearchParams();
     if (filterRegister) p.set('cashRegisterId', filterRegister);
     if (filterCashier) p.set('userId', filterCashier);
@@ -108,8 +108,10 @@ export default function CashLedgerEntriesPage() {
     if (filterSource) p.set('sourceType', filterSource);
     if (filterCurrency) p.set('currency', filterCurrency);
     if (onlyCash) p.set('onlyCash', 'true');
-    window.open(`/api/proxy/cash/ledger-entries-report?${p.toString()}`, '_blank');
+    return p.toString();
   };
+  const openReport = () => window.open(`/api/proxy/cash/ledger-entries-report?${reportParams()}`, '_blank');
+  const openSummary = () => window.open(`/api/proxy/cash/ledger-entries-summary?${reportParams()}`, '_blank');
 
   const toggleMethod = (id: string) =>
     setFilterMethodIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
@@ -134,6 +136,9 @@ export default function CashLedgerEntriesPage() {
           <h1 className="text-2xl font-bold text-white">Libro mayor de caja</h1>
           <p className="text-slate-400 text-sm">Tabla madre: todos los movimientos que tocan caja, de cualquier origen y método de pago</p>
         </div>
+        <button onClick={openSummary} className="btn-secondary flex items-center gap-2 text-sm" title="Resumen en PDF: solo el neto por método de pago (respeta los filtros)">
+          <FileBarChart2 size={16} /> Resumen
+        </button>
         <button onClick={openReport} className="btn-secondary flex items-center gap-2 text-sm" title="Reporte detallado en PDF (respeta los filtros)">
           <FileText size={16} /> Reporte detallado
         </button>

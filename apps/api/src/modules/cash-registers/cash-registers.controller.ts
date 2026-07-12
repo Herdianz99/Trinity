@@ -166,6 +166,33 @@ export class CashRegistersController {
     res.end(buffer);
   }
 
+  /** PDF RESUMIDO del libro mayor: solo el neto por metodo de pago, respetando filtros */
+  @Get('cash/ledger-entries-summary')
+  async getLedgerEntriesSummary(
+    @Res() res: Response,
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('currency') currency?: string,
+    @Query('onlyCash') onlyCash?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const buffer = await this.pdfService.generateLedgerSummaryReport({
+      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      sourceType, currency, onlyCash: onlyCash === 'true',
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="libro-mayor-resumen.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('cash-sessions/:id/payments')
   findSessionPayments(
     @Param('id') id: string,
