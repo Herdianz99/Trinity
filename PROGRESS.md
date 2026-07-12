@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 Fix timezone: KPIs de Devoluciones y Gastos del dashboard salían en 0 — 2026-07-12 (Session 70)
+
+Diego reportó que el dashboard marcaba **0 devoluciones** aunque el 11-jul se hicieron 7 (empresa grande). **Mismo bug de timezone que el de la tasa (arreglado el 11-jul), pero en otro consumidor.** Causa raíz común: `const docDate = new Date(dto.date)` — el front manda `dto.date` como `'YYYY-MM-DD'`; `new Date()` lo vuelve **medianoche UTC = 8 PM Caracas del día anterior**. El lookup de tasa ya se había arreglado (usa `caracasDateKey(dto.date)`), pero `docDate` se dejó igual porque para el libro fiscal/`yearToken` la fecha-calendario sale bien. Lo que no se vio: el **dashboard** filtra `documentDate` con `caracasDayStart/End` (semántica de timestamp), y ahí medianoche UTC cae en el día equivocado → la devolución se contaba en el día anterior y "hoy" daba 0.
+
+- **Auditoría del dashboard completo:** todas las demás queries filtran por `paidAt`/`createdAt` (timestamps reales del sistema) → correctas. El **mismo bug estaba en Gastos**: `Expense.date` (DateTime) se escribía con `new Date(dto.date)` y el dashboard lo filtra con `caracasDayStart/End` → el KPI de Gastos también subcontaba "hoy".
+- **Fix (write):** `docDate = caracasDayStart(dto.date)` en `credit-debit-notes.service` y `date: caracasDayStart(dto.date)` en los 3 create + el update de `expenses.service`. `caracasDayStart` ancla a medianoche de Caracas (04:00 UTC) = cae dentro del rango correcto del día **y** no cambia la fecha fiscal (mismo día-calendario). NO se tocó el `dueDate` del gasto a crédito (es date-only de CxP, va a medianoche UTC por convención). Typecheck API verde.
+- **Backfill en prod (ambas empresas):** `UPDATE ... SET date = date + interval '4 hours' WHERE date::time = '00:00:00'` (idempotente; solo toca las filas escritas con el bug; las mueve al mismo día-calendario). Grande: 21 NCV + 40 gastos. Chica: 7 NCV + 12 gastos. Verificado: las devoluciones del 11-jul en la grande ahora dan 7 ($317.40) en el rango del dashboard. Listas de IDs afectados guardadas en cada server (`backfill-{ncv,exp}-ids-<stamp>.txt`) como rollback exacto.
+- **PENDIENTE:** desplegar el código (lo hace Diego). Como el backfill se corrió antes del deploy, re-correr el mismo UPDATE idempotente después del deploy para barrer cualquier nota/gasto creado en el intervalo.
+
 ## 🚀 Deploy a producción: libro mayor de caja en AMBAS empresas — 2026-07-11
 
 Se desplegó todo el trabajo del libro mayor (Session 69) a las dos empresas (HEAD `8fce2a2`) y se reconstruyó el ledger histórico:

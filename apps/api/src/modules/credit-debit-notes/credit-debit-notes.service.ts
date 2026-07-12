@@ -163,7 +163,12 @@ export class CreditDebitNotesService {
     }
 
     // Fecha del documento (editable). Si no viene, hoy.
-    const docDate = dto.date ? new Date(dto.date) : new Date();
+    // OJO: pasar el STRING crudo 'YYYY-MM-DD' a caracasDayStart, NO new Date(dto.date):
+    // envolverlo en Date lo vuelve un instante (medianoche UTC = 8 PM del dia anterior en
+    // Caracas), y los reportes diarios que filtran documentDate con caracasDayStart/End
+    // (dashboard KPIs) lo contarian en el dia equivocado. caracasDayStart ancla a medianoche
+    // de Caracas (04:00 UTC), dentro del rango correcto y sin cambiar la fecha fiscal.
+    const docDate = dto.date ? caracasDayStart(dto.date) : new Date();
     // Tasa de cambio del dia del documento. OJO: hay que pasar el STRING crudo 'YYYY-MM-DD'
     // a caracasDateKey, NO new Date(dto.date): envolverlo en Date lo vuelve un instante
     // (medianoche UTC = 8 PM del dia anterior en Caracas) y tomaria la tasa del dia equivocado.

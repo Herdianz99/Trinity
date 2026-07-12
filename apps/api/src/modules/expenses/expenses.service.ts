@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
-import { caracasDateKey } from '../../common/timezone';
+import { caracasDateKey, caracasDayStart } from '../../common/timezone';
 import { writeCashLedger } from '../../common/cash-ledger';
 
 @Injectable()
@@ -225,7 +225,10 @@ export class ExpensesService {
             amountUsd: amountUsd!,
             amountBs: amountBs!,
             exchangeRate: rateVal,
-            date: new Date(dto.date),
+            // caracasDayStart (medianoche Caracas, no new Date(dto.date)=medianoche UTC=8PM
+            // dia anterior): el dashboard filtra Expense.date con caracasDayStart/End y
+            // contaria el gasto en el dia equivocado. Mismo bug que documentDate en las NC.
+            date: caracasDayStart(dto.date),
             notes: dto.notes,
             isCredit: true,
             creditDays: dto.creditDays,
@@ -288,7 +291,7 @@ export class ExpensesService {
             amountUsd: amountUsd!,
             amountBs: amountBs!,
             exchangeRate: rateVal,
-            date: new Date(dto.date),
+            date: caracasDayStart(dto.date),
             notes: dto.notes,
             createdById: userId,
             cashSessionId: dto.cashSessionId,
@@ -338,7 +341,7 @@ export class ExpensesService {
         amountUsd: amountUsd!,
         amountBs: amountBs!,
         exchangeRate: rateVal,
-        date: new Date(dto.date),
+        date: caracasDayStart(dto.date),
         notes: dto.notes,
         createdById: userId,
       },
@@ -386,7 +389,7 @@ export class ExpensesService {
     if (dto.categoryId) updateData.categoryId = dto.categoryId;
     if (dto.description) updateData.description = dto.description;
     if (dto.reference !== undefined) updateData.reference = dto.reference;
-    if (dto.date) updateData.date = new Date(dto.date);
+    if (dto.date) updateData.date = caracasDayStart(dto.date);
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     // Recalcular montos/tasa si cambia alguno. Usa la tasa EDITADA o la que ya
