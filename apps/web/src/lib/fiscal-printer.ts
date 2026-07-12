@@ -214,7 +214,7 @@ export function buildFiscalCreditNoteCommands(
     const ivaType = item.ivaType || 'GENERAL';
     const prefix = IVA_DEVOLUTION[ivaType] || 'd1';
 
-    // unitPriceBs is base price in Bs (without IVA)
+    // unitPriceBs = precio base en Bs (SIN IVA, SIN descuento) — igual que la factura.
     const unitPriceBs = item.unitPriceBs || (item.unitPriceUsd * exchangeRate);
 
     const priceStr = formatFixed(unitPriceBs, 8, 2);
@@ -223,6 +223,13 @@ export function buildFiscalCreditNoteCommands(
     const name = item.productName || 'Producto';
 
     commands.push(`${prefix}${priceStr}${qtyStr}|${code}|${name}`);
+
+    // Descuento de línea, IGUAL que la factura (p-XXXX, 2 ent+2 dec): la NC queda como
+    // espejo exacto de la factura en la memoria fiscal (mismo precio + mismo descuento + mismo IVA).
+    const discountPct = item.discountPct || 0;
+    if (discountPct > 0) {
+      commands.push(`p-${formatFixed(discountPct, 2, 2)}`);
+    }
   }
 
   // ── 3. Subtotal ──

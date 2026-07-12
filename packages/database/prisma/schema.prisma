@@ -1612,6 +1612,7 @@ model CreditDebitNoteItem {
   quantity     Float
   unitPriceUsd Float
   unitPriceBs  Float
+  discountPct  Float           @default(0) // descuento de la línea en la venta (copia de InvoiceItem.discountPct)
   ivaType      IvaType
   ivaAmount    Float
   ivaAmountBs  Float

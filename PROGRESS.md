@@ -1,6 +1,18 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Nota de crédito = COPIA FIEL de la factura (precio, descuento, IVA y tasa) — 2026-07-12 (Session 70)
+
+Rework de fondo de la devolución (reemplaza el fix intermedio de más abajo). Problema real: la NC **reconstruía** los montos desde la base sumando el IVA, mientras la factura parte del precio con IVA y lo quita → generaba **diferencias de decimales**; y fiscalmente no quedaba como espejo de la factura. Ahora la NC **copia la línea de la factura**:
+
+- **Backend** (`credit-debit-notes.service`, NCV/NDV mercancía): la línea usa el **precio BASE** y el **descuento** de la factura; IVA y total se derivan del subtotal **sin redondear** (igual que la factura) y se redondea al final → sin deriva de decimales. **Tasa = la ORIGINAL de la factura** (`invoice.exchangeRate`), no la del día de la devolución → los Bs son espejo exacto (libro de ventas y máquina fiscal), y ya no falla si no hay tasa cargada para el día.
+- **Schema:** `CreditDebitNoteItem.discountPct` (migración `20260712170000_creditnoteitem_discountpct`, aditiva `IF NOT EXISTS` + `fix-schema.sql`).
+- **Máquina fiscal** (`lib/fiscal-printer.ts`): manda el **precio base + `p-{descuento}`** tras la línea `d{iva}` — idéntico a la factura (Diego confirmó que la HKA acepta `p-` en la devolución). Antes mandaba el precio ya descontado sin `p-`.
+- **PDF de la nota:** muestra el descuento junto al nombre (P.Unit base + desc → Total neto), como la factura.
+- **Verificado en local con data real de la grande:** devolución total (GENERAL) calza **al céntimo en Bs** con la factura (ej. BOTAS: totalBs 10825.96 = 10825.96; tasa 721.3456; `unitPriceBs` 11665.9 idéntico; fiscal `d1…11665.90 + p-2000`); parcial (1 de 3) y exento (IVA 0) correctos. Typecheck API+web verde.
+- **Notas viejas:** se dejan como están (decisión de Diego). **Pendiente:** desplegar (migración + código) a ambas empresas.
+
 ## 🐛 Fix: la devolución ignoraba el descuento del artículo (reembolsaba de más) — 2026-07-12 (Session 70)
+> ⬆️ SUPERADO por el rework de arriba (NC = copia fiel). Se conserva como historia.
 
 Al devolver un artículo, la nota de crédito reembolsaba el **precio pleno**, ignorando el `discountPct` que tenía la línea en la venta. Caso real (nota NE-NC-26-00000011, grande): taladro con 19.95% de descuento → el cliente pagó **$55.15** pero la nota devolvió **$68.89** ($13.74 de más). Causa: se usaba `unitPriceWithoutIva` (precio base **sin descuento**) sin aplicar `× (1 − discountPct/100)`.
 

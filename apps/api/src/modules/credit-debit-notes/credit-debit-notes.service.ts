@@ -169,15 +169,22 @@ export class CreditDebitNotesService {
     // (dashboard KPIs) lo contarian en el dia equivocado. caracasDayStart ancla a medianoche
     // de Caracas (04:00 UTC), dentro del rango correcto y sin cambiar la fecha fiscal.
     const docDate = dto.date ? caracasDayStart(dto.date) : new Date();
-    // Tasa de cambio del dia del documento. OJO: hay que pasar el STRING crudo 'YYYY-MM-DD'
-    // a caracasDateKey, NO new Date(dto.date): envolverlo en Date lo vuelve un instante
-    // (medianoche UTC = 8 PM del dia anterior en Caracas) y tomaria la tasa del dia equivocado.
-    const rateDay = caracasDateKey(dto.date || new Date());
-    const rateRecord = await this.prisma.exchangeRate.findFirst({
-      where: { date: rateDay },
-    });
-    if (!rateRecord) throw new BadRequestException('No hay tasa de cambio registrada para la fecha seleccionada');
-    const exchangeRate = rateRecord.rate;
+    // Tasa de cambio:
+    //  - Devolución de VENTA por mercancía (NCV/NDV): la NC es COPIA de la factura, así que
+    //    usa la tasa ORIGINAL de la factura (se asigna dentro de la rama) para que los Bs sean
+    //    espejo exacto (libro de ventas y máquina fiscal). No depende de la tasa del día de la
+    //    devolución → ya no falla si no hay tasa cargada para ese día.
+    //  - Manuales y compras (NCC/NDC): tasa del día del documento. OJO: pasar el STRING crudo
+    //    'YYYY-MM-DD' a caracasDateKey, no new Date(dto.date) (medianoche UTC = 8 PM del día
+    //    anterior en Caracas → tomaría la tasa del día equivocado).
+    const isSalesMerchandise = dto.origin === 'MERCHANDISE' && ['NCV', 'NDV'].includes(dto.type);
+    let exchangeRate = 0;
+    if (!isSalesMerchandise) {
+      const rateDay = caracasDateKey(dto.date || new Date());
+      const rateRecord = await this.prisma.exchangeRate.findFirst({ where: { date: rateDay } });
+      if (!rateRecord) throw new BadRequestException('No hay tasa de cambio registrada para la fecha seleccionada');
+      exchangeRate = rateRecord.rate;
+    }
 
     let subtotalUsd = 0;
     let ivaUsd = 0;
@@ -201,6 +208,9 @@ export class CreditDebitNotesService {
           include: { items: true },
         });
         if (!invoice) throw new NotFoundException('Factura no encontrada');
+
+        // Espejo de la factura: la NC usa la tasa ORIGINAL de la factura para los Bs.
+        exchangeRate = invoice.exchangeRate;
 
         // Fetch product codes for all items
         const productIds = invoice.items.map((i) => i.productId);
@@ -250,23 +260,32 @@ export class CreditDebitNotesService {
             throw new BadRequestException(`Solo puedes devolver ${availableQty} unidades de '${invItem.productName}'. Ya se devolvieron ${returnedQty}`);
           }
 
-          // Precio base SIN descuento (unitPriceWithoutIva es el precio de referencia, sin descuento).
-          const baseUnitPriceUsd = invItem.unitPriceWithoutIva || invItem.unitPrice / (1 + this.getIvaRate(invItem.ivaType));
-          // Se devuelve lo que el cliente REALMENTE pagó: aplicar el descuento que tenía la línea
-          // en la venta (discountPct). Antes se devolvía el precio pleno, reembolsando de más.
-          const unitPriceUsd = this.round2(baseUnitPriceUsd * (1 - (invItem.discountPct || 0) / 100));
-          const lineSubtotal = this.round2(unitPriceUsd * dtoItem.quantity);
-          const lineIva = this.round2(lineSubtotal * this.getIvaRate(invItem.ivaType));
-          const lineTotal = this.round2(lineSubtotal + lineIva);
+          // La NC es COPIA de la línea de factura: mismo precio BASE (sin IVA, sin descuento) y
+          // mismo descuento. Los montos netos se calculan IGUAL que la factura
+          // (base × (1−desc) × cant, luego +IVA), redondeando al FINAL → sin la deriva de
+          // decimales que había al reconstruir. Bs con la tasa ORIGINAL de la factura
+          // (unitPriceBs de la factura) → la NC es espejo exacto en el libro y en la máquina.
+          const ivaRate = this.getIvaRate(invItem.ivaType);
+          const discountPct = invItem.discountPct || 0;
+          const discountMul = 1 - discountPct / 100;
+          const baseUnitPriceUsd = invItem.unitPriceWithoutIva || invItem.unitPrice / (1 + ivaRate);
+          const baseUnitPriceBs = invItem.unitPriceBs || this.round2(baseUnitPriceUsd * exchangeRate);
 
-          const unitPriceBs = this.round2(unitPriceUsd * exchangeRate);
-          const lineIvaBs = this.round2(lineIva * exchangeRate);
-          const lineTotalBs = this.round2(lineTotal * exchangeRate);
+          // IVA y total se derivan del subtotal SIN redondear (igual que la factura), y solo
+          // se redondea al final → la NC calza al céntimo con la línea de la factura.
+          const rawSubtotalUsd = baseUnitPriceUsd * discountMul * dtoItem.quantity;
+          const lineSubtotal = this.round2(rawSubtotalUsd);
+          const lineIva = this.round2(rawSubtotalUsd * ivaRate);
+          const lineTotal = this.round2(rawSubtotalUsd * (1 + ivaRate));
+          const rawSubtotalBs = baseUnitPriceBs * discountMul * dtoItem.quantity;
+          const lineSubtotalBs = this.round2(rawSubtotalBs);
+          const lineIvaBs = this.round2(rawSubtotalBs * ivaRate);
+          const lineTotalBs = this.round2(rawSubtotalBs * (1 + ivaRate));
 
           subtotalUsd += lineSubtotal;
           ivaUsd += lineIva;
           totalUsd += lineTotal;
-          subtotalBs += this.round2(lineSubtotal * exchangeRate);
+          subtotalBs += lineSubtotalBs;
           ivaBs += lineIvaBs;
           totalBs += lineTotalBs;
 
@@ -275,8 +294,10 @@ export class CreditDebitNotesService {
             productName: invItem.productName,
             productCode: productCodeMap.get(invItem.productId) || '',
             quantity: dtoItem.quantity,
-            unitPriceUsd: this.round2(unitPriceUsd),
-            unitPriceBs,
+            // Precio BASE (pre-descuento), igual que InvoiceItem → el fiscal manda base + p-desc
+            unitPriceUsd: this.round2(baseUnitPriceUsd),
+            unitPriceBs: this.round2(baseUnitPriceBs),
+            discountPct,
             ivaType: invItem.ivaType,
             ivaAmount: lineIva,
             ivaAmountBs: lineIvaBs,

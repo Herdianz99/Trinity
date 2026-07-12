@@ -2407,3 +2407,6 @@ CREATE INDEX IF NOT EXISTS "CashLedgerEntry_sourceType_sourceId_idx" ON "CashLed
 DO $$ BEGIN ALTER TABLE "CashLedgerEntry" ADD CONSTRAINT "CashLedgerEntry_cashSessionId_fkey" FOREIGN KEY ("cashSessionId") REFERENCES "CashSession"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "CashLedgerEntry" ADD CONSTRAINT "CashLedgerEntry_methodId_fkey" FOREIGN KEY ("methodId") REFERENCES "PaymentMethod"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "useCashLedger" BOOLEAN NOT NULL DEFAULT false;
+
+-- NC como copia de la factura: guardar el descuento de la línea para el fiscal (p-) y el PDF.
+ALTER TABLE "CreditDebitNoteItem" ADD COLUMN IF NOT EXISTS "discountPct" DOUBLE PRECISION NOT NULL DEFAULT 0;
