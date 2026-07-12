@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 Fix: KPIs de Cashea/Crediagro en 0 y /receivables/platforms vacío (mayúsculas) — 2026-07-12 (Session 70)
+
+Los KPIs "Cashea/Crediagro pendiente" en `/receivables` salían en 0 y la página `/receivables/platforms` no listaba nada, aunque hay 168 CxC de CASHEA ($10.356) y 3 de CREDIAGRO PENDIENTES. Causa: **desajuste de mayúsculas**. El `platformName` de la CxC = nombre del método de pago (`'CASHEA'`/`'CREDIAGRO'` en mayúsculas), pero el frontend comparaba contra `'Cashea'`/`'Crediagro'` (capitalizado) → `.find()` fallaba y el filtro del listado (`platformName=Cashea`) no matcheaba nada.
+
+- **Backend** (`receivables.service.buildWhere`): filtro `platformName` ahora **case-insensitive** (`{ equals, mode: 'insensitive' }`) → el listado de `/platforms` con `platformName=Cashea` matchea `CASHEA`. Verificado: 168 / 3.
+- **Frontend** `/receivables`: los KPIs matchean `byPlatform` con `.toLowerCase().includes('cashea'|'crediagro')`.
+- **Frontend** `/receivables/platforms`: el bucketeo del summary a las pestañas Cashea/Crediagro también es case-insensitive.
+- El API `/receivables/summary` ya devolvía bien `byPlatform` (CASHEA/CREDIAGRO); era solo el consumo en el front + el filtro. Typecheck API+web verde.
+
 ## 🧾 Reporte PDF de Cuentas por Cobrar AGRUPADO POR CLIENTE — 2026-07-12 (Session 70)
 
 `GET /receivables/report/pdf` ahora agrupa por cliente para ubicar las cuentas más fácil. Cada cliente es un **encabezado de grupo** (barra con nombre + RIF + N° de docs + subtotal Monto/Saldo); debajo, sus documentos ordenados por vencimiento (Documento · Vence · Monto · Saldo · Estado). Grupos ordenados alfabéticamente; total global al pie con conteo de clientes. Respeta los mismos filtros (vencidas, próximas a vencer, estado, tipo, fechas). En page-break se repite la barra del cliente ("— cont.") y el encabezado de columnas. Probado con data real de la grande (213 CxC en 16 clientes → PDF válido). Typecheck API verde.

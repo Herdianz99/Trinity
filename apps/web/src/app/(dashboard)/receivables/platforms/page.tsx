@@ -95,10 +95,11 @@ export default function PlatformsPage() {
         Cashea: { pending: 0, paid: 0 },
         Crediagro: { pending: 0, paid: 0 },
       };
+      // Match case-insensitive: byPlatform trae el nombre del método (p.ej. 'CASHEA'),
+      // mientras las pestañas son 'Cashea'/'Crediagro'.
       for (const p of data.byPlatform || []) {
-        if (totals[p.platformName]) {
-          totals[p.platformName].pending = p.totalUsd;
-        }
+        const key = Object.keys(totals).find(k => (p.platformName || '').toLowerCase().includes(k.toLowerCase()));
+        if (key) totals[key].pending = p.totalUsd;
       }
       // Get total paid per platform
       for (const platform of ['Cashea', 'Crediagro']) {

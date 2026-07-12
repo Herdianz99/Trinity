@@ -250,7 +250,9 @@ export class ReceivablesService {
       where.customerId = query.customerId;
     }
     if (query.platformName) {
-      where.platformName = query.platformName;
+      // Case-insensitive: el nombre de la plataforma = nombre del método de pago, que puede
+      // estar en mayúsculas ('CASHEA') mientras el front filtra por 'Cashea'.
+      where.platformName = { equals: query.platformName, mode: 'insensitive' };
     }
     if (query.reference) {
       // Busqueda libre: Ref/Orden + nombre o cedula del cliente (directo o via factura).

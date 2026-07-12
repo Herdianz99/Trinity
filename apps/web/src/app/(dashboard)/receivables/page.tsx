@@ -322,8 +322,9 @@ export default function ReceivablesPage() {
     }
   }
 
-  const casheaPending = summary?.byPlatform?.find(p => p.platformName === 'Cashea')?.totalUsd || 0;
-  const crediagroPending = summary?.byPlatform?.find(p => p.platformName === 'Crediagro')?.totalUsd || 0;
+  // Match case-insensitive: el platformName viene del método de pago (p.ej. 'CASHEA'), no 'Cashea'.
+  const casheaPending = summary?.byPlatform?.find(p => p.platformName?.toLowerCase().includes('cashea'))?.totalUsd || 0;
+  const crediagroPending = summary?.byPlatform?.find(p => p.platformName?.toLowerCase().includes('crediagro'))?.totalUsd || 0;
 
   return (
     <div className="p-6 space-y-6">
