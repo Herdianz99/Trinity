@@ -21,6 +21,7 @@ interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   unitPriceWithoutIva: number;
+  discountPct?: number;
   ivaType: string;
   ivaAmount: number;
   totalUsd: number;
@@ -202,7 +203,9 @@ export default function NewCreditDebitNotePage() {
       parentDoc.items.forEach((item) => {
         const qty = selectedItems[item.id] || 0;
         if (qty > 0) {
-          const unitPrice = item.unitPriceWithoutIva || item.unitPrice / (1 + getIvaRate(item.ivaType));
+          // Se devuelve lo que el cliente pagó: aplicar el descuento de la línea (igual que el backend).
+          const baseUnitPrice = item.unitPriceWithoutIva || item.unitPrice / (1 + getIvaRate(item.ivaType));
+          const unitPrice = baseUnitPrice * (1 - (item.discountPct || 0) / 100);
           const lineSubtotal = unitPrice * qty;
           const lineIva = lineSubtotal * getIvaRate(item.ivaType);
           subtotal += lineSubtotal;
@@ -405,7 +408,9 @@ export default function NewCreditDebitNotePage() {
             <tbody>
               {isSale && parentDoc?.items?.map((item) => {
                 const qty = selectedItems[item.id] || 0;
-                const unitPrice = item.unitPriceWithoutIva || item.unitPrice / (1 + getIvaRate(item.ivaType));
+                // Precio con el descuento de la línea aplicado = lo que se le devuelve al cliente.
+                const baseUnitPrice = item.unitPriceWithoutIva || item.unitPrice / (1 + getIvaRate(item.ivaType));
+                const unitPrice = baseUnitPrice * (1 - (item.discountPct || 0) / 100);
                 const lineTotal = unitPrice * qty * (1 + getIvaRate(item.ivaType));
                 const summary = returnSummary.find((s) => s.itemId === item.id);
                 const availableQty = summary ? summary.availableQty : item.quantity;

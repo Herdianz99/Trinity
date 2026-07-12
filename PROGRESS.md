@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 Fix: la devolución ignoraba el descuento del artículo (reembolsaba de más) — 2026-07-12 (Session 70)
+
+Al devolver un artículo, la nota de crédito reembolsaba el **precio pleno**, ignorando el `discountPct` que tenía la línea en la venta. Caso real (nota NE-NC-26-00000011, grande): taladro con 19.95% de descuento → el cliente pagó **$55.15** pero la nota devolvió **$68.89** ($13.74 de más). Causa: se usaba `unitPriceWithoutIva` (precio base **sin descuento**) sin aplicar `× (1 − discountPct/100)`.
+
+- **Fix backend** (`credit-debit-notes.service`, rama MERCHANDISE NCV/NDV): `unitPriceUsd = round2(base × (1 − discountPct/100))` = lo que el cliente pagó. Subtotal/IVA/totales y el `CreditDebitNoteItem` se derivan de ahí (queda consistente; el item guarda el precio neto).
+- **Fix frontend** (`credit-debit-notes/new`): mismo `× (1 − discountPct/100)` en la vista previa (`merchandiseTotal`) y en el total por fila; se agregó `discountPct` a la interfaz `ReturnItem` (el dato ya venía del API).
+- **Decisión (Diego):** las notas viejas mal calculadas se **dejan como están** (ya se acreditaron; solo se corrige de aquí en adelante).
+- **Verificado en runtime** (local): ítem base $5.06 + 20% desc. → devolución `unitPriceUsd 4.05 / total $4.70` (sin el fix daba $5.87). Typecheck API+web verde.
+
 ## 🧾 Resumen PDF del libro mayor de caja (solo neto por método) — 2026-07-12 (Session 70)
 
 Segundo PDF del libro mayor, hermano del detallado que ya existía: NO lista cada movimiento, solo el **neto por método de pago** (ingresos − egresos = lo que debe haber en ese método, para el cuadre) + el neto de efectivo de gaveta. Mismo patrón/estilo que el detallado y misma fuente de datos.
@@ -35,7 +44,6 @@ El filtro por fecha del Libro mayor mostraba de más: un pago de BINANCE de ayer
 - Validado local: `ledger.createdAt` == `invoice.paidAt` (ms de diferencia).
 
 ## ⏳ Pendientes
-- **Devolución: aplicar el descuento del artículo al devolverlo.** Al hacer la devolución/nota de crédito, el monto a devolver debe considerar el descuento que tenía el artículo en la venta (no devolver el precio pleno). Diego lo explica bien mañana (2026-07-12).
 - (Opcional) Recalcular el snapshot de sesiones ya cerradas con arqueo malo — solo afecta reportes históricos, no la operación con el ledger hacia adelante.
 - (Opcional) "Resumen PDF" del libro mayor (solo totales por método) como el de `/cash/movements`.
 

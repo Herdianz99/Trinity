@@ -250,7 +250,11 @@ export class CreditDebitNotesService {
             throw new BadRequestException(`Solo puedes devolver ${availableQty} unidades de '${invItem.productName}'. Ya se devolvieron ${returnedQty}`);
           }
 
-          const unitPriceUsd = invItem.unitPriceWithoutIva || invItem.unitPrice / (1 + this.getIvaRate(invItem.ivaType));
+          // Precio base SIN descuento (unitPriceWithoutIva es el precio de referencia, sin descuento).
+          const baseUnitPriceUsd = invItem.unitPriceWithoutIva || invItem.unitPrice / (1 + this.getIvaRate(invItem.ivaType));
+          // Se devuelve lo que el cliente REALMENTE pagó: aplicar el descuento que tenía la línea
+          // en la venta (discountPct). Antes se devolvía el precio pleno, reembolsando de más.
+          const unitPriceUsd = this.round2(baseUnitPriceUsd * (1 - (invItem.discountPct || 0) / 100));
           const lineSubtotal = this.round2(unitPriceUsd * dtoItem.quantity);
           const lineIva = this.round2(lineSubtotal * this.getIvaRate(invItem.ivaType));
           const lineTotal = this.round2(lineSubtotal + lineIva);
