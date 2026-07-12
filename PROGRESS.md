@@ -1,5 +1,9 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Reporte PDF de Cuentas por Cobrar AGRUPADO POR CLIENTE — 2026-07-12 (Session 70)
+
+`GET /receivables/report/pdf` ahora agrupa por cliente para ubicar las cuentas más fácil. Cada cliente es un **encabezado de grupo** (barra con nombre + RIF + N° de docs + subtotal Monto/Saldo); debajo, sus documentos ordenados por vencimiento (Documento · Vence · Monto · Saldo · Estado). Grupos ordenados alfabéticamente; total global al pie con conteo de clientes. Respeta los mismos filtros (vencidas, próximas a vencer, estado, tipo, fechas). En page-break se repite la barra del cliente ("— cont.") y el encabezado de columnas. Probado con data real de la grande (213 CxC en 16 clientes → PDF válido). Typecheck API verde.
+
 ## 🧾 Nota de crédito = COPIA FIEL de la factura (precio, descuento, IVA y tasa) — 2026-07-12 (Session 70)
 
 Rework de fondo de la devolución (reemplaza el fix intermedio de más abajo). Problema real: la NC **reconstruía** los montos desde la base sumando el IVA, mientras la factura parte del precio con IVA y lo quita → generaba **diferencias de decimales**; y fiscalmente no quedaba como espejo de la factura. Ahora la NC **copia la línea de la factura**:

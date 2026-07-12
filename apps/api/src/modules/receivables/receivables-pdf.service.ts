@@ -11,14 +11,14 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-// Carta horizontal, area util 40..752
+// Carta horizontal, area util 40..752. El CLIENTE va como encabezado de grupo (no columna),
+// para ubicar las cuentas por cliente mas facil.
 const COLS = [
-  { label: 'Cliente / Plataforma', x: 40, width: 210 },
-  { label: 'Documento', x: 254, width: 110 },
-  { label: 'Vence', x: 368, width: 80 },
-  { label: 'Monto USD', x: 452, width: 90, align: 'right' as const },
-  { label: 'Saldo USD', x: 546, width: 90, align: 'right' as const },
-  { label: 'Estado', x: 640, width: 112 },
+  { label: 'Documento', x: 40, width: 190 },
+  { label: 'Vence', x: 240, width: 95 },
+  { label: 'Monto USD', x: 345, width: 120, align: 'right' as const },
+  { label: 'Saldo USD', x: 475, width: 120, align: 'right' as const },
+  { label: 'Estado', x: 605, width: 147 },
 ];
 const RIGHT = 752;
 
@@ -52,6 +52,20 @@ export class ReceivablesPdfService {
     return y + 4;
   }
 
+  // Barra de encabezado de un cliente: nombre + RIF + (N docs) y subtotal Monto/Saldo.
+  private drawClientBar(
+    doc: any, y: number, name: string, rif: string | null,
+    count: number, monto: number, saldo: number, cont = false,
+  ): number {
+    doc.rect(40, y - 2, RIGHT - 40, 15).fill('#e2e8f0');
+    doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold');
+    const title = `${name}${rif ? '  ·  ' + rif : ''}  (${count})${cont ? '  — cont.' : ''}`;
+    doc.text(title, 46, y + 1, { width: 430, lineBreak: false, ellipsis: true });
+    doc.text(`Monto $${this.fmt(monto)}     Saldo $${this.fmt(saldo)}`, RIGHT - 266, y + 1, { width: 260, align: 'right', lineBreak: false });
+    doc.fillColor('#000');
+    return y + 18;
+  }
+
   async generate(query: QueryReceivablesDto): Promise<Buffer> {
     const rows = await this.receivablesService.findAllForReport(query);
     const config = await this.prisma.companyConfig.findFirst();
@@ -79,46 +93,70 @@ export class ReceivablesPdfService {
     doc.moveTo(40, 110).lineTo(RIGHT, 110).stroke('#94a3b8');
     let y = 118;
 
-    y = this.drawHeaderRow(doc, y);
+    // Agrupar por cliente (o plataforma si no tiene cliente). Los grupos se ordenan
+    // alfabeticamente por nombre; dentro de cada cliente, por vencimiento (ya viene ordenado).
+    const groups = new Map<string, { name: string; rif: string | null; rows: any[] }>();
+    for (const r of rows as any[]) {
+      const name = r.customer?.name || r.platformName || 'Sin cliente';
+      const key = r.customer?.id ? `c:${r.customer.id}` : `p:${name}`;
+      if (!groups.has(key)) groups.set(key, { name, rif: r.customer?.rif || null, rows: [] });
+      groups.get(key)!.rows.push(r);
+    }
+    const ordered = Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
     let totalMonto = 0;
     let totalSaldo = 0;
-    doc.fontSize(8).font('Helvetica');
-    for (const r of rows as any[]) {
-      if (y > doc.page.height - doc.page.margins.bottom - 24) {
+
+    for (const g of ordered) {
+      let gMonto = 0, gSaldo = 0;
+      for (const r of g.rows) { gMonto += r.amountUsd || 0; gSaldo += r.balanceUsd || 0; }
+
+      // Espacio para la barra del cliente + encabezado de columnas + al menos 1 fila.
+      if (y > doc.page.height - doc.page.margins.bottom - 60) {
         doc.addPage();
         y = 40;
-        y = this.drawHeaderRow(doc, y);
-        doc.fontSize(8).font('Helvetica');
       }
-      totalMonto += r.amountUsd || 0;
-      totalSaldo += r.balanceUsd || 0;
-      const nombre = r.customer?.name || r.platformName || '—';
-      const documento = r.number || r.invoice?.number || r.documentNumber || '—';
-      const values = [
-        nombre,
-        String(documento),
-        this.dueDate(r.dueDate),
-        `$${this.fmt(r.amountUsd)}`,
-        `$${this.fmt(r.balanceUsd)}`,
-        STATUS_LABELS[r.status] || r.status,
-      ];
-      doc.fillColor('#1e293b');
-      for (let i = 0; i < COLS.length; i++) {
-        const opts: any = { width: COLS[i].width, lineBreak: false, ellipsis: true };
-        if (COLS[i].align === 'right') opts.align = 'right';
-        doc.text(values[i] || '', COLS[i].x, y, opts);
+      y = this.drawClientBar(doc, y, g.name, g.rif, g.rows.length, gMonto, gSaldo);
+      y = this.drawHeaderRow(doc, y);
+
+      doc.fontSize(8).font('Helvetica');
+      for (const r of g.rows) {
+        if (y > doc.page.height - doc.page.margins.bottom - 24) {
+          doc.addPage();
+          y = 40;
+          y = this.drawClientBar(doc, y, g.name, g.rif, g.rows.length, gMonto, gSaldo, true);
+          y = this.drawHeaderRow(doc, y);
+          doc.fontSize(8).font('Helvetica');
+        }
+        totalMonto += r.amountUsd || 0;
+        totalSaldo += r.balanceUsd || 0;
+        const documento = r.number || r.invoice?.number || r.documentNumber || '—';
+        const values = [
+          String(documento),
+          this.dueDate(r.dueDate),
+          `$${this.fmt(r.amountUsd)}`,
+          `$${this.fmt(r.balanceUsd)}`,
+          STATUS_LABELS[r.status] || r.status,
+        ];
+        doc.fillColor('#1e293b');
+        for (let i = 0; i < COLS.length; i++) {
+          const opts: any = { width: COLS[i].width, lineBreak: false, ellipsis: true };
+          if (COLS[i].align === 'right') opts.align = 'right';
+          doc.text(values[i] || '', COLS[i].x, y, opts);
+        }
+        doc.fillColor('#000');
+        y += 13;
       }
-      doc.fillColor('#000');
-      y += 13;
+      y += 5; // separacion entre clientes
     }
 
-    // Totales
+    // Total global
+    if (y > doc.page.height - doc.page.margins.bottom - 24) { doc.addPage(); y = 40; }
     doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#cbd5e1');
     y += 4;
     doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
     doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
-    doc.text('TOTAL', 46, y + 1, { width: 300, lineBreak: false });
+    doc.text(`TOTAL  (${ordered.length} clientes)`, 46, y + 1, { width: 300, lineBreak: false });
     doc.text(`Monto: $${this.fmt(totalMonto)}     Saldo: $${this.fmt(totalSaldo)}`, 402, y + 1, { width: RIGHT - 402 - 6, align: 'right' });
     doc.fillColor('#000');
 
