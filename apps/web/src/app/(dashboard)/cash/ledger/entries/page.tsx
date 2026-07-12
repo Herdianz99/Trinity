@@ -9,6 +9,14 @@ import {
 
 const fmt = (n: number) => (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Fecha de hoy 'YYYY-MM-DD' en hora local del navegador (= Caracas para el usuario).
+// NO usar toISOString(): de noche cae en el dia siguiente (UTC).
+const todayStr = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 // Etiquetas humanas para el origen de cada fila del ledger
 const SOURCE_LABELS: Record<string, string> = {
   SALE_PAYMENT: 'Venta',
@@ -41,8 +49,8 @@ export default function CashLedgerEntriesPage() {
 
   const [filterRegister, setFilterRegister] = useState('');
   const [filterCashier, setFilterCashier] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
+  const [filterFrom, setFilterFrom] = useState(todayStr());
+  const [filterTo, setFilterTo] = useState(todayStr());
   const [filterMethodIds, setFilterMethodIds] = useState<string[]>([]);
   const [filterSource, setFilterSource] = useState('');
   const [filterCurrency, setFilterCurrency] = useState('');
@@ -118,7 +126,7 @@ export default function CashLedgerEntriesPage() {
 
   const hasFilters = filterRegister || filterCashier || filterFrom || filterTo || filterMethodIds.length || filterSource || filterCurrency || onlyCash;
   const clearFilters = () => {
-    setFilterRegister(''); setFilterCashier(''); setFilterFrom(''); setFilterTo('');
+    setFilterRegister(''); setFilterCashier(''); setFilterFrom(todayStr()); setFilterTo(todayStr());
     setFilterMethodIds([]); setFilterSource(''); setFilterCurrency(''); setOnlyCash(false);
   };
 

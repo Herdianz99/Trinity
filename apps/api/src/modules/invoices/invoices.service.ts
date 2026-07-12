@@ -1359,6 +1359,9 @@ export class InvoicesService {
     const methodMap = new Map(methods.map((m) => [m.id, m]));
 
     await this.prisma.$transaction(async (tx) => {
+      // Filas del libro mayor ya reasignadas en esta transaccion (para no mover dos veces
+      // la misma cuando hay pagos identicos del mismo metodo en la factura).
+      const claimedLedgerIds: string[] = [];
       for (const edit of dto.payments) {
         const payment = invoice.payments.find((p) => p.id === edit.paymentId);
         if (!payment) {
@@ -1390,6 +1393,30 @@ export class InvoicesService {
               : {}),
           },
         });
+
+        // El libro mayor de caja (CashLedgerEntry) congelo el metodo con que se cobro.
+        // Si aqui se corrige el metodo del pago, hay que mover tambien su fila del ledger
+        // o el reporte por metodo queda desincronizado (el pago aparece bajo el metodo viejo).
+        // sameType garantiza que isCash/isDivisa NO cambian -> solo se mueve el methodId.
+        if (edit.methodId !== cur.id) {
+          const ledgerRow = await tx.cashLedgerEntry.findFirst({
+            where: {
+              sourceType: 'SALE_PAYMENT',
+              sourceId: id,
+              methodId: cur.id,
+              amountUsd: payment.amountUsd,
+              amountBs: payment.amountBs,
+              ...(claimedLedgerIds.length ? { id: { notIn: claimedLedgerIds } } : {}),
+            },
+          });
+          if (ledgerRow) {
+            await tx.cashLedgerEntry.update({
+              where: { id: ledgerRow.id },
+              data: { methodId: edit.methodId },
+            });
+            claimedLedgerIds.push(ledgerRow.id);
+          }
+        }
       }
     });
 

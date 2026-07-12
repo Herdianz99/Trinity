@@ -7,6 +7,14 @@ const fmtUsd = (n: number) => `$${(n || 0).toLocaleString('es-VE', { minimumFrac
 const fmtBs = (n: number) => `Bs ${(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDateTime = (d: string) => new Date(d).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+// Fecha de hoy 'YYYY-MM-DD' en hora local del navegador (= Caracas para el usuario).
+// NO usar toISOString(): de noche cae en el dia siguiente (UTC).
+const todayStr = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 // Clave estable por fila para el marcado visual de corroboracion (solo visual, sin backend):
 // se arma con los datos y no con el indice, asi sobrevive paginar/refetch.
 const rowKey = (r: any) => `${r.kind}|${r.sessionId || ''}|${r.date}|${r.methodId || ''}|${r.amountUsd}|${r.amountBs}|${r.invoiceNumber || r.receiptNumber || r.concept || ''}`;
@@ -19,8 +27,8 @@ export default function CashMovementsPage() {
   // Filtros
   const [filterRegister, setFilterRegister] = useState('');
   const [filterCashier, setFilterCashier] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
+  const [filterFrom, setFilterFrom] = useState(todayStr());
+  const [filterTo, setFilterTo] = useState(todayStr());
   const [filterMethodIds, setFilterMethodIds] = useState<string[]>([]);
 
   // Datos
@@ -104,7 +112,7 @@ export default function CashMovementsPage() {
   };
 
   const clearFilters = () => {
-    setFilterRegister(''); setFilterCashier(''); setFilterFrom(''); setFilterTo(''); setFilterMethodIds([]);
+    setFilterRegister(''); setFilterCashier(''); setFilterFrom(todayStr()); setFilterTo(todayStr()); setFilterMethodIds([]);
   };
 
   const hasFilters = filterRegister || filterCashier || filterFrom || filterTo || filterMethodIds.length > 0;

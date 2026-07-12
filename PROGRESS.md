@@ -9,11 +9,14 @@ Todo en `main`, sin desplegar. Deploy: `ssh root@<server> "cd /opt/Trinity && gi
 3. `bec2bb4` — **Nota de crédito = copia fiel de la factura** (precio base + descuento + IVA + tasa original). **Trae migración** `20260712170000_creditnoteitem_discountpct` (aditiva; `deploy.sh` la aplica; `fix-schema.sql` de respaldo).
 4. `e3bf08f` — Reporte PDF de Cuentas por Cobrar agrupado por cliente.
 5. `9409de2` — fix KPIs Cashea/Crediagro en 0 + `/receivables/platforms` vacío (case-insensitive).
+6. **Fix libro mayor: editar el método de un pago no movía la fila del `CashLedgerEntry`** → el reporte por método quedaba desincronizado (el pago aparecía bajo el método viejo). `updatePaymentMethods` ahora mueve también la fila del ledger en la misma transacción (`sameType` garantiza que `isCash`/`isDivisa` no cambian → solo se mueve el `methodId`). Descubierto por Diego comparando `/cash/movements` vs `/cash/ledger/entries` (grande, hoy: VTA-098/099/100).
+7. **`/cash/movements` y `/cash/ledger/entries` abren con la fecha de HOY** por defecto (helper `todayStr()` con hora local del navegador; "Limpiar" restablece a hoy).
 
 **Post-deploy pendientes:**
 - Re-correr el **backfill idempotente** del dashboard (`UPDATE ... SET <campo> = <campo> + interval '4 hours' WHERE <campo>::time='00:00:00'` sobre `CreditDebitNote.documentDate` y `Expense.date`) en ambas empresas, para barrer lo creado entre el backfill previo y el deploy. Ver memoria `fix-dashboard-devoluciones-gastos-tz`.
 - Verificar la migración `discountPct` aplicada (`\d "CreditDebitNoteItem"`).
 - **Prueba física** de la NC en la máquina fiscal (que la HKA acepte `d{iva}` + `p-{desc}` y quede como espejo de la factura).
+- **Reparar las 3 filas del ledger desincronizadas en la GRANDE** (solo la grande; la chica no tiene): `UPDATE "CashLedgerEntry" le SET "methodId"=p."methodId" FROM "Payment" p WHERE le."sourceType"='SALE_PAYMENT' AND le."sourceId"=p."invoiceId" AND le."amountUsd"=p."amountUsd" AND le."amountBs"=p."amountBs" AND le."methodId"<>p."methodId";` → debe decir `UPDATE 3`.
 
 ## 🐛 Fix: KPIs de Cashea/Crediagro en 0 y /receivables/platforms vacío (mayúsculas) — 2026-07-12 (Session 70)
 
