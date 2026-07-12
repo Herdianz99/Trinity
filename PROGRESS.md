@@ -1,5 +1,20 @@
 ﻿# Trinity ERP — Progreso
 
+## 🚀 PENDIENTE DE DEPLOY — Session 70 (2026-07-12) — a AMBAS empresas
+
+Todo en `main`, sin desplegar. Deploy: `ssh root@<server> "cd /opt/Trinity && git pull origin main && bash deploy.sh"` en cada server.
+
+1. `57f145e` — fix timezone: KPIs Devoluciones/Gastos del dashboard salían en 0 (`documentDate`/`Expense.date` a medianoche UTC).
+2. `b3f8c39` — Resumen PDF del libro mayor de caja (solo neto por método).
+3. `bec2bb4` — **Nota de crédito = copia fiel de la factura** (precio base + descuento + IVA + tasa original). **Trae migración** `20260712170000_creditnoteitem_discountpct` (aditiva; `deploy.sh` la aplica; `fix-schema.sql` de respaldo).
+4. `e3bf08f` — Reporte PDF de Cuentas por Cobrar agrupado por cliente.
+5. `9409de2` — fix KPIs Cashea/Crediagro en 0 + `/receivables/platforms` vacío (case-insensitive).
+
+**Post-deploy pendientes:**
+- Re-correr el **backfill idempotente** del dashboard (`UPDATE ... SET <campo> = <campo> + interval '4 hours' WHERE <campo>::time='00:00:00'` sobre `CreditDebitNote.documentDate` y `Expense.date`) en ambas empresas, para barrer lo creado entre el backfill previo y el deploy. Ver memoria `fix-dashboard-devoluciones-gastos-tz`.
+- Verificar la migración `discountPct` aplicada (`\d "CreditDebitNoteItem"`).
+- **Prueba física** de la NC en la máquina fiscal (que la HKA acepte `d{iva}` + `p-{desc}` y quede como espejo de la factura).
+
 ## 🐛 Fix: KPIs de Cashea/Crediagro en 0 y /receivables/platforms vacío (mayúsculas) — 2026-07-12 (Session 70)
 
 Los KPIs "Cashea/Crediagro pendiente" en `/receivables` salían en 0 y la página `/receivables/platforms` no listaba nada, aunque hay 168 CxC de CASHEA ($10.356) y 3 de CREDIAGRO PENDIENTES. Causa: **desajuste de mayúsculas**. El `platformName` de la CxC = nombre del método de pago (`'CASHEA'`/`'CREDIAGRO'` en mayúsculas), pero el frontend comparaba contra `'Cashea'`/`'Crediagro'` (capitalizado) → `.find()` fallaba y el filtro del listado (`platformName=Cashea`) no matcheaba nada.
