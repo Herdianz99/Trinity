@@ -556,44 +556,21 @@ export class ReceiptsService {
             reference: payment.reference || null,
           },
         });
-        if (dto.cashSessionId && !isReintegro) {
+        if (dto.cashSessionId) {
+          // UNA fila del ledger por CADA metodo, tal como se metio en caja (sin agrupar).
+          // Reintegro (cobro negativo) = sale dinero -> OUT; cobro normal -> IN; pago -> OUT.
           const m = rMethodMap.get(payment.methodId);
+          const isOut = isReintegro || receipt.type !== 'COLLECTION';
           await writeCashLedger(tx, {
             cashSessionId: dto.cashSessionId,
-            direction: receipt.type === 'COLLECTION' ? 'IN' : 'OUT',
+            direction: isOut ? 'OUT' : 'IN',
             amountUsd: payment.amountUsd, amountBs: payment.amountBs,
             currency: m?.isDivisa ? 'USD' : 'BS', exchangeRate: postRate,
             methodId: payment.methodId, isCash: !!m?.isCash,
-            sourceType: receipt.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
+            sourceType: isReintegro ? 'REINTEGRO' : (receipt.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT'),
             sourceId: receipt.id, reason: `Recibo ${receipt.number}`, createdById: userId,
           });
         }
-      }
-
-      // Recibo de cobro con total negativo = salida de dinero (reintegro de retención, etc.)
-      if (isReintegro && dto.cashSessionId) {
-        const reintUsd = Math.abs(this.round2(receipt.totalUsd));
-        const reintBs = Math.abs(this.round2(receipt.totalUsd * postRate));
-        await tx.cashMovement.create({
-          data: {
-            cashSessionId: dto.cashSessionId,
-            type: 'EXPENSE',
-            amountUsd: reintUsd,
-            amountBs: reintBs,
-            exchangeRate: postRate,
-            currency: 'USD',
-            reason: `Reintegro recibo ${receipt.number}`,
-            isManual: false,
-            createdById: userId,
-          },
-        });
-        await writeCashLedger(tx, {
-          cashSessionId: dto.cashSessionId,
-          direction: 'OUT',
-          amountUsd: reintUsd, amountBs: reintBs, currency: 'USD', exchangeRate: postRate,
-          isCash: true, sourceType: 'REINTEGRO', sourceId: receipt.id,
-          reason: `Reintegro recibo ${receipt.number}`, createdById: userId,
-        });
       }
 
       // Update receipt to POSTED

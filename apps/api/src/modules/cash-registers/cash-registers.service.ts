@@ -659,6 +659,9 @@ export class CashRegistersService {
       // 2) Movimientos de caja (gastos, anticipos, manuales, reintegros)
       const movs = await tx.cashMovement.findMany({ where: { cashSessionId: sessionId } });
       for (const mv of movs as any[]) {
+        // Los reintegros ahora se reconstruyen por metodo desde el recibo (seccion 3),
+        // no desde su cashMovement agrupado (compat con reintegros historicos).
+        if (!mv.expenseId && typeof mv.reason === 'string' && mv.reason.startsWith('Reintegro')) continue;
         await writeCashLedger(tx, {
           cashSessionId: sessionId, direction: mv.type === 'INCOME' ? 'IN' : 'OUT',
           amountUsd: mv.amountUsd, amountBs: mv.amountBs, currency: mv.currency,
@@ -669,20 +672,21 @@ export class CashRegistersService {
         });
       }
 
-      // 3) Recibos CxC/CxP posteados a la sesion (excluye reintegros: ya van via cashMovement)
+      // 3) Recibos CxC/CxP posteados a la sesion. Una fila por metodo (incluye reintegros: OUT).
       const receipts = await tx.receipt.findMany({
         where: { cashSessionId: sessionId, status: 'POSTED' },
         include: { payments: { include: { method: true } } },
       });
       for (const rc of receipts as any[]) {
-        if (rc.type === 'COLLECTION' && rc.totalUsd < -0.01) continue;
+        const rcReintegro = rc.type === 'COLLECTION' && rc.totalUsd < -0.01;
         for (const rp of rc.payments) {
           const m = rp.method;
+          const isOut = rcReintegro || rc.type !== 'COLLECTION';
           await writeCashLedger(tx, {
-            cashSessionId: sessionId, direction: rc.type === 'COLLECTION' ? 'IN' : 'OUT',
+            cashSessionId: sessionId, direction: isOut ? 'OUT' : 'IN',
             amountUsd: rp.amountUsd, amountBs: rp.amountBs, currency: m?.isDivisa ? 'USD' : 'BS',
             exchangeRate: rp.exchangeRate, methodId: rp.methodId, isCash: !!m?.isCash,
-            sourceType: rc.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
+            sourceType: rcReintegro ? 'REINTEGRO' : (rc.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT'),
             sourceId: rc.id, reason: `Recibo ${rc.number} (backfill)`, createdById: session.openedById,
             occurredAt: (rp as any).createdAt || rc.postedAt || rc.createdAt,
           });

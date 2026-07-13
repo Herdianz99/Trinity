@@ -441,6 +441,12 @@ export class ExpensesService {
         }
         if (Object.keys(mvData).length > 0) {
           await tx.cashMovement.update({ where: { id: expense.cashMovement.id }, data: mvData });
+          // Sincronizar tambien la fila del libro mayor (tabla madre), para que no quede
+          // con el monto/razon viejos al editar el gasto.
+          await tx.cashLedgerEntry.updateMany({
+            where: { sourceType: 'EXPENSE', sourceId: id },
+            data: mvData,
+          });
         }
       }
 

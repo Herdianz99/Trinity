@@ -45,6 +45,16 @@ Mejora de UX sobre la validación de factura duplicada por proveedor: antes solo
 - **Frontend** `purchases/new`: `useEffect` con debounce 400ms sobre `[supplierId, supplierInvoiceNumber]` → aviso ámbar (borde + texto) bajo el campo N° factura: "Ya cargaste esta factura para este proveedor (cargada como FC-000XX)". No bloqueante (el backend igual rechaza al guardar).
 - Verificado contra data local: existente → `duplicate:true` (FC-00008); inexistente → `duplicate:false`. Typecheck API+web verde. Sin cambios de schema.
 
+## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — libro mayor de caja: reintegro por método (no agrupado)
+
+Regla del libro mayor (`CashLedgerEntry`, tabla madre): **una fila por cada línea de pago, con su `methodId`/`isCash` reales, sin agrupar** (como `StockMovement`). Auditoría de los 7 servicios que escriben caja → el único con el bug era el **reintegro** (recibo de cobro con total negativo): en vez de una fila por método, escribía **UNA fila agrupada** con `methodId=null`, `isCash=true` y `currency='USD'` hardcodeados. Por eso no se veía "P.V BANESCO F" en el ledger.
+
+- **Fix** `receipts.service.ts`: el loop de pagos escribe una fila `OUT` por método también para reintegro (`payment.methodId`, `isCash` real, moneda real, `sourceType='REINTEGRO'`); eliminado el bloque agrupado (ya no crea `cashMovement` ni fila única — queda igual que un recibo normal, que nunca creó `cashMovement`).
+- **Fix** `cash-registers.service.ts` (backfill): reconstruye reintegros por método desde el recibo (sección 3) y **salta** los `cashMovement` de reintegro (sección 2) para no duplicar.
+- **Fix** `expenses.service.ts`: al editar un gasto, sincroniza también la fila del `CashLedgerEntry` (antes solo el `cashMovement`).
+- **Fix de datos (grande, ya aplicado):** RCB-0013 y RCB-0020 (los 2 reintegros con asiento agrupado en el ledger) reemplazados por filas por método; sus `cashMovement` de reintegro borrados. Los 6 reintegros viejos (sin ledger) los reconstruye el backfill corregido.
+- Resto de flujos (ventas/POS incl. vuelto, recibos normales, gastos, anticipos, movimientos manuales) ya cumplían la regla. Typecheck API verde, sin cambios de schema.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:
