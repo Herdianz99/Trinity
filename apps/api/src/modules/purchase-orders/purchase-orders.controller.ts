@@ -40,6 +40,15 @@ export class PurchaseOrdersController {
     return this.service.getReorderSuggestions();
   }
 
+  @Get('check-duplicate')
+  checkDuplicate(
+    @Query('supplierId') supplierId: string,
+    @Query('invoiceNumber') invoiceNumber: string,
+    @Query('excludeId') excludeId?: string,
+  ) {
+    return this.service.checkDuplicateInvoice(supplierId, invoiceNumber, excludeId);
+  }
+
   @Get()
   findAll(
     @Query('supplierId') supplierId?: string,

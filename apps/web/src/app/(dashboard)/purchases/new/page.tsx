@@ -11,6 +11,7 @@ import {
   X,
   Plus,
   Pencil,
+  AlertTriangle,
 } from 'lucide-react';
 import SupplierFormModal from '@/components/supplier-form-modal';
 import ProductFormModal from '@/components/product-form-modal';
@@ -135,6 +136,7 @@ export default function NewPurchaseBillPage() {
   const [receivedDate, setReceivedDate] = useState(todayStr());
   const [supplierControlNumber, setSupplierControlNumber] = useState('');
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [dupInvoice, setDupInvoice] = useState<{ number: string } | null>(null);
   const [isFiscal, setIsFiscal] = useState(true);
   const [serieId, setSerieId] = useState('');
   const [isCredit, setIsCredit] = useState(false);
@@ -268,6 +270,23 @@ export default function NewPurchaseBillPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplierId]);
+
+  // Aviso TEMPRANO de factura duplicada: dispara al elegir proveedor o escribir el N. de
+  // factura (con debounce), para no hacer cargar toda la factura y descubrir el duplicado al guardar.
+  useEffect(() => {
+    const inv = supplierInvoiceNumber.trim();
+    if (!supplierId || !inv) { setDupInvoice(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/purchases/check-duplicate?supplierId=${encodeURIComponent(supplierId)}&invoiceNumber=${encodeURIComponent(inv)}`);
+        if (res.ok) {
+          const d = await res.json();
+          setDupInvoice(d?.duplicate ? { number: d.number } : null);
+        }
+      } catch { /* ignore */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [supplierId, supplierInvoiceNumber]);
 
   // ---- Supplier filtering ----
   const filteredSuppliers = useMemo(() => {
@@ -702,9 +721,15 @@ export default function NewPurchaseBillPage() {
                 type="text"
                 value={supplierInvoiceNumber}
                 onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                className="input-field !py-1 text-sm"
+                className={`input-field !py-1 text-sm ${dupInvoice ? '!border-amber-500/70' : ''}`}
                 placeholder="Numero..."
               />
+              {dupInvoice && (
+                <p className="mt-0.5 text-[10px] text-amber-400 flex items-start gap-1">
+                  <AlertTriangle size={11} className="flex-shrink-0 mt-px" />
+                  <span>Ya cargaste esta factura para este proveedor (cargada como {dupInvoice.number}). Verifica antes de continuar.</span>
+                </p>
+              )}
             </div>
           </div>
 

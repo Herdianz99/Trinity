@@ -37,6 +37,14 @@ Los buscadores type-ahead de inventario mostraban campos distintos (unos categor
 - **Conteos** (`count/[id]`) se dejó como está: es una tabla con filtros/checkboxes (otra UI), no un dropdown.
 - Verificado: typecheck web verde; endpoint devuelve `supplierRef` + `stock` con data real. Sin cambios de backend ni schema.
 
+## ⚠️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — aviso TEMPRANO de factura de compra duplicada
+
+Mejora de UX sobre la validación de factura duplicada por proveedor: antes solo saltaba al **Guardar** (el usuario cargaba toda la factura y perdía el tiempo). Ahora avisa **al elegir proveedor o escribir el N° de factura**.
+
+- **Backend** `purchase-orders`: nuevo endpoint liviano `GET /purchases/check-duplicate?supplierId=&invoiceNumber=&excludeId=` → `{ duplicate, id, number, status }`, sin crear nada. Refactor: `findDuplicateInvoice()` compartido alimenta el chequeo Y el `assertInvoiceNotDuplicated` que sigue **bloqueando en create()/update()** (red de seguridad).
+- **Frontend** `purchases/new`: `useEffect` con debounce 400ms sobre `[supplierId, supplierInvoiceNumber]` → aviso ámbar (borde + texto) bajo el campo N° factura: "Ya cargaste esta factura para este proveedor (cargada como FC-000XX)". No bloqueante (el backend igual rechaza al guardar).
+- Verificado contra data local: existente → `duplicate:true` (FC-00008); inexistente → `duplicate:false`. Typecheck API+web verde. Sin cambios de schema.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

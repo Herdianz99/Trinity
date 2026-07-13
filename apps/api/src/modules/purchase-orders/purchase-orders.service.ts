@@ -307,28 +307,48 @@ export class PurchaseOrdersService {
    * Lanza si ya existe otra factura de compra (no cancelada) con el mismo
    * numero de factura del proveedor. `excludeId` omite la propia factura al editar.
    */
-  private async assertInvoiceNotDuplicated(
+  private async findDuplicateInvoice(
     supplierId: string | undefined,
     supplierInvoiceNumber: string | null | undefined,
     excludeId?: string,
   ) {
     const invoiceNumber = supplierInvoiceNumber?.trim();
-    if (!supplierId || !invoiceNumber) return;
+    if (!supplierId || !invoiceNumber) return null;
 
-    const dup = await this.prisma.purchaseOrder.findFirst({
+    return this.prisma.purchaseOrder.findFirst({
       where: {
         supplierId,
         supplierInvoiceNumber: invoiceNumber,
         status: { not: 'CANCELLED' },
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
-      select: { number: true, createdAt: true },
+      select: { id: true, number: true, status: true, createdAt: true },
     });
+  }
+
+  private async assertInvoiceNotDuplicated(
+    supplierId: string | undefined,
+    supplierInvoiceNumber: string | null | undefined,
+    excludeId?: string,
+  ) {
+    const dup = await this.findDuplicateInvoice(supplierId, supplierInvoiceNumber, excludeId);
     if (dup) {
       throw new BadRequestException(
-        `Ya existe la factura N° ${invoiceNumber} para este proveedor (cargada como ${dup.number}). Verifique antes de volver a cargarla.`,
+        `Ya existe la factura N° ${supplierInvoiceNumber!.trim()} para este proveedor (cargada como ${dup.number}). Verifique antes de volver a cargarla.`,
       );
     }
+  }
+
+  /** Chequeo liviano para el frontend: avisar duplicado al escribir, sin crear nada. */
+  async checkDuplicateInvoice(
+    supplierId: string,
+    invoiceNumber: string,
+    excludeId?: string,
+  ) {
+    const dup = await this.findDuplicateInvoice(supplierId, invoiceNumber, excludeId);
+    return dup
+      ? { duplicate: true, id: dup.id, number: dup.number, status: dup.status }
+      : { duplicate: false };
   }
 
   async create(dto: CreatePurchaseOrderDto, userId: string) {
