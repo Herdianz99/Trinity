@@ -8,6 +8,7 @@ import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { IvaType, PurchaseStatus } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
+import { nextRetentionSeq, formatRetentionNumber } from '../../common/retention-number';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -302,12 +303,43 @@ export class PurchaseOrdersService {
     },
   };
 
+  /**
+   * Lanza si ya existe otra factura de compra (no cancelada) con el mismo
+   * numero de factura del proveedor. `excludeId` omite la propia factura al editar.
+   */
+  private async assertInvoiceNotDuplicated(
+    supplierId: string | undefined,
+    supplierInvoiceNumber: string | null | undefined,
+    excludeId?: string,
+  ) {
+    const invoiceNumber = supplierInvoiceNumber?.trim();
+    if (!supplierId || !invoiceNumber) return;
+
+    const dup = await this.prisma.purchaseOrder.findFirst({
+      where: {
+        supplierId,
+        supplierInvoiceNumber: invoiceNumber,
+        status: { not: 'CANCELLED' },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { number: true, createdAt: true },
+    });
+    if (dup) {
+      throw new BadRequestException(
+        `Ya existe la factura N° ${invoiceNumber} para este proveedor (cargada como ${dup.number}). Verifique antes de volver a cargarla.`,
+      );
+    }
+  }
+
   async create(dto: CreatePurchaseOrderDto, userId: string) {
     const currency = dto.currency || 'USD';
     const rate = dto.exchangeRate || (await this.getTodayRate()) || 1;
     const surchargeUsd = dto.surchargeUsd || 0;
     const surchargeDistribution = dto.surchargeDistribution || 'PROPORTIONAL';
     const discountGlobalPct = dto.discountGlobalPct || 0;
+
+    // Evitar cargar dos veces la misma factura del mismo proveedor
+    await this.assertInvoiceNotDuplicated(dto.supplierId, dto.supplierInvoiceNumber);
 
     return this.prisma.$transaction(async (tx) => {
       const { purchaseNumber, number } = await this.generatePurchaseNumber(tx);
@@ -486,6 +518,13 @@ export class PurchaseOrdersService {
     if (order.status !== 'PENDING') {
       throw new BadRequestException('Solo se pueden editar facturas en estado PENDIENTE');
     }
+
+    // Evitar que la edicion deje dos facturas iguales del mismo proveedor
+    await this.assertInvoiceNotDuplicated(
+      dto.supplierId || order.supplierId,
+      dto.supplierInvoiceNumber !== undefined ? dto.supplierInvoiceNumber : order.supplierInvoiceNumber,
+      id,
+    );
 
     const updateData: any = {};
     if (dto.supplierId) updateData.supplierId = dto.supplierId;
@@ -834,11 +873,10 @@ export class PurchaseOrdersService {
         const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
         const retBs = round2(retUsd * exchangeRate);
 
-        // Generate number: YYYYMM + 8-digit sequence
-        const now = new Date();
-        const prefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const seq = config.retentionNextNumber || 1;
-        const number = `${prefix}${String(seq).padStart(8, '0')}`;
+        // Numero auto-sanable: evita colision si el contador quedo por detras de
+        // un numero ya emitido (ver common/retention-number.ts)
+        const seq = await nextRetentionSeq(tx);
+        const number = formatRetentionNumber(seq);
 
         await tx.ivaRetention.create({
           data: {
@@ -871,12 +909,10 @@ export class PurchaseOrdersService {
         const taxBaseUsd = round2(order.totalUsd - order.totalIvaUsd);
         const taxBaseBs = round2(order.totalBs - order.totalIvaBs);
 
-        // Generate YYYYMM + 8-digit global sequence from CompanyConfig.retentionNextNumber
-        const now = new Date();
-        const retPrefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const cfgRow = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
-        const retSeq = cfgRow?.retentionNextNumber || 1;
-        const retNumber = `${retPrefix}${String(retSeq).padStart(8, '0')}`;
+        // Numero auto-sanable: evita colision si el contador quedo por detras de
+        // un numero ya emitido (ver common/retention-number.ts)
+        const retSeq = await nextRetentionSeq(tx);
+        const retNumber = formatRetentionNumber(retSeq);
 
         await tx.retentionVoucher.create({
           data: {

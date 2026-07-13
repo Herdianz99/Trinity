@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { QueryPayablesDto } from './dto/query-payables.dto';
 import { CreatePayableDto } from './dto/create-payable.dto';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { nextRetentionSeq, formatRetentionNumber } from '../../common/retention-number';
 
 @Injectable()
 export class PayablesService {
@@ -236,11 +237,10 @@ export class PayablesService {
         const retAmountUsd = Math.round(totalIvaUsd * (retPct / 100) * 100) / 100;
         const retAmountBs = Math.round(totalIvaBs * (retPct / 100) * 100) / 100;
 
-        // Generate retention number: YYYYMM + padded seq
-        const retNextNum = (config as any)?.retentionNextNumber || 1;
-        const now = new Date();
-        const yyyymm = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-        const retNumber = `${yyyymm}${retNextNum.toString().padStart(8, '0')}`;
+        // Numero de retencion auto-sanable: evita colision si el contador quedo por
+        // detras de un numero ya emitido (ver common/retention-number.ts)
+        const retNextNum = await nextRetentionSeq(tx);
+        const retNumber = formatRetentionNumber(retNextNum);
 
         await tx.companyConfig.update({
           where: { id: 'singleton' },

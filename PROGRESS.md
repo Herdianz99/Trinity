@@ -1,5 +1,19 @@
 ﻿# Trinity ERP — Progreso
 
+## 🐛 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — correlativo retención + factura duplicada
+
+Origen: en la **grande** no se podían procesar facturas ni crear CxP con retención. Diego creía que era por costo manual + recargo; **falso positivo**.
+
+**Diagnóstico real (por logs del server):** el bloqueo era `PrismaClientKnownRequestError: Unique constraint failed on the fields: (number)` en `retentionVoucher.create`/`ivaRetention.create`. `IvaRetention` y `RetentionVoucher` son tablas distintas (cada una con UNIQUE sobre `number`) pero **comparten** el contador `CompanyConfig.retentionNextNumber` (formato `YYYYMM`+8díg). El contador quedó **por detrás** de un número ya emitido → regeneraba un `number` existente → colisión → rollback → contador nunca avanza (bucle). Nada que ver con costo manual/recargo (esas facturas eran fiscales de FEBECA con IVA, por eso disparaban la retención).
+
+**Fix de datos ya aplicado en la grande (en vivo):** `retentionNextNumber = GREATEST(contador, max(IvaRetention), max(RetentionVoucher)) + 1` → quedó en **1358**. Producción destrabada al instante. Ver memoria `correlativo-retencion-desync`.
+
+**Fix de código (por desplegar, sin migración):**
+1. **Correlativo auto-sanable** — nuevo `apps/api/src/common/retention-number.ts` con `nextRetentionSeq(tx)` = `max(contador, max usado en ambas tablas)+1` + `formatRetentionNumber()`. Usado en `purchase-orders.service.ts` (bloques IvaRetention y RetentionVoucher de `process()`) y `payables.service.ts` (retención de CxP manual). Nunca vuelve a colisionar aunque el contador se desincronice.
+2. **Validación de factura duplicada por proveedor** (`purchase-orders.service.ts` → `assertInvoiceNotDuplicated()` en `create()` y `update()`): si ya existe otra factura no cancelada con el mismo `supplierInvoiceNumber` + `supplierId`, lanza `BadRequestException` "Ya existe la factura N° X para este proveedor (cargada como FC-000XX)". El front la muestra en el banner rojo inline existente (sin cambios de UI). Esto evita el recargo doble que obligó a borrar FC-00027 a mano.
+
+Typecheck API verde. **Aplica a AMBAS empresas** (mismo bug latente): tras deploy, correr el fix de datos del contador también en la chica si hiciera falta.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:
