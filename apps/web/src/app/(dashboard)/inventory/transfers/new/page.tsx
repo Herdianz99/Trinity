@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Search, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, X } from 'lucide-react';
+import ProductSearch from '@/components/product-search';
 
 interface Warehouse { id: string; name: string; }
 interface StockEntry { quantity: number; warehouse: { id: string }; }
@@ -22,13 +23,6 @@ export default function NewTransferPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // product search
-  const [text, setText] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [open, setOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => { document.title = 'Nueva Transferencia | Trinity ERP'; }, []);
   useEffect(() => {
     fetch('/api/proxy/warehouses').then(r => r.ok ? r.json() : []).then((d) => {
@@ -37,27 +31,8 @@ export default function NewTransferPage() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (text.length < 2) { setResults([]); setOpen(false); return; }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(text)}&limit=15`);
-        if (res.ok) { const d = await res.json(); setResults(d.data || []); setOpen(true); }
-      } catch { /* ignore */ } finally { setSearching(false); }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [text]);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-
   function addProduct(p: SearchResult) {
     setRows(prev => prev.some(r => r.productId === p.id) ? prev : [...prev, { productId: p.id, code: p.code, name: p.name, quantity: 1, stock: p.stock || [] }]);
-    setText(''); setResults([]); setOpen(false);
   }
   function setQty(productId: string, q: number) {
     setRows(prev => prev.map(r => r.productId === productId ? { ...r, quantity: q } : r));
@@ -120,31 +95,13 @@ export default function NewTransferPage() {
       </div>
 
       {/* Buscar producto */}
-      <div ref={ref} className="relative mb-4 max-w-xl">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-        <input type="text" placeholder="Buscar producto para agregar..." value={text} onChange={(e) => setText(e.target.value)}
-          onFocus={() => { if (results.length) setOpen(true); }} className="input-field pl-9 !py-2.5 text-sm w-full" autoComplete="off" />
-        {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" size={16} />}
-        {open && results.length > 0 && (
-          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-72 overflow-y-auto">
-            {results.map(p => {
-              const added = rows.some(r => r.productId === p.id);
-              return (
-                <button key={p.id} onClick={() => !added && addProduct(p)} disabled={added}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm border-b border-slate-700/30 last:border-0 ${added ? 'opacity-40 cursor-default' : 'hover:bg-slate-700/50 cursor-pointer'}`}>
-                  <span className="font-mono text-xs text-green-400 w-20 flex-shrink-0">{p.code}</span>
-                  <span className="text-white flex-1 truncate">{p.name}</span>
-                  {fromWarehouseId && (() => {
-                    const ex = availableIn(p.stock, fromWarehouseId);
-                    return <span className={`text-xs flex-shrink-0 ${ex > 0 ? 'text-slate-400' : 'text-red-400'}`}>Exist: {ex}</span>;
-                  })()}
-                  {added ? <span className="text-xs text-green-500 flex-shrink-0">Agregado</span> : <Plus size={14} className="text-slate-400 flex-shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <ProductSearch
+        className="mb-4 max-w-xl"
+        warehouseId={fromWarehouseId || undefined}
+        isAdded={(p) => rows.some(r => r.productId === p.id)}
+        onSelect={(p) => addProduct(p as SearchResult)}
+        placeholder="Buscar producto para agregar..."
+      />
 
       {/* Items */}
       <div className="card overflow-hidden">

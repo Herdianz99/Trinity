@@ -25,6 +25,18 @@ Nuevo reporte/tab **Negativos** en `/inventory/alerts` para ver artículos con e
 - **Decisión:** los negativos son subconjunto de agotados (un ítem en -5 sale en ambos tabs, con badge "Negativo"). El tab NO filtra servicios (igual que los otros tabs). Sin cambios de schema, sin endpoints nuevos.
 - **Verificado en local** (restore de la grande) vía endpoint real: 29 negativos con la bandera correcta. En prod-live había 31 al momento de implementar. Typecheck API+web verde.
 
+## 🔎 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — buscador de artículos unificado (código + ref. prov. + nombre + existencia)
+
+Los buscadores type-ahead de inventario mostraban campos distintos (unos categoría, otros nada). Ahora un **componente compartido** los unifica para mostrar: **código, ref. proveedor, nombre y existencia**.
+
+- **Nuevo** `apps/web/src/components/product-search.tsx` (`<ProductSearch>`): input con debounce + dropdown. Cada fila = código (color por `accent`) + ref. proveedor + nombre + existencia. Props: `onSelect`, `warehouseId` (existencia de ese almacén; si no, total entre almacenes), `isAdded` (marca "Agregado"), `busy`, `accent`, `placeholder`. Pega a `/products?search=` (que ya devuelve `supplierRef` y `stock`).
+- **Adoptado en 3 pantallas** (antes cada una tenía su buscador inline; se eliminó la duplicación):
+  - `inventory/adjustments/[id]` — antes mostraba **categoría**, ahora ref. prov. + existencia del almacén del ajuste.
+  - `inventory/replacements/[id]` — el `ProductPicker` quedó como envoltorio delgado (mantiene el chip de seleccionado, accent rojo/verde); existencia total.
+  - `inventory/transfers/new` — ya mostraba existencia del origen; se le agregó la ref. proveedor.
+- **Conteos** (`count/[id]`) se dejó como está: es una tabla con filtros/checkboxes (otra UI), no un dropdown.
+- Verificado: typecheck web verde; endpoint devuelve `supplierRef` + `stock` con data real. Sin cambios de backend ni schema.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

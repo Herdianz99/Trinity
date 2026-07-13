@@ -6,6 +6,7 @@ import {
   ArrowLeft, Loader2, Search, Trash2, Check, Save,
   XCircle, Printer, ArrowRight, Plus, X,
 } from 'lucide-react';
+import ProductSearch from '@/components/product-search';
 
 // ── Types ──
 interface ProductLite { id: string; code: string; name: string; supplierRef?: string | null; costUsd: number; }
@@ -41,32 +42,6 @@ function ProductPicker({
   onSelect: (p: SearchResult | null) => void;
   accent: 'red' | 'green';
 }) {
-  const [text, setText] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (text.length < 2) { setResults([]); setOpen(false); return; }
-    const t = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(text)}&limit=15`);
-        if (res.ok) { const d = await res.json(); setResults(d.data || []); setOpen(true); }
-      } catch { /* ignore */ } finally { setLoading(false); }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [text]);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-
   const accentText = accent === 'red' ? 'text-red-400' : 'text-green-400';
 
   if (selected) {
@@ -82,40 +57,7 @@ function ProductPicker({
   }
 
   return (
-    <div ref={ref} className="relative">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
-        <input
-          type="text"
-          placeholder="Buscar producto..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onFocus={() => { if (results.length > 0) setOpen(true); }}
-          className="input-field pl-9 !py-2 text-sm w-full"
-          autoComplete="off"
-        />
-        {loading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" size={15} />}
-      </div>
-      {open && results.length > 0 && (
-        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-64 overflow-y-auto">
-          {results.map(p => (
-            <button
-              key={p.id}
-              onClick={() => { onSelect(p); setText(''); setResults([]); setOpen(false); }}
-              className="w-full flex items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0"
-            >
-              <span className={`font-mono text-xs ${accentText} w-20 flex-shrink-0`}>{p.code}</span>
-              <span className="text-white flex-1 truncate">{p.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {open && text.length >= 2 && !loading && results.length === 0 && (
-        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl p-3 text-center text-xs text-slate-500">
-          Sin resultados
-        </div>
-      )}
-    </div>
+    <ProductSearch accent={accent} onSelect={(p) => onSelect(p as SearchResult)} placeholder="Buscar producto..." />
   );
 }
 

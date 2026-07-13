@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import CustomerSearchSelect from '@/components/customer-search-select';
 import SupplierSearchSelect from '@/components/supplier-search-select';
+import ProductSearch from '@/components/product-search';
 
 // ── Types ──────────────────────────────────────────────
 interface AdjustmentItem {
@@ -182,43 +183,8 @@ export default function InventoryAdjustmentDetailPage() {
     return dueFromDays(days);
   }
 
-  // ── Click outside to close dropdown ────────────────
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   // ── Existing product IDs ──
   const existingProductIds = new Set(adjustment?.items.map(i => i.productId) ?? []);
-
-  // ── Search products ──
-  useEffect(() => {
-    if (!searchText || searchText.length < 2) {
-      setSearchResults([]);
-      setShowDropdown(false);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const params = new URLSearchParams({ search: searchText, limit: '15' });
-        const res = await fetch(`/api/proxy/products?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.data || []);
-          setShowDropdown(true);
-        }
-      } catch { /* ignore */ } finally {
-        setSearchLoading(false);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [searchText]);
 
   // ── Add single product ─────────────────────────────
   async function handleAddProduct(productId: string) {
@@ -482,54 +448,14 @@ export default function InventoryAdjustmentDetailPage() {
       {isDraft && (
         <>
           {/* Search bar */}
-          <div ref={searchRef} className="relative mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-              <input
-                type="text"
-                placeholder="Buscar producto por nombre o codigo..."
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
-                className="input-field pl-9 !py-3 text-sm w-full"
-                autoComplete="off"
-              />
-              {searchLoading && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" size={16} />
-              )}
-            </div>
-
-            {/* Search dropdown */}
-            {showDropdown && searchResults.length > 0 && (
-              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-72 overflow-y-auto">
-                {searchResults.map(p => {
-                  const alreadyAdded = existingProductIds.has(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => !alreadyAdded && handleAddProduct(p.id)}
-                      disabled={alreadyAdded || adding}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors border-b border-slate-700/30 last:border-0 ${
-                        alreadyAdded
-                          ? 'opacity-40 cursor-default'
-                          : 'hover:bg-slate-700/50 cursor-pointer'
-                      }`}
-                    >
-                      <span className="font-mono text-xs text-green-400 w-20 flex-shrink-0">{p.code}</span>
-                      <span className="text-white flex-1 truncate">{p.name}</span>
-                      <span className="text-xs text-slate-500 flex-shrink-0">{p.category?.name || ''}</span>
-                      {alreadyAdded && <span className="text-xs text-green-500 flex-shrink-0">Agregado</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {showDropdown && searchText.length >= 2 && !searchLoading && searchResults.length === 0 && (
-              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl p-4 text-center text-sm text-slate-500">
-                No se encontraron productos
-              </div>
-            )}
-          </div>
+          <ProductSearch
+            className="mb-4"
+            warehouseId={adjustment.warehouse.id}
+            isAdded={(p) => existingProductIds.has(p.id)}
+            busy={adding}
+            onSelect={(p) => handleAddProduct(p.id)}
+            placeholder="Buscar producto por nombre o codigo..."
+          />
 
           {/* Items table */}
           <div className="card overflow-hidden">
