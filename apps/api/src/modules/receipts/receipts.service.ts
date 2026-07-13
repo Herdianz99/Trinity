@@ -169,8 +169,9 @@ export class ReceiptsService {
         items.push({
           itemType: 'PAYABLE',
           payableId: item.payableId,
-          // N° de documento del PROVEEDOR (no el correlativo interno de Trinity)
-          description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.description || payable.purchaseOrder?.number || `CxP-${item.payableId.slice(-6)}`,
+          // N° de documento del PROVEEDOR primero; la "descripcion" (texto libre) solo como
+          // ultimo recurso para CxP de gasto que no tienen documento de proveedor.
+          description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || payable.description || `CxP-${item.payableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,

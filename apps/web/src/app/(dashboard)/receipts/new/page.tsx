@@ -312,7 +312,7 @@ export default function NewReceiptPage() {
             id: payable.id,
             documentType: 'CxP',
             payableId: payable.id,
-            description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || '-',
+            description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || payable.description || '-',
             date: payable.createdAt,
             amountUsd: payable.netPayableUsd,
             amountBsHistoric: payable.amountBs,
