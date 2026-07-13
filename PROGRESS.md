@@ -55,6 +55,16 @@ Regla del libro mayor (`CashLedgerEntry`, tabla madre): **una fila por cada lín
 - **Fix de datos (grande, ya aplicado):** RCB-0013 y RCB-0020 (los 2 reintegros con asiento agrupado en el ledger) reemplazados por filas por método; sus `cashMovement` de reintegro borrados. Los 6 reintegros viejos (sin ledger) los reconstruye el backfill corregido.
 - Resto de flujos (ventas/POS incl. vuelto, recibos normales, gastos, anticipos, movimientos manuales) ya cumplían la regla. Typecheck API verde, sin cambios de schema.
 
+## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — validación de CxP duplicada por proveedor
+
+Réplica de la validación de factura de compra duplicada, pero para **CxP** (`Payable`) y **solo contra CxP** (a propósito: una factura de compra y una CxP pueden compartir número).
+- **Backend** `payables`: `findDuplicatePayable()` (por `supplierId` + `documentNumber`, solo tabla `Payable`), assert en `create()`, y endpoint liviano `GET /payables/check-duplicate?supplierId=&documentNumber=`.
+- **Frontend** `payables/new`: `useEffect` con debounce 400ms → aviso ámbar bajo "Nro. Documento" al elegir proveedor o escribir el número. Verificado contra data local. Typecheck API+web verde, sin cambios de schema.
+
+## 🔎 HALLAZGO (pendiente de arreglar) — fechas de retención se muestran 1 día antes (UTC)
+
+Las fechas de retención (`issueDate` del comprobante, `invoiceDate` de la línea) se **guardan bien** a medianoche UTC (fecha fiscal elegida por el usuario), pero el `fmtDate` del frontend (`purchases/retentions/page.tsx:66`) las formatea con getters **locales** (`getDate/getMonth/getFullYear`) → en Caracas (UTC-4) se ven **un día antes** (ej. comprobante del 01/07 se muestra 30/06, cambiando de mes/período fiscal). Es 100% display, sin tocar datos. **Fix pendiente:** `fmtDate` con `getUTC*` o `toLocaleDateString('es-VE',{timeZone:'UTC'})`. Ojo: el mismo patrón `fmtDate` local está copiado en varias páginas y quizá en el PDF del comprobante y el libro de compras — revisar alcance.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Receipt, Loader2, Save, Search, X, Shield, Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, Receipt, Loader2, Save, Search, X, Shield, Plus, Pencil, AlertTriangle } from 'lucide-react';
 import SupplierFormModal from '@/components/supplier-form-modal';
 
 interface Supplier { id: string; name: string; rif: string | null; }
@@ -31,6 +31,7 @@ export default function NewPayablePage() {
   const [supplierModalMode, setSupplierModalMode] = useState<'create' | 'edit'>('create');
   const [serieId, setSerieId] = useState('');
   const [documentNumber, setDocumentNumber] = useState('');
+  const [dupDoc, setDupDoc] = useState<{ number: string | null } | null>(null);
   const [controlFiscal, setControlFiscal] = useState('');
   const [serie, setSerie] = useState(''); // serie alfanumerica de la factura del proveedor (ej. "A")
   const [currency, setCurrency] = useState<'USD' | 'BS'>('USD');
@@ -63,6 +64,20 @@ export default function NewPayablePage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Aviso TEMPRANO de CxP duplicada: dispara al elegir proveedor o escribir el N° de documento.
+  // Solo valida contra CxP (una factura de compra y una CxP pueden compartir numero).
+  useEffect(() => {
+    const doc = documentNumber.trim();
+    if (!supplierId || !doc) { setDupDoc(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/payables/check-duplicate?supplierId=${encodeURIComponent(supplierId)}&documentNumber=${encodeURIComponent(doc)}`);
+        if (res.ok) { const d = await res.json(); setDupDoc(d?.duplicate ? { number: d.number } : null); }
+      } catch { /* ignore */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [supplierId, documentNumber]);
 
   const supplierRef = useRef<HTMLDivElement>(null);
 
@@ -284,7 +299,13 @@ export default function NewPayablePage() {
                 <div>
                   <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Nro. Documento</label>
                   <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)}
-                    placeholder="FAC-00123" className="input-field !py-1 text-sm" />
+                    placeholder="FAC-00123" className={`input-field !py-1 text-sm ${dupDoc ? '!border-amber-500/70' : ''}`} />
+                  {dupDoc && (
+                    <p className="mt-0.5 text-[10px] text-amber-400 flex items-start gap-1">
+                      <AlertTriangle size={11} className="flex-shrink-0 mt-px" />
+                      <span>Ya existe una CxP con este documento para este proveedor ({dupDoc.number || 'sin N°'}).</span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-medium text-slate-400 mb-0.5">Control Fiscal</label>

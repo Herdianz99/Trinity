@@ -72,9 +72,38 @@ export class PayablesService {
     return { message: 'Cuenta por pagar eliminada' };
   }
 
+  // Busca otra CxP (NO facturas de compra) con el mismo N° de documento del proveedor.
+  // Solo contra Payable a proposito: una factura de compra y una CxP pueden compartir numero.
+  private async findDuplicatePayable(
+    supplierId: string | undefined,
+    documentNumber: string | null | undefined,
+    excludeId?: string,
+  ) {
+    const doc = documentNumber?.trim();
+    if (!supplierId || !doc) return null;
+    return this.prisma.payable.findFirst({
+      where: { supplierId, documentNumber: doc, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      select: { id: true, number: true, createdAt: true },
+    });
+  }
+
+  /** Chequeo liviano para el frontend: avisar CxP duplicada al escribir, sin crear nada. */
+  async checkDuplicateDocument(supplierId: string, documentNumber: string) {
+    const dup = await this.findDuplicatePayable(supplierId, documentNumber);
+    return dup ? { duplicate: true, id: dup.id, number: dup.number } : { duplicate: false };
+  }
+
   async create(dto: CreatePayableDto, userId?: string) {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
+
+    // Evitar cargar dos veces la misma CxP del mismo proveedor (solo contra CxP).
+    const dupDoc = await this.findDuplicatePayable(dto.supplierId, dto.documentNumber);
+    if (dupDoc) {
+      throw new BadRequestException(
+        `Ya existe una CxP con el documento N° ${dto.documentNumber!.trim()} para este proveedor (cargada como ${dupDoc.number || 'CxP'}). Verifique antes de volver a cargarla.`,
+      );
+    }
 
     // Tasa: la que envia el usuario (editable) tiene prioridad; si no, la registrada de hoy
     let r: number;

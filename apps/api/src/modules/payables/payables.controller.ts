@@ -35,6 +35,14 @@ export class PayablesController {
     return this.service.getNextNumber();
   }
 
+  @Get('check-duplicate')
+  checkDuplicate(
+    @Query('supplierId') supplierId: string,
+    @Query('documentNumber') documentNumber: string,
+  ) {
+    return this.service.checkDuplicateDocument(supplierId, documentNumber);
+  }
+
   @Get('summary')
   summary() {
     return this.service.summary();
