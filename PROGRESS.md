@@ -14,6 +14,17 @@ Origen: en la **grande** no se podían procesar facturas ni crear CxP con retenc
 
 Typecheck API verde. **Aplica a AMBAS empresas** (mismo bug latente): tras deploy, correr el fix de datos del contador también en la chica si hiciera falta.
 
+## 📦 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — tab "Negativos" en Alertas de Inventario
+
+Nuevo reporte/tab **Negativos** en `/inventory/alerts` para ver artículos con existencia total < 0 (sobrevendidos), aparte de Agotados/Bajo mínimo/Sin rotación/Exceso. El PDF y el Excel respetan el tab (el endpoint del PDF ya recibe `report` como parámetro).
+
+- **Backend** `inventory-analysis.service.ts`: nueva bandera `negativo = currentStock < 0` en `alerts` (subconjunto de `agotado`, que sigue siendo `<= 0`).
+- **Controller** `inventory-analysis.controller.ts`: `case 'negativos'` en `filterByReport` + doc del query param.
+- **PDF** `inventory-alerts-pdf.service.ts`: título "Artículos en Negativo (Sobrevendidos)" + columna Estado muestra "Negativo".
+- **Frontend** `inventory/alerts/page.tsx`: tab **Negativos** (entre Agotados y Bajo mínimo), filtro, badge rojo fuerte "Negativo", Excel y PDF por tab.
+- **Decisión:** los negativos son subconjunto de agotados (un ítem en -5 sale en ambos tabs, con badge "Negativo"). El tab NO filtra servicios (igual que los otros tabs). Sin cambios de schema, sin endpoints nuevos.
+- **Verificado en local** (restore de la grande) vía endpoint real: 29 negativos con la bandera correcta. En prod-live había 31 al momento de implementar. Typecheck API+web verde.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

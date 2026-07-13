@@ -503,6 +503,7 @@ export class InventoryAnalysisService {
       }
 
       const agotado = currentStock <= 0;
+      const negativo = currentStock < 0; // sobrevendido: existencia por debajo de 0 (subconjunto de agotado)
       const bajoMinimo = currentStock > 0 && currentStock <= p.minStock;
       const exceso = currentStock > 0 && periodSales > 0 && daysOfInventory > DIAS_EXCESO;
 
@@ -524,7 +525,7 @@ export class InventoryAnalysisService {
         soldSinceEntry,
         periodSales: Math.round(periodSales * 100) / 100,
         daysOfInventory,
-        alerts: { agotado, bajoMinimo, sinRotacion, exceso },
+        alerts: { agotado, negativo, bajoMinimo, sinRotacion, exceso },
       };
     });
 

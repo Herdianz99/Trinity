@@ -12,11 +12,12 @@ type AlertItem = {
   daysSinceEntry: number;
   daysOfInventory: number;
   lastEntryDate: string;
-  alerts: { agotado: boolean; bajoMinimo: boolean; sinRotacion: string | null; exceso: boolean };
+  alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: string | null; exceso: boolean };
 };
 
 const REPORT_TITLES: Record<string, string> = {
   agotados: 'Articulos Agotados',
+  negativos: 'Articulos en Negativo (Sobrevendidos)',
   'bajo-minimo': 'Articulos Bajo Minimo',
   'sin-rotacion': 'Articulos Sin Rotacion',
   exceso: 'Exceso de Stock',
@@ -78,7 +79,8 @@ export class InventoryAlertsPdfService {
     doc.fontSize(8).font('Helvetica');
     for (const it of items) {
       let estado = '';
-      if (it.alerts.agotado) estado = 'Agotado';
+      if (it.alerts.negativo) estado = 'Negativo';
+      else if (it.alerts.agotado) estado = 'Agotado';
       else if (it.alerts.sinRotacion) estado = NIVEL_LABEL[it.alerts.sinRotacion] || '';
       else if (it.alerts.exceso) estado = `Exceso (${it.daysOfInventory} d)`;
       else if (it.alerts.bajoMinimo) estado = 'Bajo minimo';

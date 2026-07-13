@@ -60,7 +60,7 @@ export class InventoryAnalysisController {
   @Get('alerts/pdf')
   @ApiQuery({ name: 'from', required: true })
   @ApiQuery({ name: 'to', required: true })
-  @ApiQuery({ name: 'report', required: true, description: 'agotados | bajo-minimo | sin-rotacion | exceso | todos' })
+  @ApiQuery({ name: 'report', required: true, description: 'agotados | negativos | bajo-minimo | sin-rotacion | exceso | todos' })
   async getAlertsPdf(
     @Query('from') from: string,
     @Query('to') to: string,
@@ -82,6 +82,8 @@ export class InventoryAnalysisController {
     switch (report) {
       case 'agotados':
         return items.filter((i) => i.alerts.agotado);
+      case 'negativos':
+        return items.filter((i) => i.alerts.negativo);
       case 'bajo-minimo':
         return items.filter((i) => i.alerts.bajoMinimo);
       case 'sin-rotacion':

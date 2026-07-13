@@ -12,13 +12,14 @@ interface AlertItem {
   currentStock: number; minStock: number; costUsd: number; inventoryValueUsd: number;
   lastEntryDate: string; lastEntrySource: 'PURCHASE' | 'CREATED';
   daysSinceEntry: number; soldSinceEntry: boolean; periodSales: number; daysOfInventory: number;
-  alerts: { agotado: boolean; bajoMinimo: boolean; sinRotacion: Nivel | null; exceso: boolean };
+  alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: Nivel | null; exceso: boolean };
 }
 
-type ReportKey = 'agotados' | 'bajo-minimo' | 'sin-rotacion' | 'exceso' | 'todos';
+type ReportKey = 'agotados' | 'negativos' | 'bajo-minimo' | 'sin-rotacion' | 'exceso' | 'todos';
 
 const REPORTS: { key: ReportKey; label: string }[] = [
   { key: 'agotados', label: 'Agotados' },
+  { key: 'negativos', label: 'Negativos' },
   { key: 'bajo-minimo', label: 'Bajo mínimo' },
   { key: 'sin-rotacion', label: 'Sin rotación' },
   { key: 'exceso', label: 'Exceso' },
@@ -34,6 +35,7 @@ const NIVEL_BADGE: Record<Nivel, { label: string; cls: string }> = {
 function matchesReport(it: AlertItem, r: ReportKey): boolean {
   switch (r) {
     case 'agotados': return it.alerts.agotado;
+    case 'negativos': return it.alerts.negativo;
     case 'bajo-minimo': return it.alerts.bajoMinimo;
     case 'sin-rotacion': return !!it.alerts.sinRotacion;
     case 'exceso': return it.alerts.exceso;
@@ -80,6 +82,7 @@ export default function InventoryAlertsPage() {
   useEffect(() => { load(); }, [load]);
 
   function estadoTexto(it: AlertItem): string {
+    if (it.alerts.negativo) return 'Negativo';
     if (it.alerts.agotado) return 'Agotado';
     if (it.alerts.sinRotacion) return NIVEL_BADGE[it.alerts.sinRotacion].label;
     if (it.alerts.exceso) return `Exceso (${it.daysOfInventory} d)`;
@@ -120,7 +123,7 @@ export default function InventoryAlertsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Alertas de Inventario</h1>
-            <p className="text-slate-400 text-sm">Agotados, bajo mínimo, sin rotación y exceso</p>
+            <p className="text-slate-400 text-sm">Agotados, negativos, bajo mínimo, sin rotación y exceso</p>
           </div>
         </div>
         <MetricsHelpButton metricKeys={['agotado', 'bajoMinimo', 'sinRotacion', 'exceso', 'valorInventario']} />
@@ -214,7 +217,8 @@ export default function InventoryAlertsPage() {
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-slate-300">{it.daysSinceEntry}</td>
                     <td className="px-3 py-2.5">
-                      {it.alerts.agotado && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">Agotado</span>}
+                      {it.alerts.negativo && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-600/20 text-red-300 border-red-600/40 font-semibold">Negativo</span>}
+                      {it.alerts.agotado && !it.alerts.negativo && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">Agotado</span>}
                       {it.alerts.sinRotacion && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${NIVEL_BADGE[it.alerts.sinRotacion].cls}`}>{NIVEL_BADGE[it.alerts.sinRotacion].label}</span>}
                       {it.alerts.exceso && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">Exceso</span>}
                       {!it.alerts.agotado && !it.alerts.sinRotacion && it.alerts.bajoMinimo && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">Bajo mínimo</span>}
