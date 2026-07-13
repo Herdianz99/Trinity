@@ -1,6 +1,25 @@
 ﻿# Trinity ERP — Progreso
 
-## 🐛 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — correlativo retención + factura duplicada
+## ✅ Session 71 (2026-07-13) — RESUMEN (desplegado a la grande; chica pendiente)
+
+10 commits (`93cb375`..`40354e7`), sin migraciones. Detalle de cada uno más abajo.
+
+1. **Correlativo de retenciones auto-sanable** + validación de **factura de compra duplicada** por proveedor (`93cb375`). Fix de datos del contador ya aplicado en la grande (→1358). Ver memoria `correlativo-retencion-desync`.
+2. **Tab "Negativos"** en Alertas de Inventario (existencia < 0) — con PDF/Excel (`a1c238f`).
+3. **Buscador de artículos unificado** (`<ProductSearch>`: código + ref. proveedor + nombre + existencia) en ajustes/reemplazos/transferencias (`fe60018`).
+4. **Aviso temprano** de factura de compra duplicada (al escribir N° / elegir proveedor) (`9d2c087`).
+5. **Libro mayor de caja: reintegro por método** (no agrupado) — auditoría de los 7 servicios de caja; fix de datos de 2 reintegros en la grande (`4474da1`).
+6. **Validación de CxP duplicada** por proveedor (solo contra CxP) (`17225c5`).
+7. **Fix fechas de retención (UTC)** — se veían un día antes; frontend + PDF (`5ee4c28`).
+8. **Recibos:** punto decimal (`MoneyInput`) + fecha de recepción en PDF de compra (`aa7d79e`); columna "Documento" muestra el **N° de documento del proveedor** en los 3 lugares (create, picker, preselect), gastos conservan su texto (`056cdc1`, `40354e7`). Fix de datos: 9 ReceiptItem de CxP recalculados en la grande.
+
+**Fixes de datos ya aplicados en la grande** (no requieren deploy): contador de retención (1358), renumeración/consolidación de comprobantes de retención, reversa de 5 recibos de retención + borrado de 6 comprobantes, 2 reintegros del ledger por método, 9 descripciones de ReceiptItem de CxP. Respaldos en `/root/backups/`.
+
+**Pendiente:** desplegar a la **chica** (`134.209.220.233`) — mismo `git pull + deploy.sh`, sin migración.
+
+---
+
+## 🐛 DESPLEGADO grande — Session 71 (2026-07-13) — correlativo retención + factura duplicada
 
 Origen: en la **grande** no se podían procesar facturas ni crear CxP con retención. Diego creía que era por costo manual + recargo; **falso positivo**.
 
@@ -14,7 +33,7 @@ Origen: en la **grande** no se podían procesar facturas ni crear CxP con retenc
 
 Typecheck API verde. **Aplica a AMBAS empresas** (mismo bug latente): tras deploy, correr el fix de datos del contador también en la chica si hiciera falta.
 
-## 📦 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — tab "Negativos" en Alertas de Inventario
+## 📦 DESPLEGADO grande — Session 71 (2026-07-13) — tab "Negativos" en Alertas de Inventario
 
 Nuevo reporte/tab **Negativos** en `/inventory/alerts` para ver artículos con existencia total < 0 (sobrevendidos), aparte de Agotados/Bajo mínimo/Sin rotación/Exceso. El PDF y el Excel respetan el tab (el endpoint del PDF ya recibe `report` como parámetro).
 
@@ -25,7 +44,7 @@ Nuevo reporte/tab **Negativos** en `/inventory/alerts` para ver artículos con e
 - **Decisión:** los negativos son subconjunto de agotados (un ítem en -5 sale en ambos tabs, con badge "Negativo"). El tab NO filtra servicios (igual que los otros tabs). Sin cambios de schema, sin endpoints nuevos.
 - **Verificado en local** (restore de la grande) vía endpoint real: 29 negativos con la bandera correcta. En prod-live había 31 al momento de implementar. Typecheck API+web verde.
 
-## 🔎 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — buscador de artículos unificado (código + ref. prov. + nombre + existencia)
+## 🔎 DESPLEGADO grande — Session 71 (2026-07-13) — buscador de artículos unificado (código + ref. prov. + nombre + existencia)
 
 Los buscadores type-ahead de inventario mostraban campos distintos (unos categoría, otros nada). Ahora un **componente compartido** los unifica para mostrar: **código, ref. proveedor, nombre y existencia**.
 
@@ -37,7 +56,7 @@ Los buscadores type-ahead de inventario mostraban campos distintos (unos categor
 - **Conteos** (`count/[id]`) se dejó como está: es una tabla con filtros/checkboxes (otra UI), no un dropdown.
 - Verificado: typecheck web verde; endpoint devuelve `supplierRef` + `stock` con data real. Sin cambios de backend ni schema.
 
-## ⚠️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — aviso TEMPRANO de factura de compra duplicada
+## ⚠️ DESPLEGADO grande — Session 71 (2026-07-13) — aviso TEMPRANO de factura de compra duplicada
 
 Mejora de UX sobre la validación de factura duplicada por proveedor: antes solo saltaba al **Guardar** (el usuario cargaba toda la factura y perdía el tiempo). Ahora avisa **al elegir proveedor o escribir el N° de factura**.
 
@@ -45,7 +64,7 @@ Mejora de UX sobre la validación de factura duplicada por proveedor: antes solo
 - **Frontend** `purchases/new`: `useEffect` con debounce 400ms sobre `[supplierId, supplierInvoiceNumber]` → aviso ámbar (borde + texto) bajo el campo N° factura: "Ya cargaste esta factura para este proveedor (cargada como FC-000XX)". No bloqueante (el backend igual rechaza al guardar).
 - Verificado contra data local: existente → `duplicate:true` (FC-00008); inexistente → `duplicate:false`. Typecheck API+web verde. Sin cambios de schema.
 
-## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — libro mayor de caja: reintegro por método (no agrupado)
+## 🧾 DESPLEGADO grande — Session 71 (2026-07-13) — libro mayor de caja: reintegro por método (no agrupado)
 
 Regla del libro mayor (`CashLedgerEntry`, tabla madre): **una fila por cada línea de pago, con su `methodId`/`isCash` reales, sin agrupar** (como `StockMovement`). Auditoría de los 7 servicios que escriben caja → el único con el bug era el **reintegro** (recibo de cobro con total negativo): en vez de una fila por método, escribía **UNA fila agrupada** con `methodId=null`, `isCash=true` y `currency='USD'` hardcodeados. Por eso no se veía "P.V BANESCO F" en el ledger.
 
@@ -55,24 +74,24 @@ Regla del libro mayor (`CashLedgerEntry`, tabla madre): **una fila por cada lín
 - **Fix de datos (grande, ya aplicado):** RCB-0013 y RCB-0020 (los 2 reintegros con asiento agrupado en el ledger) reemplazados por filas por método; sus `cashMovement` de reintegro borrados. Los 6 reintegros viejos (sin ledger) los reconstruye el backfill corregido.
 - Resto de flujos (ventas/POS incl. vuelto, recibos normales, gastos, anticipos, movimientos manuales) ya cumplían la regla. Typecheck API verde, sin cambios de schema.
 
-## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — validación de CxP duplicada por proveedor
+## 🧾 DESPLEGADO grande — Session 71 (2026-07-13) — validación de CxP duplicada por proveedor
 
 Réplica de la validación de factura de compra duplicada, pero para **CxP** (`Payable`) y **solo contra CxP** (a propósito: una factura de compra y una CxP pueden compartir número).
 - **Backend** `payables`: `findDuplicatePayable()` (por `supplierId` + `documentNumber`, solo tabla `Payable`), assert en `create()`, y endpoint liviano `GET /payables/check-duplicate?supplierId=&documentNumber=`.
 - **Frontend** `payables/new`: `useEffect` con debounce 400ms → aviso ámbar bajo "Nro. Documento" al elegir proveedor o escribir el número. Verificado contra data local. Typecheck API+web verde, sin cambios de schema.
 
-## 🗓️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — fix fechas de retención (UTC, se veían 1 día antes)
+## 🗓️ DESPLEGADO grande — Session 71 (2026-07-13) — fix fechas de retención (UTC, se veían 1 día antes)
 
 Las fechas fiscales de retención (`issueDate` del comprobante, `invoiceDate` de la línea) se guardan a medianoche UTC (correcto), pero el `fmtDate` del frontend las formateaba con getters **locales** → en Caracas se veían **un día antes** (ej. comprobante del 01/07 se mostraba 30/06, cambiando de período fiscal). Solo display, datos intactos.
 - **Fix frontend** (`purchases/retentions/page.tsx`, `[id]/page.tsx`, `new/page.tsx`): nuevo `fmtFiscalDate` que formatea desde el `YYYY-MM-DD` del ISO (sin conversión de zona), usado para issueDate/invoiceDate. `createdAt` (timestamp real) sigue en hora local con el `fmtDate` viejo.
 - **PDF** `retention-vouchers-pdf.service.ts`: `fmtDate`/`fmtPeriodo` a `getUTC*` (explícito, independiente del TZ del proceso).
 - **Libro de compras**: ya estaba bien (usa `fmtFiscalDate` con substring). Typecheck API+web verde.
 
-## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — recibos (punto decimal + N° documento) + fecha recepción en PDF de compra
+## 🧾 DESPLEGADO grande — Session 71 (2026-07-13) — recibos (punto decimal + N° documento) + fecha recepción en PDF de compra
 
 Tres arreglos:
 1. **Punto decimal en recibos** (`receipts/new`): los inputs de monto eran `type="number"` con estado numérico → al escribir "1." se borraba el punto (y en locale es-VE el separador esperado podía ser coma). Nuevo componente `components/money-input.tsx` (texto + `inputMode="decimal"`, retiene el texto crudo, acepta coma o punto, devuelve el número). Aplicado a los 4 inputs decimales: tasa, monto del documento, y USD/Bs de cada pago.
-2. **Columna "Documento" en recibos** muestra el **N° de documento del proveedor**, no el correlativo Trinity. En `receipts.service` (create) y en el preselect de `receipts/new`, la CxP usa `documentNumber || purchaseOrder.supplierInvoiceNumber || purchaseOrder.number || description(texto libre, solo para CxP de gasto) || CxP-...`. Se agregó `supplierInvoiceNumber` al include del payable (create) y al `findOne` de payables. Revisados los otros tipos: CxC usa el N° de factura fiscal, notas y retenciones su propio N° → ya correctos; solo la CxP mostraba el N° interno. **Fix de datos (grande):** se recalcularon las descripciones de los ReceiptItem de CxP ya guardados (9 filas: "FACTURA"/"FC-000XX" → N° de documento real; los gastos conservan su texto).
+2. **Columna "Documento" en recibos** muestra el **N° de documento del proveedor**, no el correlativo Trinity. En los **3 lugares** que arman el label (`receipts.service` `create()`, el picker `getPendingDocuments`, y el preselect de `receipts/new`), la CxP usa `documentNumber || purchaseOrder.supplierInvoiceNumber || purchaseOrder.number || description(texto libre, solo para CxP de gasto) || CxP-...`. Se agregó `supplierInvoiceNumber` al include del payable (create) y al `findOne` de payables. Revisados los otros tipos: CxC usa el N° de factura fiscal, notas y retenciones su propio N° → ya correctos; solo la CxP mostraba el N° interno. **Fix de datos (grande):** se recalcularon las descripciones de los ReceiptItem de CxP ya guardados (9 filas: "FACTURA"/"FC-000XX" → N° de documento real; los gastos conservan su texto).
 3. **PDF de compra — fecha de recepción**: imprimía `receivedAt` (fecha de proceso = hoy) en vez de `receivedDate` (la que puso el usuario). Cambiado a `receivedDate || receivedAt`.
 
 Typecheck API+web verde, sin cambios de schema.
