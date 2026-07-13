@@ -158,7 +158,7 @@ export class PurchaseOrdersPdfService {
       // Row 1
       labelValue(doc, 'Nº Interno: ', order.number, col1x, iy, cw);
       labelValue(doc, 'Fecha: ', fmtDate(order.invoiceDate), col2x, iy, cw);
-      labelValue(doc, 'Recepcion: ', fmtDate(order.receivedAt) || 'Pendiente', col3x, iy, cw);
+      labelValue(doc, 'Recepcion: ', fmtDate(order.receivedDate || order.receivedAt) || 'Pendiente', col3x, iy, cw);
       iy += 12;
 
       // Row 2

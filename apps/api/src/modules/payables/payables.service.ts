@@ -539,7 +539,7 @@ export class PayablesService {
       include: {
         supplier: true,
         purchaseOrder: {
-          select: { id: true, number: true, totalUsd: true, createdAt: true },
+          select: { id: true, number: true, supplierInvoiceNumber: true, totalUsd: true, createdAt: true },
         },
         serie: { select: { id: true, name: true, isFiscal: true } },
         retentionVoucherLines: {

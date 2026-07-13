@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fmtRate } from '@/lib/format';
+import MoneyInput from '@/components/money-input';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Loader2, Save, CreditCard, X, Search,
@@ -311,7 +312,7 @@ export default function NewReceiptPage() {
             id: payable.id,
             documentType: 'CxP',
             payableId: payable.id,
-            description: `Orden ${payable.purchaseOrder?.number || '-'}`,
+            description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || '-',
             date: payable.createdAt,
             amountUsd: payable.netPayableUsd,
             amountBsHistoric: payable.amountBs,
@@ -718,12 +719,9 @@ export default function NewReceiptPage() {
             )}
             <label className="flex items-center gap-2">
               <span>Tasa{isCollection ? '' : ' (manual)'}:</span>
-              <input
-                type="number"
-                step="0.0001"
-                min="0"
-                value={rate || ''}
-                onChange={(e) => setRate(Number(e.target.value) || 0)}
+              <MoneyInput
+                value={rate || 0}
+                onValueChange={(n) => setRate(n)}
                 className="w-28 bg-slate-700 border border-slate-600 text-white font-mono rounded-lg px-2 py-1 text-sm"
               />
               <span className="text-slate-500">Bs/$</span>
@@ -999,13 +997,9 @@ export default function NewReceiptPage() {
                         </td>
                         <td className="px-3 py-2 text-slate-300 font-mono">{doc.description}</td>
                         <td className="px-3 py-2 text-right">
-                          <input
-                            type="number"
+                          <MoneyInput
                             value={doc.selectedAmountUsd}
-                            onChange={(e) => updateAmount(doc.id, Number(e.target.value))}
-                            step="0.01"
-                            min="0.01"
-                            max={doc.balanceUsd}
+                            onValueChange={(n) => updateAmount(doc.id, n)}
                             className="w-20 bg-slate-700 border border-slate-600 text-white text-right rounded px-1.5 py-0.5 text-xs font-mono"
                           />
                         </td>
@@ -1202,21 +1196,17 @@ export default function NewReceiptPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] text-slate-500">USD</label>
-                      <input
-                        type="number"
+                      <MoneyInput
                         value={line.amountUsd}
-                        onChange={(e) => updatePaymentLine(idx, 'amountUsd', Number(e.target.value))}
-                        step="0.01"
+                        onValueChange={(n) => updatePaymentLine(idx, 'amountUsd', n)}
                         className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono"
                       />
                     </div>
                     <div>
                       <label className="text-[10px] text-slate-500">Bs</label>
-                      <input
-                        type="number"
+                      <MoneyInput
                         value={line.amountBs}
-                        onChange={(e) => updatePaymentLine(idx, 'amountBs', Number(e.target.value))}
-                        step="0.01"
+                        onValueChange={(n) => updatePaymentLine(idx, 'amountBs', n)}
                         className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono"
                       />
                     </div>

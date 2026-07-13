@@ -68,6 +68,15 @@ Las fechas fiscales de retención (`issueDate` del comprobante, `invoiceDate` de
 - **PDF** `retention-vouchers-pdf.service.ts`: `fmtDate`/`fmtPeriodo` a `getUTC*` (explícito, independiente del TZ del proceso).
 - **Libro de compras**: ya estaba bien (usa `fmtFiscalDate` con substring). Typecheck API+web verde.
 
+## 🧾 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — recibos (punto decimal + N° documento) + fecha recepción en PDF de compra
+
+Tres arreglos:
+1. **Punto decimal en recibos** (`receipts/new`): los inputs de monto eran `type="number"` con estado numérico → al escribir "1." se borraba el punto (y en locale es-VE el separador esperado podía ser coma). Nuevo componente `components/money-input.tsx` (texto + `inputMode="decimal"`, retiene el texto crudo, acepta coma o punto, devuelve el número). Aplicado a los 4 inputs decimales: tasa, monto del documento, y USD/Bs de cada pago.
+2. **Columna "Documento" en recibos** muestra el **N° de documento del proveedor**, no el correlativo Trinity. En `receipts.service` (create) y en el preselect de `receipts/new`, la CxP ahora usa `documentNumber || purchaseOrder.supplierInvoiceNumber || ... || number`. Se agregó `supplierInvoiceNumber` al include del payable (create) y al `findOne` de payables. Revisados los otros tipos: CxC usa el N° de factura fiscal, notas y retenciones su propio N° → ya correctos; solo la CxP mostraba el N° interno.
+3. **PDF de compra — fecha de recepción**: imprimía `receivedAt` (fecha de proceso = hoy) en vez de `receivedDate` (la que puso el usuario). Cambiado a `receivedDate || receivedAt`.
+
+Typecheck API+web verde, sin cambios de schema.
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

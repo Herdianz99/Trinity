@@ -155,7 +155,7 @@ export class ReceiptsService {
       } else if (item.payableId) {
         const payable = await this.prisma.payable.findUnique({
           where: { id: item.payableId },
-          include: { purchaseOrder: { select: { number: true } } },
+          include: { purchaseOrder: { select: { number: true, supplierInvoiceNumber: true } } },
         });
         if (!payable) throw new BadRequestException(`CxP ${item.payableId} no encontrada`);
         if (payable.status === 'PAID') throw new BadRequestException(`CxP ${payable.purchaseOrder?.number || payable.documentNumber || item.payableId} ya está pagada`);
@@ -169,7 +169,8 @@ export class ReceiptsService {
         items.push({
           itemType: 'PAYABLE',
           payableId: item.payableId,
-          description: payable.purchaseOrder?.number || payable.description || payable.documentNumber || `CxP-${item.payableId.slice(-6)}`,
+          // N° de documento del PROVEEDOR (no el correlativo interno de Trinity)
+          description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.description || payable.purchaseOrder?.number || `CxP-${item.payableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
