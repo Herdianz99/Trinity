@@ -658,7 +658,7 @@ export class ReceiptsService {
         where,
         orderBy: { createdAt: 'asc' },
         include: {
-          purchaseOrder: { select: { id: true, number: true, createdAt: true } },
+          purchaseOrder: { select: { id: true, number: true, supplierInvoiceNumber: true, createdAt: true } },
         },
       });
 
@@ -696,7 +696,7 @@ export class ReceiptsService {
         id: p.id,
         documentType: 'CxP',
         payableId: p.id,
-        description: p.purchaseOrder?.number || (p as any).description || (p as any).documentNumber || `CxP-${p.id.slice(-6)}`,
+        description: (p as any).documentNumber || p.purchaseOrder?.supplierInvoiceNumber || p.purchaseOrder?.number || (p as any).description || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,
         dueDate: p.dueDate,
         amountUsd: p.netPayableUsd,
