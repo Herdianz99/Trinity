@@ -35,10 +35,13 @@ function fmt(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// invoiceDate es date-only guardada a medianoche UTC: formatear desde el YYYY-MM-DD del ISO,
+// sin convertir zona (evita el corrimiento de un dia en Caracas).
 function fmtDate(iso: string | null): string {
   if (!iso) return '--';
-  const d = new Date(iso);
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  const ymd = iso.substring(0, 10).split('-');
+  if (ymd.length !== 3) return '--';
+  return `${ymd[2]}/${ymd[1]}/${ymd[0]}`;
 }
 
 function round2(n: number): number {

@@ -71,6 +71,15 @@ function fmtDate(iso: string | null): string {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+// Fechas fiscales date-only (issueDate/invoiceDate) guardadas a medianoche UTC: formatear desde el
+// YYYY-MM-DD del ISO, sin convertir zona (evita el corrimiento de un dia en Caracas).
+function fmtFiscalDate(iso: string | null): string {
+  if (!iso) return '--';
+  const ymd = iso.substring(0, 10).split('-');
+  if (ymd.length !== 3) return '--';
+  return `${ymd[2]}/${ymd[1]}/${ymd[0]}`;
+}
+
 function toLocalDateStr(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -303,7 +312,7 @@ export default function RetentionVoucherDetailPage() {
         <div className="flex flex-wrap gap-6 text-sm">
           <div>
             <p className="text-xs text-slate-500">Fecha emisión</p>
-            <p className="text-slate-300">{fmtDate(voucher.issueDate)}</p>
+            <p className="text-slate-300">{fmtFiscalDate(voucher.issueDate)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Fecha creación</p>
@@ -399,7 +408,7 @@ export default function RetentionVoucherDetailPage() {
                   </td>
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierInvoiceNumber || '--'}</td>
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierControlNumber || '--'}</td>
-                  <td className="px-3 py-2.5 text-slate-300 text-xs">{fmtDate(line.invoiceDate)}</td>
+                  <td className="px-3 py-2.5 text-slate-300 text-xs">{fmtFiscalDate(line.invoiceDate)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.invoiceTotalBs)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.taxableBaseBs)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.ivaAmountBs)}</td>

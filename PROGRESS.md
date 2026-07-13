@@ -61,9 +61,12 @@ Réplica de la validación de factura de compra duplicada, pero para **CxP** (`P
 - **Backend** `payables`: `findDuplicatePayable()` (por `supplierId` + `documentNumber`, solo tabla `Payable`), assert en `create()`, y endpoint liviano `GET /payables/check-duplicate?supplierId=&documentNumber=`.
 - **Frontend** `payables/new`: `useEffect` con debounce 400ms → aviso ámbar bajo "Nro. Documento" al elegir proveedor o escribir el número. Verificado contra data local. Typecheck API+web verde, sin cambios de schema.
 
-## 🔎 HALLAZGO (pendiente de arreglar) — fechas de retención se muestran 1 día antes (UTC)
+## 🗓️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — fix fechas de retención (UTC, se veían 1 día antes)
 
-Las fechas de retención (`issueDate` del comprobante, `invoiceDate` de la línea) se **guardan bien** a medianoche UTC (fecha fiscal elegida por el usuario), pero el `fmtDate` del frontend (`purchases/retentions/page.tsx:66`) las formatea con getters **locales** (`getDate/getMonth/getFullYear`) → en Caracas (UTC-4) se ven **un día antes** (ej. comprobante del 01/07 se muestra 30/06, cambiando de mes/período fiscal). Es 100% display, sin tocar datos. **Fix pendiente:** `fmtDate` con `getUTC*` o `toLocaleDateString('es-VE',{timeZone:'UTC'})`. Ojo: el mismo patrón `fmtDate` local está copiado en varias páginas y quizá en el PDF del comprobante y el libro de compras — revisar alcance.
+Las fechas fiscales de retención (`issueDate` del comprobante, `invoiceDate` de la línea) se guardan a medianoche UTC (correcto), pero el `fmtDate` del frontend las formateaba con getters **locales** → en Caracas se veían **un día antes** (ej. comprobante del 01/07 se mostraba 30/06, cambiando de período fiscal). Solo display, datos intactos.
+- **Fix frontend** (`purchases/retentions/page.tsx`, `[id]/page.tsx`, `new/page.tsx`): nuevo `fmtFiscalDate` que formatea desde el `YYYY-MM-DD` del ISO (sin conversión de zona), usado para issueDate/invoiceDate. `createdAt` (timestamp real) sigue en hora local con el `fmtDate` viejo.
+- **PDF** `retention-vouchers-pdf.service.ts`: `fmtDate`/`fmtPeriodo` a `getUTC*` (explícito, independiente del TZ del proceso).
+- **Libro de compras**: ya estaba bien (usa `fmtFiscalDate` con substring). Typecheck API+web verde.
 
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 

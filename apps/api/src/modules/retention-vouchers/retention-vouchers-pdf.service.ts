@@ -8,16 +8,18 @@ function fmtBs(n: number): string {
   return (n < 0 ? '-' : '') + intPart + ',' + parts[1];
 }
 
+// Fechas fiscales date-only (issueDate/invoiceDate) guardadas a medianoche UTC: formatear en UTC
+// para que la fecha salga tal como se eligio, sin depender del timezone del proceso.
 function fmtDate(d: Date | string | null): string {
   if (!d) return '';
   const date = new Date(d);
-  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  return `${date.getUTCDate().toString().padStart(2, '0')}/${(date.getUTCMonth() + 1).toString().padStart(2, '0')}/${date.getUTCFullYear()}`;
 }
 
 function fmtPeriodo(d: Date | null): string {
   if (!d) return '';
   const date = new Date(d);
-  return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`;
+  return `${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCFullYear()}`;
 }
 
 function fmtHora(d: Date): string {

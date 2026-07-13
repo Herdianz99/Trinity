@@ -69,6 +69,16 @@ function fmtDate(iso: string | null): string {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+// Fechas fiscales (issueDate del comprobante, invoiceDate de la linea) son date-only guardadas a
+// medianoche UTC: formatear desde el YYYY-MM-DD del ISO, sin convertir zona (si no, en Caracas se
+// corre un dia atras). NO usar para timestamps reales (createdAt) — esos van en hora local.
+function fmtFiscalDate(iso: string | null): string {
+  if (!iso) return '--';
+  const ymd = iso.substring(0, 10).split('-');
+  if (ymd.length !== 3) return '--';
+  return `${ymd[2]}/${ymd[1]}/${ymd[0]}`;
+}
+
 function toLocalDateStr(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -376,7 +386,7 @@ export default function RetentionsPage() {
                     <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums font-mono">${fmt(v.retentionAmountUsd)}</td>
                     <td className="px-3 py-2.5 text-right text-slate-300 tabular-nums font-mono">Bs {fmt(v.retentionAmountBs)}</td>
                     <td className="px-3 py-2.5 text-center text-slate-400 text-xs">{v.retentionPct}%</td>
-                    <td className="px-3 py-2.5 text-slate-300">{fmtDate(v.issueDate)}</td>
+                    <td className="px-3 py-2.5 text-slate-300">{fmtFiscalDate(v.issueDate)}</td>
                     <td className="px-3 py-2.5 text-center">
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold border ${STATUS_BADGES[v.status]}`}>
                         {STATUS_LABELS[v.status]}
@@ -536,7 +546,7 @@ export default function RetentionsPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Fecha emisión</p>
-                  <p className="text-slate-300">{fmtDate(detailModal.issueDate)}</p>
+                  <p className="text-slate-300">{fmtFiscalDate(detailModal.issueDate)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Creado</p>
@@ -581,7 +591,7 @@ export default function RetentionsPage() {
                                 {line.supplierInvoiceNumber || 'CxP manual'}
                               </span>
                             )}
-                            <div className="text-slate-600">{fmtDate(line.invoiceDate)}</div>
+                            <div className="text-slate-600">{fmtFiscalDate(line.invoiceDate)}</div>
                           </td>
                           <td className="px-3 py-2 text-slate-400 font-mono">{line.supplierControlNumber || '--'}</td>
                           <td className="px-3 py-2 text-right text-slate-300 font-mono">${fmt(line.taxableBaseUsd)}</td>
