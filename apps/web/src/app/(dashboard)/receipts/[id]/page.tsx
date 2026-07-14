@@ -172,7 +172,7 @@ export default function ReceiptDetailPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Error al eliminar');
       setMessage({ type: 'success', text: 'Recibo eliminado y documentos revertidos' });
-      setTimeout(() => router.push('/receipts'), 1200);
+      setTimeout(() => router.push(receipt?.type === 'COLLECTION' ? '/receipts/collection' : '/receipts/payment'), 1200);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     }
