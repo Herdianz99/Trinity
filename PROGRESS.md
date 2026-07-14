@@ -1,8 +1,10 @@
 ﻿# Trinity ERP — Progreso
 
-## ✅ Session 71 (2026-07-13) — RESUMEN (desplegado a la grande; chica pendiente)
+## ✅ Session 71 (2026-07-13) — RESUMEN
 
-10 commits (`93cb375`..`40354e7`), sin migraciones. Detalle de cada uno más abajo.
+**Tanda A — YA DESPLEGADA a la grande** (10 commits `93cb375`..`40354e7`, sin migraciones; **chica pendiente**). Detalle abajo.
+
+**Tanda B — PENDIENTE DE DEPLOY a AMBAS** (5 commits `69a592b`..`e0b61f8`, **con migración** `20260713230000_anticipos_cruzables_receipt`): anticipos cruzables + borrado con clave, diferencial cambiario por tasa, fecha/tasa en recibo de pago, eliminar recibo procesado con clave. Detalle en los bloques "PENDIENTE DE DEPLOY" de abajo. Post-deploy: asignar los permisos nuevos (`DELETE_CUSTOMER_ADVANCE`/`DELETE_SUPPLIER_ADVANCE`, `DELETE_RECEIPT_COLLECTION`/`DELETE_RECEIPT_PAYMENT`) a una clave dinámica activa.
 
 1. **Correlativo de retenciones auto-sanable** + validación de **factura de compra duplicada** por proveedor (`93cb375`). Fix de datos del contador ya aplicado en la grande (→1358). Ver memoria `correlativo-retencion-desync`.
 2. **Tab "Negativos"** en Alertas de Inventario (existencia < 0) — con PDF/Excel (`a1c238f`).
@@ -106,6 +108,26 @@ Feature grande. Los anticipos (de cliente y de proveedor) ahora se **cruzan en l
 - **Frontend**: recibos muestran los anticipos en la lista de cruzables (badge teal "Anticipo"); `/receivables` y `/payables` tienen botón borrar (solo si AVAILABLE) → `DynamicKeyModal` (modificado para pasar la clave al callback, compatible hacia atrás). 
 - **Verificado**: typecheck API+web verde; migración aplicada en local; smoke-test: `getPendingDocuments` devuelve el anticipo (sign -1); DELETE bloquea consumidos (400) y rechaza clave incorrecta (401).
 - **Post-deploy**: crear los permisos `DELETE_CUSTOMER_ADVANCE`/`DELETE_SUPPLIER_ADVANCE` en alguna clave dinámica activa (si no, nadie podrá borrar anticipos).
+
+## 💱 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — diferencial cambiario por TASA (no por fecha) (`01b677a`)
+
+Si una factura se cobra/paga a la **misma tasa** con la que se emitió, ya **no genera diferencial cambiario** (antes lo generaba siempre por decimales). Regla acordada con Diego: **solo importa la tasa, no la fecha** — si aunque sea un documento del recibo tiene tasa distinta a la del recibo, ese sí genera diferencial; los de igual tasa, no.
+
+- **Backend** `receipts.service`: nuevo helper `bsToday(amountUsd, historicBs, docRate, effectiveRate)` — si `|docRate - effectiveRate| < 0.0001` devuelve el **Bs histórico** (diferencial 0 exacto), si no, `amountUsd * effectiveRate`. Aplicado a las 9 rutas de `amountBsToday` (RECEIVABLE, PAYABLE, notas, retenciones, anticipos). El diferencial sigue siendo `Σ amountBsToday − Σ amountBsHistoric`.
+- **Verificado**: misma tasa → diferencial 0; tasa distinta (700 vs doc) → diferencial −1067.28. Typecheck API verde, sin migración.
+
+## 🗓️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — recibo de pago con selector de fecha + tasa del día (`36db119`)
+
+El **recibo de pago** ahora deja **cambiar la fecha** y con ella trae la **tasa de ese día** (igual que el recibo de cobro, que ya lo tenía). Al cambiar la fecha se recalculan los Bs de hoy y el diferencial. Typecheck API+web verde, sin migración.
+
+## 🗑️ PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — eliminar recibo PROCESADO con clave dinámica (revierte los documentos) (`885b2af`, `e0b61f8`)
+
+`/settings/dynamic-keys` tenía los permisos `DELETE_RECEIPT_COLLECTION`/`DELETE_RECEIPT_PAYMENT` pero **no estaban implementados**. Ahora se puede **eliminar un recibo ya POSTED** y deja los documentos exactamente como estaban.
+
+- **Backend** `receipts.service.remove(id, dynamicKey?)`: si el recibo está POSTED, **valida la clave dinámica** (permiso según tipo) y **revierte todo en una transacción**: CxC/CxP (recalcula el pagado desde los pagos que quedan → PENDING/PARTIAL/PAID, tocando **solo** lo de ese recibo), notas (paidAmount + `appliedAt`), retenciones (`appliedAt`), anticipos (paidAmount/status → AVAILABLE/PARTIAL), borra las filas del libro mayor (`CashLedgerEntry` por `sourceId`) + el `CashMovement` de reintegro legacy, y borra el recibo/pagos/items. Si está DRAFT, borrado simple sin clave. Controller pasa `dynamicKey`; módulo importa `DynamicKeysModule`.
+- **Frontend** detalle del recibo: botón **"Eliminar"** en recibos POSTED → `DynamicKeyModal`; tras borrar redirige a `/receipts/collection` o `/receipts/payment` según el tipo (la ruta `/receipts` no existe).
+- **Sin migración** (los permisos ya estaban en el enum). **Verificado e2e**: posteé recibo de pago → CxP a PAID → DELETE con clave → CxP volvió a su estado previo exacto (respetando otros pagos) + ledger limpio. Typecheck API+web verde.
+- **Post-deploy**: asignar `DELETE_RECEIPT_COLLECTION`/`DELETE_RECEIPT_PAYMENT` a alguna clave dinámica activa.
 
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
