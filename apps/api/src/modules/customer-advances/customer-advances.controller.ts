@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -43,5 +44,10 @@ export class CustomerAdvancesController {
   @Get('customer/:customerId')
   findByCustomer(@Param('customerId') customerId: string) {
     return this.service.findByCustomer(customerId);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @Body('dynamicKey') dynamicKey: string) {
+    return this.service.remove(id, dynamicKey);
   }
 }

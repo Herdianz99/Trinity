@@ -7,10 +7,54 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { CreateCustomerAdvanceDto } from './dto/create-customer-advance.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
 export class CustomerAdvancesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dynamicKeysService: DynamicKeysService,
+  ) {}
+
+  // Eliminar un anticipo NO usado (saldo intacto), con clave dinamica. Revierte caja + ledger.
+  async remove(id: string, dynamicKey: string) {
+    const advance = await this.prisma.customerAdvance.findUnique({
+      where: { id },
+      include: { customer: { select: { name: true } } },
+    });
+    if (!advance) throw new NotFoundException('Anticipo no encontrado');
+    if (advance.paidAmountUsd > 0.01 || advance.status !== 'AVAILABLE') {
+      throw new BadRequestException(
+        'No se puede eliminar: el anticipo ya fue usado (cruzado en un recibo o factura). Reversa primero ese documento.',
+      );
+    }
+
+    await this.dynamicKeysService.validate({
+      key: dynamicKey,
+      permission: 'DELETE_CUSTOMER_ADVANCE',
+      action: `Eliminar anticipo de ${advance.customer?.name || 'cliente'} ($${advance.amountUsd.toFixed(2)})`,
+      entityType: 'CustomerAdvance',
+      entityId: id,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      // Revertir la fila del libro mayor (linkeada por sourceType/sourceId)
+      await tx.cashLedgerEntry.deleteMany({ where: { sourceType: 'CUSTOMER_ADVANCE', sourceId: id } });
+      // Revertir el CashMovement del arqueo (match por sesion + tipo + monto + razon)
+      const mv = await tx.cashMovement.findFirst({
+        where: {
+          cashSessionId: advance.cashSessionId,
+          type: 'INCOME',
+          amountUsd: advance.amountUsd,
+          reason: `Anticipo cliente: ${advance.customer?.name || ''}`,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (mv) await tx.cashMovement.delete({ where: { id: mv.id } });
+      await tx.customerAdvance.delete({ where: { id } });
+    });
+    return { message: 'Anticipo eliminado' };
+  }
 
   async create(dto: CreateCustomerAdvanceDto, userId: string) {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });

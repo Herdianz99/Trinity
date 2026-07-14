@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -43,5 +44,10 @@ export class SupplierAdvancesController {
   @Get('supplier/:supplierId')
   findBySupplier(@Param('supplierId') supplierId: string) {
     return this.service.findBySupplier(supplierId);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @Body('dynamicKey') dynamicKey: string) {
+    return this.service.remove(id, dynamicKey);
   }
 }

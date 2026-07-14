@@ -18,6 +18,8 @@ interface PendingDoc {
   customerIvaRetentionId?: string;
   retentionVoucherId?: string;
   islrRetentionVoucherId?: string;
+  customerAdvanceId?: string;
+  supplierAdvanceId?: string;
   description: string;
   reference?: string | null;
   date: string;
@@ -366,7 +368,7 @@ export default function NewReceiptPage() {
         setPendingDocs(json.filter((d: PendingDoc) => !selIds.has(d.id)));
       } else if (json.receivables) {
         // Merge receivables and notes (NCV/NDV) into a single list
-        const allDocs = [...json.receivables, ...(json.notes || []), ...(json.retentions || [])];
+        const allDocs = [...json.receivables, ...(json.notes || []), ...(json.retentions || []), ...(json.advances || [])];
         setPendingDocs(allDocs.filter((d: PendingDoc) => !selIds.has(d.id)));
       } else {
         setPendingDocs([]);
@@ -458,6 +460,8 @@ export default function NewReceiptPage() {
           customerIvaRetentionId: d.customerIvaRetentionId,
           retentionVoucherId: d.retentionVoucherId,
           islrRetentionVoucherId: d.islrRetentionVoucherId,
+          customerAdvanceId: d.customerAdvanceId,
+          supplierAdvanceId: d.supplierAdvanceId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -503,6 +507,8 @@ export default function NewReceiptPage() {
           customerIvaRetentionId: d.customerIvaRetentionId,
           retentionVoucherId: d.retentionVoucherId,
           islrRetentionVoucherId: d.islrRetentionVoucherId,
+          customerAdvanceId: d.customerAdvanceId,
+          supplierAdvanceId: d.supplierAdvanceId,
           sign: d.sign,
           amountUsd: d.selectedAmountUsd,
         })),
@@ -906,6 +912,7 @@ export default function NewReceiptPage() {
                         className={`border-b border-slate-700/20 hover:bg-slate-700/20 transition-colors ${
                           doc.documentType === 'CxC' ? 'bg-green-500/5'
                           : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION' || doc.documentType === 'PURCHASE_ISLR_RETENTION') ? 'bg-purple-500/5'
+                          : (doc.documentType === 'CUSTOMER_ADVANCE' || doc.documentType === 'SUPPLIER_ADVANCE') ? 'bg-teal-500/5'
                           : 'bg-red-500/5'
                         }`}
                       >
@@ -915,10 +922,13 @@ export default function NewReceiptPage() {
                               ? 'bg-green-500/20 text-green-400'
                               : (doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION' || doc.documentType === 'PURCHASE_ISLR_RETENTION')
                               ? 'bg-purple-500/20 text-purple-400'
+                              : (doc.documentType === 'CUSTOMER_ADVANCE' || doc.documentType === 'SUPPLIER_ADVANCE')
+                              ? 'bg-teal-500/20 text-teal-400'
                               : 'bg-red-500/20 text-red-400'
                           }`}>
                             {(doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION') ? 'Ret. IVA'
                              : doc.documentType === 'PURCHASE_ISLR_RETENTION' ? 'Ret. ISLR'
+                             : (doc.documentType === 'CUSTOMER_ADVANCE' || doc.documentType === 'SUPPLIER_ADVANCE') ? 'Anticipo'
                              : doc.documentType}
                           </span>
                         </td>

@@ -30,6 +30,14 @@ class ReceiptItemDto {
   @IsString()
   islrRetentionVoucherId?: string;
 
+  @IsOptional()
+  @IsString()
+  customerAdvanceId?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierAdvanceId?: string;
+
   @IsNumber()
   @IsIn([1, -1])
   sign: number;

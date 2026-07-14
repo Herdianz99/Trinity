@@ -6,7 +6,7 @@ import { Loader2, ShieldAlert, Eye, EyeOff, X } from 'lucide-react';
 interface DynamicKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthorized: () => void;
+  onAuthorized: (key: string) => void;
   permission: string;
   title?: string;
   description?: string;
@@ -58,10 +58,11 @@ export default function DynamicKeyModal({
         throw new Error(err.message || 'Clave incorrecta o sin permisos para esta accion');
       }
 
+      const authorizedKey = key;
       setKey('');
       setError('');
       onClose();
-      onAuthorized();
+      onAuthorized(authorizedKey);
     } catch (err: any) {
       setError(err.message || 'Clave incorrecta o sin permisos para esta accion');
       setKey('');

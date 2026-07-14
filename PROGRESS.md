@@ -96,6 +96,17 @@ Tres arreglos:
 
 Typecheck API+web verde, sin cambios de schema.
 
+## 🧩 PENDIENTE DE DEPLOY — Session 71 (2026-07-13) — anticipos cruzables en recibos + borrado con clave dinámica (CON MIGRACIÓN)
+
+Feature grande. Los anticipos (de cliente y de proveedor) ahora se **cruzan en los recibos** como un crédito (igual que una nota de crédito, `sign=-1`): el saldo a favor del cliente baja lo que se cobra, y el anticipo al proveedor baja lo que se paga. Antes solo el anticipo de cliente se consumía dentro de la factura (`pm_saldo_favor`); el de proveedor no se podía usar.
+
+- **Migración** `20260713230000_anticipos_cruzables_receipt` (aditiva, `IF NOT EXISTS`): `ReceiptItemType` += `CUSTOMER_ADVANCE`/`SUPPLIER_ADVANCE`; `DynamicKeyPerm` += `DELETE_CUSTOMER_ADVANCE`/`DELETE_SUPPLIER_ADVANCE`; `ReceiptItem` += `customerAdvanceId`/`supplierAdvanceId` (FK, ON DELETE SET NULL).
+- **Backend recibos** (`receipts.service`): `create()` arma el item crédito del anticipo (clamp al saldo, Bs proporcional); `post()` lo consume (sube `paidAmount`, PARTIAL/CONSUMED) **sin tocar caja** (ya movió caja al crearse); `getPendingDocuments()` devuelve los anticipos AVAILABLE/PARTIAL como cruzables (cobro=cliente, pago=proveedor). DTO + tipos + create de ReceiptItem con los ids nuevos.
+- **Borrado con clave dinámica**: endpoints `DELETE /customer-advances/:id` y `/supplier-advances/:id` — validan la clave (permiso nuevo), **bloquean si el anticipo ya se usó** (paidAmount>0), y **revierten caja+ledger** (borran el `CashLedgerEntry` por sourceId y el `CashMovement`). Módulos importan `DynamicKeysModule`.
+- **Frontend**: recibos muestran los anticipos en la lista de cruzables (badge teal "Anticipo"); `/receivables` y `/payables` tienen botón borrar (solo si AVAILABLE) → `DynamicKeyModal` (modificado para pasar la clave al callback, compatible hacia atrás). 
+- **Verificado**: typecheck API+web verde; migración aplicada en local; smoke-test: `getPendingDocuments` devuelve el anticipo (sign -1); DELETE bloquea consumidos (400) y rechaza clave incorrecta (401).
+- **Post-deploy**: crear los permisos `DELETE_CUSTOMER_ADVANCE`/`DELETE_SUPPLIER_ADVANCE` en alguna clave dinámica activa (si no, nadie podrá borrar anticipos).
+
 ## ✅ DESPLEGADO — Session 70 (2026-07-12) — AMBAS empresas (HEAD `0f10217`)
 
 Deploy completado a grande (`134.209.164.59`) y chica (`134.209.220.233`). Contenido:

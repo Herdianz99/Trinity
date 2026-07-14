@@ -206,6 +206,8 @@ enum ReceiptItemType {
   SALES_IVA_RETENTION
   PURCHASE_IVA_RETENTION
   PURCHASE_ISLR_RETENTION
+  CUSTOMER_ADVANCE
+  SUPPLIER_ADVANCE
 }
 
 enum DynamicKeyPerm {
@@ -227,6 +229,8 @@ enum DynamicKeyPerm {
   MANUAL_CASH_MOVEMENT
   SELL_NEGATIVE_STOCK
   OVERRIDE_CREDIT_BLOCK
+  DELETE_CUSTOMER_ADVANCE
+  DELETE_SUPPLIER_ADVANCE
 }
 
 enum CashMovementType {
@@ -907,6 +911,7 @@ model CustomerAdvance {
   cashSessionId String
   createdById   String
   createdBy     User                  @relation("AdvanceCreator", fields: [createdById], references: [id])
+  receiptItems  ReceiptItem[]
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 }
@@ -928,6 +933,7 @@ model SupplierAdvance {
   cashSessionId String
   createdById   String
   createdBy     User                  @relation("SupplierAdvanceCreator", fields: [createdById], references: [id])
+  receiptItems  ReceiptItem[]
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 }
@@ -1420,6 +1426,10 @@ model ReceiptItem {
   retentionVoucher       RetentionVoucher?     @relation(fields: [retentionVoucherId], references: [id])
   islrRetentionVoucherId String?
   islrRetentionVoucher   IslrRetentionVoucher? @relation(fields: [islrRetentionVoucherId], references: [id])
+  customerAdvanceId String?
+  customerAdvance   CustomerAdvance? @relation(fields: [customerAdvanceId], references: [id])
+  supplierAdvanceId String?
+  supplierAdvance   SupplierAdvance? @relation(fields: [supplierAdvanceId], references: [id])
   description       String
   amountUsd         Float            @default(0)
   amountBsHistoric  Float            @default(0)

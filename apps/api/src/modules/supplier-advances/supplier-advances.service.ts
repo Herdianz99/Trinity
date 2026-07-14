@@ -7,10 +7,52 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
 export class SupplierAdvancesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dynamicKeysService: DynamicKeysService,
+  ) {}
+
+  // Eliminar un anticipo NO usado (saldo intacto), con clave dinamica. Revierte caja + ledger.
+  async remove(id: string, dynamicKey: string) {
+    const advance = await this.prisma.supplierAdvance.findUnique({
+      where: { id },
+      include: { supplier: { select: { name: true } } },
+    });
+    if (!advance) throw new NotFoundException('Anticipo no encontrado');
+    if (advance.paidAmountUsd > 0.01 || advance.status !== 'AVAILABLE') {
+      throw new BadRequestException(
+        'No se puede eliminar: el anticipo ya fue usado (cruzado en un recibo). Reversa primero ese documento.',
+      );
+    }
+
+    await this.dynamicKeysService.validate({
+      key: dynamicKey,
+      permission: 'DELETE_SUPPLIER_ADVANCE',
+      action: `Eliminar anticipo a ${advance.supplier?.name || 'proveedor'} ($${advance.amountUsd.toFixed(2)})`,
+      entityType: 'SupplierAdvance',
+      entityId: id,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cashLedgerEntry.deleteMany({ where: { sourceType: 'SUPPLIER_ADVANCE', sourceId: id } });
+      const mv = await tx.cashMovement.findFirst({
+        where: {
+          cashSessionId: advance.cashSessionId,
+          type: 'EXPENSE',
+          amountUsd: advance.amountUsd,
+          reason: `Anticipo proveedor: ${advance.supplier?.name || ''}`,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (mv) await tx.cashMovement.delete({ where: { id: mv.id } });
+      await tx.supplierAdvance.delete({ where: { id } });
+    });
+    return { message: 'Anticipo eliminado' };
+  }
 
   async create(dto: CreateSupplierAdvanceDto, userId: string) {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });

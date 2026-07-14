@@ -110,7 +110,7 @@ export class ReceiptsService {
 
     // Build items
     const items: Array<{
-      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION' | 'SALES_IVA_RETENTION' | 'PURCHASE_IVA_RETENTION' | 'PURCHASE_ISLR_RETENTION';
+      itemType: 'RECEIVABLE' | 'PAYABLE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'IVA_RETENTION' | 'SALES_IVA_RETENTION' | 'PURCHASE_IVA_RETENTION' | 'PURCHASE_ISLR_RETENTION' | 'CUSTOMER_ADVANCE' | 'SUPPLIER_ADVANCE';
       receivableId?: string;
       payableId?: string;
       creditDebitNoteId?: string;
@@ -118,6 +118,8 @@ export class ReceiptsService {
       customerIvaRetentionId?: string;
       retentionVoucherId?: string;
       islrRetentionVoucherId?: string;
+      customerAdvanceId?: string;
+      supplierAdvanceId?: string;
       description: string;
       amountUsd: number;
       amountBsHistoric: number;
@@ -276,6 +278,48 @@ export class ReceiptsService {
           differentialBs: 0,
           sign: item.sign,
         });
+      } else if (item.customerAdvanceId) {
+        // Anticipo de cliente (saldo a favor) = credito que resta de lo que se cobra
+        const advance = await this.prisma.customerAdvance.findUnique({
+          where: { id: item.customerAdvanceId },
+          include: { customer: { select: { name: true } } },
+        });
+        if (!advance) throw new BadRequestException(`Anticipo ${item.customerAdvanceId} no encontrado`);
+        if (advance.status === 'CONSUMED') throw new BadRequestException(`El anticipo de ${advance.customer?.name || 'cliente'} ya está consumido`);
+        const balanceUsd = this.round2(advance.amountUsd - advance.paidAmountUsd);
+        const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
+        const proportion = advance.amountUsd > 0 ? amountUsd / advance.amountUsd : 0;
+        items.push({
+          itemType: 'CUSTOMER_ADVANCE',
+          customerAdvanceId: item.customerAdvanceId,
+          description: `Anticipo${advance.reference ? ' ' + advance.reference : ''} (saldo a favor)`,
+          amountUsd,
+          amountBsHistoric: this.round2(advance.amountBs * proportion),
+          amountBsToday: this.round2(amountUsd * effectiveRate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
+      } else if (item.supplierAdvanceId) {
+        // Anticipo a proveedor = credito que resta de lo que se paga (baja la deuda)
+        const advance = await this.prisma.supplierAdvance.findUnique({
+          where: { id: item.supplierAdvanceId },
+          include: { supplier: { select: { name: true } } },
+        });
+        if (!advance) throw new BadRequestException(`Anticipo ${item.supplierAdvanceId} no encontrado`);
+        if (advance.status === 'CONSUMED') throw new BadRequestException(`El anticipo a ${advance.supplier?.name || 'proveedor'} ya está consumido`);
+        const balanceUsd = this.round2(advance.amountUsd - advance.paidAmountUsd);
+        const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
+        const proportion = advance.amountUsd > 0 ? amountUsd / advance.amountUsd : 0;
+        items.push({
+          itemType: 'SUPPLIER_ADVANCE',
+          supplierAdvanceId: item.supplierAdvanceId,
+          description: `Anticipo${advance.reference ? ' ' + advance.reference : ''} (adelanto)`,
+          amountUsd,
+          amountBsHistoric: this.round2(advance.amountBs * proportion),
+          amountBsToday: this.round2(amountUsd * effectiveRate),
+          differentialBs: 0,
+          sign: item.sign,
+        });
       }
     }
 
@@ -351,6 +395,8 @@ export class ReceiptsService {
               customerIvaRetentionId: item.customerIvaRetentionId || null,
               retentionVoucherId: item.retentionVoucherId || null,
               islrRetentionVoucherId: item.islrRetentionVoucherId || null,
+              customerAdvanceId: item.customerAdvanceId || null,
+              supplierAdvanceId: item.supplierAdvanceId || null,
               description: item.description,
               amountUsd: item.amountUsd,
               amountBsHistoric: item.amountBsHistoric,
@@ -531,6 +577,36 @@ export class ReceiptsService {
           await tx.retentionVoucher.update({ where: { id: item.retentionVoucherId }, data: { appliedAt: new Date() } });
         } else if (item.itemType === 'PURCHASE_ISLR_RETENTION' && item.islrRetentionVoucherId) {
           await tx.islrRetentionVoucher.update({ where: { id: item.islrRetentionVoucherId }, data: { appliedAt: new Date() } });
+        } else if (item.itemType === 'CUSTOMER_ADVANCE' && item.customerAdvanceId) {
+          // Consumir el anticipo del cliente (no toca caja: ya movió caja al crearse)
+          const advance = await tx.customerAdvance.findUnique({ where: { id: item.customerAdvanceId } });
+          if (!advance) throw new BadRequestException('El anticipo ya no existe');
+          const remaining = this.round2(advance.amountUsd - advance.paidAmountUsd);
+          if (item.amountUsd > remaining + 0.01) {
+            throw new BadRequestException(`El anticipo ya no tiene saldo suficiente (restante: $${remaining.toFixed(2)}).`);
+          }
+          const newPaidUsd = this.round2(advance.paidAmountUsd + item.amountUsd);
+          const newPaidBs = this.round2(advance.paidAmountBs + item.amountBsHistoric);
+          const fullyConsumed = newPaidUsd >= this.round2(advance.amountUsd) - 0.01;
+          await tx.customerAdvance.update({
+            where: { id: item.customerAdvanceId },
+            data: { paidAmountUsd: newPaidUsd, paidAmountBs: newPaidBs, status: fullyConsumed ? 'CONSUMED' : 'PARTIAL' },
+          });
+        } else if (item.itemType === 'SUPPLIER_ADVANCE' && item.supplierAdvanceId) {
+          // Consumir el anticipo al proveedor (no toca caja: ya movió caja al crearse)
+          const advance = await tx.supplierAdvance.findUnique({ where: { id: item.supplierAdvanceId } });
+          if (!advance) throw new BadRequestException('El anticipo ya no existe');
+          const remaining = this.round2(advance.amountUsd - advance.paidAmountUsd);
+          if (item.amountUsd > remaining + 0.01) {
+            throw new BadRequestException(`El anticipo ya no tiene saldo suficiente (restante: $${remaining.toFixed(2)}).`);
+          }
+          const newPaidUsd = this.round2(advance.paidAmountUsd + item.amountUsd);
+          const newPaidBs = this.round2(advance.paidAmountBs + item.amountBsHistoric);
+          const fullyConsumed = newPaidUsd >= this.round2(advance.amountUsd) - 0.01;
+          await tx.supplierAdvance.update({
+            where: { id: item.supplierAdvanceId },
+            data: { paidAmountUsd: newPaidUsd, paidAmountBs: newPaidBs, status: fullyConsumed ? 'CONSUMED' : 'PARTIAL' },
+          });
         }
         // DIFFERENTIAL items don't generate CxC/CxP movements
       }
@@ -760,7 +836,26 @@ export class ReceiptsService {
         })),
       ];
 
-      return [...payableDocs, ...noteDocs, ...retentionDocs];
+      // Anticipos al proveedor disponibles = créditos que bajan la deuda
+      const supplierAdvances = await this.prisma.supplierAdvance.findMany({
+        where: { supplierId: query.entityId, status: { in: ['AVAILABLE', 'PARTIAL'] } },
+        orderBy: { createdAt: 'asc' },
+      });
+      const advanceDocs = supplierAdvances.map((a) => ({
+        id: a.id,
+        documentType: 'SUPPLIER_ADVANCE',
+        supplierAdvanceId: a.id,
+        description: `Anticipo${a.reference ? ' ' + a.reference : ''} (adelanto)`,
+        date: a.createdAt,
+        amountUsd: a.amountUsd,
+        amountBsHistoric: a.amountBs,
+        exchangeRate: a.exchangeRate,
+        balanceUsd: this.round2(a.amountUsd - a.paidAmountUsd),
+        status: a.status,
+        sign: -1,
+      }));
+
+      return [...payableDocs, ...noteDocs, ...retentionDocs, ...advanceDocs];
     }
 
     // Collection mode: by customer or platform
@@ -829,6 +924,15 @@ export class ReceiptsService {
       });
     }
 
+    // Anticipos del cliente (saldo a favor) disponibles = créditos que bajan lo que se cobra
+    let customerAdvances: any[] = [];
+    if (customerId) {
+      customerAdvances = await this.prisma.customerAdvance.findMany({
+        where: { customerId, status: { in: ['AVAILABLE', 'PARTIAL'] } },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
     // Excluir receivables que ya estan en un recibo en BORRADOR (evita borradores duplicados)
     const draftReceivableItems = await this.prisma.receiptItem.findMany({
       where: { receivableId: { in: receivables.map((r) => r.id) }, receipt: { status: 'DRAFT' } },
@@ -887,6 +991,19 @@ export class ReceiptsService {
         exchangeRate: r.exchangeRate,
         balanceUsd: r.retentionUsd,
         status: 'POSTED',
+        sign: -1,
+      })),
+      advances: customerAdvances.map((a) => ({
+        id: a.id,
+        documentType: 'CUSTOMER_ADVANCE',
+        customerAdvanceId: a.id,
+        description: `Anticipo${a.reference ? ' ' + a.reference : ''} (saldo a favor)`,
+        date: a.createdAt,
+        amountUsd: a.amountUsd,
+        amountBsHistoric: a.amountBs,
+        exchangeRate: a.exchangeRate,
+        balanceUsd: this.round2(a.amountUsd - a.paidAmountUsd),
+        status: a.status,
         sign: -1,
       })),
       payables: [],

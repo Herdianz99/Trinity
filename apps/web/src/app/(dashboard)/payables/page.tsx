@@ -17,7 +17,9 @@ import {
   FileText,
   Plus,
   Banknote,
+  Trash2,
 } from 'lucide-react';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface Payable {
   id: string;
@@ -136,6 +138,7 @@ export default function PayablesPage() {
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [advanceForm, setAdvanceForm] = useState({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
   const [savingAdvance, setSavingAdvance] = useState(false);
+  const [deleteAdvance, setDeleteAdvance] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
   const [openCashSessions, setOpenCashSessions] = useState<{ id: string; label: string }[]>([]);
   const [exchangeRate, setExchangeRate] = useState(0);
@@ -274,6 +277,24 @@ export default function PayablesPage() {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setSavingAdvance(false);
+    }
+  }
+
+  async function handleDeleteAdvance(key: string) {
+    if (!deleteAdvance) return;
+    try {
+      const res = await fetch(`/api/proxy/supplier-advances/${deleteAdvance.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dynamicKey: key }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'No se pudo eliminar'); }
+      setMessage({ type: 'success', text: 'Anticipo eliminado' });
+      fetchAdvances();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setDeleteAdvance(null);
     }
   }
 
@@ -589,15 +610,16 @@ export default function PayablesPage() {
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Metodo</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Referencia</th>
+                    <th className="text-center px-4 py-3 text-slate-400 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {advancesLoading ? (
-                    <tr><td colSpan={8} className="text-center py-8">
+                    <tr><td colSpan={9} className="text-center py-8">
                       <Loader2 className="animate-spin mx-auto text-slate-400" size={24} />
                     </td></tr>
                   ) : advances.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-8 text-slate-500">No hay anticipos registrados</td></tr>
+                    <tr><td colSpan={9} className="text-center py-8 text-slate-500">No hay anticipos registrados</td></tr>
                   ) : advances.map(a => (
                     <tr key={a.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
                       <td className="px-4 py-3 text-slate-200">{a.supplier?.name || '-'}</td>
@@ -612,6 +634,13 @@ export default function PayablesPage() {
                       <td className="px-4 py-3 text-slate-300">{a.method?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-300 text-xs">{new Date(a.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs font-mono">{a.reference || '-'}</td>
+                      <td className="px-4 py-3 text-center">
+                        {a.status === 'AVAILABLE' && (
+                          <button onClick={() => setDeleteAdvance(a)} title="Eliminar anticipo (clave)" className="text-slate-500 hover:text-red-400">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -786,6 +815,21 @@ export default function PayablesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Eliminar anticipo con clave dinamica */}
+      {deleteAdvance && (
+        <DynamicKeyModal
+          isOpen={!!deleteAdvance}
+          onClose={() => setDeleteAdvance(null)}
+          onAuthorized={(key) => handleDeleteAdvance(key)}
+          permission="DELETE_SUPPLIER_ADVANCE"
+          entityType="SupplierAdvance"
+          entityId={deleteAdvance.id}
+          action={`Eliminar anticipo a ${deleteAdvance.supplier?.name || 'proveedor'} ($${Number(deleteAdvance.amountUsd).toFixed(2)})`}
+          title="Eliminar anticipo"
+          description="Ingresa la clave para eliminar este anticipo"
+        />
       )}
 
       {/* Advance Modal */}
