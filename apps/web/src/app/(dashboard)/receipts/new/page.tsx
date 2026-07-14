@@ -712,19 +712,17 @@ export default function NewReceiptPage() {
             Nuevo {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'}
           </h1>
           <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            {isCollection && (
-              <label className="flex items-center gap-2">
-                <span>Fecha tasa:</span>
-                <input
-                  type="date"
-                  value={rateDate}
-                  onChange={(e) => { setRateDate(e.target.value); fetchRateForDate(e.target.value); }}
-                  className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-2 py-1 text-sm"
-                />
-              </label>
-            )}
             <label className="flex items-center gap-2">
-              <span>Tasa{isCollection ? '' : ' (manual)'}:</span>
+              <span>Fecha tasa:</span>
+              <input
+                type="date"
+                value={rateDate}
+                onChange={(e) => { setRateDate(e.target.value); fetchRateForDate(e.target.value); }}
+                className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              <span>Tasa:</span>
               <MoneyInput
                 value={rate || 0}
                 onValueChange={(n) => setRate(n)}
