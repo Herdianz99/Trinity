@@ -28,11 +28,12 @@ export class ExpensePdfService {
     const config = await this.prisma.companyConfig.findFirst();
 
     return new Promise((resolve, reject) => {
-      // Media carta = mitad EXACTA de una LETTER (612x792 -> 612x396): ancho completo
-      // de la carta, mitad del alto. Dos comprobantes apilados llenan una hoja carta,
-      // asi que se imprimen 2 gastos por hoja. El contenido va derecho (no rotado);
-      // la pagina solo es ancha y baja (la mitad superior/inferior de la carta).
-      const doc = new PDFDocument({ size: [612, 396], margins: { top: 30, left: 30, right: 30, bottom: 6 } });
+      // Comprobante en la MITAD SUPERIOR de una hoja carta VERTICAL (612x792, portrait),
+      // igual que facturas/recibos, para que NUNCA se imprima horizontal. Una linea de
+      // corte punteada marca la mitad: se imprime, se corta por la guia y queda un
+      // comprobante de media carta. La mitad inferior queda libre.
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 30, left: 30, right: 30, bottom: 30 } });
+      const HALF = doc.page.height / 2; // 396 = mitad del alto de la carta
       const buffers: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
@@ -161,7 +162,7 @@ export class ExpensePdfService {
       }
 
       // ========== FIRMA ==========
-      y = Math.max(y + 6, boxTop + boxH + 22);
+      y = Math.max(y + 6, boxTop + boxH + 22, HALF - 66);
       const sigGap = 40;
       const sigW = (pageWidth - sigGap) / 2;
       doc.moveTo(left, y).lineTo(left + sigW, y).stroke('#999999');
@@ -171,13 +172,21 @@ export class ExpensePdfService {
       doc.text('Elaborado por', left, y, { width: sigW, align: 'center' });
       doc.text('Autorizado por', left + sigW + sigGap, y, { width: sigW, align: 'center' });
 
-      // ========== FOOTER ==========
-      const footerY = doc.page.height - 24;
+      // ========== FOOTER (dentro de la mitad superior, fluye bajo la firma) ==========
+      const footerY = Math.max(y + 16, HALF - 24);
       doc.moveTo(left, footerY).lineTo(rightEdge, footerY).stroke('#cccccc');
       doc.fontSize(6.5).font('Helvetica').fillColor('#888888').text(
         `${config?.companyName || 'Trinity ERP'} - Comprobante de gasto - Generado el ${new Date().toLocaleString('es-VE')}`,
         left, footerY + 6, { width: pageWidth, align: 'center' },
       );
+
+      // ========== LINEA DE CORTE (a la mitad de la hoja) ==========
+      doc.save();
+      doc.lineWidth(0.7).dash(4, { space: 3 }).strokeColor('#aaaaaa')
+        .moveTo(24, HALF).lineTo(doc.page.width - 24, HALF).stroke();
+      doc.restore();
+      doc.fontSize(7).font('Helvetica').fillColor('#999999')
+        .text('corte', doc.page.width - 56, HALF + 3);
 
       doc.end();
     });
