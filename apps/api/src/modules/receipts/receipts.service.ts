@@ -19,6 +19,14 @@ export class ReceiptsService {
     return Math.round(n * 100) / 100;
   }
 
+  // Bs "de hoy" de un documento: si su tasa coincide con la del recibo NO hay diferencial
+  // cambiario (se usa su Bs historico tal cual, evitando incluso centavos de redondeo).
+  // Solo cuando la tasa difiere se recalcula a la tasa del recibo (ahi si hay diferencial).
+  private bsToday(amountUsd: number, historicBs: number, docRate: number | null | undefined, effectiveRate: number): number {
+    if (docRate && Math.abs(docRate - effectiveRate) < 0.0001) return this.round2(historicBs);
+    return this.round2(amountUsd * effectiveRate);
+  }
+
   async findAll(query: QueryReceiptsDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 20;
@@ -142,7 +150,7 @@ export class ReceiptsService {
         // Historic Bs: proportional to the original Bs amount
         const proportion = amountUsd / receivable.amountUsd;
         const amountBsHistoric = this.round2(receivable.amountBs * proportion);
-        const amountBsToday = this.round2(amountUsd * effectiveRate);
+        const amountBsToday = this.bsToday(amountUsd, amountBsHistoric, receivable.exchangeRate, effectiveRate);
 
         items.push({
           itemType: 'RECEIVABLE',
@@ -166,7 +174,7 @@ export class ReceiptsService {
         const amountUsd = item.amountUsd ? Math.min(item.amountUsd, balanceUsd) : balanceUsd;
         const proportion = amountUsd / payable.netPayableUsd;
         const amountBsHistoric = this.round2(payable.netPayableBs * proportion);
-        const amountBsToday = this.round2(amountUsd * effectiveRate);
+        const amountBsToday = this.bsToday(amountUsd, amountBsHistoric, payable.exchangeRate, effectiveRate);
 
         items.push({
           itemType: 'PAYABLE',
@@ -199,7 +207,7 @@ export class ReceiptsService {
         const amountUsd = item.amountUsd ? Math.min(this.round2(item.amountUsd), remaining) : remaining;
         const proportion = note.totalUsd > 0 ? amountUsd / note.totalUsd : 0;
         const amountBsHistoric = this.round2(note.totalBs * proportion);
-        const amountBsToday = this.round2(amountUsd * effectiveRate);
+        const amountBsToday = this.bsToday(amountUsd, amountBsHistoric, note.exchangeRate, effectiveRate);
 
         items.push({
           itemType: isCredit ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
@@ -225,7 +233,7 @@ export class ReceiptsService {
           description: `Ret. IVA ${retention.number} (${retention.purchaseOrder?.number || ''})`,
           amountUsd: retention.retentionUsd,
           amountBsHistoric: retention.retentionBs,
-          amountBsToday: this.round2(retention.retentionUsd * effectiveRate),
+          amountBsToday: this.bsToday(retention.retentionUsd, retention.retentionBs, retention.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -240,7 +248,7 @@ export class ReceiptsService {
           description: `Ret. IVA ${v.number}`,
           amountUsd: v.retentionAmountUsd,
           amountBsHistoric: v.retentionAmountBs,
-          amountBsToday: this.round2(v.retentionAmountUsd * effectiveRate),
+          amountBsToday: this.bsToday(v.retentionAmountUsd, v.retentionAmountBs, v.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -255,7 +263,7 @@ export class ReceiptsService {
           description: `Ret. ISLR ${v.number}`,
           amountUsd: v.retentionAmountUsd,
           amountBsHistoric: v.retentionAmountBs,
-          amountBsToday: this.round2(v.retentionAmountUsd * effectiveRate),
+          amountBsToday: this.bsToday(v.retentionAmountUsd, v.retentionAmountBs, v.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -274,7 +282,7 @@ export class ReceiptsService {
           description: `Ret. IVA ${retention.number} (${retention.invoice?.number || ''})`,
           amountUsd: retention.retentionUsd,
           amountBsHistoric: retention.retentionBs,
-          amountBsToday: this.round2(retention.retentionUsd * effectiveRate),
+          amountBsToday: this.bsToday(retention.retentionUsd, retention.retentionBs, retention.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -295,7 +303,7 @@ export class ReceiptsService {
           description: `Anticipo${advance.reference ? ' ' + advance.reference : ''} (saldo a favor)`,
           amountUsd,
           amountBsHistoric: this.round2(advance.amountBs * proportion),
-          amountBsToday: this.round2(amountUsd * effectiveRate),
+          amountBsToday: this.bsToday(amountUsd, this.round2(advance.amountBs * proportion), advance.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
@@ -316,7 +324,7 @@ export class ReceiptsService {
           description: `Anticipo${advance.reference ? ' ' + advance.reference : ''} (adelanto)`,
           amountUsd,
           amountBsHistoric: this.round2(advance.amountBs * proportion),
-          amountBsToday: this.round2(amountUsd * effectiveRate),
+          amountBsToday: this.bsToday(amountUsd, this.round2(advance.amountBs * proportion), advance.exchangeRate, effectiveRate),
           differentialBs: 0,
           sign: item.sign,
         });
