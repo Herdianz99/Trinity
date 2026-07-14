@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X,
+  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X, Trash2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -96,6 +96,7 @@ export default function ReceiptDetailPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authAction, setAuthAction] = useState<'cancel' | 'delete'>('cancel');
 
   // Payment modal for processing DRAFT
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -146,7 +147,36 @@ export default function ReceiptDetailPage() {
   }, []);
 
   function requestCancel() {
+    setAuthAction('cancel');
     setAuthModalOpen(true);
+  }
+
+  function requestDelete() {
+    setAuthAction('delete');
+    setAuthModalOpen(true);
+  }
+
+  function onAuthorized(key: string) {
+    if (authAction === 'delete') executeDelete(key);
+    else executeCancel();
+  }
+
+  async function executeDelete(key: string) {
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/proxy/receipts/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dynamicKey: key }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Error al eliminar');
+      setMessage({ type: 'success', text: 'Recibo eliminado y documentos revertidos' });
+      setTimeout(() => router.push('/receipts'), 1200);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setCancelling(false);
   }
 
   async function executeCancel() {
@@ -317,15 +347,25 @@ export default function ReceiptDetailPage() {
             </>
           )}
           {receipt.status === 'POSTED' && (
-            <a
-              href={`/api/proxy/receipts/${id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-            >
-              <Printer size={16} />
-              Imprimir PDF
-            </a>
+            <>
+              <a
+                href={`/api/proxy/receipts/${id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                <Printer size={16} />
+                Imprimir PDF
+              </a>
+              <button
+                onClick={requestDelete}
+                disabled={cancelling}
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg font-medium transition-colors"
+              >
+                <Trash2 size={16} />
+                Eliminar
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -522,11 +562,13 @@ export default function ReceiptDetailPage() {
       <DynamicKeyModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onAuthorized={executeCancel}
+        onAuthorized={onAuthorized}
         permission={getCancelPermission()}
         entityType="Receipt"
         entityId={id}
-        action={`Cancelar recibo ${receipt.number}`}
+        action={`${authAction === 'delete' ? 'Eliminar' : 'Cancelar'} recibo ${receipt.number}`}
+        title={authAction === 'delete' ? 'Eliminar recibo procesado' : 'Cancelar recibo'}
+        description={authAction === 'delete' ? 'Se revertiran los documentos a su estado anterior. Ingresa la clave.' : 'Ingresa la clave de supervisor para continuar'}
       />
 
       {/* Payment Modal */}

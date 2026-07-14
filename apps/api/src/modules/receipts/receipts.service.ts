@@ -10,10 +10,14 @@ import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
 import { QueryPendingDocumentsDto } from './dto/query-pending-documents.dto';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
 export class ReceiptsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dynamicKeysService: DynamicKeysService,
+  ) {}
 
   private round2(n: number): number {
     return Math.round(n * 100) / 100;
@@ -702,22 +706,109 @@ export class ReceiptsService {
     });
   }
 
-  // Eliminar (borrar de verdad) un recibo NO procesado (borrador o anulado), para que no ocupe
-  // espacio. Un recibo en borrador no tiene pagos aplicados, asi que es seguro borrarlo.
-  async remove(id: string) {
+  // Eliminar un recibo. Borrador/anulado: borrado directo. PROCESADO: requiere clave dinamica
+  // y REVIERTE todo lo que aplico (deja CxC/CxP, notas, retenciones, anticipos y caja como estaban).
+  async remove(id: string, dynamicKey?: string) {
     const receipt = await this.prisma.receipt.findUnique({
       where: { id },
-      select: { id: true, status: true, number: true },
+      include: { items: true },
     });
     if (!receipt) throw new NotFoundException('Recibo no encontrado');
-    if (receipt.status === 'POSTED') {
-      throw new BadRequestException('No se puede eliminar un recibo procesado. Solo borradores o anulados.');
+
+    // Borrador/anulado: no aplico nada, se borra directo.
+    if (receipt.status !== 'POSTED') {
+      await this.prisma.$transaction([
+        this.prisma.receiptItem.deleteMany({ where: { receiptId: id } }),
+        this.prisma.receipt.delete({ where: { id } }),
+      ]);
+      return { message: `Recibo ${receipt.number} eliminado` };
     }
-    await this.prisma.$transaction([
-      this.prisma.receiptItem.deleteMany({ where: { receiptId: id } }),
-      this.prisma.receipt.delete({ where: { id } }),
-    ]);
-    return { message: `Recibo ${receipt.number} eliminado` };
+
+    // Procesado: clave dinamica (permiso segun tipo) + reversa completa.
+    const permission = receipt.type === 'COLLECTION' ? 'DELETE_RECEIPT_COLLECTION' : 'DELETE_RECEIPT_PAYMENT';
+    await this.dynamicKeysService.validate({
+      key: dynamicKey || '',
+      permission,
+      action: `Eliminar recibo procesado ${receipt.number}`,
+      entityType: 'Receipt',
+      entityId: id,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      const receivableIds = new Set<string>();
+      const payableIds = new Set<string>();
+
+      // 1) Revertir cada item a su estado previo
+      for (const item of receipt.items) {
+        if (item.itemType === 'RECEIVABLE' && item.receivableId) {
+          receivableIds.add(item.receivableId);
+        } else if (item.itemType === 'PAYABLE' && item.payableId) {
+          payableIds.add(item.payableId);
+        } else if ((item.itemType === 'CREDIT_NOTE' || item.itemType === 'DEBIT_NOTE') && item.creditDebitNoteId) {
+          const note = await tx.creditDebitNote.findUnique({ where: { id: item.creditDebitNoteId } });
+          if (note) {
+            const newPaid = this.round2(Math.max(0, (note.paidAmountUsd || 0) - item.amountUsd));
+            await tx.creditDebitNote.update({ where: { id: item.creditDebitNoteId }, data: { paidAmountUsd: newPaid, appliedAt: null } });
+          }
+        } else if (item.itemType === 'IVA_RETENTION' && item.ivaRetentionId) {
+          await tx.ivaRetention.update({ where: { id: item.ivaRetentionId }, data: { appliedAt: null } });
+        } else if (item.itemType === 'SALES_IVA_RETENTION' && item.customerIvaRetentionId) {
+          await tx.customerIvaRetention.update({ where: { id: item.customerIvaRetentionId }, data: { appliedAt: null } });
+        } else if (item.itemType === 'PURCHASE_IVA_RETENTION' && item.retentionVoucherId) {
+          await tx.retentionVoucher.update({ where: { id: item.retentionVoucherId }, data: { appliedAt: null } });
+        } else if (item.itemType === 'PURCHASE_ISLR_RETENTION' && item.islrRetentionVoucherId) {
+          await tx.islrRetentionVoucher.update({ where: { id: item.islrRetentionVoucherId }, data: { appliedAt: null } });
+        } else if (item.itemType === 'CUSTOMER_ADVANCE' && item.customerAdvanceId) {
+          const adv = await tx.customerAdvance.findUnique({ where: { id: item.customerAdvanceId } });
+          if (adv) {
+            const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
+            const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
+            await tx.customerAdvance.update({ where: { id: item.customerAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+          }
+        } else if (item.itemType === 'SUPPLIER_ADVANCE' && item.supplierAdvanceId) {
+          const adv = await tx.supplierAdvance.findUnique({ where: { id: item.supplierAdvanceId } });
+          if (adv) {
+            const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
+            const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
+            await tx.supplierAdvance.update({ where: { id: item.supplierAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+          }
+        }
+      }
+
+      // 2) Borrar los pagos que genero este recibo
+      await tx.receivablePayment.deleteMany({ where: { receiptId: id } });
+      await tx.payablePayment.deleteMany({ where: { receiptId: id } });
+
+      // 3) Recalcular CxC afectadas desde los pagos que quedan
+      for (const rid of receivableIds) {
+        const r = await tx.receivable.findUnique({ where: { id: rid } });
+        if (!r) continue;
+        const s = await tx.receivablePayment.aggregate({ where: { receivableId: rid }, _sum: { amountUsd: true, amountBs: true } });
+        const paidUsd = this.round2(s._sum.amountUsd || 0);
+        const isPaid = paidUsd >= r.amountUsd - 0.01;
+        await tx.receivable.update({ where: { id: rid }, data: { paidAmountUsd: paidUsd, paidAmountBs: this.round2(s._sum.amountBs || 0), status: isPaid ? 'PAID' : paidUsd > 0.01 ? 'PARTIAL' : 'PENDING', paidAt: isPaid ? r.paidAt : null } });
+      }
+      // 4) Recalcular CxP afectadas
+      for (const pid of payableIds) {
+        const p = await tx.payable.findUnique({ where: { id: pid } });
+        if (!p) continue;
+        const s = await tx.payablePayment.aggregate({ where: { payableId: pid }, _sum: { amountUsd: true, amountBs: true } });
+        const paidUsd = this.round2(s._sum.amountUsd || 0);
+        const isPaid = paidUsd >= p.netPayableUsd - 0.01;
+        await tx.payable.update({ where: { id: pid }, data: { paidAmountUsd: paidUsd, paidAmountBs: this.round2(s._sum.amountBs || 0), status: isPaid ? 'PAID' : paidUsd > 0.01 ? 'PARTIAL' : 'PENDING', paidAt: isPaid ? p.paidAt : null } });
+      }
+
+      // 5) Revertir caja: filas del libro mayor + cashMovement de reintegro (legacy)
+      await tx.cashLedgerEntry.deleteMany({ where: { sourceId: id, sourceType: { in: ['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT', 'REINTEGRO'] } } });
+      await tx.cashMovement.deleteMany({ where: { reason: `Reintegro recibo ${receipt.number}` } });
+
+      // 6) Borrar el recibo
+      await tx.receiptPayment.deleteMany({ where: { receiptId: id } });
+      await tx.receiptItem.deleteMany({ where: { receiptId: id } });
+      await tx.receipt.delete({ where: { id } });
+    });
+
+    return { message: `Recibo ${receipt.number} eliminado y documentos revertidos` };
   }
 
   async getPendingDocuments(query: QueryPendingDocumentsDto) {

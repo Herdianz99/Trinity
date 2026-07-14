@@ -80,7 +80,7 @@ export class ReceiptsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.receiptsService.remove(id);
+  remove(@Param('id') id: string, @Body('dynamicKey') dynamicKey?: string) {
+    return this.receiptsService.remove(id, dynamicKey);
   }
 }
