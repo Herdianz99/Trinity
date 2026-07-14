@@ -28,62 +28,59 @@ export class ExpensePdfService {
     const config = await this.prisma.companyConfig.findFirst();
 
     return new Promise((resolve, reject) => {
-      // Media carta VERTICAL (retrato): 396x612 pt = 5.5" x 8.5" ("media carta"),
-      // la mitad de una LETTER pero manteniendo orientacion vertical (NO apaisada).
-      // Dos comprobantes entran por hoja carta con impresion 2-en-1 para ahorrar papel.
-      const doc = new PDFDocument({ size: [396, 612], margins: { top: 30, left: 30, right: 30, bottom: 6 } });
+      // Media carta = mitad EXACTA de una LETTER (612x792 -> 612x396): ancho completo
+      // de la carta, mitad del alto. Dos comprobantes apilados llenan una hoja carta,
+      // asi que se imprimen 2 gastos por hoja. El contenido va derecho (no rotado);
+      // la pagina solo es ancha y baja (la mitad superior/inferior de la carta).
+      const doc = new PDFDocument({ size: [612, 396], margins: { top: 30, left: 30, right: 30, bottom: 6 } });
       const buffers: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
       const left = 30;
-      const pageWidth = doc.page.width - 60; // 336
+      const pageWidth = doc.page.width - 60; // 552
       const rightEdge = left + pageWidth;
-      let y = 30;
+      let y = 28;
 
-      // ========== TITULO ==========
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000')
-        .text('COMPROBANTE DE GASTO', left, y, { width: pageWidth, align: 'center' });
-      y += 22;
-
-      // ========== HEADER (empresa izquierda / datos derecha) ==========
-      const headerTop = y;
-      const compW = 180;
-      let ly = headerTop;
+      // ========== HEADER (empresa izquierda / titulo + datos derecha) ==========
+      let logoBottom = y;
       if (config?.logo) {
         try {
           const base64Data = config.logo.replace(/^data:image\/\w+;base64,/, '');
-          doc.image(Buffer.from(base64Data, 'base64'), left, ly, { height: 38 });
-          ly += 42;
+          doc.image(Buffer.from(base64Data, 'base64'), left, y, { height: 40 });
+          logoBottom = y + 44;
         } catch {
-          doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text(config?.companyName || 'Trinity ERP', left, ly, { width: compW });
-          ly += doc.heightOfString(config?.companyName || 'Trinity ERP', { width: compW });
+          doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(config?.companyName || 'Trinity ERP', left, y);
+          logoBottom = y + 18;
         }
       } else {
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text(config?.companyName || 'Trinity ERP', left, ly, { width: compW });
-        ly += doc.heightOfString(config?.companyName || 'Trinity ERP', { width: compW }) + 2;
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(config?.companyName || 'Trinity ERP', left, y);
+        let ly = y + 18;
         doc.fontSize(8).font('Helvetica').fillColor('#333333');
-        if (config?.rif) { doc.text(`RIF: ${config.rif}`, left, ly, { width: compW }); ly += 11; }
-        if (config?.address) { doc.text(config.address, left, ly, { width: compW }); ly += doc.heightOfString(config.address, { width: compW }); }
-        if (config?.phone) { doc.text(`Tel: ${config.phone}`, left, ly, { width: compW }); ly += 11; }
+        if (config?.rif) { doc.text(`RIF: ${config.rif}`, left, ly); ly += 11; }
+        if (config?.address) { doc.text(config.address, left, ly, { width: 260 }); ly += 11; }
+        if (config?.phone) { doc.text(`Tel: ${config.phone}`, left, ly); ly += 11; }
+        logoBottom = ly;
       }
 
-      // Datos del comprobante (derecha, alineados a la derecha)
-      const metaX = left + compW + 10;
-      const metaW = rightEdge - metaX;
-      let ry = headerTop;
+      // Titulo + datos del comprobante (derecha)
+      const rightX = 320;
+      let ry = 28;
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000')
+        .text('COMPROBANTE DE GASTO', rightX, ry, { width: rightEdge - rightX, align: 'right' });
+      ry += 18;
       doc.fontSize(8).font('Helvetica').fillColor('#555555');
-      doc.text(`Fecha del gasto: ${new Date(expense.date).toLocaleDateString('es-VE', { timeZone: 'UTC' })}`, metaX, ry, { width: metaW, align: 'right' }); ry += 11;
-      doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, metaX, ry, { width: metaW, align: 'right' }); ry += 11;
-      doc.text(`ID: ${expense.id}`, metaX, ry, { width: metaW, align: 'right' }); ry += doc.heightOfString(`ID: ${expense.id}`, { width: metaW });
+      doc.text(`Fecha del gasto: ${new Date(expense.date).toLocaleDateString('es-VE', { timeZone: 'UTC' })}`, rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 10;
+      doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 10;
+      doc.text(`ID: ${expense.id}`, rightX, ry, { width: rightEdge - rightX, align: 'right' });
 
-      y = Math.max(ly, ry) + 10;
+      y = Math.max(logoBottom, ry) + 10;
       doc.moveTo(left, y).lineTo(rightEdge, y).stroke('#cccccc');
       y += 12;
 
       // ========== DATOS DEL GASTO ==========
-      const labelW = 105;
+      const labelW = 120;
       const valueX = left + labelW;
       const valueW = pageWidth - labelW;
 
@@ -134,21 +131,21 @@ export class ExpensePdfService {
       doc.roundedRect(left, boxTop, pageWidth, boxH, 6).fill('#f8f9fa');
       doc.restore();
 
-      const col1 = left + 14;
-      const col2 = left + pageWidth / 3 + 6;
+      const col1 = left + 20;
+      const col2 = left + pageWidth / 3 + 10;
       const col3 = left + (pageWidth * 2) / 3;
       const cy = boxTop + 12;
 
-      doc.fontSize(7.5).font('Helvetica').fillColor('#888888');
+      doc.fontSize(8).font('Helvetica').fillColor('#888888');
       doc.text('MONTO USD', col1, cy);
       doc.text('TASA (Bs/USD)', col2, cy);
       doc.text('MONTO Bs', col3, cy);
 
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#b91c1c');
+      doc.fontSize(15).font('Helvetica-Bold').fillColor('#b91c1c');
       doc.text(`$ ${this.fmt(expense.amountUsd)}`, col1, cy + 14);
-      doc.fillColor('#000000').fontSize(11);
+      doc.fillColor('#000000').fontSize(12);
       doc.text(this.fmt(expense.exchangeRate), col2, cy + 16);
-      doc.fillColor('#b91c1c').fontSize(14);
+      doc.fillColor('#b91c1c').fontSize(15);
       doc.text(`Bs ${this.fmt(expense.amountBs)}`, col3, cy + 14);
 
       y = boxTop + boxH + 12;
@@ -165,7 +162,7 @@ export class ExpensePdfService {
 
       // ========== FIRMA ==========
       y = Math.max(y + 6, boxTop + boxH + 22);
-      const sigGap = 26;
+      const sigGap = 40;
       const sigW = (pageWidth - sigGap) / 2;
       doc.moveTo(left, y).lineTo(left + sigW, y).stroke('#999999');
       doc.moveTo(left + sigW + sigGap, y).lineTo(rightEdge, y).stroke('#999999');
