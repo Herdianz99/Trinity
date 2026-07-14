@@ -1,10 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
-## ✅ Session 71 (2026-07-13) — RESUMEN
+## ✅ Session 71 (2026-07-13) — RESUMEN — **TODO DESPLEGADO A AMBAS EMPRESAS** (HEAD `d3794aa`)
 
-**Tanda A — YA DESPLEGADA a la grande** (10 commits `93cb375`..`40354e7`, sin migraciones; **chica pendiente**). Detalle abajo.
+**Tanda A** (10 commits `93cb375`..`40354e7`, sin migraciones) + **Tanda B** (5 commits `69a592b`..`e0b61f8`, con migración `20260713230000_anticipos_cruzables_receipt`) desplegadas a **grande** (`134.209.164.59`) y **chica** (`134.209.220.233`) el 2026-07-13. Verificado en ambas: API `/health` 200, PM2 online, migración `anticipos_cruzables_receipt` = OK, enums (`CUSTOMER_ADVANCE`/`SUPPLIER_ADVANCE`, 4 `DELETE_*` nuevos) y columnas `ReceiptItem.customerAdvanceId`/`supplierAdvanceId` presentes.
 
-**Tanda B — PENDIENTE DE DEPLOY a AMBAS** (5 commits `69a592b`..`e0b61f8`, **con migración** `20260713230000_anticipos_cruzables_receipt`): anticipos cruzables + borrado con clave, diferencial cambiario por tasa, fecha/tasa en recibo de pago, eliminar recibo procesado con clave. Detalle en los bloques "PENDIENTE DE DEPLOY" de abajo. Post-deploy: asignar los permisos nuevos (`DELETE_CUSTOMER_ADVANCE`/`DELETE_SUPPLIER_ADVANCE`, `DELETE_RECEIPT_COLLECTION`/`DELETE_RECEIPT_PAYMENT`) a una clave dinámica activa.
+**Post-deploy — estado de permisos (clave dinámica activa en cada empresa):**
+- ✅ `DELETE_RECEIPT_COLLECTION` + `DELETE_RECEIPT_PAYMENT` ya asignados (grande: "Clave Maestra"; chica: "admi") → **eliminar recibos procesados funciona en ambas**.
+- ⏳ `DELETE_CUSTOMER_ADVANCE` + `DELETE_SUPPLIER_ADVANCE` **aún NO asignados en ninguna empresa** → **borrar anticipos todavía no funciona**. Diego los agregará mañana (2026-07-14) en `/settings/dynamic-keys` de cada empresa. Es lo ÚNICO que queda de la Session 71.
+
+Detalle de cada cambio en los bloques de abajo (los rótulos "PENDIENTE DE DEPLOY" de la Tanda B ya están desplegados; se conservan como historia).
 
 1. **Correlativo de retenciones auto-sanable** + validación de **factura de compra duplicada** por proveedor (`93cb375`). Fix de datos del contador ya aplicado en la grande (→1358). Ver memoria `correlativo-retencion-desync`.
 2. **Tab "Negativos"** en Alertas de Inventario (existencia < 0) — con PDF/Excel (`a1c238f`).
