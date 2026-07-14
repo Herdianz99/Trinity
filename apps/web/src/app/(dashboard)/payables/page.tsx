@@ -18,6 +18,7 @@ import {
   Plus,
   Banknote,
   Trash2,
+  Printer,
 } from 'lucide-react';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
 
@@ -133,6 +134,10 @@ export default function PayablesPage() {
   const [advancesTotalPages, setAdvancesTotalPages] = useState(1);
   const [advancesLoading, setAdvancesLoading] = useState(false);
   const [advancesStatus, setAdvancesStatus] = useState('');
+  const [advancesSupplierId, setAdvancesSupplierId] = useState('');
+  const [advancesReference, setAdvancesReference] = useState('');
+  const [advancesFrom, setAdvancesFrom] = useState('');
+  const [advancesTo, setAdvancesTo] = useState('');
 
   // Advance modal states
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
@@ -205,6 +210,10 @@ export default function PayablesPage() {
       params.set('page', advancesPage.toString());
       params.set('limit', '20');
       if (advancesStatus) params.set('status', advancesStatus);
+      if (advancesSupplierId) params.set('supplierId', advancesSupplierId);
+      if (advancesReference) params.set('reference', advancesReference);
+      if (advancesFrom) params.set('from', advancesFrom);
+      if (advancesTo) params.set('to', advancesTo);
       const res = await fetch(`/api/proxy/supplier-advances?${params}`);
       const data = await res.json();
       setAdvances(data.data || []);
@@ -215,7 +224,18 @@ export default function PayablesPage() {
     } finally {
       setAdvancesLoading(false);
     }
-  }, [advancesPage, advancesStatus]);
+  }, [advancesPage, advancesStatus, advancesSupplierId, advancesReference, advancesFrom, advancesTo]);
+
+  // Reporte PDF de la lista de anticipos con el filtro actual (sin paginacion)
+  function openAdvancesReportPdf() {
+    const params = new URLSearchParams();
+    if (advancesStatus) params.set('status', advancesStatus);
+    if (advancesSupplierId) params.set('supplierId', advancesSupplierId);
+    if (advancesReference) params.set('reference', advancesReference);
+    if (advancesFrom) params.set('from', advancesFrom);
+    if (advancesTo) params.set('to', advancesTo);
+    window.open(`/api/proxy/supplier-advances/report/pdf?${params}`, '_blank');
+  }
 
   const fetchExchangeRate = useCallback(async () => {
     try {
@@ -584,6 +604,14 @@ export default function PayablesPage() {
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div>
+                <label className="text-xs text-slate-400 mb-1 block">Proveedor</label>
+                <select value={advancesSupplierId} onChange={e => { setAdvancesSupplierId(e.target.value); setAdvancesPage(1); }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 min-w-[200px]">
+                  <option value="">Todos</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="text-xs text-slate-400 mb-1 block">Estado</label>
                 <select value={advancesStatus} onChange={e => { setAdvancesStatus(e.target.value); setAdvancesPage(1); }}
                   className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
@@ -592,6 +620,31 @@ export default function PayablesPage() {
                   <option value="PARTIAL">Parcial</option>
                   <option value="CONSUMED">Consumido</option>
                 </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Desde</label>
+                <input type="date" value={advancesFrom} onChange={e => { setAdvancesFrom(e.target.value); setAdvancesPage(1); }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Hasta</label>
+                <input type="date" value={advancesTo} onChange={e => { setAdvancesTo(e.target.value); setAdvancesPage(1); }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Referencia</label>
+                <input type="text" value={advancesReference} onChange={e => { setAdvancesReference(e.target.value); setAdvancesPage(1); }}
+                  placeholder="Referencia" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+              </div>
+              <div className="ml-auto flex items-end gap-2">
+                {(advancesSupplierId || advancesStatus || advancesFrom || advancesTo || advancesReference) && (
+                  <button onClick={() => { setAdvancesSupplierId(''); setAdvancesStatus(''); setAdvancesFrom(''); setAdvancesTo(''); setAdvancesReference(''); setAdvancesPage(1); }}
+                    className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">Limpiar</button>
+                )}
+                <button onClick={openAdvancesReportPdf}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium">
+                  <FileText size={16} /> Reporte PDF
+                </button>
               </div>
             </div>
           </div>
@@ -635,11 +688,16 @@ export default function PayablesPage() {
                       <td className="px-4 py-3 text-slate-300 text-xs">{new Date(a.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs font-mono">{a.reference || '-'}</td>
                       <td className="px-4 py-3 text-center">
-                        {a.status === 'AVAILABLE' && (
-                          <button onClick={() => setDeleteAdvance(a)} title="Eliminar anticipo (clave)" className="text-slate-500 hover:text-red-400">
-                            <Trash2 size={15} />
+                        <div className="inline-flex items-center gap-2">
+                          <button onClick={() => window.open(`/api/proxy/supplier-advances/${a.id}/pdf`, '_blank')} title="Imprimir comprobante" className="text-slate-500 hover:text-teal-400">
+                            <Printer size={15} />
                           </button>
-                        )}
+                          {a.status === 'AVAILABLE' && (
+                            <button onClick={() => setDeleteAdvance(a)} title="Eliminar anticipo (clave)" className="text-slate-500 hover:text-red-400">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

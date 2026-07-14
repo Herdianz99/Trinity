@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
-import { caracasDateKey } from '../../common/timezone';
+import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
@@ -119,14 +119,27 @@ export class SupplierAdvancesService {
     });
   }
 
-  async findAll(query: { supplierId?: string; status?: string; page?: number; limit?: number }) {
+  // Filtro Prisma compartido por la lista paginada y el reporte.
+  // Fechas: createdAt es TIMESTAMP -> rango del dia-calendario Caracas (ver timezone.ts).
+  private buildWhere(query: { supplierId?: string; status?: string; from?: string; to?: string; reference?: string }) {
+    const where: any = {};
+    if (query.supplierId) where.supplierId = query.supplierId;
+    if (query.status) where.status = query.status;
+    if (query.reference) where.reference = { contains: query.reference, mode: 'insensitive' };
+    if (query.from || query.to) {
+      where.createdAt = {};
+      if (query.from) where.createdAt.gte = caracasDayStart(query.from);
+      if (query.to) where.createdAt.lte = caracasDayEnd(query.to);
+    }
+    return where;
+  }
+
+  async findAll(query: { supplierId?: string; status?: string; from?: string; to?: string; reference?: string; page?: number; limit?: number }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (query.supplierId) where.supplierId = query.supplierId;
-    if (query.status) where.status = query.status;
+    const where = this.buildWhere(query);
 
     const [data, total] = await Promise.all([
       this.prisma.supplierAdvance.findMany({
@@ -170,5 +183,42 @@ export class SupplierAdvancesService {
       remainingUsd: Math.round((a.amountUsd - a.paidAmountUsd) * 100) / 100,
       remainingBs: Math.round((a.amountBs - a.paidAmountBs) * 100) / 100,
     }));
+  }
+
+  // Todos los anticipos que cumplen el filtro (sin paginar), para el reporte PDF de lista.
+  async findAllForReport(query: { supplierId?: string; status?: string; from?: string; to?: string; reference?: string }) {
+    const where = this.buildWhere(query);
+    const data = await this.prisma.supplierAdvance.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        supplier: { select: { id: true, name: true, rif: true } },
+        method: { select: { id: true, name: true } },
+      },
+    });
+    return data.map((a) => ({
+      ...a,
+      remainingUsd: Math.round((a.amountUsd - a.paidAmountUsd) * 100) / 100,
+      remainingBs: Math.round((a.amountBs - a.paidAmountBs) * 100) / 100,
+    }));
+  }
+
+  // Un anticipo con su historial de consumo (recibos que lo cruzaron), para el PDF individual.
+  async findOneForPdf(id: string) {
+    const advance = await this.prisma.supplierAdvance.findUnique({
+      where: { id },
+      include: {
+        supplier: { select: { name: true, rif: true } },
+        method: { select: { name: true } },
+        createdBy: { select: { name: true } },
+        receiptItems: {
+          include: {
+            receipt: { select: { number: true, type: true, status: true, createdAt: true } },
+          },
+        },
+      },
+    });
+    if (!advance) throw new NotFoundException('Anticipo no encontrado');
+    return advance;
   }
 }
