@@ -172,22 +172,6 @@ export class ExpensePdfService {
       doc.text('Elaborado por', left, y, { width: sigW, align: 'center' });
       doc.text('Autorizado por', left + sigW + sigGap, y, { width: sigW, align: 'center' });
 
-      // ========== FOOTER (dentro de la mitad superior, fluye bajo la firma) ==========
-      const footerY = Math.max(y + 16, HALF - 24);
-      doc.moveTo(left, footerY).lineTo(rightEdge, footerY).stroke('#cccccc');
-      doc.fontSize(6.5).font('Helvetica').fillColor('#888888').text(
-        `${config?.companyName || 'Trinity ERP'} - Comprobante de gasto - Generado el ${new Date().toLocaleString('es-VE')}`,
-        left, footerY + 6, { width: pageWidth, align: 'center' },
-      );
-
-      // ========== LINEA DE CORTE (a la mitad de la hoja) ==========
-      doc.save();
-      doc.lineWidth(0.7).dash(4, { space: 3 }).strokeColor('#aaaaaa')
-        .moveTo(24, HALF).lineTo(doc.page.width - 24, HALF).stroke();
-      doc.restore();
-      doc.fontSize(7).font('Helvetica').fillColor('#999999')
-        .text('corte', doc.page.width - 56, HALF + 3);
-
       doc.end();
     });
   }
