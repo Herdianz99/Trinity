@@ -54,6 +54,7 @@ interface NoteItem {
   quantity: number;
   unitPriceUsd: number;
   unitPriceBs: number;
+  discountPct?: number;
   ivaType: string;
   ivaAmount: number;
   ivaAmountBs: number;
@@ -606,6 +607,7 @@ export default function CreditDebitNoteDetailPage() {
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant.</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">P.Unit $</th>
+                    <th className="text-right px-4 py-3 text-slate-400 font-medium">Desc. %</th>
                     <th className="text-center px-4 py-3 text-slate-400 font-medium">IVA</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">IVA $</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">Total $</th>
@@ -618,6 +620,7 @@ export default function CreditDebitNoteDetailPage() {
                       <td className="px-4 py-3 text-white">{item.productName}</td>
                       <td className="px-4 py-3 text-right text-slate-300">{item.quantity}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{fmt(item.unitPriceUsd)}</td>
+                      <td className="px-4 py-3 text-right text-slate-300 font-mono">{item.discountPct ? `${item.discountPct}%` : '—'}</td>
                       <td className="px-4 py-3 text-center text-xs text-slate-400">{IVA_LABELS[item.ivaType] || item.ivaType}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{fmt(item.ivaAmount)}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{fmt(item.totalUsd)}</td>

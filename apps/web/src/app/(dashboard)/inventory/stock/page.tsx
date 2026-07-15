@@ -56,6 +56,8 @@ export default function StockPage() {
   // Valorar el inventario con el costo solo, o con costo + brecha (en productos que llevan brecha).
   // Por defecto arranca en "brecha" (costo + brecha), que es la valuacion que el negocio mira.
   const [valuationMode, setValuationMode] = useState<'cost' | 'costBrega'>('costBrega');
+  // Filtro por brecha: todos / solo los que llevan brecha / solo los que no.
+  const [bregaFilter, setBregaFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [loading, setLoading] = useState(true);
   const [adjustModal, setAdjustModal] = useState<{ productId: string; productName: string; currentStock: number } | null>(null);
   const [adjustForm, setAdjustForm] = useState({ warehouseId: '', type: 'ADJUSTMENT_IN' as string, quantity: 0, reason: '' });
@@ -164,10 +166,16 @@ export default function StockPage() {
       : base;
   }
 
+  // Filtro por brecha aplicado a la lista mostrada (afecta tabla y KPIs valorizados)
+  const matchesBrega = (p: { bregaApplies?: boolean }) =>
+    bregaFilter === 'all' ? true : bregaFilter === 'yes' ? !!p.bregaApplies : !p.bregaApplies;
+  const displayGlobal = globalStock.filter(i => matchesBrega(i.product));
+  const displayItems = stockItems.filter(i => matchesBrega(i.product));
+
   // Compute valuation
   const totalValuationUsd = selectedWarehouse === 'all'
-    ? globalStock.reduce((sum, item) => sum + item.totalStock * effectiveCost(item.product), 0)
-    : stockItems.reduce((sum, item) => sum + item.quantity * effectiveCost(item.product), 0);
+    ? displayGlobal.reduce((sum, item) => sum + item.totalStock * effectiveCost(item.product), 0)
+    : displayItems.reduce((sum, item) => sum + item.quantity * effectiveCost(item.product), 0);
   const totalValuationBs = totalValuationUsd * exchangeRate;
 
   function getStockStatus(qty: number, minStock: number) {
@@ -240,6 +248,27 @@ export default function StockPage() {
             </button>
           ))}
         </div>
+        {/* Filtro por brecha */}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/50">
+          <span className="text-xs text-slate-500 uppercase tracking-wider">Brecha:</span>
+          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+            {([
+              { key: 'all', label: 'Todos' },
+              { key: 'yes', label: 'Con brecha' },
+              { key: 'no', label: 'Sin brecha' },
+            ] as const).map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setBregaFilter(opt.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  bregaFilter === opt.key ? 'bg-green-500/20 text-green-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Reporte Valorizado (KPIs arriba, para verlos sin scrollear toda la lista) */}
@@ -270,15 +299,15 @@ export default function StockPage() {
           <div>
             <p className="text-xs text-slate-500 uppercase">Productos</p>
             <p className="text-xl font-bold text-white font-mono">
-              {selectedWarehouse === 'all' ? globalStock.length : stockItems.length}
+              {selectedWarehouse === 'all' ? displayGlobal.length : displayItems.length}
             </p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase">Unidades totales</p>
             <p className="text-xl font-bold text-white font-mono">
               {selectedWarehouse === 'all'
-                ? globalStock.reduce((s, i) => s + i.totalStock, 0).toLocaleString()
-                : stockItems.reduce((s, i) => s + i.quantity, 0).toLocaleString()
+                ? displayGlobal.reduce((s, i) => s + i.totalStock, 0).toLocaleString()
+                : displayItems.reduce((s, i) => s + i.quantity, 0).toLocaleString()
               }
             </p>
           </div>
@@ -318,9 +347,9 @@ export default function StockPage() {
                   <Loader2 className="animate-spin text-green-500 mx-auto" size={28} />
                 </td></tr>
               ) : selectedWarehouse === 'all' ? (
-                globalStock.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay stock registrado</td></tr>
-                ) : globalStock.map(item => {
+                displayGlobal.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay productos que coincidan con el filtro</td></tr>
+                ) : displayGlobal.map(item => {
                   const status = getStockStatus(item.totalStock, item.minStock);
                   return (
                     <tr key={item.product.id} className={`border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors ${status.rowBg}`}>
@@ -334,7 +363,7 @@ export default function StockPage() {
                       <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${effectiveCost(item.product).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.totalStock * effectiveCost(item.product)).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${status.color}`}>{status.label}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -358,9 +387,9 @@ export default function StockPage() {
                   );
                 })
               ) : (
-                stockItems.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay stock en este almacen</td></tr>
-                ) : stockItems.map(item => {
+                displayItems.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay productos que coincidan con el filtro</td></tr>
+                ) : displayItems.map(item => {
                   const status = getStockStatus(item.quantity, item.product.minStock);
                   return (
                     <tr key={item.id} className={`border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors ${status.rowBg}`}>
@@ -374,7 +403,7 @@ export default function StockPage() {
                       <td className="px-4 py-3 text-right text-slate-300 font-mono hidden lg:table-cell">${effectiveCost(item.product).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-white font-mono hidden lg:table-cell">${(item.quantity * effectiveCost(item.product)).toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${status.color}`}>{status.label}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">

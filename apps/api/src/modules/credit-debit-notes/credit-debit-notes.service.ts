@@ -340,13 +340,24 @@ export class CreditDebitNotesService {
             throw new BadRequestException(`Solo puedes devolver ${availableQty} unidades de '${poItem.product.name}'. Ya se devolvieron ${returnedQty}`);
           }
 
-          const unitPriceUsd = poItem.costUsd;
-          const ivaRate = this.getIvaRate(poItem.product.ivaType);
-          const lineSubtotal = this.round2(unitPriceUsd * dtoItem.quantity);
+          // La nota es un ESPEJO de la factura de compra: se muestra el precio unitario
+          // BRUTO y el descuento de la linea tal cual la factura, pero el subtotal se
+          // calcula con el costo NETO (lo que realmente se pago). Asi la devolucion queda
+          // identica a la compra, solo que en reverso. Fallback al bruto si no hay neto.
+          const grossUnitUsd = poItem.costUsd;
+          const netUnitUsd = poItem.netCostUsd > 0 ? poItem.netCostUsd : poItem.costUsd;
+          const discountPct = poItem.discountPct || 0;
+          // El IVA de la devolucion solo aplica si la compra original llevo IVA. Si la
+          // compra se registro sin IVA (totalIvaUsd = 0, p.ej. proveedor no fiscal), la
+          // devolucion tampoco lleva IVA: no se puede acreditar un IVA que nunca se pago.
+          const purchaseHadIva = (po.totalIvaUsd || 0) > 0;
+          const effectiveIvaType = purchaseHadIva ? poItem.product.ivaType : 'EXEMPT';
+          const ivaRate = this.getIvaRate(effectiveIvaType);
+          const lineSubtotal = this.round2(netUnitUsd * dtoItem.quantity);
           const lineIva = this.round2(lineSubtotal * ivaRate);
           const lineTotal = this.round2(lineSubtotal + lineIva);
 
-          const unitPriceBs = this.round2(unitPriceUsd * exchangeRate);
+          const unitPriceBs = this.round2(grossUnitUsd * exchangeRate);
           const lineIvaBs = this.round2(lineIva * exchangeRate);
           const lineTotalBs = this.round2(lineTotal * exchangeRate);
 
@@ -362,13 +373,14 @@ export class CreditDebitNotesService {
             productName: poItem.product.name,
             productCode: poItem.product.code,
             quantity: dtoItem.quantity,
-            unitPriceUsd: this.round2(unitPriceUsd),
+            unitPriceUsd: this.round2(grossUnitUsd),
             unitPriceBs,
-            ivaType: poItem.product.ivaType,
+            ivaType: effectiveIvaType,
             ivaAmount: lineIva,
             ivaAmountBs: lineIvaBs,
             totalUsd: lineTotal,
             totalBs: lineTotalBs,
+            discountPct,
           });
         }
       }

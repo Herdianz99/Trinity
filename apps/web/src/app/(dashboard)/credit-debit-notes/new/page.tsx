@@ -33,6 +33,7 @@ interface POItem {
   product: { code: string; name: string; ivaType: string };
   quantity: number;
   costUsd: number;
+  netCostUsd?: number;
   totalUsd: number;
   receivedQty: number;
 }
@@ -42,6 +43,7 @@ interface ParentDoc {
   number: string;
   totalUsd: number;
   totalBs: number;
+  totalIvaUsd?: number;
   exchangeRate: number;
   igtfUsd?: number;
   customer?: { name: string; rif: string | null } | null;
@@ -127,6 +129,7 @@ export default function NewCreditDebitNotePage() {
           number: po.number,
           totalUsd: po.totalUsd,
           totalBs: po.totalBs || 0,
+          totalIvaUsd: po.totalIvaUsd || 0,
           exchangeRate: po.exchangeRate || 0,
           supplier: po.supplier,
           poItems: po.items,
@@ -213,11 +216,15 @@ export default function NewCreditDebitNotePage() {
         }
       });
     } else if (!isSale && parentDoc?.poItems) {
+      // Igual que el backend: costo NETO pagado (con descuento), y el IVA solo si la
+      // compra original llevo IVA (si la compra fue sin IVA, la devolucion tampoco).
+      const purchaseHadIva = (parentDoc.totalIvaUsd || 0) > 0;
       parentDoc.poItems.forEach((item) => {
         const qty = selectedItems[item.id] || 0;
         if (qty > 0) {
-          const lineSubtotal = item.costUsd * qty;
-          const lineIva = lineSubtotal * getIvaRate(item.product.ivaType);
+          const unitPrice = (item.netCostUsd ?? 0) > 0 ? (item.netCostUsd as number) : item.costUsd;
+          const lineSubtotal = unitPrice * qty;
+          const lineIva = purchaseHadIva ? lineSubtotal * getIvaRate(item.product.ivaType) : 0;
           subtotal += lineSubtotal;
           iva += lineIva;
         }
@@ -450,7 +457,10 @@ export default function NewCreditDebitNotePage() {
               })}
               {!isSale && parentDoc?.poItems?.map((item) => {
                 const qty = selectedItems[item.id] || 0;
-                const lineTotal = item.costUsd * qty * (1 + getIvaRate(item.product.ivaType));
+                // Total de linea con el costo NETO pagado y el IVA solo si la compra lo llevo
+                const poHadIva = (parentDoc?.totalIvaUsd || 0) > 0;
+                const netUnit = (item.netCostUsd ?? 0) > 0 ? (item.netCostUsd as number) : item.costUsd;
+                const lineTotal = netUnit * qty * (1 + (poHadIva ? getIvaRate(item.product.ivaType) : 0));
                 const summary = returnSummary.find((s) => s.itemId === item.id);
                 const availableQty = summary ? summary.availableQty : item.quantity;
                 const returnedQty = summary ? summary.returnedQty : 0;

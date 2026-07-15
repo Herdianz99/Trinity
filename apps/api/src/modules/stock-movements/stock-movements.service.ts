@@ -6,41 +6,46 @@ import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 export class StockMovementsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Construye el filtro Prisma compartido por el listado y los reportes.
+  // supplierId filtra por el proveedor de la FICHA del producto (Product.supplierId).
+  private buildWhere(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const where: any = {};
+
+    if (filters.productId) where.productId = filters.productId;
+    if (filters.warehouseId) where.warehouseId = filters.warehouseId;
+    if (filters.type) where.type = filters.type;
+    if (filters.supplierId) where.product = { supplierId: filters.supplierId };
+
+    if (filters.from || filters.to) {
+      where.createdAt = {};
+      if (filters.from) where.createdAt.gte = caracasDayStart(filters.from);
+      if (filters.to) where.createdAt.lte = caracasDayEnd(filters.to);
+    }
+
+    return where;
+  }
+
   async findAll(filters: {
     productId?: string;
     warehouseId?: string;
     type?: string;
+    supplierId?: string;
     from?: string;
     to?: string;
     page?: number;
     limit?: number;
   }) {
-    const where: any = {};
+    const where = this.buildWhere(filters);
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
-
-    if (filters.productId) {
-      where.productId = filters.productId;
-    }
-
-    if (filters.warehouseId) {
-      where.warehouseId = filters.warehouseId;
-    }
-
-    if (filters.type) {
-      where.type = filters.type;
-    }
-
-    if (filters.from || filters.to) {
-      where.createdAt = {};
-      if (filters.from) {
-        where.createdAt.gte = caracasDayStart(filters.from);
-      }
-      if (filters.to) {
-        where.createdAt.lte = caracasDayEnd(filters.to);
-      }
-    }
 
     const [data, total] = await Promise.all([
       this.prisma.stockMovement.findMany({
@@ -102,6 +107,78 @@ export class StockMovementsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Todos los movimientos que matchean los filtros (sin paginar), agrupados por la
+   * categoria del producto. Para el reporte PDF "por categoria" de /inventory/movements.
+   * Devuelve tambien un resumen de los filtros con los nombres ya resueltos.
+   */
+  async getGroupedByCategory(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const where = this.buildWhere(filters);
+
+    const movements = await this.prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: {
+          select: { code: true, name: true, category: { select: { name: true } } },
+        },
+        warehouse: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Agrupar por nombre de categoria (los sin categoria van a "Sin categoria")
+    const groupsMap = new Map<string, typeof movements>();
+    for (const m of movements) {
+      const cat = m.product.category?.name || 'Sin categoria';
+      if (!groupsMap.has(cat)) groupsMap.set(cat, []);
+      groupsMap.get(cat)!.push(m);
+    }
+    const groups = [...groupsMap.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+      .map(([category, items]) => {
+        let entradas = 0;
+        let salidas = 0;
+        for (const m of items) {
+          if (m.quantity >= 0) entradas += m.quantity;
+          else salidas += Math.abs(m.quantity);
+        }
+        return { category, items, entradas, salidas, neto: entradas - salidas, count: items.length };
+      });
+
+    // Resolver nombres para el encabezado del reporte
+    const [warehouse, supplier, product] = await Promise.all([
+      filters.warehouseId
+        ? this.prisma.warehouse.findUnique({ where: { id: filters.warehouseId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.supplierId
+        ? this.prisma.supplier.findUnique({ where: { id: filters.supplierId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.productId
+        ? this.prisma.product.findUnique({ where: { id: filters.productId }, select: { code: true, name: true } })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      groups,
+      totalCount: movements.length,
+      summary: {
+        from: filters.from || null,
+        to: filters.to || null,
+        warehouseName: warehouse?.name || null,
+        supplierName: supplier?.name || null,
+        type: filters.type || null,
+        product: product ? `${product.code} — ${product.name}` : null,
       },
     };
   }

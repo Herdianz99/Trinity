@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText } from 'lucide-react';
 import { getMovementSource } from '@/lib/movement-source';
 
 interface Movement {
@@ -24,6 +24,7 @@ interface Movement {
 }
 
 interface Warehouse { id: string; name: string; }
+interface Supplier { id: string; name: string; }
 
 const TYPE_BADGES: Record<string, string> = {
   PURCHASE: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -62,6 +63,7 @@ export default function MovementsPage() {
 
   const [movements, setMovements] = useState<Movement[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -70,25 +72,33 @@ export default function MovementsPage() {
   // Filters
   const [filterProductId, setFilterProductId] = useState(initialProductId);
   const [filterWarehouseId, setFilterWarehouseId] = useState('');
+  const [filterSupplierId, setFilterSupplierId] = useState('');
   const [filterType, setFilterType] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
+  // Formatea una fecha usando la hora LOCAL del navegador (= Caracas para el usuario).
+  // NO usar toISOString(): a las 8 PM Caracas ya es el dia siguiente en UTC y "hoy"
+  // saldria vacio (el bug que reporto el usuario).
+  function fmtLocal(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   function getDateRange(): { from?: string; to?: string } {
     const now = new Date();
     if (dateRange === 'today') {
-      const d = now.toISOString().split('T')[0];
+      const d = fmtLocal(now);
       return { from: d, to: d };
     }
     if (dateRange === 'week') {
       const start = new Date(now);
       start.setDate(now.getDate() - now.getDay());
-      return { from: start.toISOString().split('T')[0], to: now.toISOString().split('T')[0] };
+      return { from: fmtLocal(start), to: fmtLocal(now) };
     }
     if (dateRange === 'month') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: start.toISOString().split('T')[0], to: now.toISOString().split('T')[0] };
+      return { from: fmtLocal(start), to: fmtLocal(now) };
     }
     if (dateRange === 'custom') {
       return { from: customFrom || undefined, to: customTo || undefined };
@@ -96,18 +106,26 @@ export default function MovementsPage() {
     return {};
   }
 
+  // Params comunes al listado y al reporte (sin paginacion)
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filterProductId) params.set('productId', filterProductId);
+    if (filterWarehouseId) params.set('warehouseId', filterWarehouseId);
+    if (filterSupplierId) params.set('supplierId', filterSupplierId);
+    if (filterType) params.set('type', filterType);
+    const range = getDateRange();
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    return params;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterProductId, filterWarehouseId, filterSupplierId, filterType, dateRange, customFrom, customTo]);
+
   const fetchMovements = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
+      const params = buildFilterParams();
       params.set('page', page.toString());
       params.set('limit', '25');
-      if (filterProductId) params.set('productId', filterProductId);
-      if (filterWarehouseId) params.set('warehouseId', filterWarehouseId);
-      if (filterType) params.set('type', filterType);
-      const range = getDateRange();
-      if (range.from) params.set('from', range.from);
-      if (range.to) params.set('to', range.to);
 
       const res = await fetch(`/api/proxy/stock-movements?${params}`);
       if (res.ok) {
@@ -119,15 +137,28 @@ export default function MovementsPage() {
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [page, filterProductId, filterWarehouseId, filterType, dateRange, customFrom, customTo]);
+  }, [page, buildFilterParams]);
+
+  function openCategoryReport() {
+    const params = buildFilterParams();
+    window.open(`/api/proxy/stock-movements/report/by-category?${params}`, '_blank');
+  }
 
   const fetchWarehouses = useCallback(async () => {
     const res = await fetch('/api/proxy/warehouses');
     if (res.ok) setWarehouses(await res.json());
   }, []);
 
+  const fetchSuppliers = useCallback(async () => {
+    const res = await fetch('/api/proxy/suppliers');
+    if (res.ok) {
+      const data = await res.json();
+      setSuppliers(Array.isArray(data) ? data : data.data || []);
+    }
+  }, []);
+
   useEffect(() => { document.title = 'Movimientos de Stock | Trinity ERP'; }, []);
-  useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
+  useEffect(() => { fetchWarehouses(); fetchSuppliers(); }, [fetchWarehouses, fetchSuppliers]);
   useEffect(() => { fetchMovements(); }, [fetchMovements]);
 
   return (
@@ -140,6 +171,14 @@ export default function MovementsPage() {
           <h1 className="text-2xl font-bold text-white">Movimientos de Stock</h1>
           <p className="text-slate-400 text-sm">{total} movimientos</p>
         </div>
+        <button
+          onClick={openCategoryReport}
+          className="ml-auto btn-secondary !py-2.5 text-sm flex items-center gap-2"
+          title="Generar PDF de los movimientos filtrados, agrupados por categoria"
+        >
+          <FileText size={16} />
+          <span className="hidden sm:inline">Reporte por categoria</span>
+        </button>
       </div>
 
       {/* Filters */}
@@ -174,7 +213,7 @@ export default function MovementsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <select
             value={filterWarehouseId}
             onChange={(e) => { setFilterWarehouseId(e.target.value); setPage(1); }}
@@ -182,6 +221,15 @@ export default function MovementsPage() {
           >
             <option value="">Todos los almacenes</option>
             {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+          <select
+            value={filterSupplierId}
+            onChange={(e) => { setFilterSupplierId(e.target.value); setPage(1); }}
+            className="input-field !py-2 text-sm"
+            title="Proveedor asignado en la ficha del producto"
+          >
+            <option value="">Todos los proveedores</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <select
             value={filterType}

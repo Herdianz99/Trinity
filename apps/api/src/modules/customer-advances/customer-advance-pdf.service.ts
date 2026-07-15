@@ -44,73 +44,67 @@ export class CustomerAdvancePdfService {
     const remainingUsd = Math.round((advance.amountUsd - advance.paidAmountUsd) * 100) / 100;
     const remainingBs = Math.round((advance.amountBs - advance.paidAmountBs) * 100) / 100;
 
-    // Historial: los items de recibo que cruzaron el anticipo (excluye recibos anulados).
-    const consumos = (advance.receiptItems || [])
-      .filter((it: any) => it.receipt && it.receipt.status !== 'CANCELLED')
-      .map((it: any) => ({
-        number: it.receipt.number,
-        date: it.receipt.createdAt,
-        usd: Math.abs(it.amountUsd || 0),
-        bs: Math.abs(it.amountBsHistoric || 0),
-      }))
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margin: 40 });
+      // Comprobante en la MITAD SUPERIOR de una hoja carta VERTICAL (612x792), con las
+      // mismas proporciones que el comprobante de gasto: media carta, sin linea de corte
+      // ni footer. La mitad inferior queda libre.
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 30, left: 30, right: 30, bottom: 30 } });
+      const HALF = doc.page.height / 2; // 396 = mitad del alto de la carta
       const buffers: Buffer[] = [];
       doc.on('data', (c: Buffer) => buffers.push(c));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      const left = 40;
-      const pageWidth = doc.page.width - 80;
+      const left = 30;
+      const pageWidth = doc.page.width - 60; // 552
       const rightEdge = left + pageWidth;
-      let y = 40;
+      let y = 28;
 
       // ---------- HEADER ----------
       let logoBottom = y;
       if (config?.logo) {
         try {
           const base64 = config.logo.replace(/^data:image\/\w+;base64,/, '');
-          doc.image(Buffer.from(base64, 'base64'), left, y, { height: 50 });
-          logoBottom = y + 55;
+          doc.image(Buffer.from(base64, 'base64'), left, y, { height: 40 });
+          logoBottom = y + 44;
         } catch {
-          doc.fontSize(16).font('Helvetica-Bold').fillColor('#000').text(config?.companyName || 'Trinity ERP', left, y);
-          logoBottom = y + 20;
+          doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text(config?.companyName || 'Trinity ERP', left, y);
+          logoBottom = y + 18;
         }
       } else {
-        doc.fontSize(16).font('Helvetica-Bold').fillColor('#000').text(config?.companyName || 'Trinity ERP', left, y);
-        let ly = y + 20;
-        doc.fontSize(9).font('Helvetica').fillColor('#333');
-        if (config?.rif) { doc.text(`RIF: ${config.rif}`, left, ly); ly += 12; }
-        if (config?.address) { doc.text(config.address, left, ly, { width: 260 }); ly += 12; }
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text(config?.companyName || 'Trinity ERP', left, y);
+        let ly = y + 18;
+        doc.fontSize(8).font('Helvetica').fillColor('#333');
+        if (config?.rif) { doc.text(`RIF: ${config.rif}`, left, ly); ly += 11; }
+        if (config?.address) { doc.text(config.address, left, ly, { width: 260 }); ly += 11; }
+        if (config?.phone) { doc.text(`Tel: ${config.phone}`, left, ly); ly += 11; }
         logoBottom = ly;
       }
 
       const rightX = 320;
-      let ry = 40;
-      doc.fontSize(15).font('Helvetica-Bold').fillColor('#000')
+      let ry = 28;
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#000')
         .text('COMPROBANTE DE ANTICIPO', rightX, ry, { width: rightEdge - rightX, align: 'right' });
-      ry += 20;
-      doc.fontSize(9).font('Helvetica').fillColor('#555');
-      doc.text('Cuenta por Cobrar (Cliente)', rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 12;
-      doc.text(`Fecha: ${this.dateStr(advance.createdAt)}`, rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 12;
+      ry += 18;
+      doc.fontSize(8).font('Helvetica').fillColor('#555');
+      doc.text('Cuenta por Cobrar (Cliente)', rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 10;
+      doc.text(`Fecha: ${this.dateStr(advance.createdAt)}`, rightX, ry, { width: rightEdge - rightX, align: 'right' }); ry += 10;
       doc.text(`ID: ${advance.id}`, rightX, ry, { width: rightEdge - rightX, align: 'right' });
 
-      y = Math.max(logoBottom, ry) + 18;
+      y = Math.max(logoBottom, ry) + 10;
       doc.moveTo(left, y).lineTo(rightEdge, y).stroke('#ccc');
-      y += 18;
+      y += 12;
 
       // ---------- DATOS ----------
-      const labelW = 130;
+      const labelW = 120;
       const valueX = left + labelW;
       const valueW = pageWidth - labelW;
       const row = (label: string, value: string) => {
-        doc.fontSize(9.5).font('Helvetica-Bold').fillColor('#555').text(label, left, y, { width: labelW - 8 });
-        doc.fontSize(9.5).font('Helvetica').fillColor('#000');
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#555').text(label, left, y, { width: labelW - 8 });
+        doc.fontSize(8.5).font('Helvetica').fillColor('#000');
         const h = doc.heightOfString(value || '-', { width: valueW });
         doc.text(value || '-', valueX, y, { width: valueW });
-        y += Math.max(17, h + 5);
+        y += Math.max(13, h + 3);
       };
       row('Cliente', `${advance.customer?.name || '-'}${advance.customer?.rif ? `  (${advance.customer.rif})` : ''}`);
       row('Metodo de pago', advance.method?.name || '-');
@@ -118,15 +112,15 @@ export class CustomerAdvancePdfService {
       row('Referencia', advance.reference || '-');
       row('Registrado por', advance.createdBy?.name || '-');
 
-      y += 6;
+      y += 5;
       doc.moveTo(left, y).lineTo(rightEdge, y).stroke('#eee');
-      y += 16;
+      y += 10;
 
       // ---------- MONTOS ----------
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#555').text('MONTO DEL ANTICIPO', left, y);
-      y += 20;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#555').text('MONTO DEL ANTICIPO', left, y);
+      y += 15;
       const boxTop = y;
-      const boxH = 96;
+      const boxH = 76;
       doc.save();
       doc.roundedRect(left, boxTop, pageWidth, boxH, 6).fill('#f8f9fa');
       doc.restore();
@@ -134,90 +128,51 @@ export class CustomerAdvancePdfService {
       const col1 = left + 20;
       const col2 = left + pageWidth / 3 + 10;
       const col3 = left + (pageWidth * 2) / 3;
-      let cy = boxTop + 14;
+      let cy = boxTop + 10;
       doc.fontSize(8).font('Helvetica').fillColor('#888');
       doc.text('MONTO USD', col1, cy);
       doc.text('TASA (Bs/USD)', col2, cy);
       doc.text('MONTO Bs', col3, cy);
-      doc.fontSize(15).font('Helvetica-Bold').fillColor('#0f766e');
-      doc.text(`$ ${this.fmt(advance.amountUsd)}`, col1, cy + 14);
-      doc.fillColor('#000').fontSize(13);
-      doc.text(this.fmt(advance.exchangeRate), col2, cy + 15);
-      doc.fillColor('#0f766e').fontSize(15);
-      doc.text(`Bs ${this.fmt(advance.amountBs)}`, col3, cy + 14);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f766e');
+      doc.text(`$ ${this.fmt(advance.amountUsd)}`, col1, cy + 12);
+      doc.fillColor('#000').fontSize(11);
+      doc.text(this.fmt(advance.exchangeRate), col2, cy + 14);
+      doc.fillColor('#0f766e').fontSize(14);
+      doc.text(`Bs ${this.fmt(advance.amountBs)}`, col3, cy + 12);
 
-      cy = boxTop + 56;
+      cy = boxTop + 44;
       doc.fontSize(8).font('Helvetica').fillColor('#888');
       doc.text('CONSUMIDO USD', col1, cy);
       doc.text('RESTANTE USD', col2, cy);
       doc.text('RESTANTE Bs', col3, cy);
-      doc.fontSize(13).font('Helvetica-Bold').fillColor('#b45309');
-      doc.text(`$ ${this.fmt(advance.paidAmountUsd)}`, col1, cy + 13);
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#b45309');
+      doc.text(`$ ${this.fmt(advance.paidAmountUsd)}`, col1, cy + 12);
       doc.fillColor('#166534');
-      doc.text(`$ ${this.fmt(remainingUsd)}`, col2, cy + 13);
-      doc.text(`Bs ${this.fmt(remainingBs)}`, col3, cy + 13);
+      doc.text(`$ ${this.fmt(remainingUsd)}`, col2, cy + 12);
+      doc.text(`Bs ${this.fmt(remainingBs)}`, col3, cy + 12);
 
-      y = boxTop + boxH + 20;
-
-      // ---------- HISTORIAL DE CONSUMO ----------
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#555').text('HISTORIAL DE CONSUMO', left, y);
-      y += 18;
-      if (consumos.length === 0) {
-        doc.fontSize(9).font('Helvetica-Oblique').fillColor('#888')
-          .text('Sin consumos — el anticipo esta disponible en su totalidad.', left, y, { width: pageWidth });
-        y += 18;
-      } else {
-        // encabezado de tabla
-        const cH = [
-          { label: 'Fecha', x: left, w: 110 },
-          { label: 'Recibo', x: left + 120, w: 200 },
-          { label: 'Monto USD', x: left + 330, w: 90, align: 'right' as const },
-          { label: 'Monto Bs', x: left + 430, w: pageWidth - 430, align: 'right' as const },
-        ];
-        doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#334155');
-        for (const c of cH) doc.text(c.label, c.x, y, { width: c.w, align: c.align || 'left' });
-        y += 13;
-        doc.moveTo(left, y).lineTo(rightEdge, y).stroke('#e2e8f0');
-        y += 4;
-        doc.fontSize(9).font('Helvetica').fillColor('#1e293b');
-        for (const c of consumos) {
-          if (y > doc.page.height - 90) { doc.addPage(); y = 40; }
-          doc.text(this.dateStr(c.date), cH[0].x, y, { width: cH[0].w });
-          doc.text(c.number || '—', cH[1].x, y, { width: cH[1].w, lineBreak: false, ellipsis: true });
-          doc.text(`$ ${this.fmt(c.usd)}`, cH[2].x, y, { width: cH[2].w, align: 'right' });
-          doc.text(`Bs ${this.fmt(c.bs)}`, cH[3].x, y, { width: cH[3].w, align: 'right' });
-          y += 14;
-        }
-        y += 2;
-        doc.moveTo(left, y).lineTo(rightEdge, y).stroke('#cbd5e1');
-        y += 4;
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000');
-        doc.text('Total consumido', left + 120, y, { width: 200 });
-        doc.text(`$ ${this.fmt(advance.paidAmountUsd)}`, left + 330, y, { width: 90, align: 'right' });
-        doc.text(`Bs ${this.fmt(advance.paidAmountBs)}`, left + 430, y, { width: pageWidth - 430, align: 'right' });
-        y += 18;
-      }
+      y = boxTop + boxH + 12;
 
       // ---------- NOTAS ----------
       if (advance.notes) {
-        y += 4;
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#555').text('Notas', left, y);
-        y += 14;
-        doc.fontSize(9).font('Helvetica').fillColor('#000');
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#555').text('Notas', left, y);
+        y += 12;
+        doc.fontSize(8.5).font('Helvetica').fillColor('#000');
         const h = doc.heightOfString(advance.notes, { width: pageWidth });
         doc.text(advance.notes, left, y, { width: pageWidth });
-        y += h + 10;
+        y += h + 8;
       }
 
       // ---------- FIRMA ----------
-      y = Math.max(y + 30, doc.page.height - 120);
-      const sigW = (pageWidth - 40) / 2;
+      y = Math.max(y + 6, boxTop + boxH + 22, HALF - 66);
+      const sigGap = 40;
+      const sigW = (pageWidth - sigGap) / 2;
       doc.moveTo(left, y).lineTo(left + sigW, y).stroke('#999');
-      doc.moveTo(left + sigW + 40, y).lineTo(rightEdge, y).stroke('#999');
+      doc.moveTo(left + sigW + sigGap, y).lineTo(rightEdge, y).stroke('#999');
       y += 4;
       doc.fontSize(8).font('Helvetica').fillColor('#555');
       doc.text('Elaborado por', left, y, { width: sigW, align: 'center' });
-      doc.text('Recibi conforme', left + sigW + 40, y, { width: sigW, align: 'center' });
+      doc.text('Recibi conforme', left + sigW + sigGap, y, { width: sigW, align: 'center' });
 
       doc.end();
     });

@@ -89,6 +89,12 @@ export class CustomerAdvancesController {
     return this.service.findByCustomer(customerId);
   }
 
+  // Detalle JSON de un anticipo (con historial de consumo) para la pagina de detalle.
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string, @Body('dynamicKey') dynamicKey: string) {
     return this.service.remove(id, dynamicKey);

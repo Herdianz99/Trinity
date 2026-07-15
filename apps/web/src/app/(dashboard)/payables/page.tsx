@@ -689,6 +689,9 @@ export default function PayablesPage() {
                       <td className="px-4 py-3 text-slate-400 text-xs font-mono">{a.reference || '-'}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="inline-flex items-center gap-2">
+                          <Link href={`/payables/advances/${a.id}`} title="Ver detalle" className="text-slate-500 hover:text-blue-400">
+                            <Eye size={15} />
+                          </Link>
                           <button onClick={() => window.open(`/api/proxy/supplier-advances/${a.id}/pdf`, '_blank')} title="Imprimir comprobante" className="text-slate-500 hover:text-teal-400">
                             <Printer size={15} />
                           </button>

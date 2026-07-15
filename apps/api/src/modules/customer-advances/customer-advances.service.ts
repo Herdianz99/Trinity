@@ -205,6 +205,44 @@ export class CustomerAdvancesService {
     }));
   }
 
+  // Un anticipo con su historial de consumo (recibos que lo cruzaron), para la pagina de detalle (JSON).
+  async findOne(id: string) {
+    const advance = await this.prisma.customerAdvance.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { id: true, name: true, rif: true } },
+        method: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        receiptItems: {
+          include: {
+            receipt: { select: { id: true, number: true, type: true, status: true, createdAt: true } },
+          },
+        },
+      },
+    });
+    if (!advance) throw new NotFoundException('Anticipo no encontrado');
+
+    const consumos = (advance.receiptItems || [])
+      .filter((it: any) => it.receipt && it.receipt.status !== 'CANCELLED')
+      .map((it: any) => ({
+        receiptId: it.receipt.id,
+        number: it.receipt.number,
+        type: it.receipt.type,
+        date: it.receipt.createdAt,
+        amountUsd: Math.round(Math.abs(it.amountUsd || 0) * 100) / 100,
+        amountBs: Math.round(Math.abs(it.amountBsHistoric || 0) * 100) / 100,
+      }))
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const { receiptItems, ...rest } = advance as any;
+    return {
+      ...rest,
+      remainingUsd: Math.round((advance.amountUsd - advance.paidAmountUsd) * 100) / 100,
+      remainingBs: Math.round((advance.amountBs - advance.paidAmountBs) * 100) / 100,
+      consumos,
+    };
+  }
+
   // Un anticipo con su historial de consumo (recibos que lo cruzaron), para el PDF individual.
   async findOneForPdf(id: string) {
     const advance = await this.prisma.customerAdvance.findUnique({
