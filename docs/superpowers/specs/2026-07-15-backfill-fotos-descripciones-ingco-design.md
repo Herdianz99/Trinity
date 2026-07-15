@@ -55,9 +55,11 @@ Un script de **una corrida** (backfill) que, para los productos **INGCO** sin fo
 4. **Descripción:** está server-rendered en el HTML de `/ve/`, en el campo `parameter`
    (visible en el `<div class="parameter-content">`). Es la versión **completa en español**.
    La versión corta que se ve en inglés proviene de `/ve-en/` y **no se usa**.
-5. **Foto:** NO está en el HTML estático; se carga por el API interno `product/detail`
-   (endpoint identificado; parámetro `productExtNo` = código de modelo). Imágenes en el CDN
-   `res-de.togroup.com`.
+5. **Foto:** está en el **mismo HTML SSR** de `/ve/`, dentro de `g_initialProps` en el campo
+   `productPicList` (array de URLs del CDN `res-de.togroup.com`). El archivo se nombra con el
+   **código de modelo** (ej. `.../photo/{timestamp}/CIDLI206681.jpg`). Confirmado: descarga
+   `http 200`, `image/jpeg`. → **No hace falta API ni navegador headless**: título +
+   descripción + imagen salen del **mismo request**.
 6. **SSR intermitente:** con muchos hits seguidos, el sitio empieza a devolver respuestas
    vacías. → El script necesita **reintentos + throttling** (pausa entre productos).
 
@@ -66,12 +68,10 @@ correctos y seguros (código no listado en VE / código interno no-INGCO) → si
 
 ## Estrategia de extracción de la foto
 
-- **Primaria:** pegarle al API interno `product/detail` (puro HTTP, rápido, sin dependencias
-  de navegador). **Tarea 1 del plan de implementación:** confirmar el host base del API
-  (timebox ~15 min). Devuelve JSON con la(s) URL(s) de imagen del CDN.
-- **Fallback:** si el API se resiste, **navegador headless** (Playwright) que renderiza
-  `.../ve/product/x/{MODELO}`, deja cargar el JS y lee el `<img>` principal del DOM. Más
-  lento y con dependencia (Chromium), pero a prueba de balas. Aceptable para un backfill.
+**Puro HTTP, del mismo request de la página.** Se hace `fetch` a `.../ve/product/x/{MODELO}`
+(con reintentos por el SSR intermitente) y del HTML se parsea `g_initialProps` (JSON) para
+leer `productPicList[0]` → la URL de la imagen en el CDN. Se descarga esa URL (`fetch`) para
+obtener los bytes. Sin API que reversar, sin navegador headless, sin dependencias nuevas.
 
 La imagen descargada (bytes) pasa **sin cambios** por el pipeline existente:
 `processProductImage(buffer)` → thumb+medium webp → `SpacesService.uploadPublic()` →
@@ -128,7 +128,13 @@ registro `ProductImage` (primaria si es la primera) → `Product.primaryImageThu
 - Fase 2 aplica en prod (grande) sin impacto perceptible para los usuarios trabajando.
 - Los productos con foto se ven correctamente en el POS (thumb) usando el pipeline existente.
 
-## Item técnico abierto (se cierra al inicio de la implementación)
+## Extracción — resumen técnico (confirmado, sin items abiertos)
 
-- Confirmar el **host base del API `product/detail`** para la vía primaria de imagen.
-  Si en el timebox no sale, se adopta el fallback headless (Playwright). No es bloqueante.
+De **un solo `fetch`** a `https://www.ingco.com/ve/product/x/{MODELO}` (reintentos hasta que
+el SSR renderice) se obtienen las 3 cosas del `g_initialProps` / HTML:
+- `<title>` → **guarda** (vacío = no-match = se salta).
+- `parameter` (`<div class="parameter-content">`) → **descripción** en español (literal).
+- `productPicList[0]` → **URL de la imagen** en el CDN; se descarga aparte para los bytes.
+
+Sin dependencias nuevas: `fetch` global (Node 24), `cheerio` (ya en `apps/api`) para el HTML,
+y el pipeline de imágenes existente.
