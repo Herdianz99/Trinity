@@ -40,6 +40,9 @@ test('buildProductUrl acepta base alterna (WADFOW, misma plataforma)', () => {
 test('extractTitle devuelve el nombre sin sufijo, o null si vacío', () => {
   assert.equal(extractTitle(HTML_OK), 'Accesorios Cincel SDS Plus DBC0112501');
   assert.equal(extractTitle(HTML_EMPTY), null);
+  // sufijo de otras marcas de la misma plataforma
+  assert.equal(extractTitle('<title>Herramientas inalámbricas Taladro JDCDS540 - JADEVER Honduras</title>'), 'Herramientas inalámbricas Taladro JDCDS540');
+  assert.equal(extractTitle('<title>Llave de tubo WPW8148 - WADFOW India</title>'), 'Llave de tubo WPW8148');
 });
 
 test('extractDescription convierte <br> en saltos y limpia', () => {

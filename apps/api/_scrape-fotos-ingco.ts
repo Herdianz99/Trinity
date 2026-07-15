@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { buildProductUrl, cleanCode, parseIngcoPage, extractTitle, INGCO_BASE, WADFOW_BASE } from './_ingco-lib';
+import { buildProductUrl, cleanCode, parseIngcoPage, extractTitle, INGCO_BASE, WADFOW_BASE, JADEVER_BASE } from './_ingco-lib';
 
 // Node >=20.12 tiene process.loadEnvFile; el tipo puede faltar en @types/node viejo.
 (process as { loadEnvFile?: (p?: string) => void }).loadEnvFile?.('.env'); // apps/api/.env (DATABASE_URL local)
@@ -17,7 +17,7 @@ function argStr(name: string, def: string): string {
 }
 const BRAND = argStr('brand', 'INGCO');
 const baseArg = argStr('base', 'ingco');
-const BASE = baseArg === 'wadfow' ? WADFOW_BASE : baseArg === 'ingco' ? INGCO_BASE : baseArg;
+const BASE = baseArg === 'wadfow' ? WADFOW_BASE : baseArg === 'jadever' ? JADEVER_BASE : baseArg === 'ingco' ? INGCO_BASE : baseArg;
 const DIR = argStr('dir', '_ingco-out');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
