@@ -1,0 +1,134 @@
+# Backfill de fotos + descripciones desde catálogo INGCO — Diseño
+
+- **Fecha:** 2026-07-15
+- **Autor:** Diego + Claude
+- **Estado:** Aprobado, pendiente de plan de implementación
+- **Empresa piloto:** la **grande** (`134.209.164.59`, ~9.161 productos activos; restore local en `trinity-postgres-1`)
+
+## Contexto
+
+La infraestructura de fotos ya existe (Sesión del 2026-07-05): modelo `ProductImage`
+(thumb/medium en Spaces), `Product.primaryImageThumbUrl/MediumUrl`, `SpacesService`,
+`processProductImage()` (genera webp thumb+medium) y `ProductImagesService.upload()`.
+El problema: de los **9.161 productos activos no-servicio, prácticamente 0 tienen foto**
+(1 solo). Cargarlas a mano es inviable.
+
+Los productos están dominados por **marcas de herramientas con catálogo oficial online**
+(INGCO 458, WADFOW 481, VERT 474, JADEVER 540, ZAXON 472…). En esas marcas el
+`supplierRef` **es el código de modelo del fabricante**, buscable en su web oficial.
+
+## Objetivo
+
+Un script de **una corrida** (backfill) que, para los productos **INGCO** sin foto:
+- Encuentre el producto en el catálogo oficial de INGCO Venezuela por su código de modelo.
+- Descargue la **foto oficial** y la enlace al producto reutilizando el pipeline existente.
+- Extraiga la **descripción/características en español** y la guarde en `Product.description`.
+- Sin equivocarse nunca de producto (enlace automático directo, pero con guarda dura).
+- Sin poner en riesgo la BD de producción.
+
+## No-objetivos (explícito — NO se hace ahora)
+
+- **Feature permanente en el ERP** (botón/endpoint/job): fuera de alcance. Esto es un script
+  tipo `_import-*.ts`, sin UI ni endpoints. La lógica se escribe reutilizable por si a futuro
+  se envuelve, pero no se construye nada de eso ahora.
+- **Otras marcas** (WADFOW/VERT/JADEVER/ZAXON…): fuera de este piloto. Son marcas hermanas
+  de TOTAL GROUP (mismo sitio/estructura), así que el piloto INGCO se replicará casi igual,
+  pero se valida INGCO primero.
+- **Matcheo por nombre difuso o por código de barras:** descartado. Barcode no existe en la
+  data (1 producto). El match es por **código de modelo exacto**.
+- **Traducción:** innecesaria; el sitio `/ve/` ya trae el texto en español.
+- **Limpieza/reescritura de la descripción:** se guarda **literal** como viene de INGCO
+  (decisión del usuario: opción "a"). Solo se normalizan saltos de línea (`<br>` → salto).
+
+## Hallazgos de viabilidad (investigados y confirmados)
+
+1. **Sitio oficial INGCO Venezuela en español:** `https://www.ingco.com/ve/product/{slug}/{MODELO}`.
+   El **slug de categoría es cosmético** — el sitio resuelve por el último segmento (código de
+   modelo). Basta usar un slug fijo cualquiera: `.../product/x/{MODELO}`.
+2. **El código se pasa TAL CUAL** (`supplierRef` sin alterar). Los prefijos son parte del
+   código real de INGCO: la `U` (`UPLM6001`) y el `ING-` (`ING-UMMA13018`) **se necesitan** y
+   calzan tal cual en el sitio VE. **No se quitan prefijos.** Única higiene: `trim()` de
+   espacios sobrantes. Si el código tal cual no matchea, se salta (no se inventa).
+3. **Guarda de acierto 100% confiable:** si el modelo existe, el `<title>` de la página trae
+   el nombre real del producto; si no existe, el `<title>` viene **vacío**. → Regla:
+   **`<title>` vacío = no-match = se salta** (nunca foto ni descripción equivocada).
+4. **Descripción:** está server-rendered en el HTML de `/ve/`, en el campo `parameter`
+   (visible en el `<div class="parameter-content">`). Es la versión **completa en español**.
+   La versión corta que se ve en inglés proviene de `/ve-en/` y **no se usa**.
+5. **Foto:** NO está en el HTML estático; se carga por el API interno `product/detail`
+   (endpoint identificado; parámetro `productExtNo` = código de modelo). Imágenes en el CDN
+   `res-de.togroup.com`.
+6. **SSR intermitente:** con muchos hits seguidos, el sitio empieza a devolver respuestas
+   vacías. → El script necesita **reintentos + throttling** (pausa entre productos).
+
+**Resultado del piloto de 10 productos INGCO al azar:** 7 aciertos; los 3 fallos fueron
+correctos y seguros (código no listado en VE / código interno no-INGCO) → sin foto, sin error.
+
+## Estrategia de extracción de la foto
+
+- **Primaria:** pegarle al API interno `product/detail` (puro HTTP, rápido, sin dependencias
+  de navegador). **Tarea 1 del plan de implementación:** confirmar el host base del API
+  (timebox ~15 min). Devuelve JSON con la(s) URL(s) de imagen del CDN.
+- **Fallback:** si el API se resiste, **navegador headless** (Playwright) que renderiza
+  `.../ve/product/x/{MODELO}`, deja cargar el JS y lee el `<img>` principal del DOM. Más
+  lento y con dependencia (Chromium), pero a prueba de balas. Aceptable para un backfill.
+
+La imagen descargada (bytes) pasa **sin cambios** por el pipeline existente:
+`processProductImage(buffer)` → thumb+medium webp → `SpacesService.uploadPublic()` →
+registro `ProductImage` (primaria si es la primera) → `Product.primaryImageThumbUrl/MediumUrl`.
+
+## Arquitectura de ejecución — 2 fases (seguridad de producción)
+
+**Regla dura: el desarrollo y el scraping pesado NO tocan producción.** Se trabaja contra la
+**BD local** (restore de la grande; `productId` idénticos a prod, así los resultados calzan).
+
+### Fase 1 — Scrape (local, CERO contacto con prod)
+- Lee de la **BD local** los productos INGCO sin foto (`brand = INGCO`, sin `ProductImage`,
+  `supplierRef` no vacío, `isActive`, no `isService`).
+- Por cada uno: construye la URL, valida `<title>`, y si matchea baja **foto + descripción**
+  (con reintentos + throttling).
+- **No escribe en ninguna BD ni Spaces.** Produce un **artefacto local revisable**:
+  un directorio con las imágenes descargadas + un `JSON` por producto
+  (`{ productId, code, supplierRef, title, imagePath, description, status }`).
+- `status` cubre: `matched`, `no-match` (title vacío), `error` (tras reintentos).
+- Emite un **resumen** al final: N matcheados / N sin-match / N error, para revisar calidad.
+
+### Fase 2 — Aplicar (en el servidor de la grande, en tandas nocturnas)
+- Como la **BD de prod es accesible solo por SSH**, esta fase corre **en el servidor**
+  (nunca se expone la BD a internet). El artefacto de la Fase 1 se transfiere al servidor.
+- Por cada producto matcheado (**idempotente, solo si sigue sin foto**):
+  - Sube thumb+medium a **Spaces** (externo → cero carga de BD).
+  - `INSERT` en `ProductImage` (primaria) + `UPDATE Product` (thumb/medium URLs, y
+    `description` **solo si está vacía** — no pisa descripciones existentes).
+  - Todo en una transacción **por producto** (pequeña, sin locks largos, sin barridos).
+- **Throttled** y ejecutable **en tandas** (ej. `--limit N --offset M`) en horario de baja.
+- Carga real: ~cientos de escrituras de una fila, goteadas → despreciable para Postgres.
+
+## Datos que se escriben (solo en Fase 2, solo prod)
+
+- `ProductImage`: filas nuevas (thumbKey, mediumKey, isPrimary, bytes, width, height…).
+- `Product`: `primaryImageThumbUrl`, `primaryImageMediumUrl`, y `description`
+  (**solo si estaba vacía**).
+- **Nada más.** No toca stock, precios, costos, ni ninguna otra tabla.
+
+## Seguridad y reversibilidad
+
+- **Idempotente:** re-correr no duplica (salta productos que ya tienen foto).
+- **Solo-faltantes:** nunca pisa fotos ni descripciones existentes.
+- **Guarda de match:** `<title>` vacío → se salta. Sin match difuso → sin foto errada.
+- **Reversible:** si una foto quedó mal, se borra con el flujo existente
+  (`ProductImagesService.remove`, que limpia Spaces + reasigna primaria).
+- **Throttling + reintentos:** amable con el sitio de INGCO y robusto ante su SSR intermitente.
+
+## Criterios de éxito
+
+- Fase 1 corre en local y produce el artefacto con un % de aciertos razonable sobre los 458
+  INGCO (esperado alto en códigos INGCO-format; los no-listados/no-INGCO se saltan limpio).
+- Cero fotos/descripciones equivocadas en una revisión por muestreo del artefacto.
+- Fase 2 aplica en prod (grande) sin impacto perceptible para los usuarios trabajando.
+- Los productos con foto se ven correctamente en el POS (thumb) usando el pipeline existente.
+
+## Item técnico abierto (se cierra al inicio de la implementación)
+
+- Confirmar el **host base del API `product/detail`** para la vía primaria de imagen.
+  Si en el timebox no sale, se adopta el fallback headless (Playwright). No es bloqueante.
