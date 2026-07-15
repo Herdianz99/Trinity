@@ -241,7 +241,7 @@ export default function InvoicesPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por factura, cliente o cedula/RIF..."
+            placeholder="Buscar por factura, N° fiscal, cliente o cedula/RIF..."
             className="input-field !py-2.5 !pl-9 text-sm w-full"
           />
         </div>

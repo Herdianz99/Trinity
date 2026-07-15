@@ -52,10 +52,11 @@ export class InvoicesService {
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.cashRegisterId) where.cashRegisterId = filters.cashRegisterId;
 
-    // Unified search: invoice number, customer name, or customer rif
+    // Unified search: invoice number, fiscal number, customer name, or customer rif
     if (filters.search) {
       where.OR = [
         { number: { contains: filters.search, mode: 'insensitive' } },
+        { fiscalNumber: { contains: filters.search, mode: 'insensitive' } },
         { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
         { customer: { rif: { contains: filters.search, mode: 'insensitive' } } },
       ];

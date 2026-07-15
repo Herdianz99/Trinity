@@ -609,7 +609,9 @@ export class CreditDebitNotesService {
               productId: item.productId,
               warehouseId,
               type: 'RETURN_OUT',
-              quantity: item.quantity,
+              // Salida de mercancia hacia el proveedor: cantidad NEGATIVA (convenio
+              // del sistema: entrada = +, salida = -). El Stock se descuenta abajo.
+              quantity: -item.quantity,
               costUsd: item.unitPriceUsd,
               reason: `NC Compra ${note.number}`,
               reference: note.number,
@@ -864,13 +866,14 @@ export class CreditDebitNotesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (note.status === 'POSTED') {
-        // Revertir movimientos de stock de mercancia (RETURN_IN suma stock; RETURN_OUT lo resta)
+        // Revertir movimientos de stock de mercancia. La cantidad ya viene con signo
+        // (RETURN_IN = +, RETURN_OUT = -), asi que revertir es simplemente negarla.
         if (note.origin === 'MERCHANDISE' && warehouseId) {
           const movements = await tx.stockMovement.findMany({
             where: { reference: note.number, type: { in: ['RETURN_IN', 'RETURN_OUT'] } },
           });
           for (const m of movements) {
-            const delta = m.type === 'RETURN_IN' ? -m.quantity : m.quantity;
+            const delta = -m.quantity;
             await tx.stock.update({
               where: { productId_warehouseId: { productId: m.productId, warehouseId: m.warehouseId } },
               data: { quantity: { increment: delta } },
