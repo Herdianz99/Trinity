@@ -4,14 +4,24 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { buildProductUrl, cleanCode, parseIngcoPage, extractTitle } from './_ingco-lib';
+import { buildProductUrl, cleanCode, parseIngcoPage, extractTitle, INGCO_BASE, WADFOW_BASE } from './_ingco-lib';
 
 // Node >=20.12 tiene process.loadEnvFile; el tipo puede faltar en @types/node viejo.
 (process as { loadEnvFile?: (p?: string) => void }).loadEnvFile?.('.env'); // apps/api/.env (DATABASE_URL local)
 const prisma = new PrismaClient();
 
+// Args (default = INGCO). Ej WADFOW: --brand WADFOW --base wadfow --dir _wadfow-out
+function argStr(name: string, def: string): string {
+  const i = process.argv.indexOf(`--${name}`);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : def;
+}
+const BRAND = argStr('brand', 'INGCO');
+const baseArg = argStr('base', 'ingco');
+const BASE = baseArg === 'wadfow' ? WADFOW_BASE : baseArg === 'ingco' ? INGCO_BASE : baseArg;
+const DIR = argStr('dir', '_ingco-out');
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
-const OUT = path.join(process.cwd(), '_ingco-out');
+const OUT = path.join(process.cwd(), DIR);
 const IMG_DIR = path.join(OUT, 'img');
 const THROTTLE_MS = 1500; // pausa entre productos (amable con el sitio)
 const FETCH_TRIES = 5;
@@ -64,7 +74,7 @@ async function main() {
     where: {
       isActive: true,
       isService: false,
-      brand: { name: 'INGCO' },
+      brand: { name: BRAND },
       supplierRef: { not: null },
       images: { none: {} }, // sin ninguna ProductImage
     },
@@ -72,14 +82,15 @@ async function main() {
     orderBy: { code: 'asc' },
   });
 
-  console.log(`Productos INGCO sin foto a procesar: ${products.length}`);
+  console.log(`[${BRAND}] base=${BASE} dir=${DIR}`);
+  console.log(`Productos ${BRAND} sin foto a procesar: ${products.length}`);
   const manifest: ManifestRow[] = [];
   let matched = 0, noImage = 0, noMatch = 0, errors = 0;
 
   for (let idx = 0; idx < products.length; idx++) {
     const p = products[idx];
     const model = cleanCode(p.supplierRef as string);
-    const url = buildProductUrl(model);
+    const url = buildProductUrl(model, BASE);
     const html = await fetchRendered(url);
 
     if (!html) {

@@ -1,14 +1,16 @@
 import * as cheerio from 'cheerio';
 
+// Bases de la plataforma TOTAL GROUP (mismo HTML/estructura). El slug es cosmético.
 export const INGCO_BASE = 'https://www.ingco.com/ve/product/x/';
+export const WADFOW_BASE = 'https://www.wadfow.com/ve/product/x/';
 
 /** Código tal cual: solo recorta espacios. NO quita prefijos (U, ING-) que son parte del código real. */
 export function cleanCode(ref: string): string {
   return ref.trim();
 }
 
-export function buildProductUrl(model: string): string {
-  return INGCO_BASE + encodeURIComponent(cleanCode(model));
+export function buildProductUrl(model: string, base: string = INGCO_BASE): string {
+  return base + encodeURIComponent(cleanCode(model));
 }
 
 /** <title> sin el sufijo " - INGCO Venezuela". null si viene vacío (modelo inexistente). */

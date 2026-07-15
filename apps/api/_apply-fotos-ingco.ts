@@ -17,8 +17,6 @@ const prisma = APPLY_DB
   ? new PrismaClient({ datasources: { db: { url: APPLY_DB } } })
   : new PrismaClient();
 
-const OUT = path.join(process.cwd(), '_ingco-out');
-const IMG_DIR = path.join(OUT, 'img');
 const THROTTLE_MS = 400;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -26,6 +24,13 @@ function arg(name: string, def: number): number {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 && process.argv[i + 1] ? parseInt(process.argv[i + 1], 10) : def;
 }
+function argStr(name: string, def: string): string {
+  const i = process.argv.indexOf(`--${name}`);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : def;
+}
+// Carpeta del artefacto (default INGCO). Ej WADFOW: --dir _wadfow-out
+const OUT = path.join(process.cwd(), argStr('dir', '_ingco-out'));
+const IMG_DIR = path.join(OUT, 'img');
 
 const BUCKET = process.env.SPACES_BUCKET as string;
 const CDN = (process.env.SPACES_CDN_BASE || '').replace(/\/$/, '');

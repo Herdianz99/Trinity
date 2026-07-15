@@ -7,6 +7,7 @@ import {
   extractDescription,
   extractImageUrl,
   parseIngcoPage,
+  WADFOW_BASE,
 } from './_ingco-lib';
 
 // Fixtures basados en el HTML real de ingco.com/ve
@@ -30,6 +31,10 @@ test('cleanCode recorta espacios y no altera prefijos', () => {
 test('buildProductUrl arma la URL con slug cosmético', () => {
   assert.equal(buildProductUrl('DBC0112501'), 'https://www.ingco.com/ve/product/x/DBC0112501');
   assert.equal(buildProductUrl(' HTC04601 '), 'https://www.ingco.com/ve/product/x/HTC04601');
+});
+
+test('buildProductUrl acepta base alterna (WADFOW, misma plataforma)', () => {
+  assert.equal(buildProductUrl('WYH1325', WADFOW_BASE), 'https://www.wadfow.com/ve/product/x/WYH1325');
 });
 
 test('extractTitle devuelve el nombre sin sufijo, o null si vacío', () => {
