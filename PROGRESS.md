@@ -688,6 +688,7 @@ La tienda (`trebol-shop`, rama `tienda-snapshot`, pusheada a GitHub) solo corre 
 ## 📋 PENDIENTES
 
 ### Otros pendientes de fotos (Fase 2)
+- **POS: al ampliar la imagen del producto (vista grande), mostrar también la descripción** del producto junto a la foto. (Pedido de Diego 2026-07-15, tras el backfill de fotos+descripción INGCO.)
 - Carga masiva por lote (Flujo C: cruzar por código/supplierRef), galería en la ficha del producto.
 - Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
 - Script preservar fotos al restaurar el respaldo base (día de la migración).

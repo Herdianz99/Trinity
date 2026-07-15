@@ -10,7 +10,12 @@ import { processProductImage } from './src/modules/product-images/image-processi
 
 // Node >=20.12 tiene process.loadEnvFile; el tipo puede faltar en @types/node viejo.
 (process as { loadEnvFile?: (p?: string) => void }).loadEnvFile?.('.env');
-const prisma = new PrismaClient();
+// Override opcional de la BD: para correr DESDE LOCAL vía túnel SSH contra prod
+// (BD por el túnel, Spaces del .env local). Si no se pasa, usa DATABASE_URL del .env.
+const APPLY_DB = process.env.APPLY_DATABASE_URL;
+const prisma = APPLY_DB
+  ? new PrismaClient({ datasources: { db: { url: APPLY_DB } } })
+  : new PrismaClient();
 
 const OUT = path.join(process.cwd(), '_ingco-out');
 const IMG_DIR = path.join(OUT, 'img');
