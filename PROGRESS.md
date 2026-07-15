@@ -687,6 +687,10 @@ La tienda (`trebol-shop`, rama `tienda-snapshot`, pusheada a GitHub) solo corre 
 
 ## 📋 PENDIENTES
 
+### Validaciones POS (por validar)
+- **Bloquear facturar con precio 0:** verificar en el POS que NO se pueda facturar un artículo con precio unitario en 0 (ni por override ni por producto sin precio). (Pedido de Diego 2026-07-15.)
+- **Bloquear 100% de descuento:** verificar que NO se pueda aplicar un descuento del 100% en una línea/factura (el neto no puede quedar en 0 por descuento total). (Pedido de Diego 2026-07-15.)
+
 ### Otros pendientes de fotos (Fase 2)
 - **POS: al ampliar la imagen del producto (vista grande), mostrar también la descripción** del producto junto a la foto. (Pedido de Diego 2026-07-15, tras el backfill de fotos+descripción INGCO.)
 - Carga masiva por lote (Flujo C: cruzar por código/supplierRef), galería en la ficha del producto.
