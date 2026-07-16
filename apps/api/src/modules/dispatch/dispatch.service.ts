@@ -124,7 +124,13 @@ export class DispatchService {
 
   async findAll(filters: { status?: string; search?: string }) {
     const where: any = {};
-    if (filters.status) where.status = filters.status;
+    // 'PENDIENTES' = comandas con mercancia aun por retirar (PENDIENTE + PARCIAL); es el
+    // filtro por defecto del front. Ausente o 'TODAS' = sin filtro. Otro valor = estado exacto.
+    if (filters.status && filters.status !== 'TODAS') {
+      where.status = filters.status === 'PENDIENTES'
+        ? { in: ['PENDIENTE', 'PARCIAL'] }
+        : filters.status;
+    }
     const s = filters.search?.trim();
     if (s) {
       const digits = s.replace(/\D/g, '');

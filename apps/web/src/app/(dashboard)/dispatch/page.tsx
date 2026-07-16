@@ -13,6 +13,7 @@ export default function DispatchPage() {
   const router = useRouter();
   const [areas, setAreas] = useState<Area[]>([]);
   const [tab, setTab] = useState<string>('comandas'); // 'comandas' | 'todos' | <areaId>
+  const [statusFilter, setStatusFilter] = useState<'PENDIENTES' | 'TODAS'>('PENDIENTES');
   const [search, setSearch] = useState('');
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -33,11 +34,12 @@ export default function DispatchPage() {
     fetch('/api/proxy/print-areas').then(r => r.ok ? r.json() : []).then((d) => setAreas(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
-  const load = useCallback(async (activeTab: string, q: string) => {
+  const load = useCallback(async (activeTab: string, q: string, status: string) => {
     setLoading(true);
     try {
       if (activeTab === 'comandas') {
-        const res = await fetch(`/api/proxy/dispatches?search=${encodeURIComponent(q)}`);
+        const statusParam = status && status !== 'TODAS' ? `&status=${status}` : '';
+        const res = await fetch(`/api/proxy/dispatches?search=${encodeURIComponent(q)}${statusParam}`);
         setDispatches(res.ok ? await res.json() : []);
       } else {
         const areaParam = activeTab === 'todos' ? '' : `&printAreaId=${activeTab}`;
@@ -49,11 +51,11 @@ export default function DispatchPage() {
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => load(tab, search), 250);
+    searchTimer.current = setTimeout(() => load(tab, search, statusFilter), 250);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [tab, search, load]);
+  }, [tab, search, statusFilter, load]);
 
-  const refresh = () => load(tab, search);
+  const refresh = () => load(tab, search, statusFilter);
   const openDispatch = (id: string) => router.push(`/dispatch/${id}`);
 
   // Búsqueda de facturas para crear (por trozos del número o nombre del cliente; solo pagadas)
@@ -127,12 +129,27 @@ export default function DispatchPage() {
         {areas.map(a => (
           <TabBtn key={a.id} active={tab === a.id} onClick={() => setTab(a.id)}>{a.name}</TabBtn>
         ))}
+        {tab === 'comandas' && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-500">Mostrar:</span>
+            <div className="inline-flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+              <button onClick={() => setStatusFilter('PENDIENTES')}
+                className={`px-3 py-1.5 transition-colors ${statusFilter === 'PENDIENTES' ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-700/40'}`}>
+                Pendientes
+              </button>
+              <button onClick={() => setStatusFilter('TODAS')}
+                className={`px-3 py-1.5 transition-colors border-l border-slate-700 ${statusFilter === 'TODAS' ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-700/40'}`}>
+                Todas
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-emerald-500" size={28} /></div>
       ) : tab === 'comandas' ? (
-        <DispatchList dispatches={dispatches} onOpen={openDispatch} />
+        <DispatchList dispatches={dispatches} onOpen={openDispatch} emptyText={statusFilter === 'PENDIENTES' ? 'No hay comandas pendientes' : 'No hay comandas'} />
       ) : (
         <ItemsList items={items} onOpen={openDispatch} />
       )}
@@ -196,8 +213,8 @@ function ProgressBadge({ items }: { items: any[] }) {
   return <span className="text-[11px] text-slate-400">{done}/{total} art. completos</span>;
 }
 
-function DispatchList({ dispatches, onOpen }: { dispatches: any[]; onOpen: (id: string) => void }) {
-  if (dispatches.length === 0) return <Empty text="No hay comandas por retirar" />;
+function DispatchList({ dispatches, onOpen, emptyText }: { dispatches: any[]; onOpen: (id: string) => void; emptyText: string }) {
+  if (dispatches.length === 0) return <Empty text={emptyText} />;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
       {dispatches.map((d) => {
