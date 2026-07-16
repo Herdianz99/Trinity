@@ -29,18 +29,6 @@ const SOURCE_LABELS: Record<string, string> = {
   MANUAL: 'Mov. manual',
   REINTEGRO: 'Reintegro',
 };
-const SOURCE_COLORS: Record<string, string> = {
-  SALE_PAYMENT: 'bg-green-500/10 text-green-400 border-green-500/20',
-  CHANGE: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  RECEIPT_COLLECTION: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  RECEIPT_PAYMENT: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  EXPENSE: 'bg-red-500/10 text-red-400 border-red-500/20',
-  CUSTOMER_ADVANCE: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  SUPPLIER_ADVANCE: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  MANUAL: 'bg-slate-600/20 text-slate-300 border-slate-600',
-  REINTEGRO: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-};
-
 export default function CashLedgerEntriesPage() {
   const router = useRouter();
   const [registers, setRegisters] = useState<any[]>([]);
@@ -253,19 +241,18 @@ export default function CashLedgerEntriesPage() {
               <tr className="border-b border-slate-700/50 bg-slate-800/40 text-slate-400 text-xs">
                 <th className="text-left px-3 py-2.5 font-medium">Fecha</th>
                 <th className="text-left px-3 py-2.5 font-medium">Caja / Cajero</th>
-                <th className="text-left px-3 py-2.5 font-medium">Origen</th>
                 <th className="text-left px-3 py-2.5 font-medium">Detalle</th>
+                <th className="text-left px-3 py-2.5 font-medium">Referencia</th>
                 <th className="text-left px-3 py-2.5 font-medium">Método</th>
-                <th className="text-center px-3 py-2.5 font-medium">Tipo</th>
                 <th className="text-right px-3 py-2.5 font-medium">USD</th>
                 <th className="text-right px-3 py-2.5 font-medium">Bs</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="py-16 text-center"><Loader2 className="animate-spin text-indigo-500 inline" size={26} /></td></tr>
+                <tr><td colSpan={7} className="py-16 text-center"><Loader2 className="animate-spin text-indigo-500 inline" size={26} /></td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-slate-500 text-sm">No hay movimientos en el libro mayor {hasFilters ? 'con estos filtros' : ''}</td></tr>
+                <tr><td colSpan={7} className="py-12 text-center text-slate-500 text-sm">No hay movimientos en el libro mayor {hasFilters ? 'con estos filtros' : ''}</td></tr>
               ) : rows.map(r => {
                 const isOut = r.direction === 'OUT';
                 return (
@@ -276,22 +263,17 @@ export default function CashLedgerEntriesPage() {
                     <td className="px-3 py-2.5 text-slate-300">
                       {r.registerName}<span className="block text-[11px] text-slate-500">{r.cashierName}</span>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${SOURCE_COLORS[r.sourceType] || 'bg-slate-700 text-slate-400 border-slate-600'}`}>
-                        {SOURCE_LABELS[r.sourceType] || r.sourceType}
-                      </span>
+                    <td className="px-3 py-2.5 text-slate-300 max-w-[260px] truncate" title={`${r.docNumber && r.docNumber !== '—' ? r.docNumber + ' · ' : ''}${r.partyName || ''}`}>
+                      {r.docNumber && r.docNumber !== '—'
+                        ? <span><span className="text-white">{r.docNumber}</span> <span className="text-slate-500">·</span> {r.partyName}</span>
+                        : (r.partyName || '—')}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-400 text-xs max-w-[220px] truncate" title={r.reason || ''}>{r.reason || '—'}</td>
+                    <td className="px-3 py-2.5 text-slate-400 text-xs max-w-[160px] truncate" title={r.reference || ''}>{r.reference || '—'}</td>
                     <td className="px-3 py-2.5 text-slate-300">
                       <span className="inline-flex items-center gap-1">
                         {r.isCash ? <Banknote size={13} className="text-green-400" /> : <CreditCard size={13} className="text-slate-500" />}
                         {r.methodName}
                       </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {isOut
-                        ? <span className="inline-flex items-center gap-1 text-red-400 text-xs"><ArrowUpCircle size={13} /> Egreso</span>
-                        : <span className="inline-flex items-center gap-1 text-green-400 text-xs"><ArrowDownCircle size={13} /> Ingreso</span>}
                     </td>
                     <td className={`px-3 py-2.5 text-right font-mono ${isOut ? 'text-red-400' : 'text-green-400'}`}>
                       {r.currency === 'USD' ? `${isOut ? '-' : ''}$${fmt(r.amountUsd)}` : <span className="text-slate-600">—</span>}
