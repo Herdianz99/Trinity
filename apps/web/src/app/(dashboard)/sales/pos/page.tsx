@@ -201,7 +201,7 @@ export default function POSPage() {
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; code: string; name: string; description: string | null } | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1886,7 +1886,7 @@ export default function POSPage() {
                         <img
                           src={product.primaryImageThumbUrl}
                           alt=""
-                          onClick={(e) => { e.stopPropagation(); setLightboxUrl(product.primaryImageMediumUrl || product.primaryImageThumbUrl); }}
+                          onClick={(e) => { e.stopPropagation(); setLightbox({ url: product.primaryImageMediumUrl || product.primaryImageThumbUrl, code: product.code, name: product.name, description: product.description ?? null }); }}
                           className="w-10 h-10 rounded-lg object-cover border border-slate-700 mb-2 cursor-zoom-in"
                         />
                       ) : (
@@ -2249,12 +2249,21 @@ export default function POSPage() {
   // ── Shared Modals (rendered in both mobile & desktop) ─────────────────
   const renderSharedModals = () => (
     <>
-      {lightboxUrl && (
+      {lightbox && (
         <div
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightbox(null)}
           className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
         >
-          <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
+          <div className="flex flex-col items-center gap-3 max-w-2xl w-full">
+            <img src={lightbox.url} alt={lightbox.name} className="max-w-full max-h-[65vh] rounded-lg object-contain" />
+            <div className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-4 py-3 text-center">
+              <div className="text-xs font-mono text-slate-500">{lightbox.code}</div>
+              <div className="text-sm font-semibold text-white">{lightbox.name}</div>
+              {lightbox.description && (
+                <p className="mt-1.5 text-sm text-slate-300 whitespace-pre-wrap">{lightbox.description}</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
       {showLostSale && (
@@ -3172,7 +3181,7 @@ export default function POSPage() {
                   <img
                     src={product.primaryImageThumbUrl}
                     alt=""
-                    onClick={(e) => { e.stopPropagation(); setLightboxUrl(product.primaryImageMediumUrl || product.primaryImageThumbUrl); }}
+                    onClick={(e) => { e.stopPropagation(); setLightbox({ url: product.primaryImageMediumUrl || product.primaryImageThumbUrl, code: product.code, name: product.name, description: product.description ?? null }); }}
                     className="w-10 h-10 rounded object-cover border border-slate-700 flex-shrink-0 mr-3 cursor-zoom-in"
                   />
                 ) : (
