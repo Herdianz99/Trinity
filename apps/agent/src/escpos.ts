@@ -11,6 +11,12 @@ const ESC = 0x1b;
 const GS = 0x1d;
 
 const INIT = [ESC, 0x40]; // ESC @ — Initialize printer
+// FS . — Cancela el modo de caracteres chinos/kanji. Muchas termicas de 80mm vienen
+// con "Chinese character: Yes" por defecto: en ese modo tratan TODO byte alto (>=0x80)
+// como primer byte de un caracter chino de 2 bytes, asi que se comen la Ñ/tildes (byte
+// 0xa5, etc.) JUNTO con la letra siguiente. Al cancelarlo, los bytes altos se imprimen
+// como un solo caracter del code page seleccionado (CP850) -> la Ñ y las tildes salen bien.
+const CANCEL_KANJI = [0x1c, 0x2e]; // FS .
 const SET_CP850 = [ESC, 0x74, 0x02]; // ESC t 2 — Select CP850
 
 const ALIGN_LEFT = [ESC, 0x61, 0x00];
@@ -42,8 +48,9 @@ function dashLine(width: number): string {
 export function parseMarkupToEscPos(content: string, lineWidth = 48): Buffer {
   const chunks: Buffer[] = [];
 
-  // Prepend INIT + codepage
-  chunks.push(Buffer.from([...INIT, ...SET_CP850]));
+  // Prepend INIT + cancelar modo chino + codepage. El orden importa: INIT (ESC @)
+  // resetea la impresora a sus defaults (modo chino ON), asi que FS . debe ir DESPUES.
+  chunks.push(Buffer.from([...INIT, ...CANCEL_KANJI, ...SET_CP850]));
 
   let lastIndex = 0;
 

@@ -44,7 +44,7 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    version: '1.1.4',
+    version: '1.1.5',
     thermalEnabled: config.thermalEnabled,
     printerName: config.thermalPrinterName,
   });
