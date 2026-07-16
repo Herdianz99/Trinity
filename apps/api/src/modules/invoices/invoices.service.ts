@@ -313,6 +313,10 @@ export class InvoicesService {
 
       // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;
+      // La maquina fiscal rechaza lineas en 0 -> no permitir precio 0 en la factura
+      if (priceWithIva == null || priceWithIva <= 0) {
+        throw new BadRequestException(`El articulo "${product.name}" no puede facturarse con precio 0 (la maquina fiscal lo rechaza). Configurale un precio.`);
+      }
       const originalIvaRate = IVA_RATES[product.ivaType] || 0;
       // At pre-invoice creation, use the product's original IVA type
       // VAT exemption will be applied at payment time based on the cashier's serie
@@ -323,6 +327,10 @@ export class InvoicesService {
 
       // Apply line discount
       const discountPct = item.discountPct || 0;
+      // Descuento maximo permitido: 90%
+      if (discountPct > 90) {
+        throw new BadRequestException(`El descuento maximo permitido es 90% (articulo "${product.name}").`);
+      }
       const discountMultiplier = 1 - discountPct / 100;
       const discountedBasePrice = baseUnitPrice * discountMultiplier;
       const lineSubtotal = discountedBasePrice * item.quantity;
@@ -1238,6 +1246,10 @@ export class InvoicesService {
 
       // priceDetal already includes IVA — extract base price using original product rate
       const priceWithIva = item.unitPrice ?? product.priceDetal;
+      // La maquina fiscal rechaza lineas en 0 -> no permitir precio 0 en la factura
+      if (priceWithIva == null || priceWithIva <= 0) {
+        throw new BadRequestException(`El articulo "${product.name}" no puede facturarse con precio 0 (la maquina fiscal lo rechaza). Configurale un precio.`);
+      }
       const originalIvaRate = IVA_RATES[product.ivaType] || 0;
       const effectiveIvaType = invoiceSerie?.isVatExempt ? 'EXEMPT' : product.ivaType;
       const ivaRate = IVA_RATES[effectiveIvaType] || 0;
@@ -1246,6 +1258,10 @@ export class InvoicesService {
 
       // Apply line discount
       const discountPct = item.discountPct || 0;
+      // Descuento maximo permitido: 90%
+      if (discountPct > 90) {
+        throw new BadRequestException(`El descuento maximo permitido es 90% (articulo "${product.name}").`);
+      }
       const discountMultiplier = 1 - discountPct / 100;
       const discountedBasePrice = baseUnitPrice * discountMultiplier;
       const lineSubtotal = discountedBasePrice * item.quantity;

@@ -762,6 +762,11 @@ export default function POSPage() {
       setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
       return;
     }
+    // La maquina fiscal rechaza articulos en 0 -> no dejar agregarlos al carrito
+    if (product.priceDetal == null || product.priceDetal <= 0) {
+      setMessage({ type: 'error', text: `"${product.name}" no tiene precio (esta en 0). Configurale un precio antes de venderlo: la maquina fiscal rechaza articulos en 0.` });
+      return;
+    }
     const stockQty = product.stock?.[0]?.quantity || 0;
     // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
     const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
@@ -838,7 +843,12 @@ export default function POSPage() {
 
   function confirmPriceOverride(productId: string) {
     const val = parseFloat(editingPriceValue);
-    if (!isNaN(val) && val >= 0) {
+    // No permitir precio 0 (la maquina fiscal lo rechaza)
+    if (!isNaN(val) && val <= 0) {
+      setMessage({ type: 'error', text: 'El precio no puede quedar en 0: la maquina fiscal rechaza articulos en 0.' });
+      return;
+    }
+    if (!isNaN(val) && val > 0) {
       setCart(prev => prev.map(i => i.productId === productId ? { ...i, unitPrice: val, priceOverridden: val !== i.originalPrice } : i));
     }
     setEditingPriceItemId(null);
@@ -851,7 +861,8 @@ export default function POSPage() {
   // Aplica el mismo descuento a TODAS las lineas del carrito. Cada linea sigue
   // siendo editable, asi que despues se puede poner 0 a las que no aplican.
   function applyBulkDiscount(pct: number) {
-    const clamped = Math.min(100, Math.max(0, pct));
+    if (pct > 90) setMessage({ type: 'error', text: 'El descuento maximo permitido es 90%.' });
+    const clamped = Math.min(90, Math.max(0, pct));
     setCart(prev => prev.map(i => ({ ...i, discountPct: clamped })));
   }
 
@@ -1985,7 +1996,7 @@ export default function POSPage() {
                 className="w-14 px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sm text-orange-400 text-right focus:outline-none focus:border-orange-500/50"
                 step="0.5"
                 min="0"
-                max="100"
+                max="90"
               />
               <button
                 onClick={() => { const v = parseFloat(bulkDiscount); if (!isNaN(v)) applyBulkDiscount(v); }}
@@ -3372,7 +3383,7 @@ export default function POSPage() {
                 className="w-14 px-1.5 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-orange-400 text-right focus:outline-none focus:border-orange-500/50"
                 step="0.5"
                 min="0"
-                max="100"
+                max="90"
               />
               <button
                 onClick={() => { const v = parseFloat(bulkDiscount); if (!isNaN(v)) applyBulkDiscount(v); }}
@@ -3433,14 +3444,15 @@ export default function POSPage() {
                         value={item.discountPct || ''}
                         onChange={e => {
                           const v = parseFloat(e.target.value);
-                          const pct = isNaN(v) ? 0 : Math.min(100, Math.max(0, v));
+                          if (v > 90) setMessage({ type: 'error', text: 'El descuento maximo permitido es 90%.' });
+                          const pct = isNaN(v) ? 0 : Math.min(90, Math.max(0, v));
                           setCart(prev => prev.map(c => c.productId === item.productId ? { ...c, discountPct: pct } : c));
                         }}
                         placeholder="0"
                         className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-orange-400 text-right focus:outline-none focus:border-orange-500/50"
                         step="0.5"
                         min="0"
-                        max="100"
+                        max="90"
                       />
                     </div>
                     {item.discountPct > 0 && (

@@ -709,9 +709,9 @@ La tienda (`trebol-shop`, rama `tienda-snapshot`, pusheada a GitHub) solo corre 
 
 ## 📋 PENDIENTES
 
-### Validaciones POS (por validar)
-- **Bloquear facturar con precio 0:** verificar en el POS que NO se pueda facturar un artículo con precio unitario en 0 (ni por override ni por producto sin precio). (Pedido de Diego 2026-07-15.)
-- **Bloquear 100% de descuento:** verificar que NO se pueda aplicar un descuento del 100% en una línea/factura (el neto no puede quedar en 0 por descuento total). (Pedido de Diego 2026-07-15.)
+### Validaciones POS — IMPLEMENTADAS Session 75 (PENDIENTE DEPLOY a ambas empresas)
+- **Precio 0 bloqueado** (la máquina fiscal rechaza líneas en 0): el POS (`sales/pos`) no deja agregar al carrito un producto con `priceDetal <= 0` ni sobrescribir el precio a 0; `invoices.service` (`create()` y `pay()`) rechaza cualquier línea con precio ≤ 0 (`BadRequestException`).
+- **Descuento máximo 90%**: el POS topa el descuento masivo y por línea a 90% (aviso + `max="90"`); backend rechaza `discountPct > 90` en `create()` y `pay()`. (Probado en local; falta deploy.)
 
 ### Otros pendientes de fotos (Fase 2)
 - **POS: al ampliar la imagen del producto (vista grande), mostrar también la descripción** del producto junto a la foto. (Pedido de Diego 2026-07-15, tras el backfill de fotos+descripción INGCO.)
