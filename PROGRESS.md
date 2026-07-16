@@ -709,12 +709,15 @@ La tienda (`trebol-shop`, rama `tienda-snapshot`, pusheada a GitHub) solo corre 
 
 ## 📋 PENDIENTES
 
-### Validaciones POS — IMPLEMENTADAS Session 75 (PENDIENTE DEPLOY a ambas empresas)
-- **Precio 0 bloqueado** (la máquina fiscal rechaza líneas en 0): el POS (`sales/pos`) no deja agregar al carrito un producto con `priceDetal <= 0` ni sobrescribir el precio a 0; `invoices.service` (`create()` y `pay()`) rechaza cualquier línea con precio ≤ 0 (`BadRequestException`).
-- **Descuento máximo 90%**: el POS topa el descuento masivo y por línea a 90% (aviso + `max="90"`); backend rechaza `discountPct > 90` en `create()` y `pay()`. (Probado en local; falta deploy.)
+### Validaciones POS — ✅ DESPLEGADAS a ambas empresas (Session 75, commits `e58626c` + `b1a1b80`)
+- **Precio 0 bloqueado** (la máquina fiscal rechaza líneas en 0): el POS (`sales/pos`) no deja agregar al carrito un producto con `priceDetal <= 0` ni sobrescribir el precio a 0; `invoices.service` (`create()` y `pay()`) rechaza cualquier línea con precio ≤ 0 (`BadRequestException`). **LIVE.**
+- **Descuento máximo 90%**: el POS topa el descuento masivo y por línea a 90% (aviso + `max="90"`); backend rechaza `discountPct > 90` en `create()` y `pay()`. **LIVE.**
+- **⚠️ Incidente de deploy (resuelto):** el primer deploy dejó `trinity-api` en crash-loop (`Cannot find module dist/main.js`). Causa: los scripts scratch `_*.ts` que se commitearon en `apps/api/` hacían que `nest build` (sin `include` en tsconfig) los compilara junto a `src/`, desviando el `rootDir` → `main.js` salía en `dist/src/`. **Fix `b1a1b80`:** `apps/api/tsconfig.json` con `rootDir:"./src"` + `include:["src/**/*"]` + `exclude:["_*.ts"]`. Prod restaurada en ambas (git pull + `rm -rf dist` + `nest build` + `pm2 restart trinity-api`). LECCIÓN: nunca commitear scratch `_*.ts` sin excluirlos del build.
 
 ### Otros pendientes de fotos (Fase 2)
-- **POS: al ampliar la imagen del producto (vista grande), mostrar también la descripción** del producto junto a la foto. (Pedido de Diego 2026-07-15, tras el backfill de fotos+descripción INGCO.)
+- **POS: al ampliar la foto, mostrar la descripción** — 🚧 EN PROGRESO (Session 75, retomar mañana). **NO desplegado, NO commiteado.**
+  - Backend a medias **SIN COMMIT** (solo working tree local): `products.service.ts` (búsqueda por SQL crudo, ~línea 230) — se le agregó `p.description` + `p."primaryImageMediumUrl"` al SELECT y al `.map()`. El otro path (findMany con `include`) ya los trae.
+  - **FALTA:** frontend del lightbox en `sales/pos/page.tsx` — estado `lightboxUrl` (~L204, string), se abre en L1889/L3175 (`setLightboxUrl(...)`), se renderiza en ~L2252. Guardar también nombre+descripción del producto y mostrarlos junto a la imagen ampliada. Luego commit + deploy.
 - Carga masiva por lote (Flujo C: cruzar por código/supplierRef), galería en la ficha del producto.
 - Barrido de huérfanos en Spaces: solo-servidor con guardas (local comparte bucket con prod → peligroso).
 - Script preservar fotos al restaurar el respaldo base (día de la migración).
