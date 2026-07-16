@@ -1,5 +1,27 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ Session 75 (2026-07-15/16) — Backfill de fotos (grande) + migración de productos (chica)
+
+Trabajo de datos directo sobre prod (aditivo, vía túnel SSH; **no** es deploy de código de app). Toolkit scratch en `apps/api/_*.ts` (sin trackear los que tienen rutas/creds).
+
+**1. Backfill de fotos + descripciones a la GRANDE** (`134.209.164.59`, bucket Spaces `trinity-inversiones`):
+- **INGCO 409 · WADFOW 418 · JADEVER 500 · FERCOVEN 124** → **~1.455 productos con foto** (de ~103 previos), `showInStore` activado, descripción en español.
+- **Scraper TOTAL GROUP** (reusable, `--brand/--base/--dir`): INGCO/WADFOW/JADEVER se scrapean por HTML SSR (`/ve/` o `/hn/`, `productPicList` + `parameter-content`, guarda por `<title>` vacío). Lib + tests en `apps/api/_ingco-lib.ts`.
+- **FERCOVEN** por su **API pública** `POST api.fercoven.com/api/web/search` (match `modelo`=`supplierRef`): galería (hasta 10 fotos/producto) + descripción + **401 códigos de barras** rellenados (EAN-13/UPC-A validados, guarda `@unique`).
+- **VERT descartada** (códigos internos, no de fábrica). Faltantes (foto manual): `apps/api/_faltantes-fotos.csv` (597: INGCO 49, WADFOW 63, JADEVER 53, FERCOVEN 432).
+- Flujo: scrape LOCAL (0 prod, artefacto + `review.html`) → apply a prod (Spaces + `ProductImage` + `Product`, idempotente, solo-faltantes) por túnel SSH.
+
+**2. Migración de productos nuevos a la CHICA** (`134.209.220.233`, proveedor TotalTools):
+- **1.932 productos nuevos** (TOTAL TOOLS VENEZUELA, C.A · J-40257414-2), aditivo, sin tocar los 2.407 existentes (14 refs ya existían → saltados). Fuentes Wensoft: `datos.xlsx` + `existencias.xlsx` + `precios-costos.xlsx`.
+- **`code` = referencia del proveedor** (a pedido del cliente), **22 categorías nuevas** (códigos limpios HMA/AHE/INA…), precio = PVP exacto (deriva ganancia), costo/IVA/stock/brecha, marca+proveedor enlazados.
+- **Kardex:** `StockMovement` de **"Carga inicial desde Wensoft"** (`ADJUSTMENT_IN`, 444 con stock>0) — ver memoria `wensoft-import-carga-inicial`. Se validó en copia local (`chica_db`) antes de subir; **backup previo** `_chica-backup-preimport.dump`.
+
+**3. Operaciones puntuales en prod (grande):**
+- **Eliminada factura fiscal `VF-26-00000345`** (PAID, no impresa) con reverso completo: stock repuesto (6), libro de ventas, libro mayor de caja, pago, print jobs, ítems — en transacción, con respaldo `_backup-VF345.json`. Deja hueco en el correlativo (asumido).
+- **Vendedor de `NE-26-00001035`** cambiado a **José Alejandro Rodríguez (VEN-009)**.
+
+**Pendientes (ver sección PENDIENTES):** validaciones POS (no facturar precio 0, no 100% descuento, mostrar descripción al ampliar foto).
+
 ## ✅ Session 71 (2026-07-13) — RESUMEN — **TODO DESPLEGADO A AMBAS EMPRESAS** (HEAD `d3794aa`)
 
 **Tanda A** (10 commits `93cb375`..`40354e7`, sin migraciones) + **Tanda B** (5 commits `69a592b`..`e0b61f8`, con migración `20260713230000_anticipos_cruzables_receipt`) desplegadas a **grande** (`134.209.164.59`) y **chica** (`134.209.220.233`) el 2026-07-13. Verificado en ambas: API `/health` 200, PM2 online, migración `anticipos_cruzables_receipt` = OK, enums (`CUSTOMER_ADVANCE`/`SUPPLIER_ADVANCE`, 4 `DELETE_*` nuevos) y columnas `ReceiptItem.customerAdvanceId`/`supplierAdvanceId` presentes.
