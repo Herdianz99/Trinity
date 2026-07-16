@@ -1,5 +1,21 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ Session 75 (cont. 2026-07-16) — Features UI (POS/despacho/caja) + fix agente + ops prod
+
+**Código (commiteado; PENDIENTE DE DEPLOY a ambas empresas, salvo el agente que es .exe por PC):**
+1. **Agente térmico v1.1.5** — las comandas se comían la Ñ/tildes: las térmicas 80mm de despacho traen `Chinese character: Yes` (tratan cada byte alto como carácter CJK de 2 bytes → se comen la Ñ **y la letra siguiente**). El agente ahora manda `FS .` (`1C 2E`, cancela modo chino) al inicio de cada ticket. Rebuild de `apps/agent/trinity-agent.exe`; hay que **reemplazar el .exe en cada PC de despacho** (no es deploy de servidor). Ver memoria `agente-tildes-modo-chino`. (commit `26b9226`)
+2. **POS — descripción al ampliar la foto:** el lightbox muestra código + nombre + **descripción** (la data ya venía de `findAll`). Completa el pendiente que quedaba de la Session 75. (commit `a6a84d2`)
+3. **/dispatch — filtro de estado:** "Pendientes" (PENDIENTE + PARCIAL) seleccionado por defecto / "Todas". Backend `dispatch.findAll` acepta `status=PENDIENTES` (agrupa ambos).
+4. **/cash/ledger/entries:** se quitan las columnas **Origen** y **Tipo**; **Detalle** ahora es `N° doc · cliente` (como en `/cash/movements`); nueva columna **Referencia**. La lógica de resolver doc/cliente/ref se extrajo del PDF a un helper `enrichLedgerRows()` **compartido por la lista y el reporte**.
+
+**Operaciones directas en prod (sin deploy, vía SSH — ya en vivo):**
+- **Chica:** 1.932 productos de la marca **TotalTools** → sufijo `" TotalTools"` en el nombre (`searchVector` reindexado por trigger). Respaldo `backup-nombres-totaltools-*.csv`.
+- **Chica:** serie fiscal **"FISCAL 2"** eliminada (estaba vacía, 0 documentos de cualquier tipo). Respaldo `backup-serie-fiscal2-*.csv`.
+- **Grande:** factura **NE-26-00001083** — los cajeros cargaron mal el split de pagos; corregido a P.V BANESCO 99.98 / CASHEA 149.98 (métodos ya estaban bien), sincronizado **pago + ledger + CxC de Cashea**; total intacto (249.96). Respaldo `backup-NE1083-pagos.csv`.
+- **Grande:** comanda **DSP-0009** despachada por error → revertida a PENDIENTE (borrado el `DispatchDelivery`, `quantityDelivered`→0, `completedAt`→null; `deliver()` no toca stock). Respaldo `backup-DSP0009-entrega.csv`.
+
+**Local:** se montó la última copia de la grande en local para pruebas (dump **plain SQL**, porque el custom pg16 no restaura en el pg15 local). Gotcha del `tsconfig.tsbuildinfo` que tumba el API dev documentado en memoria `local-restore-grande-y-tsbuildinfo`.
+
 ## ✅ Session 75 (2026-07-15/16) — Backfill de fotos (grande) + migración de productos (chica)
 
 Trabajo de datos directo sobre prod (aditivo, vía túnel SSH; **no** es deploy de código de app). Toolkit scratch en `apps/api/_*.ts` (sin trackear los que tienen rutas/creds).
