@@ -32,6 +32,14 @@
 
 **Local:** montada copia fresca de la grande en `trebol_db` (dump plano pg16→pg15, migración `intended_payment` + `fix-schema` aplicados) para pruebas.
 
+**Ops prod (chica):** agregados los permisos `DELETE_SUPPLIER_ADVANCE` + `DELETE_CUSTOMER_ADVANCE` a la clave dinámica **"admi"** por BD (ya se pueden borrar anticipos desde la app; ambas empresas quedan parejas).
+
+**Fotos — recon de scraping (PAUSADO):** se intentó arrancar por las 3 marcas "factibles" y las 3 dieron problemas → la evaluación previa fue optimista (asumió refs = código de modelo).
+- **PROMAKER** (246): `promakertools.com` da connect-timeout desde esta máquina (geo/anti-bot); no se puede bajar local.
+- **Belt-G** (400): tienda "Grifocentro" es **SPA Next.js** (client-render, sin API descubrible); requiere navegador real. Refs `FRE-/GRI-/COD-` = del distribuidor → match difuso por nombre.
+- **BELLOTA** (170): fuentes accesibles (bellota.com, roymo, unionferretera SSR OK), pero **nuestras refs son ~1/3 códigos del distribuidor (100401, 103500BG), ~1/3 código real Bellota (104-22, 1778-20), ~1/3 otros**. El catálogo de unionferretera (130 prods de España) dio **0/170 match**.
+- **Pendiente decidir:** tanteo de bellota.com para las ~49 refs con código real, o montar navegador (browser-use/cloud) para PROMAKER/Belt-G, o foto manual. `browser-use` NO está instalado en esta máquina (sin Python).
+
 ## ✅ Session 75 (cont. 2026-07-16) — Features UI (POS/despacho/caja) + fix agente + ops prod
 
 **Código (commiteado; PENDIENTE DE DEPLOY a ambas empresas, salvo el agente que es .exe por PC):**
