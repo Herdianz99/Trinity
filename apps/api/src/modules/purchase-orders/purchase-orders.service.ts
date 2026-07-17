@@ -8,7 +8,6 @@ import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { IvaType, PurchaseStatus } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
-import { nextRetentionSeq, formatRetentionNumber } from '../../common/retention-number';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -886,92 +885,13 @@ export class PurchaseOrdersService {
         }
       }
 
-      // Create IvaRetention document if applicable
-      if (config?.isIGTFContributor && order.isFiscal && order.totalIvaUsd > 0) {
-        const exchangeRate = order.exchangeRate;
-        const ivaRetPct = config.ivaRetentionPct || 75;
-        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
-        const retBs = round2(retUsd * exchangeRate);
-
-        // Numero auto-sanable: evita colision si el contador quedo por detras de
-        // un numero ya emitido (ver common/retention-number.ts)
-        const seq = await nextRetentionSeq(tx);
-        const number = formatRetentionNumber(seq);
-
-        await tx.ivaRetention.create({
-          data: {
-            number,
-            purchaseOrderId: order.id,
-            supplierId: order.supplierId,
-            ivaBaseUsd: order.totalIvaUsd,
-            ivaBaseBs: order.totalIvaBs,
-            retentionPct: ivaRetPct,
-            retentionUsd: retUsd,
-            retentionBs: retBs,
-            exchangeRate,
-            createdById: userId,
-          },
-        });
-
-        // Increment sequence
-        await tx.companyConfig.update({
-          where: { id: 'singleton' },
-          data: { retentionNextNumber: seq + 1 },
-        });
-      }
-
-      // Create RetentionVoucher (header + line) if supplier is retention agent
-      if (order.supplier.isRetentionAgent && order.serie?.isFiscal && order.totalIvaUsd > 0) {
-        const exchangeRate = order.exchangeRate;
-        const ivaRetPct = config?.ivaRetentionPct || 75;
-        const retUsd = round2(order.totalIvaUsd * (ivaRetPct / 100));
-        const retBs = round2(retUsd * exchangeRate);
-        const taxBaseUsd = round2(order.totalUsd - order.totalIvaUsd);
-        const taxBaseBs = round2(order.totalBs - order.totalIvaBs);
-
-        // Numero auto-sanable: evita colision si el contador quedo por detras de
-        // un numero ya emitido (ver common/retention-number.ts)
-        const retSeq = await nextRetentionSeq(tx);
-        const retNumber = formatRetentionNumber(retSeq);
-
-        await tx.retentionVoucher.create({
-          data: {
-            number: retNumber,
-            supplierId: order.supplierId,
-            serieId: order.serieId,
-            status: 'PENDING',
-            retentionPct: ivaRetPct,
-            retentionAmountUsd: retUsd,
-            retentionAmountBs: retBs,
-            exchangeRate,
-            createdById: userId,
-            lines: {
-              create: {
-                purchaseOrderId: order.id,
-                supplierInvoiceNumber: order.supplierInvoiceNumber,
-                supplierControlNumber: order.supplierControlNumber,
-                invoiceDate: order.invoiceDate,
-                invoiceTotalUsd: order.totalUsd,
-                invoiceTotalBs: order.totalBs,
-                taxableBaseUsd: taxBaseUsd,
-                taxableBaseBs: taxBaseBs,
-                ivaAmountUsd: order.totalIvaUsd,
-                ivaAmountBs: order.totalIvaBs,
-                retentionPct: ivaRetPct,
-                retentionAmountUsd: retUsd,
-                retentionAmountBs: retBs,
-                exchangeRate,
-              },
-            },
-          },
-        });
-
-        // Increment global retention sequence
-        await tx.companyConfig.update({
-          where: { id: 'singleton' },
-          data: { retentionNextNumber: retSeq + 1 },
-        });
-      }
+      // NOTA (Session 76): la retencion de IVA de compras se maneja SOLO por CxP
+      // (payables.service crea UN unico RetentionVoucher: comprobante + libro + neteo).
+      // Antes, process() creaba AQUI una IvaRetention Y un RetentionVoucher, consumiendo
+      // DOS correlativos por una sola retencion → origen de los saltos en la serie.
+      // Desactivado a pedido: las compras fiscales ya NO generan retencion automatica.
+      // Los registros IvaRetention/RetentionVoucher existentes NO se tocan (siguen
+      // cruzables en recibos). El libro de la factura de compra se sigue creando abajo.
 
       // Create PurchaseBookEntry automatically (invoice line — without retention, retention comes separately when issued)
       if (order.serie?.isFiscal) {
