@@ -81,7 +81,10 @@ export class RetentionVouchersService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        // Ordenar por correlativo (el number es de ancho fijo YYYYMM+8, asi que
+        // el orden de texto = orden numerico). Tras renumerar retenciones, createdAt
+        // dejaba la lista desordenada respecto al correlativo.
+        orderBy: { number: 'desc' },
         include: this.includeDetail,
       }),
       this.prisma.retentionVoucher.count({ where }),

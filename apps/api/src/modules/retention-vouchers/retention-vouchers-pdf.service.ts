@@ -31,10 +31,15 @@ function fmtHora(d: Date): string {
 }
 
 /** Helper: write bold label + normal value in a single line without continued */
-function labelValue(doc: PDFKit.PDFDocument, label: string, value: string, x: number, y: number, w: number) {
+function labelValue(doc: PDFKit.PDFDocument, label: string, value: string, x: number, y: number, w: number): number {
   const labelW = doc.font('Helvetica-Bold').widthOfString(label);
   doc.font('Helvetica-Bold').text(label, x, y, { lineBreak: false });
-  doc.font('Helvetica').text(value, x + labelW, y, { width: w - labelW, lineBreak: false });
+  const valueW = w - labelW;
+  // El valor SE AJUSTA en varias lineas si es largo (ej. nombres de entes publicos),
+  // en vez de montarse sobre el campo de abajo. Devuelve la Y despues del campo.
+  doc.font('Helvetica').text(value || '', x + labelW, y, { width: valueW });
+  const h = doc.heightOfString(value || '', { width: valueW });
+  return y + Math.max(10, h + 2);
 }
 
 @Injectable()
@@ -167,43 +172,36 @@ export class RetentionVouchersPdfService {
       const colWidth = pageWidth / 2;
       const col1X = L;
       const col2X = L + colWidth;
-      const boxH = 52;
       const boxTop = y;
+      const bw = colWidth - 12;
 
-      // Agente de retención (company) — left box
-      doc.rect(col1X, boxTop, colWidth, boxH).lineWidth(0.5).stroke('#333333');
+      // Encabezados de cada recuadro
       doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#000000')
         .text('Datos del agente de retención', col1X + 5, boxTop + 4, { lineBreak: false });
-      doc.fontSize(7);
-      let ay = boxTop + 15;
-      const bw = colWidth - 12;
-      labelValue(doc, 'Nombre: ', config?.companyName || '', col1X + 5, ay, bw);
-      ay += 10;
-      labelValue(doc, 'RIF: ', config?.rif || '', col1X + 5, ay, bw);
-      ay += 10;
-      labelValue(doc, 'Dirección: ', (config?.address || '').substring(0, 50), col1X + 5, ay, bw);
-      ay += 10;
-      if (config?.phone) {
-        labelValue(doc, 'Teléfono: ', config.phone, col1X + 5, ay, bw);
-      }
-
-      // Sujeto retenido (supplier) — right box
-      doc.rect(col2X, boxTop, colWidth, boxH).lineWidth(0.5).stroke('#333333');
-      doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#000000')
+      doc.fontSize(7.5).font('Helvetica-Bold')
         .text('Datos del sujeto retenido', col2X + 5, boxTop + 4, { lineBreak: false });
       doc.fontSize(7);
+
+      // Agente de retención (company) — columna izquierda. Cada campo devuelve la Y
+      // siguiente, así los largos empujan a los de abajo (sin montarse).
+      let ay = boxTop + 15;
+      ay = labelValue(doc, 'Nombre: ', config?.companyName || '', col1X + 5, ay, bw);
+      ay = labelValue(doc, 'RIF: ', config?.rif || '', col1X + 5, ay, bw);
+      ay = labelValue(doc, 'Dirección: ', (config?.address || '').substring(0, 60), col1X + 5, ay, bw);
+      if (config?.phone) ay = labelValue(doc, 'Teléfono: ', config.phone, col1X + 5, ay, bw);
+
+      // Sujeto retenido (supplier) — columna derecha
       let sy = boxTop + 15;
-      labelValue(doc, 'Nombre: ', voucher.supplier.name, col2X + 5, sy, bw);
-      sy += 10;
-      labelValue(doc, 'RIF: ', voucher.supplier.rif || '', col2X + 5, sy, bw);
-      sy += 10;
-      if (voucher.supplier.address) {
-        labelValue(doc, 'Dirección: ', (voucher.supplier.address).substring(0, 50), col2X + 5, sy, bw);
-        sy += 10;
-      }
-      if (voucher.supplier.phone) {
-        labelValue(doc, 'Teléfono: ', voucher.supplier.phone, col2X + 5, sy, bw);
-      }
+      sy = labelValue(doc, 'Nombre: ', voucher.supplier.name, col2X + 5, sy, bw);
+      sy = labelValue(doc, 'RIF: ', voucher.supplier.rif || '', col2X + 5, sy, bw);
+      if (voucher.supplier.address) sy = labelValue(doc, 'Dirección: ', voucher.supplier.address.substring(0, 60), col2X + 5, sy, bw);
+      if (voucher.supplier.phone) sy = labelValue(doc, 'Teléfono: ', voucher.supplier.phone, col2X + 5, sy, bw);
+
+      // Recuadros dibujados AL FINAL con la altura del más alto (para que ninguno corte texto).
+      const boxH = Math.max(ay, sy) - boxTop + 4;
+      doc.lineWidth(0.5).strokeColor('#333333');
+      doc.rect(col1X, boxTop, colWidth, boxH).stroke();
+      doc.rect(col2X, boxTop, colWidth, boxH).stroke();
 
       y = boxTop + boxH + 8;
 

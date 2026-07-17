@@ -17,6 +17,18 @@
 - **Fase 1** empleados (reusa `Customer`) · **2** parámetros · **3** corrida (captura días/HE/deducciones → calcula → cierra) · **4** recibo PDF + relación por depto · **5** deducción de CxC del empleado (reusa recibos).
 - Regla a confirmar con RRHH: en el Excel "A cobrar" NO incluye horas extra (se muestran aparte); el motor calcula neto = (salario+HE) − deducciones.
 
+**Fixes de código (PENDIENTE DE DEPLOY, API+Web):**
+- **PDF de retención IVA** (`retention-vouchers-pdf.service.ts`): el nombre largo del proveedor (entes públicos, ej. SENCAMER) se envolvía en 3 líneas y se montaba sobre el RIF (recuadro de altura fija). Ahora `labelValue` ajusta el valor en varias líneas y devuelve la Y; el recuadro crece a la altura del más alto. Verificado renderizando el PDF real.
+- **Lista `/purchases/retentions`** (`retention-vouchers.service.ts` `findAll`): ordena por **correlativo** (`number`) en vez de `createdAt` — tras renumerar quedaba revuelta. (El TXT SENIAT ya iba por `number`.)
+- **`/settings/dynamic-keys`** (frontend): faltaban en `PERM_LABELS` los permisos `DELETE_SUPPLIER_ADVANCE` / `DELETE_CUSTOMER_ADVANCE` → no se podían asignar por UI (raíz del pendiente de la Session 71). Agregados.
+
+**Ops prod (grande) — retenciones de IVA (aplicado en vivo, respaldos en `/root/backups/pre-rv*.sql.gz`):**
+- **Diagnóstico de correlativos que "saltaban":** `IvaRetention` y `RetentionVoucher` son 2 tablas que modelan lo mismo y **comparten el contador** (`nextRetentionSeq` = max de ambas). En compras fiscales `process()` crea las DOS → una compra come 2 números. El camino de **CxP (`payables`) ya es de 1 sola tabla** (RetentionVoucher + libro + cruce en recibo). Decisión del cliente: **solo CxP en adelante** (no más compras fiscales) → el problema no reaparece.
+- **Rellenado de huecos** (renumerando comprobante + su línea de libro juntos, en transacción): `1407→1361`, `1412→1394`, `1413→1396`, `1414→1398`, `1415→1407`. Contador bajado **1416→1412**. **Serie de comprobantes 1346–1411 continua, sin huecos.** El cruce en recibos se enlaza por id (no se rompe al renumerar).
+- **Permisos:** `DELETE_SUPPLIER_ADVANCE`+`DELETE_CUSTOMER_ADVANCE` agregados a la clave dinámica "Clave Maestra" por BD (destraba borrar anticipos; el usuario borró el anticipo de PROARCA vía app).
+
+**Local:** montada copia fresca de la grande en `trebol_db` (dump plano pg16→pg15, migración `intended_payment` + `fix-schema` aplicados) para pruebas.
+
 ## ✅ Session 75 (cont. 2026-07-16) — Features UI (POS/despacho/caja) + fix agente + ops prod
 
 **Código (commiteado; PENDIENTE DE DEPLOY a ambas empresas, salvo el agente que es .exe por PC):**
