@@ -1,5 +1,22 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧭 Session 76 (2026-07-17) — Features POS + evaluaciones (multisucursal / nómina) + plan nómina
+
+**Hecho y commiteado:**
+- **POS Feature 1 — USD editable en métodos Bs** (`9a395d2`): en el modal de cobro ambos campos USD y Bs son editables (el que se escribe maneja al otro con la tasa). Resuelve el caso Cashea (inicial en $, cliente paga en Bs). Solo frontend.
+- **POS Feature 2 — pago previsto (Cashea/Crediagro)** (`9a395d2`): el vendedor marca el método previsto en la pre-factura (chips en vista de búsqueda móvil + carrito + escritorio); el cajero ve un pill en el drawer de pendientes y un banner al retomar/cobrar. Campo `Invoice.intendedPaymentMethodId` nullable/aditivo (migración `20260717150000` + `fix-schema.sql`). **PENDIENTE DE DEPLOY** (API+Web, ambas empresas).
+- **Ops prod (grande):** eliminado ajuste `ADJ-0042` (reverso de stock + borrado, respaldo en `/root/backups/`).
+- **Doc:** `docs/MULTISUCURSAL-FACTIBILIDAD.md` (`4859227`).
+
+**Evaluaciones (sin ejecutar):**
+- **Multisucursal:** factible ~11-13 sesiones; mismo RIF + precios compartidos + usuarios multi-sucursal; enfoque `branchId` nullable + flag; nubes intactas por DB separada + flag off. Ver doc.
+- **Nómina básica:** ~8-10 sesiones; alcance día-a-día (sueldo indexado-USD pagado en Bs, HE + feriados, IVSS/FAOV montos fijos; SIN prestaciones/ISLR/vacaciones/cestaticket). Empleado reusa ficha `Customer` (`isEmployee` ya existe) para descontar su CxC por nómina. Se analizó el Excel real de RRHH (`nomina.xlsx`, hoja semanal, fórmulas verificadas).
+
+**Planeado — Módulo de nómina** (plan completo en `docs/superpowers/plans/2026-07-17-nomina.md`):
+- **Fase 0** — Schema (`Employee`/`PayrollParam`/`PayrollRun`/`PayrollRunLine`) + migración aditiva + **motor de cálculo (función pura) validado contra el Excel** al centavo. Detallada en el plan.
+- **Fase 1** empleados (reusa `Customer`) · **2** parámetros · **3** corrida (captura días/HE/deducciones → calcula → cierra) · **4** recibo PDF + relación por depto · **5** deducción de CxC del empleado (reusa recibos).
+- Regla a confirmar con RRHH: en el Excel "A cobrar" NO incluye horas extra (se muestran aparte); el motor calcula neto = (salario+HE) − deducciones.
+
 ## ✅ Session 75 (cont. 2026-07-16) — Features UI (POS/despacho/caja) + fix agente + ops prod
 
 **Código (commiteado; PENDIENTE DE DEPLOY a ambas empresas, salvo el agente que es .exe por PC):**
