@@ -2410,3 +2410,7 @@ ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "useCashLedger" BOOLEAN NOT
 
 -- NC como copia de la factura: guardar el descuento de la línea para el fiscal (p-) y el PDF.
 ALTER TABLE "CreditDebitNoteItem" ADD COLUMN IF NOT EXISTS "discountPct" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- Método de pago previsto por el vendedor (Cashea/Crediagro): aviso al cajero al retomar la pre-factura.
+ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "intendedPaymentMethodId" TEXT;
+DO $$ BEGIN ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_intendedPaymentMethodId_fkey" FOREIGN KEY ("intendedPaymentMethodId") REFERENCES "PaymentMethod"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

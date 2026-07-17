@@ -133,6 +133,7 @@ export class InvoicesService {
       include: {
         customer: { select: { id: true, name: true, documentType: true, rif: true } },
         seller: { select: { id: true, code: true, name: true } },
+        intendedPaymentMethod: { select: { id: true, name: true } },
         items: {
           take: 3,
           select: { id: true, productName: true, quantity: true },
@@ -395,6 +396,7 @@ export class InvoicesService {
         totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
         exchangeRate: rate.rate,
         notes: dto.notes,
+        intendedPaymentMethodId: dto.intendedPaymentMethodId || null,
         createdById: user.id,
         sellerId,
         items: { create: itemsData },
@@ -1153,6 +1155,7 @@ export class InvoicesService {
         items: true,
         customer: true,
         seller: { select: { id: true, code: true, name: true } },
+        intendedPaymentMethod: { select: { id: true, name: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
@@ -1324,6 +1327,7 @@ export class InvoicesService {
           totalBs: Math.round((subtotalBsAccum + ivaBsAccum) * 100) / 100,
           exchangeRate: rate.rate,
           notes: dto.notes,
+          intendedPaymentMethodId: dto.intendedPaymentMethodId ?? invoice.intendedPaymentMethodId,
           lockedById: null,
           lockedAt: null,
           items: { create: itemsData },

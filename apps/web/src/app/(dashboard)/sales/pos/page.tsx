@@ -290,6 +290,9 @@ export default function POSPage() {
   const [userSellerName, setUserSellerName] = useState<string | null>(null);
   const [mySellerId, setMySellerId] = useState<string | null>(null);
 
+  // Pago previsto (Cashea/Crediagro): el vendedor lo marca en la pre-factura para avisar al cajero.
+  const [intendedMethod, setIntendedMethod] = useState<{ id: string; name: string } | null>(null);
+
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
   const [changeMethodId, setChangeMethodId] = useState<string | null>(null);
@@ -310,6 +313,37 @@ export default function POSPage() {
 
   // Hay alguna linea de pago que genera CxC (cashea/crediagro/etc) sin referencia cargada
   const hasMissingCxcReference = payments.some(p => p.createsReceivable && !p.reference.trim());
+
+  // Métodos de financiamiento (Cashea/Crediagro) para el selector de "pago previsto" del vendedor.
+  const financingMethods = (() => {
+    const flat: PaymentMethodData[] = [];
+    const walk = (arr: PaymentMethodData[]) => arr.forEach(m => { flat.push(m); if (m.children) walk(m.children); });
+    walk(paymentMethods);
+    return flat.filter(m => m.createsReceivable && m.isActive);
+  })();
+
+  // Chips de "pago previsto" (solo modo vendedor): marca Cashea/Crediagro para avisar al cajero.
+  const renderIntendedPayment = () => {
+    if (userRole !== 'SELLER' || financingMethods.length === 0) return null;
+    return (
+      <div className="px-3 py-2 border-t border-slate-700/50">
+        <div className="text-[11px] text-slate-500 mb-1.5">Pago previsto (opcional)</div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setIntendedMethod(null)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${!intendedMethod ? 'bg-slate-600/40 border-slate-500 text-white' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+          >Ninguno</button>
+          {financingMethods.map(m => (
+            <button
+              key={m.id}
+              onClick={() => setIntendedMethod({ id: m.id, name: m.name })}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${intendedMethod?.id === m.id ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+            >{m.name}</button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Drawer de facturas en espera: filtro "mis facturas" (solo si el usuario tiene vendedor propio)
   // + buscador por nombre o cedula del cliente (la cedula matchea ignorando el prefijo V-/E-).
@@ -968,10 +1002,13 @@ export default function POSPage() {
       const updated = { ...p, [field]: p.methodId === 'pm_saldo_favor' && field === 'amountUsd' ? numValue : value };
       // El saldo a favor esta denominado en USD (aunque isDivisa=false): el monto se
       // ingresa en USD y el Bs se deriva, igual que un pago en divisa.
-      const usdInput = p.isDivisa || p.methodId === 'pm_saldo_favor';
-      if (field === 'amountUsd' && usdInput) {
+      // Ambos campos (USD y Bs) son editables en CUALQUIER método: el que se escribe maneja
+      // al otro con la tasa. Caso de uso: Cashea indica la inicial en USD y el cliente paga en
+      // Bs; el cajero escribe 20.50 en USD y el Bs se calcula solo (antes el USD era readonly
+      // en métodos Bs). "Saldo a favor" sigue siendo solo-USD (su campo Bs queda readonly).
+      if (field === 'amountUsd') {
         updated.amountBs = Math.round(Number(updated.amountUsd) * exchangeRate * 100) / 100;
-      } else if (field === 'amountBs' && !usdInput) {
+      } else if (field === 'amountBs') {
         updated.amountUsd = exchangeRate > 0 ? Math.round(Number(value) / exchangeRate * 100) / 100 : 0;
       }
       return updated;
@@ -1023,6 +1060,7 @@ export default function POSPage() {
         customerId: customerId || undefined,
         cashRegisterId: selectedCashRegister?.id || undefined,
         sellerId: selectedSellerId || undefined,
+        intendedPaymentMethodId: intendedMethod?.id || undefined,
         items: cart.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -1058,6 +1096,7 @@ export default function POSPage() {
       setCustomerId(null);
       setCustomerName('');
       setExistingInvoiceId(null);
+      setIntendedMethod(null);
       setMobileView('search'); // volver a la pantalla de busqueda para la siguiente factura
       setMessage({ type: 'success', text: 'Factura guardada en espera' });
       fetchPending();
@@ -1555,6 +1594,8 @@ export default function POSPage() {
       }
       // Preserve the original seller so commissions stay with whoever sold it
       setSelectedSellerId(fullInvoice.seller?.id ?? null);
+      // Traer el pago previsto que marcó el vendedor (aviso al cajero)
+      setIntendedMethod(fullInvoice.intendedPaymentMethod ? { id: fullInvoice.intendedPaymentMethod.id, name: fullInvoice.intendedPaymentMethod.name } : null);
       setExistingInvoiceId(inv.id);
       setPendingDrawerOpen(false);
       setConfirmRetake(null);
@@ -2074,6 +2115,7 @@ export default function POSPage() {
                 {exchangeRate > 0 && <span className="block text-xs font-normal text-slate-400">Bs {fmtBs(totalUsd * exchangeRate)}</span>}
               </span>
             </div>
+            {renderIntendedPayment()}
             {userRole === 'SELLER' ? (
               <button
                 onClick={handleSaveInvoice}
@@ -2132,6 +2174,9 @@ export default function POSPage() {
               </button>
             )}
           </div>
+
+          {/* Pago previsto (visible en la vista de busqueda para el vendedor, sin abrir el carrito) */}
+          {renderIntendedPayment()}
 
           {/* Cabecera / toggle */}
           <button
@@ -2291,6 +2336,12 @@ export default function POSPage() {
             </div>
 
             <div className="p-4 md:p-6 space-y-5">
+              {intendedMethod && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-violet-500/15 border border-violet-500/40 text-violet-200">
+                  <CreditCard size={18} className="shrink-0" />
+                  <span className="text-sm font-medium">El cliente indicó que pagará con <span className="font-bold">{intendedMethod.name}</span></span>
+                </div>
+              )}
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -2376,7 +2427,6 @@ export default function POSPage() {
                             value={p.amountUsd}
                             onChange={n => updatePayment(idx, 'amountUsd', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            readOnly={!p.isDivisa && p.methodId !== 'pm_saldo_favor'}
                           />
                         </div>
                         <div>
@@ -2385,7 +2435,7 @@ export default function POSPage() {
                             value={p.amountBs}
                             onChange={n => updatePayment(idx, 'amountBs', n)}
                             className="input-field !py-2.5 md:!py-1.5 text-sm"
-                            readOnly={p.isDivisa || p.methodId === 'pm_saldo_favor'}
+                            readOnly={p.methodId === 'pm_saldo_favor'}
                           />
                         </div>
                         <div>
@@ -2954,6 +3004,12 @@ export default function POSPage() {
                     <UserCheck size={12} className="text-slate-500" />
                     <span className="text-xs text-slate-400">{inv.seller?.name || 'Sin vendedor'}</span>
                   </div>
+                  {inv.intendedPaymentMethod && (
+                    <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-violet-500/10 text-violet-300 border border-violet-500/20 w-fit font-medium">
+                      <CreditCard size={11} />
+                      Pagará con {inv.intendedPaymentMethod.name}
+                    </div>
+                  )}
                   <div className="text-xs text-slate-500">
                     {inv.items?.slice(0, 2).map((it: any, i: number) => (
                       <span key={i}>{it.productName} x{it.quantity}{i < 1 && inv.items.length > 1 ? ', ' : ''}</span>
@@ -3518,6 +3574,9 @@ export default function POSPage() {
               </div>
             </div>
           )}
+
+          {/* Pago previsto (vendedor marca Cashea/Crediagro para avisar al cajero) */}
+          {renderIntendedPayment()}
 
           {/* Totals and actions */}
           <div className="border-t border-slate-700/50 p-3 space-y-2">

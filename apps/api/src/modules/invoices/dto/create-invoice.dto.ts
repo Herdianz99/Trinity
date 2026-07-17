@@ -64,6 +64,11 @@ export class CreateInvoiceDto {
   @IsString()
   notes?: string;
 
+  @ApiProperty({ required: false, description: 'Método de pago previsto por el vendedor (Cashea/Crediagro)' })
+  @IsOptional()
+  @IsString()
+  intendedPaymentMethodId?: string;
+
   @ApiProperty({ type: [CreateInvoiceItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

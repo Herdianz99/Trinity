@@ -963,6 +963,7 @@ model PaymentMethod {
   customerAdvances   CustomerAdvance[]
   supplierAdvances   SupplierAdvance[]
   ledgerEntries      CashLedgerEntry[]
+  intendedInvoices   Invoice[]           @relation("IntendedPayment")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -1151,6 +1152,10 @@ model Invoice {
   createdById         String
   sellerId            String?
   seller              Seller?            @relation(fields: [sellerId], references: [id])
+  // Método de pago que el vendedor prevé que usará el cliente (Cashea/Crediagro). Solo un
+  // aviso para el cajero al retomar la pre-factura; no obliga ni pre-cobra nada.
+  intendedPaymentMethodId String?
+  intendedPaymentMethod   PaymentMethod? @relation("IntendedPayment", fields: [intendedPaymentMethodId], references: [id])
   cashierId           String?
   cashier             User?              @relation("InvoiceCashier", fields: [cashierId], references: [id])
   lockedById          String?
