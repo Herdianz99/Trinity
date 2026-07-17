@@ -8,7 +8,7 @@ type Movement = {
   quantity: number;
   reason: string | null;
   reference: string | null;
-  product: { code: string; name: string; category: { name: string } | null };
+  product: { code: string; name: string; priceDetal: number; category: { name: string } | null };
   warehouse: { name: string };
 };
 
@@ -19,6 +19,9 @@ type Group = {
   salidas: number;
   neto: number;
   count: number;
+  entradasVenta: number;
+  salidasVenta: number;
+  netoVenta: number;
 };
 
 type Summary = {
@@ -99,13 +102,15 @@ export class StockMovementsPdfService {
 
     // ── Columnas (carta vertical, x de 30 a 582) ──
     const columns = [
-      { label: 'Fecha', x: 30, width: 70 },
-      { label: 'Codigo', x: 100, width: 62 },
-      { label: 'Producto', x: 162, width: 190 },
-      { label: 'Tipo', x: 352, width: 54 },
-      { label: 'Cantidad', x: 406, width: 46, align: 'right' as const },
-      { label: 'Motivo / Ref.', x: 452, width: 130 },
+      { label: 'Fecha', x: 30, width: 64 },
+      { label: 'Codigo', x: 94, width: 56 },
+      { label: 'Producto', x: 150, width: 150 },
+      { label: 'Tipo', x: 300, width: 50 },
+      { label: 'Cantidad', x: 350, width: 42, align: 'right' as const },
+      { label: 'Monto venta', x: 392, width: 66, align: 'right' as const },
+      { label: 'Motivo / Ref.', x: 458, width: 124 },
     ];
+    const m$ = (n: number) => (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     let y = 108;
 
@@ -139,12 +144,14 @@ export class StockMovementsPdfService {
       doc.fontSize(8).font('Helvetica');
       for (const m of group.items) {
         const motivo = m.reason || m.reference || '—';
+        const montoV = m.quantity * (m.product.priceDetal || 0);
         const values = [
           this.fmtDateTime(m.createdAt),
           m.product.code,
           m.product.name,
           TYPE_LABELS[m.type] || m.type,
           `${m.quantity > 0 ? '+' : ''}${m.quantity}`,
+          `${montoV >= 0 ? '+' : '-'}$${m$(Math.abs(montoV))}`,
           motivo,
         ];
 
@@ -168,26 +175,34 @@ export class StockMovementsPdfService {
 
         doc.fillColor('#1e293b');
         for (let i = 0; i < columns.length; i++) {
-          const isQty = i === 4;
-          if (isQty) doc.fillColor(m.quantity >= 0 ? '#15803d' : '#b91c1c');
+          const colored = i === 4 || i === 5;
+          if (colored) doc.fillColor(m.quantity >= 0 ? '#15803d' : '#b91c1c');
           doc.text(values[i] || '', columns[i].x, y, {
             width: columns[i].width,
             align: (columns[i] as any).align,
             lineBreak: true,
           });
-          if (isQty) doc.fillColor('#1e293b');
+          if (colored) doc.fillColor('#1e293b');
         }
         doc.fillColor('#000');
         y += rowHeight;
       }
 
-      // Subtotal de la categoria
-      ensureSpace(18);
+      // Subtotal de la categoria (cantidades + monto a precio de venta)
+      ensureSpace(28);
       doc.moveTo(30, y).lineTo(pageRight, y).stroke('#e2e8f0');
       y += 3;
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
       doc.text(
         `Subtotal ${group.category}:  Entradas +${group.entradas}   Salidas -${group.salidas}   Neto ${group.neto >= 0 ? '+' : ''}${group.neto}`,
+        30,
+        y,
+        { width: pageRight - 30, align: 'right' },
+      );
+      y += 11;
+      doc.fillColor('#0f766e');
+      doc.text(
+        `Monto venta:  Entradas +$${m$(group.entradasVenta)}   Salidas -$${m$(group.salidasVenta)}   Neto ${group.netoVenta >= 0 ? '+' : '-'}$${m$(Math.abs(group.netoVenta))}`,
         30,
         y,
         { width: pageRight - 30, align: 'right' },
@@ -200,7 +215,10 @@ export class StockMovementsPdfService {
     const totEntradas = groups.reduce((s, g) => s + g.entradas, 0);
     const totSalidas = groups.reduce((s, g) => s + g.salidas, 0);
     const totNeto = totEntradas - totSalidas;
-    ensureSpace(30);
+    const totEntradasV = groups.reduce((s, g) => s + g.entradasVenta, 0);
+    const totSalidasV = groups.reduce((s, g) => s + g.salidasVenta, 0);
+    const totNetoV = Math.round((totEntradasV - totSalidasV) * 100) / 100;
+    ensureSpace(40);
     doc.moveTo(30, y).lineTo(pageRight, y).stroke('#94a3b8');
     y += 5;
     doc.fontSize(9).font('Helvetica-Bold').fillColor('#000');
@@ -210,6 +228,15 @@ export class StockMovementsPdfService {
       y,
       { width: pageRight - 30, align: 'right' },
     );
+    y += 12;
+    doc.fillColor('#0f766e');
+    doc.text(
+      `Monto venta:  Entradas +$${m$(totEntradasV)}   Salidas -$${m$(totSalidasV)}   Neto ${totNetoV >= 0 ? '+' : '-'}$${m$(Math.abs(totNetoV))}`,
+      30,
+      y,
+      { width: pageRight - 30, align: 'right' },
+    );
+    doc.fillColor('#000');
 
     if (groups.length === 0) {
       doc.fontSize(10).font('Helvetica').fillColor('#64748b');

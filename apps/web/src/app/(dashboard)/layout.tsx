@@ -5,6 +5,7 @@ import ExchangeRateBanner from '@/components/exchange-rate-banner';
 import PrintMonitor from '@/components/print-monitor';
 import MobileBottomNav from '@/components/mobile-bottom-nav';
 import SessionKeeper from '@/components/session-keeper';
+import { NavGuardProvider } from '@/components/nav-guard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -44,7 +45,7 @@ export default async function DashboardLayout({
       <main className="flex-1 overflow-y-auto">
         <ExchangeRateBanner />
         <div className="p-4 md:p-6 lg:p-8 pb-20 md:pb-6 lg:pb-8">
-          {children}
+          <NavGuardProvider>{children}</NavGuardProvider>
         </div>
       </main>
       {user && <MobileBottomNav role={user.role} />}

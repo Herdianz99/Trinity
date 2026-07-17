@@ -30,6 +30,7 @@ import {
   PackageX,
   Image as ImageIcon,
 } from 'lucide-react';
+import { useNavGuard } from '@/components/nav-guard';
 import SeniatModal from '@/components/seniat-modal';
 import { LostSaleModal } from '@/components/lost-sale-modal';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -310,6 +311,17 @@ export default function POSPage() {
 
   const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
+
+  // Guard de "salir sin guardar": hay venta cargada si el carrito tiene articulos.
+  // "Guardar y salir" = aparcar la pre-factura (doSaveInvoice, que devuelve exito).
+  const { setBlocker } = useNavGuard();
+  const isPosDirty = cart.length > 0;
+  const savePosRef = useRef(doSaveInvoice);
+  savePosRef.current = doSaveInvoice;
+  useEffect(() => {
+    setBlocker(isPosDirty ? { onSave: () => savePosRef.current(), what: 'la venta' } : null);
+    return () => setBlocker(null);
+  }, [isPosDirty, setBlocker]);
 
   // Hay alguna linea de pago que genera CxC (cashea/crediagro/etc) sin referencia cargada
   const hasMissingCxcReference = payments.some(p => p.createsReceivable && !p.reference.trim());
@@ -1051,8 +1063,8 @@ export default function POSPage() {
     setTimeout(() => customerSearchInputRef.current?.focus(), 100);
   }
 
-  async function doSaveInvoice() {
-    if (cart.length === 0) return;
+  async function doSaveInvoice(): Promise<boolean> {
+    if (cart.length === 0) return false;
     setProcessing(true);
     setMessage(null);
     try {
@@ -1100,8 +1112,10 @@ export default function POSPage() {
       setMobileView('search'); // volver a la pantalla de busqueda para la siguiente factura
       setMessage({ type: 'success', text: 'Factura guardada en espera' });
       fetchPending();
+      return true;
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
+      return false;
     } finally {
       setProcessing(false);
     }

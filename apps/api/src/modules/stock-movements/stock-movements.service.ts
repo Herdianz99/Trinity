@@ -130,7 +130,7 @@ export class StockMovementsService {
       where,
       include: {
         product: {
-          select: { code: true, name: true, category: { select: { name: true } } },
+          select: { code: true, name: true, priceDetal: true, category: { select: { name: true } } },
         },
         warehouse: { select: { name: true } },
       },
@@ -149,11 +149,19 @@ export class StockMovementsService {
       .map(([category, items]) => {
         let entradas = 0;
         let salidas = 0;
+        let entradasVenta = 0;
+        let salidasVenta = 0;
         for (const m of items) {
-          if (m.quantity >= 0) entradas += m.quantity;
-          else salidas += Math.abs(m.quantity);
+          const price = m.product.priceDetal || 0;
+          if (m.quantity >= 0) { entradas += m.quantity; entradasVenta += m.quantity * price; }
+          else { salidas += Math.abs(m.quantity); salidasVenta += Math.abs(m.quantity) * price; }
         }
-        return { category, items, entradas, salidas, neto: entradas - salidas, count: items.length };
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        return {
+          category, items, entradas, salidas, neto: entradas - salidas, count: items.length,
+          entradasVenta: r2(entradasVenta), salidasVenta: r2(salidasVenta),
+          netoVenta: r2(entradasVenta - salidasVenta),
+        };
       });
 
     // Resolver nombres para el encabezado del reporte

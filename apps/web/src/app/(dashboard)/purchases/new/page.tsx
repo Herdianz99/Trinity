@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useNavGuard } from '@/components/nav-guard';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -114,6 +115,7 @@ function fmt(n: number): string {
 
 export default function NewPurchaseBillPage() {
   const router = useRouter();
+  const { setBlocker, requestNavigate } = useNavGuard();
 
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -634,6 +636,7 @@ export default function NewPurchaseBillPage() {
         throw new Error(errData.message || 'Error al guardar');
       }
       const created = await res.json();
+      setBlocker(null); // ya se guardó: no interceptar la navegación al detalle
       router.push(`/purchases/${created.id}`);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
@@ -641,6 +644,42 @@ export default function NewPurchaseBillPage() {
       setSaving(false);
     }
   }
+
+  // ---- Guard de "salir sin guardar" ----
+  // Guarda la factura como PENDING y devuelve si tuvo éxito (sin redirigir), para que
+  // el guard de navegación lleve al usuario a donde iba tras guardar.
+  async function saveDraftSilent(): Promise<boolean> {
+    const err = validate();
+    if (err) { setMessage({ type: 'error', text: err }); return false; }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/proxy/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || 'Error al guardar');
+      }
+      return true;
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Hay factura "cargada" si el usuario eligió proveedor, agregó artículos o escribió el N° de factura.
+  const isDirty = !!supplierId || items.some((i) => i.productId) || !!supplierInvoiceNumber.trim() || !!supplierControlNumber.trim();
+  const saveDraftRef = useRef(saveDraftSilent);
+  saveDraftRef.current = saveDraftSilent;
+  useEffect(() => {
+    setBlocker(isDirty ? { onSave: () => saveDraftRef.current(), what: 'la factura de compra' } : null);
+    return () => setBlocker(null);
+  }, [isDirty, setBlocker]);
 
   // ---- Render ----
 
@@ -657,7 +696,7 @@ export default function NewPurchaseBillPage() {
       {/* ═══ Header ═══ */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push('/purchases')}
+          onClick={() => requestNavigate('/purchases')}
           className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={20} />
@@ -1458,7 +1497,7 @@ export default function NewPurchaseBillPage() {
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          onClick={() => router.push('/purchases')}
+          onClick={() => requestNavigate('/purchases')}
           className="text-sm text-slate-400 hover:text-white transition-colors px-4 py-2.5"
         >
           Cancelar
