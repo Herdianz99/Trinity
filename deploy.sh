@@ -124,7 +124,14 @@ fi
 # ── 6. Build y restart API ──
 log "Construyendo y reiniciando API..."
 cd "$PROJECT_DIR"
+# Con nest-cli deleteOutDir=true, tsc incremental puede "no emitir" si el .tsbuildinfo
+# viejo cree que no hay cambios -> queda dist sin main.js y el API entra en loop de restart.
+# Borrarlo fuerza el emit en cada deploy.
+rm -f apps/api/tsconfig.tsbuildinfo apps/api/tsconfig.build.tsbuildinfo 2>/dev/null || true
 pnpm --filter api build 2>&1 | tail -3
+if [ ! -f apps/api/dist/main.js ]; then
+  fail "El build del API no genero apps/api/dist/main.js (revisar tsbuildinfo / errores de compilacion)"
+fi
 pm2 restart trinity-api --update-env 2>&1 | tail -1
 sleep 3
 
