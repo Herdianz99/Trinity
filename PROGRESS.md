@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 👷 Nómina — Fase 0 (rama `feature/nomina`, 2026-07-18) — Fundación de datos + motor validado
+
+> Trabajo en rama aparte `feature/nomina` (NO tocar `main`, que queda desplegable). Plan: `docs/superpowers/plans/2026-07-17-nomina.md`.
+
+- **Schema + migración aditiva** (`20260718100000_payroll_module`): 4 modelos nuevos `Employee` (reusa ficha `Customer` vía `customerId @unique`) · `PayrollParam` (singleton: IVSS/FAOV/INCES fijos, recargos HE, días base) · `PayrollRun` (corrida: período, tasa BCV snapshot, totales, DRAFT/CLOSED) · `PayrollRunLine` (una línea por empleado, entradas + calculados). Relación inversa `employee Employee?` en `Customer`. Espejado en `deploy/fix-schema.sql`. Migración aplicada en local + cliente Prisma regenerado + 4 tablas verificadas.
+- **Motor de cálculo puro** (`apps/api/src/modules/payroll/payroll-calc.ts`): `computePayrollLine(input, params)` replica las fórmulas del Excel de RRHH (mensual/diario USD, salario Bs, valor-hora, HED×1.5 / HEN×1.3, deducciones fijas, neto = (salario+HE)−deducciones). No redondea intermedios, solo montos Bs finales.
+- **Validado al centavo** contra filas reales del Excel (tasa BCV 563.29): CLEIDER (salario 28477.44, neto 28467.23), PEDRO (valor-hora 711.94, HED 1067.90, HEN 1388.28, total HED 14950.66), ANDREINA (19934.21). `TODO OK ✅` vía `apps/api/_payroll-validate.ts` (scratch, no trackeado).
+- **⚠️ Regla a confirmar con RRHH:** el Excel muestra "A cobrar" (col V) SIN horas extra (aparecen aparte); el motor calcula neto = (salario+HE)−deducciones. Confirmar si el pago neto real incluye las HE o se pagan por separado. Documentado en la cabecera del motor.
+- **Siguiente:** Fase 1 (CRUD empleados reusando `Customer`).
+
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
 En **`/receipts/new?type=PAYMENT`**, la columna **"Tipo"** de Documentos pendientes ahora distingue el origen de cada CxP:

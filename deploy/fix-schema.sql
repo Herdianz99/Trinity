@@ -2414,3 +2414,46 @@ ALTER TABLE "CreditDebitNoteItem" ADD COLUMN IF NOT EXISTS "discountPct" DOUBLE 
 -- Método de pago previsto por el vendedor (Cashea/Crediagro): aviso al cajero al retomar la pre-factura.
 ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "intendedPaymentMethodId" TEXT;
 DO $$ BEGIN ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_intendedPaymentMethodId_fkey" FOREIGN KEY ("intendedPaymentMethodId") REFERENCES "PaymentMethod"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Módulo de nómina básica (Fase 0). Tablas nuevas, aditivo — no afecta instalaciones existentes.
+CREATE TABLE IF NOT EXISTS "Employee" (
+  "id" TEXT NOT NULL, "code" TEXT, "customerId" TEXT NOT NULL, "department" TEXT NOT NULL,
+  "cargo" TEXT, "bank" TEXT, "salaryBaseUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "frequency" TEXT NOT NULL DEFAULT 'WEEKLY', "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "Employee_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX IF NOT EXISTS "Employee_customerId_key" ON "Employee"("customerId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Employee_code_key" ON "Employee"("code");
+DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "PayrollParam" (
+  "id" TEXT NOT NULL DEFAULT 'singleton', "ivssBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "faovBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "incesBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "otDayFactor" DOUBLE PRECISION NOT NULL DEFAULT 1.5, "otNightFactor" DOUBLE PRECISION NOT NULL DEFAULT 1.3,
+  "monthDays" INTEGER NOT NULL DEFAULT 30, "weeklyHours" INTEGER NOT NULL DEFAULT 40,
+  "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "PayrollParam_pkey" PRIMARY KEY ("id"));
+
+CREATE TABLE IF NOT EXISTS "PayrollRun" (
+  "id" TEXT NOT NULL, "number" TEXT, "type" TEXT NOT NULL, "periodFrom" TIMESTAMP(3) NOT NULL,
+  "periodTo" TIMESTAMP(3) NOT NULL, "exchangeRate" DOUBLE PRECISION NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'DRAFT', "totalGrossBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalDeductionsBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "totalNetBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdById" TEXT NOT NULL, "closedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "PayrollRun_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX IF NOT EXISTS "PayrollRun_number_key" ON "PayrollRun"("number");
+
+CREATE TABLE IF NOT EXISTS "PayrollRunLine" (
+  "id" TEXT NOT NULL, "payrollRunId" TEXT NOT NULL, "employeeId" TEXT NOT NULL,
+  "salaryBaseUsd" DOUBLE PRECISION NOT NULL, "daysWorked" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "daysRest" DOUBLE PRECISION NOT NULL DEFAULT 0, "overtimeDayHours" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "overtimeNightHours" DOUBLE PRECISION NOT NULL DEFAULT 0, "manualDeductionUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "creditDeductionBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "salaryBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "overtimeBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "grossBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "ivssBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "faovBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalDeductionsBs" DOUBLE PRECISION NOT NULL DEFAULT 0, "netBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "netUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  CONSTRAINT "PayrollRunLine_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX IF NOT EXISTS "PayrollRunLine_payrollRunId_employeeId_key" ON "PayrollRunLine"("payrollRunId","employeeId");
+DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_payrollRunId_fkey" FOREIGN KEY ("payrollRunId") REFERENCES "PayrollRun"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
