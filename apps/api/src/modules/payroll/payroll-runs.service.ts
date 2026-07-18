@@ -148,6 +148,26 @@ export class PayrollRunsService {
       },
     });
     if (!run) throw new NotFoundException('Corrida no encontrada');
+    return this.attachDebts(run);
+  }
+
+  // Adjunta a cada línea la deuda CxC pendiente del empleado (para decidir la deducción de crédito).
+  private async attachDebts<T extends { lines: any[] }>(run: T): Promise<T> {
+    const custIds = [...new Set(run.lines.map((l) => l.employee?.customerId).filter(Boolean))] as string[];
+    const debt = new Map<string, number>();
+    if (custIds.length > 0) {
+      const recs = await this.prisma.receivable.findMany({
+        where: { customerId: { in: custIds }, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { customerId: true, amountUsd: true, paidAmountUsd: true },
+      });
+      for (const r of recs) {
+        const bal = r.amountUsd - r.paidAmountUsd;
+        if (bal > 0.001 && r.customerId) debt.set(r.customerId, (debt.get(r.customerId) || 0) + bal);
+      }
+    }
+    for (const l of run.lines) {
+      if (l.employee) (l.employee as any).customerDebtUsd = r2(debt.get(l.employee.customerId) || 0);
+    }
     return run;
   }
 
@@ -201,13 +221,64 @@ export class PayrollRunsService {
     return this.findOne(id);
   }
 
-  async close(id: string) {
+  async close(id: string, userId: string) {
     const run = await this.prisma.payrollRun.findUnique({ where: { id } });
     if (!run) throw new NotFoundException('Corrida no encontrada');
     if (run.status !== 'DRAFT') throw new BadRequestException('La corrida ya está cerrada');
 
     await this.prisma.$transaction(async (tx) => {
       await this.recompute(tx, id); // asegura totales al día antes de cerrar
+
+      // Aplicar las deducciones de crédito contra las CxC de cada empleado (FIFO).
+      // Reusa el mecanismo de ReceivablePayment; no toca caja (según el alcance del módulo).
+      const lines = await tx.payrollRunLine.findMany({
+        where: { payrollRunId: id, creditDeductionBs: { gt: 0.001 } },
+        include: { employee: { include: { customer: { select: { name: true } } } } },
+      });
+      for (const line of lines) {
+        let remainingUsd = r2(line.creditDeductionBs / run.exchangeRate);
+        const recs = await tx.receivable.findMany({
+          where: { customerId: line.employee.customerId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+        });
+        for (const rec of recs) {
+          if (remainingUsd <= 0.001) break;
+          const bal = r2(rec.amountUsd - rec.paidAmountUsd);
+          if (bal <= 0.001) continue;
+          const applyUsd = Math.min(remainingUsd, bal);
+          const applyBs = r2(applyUsd * run.exchangeRate);
+          const newPaidUsd = r2(rec.paidAmountUsd + applyUsd);
+          const isPaid = newPaidUsd >= rec.amountUsd - 0.01;
+          await tx.receivablePayment.create({
+            data: {
+              receivableId: rec.id,
+              amountUsd: applyUsd,
+              amountBs: applyBs,
+              exchangeRate: run.exchangeRate,
+              methodId: null,
+              reference: `Nomina ${run.number}`,
+              notes: `Deduccion de nomina ${run.number}`,
+              createdById: userId,
+            },
+          });
+          await tx.receivable.update({
+            where: { id: rec.id },
+            data: {
+              paidAmountUsd: newPaidUsd,
+              paidAmountBs: r2(rec.paidAmountBs + applyBs),
+              status: isPaid ? 'PAID' : 'PARTIAL',
+              paidAt: isPaid ? new Date() : rec.paidAt,
+            },
+          });
+          remainingUsd = r2(remainingUsd - applyUsd);
+        }
+        if (remainingUsd > 0.01) {
+          throw new BadRequestException(
+            `${line.employee.customer.name}: la deducción de crédito ($${r2(line.creditDeductionBs / run.exchangeRate).toFixed(2)}) supera su deuda pendiente por $${remainingUsd.toFixed(2)}. Ajuste el monto antes de cerrar.`,
+          );
+        }
+      }
+
       await tx.payrollRun.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date() } });
     });
     return this.findOne(id);

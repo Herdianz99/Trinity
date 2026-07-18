@@ -28,7 +28,13 @@
 - **Backend** `PayrollPdfService` (PDFKit) + endpoints en `PayrollRunsController`: `GET /:id/relation/pdf` (relación landscape agrupada por **departamento** con subtotales + total general), `GET /:id/receipts/pdf` (todos los recibos, 2 por página), `GET /:id/receipt/:lineId/pdf` (recibo individual). Encabezado con `companyName`/`rif` de `CompanyConfig`. "Otras deducciones" = total − IVSS − FAOV.
 - **Frontend** `/payroll/runs/[id]`: botones **Relacion PDF** y **Recibos PDF** en el header (abren en pestaña nueva) + ícono de **recibo por fila** de empleado.
 - **Verificado renderizando los PDFs reales** (leídos con visor): recibo individual (asignaciones/deducciones/neto/firmas) y relación por departamento se ven correctos, números al centavo (total asig 71.905,54, neto 69.068,67). Se corrigió un bug de ancho de la última columna de la relación (reescrito el modelo de columnas por array). Typecheck API+Web verde. Datos de prueba limpiados.
-- **Siguiente:** Fase 5 (deducción del crédito/CxC del empleado al cerrar la corrida).
+
+**Fase 5 — Deducción de crédito/CxC (MÓDULO COMPLETO):**
+- **Backend** (`payroll-runs.service.ts`): `findOne` **adjunta la deuda CxC pendiente** de cada empleado (`employee.customerDebtUsd` = suma de saldos de sus `Receivable` PENDING/PARTIAL/OVERDUE). `close(id, userId)` ahora, dentro de la transacción, **aplica la `creditDeductionBs` de cada línea contra las CxC del empleado FIFO** (÷ tasa → USD): crea `ReceivablePayment` (sin recibo ni caja — `receiptId`/`methodId` null, ref "Nomina NOM-####") y baja `paidAmountUsd`/`status`. **Guard:** si la deducción supera la deuda, lanza error y NO cierra (rollback). No toca caja (según el alcance).
+- **Frontend** `/payroll/runs/[id]`: bajo cada empleado se muestra **"Deuda CxC: $X"** con botón **usar** que precarga la deducción de crédito con el saldo (× tasa).
+- **Verificado end-to-end** (JWT): empleado con CxC $30 → deducir $20 baja la CxC a PARTIAL ($10 restante) con `ReceivablePayment` de $20/11.265,80 Bs; deducir $50 sobre deuda $10 → error claro y corrida queda DRAFT. Typecheck API+Web verde. Datos de prueba limpiados.
+
+**✅ MÓDULO DE NÓMINA COMPLETO (Fases 0-5)** en la rama `feature/nomina`. Pendiente: (1) confirmar con RRHH la regla del neto vs horas extra; (2) merge a `main` + deploy cuando el jefe lo apruebe.
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 

@@ -48,8 +48,8 @@ export class PayrollRunsController {
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string) {
-    return this.service.close(id);
+  close(@Param('id') id: string, @CurrentUser() user: { id: string; email: string; role: UserRole }) {
+    return this.service.close(id, user.id);
   }
 
   @Delete(':id')
