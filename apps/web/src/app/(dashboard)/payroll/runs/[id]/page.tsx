@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users } from 'lucide-react';
+import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files } from 'lucide-react';
 
 interface Line {
   id: string;
@@ -139,19 +139,27 @@ export default function PayrollRunDetailPage() {
             <p className="text-sm text-slate-400">{TYPE_LABEL[run.type]} · {fmtDate(run.periodFrom)} — {fmtDate(run.periodTo)} · Tasa {fmt(run.exchangeRate)} Bs/$</p>
           </div>
         </div>
-        {isDraft && (
-          <div className="flex items-center gap-2">
-            <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors disabled:opacity-50">
-              {syncing ? <Loader2 className="animate-spin" size={15} /> : <Users size={15} />} Sincronizar empleados
-            </button>
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50">
-              {saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Guardar y recalcular
-            </button>
-            <button onClick={handleClose} disabled={closing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
-              {closing ? <Loader2 className="animate-spin" size={15} /> : <Lock size={15} />} Cerrar corrida
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <a href={`/api/proxy/payroll-runs/${id}/relation/pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
+            <FileText size={15} /> Relacion PDF
+          </a>
+          <a href={`/api/proxy/payroll-runs/${id}/receipts/pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
+            <Files size={15} /> Recibos PDF
+          </a>
+          {isDraft && (
+            <>
+              <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors disabled:opacity-50">
+                {syncing ? <Loader2 className="animate-spin" size={15} /> : <Users size={15} />} Sincronizar
+              </button>
+              <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50">
+                {saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Guardar y recalcular
+              </button>
+              <button onClick={handleClose} disabled={closing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
+                {closing ? <Loader2 className="animate-spin" size={15} /> : <Lock size={15} />} Cerrar corrida
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {message && (
@@ -181,6 +189,7 @@ export default function PayrollRunDetailPage() {
                 <Th className="text-right bg-slate-800/60">Deduc.<br/>Bs</Th>
                 <Th className="text-right bg-slate-800/60">Neto Bs</Th>
                 <Th className="text-right bg-slate-800/60">Neto<br/>USD</Th>
+                <Th className="bg-slate-800/60"></Th>
               </tr>
             </thead>
             <tbody>
@@ -207,6 +216,11 @@ export default function PayrollRunDetailPage() {
                   <Td className="text-red-300">{fmt(l.totalDeductionsBs)}</Td>
                   <Td className="text-green-300 font-semibold">{fmt(l.netBs)}</Td>
                   <Td>${fmt(l.netUsd)}</Td>
+                  <td className="px-2 py-2 text-center">
+                    <a href={`/api/proxy/payroll-runs/${id}/receipt/${l.id}/pdf`} target="_blank" rel="noopener noreferrer" className="inline-flex p-1 rounded text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Recibo PDF">
+                      <FileText size={14} />
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -219,6 +233,7 @@ export default function PayrollRunDetailPage() {
                 <Td className="text-red-300">{fmt(run.totalDeductionsBs)}</Td>
                 <Td className="text-green-300">{fmt(run.totalNetBs)}</Td>
                 <td></td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
@@ -228,7 +243,7 @@ export default function PayrollRunDetailPage() {
   );
 }
 
-function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function Th({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
   return <th className={`px-2.5 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide align-bottom ${className.includes('text-') ? '' : 'text-center'} ${className}`}>{children}</th>;
 }
 function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {

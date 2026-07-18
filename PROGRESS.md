@@ -23,7 +23,12 @@
 - **Backend** `PayrollRunsController` (`/payroll-runs`, `@RequireModule('payroll')`) + `PayrollRunsService`. Integra el **motor de la Fase 0**: `POST` crea la corrida (snapshot de tasa BCV = la de hoy o una manual), **auto-carga los empleados activos de esa frecuencia** como líneas y recalcula; `GET` lista; `GET /:id` detalle con líneas (+empleado); `PATCH /:id/lines` (captura días/descanso/HED/HEN/deduc. USD/deduc. crédito Bs → recalcula TODO con el motor + totales); `POST /:id/sync-employees` (agrega activos que falten); `POST /:id/close` (recalcula y pasa a CLOSED); `DELETE /:id` (solo DRAFT). Correlativo `NOM-0001`. Mapeo motor: WEEKLY→52 períodos/40h, BIWEEKLY→24/80h.
 - **Frontend** `/payroll/runs` (listado con modal de creación: frecuencia + rango + tasa manual opcional) y `/payroll/runs/[id]` (tabla editable: inputs por empleado + columnas calculadas + totales; botones Guardar y recalcular / Sincronizar / Cerrar; read-only si CLOSED). Ítem **NOMINA → Corridas** en el sidebar.
 - **Verificado end-to-end** (JWT): corrida WEEKLY tasa 563.29 con 2 empleados reproduce los números de la Fase 0 al centavo — CLEIDER neto 28467.23, PEDRO bruto 43428.10 (HE 14950.66) neto 43417.89, totales OK, cierre CLOSED. Typecheck API+Web verde. Datos de prueba limpiados.
-- **Siguiente:** Fase 4 (recibo de pago PDF por empleado + relación por departamento).
+
+**Fase 4 — Recibo PDF + relación por departamento:**
+- **Backend** `PayrollPdfService` (PDFKit) + endpoints en `PayrollRunsController`: `GET /:id/relation/pdf` (relación landscape agrupada por **departamento** con subtotales + total general), `GET /:id/receipts/pdf` (todos los recibos, 2 por página), `GET /:id/receipt/:lineId/pdf` (recibo individual). Encabezado con `companyName`/`rif` de `CompanyConfig`. "Otras deducciones" = total − IVSS − FAOV.
+- **Frontend** `/payroll/runs/[id]`: botones **Relacion PDF** y **Recibos PDF** en el header (abren en pestaña nueva) + ícono de **recibo por fila** de empleado.
+- **Verificado renderizando los PDFs reales** (leídos con visor): recibo individual (asignaciones/deducciones/neto/firmas) y relación por departamento se ven correctos, números al centavo (total asig 71.905,54, neto 69.068,67). Se corrigió un bug de ancho de la última columna de la relación (reescrito el modelo de columnas por array). Typecheck API+Web verde. Datos de prueba limpiados.
+- **Siguiente:** Fase 5 (deducción del crédito/CxC del empleado al cerrar la corrida).
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
