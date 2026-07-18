@@ -8,7 +8,12 @@
 - **Motor de cálculo puro** (`apps/api/src/modules/payroll/payroll-calc.ts`): `computePayrollLine(input, params)` replica las fórmulas del Excel de RRHH (mensual/diario USD, salario Bs, valor-hora, HED×1.5 / HEN×1.3, deducciones fijas, neto = (salario+HE)−deducciones). No redondea intermedios, solo montos Bs finales.
 - **Validado al centavo** contra filas reales del Excel (tasa BCV 563.29): CLEIDER (salario 28477.44, neto 28467.23), PEDRO (valor-hora 711.94, HED 1067.90, HEN 1388.28, total HED 14950.66), ANDREINA (19934.21). `TODO OK ✅` vía `apps/api/_payroll-validate.ts` (scratch, no trackeado).
 - **⚠️ Regla a confirmar con RRHH:** el Excel muestra "A cobrar" (col V) SIN horas extra (aparecen aparte); el motor calcula neto = (salario+HE)−deducciones. Confirmar si el pago neto real incluye las HE o se pagan por separado. Documentado en la cabecera del motor.
-- **Siguiente:** Fase 1 (CRUD empleados reusando `Customer`).
+
+**Fase 1 — Empleados (CRUD reusando `Customer`):**
+- **Backend** `apps/api/src/modules/payroll/` (`PayrollModule`, registrado en `app.module`): `EmployeesController` (`/employees`, gateado por `@RequireModule('payroll')`) + `EmployeesService`. Endpoints: `POST /employees` (crea ficha nueva `Customer` con `isEmployee=true` **o** enlaza una existente, en transacción, correlativo `EMP-0001`), `GET /employees` (búsqueda por código/nombre/cargo/RIF), `GET /:id`, `PATCH /:id` (campos del empleado; la identidad se edita en la ficha Customer), `PATCH /:id/toggle-active`. Módulo `payroll` agregado a `VALID_MODULES` (role-permissions).
+- **Frontend** `/payroll/employees` (CRUD por modales estilo vendedores): listado con búsqueda, alta con toggle "Cliente nuevo / Cliente existente" (buscador de clientes), campos departamento/cargo/frecuencia/sueldo base USD/banco, edición y activar/desactivar. Sección **NOMINA → Empleados** en el sidebar + etiqueta "Nómina" en Permisos por rol.
+- **Verificado end-to-end** (JWT local firmado): create con ficha nueva → `EMP-0001` + `Customer.isEmployee=true`, list, edit (sueldo/cargo), toggle. Typecheck API+Web verde.
+- **Siguiente:** Fase 2 (parámetros IVSS/FAOV/recargos) o Fase 3 (corrida).
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
