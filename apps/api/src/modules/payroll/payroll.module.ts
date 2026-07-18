@@ -3,10 +3,12 @@ import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { PayrollParamsController } from './payroll-params.controller';
 import { PayrollParamsService } from './payroll-params.service';
+import { PayrollRunsController } from './payroll-runs.controller';
+import { PayrollRunsService } from './payroll-runs.service';
 
 @Module({
-  controllers: [EmployeesController, PayrollParamsController],
-  providers: [EmployeesService, PayrollParamsService],
-  exports: [EmployeesService, PayrollParamsService],
+  controllers: [EmployeesController, PayrollParamsController, PayrollRunsController],
+  providers: [EmployeesService, PayrollParamsService, PayrollRunsService],
+  exports: [EmployeesService, PayrollParamsService, PayrollRunsService],
 })
 export class PayrollModule {}

@@ -18,7 +18,12 @@
 - **Backend** `PayrollParamsController` (`/payroll-params`, `@RequireModule('payroll')`) + `PayrollParamsService`: `GET` (devuelve el singleton, lo crea con defaults del schema si no existe) y `PATCH` (upsert, actualiza solo lo que venga). Registrados en `PayrollModule`.
 - **Frontend** `/payroll/parameters`: form agrupado en 3 secciones — deducciones fijas de ley (IVSS/FAOV/INCES en Bs), recargos de horas extra (factor diurno/nocturno), bases de cálculo (días/mes, horas/semana). Ítem **NOMINA → Parametros** en el sidebar.
 - **Verificado** (JWT): GET crea el singleton con defaults, PATCH actualiza IVSS/FAOV y persiste. Typecheck API+Web verde. Singleton reseteado en local.
-- **Siguiente:** Fase 3 (corrida: crear período, cargar empleados, capturar días/HE/deducciones, calcular con el motor, revisar, cerrar).
+
+**Fase 3 — Corrida (`PayrollRun`):**
+- **Backend** `PayrollRunsController` (`/payroll-runs`, `@RequireModule('payroll')`) + `PayrollRunsService`. Integra el **motor de la Fase 0**: `POST` crea la corrida (snapshot de tasa BCV = la de hoy o una manual), **auto-carga los empleados activos de esa frecuencia** como líneas y recalcula; `GET` lista; `GET /:id` detalle con líneas (+empleado); `PATCH /:id/lines` (captura días/descanso/HED/HEN/deduc. USD/deduc. crédito Bs → recalcula TODO con el motor + totales); `POST /:id/sync-employees` (agrega activos que falten); `POST /:id/close` (recalcula y pasa a CLOSED); `DELETE /:id` (solo DRAFT). Correlativo `NOM-0001`. Mapeo motor: WEEKLY→52 períodos/40h, BIWEEKLY→24/80h.
+- **Frontend** `/payroll/runs` (listado con modal de creación: frecuencia + rango + tasa manual opcional) y `/payroll/runs/[id]` (tabla editable: inputs por empleado + columnas calculadas + totales; botones Guardar y recalcular / Sincronizar / Cerrar; read-only si CLOSED). Ítem **NOMINA → Corridas** en el sidebar.
+- **Verificado end-to-end** (JWT): corrida WEEKLY tasa 563.29 con 2 empleados reproduce los números de la Fase 0 al centavo — CLEIDER neto 28467.23, PEDRO bruto 43428.10 (HE 14950.66) neto 43417.89, totales OK, cierre CLOSED. Typecheck API+Web verde. Datos de prueba limpiados.
+- **Siguiente:** Fase 4 (recibo de pago PDF por empleado + relación por departamento).
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 

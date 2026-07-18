@@ -1,0 +1,236 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users } from 'lucide-react';
+
+interface Line {
+  id: string;
+  salaryBaseUsd: number;
+  daysWorked: number;
+  daysRest: number;
+  overtimeDayHours: number;
+  overtimeNightHours: number;
+  manualDeductionUsd: number;
+  creditDeductionBs: number;
+  salaryBs: number;
+  overtimeBs: number;
+  grossBs: number;
+  ivssBs: number;
+  faovBs: number;
+  totalDeductionsBs: number;
+  netBs: number;
+  netUsd: number;
+  employee: { code: string | null; department: string; customer: { name: string } };
+}
+
+interface Run {
+  id: string;
+  number: string | null;
+  type: string;
+  periodFrom: string;
+  periodTo: string;
+  exchangeRate: number;
+  status: string;
+  totalGrossBs: number;
+  totalDeductionsBs: number;
+  totalNetBs: number;
+  lines: Line[];
+}
+
+const TYPE_LABEL: Record<string, string> = { WEEKLY: 'Semanal', BIWEEKLY: 'Quincenal' };
+const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('es-VE', { timeZone: 'UTC' });
+
+// Campos capturables por el usuario
+const INPUT_FIELDS = ['daysWorked', 'daysRest', 'overtimeDayHours', 'overtimeNightHours', 'manualDeductionUsd', 'creditDeductionBs'] as const;
+type InputField = typeof INPUT_FIELDS[number];
+
+export default function PayrollRunDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [run, setRun] = useState<Run | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchRun = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}`);
+      if (res.ok) setRun(await res.json());
+    } catch { /* empty */ }
+    setLoading(false);
+  }, [id]);
+
+  useEffect(() => { fetchRun(); }, [fetchRun]);
+  useEffect(() => { if (run) document.title = `${run.number || 'Corrida'} | Trinity ERP`; }, [run]);
+
+  const isDraft = run?.status === 'DRAFT';
+
+  function setLineInput(lineId: string, field: InputField, value: number) {
+    setRun((r) => r ? { ...r, lines: r.lines.map((l) => l.id === lineId ? { ...l, [field]: value } : l) } : r);
+  }
+
+  async function handleSave() {
+    if (!run) return;
+    setSaving(true); setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/lines`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lines: run.lines.map((l) => ({
+            id: l.id,
+            daysWorked: l.daysWorked, daysRest: l.daysRest,
+            overtimeDayHours: l.overtimeDayHours, overtimeNightHours: l.overtimeNightHours,
+            manualDeductionUsd: l.manualDeductionUsd, creditDeductionBs: l.creditDeductionBs,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setRun(data);
+      setMessage({ type: 'success', text: 'Cálculo actualizado' });
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+    setSaving(false);
+  }
+
+  async function handleSync() {
+    setSyncing(true); setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/sync-employees`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setRun(data);
+      setMessage({ type: 'success', text: 'Empleados sincronizados' });
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+    setSyncing(false);
+  }
+
+  async function handleClose() {
+    if (!confirm('¿Cerrar la corrida? No podrá editarse después.')) return;
+    setClosing(true); setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/close`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setRun(data);
+      setMessage({ type: 'success', text: 'Corrida cerrada' });
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+    setClosing(false);
+  }
+
+  if (loading) return <div className="flex items-center justify-center py-32"><Loader2 className="animate-spin text-green-400" size={32} /></div>;
+  if (!run) return <div className="text-center py-32 text-slate-500">Corrida no encontrada</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.push('/payroll/runs')} className="p-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 transition-colors"><ArrowLeft size={18} /></button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-white">{run.number}</h1>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${run.status === 'CLOSED' ? 'bg-slate-500/15 text-slate-300 border-slate-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}>{run.status === 'CLOSED' ? 'Cerrada' : 'Borrador'}</span>
+            </div>
+            <p className="text-sm text-slate-400">{TYPE_LABEL[run.type]} · {fmtDate(run.periodFrom)} — {fmtDate(run.periodTo)} · Tasa {fmt(run.exchangeRate)} Bs/$</p>
+          </div>
+        </div>
+        {isDraft && (
+          <div className="flex items-center gap-2">
+            <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors disabled:opacity-50">
+              {syncing ? <Loader2 className="animate-spin" size={15} /> : <Users size={15} />} Sincronizar empleados
+            </button>
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50">
+              {saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Guardar y recalcular
+            </button>
+            <button onClick={handleClose} disabled={closing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
+              {closing ? <Loader2 className="animate-spin" size={15} /> : <Lock size={15} />} Cerrar corrida
+            </button>
+          </div>
+        )}
+      </div>
+
+      {message && (
+        <div className={`p-3 rounded-lg border text-sm ${message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>{message.text}</div>
+      )}
+
+      {isDraft && (
+        <p className="text-xs text-slate-500 flex items-center gap-1.5"><RefreshCw size={13} /> Las columnas calculadas se actualizan al pulsar <span className="text-slate-300">Guardar y recalcular</span>.</p>
+      )}
+
+      {/* Table */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto">
+          <table className="w-full text-xs whitespace-nowrap">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-800">
+                <Th className="text-left sticky left-0 bg-slate-800">Empleado</Th>
+                <Th>Días<br/>trab.</Th>
+                <Th>Días<br/>desc.</Th>
+                <Th>HE<br/>diurnas</Th>
+                <Th>HE<br/>noct.</Th>
+                <Th>Deduc.<br/>USD</Th>
+                <Th>Deduc.<br/>créd. Bs</Th>
+                <Th className="text-right bg-slate-800/60">Salario<br/>Bs</Th>
+                <Th className="text-right bg-slate-800/60">HE Bs</Th>
+                <Th className="text-right bg-slate-800/60">Bruto<br/>Bs</Th>
+                <Th className="text-right bg-slate-800/60">Deduc.<br/>Bs</Th>
+                <Th className="text-right bg-slate-800/60">Neto Bs</Th>
+                <Th className="text-right bg-slate-800/60">Neto<br/>USD</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {run.lines.map((l) => (
+                <tr key={l.id} className="border-t border-slate-700/30 hover:bg-slate-800/30">
+                  <td className="px-3 py-2 sticky left-0 bg-slate-900/95">
+                    <div className="font-medium text-slate-200">{l.employee.customer.name}</div>
+                    <div className="text-[10px] text-slate-500">{l.employee.code} · {l.employee.department} · ${fmt(l.salaryBaseUsd)}</div>
+                  </td>
+                  {INPUT_FIELDS.map((f) => (
+                    <td key={f} className="px-1.5 py-1.5">
+                      <input
+                        type="number" min={0} step="any" disabled={!isDraft}
+                        value={l[f] === 0 ? '' : l[f]}
+                        onChange={(e) => setLineInput(l.id, f, Number(e.target.value) || 0)}
+                        placeholder="0"
+                        className="w-16 bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-right text-slate-100 font-mono text-xs focus:outline-none focus:border-green-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                      />
+                    </td>
+                  ))}
+                  <Td>{fmt(l.salaryBs)}</Td>
+                  <Td>{fmt(l.overtimeBs)}</Td>
+                  <Td className="text-slate-200">{fmt(l.grossBs)}</Td>
+                  <Td className="text-red-300">{fmt(l.totalDeductionsBs)}</Td>
+                  <Td className="text-green-300 font-semibold">{fmt(l.netBs)}</Td>
+                  <Td>${fmt(l.netUsd)}</Td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="sticky bottom-0">
+              <tr className="bg-slate-800 border-t-2 border-slate-600 font-semibold">
+                <td className="px-3 py-2.5 sticky left-0 bg-slate-800 text-slate-300">TOTALES ({run.lines.length})</td>
+                <td colSpan={6}></td>
+                <td colSpan={2}></td>
+                <Td className="text-slate-100">{fmt(run.totalGrossBs)}</Td>
+                <Td className="text-red-300">{fmt(run.totalDeductionsBs)}</Td>
+                <Td className="text-green-300">{fmt(run.totalNetBs)}</Td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <th className={`px-2.5 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide align-bottom ${className.includes('text-') ? '' : 'text-center'} ${className}`}>{children}</th>;
+}
+function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <td className={`px-3 py-2 text-right font-mono text-slate-300 ${className}`}>{children}</td>;
+}
