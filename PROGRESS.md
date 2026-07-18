@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
+
+En **`/receipts/new?type=PAYMENT`**, la columna **"Tipo"** de Documentos pendientes ahora distingue el origen de cada CxP:
+- **`F. Compra`** → el CxP viene de una **factura de compra** (tiene `purchaseOrder` asociada).
+- **`CxP`** → **CxP manual** (gasto o cuenta por pagar creada a mano, sin orden de compra).
+
+Backend (`receipts.service.ts` `getPendingDocuments`, rama PAYMENT): se agregó `fromPurchase: !!p.purchaseOrder` al doc del payable. Frontend (`receipts/new/page.tsx`): campo `fromPurchase?` en `PendingDoc` + label condicional en el badge. Resto de tipos (Ret. IVA/ISLR, Anticipo, notas) sin cambios; `documentType` sigue siendo `'CxP'` (no afecta signo/colores/selección). Typecheck API+Web verde, probado en local. **PENDIENTE DE DEPLOY (API+Web, ambas empresas).**
+
 ## 🧭 Session 76 (2026-07-17) — Features POS + evaluaciones (multisucursal / nómina) + plan nómina
 
 > ✅ **DESPLEGADO a grande + chica el 2026-07-17** (hasta `ea7aeee`, con migración `intended_payment`). Todos los rótulos "PENDIENTE DE DEPLOY" de abajo **ya están en vivo**. En el deploy de la grande el build del API falló por un `.tsbuildinfo` viejo (tsc incremental no emitía con `deleteOutDir`) → arreglado a mano y de raíz en `deploy.sh` (`ea7aeee`: borra el tsbuildinfo + verifica `dist/main.js`).

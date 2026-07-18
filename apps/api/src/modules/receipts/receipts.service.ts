@@ -870,6 +870,9 @@ export class ReceiptsService {
       const payableDocs = payables.filter((p) => !draftPayableIds.has(p.id)).map((p) => ({
         id: p.id,
         documentType: 'CxP',
+        // Origen del CxP: si tiene orden de compra asociada viene de una factura de compra;
+        // si no, es una CxP manual (gasto o CxP creada a mano).
+        fromPurchase: !!p.purchaseOrder,
         payableId: p.id,
         description: (p as any).documentNumber || p.purchaseOrder?.supplierInvoiceNumber || p.purchaseOrder?.number || (p as any).description || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,

@@ -30,6 +30,7 @@ interface PendingDoc {
   balanceUsd: number;
   status: string;
   sign?: number;
+  fromPurchase?: boolean; // CxP: true = viene de factura de compra, false = CxP manual
 }
 
 interface PlatformMethod {
@@ -927,6 +928,7 @@ export default function NewReceiptPage() {
                             {(doc.documentType === 'IVA_RETENTION' || doc.documentType === 'SALES_IVA_RETENTION' || doc.documentType === 'PURCHASE_IVA_RETENTION') ? 'Ret. IVA'
                              : doc.documentType === 'PURCHASE_ISLR_RETENTION' ? 'Ret. ISLR'
                              : (doc.documentType === 'CUSTOMER_ADVANCE' || doc.documentType === 'SUPPLIER_ADVANCE') ? 'Anticipo'
+                             : doc.documentType === 'CxP' ? (doc.fromPurchase ? 'F. Compra' : 'CxP')
                              : doc.documentType}
                           </span>
                         </td>
