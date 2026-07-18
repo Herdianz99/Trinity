@@ -31,7 +31,7 @@
 
 **Fase 5 — Deducción de crédito/CxC (MÓDULO COMPLETO):**
 - **Backend** (`payroll-runs.service.ts`): `findOne` **adjunta la deuda CxC pendiente** de cada empleado (`employee.customerDebtUsd` = suma de saldos de sus `Receivable` PENDING/PARTIAL/OVERDUE). `close(id, userId)` ahora, dentro de la transacción, **aplica la `creditDeductionBs` de cada línea contra las CxC del empleado FIFO** (÷ tasa → USD): crea `ReceivablePayment` (sin recibo ni caja — `receiptId`/`methodId` null, ref "Nomina NOM-####") y baja `paidAmountUsd`/`status`. **Guard:** si la deducción supera la deuda, lanza error y NO cierra (rollback). No toca caja (según el alcance).
-- **Frontend** `/payroll/runs/[id]`: bajo cada empleado se muestra **"Deuda CxC: $X"** con botón **usar** que precarga la deducción de crédito con el saldo (× tasa).
+- **Frontend** `/payroll/runs/[id]`: bajo cada empleado se muestra **"Deuda CxC: $X"** con botones **todo** (descuenta el saldo completo) y **descontar…** (popover: chips 25/50/75/100% o % libre, con preview en $ y Bs, tope = deuda). El campo "Deduc. créd. Bs" sigue editable para afinar el monto exacto.
 - **Verificado end-to-end** (JWT): empleado con CxC $30 → deducir $20 baja la CxC a PARTIAL ($10 restante) con `ReceivablePayment` de $20/11.265,80 Bs; deducir $50 sobre deuda $10 → error claro y corrida queda DRAFT. Typecheck API+Web verde. Datos de prueba limpiados.
 
 **✅ MÓDULO DE NÓMINA COMPLETO (Fases 0-5)** en la rama `feature/nomina`. Pendiente: (1) confirmar con RRHH la regla del neto vs horas extra; (2) merge a `main` + deploy cuando el jefe lo apruebe.

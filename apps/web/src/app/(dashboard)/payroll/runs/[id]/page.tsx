@@ -55,6 +55,9 @@ export default function PayrollRunDetailPage() {
   const [closing, setClosing] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Popover de deducción de crédito por % de la deuda (por línea)
+  const [pctOpen, setPctOpen] = useState<string | null>(null);
+  const [pctVal, setPctVal] = useState('30');
 
   const fetchRun = useCallback(async () => {
     setLoading(true);
@@ -72,6 +75,15 @@ export default function PayrollRunDetailPage() {
 
   function setLineInput(lineId: string, field: InputField, value: number) {
     setRun((r) => r ? { ...r, lines: r.lines.map((l) => l.id === lineId ? { ...l, [field]: value } : l) } : r);
+  }
+
+  // Aplica un % (o monto USD) de la deuda como deducción de crédito (en Bs), tope = deuda total.
+  function applyCreditPct(lineId: string, debtUsd: number, pct: number) {
+    if (!run) return;
+    const usd = Math.min(debtUsd, Math.max(0, (debtUsd * pct) / 100));
+    const bs = Math.round(usd * run.exchangeRate * 100) / 100;
+    setLineInput(lineId, 'creditDeductionBs', bs);
+    setPctOpen(null);
   }
 
   async function handleSave() {
@@ -199,15 +211,50 @@ export default function PayrollRunDetailPage() {
                     <div className="font-medium text-slate-200">{l.employee.customer.name}</div>
                     <div className="text-[10px] text-slate-500">{l.employee.code} · {l.employee.department} · ${fmt(l.salaryBaseUsd)}</div>
                     {(l.employee.customerDebtUsd ?? 0) > 0.01 && (
-                      <div className="text-[10px] text-amber-400/90 flex items-center gap-1">
+                      <div className="relative text-[10px] text-amber-400/90 flex items-center gap-1.5">
                         Deuda CxC: ${fmt(l.employee.customerDebtUsd!)}
                         {isDraft && (
-                          <button
-                            type="button"
-                            onClick={() => setLineInput(l.id, 'creditDeductionBs', Math.round((l.employee.customerDebtUsd! * run.exchangeRate) * 100) / 100)}
-                            className="text-[9px] px-1 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 transition-colors"
-                            title="Usar el saldo como deducción de crédito"
-                          >usar</button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => { setPctOpen(pctOpen === l.id ? null : l.id); setPctVal('30'); }}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 transition-colors"
+                              title="Descontar parte de la deuda"
+                            >descontar…</button>
+                            <button
+                              type="button"
+                              onClick={() => applyCreditPct(l.id, l.employee.customerDebtUsd!, 100)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 transition-colors"
+                              title="Descontar el total de la deuda"
+                            >todo</button>
+                          </>
+                        )}
+                        {pctOpen === l.id && (
+                          <div className="absolute top-5 left-0 z-30 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-2.5 text-slate-200 font-sans">
+                            <div className="text-[11px] font-medium mb-1.5">Descontar de ${fmt(l.employee.customerDebtUsd!)}</div>
+                            <div className="flex gap-1 mb-2">
+                              {[25, 50, 75, 100].map((p) => (
+                                <button key={p} type="button" onClick={() => setPctVal(String(p))}
+                                  className={`flex-1 text-[10px] py-0.5 rounded ${Number(pctVal) === p ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>{p}%</button>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <input type="number" min={0} max={100} value={pctVal}
+                                onChange={(e) => setPctVal(e.target.value)}
+                                className="w-14 bg-slate-900 border border-slate-600 rounded px-1.5 py-1 text-right text-xs font-mono focus:outline-none focus:border-amber-500" />
+                              <span className="text-[11px] text-slate-400">% de la deuda</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mb-2">
+                              = ${fmt(Math.min(l.employee.customerDebtUsd!, (l.employee.customerDebtUsd! * (Number(pctVal) || 0)) / 100))}
+                              {' '}({fmt(Math.round(Math.min(l.employee.customerDebtUsd!, (l.employee.customerDebtUsd! * (Number(pctVal) || 0)) / 100) * run.exchangeRate * 100) / 100)} Bs)
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button type="button" onClick={() => applyCreditPct(l.id, l.employee.customerDebtUsd!, Number(pctVal) || 0)}
+                                className="flex-1 text-[11px] py-1 rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors">Aplicar</button>
+                              <button type="button" onClick={() => setPctOpen(null)}
+                                className="px-2 text-[11px] py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">Cancelar</button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
