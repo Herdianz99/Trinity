@@ -1374,6 +1374,29 @@ export default function POSPage() {
       setMessage({ type: 'error', text: 'El monto pagado no cubre el total' });
       return;
     }
+    // Guard anti "monto sin la coma" (ej: 2196 en vez de 21.96). Los pagos que NO son
+    // efectivo en divisa (punto de venta, transferencia, Bs) nunca generan vuelto, asi
+    // que si superan el total siempre es un error de tipeo. Se bloquea antes de inflar
+    // la caja y el reporte por metodo de pago.
+    const nonDivisaPaidUsd = payments
+      .filter(p => !p.isDivisa)
+      .reduce((s, p) => s + Number(p.amountUsd || 0), 0);
+    if (nonDivisaPaidUsd - grandTotalUsd > 0.5) {
+      setMessage({
+        type: 'error',
+        text: `Los pagos que no son efectivo en divisa suman $${nonDivisaPaidUsd.toFixed(2)}, mayor que el total de $${grandTotalUsd.toFixed(2)}. Revise los montos (¿falto la coma decimal?).`,
+      });
+      return;
+    }
+    // Vuelto implausible: un monto en divisa sin la coma (ej: 4392 en vez de 43.92)
+    // dispara un vuelto gigante. El vuelto es legitimo, asi que no se bloquea, pero se
+    // pide confirmacion para que el cajero no lo pase por error.
+    if (hasChange && changeUsd > grandTotalUsd + 100 && changeUsd > grandTotalUsd * 3) {
+      const ok = confirm(
+        `El vuelto es $${changeUsd.toFixed(2)}, mucho mayor que el total de $${grandTotalUsd.toFixed(2)}.\n¿El cliente realmente pago de mas en efectivo? Revise que no falte la coma decimal.`,
+      );
+      if (!ok) return;
+    }
     if (hasChange && needsBsChange && !changeMethodId) {
       setMessage({ type: 'error', text: 'Seleccione un metodo de vuelto' });
       return;
