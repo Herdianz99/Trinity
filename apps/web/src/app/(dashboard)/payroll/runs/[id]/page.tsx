@@ -184,7 +184,7 @@ export default function PayrollRunDetailPage() {
 
       {/* Table */}
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-180px)] overflow-y-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-800">
