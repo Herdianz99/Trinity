@@ -206,6 +206,7 @@ const menuSections: MenuSection[] = [
     permission: 'payroll',
     items: [
       { label: 'Empleados', href: '/payroll/employees', icon: <UserCheck size={18} /> },
+      { label: 'Parametros', href: '/payroll/parameters', icon: <SlidersHorizontal size={18} /> },
     ],
   },
   {

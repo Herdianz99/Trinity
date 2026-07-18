@@ -13,7 +13,12 @@
 - **Backend** `apps/api/src/modules/payroll/` (`PayrollModule`, registrado en `app.module`): `EmployeesController` (`/employees`, gateado por `@RequireModule('payroll')`) + `EmployeesService`. Endpoints: `POST /employees` (crea ficha nueva `Customer` con `isEmployee=true` **o** enlaza una existente, en transacción, correlativo `EMP-0001`), `GET /employees` (búsqueda por código/nombre/cargo/RIF), `GET /:id`, `PATCH /:id` (campos del empleado; la identidad se edita en la ficha Customer), `PATCH /:id/toggle-active`. Módulo `payroll` agregado a `VALID_MODULES` (role-permissions).
 - **Frontend** `/payroll/employees` (CRUD por modales estilo vendedores): listado con búsqueda, alta con toggle "Cliente nuevo / Cliente existente" (buscador de clientes), campos departamento/cargo/frecuencia/sueldo base USD/banco, edición y activar/desactivar. Sección **NOMINA → Empleados** en el sidebar + etiqueta "Nómina" en Permisos por rol.
 - **Verificado end-to-end** (JWT local firmado): create con ficha nueva → `EMP-0001` + `Customer.isEmployee=true`, list, edit (sueldo/cargo), toggle. Typecheck API+Web verde.
-- **Siguiente:** Fase 2 (parámetros IVSS/FAOV/recargos) o Fase 3 (corrida).
+
+**Fase 2 — Parámetros (singleton `PayrollParam`):**
+- **Backend** `PayrollParamsController` (`/payroll-params`, `@RequireModule('payroll')`) + `PayrollParamsService`: `GET` (devuelve el singleton, lo crea con defaults del schema si no existe) y `PATCH` (upsert, actualiza solo lo que venga). Registrados en `PayrollModule`.
+- **Frontend** `/payroll/parameters`: form agrupado en 3 secciones — deducciones fijas de ley (IVSS/FAOV/INCES en Bs), recargos de horas extra (factor diurno/nocturno), bases de cálculo (días/mes, horas/semana). Ítem **NOMINA → Parametros** en el sidebar.
+- **Verificado** (JWT): GET crea el singleton con defaults, PATCH actualiza IVSS/FAOV y persiste. Typecheck API+Web verde. Singleton reseteado en local.
+- **Siguiente:** Fase 3 (corrida: crear período, cargar empleados, capturar días/HE/deducciones, calcular con el motor, revisar, cerrar).
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
