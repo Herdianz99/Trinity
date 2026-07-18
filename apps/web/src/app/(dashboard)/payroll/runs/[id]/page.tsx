@@ -207,7 +207,7 @@ export default function PayrollRunDetailPage() {
             <tbody>
               {run.lines.map((l) => (
                 <tr key={l.id} className="border-t border-slate-700/30 hover:bg-slate-800/30">
-                  <td className="px-3 py-2 sticky left-0 bg-slate-900/95">
+                  <td className={`px-3 py-2 sticky left-0 bg-slate-900/95 ${pctOpen === l.id ? 'z-40' : ''}`}>
                     <div className="font-medium text-slate-200">{l.employee.customer.name}</div>
                     <div className="text-[10px] text-slate-500">{l.employee.code} · {l.employee.department} · ${fmt(l.salaryBaseUsd)}</div>
                     {(l.employee.customerDebtUsd ?? 0) > 0.01 && (
@@ -230,7 +230,7 @@ export default function PayrollRunDetailPage() {
                           </>
                         )}
                         {pctOpen === l.id && (
-                          <div className="absolute top-5 left-0 z-30 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-2.5 text-slate-200 font-sans">
+                          <div className="absolute top-5 left-0 z-50 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-2.5 text-slate-200 font-sans">
                             <div className="text-[11px] font-medium mb-1.5">Descontar de ${fmt(l.employee.customerDebtUsd!)}</div>
                             <div className="flex gap-1 mb-2">
                               {[25, 50, 75, 100].map((p) => (
