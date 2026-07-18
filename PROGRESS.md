@@ -2,6 +2,8 @@
 
 ## 🧭 Session 76 (2026-07-17) — Features POS + evaluaciones (multisucursal / nómina) + plan nómina
 
+> ✅ **DESPLEGADO a grande + chica el 2026-07-17** (hasta `ea7aeee`, con migración `intended_payment`). Todos los rótulos "PENDIENTE DE DEPLOY" de abajo **ya están en vivo**. En el deploy de la grande el build del API falló por un `.tsbuildinfo` viejo (tsc incremental no emitía con `deleteOutDir`) → arreglado a mano y de raíz en `deploy.sh` (`ea7aeee`: borra el tsbuildinfo + verifica `dist/main.js`).
+
 **Hecho y commiteado:**
 - **POS Feature 1 — USD editable en métodos Bs** (`9a395d2`): en el modal de cobro ambos campos USD y Bs son editables (el que se escribe maneja al otro con la tasa). Resuelve el caso Cashea (inicial en $, cliente paga en Bs). Solo frontend.
 - **POS Feature 2 — pago previsto (Cashea/Crediagro)** (`9a395d2`): el vendedor marca el método previsto en la pre-factura (chips en vista de búsqueda móvil + carrito + escritorio); el cajero ve un pill en el drawer de pendientes y un banner al retomar/cobrar. Campo `Invoice.intendedPaymentMethodId` nullable/aditivo (migración `20260717150000` + `fix-schema.sql`). **PENDIENTE DE DEPLOY** (API+Web, ambas empresas).
