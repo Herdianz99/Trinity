@@ -1,5 +1,28 @@
 ﻿# Trinity ERP — Progreso
 
+## 📌 Pendientes (actualizado 2026-07-19)
+
+**Nómina — listos para deploy de prueba con RRHH:**
+- **Deploy pendiente:** `feature/nomina` ya está **mergeada a `main`** (local, SIN pushear/desplegar). El deploy llevará: módulo de nómina (Fases 0-5) + el fix de sobrepago del POS (`9944790`) + Session 77 (recibo distingue origen del CxP). Todo aditivo. Falta: `git push origin main` + `ssh ... deploy.sh` en la empresa donde probará RRHH.
+  - Para que RRHH lo vea: el rol de la cuenta necesita el módulo `payroll` habilitado (o admin `*`) en **Permisos por rol**.
+  - Probar en **BORRADOR** (captura/cálculo/PDFs). **NO cerrar corridas reales** hasta confirmar la regla del neto — al cerrar se descuenta la deducción de crédito contra las CxC reales del empleado. Para probar el cierre, usar un empleado dummy.
+- **⚠️ Confirmar con RRHH — regla del neto vs horas extra:** en el Excel la col "A cobrar" NO incluye las HE (van aparte); el motor calcula `neto = (salario + HE) − deducciones`. Confirmar cuál es el correcto antes de cerrar corridas reales.
+
+**[NUEVO] Envío de recibos de nómina por correo (fast-follow, ~1 sesión, sin riesgo):**
+- Al procesar/cerrar la corrida y tras chequear que todo esté bien, poder **enviar por correo a cada empleado su recibo de pago**.
+- **Ya existe la parte pesada:** el recibo PDF individual (`payroll-pdf.service.ts` → `generateReceipt(id, lineId)`) y el campo `email` en la ficha del empleado (heredado de `Customer`).
+- **Falta:** el proyecto NO tiene infraestructura de correo. Montar `nodemailer` + `MailService` (config por env) + endpoint `POST /:id/send-receipts` (solo si CLOSED: recorre empleados con email, adjunta su PDF, devuelve resumen enviados/sin-correo/fallidos) + botón "Enviar recibos por correo" en `/payroll/runs/[id]` (+ reenvío por fila; opcional `receiptSentAt` con mini-migración aditiva).
+- **Decisión del cliente:** usarán **Gmail** por simplicidad → requiere **App Password** (necesita 2FA activada en la cuenta). El "de" saldría como la cuenta `@gmail.com`. (Alternativas $0 evaluadas: Resend free enviando desde el dominio de Namecheap, o Zoho Mail free con buzón real.) NO bloquea el deploy de prueba.
+
+**2 cambios UI — ✅ commiteados a `main` el 2026-07-19 (entran en el próximo deploy):**
+- **Guard "salir sin guardar" en edición de compras** (`purchases/[id]/edit/page.tsx`): extiende el NavGuard de la Session 76 al formulario de edición (detecta dirty por firma del payload vs. estado cargado; guarda con PATCH sin redirigir).
+- **Tab "Galería" en detalle de producto** (`catalog/products/[code]/page.tsx`): tab nuevo con galería lazy (`/products/:id/images`) + lightbox.
+
+**Backlog previo (sesiones anteriores):**
+- **Fotos — scraping pausado:** PROMAKER/Belt-G/BELLOTA (marcas con más productos sin foto); la evaluación fue optimista (refs ≠ código de fábrica). Ver memoria `fotos-marcas-pendientes`.
+- **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
+- **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
+
 ## 👷 Nómina — Fase 0 (rama `feature/nomina`, 2026-07-18) — Fundación de datos + motor validado
 
 > Trabajo en rama aparte `feature/nomina` (NO tocar `main`, que queda desplegable). Plan: `docs/superpowers/plans/2026-07-17-nomina.md`.
@@ -34,7 +57,7 @@
 - **Frontend** `/payroll/runs/[id]`: bajo cada empleado se muestra **"Deuda CxC: $X"** con botones **todo** (descuenta el saldo completo) y **descontar…** (popover: chips 25/50/75/100% o % libre, con preview en $ y Bs, tope = deuda). El campo "Deduc. créd. Bs" sigue editable para afinar el monto exacto.
 - **Verificado end-to-end** (JWT): empleado con CxC $30 → deducir $20 baja la CxC a PARTIAL ($10 restante) con `ReceivablePayment` de $20/11.265,80 Bs; deducir $50 sobre deuda $10 → error claro y corrida queda DRAFT. Typecheck API+Web verde. Datos de prueba limpiados.
 
-**✅ MÓDULO DE NÓMINA COMPLETO (Fases 0-5)** en la rama `feature/nomina`. Pendiente: (1) confirmar con RRHH la regla del neto vs horas extra; (2) merge a `main` + deploy cuando el jefe lo apruebe.
+**✅ MÓDULO DE NÓMINA COMPLETO (Fases 0-5)** — **mergeado a `main`** el 2026-07-19 (merge no-ff, sin conflictos; queda sobre el fix de sobrepago del POS). Pendientes en la sección **📌 Pendientes** de arriba: (1) push + deploy para prueba con RRHH; (2) confirmar la regla del neto vs horas extra; (3) [nuevo] envío de recibos por correo (fast-follow).
 
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
