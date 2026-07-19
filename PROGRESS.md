@@ -2,8 +2,8 @@
 
 ## 📌 Pendientes (actualizado 2026-07-19)
 
-**Nómina — listos para deploy de prueba con RRHH:**
-- **Deploy pendiente:** `feature/nomina` ya está **mergeada a `main`** (local, SIN pushear/desplegar). El deploy llevará: módulo de nómina (Fases 0-5) + el fix de sobrepago del POS (`9944790`) + Session 77 (recibo distingue origen del CxP). Todo aditivo. Falta: `git push origin main` + `ssh ... deploy.sh` en la empresa donde probará RRHH.
+**Nómina — deploy de prueba con RRHH:**
+- **✅ DESPLEGADO a la GRANDE (`inversiones`, 134.209.164.59) el 2026-07-19** (commit `aff4bc0`): módulo de nómina (Fases 0-5) + fix de sobrepago del POS (`9944790`) + Session 77 (recibo distingue origen del CxP). Verificado: 4 tablas payroll creadas (migración aplicada), PM2 `trinity-api`/`trinity-web` online. **PENDIENTE de desplegar en la CHICA (`eltrebol`, 134.209.220.233)** cuando se apruebe.
   - Para que RRHH lo vea: el rol de la cuenta necesita el módulo `payroll` habilitado (o admin `*`) en **Permisos por rol**.
   - Probar en **BORRADOR** (captura/cálculo/PDFs). **NO cerrar corridas reales** hasta confirmar la regla del neto — al cerrar se descuenta la deducción de crédito contra las CxC reales del empleado. Para probar el cierre, usar un empleado dummy.
 - **⚠️ Confirmar con RRHH — regla del neto vs horas extra:** en el Excel la col "A cobrar" NO incluye las HE (van aparte); el motor calcula `neto = (salario + HE) − deducciones`. Confirmar cuál es el correcto antes de cerrar corridas reales.
