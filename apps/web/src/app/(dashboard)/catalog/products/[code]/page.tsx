@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Package, Save, Loader2, AlertTriangle,
   ChevronLeft, ChevronRight, ExternalLink, LogOut,
+  Image as ImageIcon, X,
 } from 'lucide-react';
 import Toggle from '@/components/toggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -40,6 +41,8 @@ interface Product {
   saleBlocked?: boolean;
   showInStore?: boolean;
   storeFeatured?: boolean;
+  primaryImageThumbUrl?: string | null;
+  primaryImageMediumUrl?: string | null;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
   supplier: { id: string; name: string } | null;
@@ -105,6 +108,12 @@ export default function ProductDetailPage() {
 
   // ── Active tab (lazy loading) ──
   const [activeTab, setActiveTab] = useState('info');
+
+  // ── Galería de imágenes (lazy) + lightbox ──
+  const [gallery, setGallery] = useState<any[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryLoaded, setGalleryLoaded] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   // ── Movements (Kardex) ──
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -244,6 +253,15 @@ export default function ProductDetailPage() {
     }
   }, [product, purchPage]);
 
+  const fetchGallery = useCallback(async () => {
+    if (!product) return;
+    setGalleryLoading(true);
+    try {
+      const res = await fetch(`/api/proxy/products/${product.id}/images`);
+      setGallery(res.ok ? await res.json() : []);
+    } catch { setGallery([]); } finally { setGalleryLoading(false); setGalleryLoaded(true); }
+  }, [product]);
+
   useEffect(() => { fetchProduct(); fetchMeta(); }, [fetchProduct, fetchMeta]);
 
   useEffect(() => {
@@ -259,6 +277,11 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (activeTab === 'purchases' && product) fetchPurchases();
   }, [activeTab, product, purchPage, fetchPurchases]);
+
+  // Lazy load: fetch galería only when tab is active
+  useEffect(() => {
+    if (activeTab === 'gallery' && product && !galleryLoaded) fetchGallery();
+  }, [activeTab, product, galleryLoaded, fetchGallery]);
 
   // Sync editable price fields when product loads
   useEffect(() => {
@@ -562,9 +585,10 @@ export default function ProductDetailPage() {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="info" onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Informacion General</TabsTrigger>
+          <TabsTrigger value="gallery">Galeria</TabsTrigger>
           <TabsTrigger value="stock">Existencias</TabsTrigger>
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="purchases">Historial de compras</TabsTrigger>
@@ -698,6 +722,40 @@ export default function ProductDetailPage() {
               </button>
             </div>
           </form>
+        </TabsContent>
+
+        {/* ═══ TAB: Galería ═══ */}
+        <TabsContent value="gallery">
+          <div className="card p-6">
+            {galleryLoading ? (
+              <div className="flex justify-center py-16"><Loader2 className="animate-spin text-emerald-500" size={28} /></div>
+            ) : gallery.length === 0 ? (
+              <div className="text-center py-16 text-slate-500 text-sm">
+                <ImageIcon size={40} className="mx-auto mb-3 text-slate-600" />
+                Este artículo no tiene fotos.
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mb-3">{gallery.length} foto(s) — toca cualquiera para ampliarla.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {gallery.map((img) => (
+                    <div key={img.id} className="relative">
+                      <img
+                        src={img.mediumUrl || img.thumbUrl}
+                        alt=""
+                        loading="lazy"
+                        onClick={() => setLightbox(img.mediumUrl || img.thumbUrl)}
+                        className="w-full aspect-square object-contain rounded-lg border border-slate-700 bg-slate-900 cursor-zoom-in"
+                      />
+                      {img.isPrimary && (
+                        <span className="absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Principal</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </TabsContent>
 
         {/* ═══ TAB: Existencias ═══ */}
@@ -1076,6 +1134,14 @@ export default function ProductDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Lightbox — ampliar imagen (info + galería) */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <img src={lightbox} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
+          <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={28} /></button>
+        </div>
+      )}
     </div>
   );
 }

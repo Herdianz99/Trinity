@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useNavGuard } from '@/components/nav-guard';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -124,6 +125,7 @@ export default function EditPurchaseBillPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { setBlocker, requestNavigate } = useNavGuard();
 
   // ---- Bootstrap data ----
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -680,6 +682,7 @@ export default function EditPurchaseBillPage() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || 'Error al guardar');
       }
+      setBlocker(null); // ya se guardó: no interceptar la navegación al detalle
       router.push(`/purchases/${id}`);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
@@ -687,6 +690,52 @@ export default function EditPurchaseBillPage() {
       setSaving(false);
     }
   }
+
+  // ---- Guard de "salir sin guardar" ----
+  // Guarda los cambios (PATCH) y devuelve si tuvo éxito, sin redirigir, para que
+  // el guard de navegación lleve al usuario a donde iba tras guardar.
+  async function saveEditSilent(): Promise<boolean> {
+    const err = validate();
+    if (err) { setMessage({ type: 'error', text: err }); return false; }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/purchases/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || 'Error al guardar');
+      }
+      initialSigRef.current = JSON.stringify(buildPayload()); // nueva línea base: ya no hay cambios pendientes
+      return true;
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // A diferencia del formulario de "nueva compra" (siempre vacío al entrar), aquí el
+  // formulario carga con datos, así que "hay cambios" se detecta comparando la firma
+  // actual del payload contra la del momento en que terminó de cargar la factura.
+  const initialSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loadingBill) return;
+    if (initialSigRef.current === null) initialSigRef.current = JSON.stringify(buildPayload());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingBill]);
+
+  const isDirty = initialSigRef.current !== null && JSON.stringify(buildPayload()) !== initialSigRef.current;
+  const saveEditRef = useRef(saveEditSilent);
+  saveEditRef.current = saveEditSilent;
+  useEffect(() => {
+    setBlocker(isDirty ? { onSave: () => saveEditRef.current(), what: 'los cambios de la factura de compra' } : null);
+    return () => setBlocker(null);
+  }, [isDirty, setBlocker]);
 
   // ---- Render ----
 
@@ -703,7 +752,7 @@ export default function EditPurchaseBillPage() {
       {/* ═══ Header ═══ */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push(`/purchases/${id}`)}
+          onClick={() => requestNavigate(`/purchases/${id}`)}
           className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={20} />
@@ -1498,7 +1547,7 @@ export default function EditPurchaseBillPage() {
       <div className="flex items-center justify-end gap-3">
         <button
           type="button"
-          onClick={() => router.push(`/purchases/${id}`)}
+          onClick={() => requestNavigate(`/purchases/${id}`)}
           className="text-sm text-slate-400 hover:text-white transition-colors px-4 py-2.5"
         >
           Cancelar
