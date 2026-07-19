@@ -1,5 +1,41 @@
 ﻿# Trinity ERP — Progreso
 
+## 👷 Nómina — Fase 0 (rama `feature/nomina`, 2026-07-18) — Fundación de datos + motor validado
+
+> Trabajo en rama aparte `feature/nomina` (NO tocar `main`, que queda desplegable). Plan: `docs/superpowers/plans/2026-07-17-nomina.md`.
+
+- **Schema + migración aditiva** (`20260718100000_payroll_module`): 4 modelos nuevos `Employee` (reusa ficha `Customer` vía `customerId @unique`) · `PayrollParam` (singleton: IVSS/FAOV/INCES fijos, recargos HE, días base) · `PayrollRun` (corrida: período, tasa BCV snapshot, totales, DRAFT/CLOSED) · `PayrollRunLine` (una línea por empleado, entradas + calculados). Relación inversa `employee Employee?` en `Customer`. Espejado en `deploy/fix-schema.sql`. Migración aplicada en local + cliente Prisma regenerado + 4 tablas verificadas.
+- **Motor de cálculo puro** (`apps/api/src/modules/payroll/payroll-calc.ts`): `computePayrollLine(input, params)` replica las fórmulas del Excel de RRHH (mensual/diario USD, salario Bs, valor-hora, HED×1.5 / HEN×1.3, deducciones fijas, neto = (salario+HE)−deducciones). No redondea intermedios, solo montos Bs finales.
+- **Validado al centavo** contra filas reales del Excel (tasa BCV 563.29): CLEIDER (salario 28477.44, neto 28467.23), PEDRO (valor-hora 711.94, HED 1067.90, HEN 1388.28, total HED 14950.66), ANDREINA (19934.21). `TODO OK ✅` vía `apps/api/_payroll-validate.ts` (scratch, no trackeado).
+- **⚠️ Regla a confirmar con RRHH:** el Excel muestra "A cobrar" (col V) SIN horas extra (aparecen aparte); el motor calcula neto = (salario+HE)−deducciones. Confirmar si el pago neto real incluye las HE o se pagan por separado. Documentado en la cabecera del motor.
+
+**Fase 1 — Empleados (CRUD reusando `Customer`):**
+- **Backend** `apps/api/src/modules/payroll/` (`PayrollModule`, registrado en `app.module`): `EmployeesController` (`/employees`, gateado por `@RequireModule('payroll')`) + `EmployeesService`. Endpoints: `POST /employees` (crea ficha nueva `Customer` con `isEmployee=true` **o** enlaza una existente, en transacción, correlativo `EMP-0001`), `GET /employees` (búsqueda por código/nombre/cargo/RIF), `GET /:id`, `PATCH /:id` (campos del empleado; la identidad se edita en la ficha Customer), `PATCH /:id/toggle-active`. Módulo `payroll` agregado a `VALID_MODULES` (role-permissions).
+- **Frontend** `/payroll/employees` (CRUD por modales estilo vendedores): listado con búsqueda, alta con toggle "Cliente nuevo / Cliente existente" (buscador de clientes), campos departamento/cargo/frecuencia/sueldo base USD/banco, edición y activar/desactivar. Sección **NOMINA → Empleados** en el sidebar + etiqueta "Nómina" en Permisos por rol.
+- **Verificado end-to-end** (JWT local firmado): create con ficha nueva → `EMP-0001` + `Customer.isEmployee=true`, list, edit (sueldo/cargo), toggle. Typecheck API+Web verde.
+
+**Fase 2 — Parámetros (singleton `PayrollParam`):**
+- **Backend** `PayrollParamsController` (`/payroll-params`, `@RequireModule('payroll')`) + `PayrollParamsService`: `GET` (devuelve el singleton, lo crea con defaults del schema si no existe) y `PATCH` (upsert, actualiza solo lo que venga). Registrados en `PayrollModule`.
+- **Frontend** `/payroll/parameters`: form agrupado en 3 secciones — deducciones fijas de ley (IVSS/FAOV/INCES en Bs), recargos de horas extra (factor diurno/nocturno), bases de cálculo (días/mes, horas/semana). Ítem **NOMINA → Parametros** en el sidebar.
+- **Verificado** (JWT): GET crea el singleton con defaults, PATCH actualiza IVSS/FAOV y persiste. Typecheck API+Web verde. Singleton reseteado en local.
+
+**Fase 3 — Corrida (`PayrollRun`):**
+- **Backend** `PayrollRunsController` (`/payroll-runs`, `@RequireModule('payroll')`) + `PayrollRunsService`. Integra el **motor de la Fase 0**: `POST` crea la corrida (snapshot de tasa BCV = la de hoy o una manual), **auto-carga los empleados activos de esa frecuencia** como líneas y recalcula; `GET` lista; `GET /:id` detalle con líneas (+empleado); `PATCH /:id/lines` (captura días/descanso/HED/HEN/deduc. USD/deduc. crédito Bs → recalcula TODO con el motor + totales); `POST /:id/sync-employees` (agrega activos que falten); `POST /:id/close` (recalcula y pasa a CLOSED); `DELETE /:id` (solo DRAFT). Correlativo `NOM-0001`. Mapeo motor: WEEKLY→52 períodos/40h, BIWEEKLY→24/80h.
+- **Frontend** `/payroll/runs` (listado con modal de creación: frecuencia + rango + tasa manual opcional) y `/payroll/runs/[id]` (tabla editable: inputs por empleado + columnas calculadas + totales; botones Guardar y recalcular / Sincronizar / Cerrar; read-only si CLOSED). Ítem **NOMINA → Corridas** en el sidebar.
+- **Verificado end-to-end** (JWT): corrida WEEKLY tasa 563.29 con 2 empleados reproduce los números de la Fase 0 al centavo — CLEIDER neto 28467.23, PEDRO bruto 43428.10 (HE 14950.66) neto 43417.89, totales OK, cierre CLOSED. Typecheck API+Web verde. Datos de prueba limpiados.
+
+**Fase 4 — Recibo PDF + relación por departamento:**
+- **Backend** `PayrollPdfService` (PDFKit) + endpoints en `PayrollRunsController`: `GET /:id/relation/pdf` (relación landscape agrupada por **departamento** con subtotales + total general), `GET /:id/receipts/pdf` (todos los recibos, 2 por página), `GET /:id/receipt/:lineId/pdf` (recibo individual). Encabezado con `companyName`/`rif` de `CompanyConfig`. "Otras deducciones" = total − IVSS − FAOV.
+- **Frontend** `/payroll/runs/[id]`: botones **Relacion PDF** y **Recibos PDF** en el header (abren en pestaña nueva) + ícono de **recibo por fila** de empleado.
+- **Verificado renderizando los PDFs reales** (leídos con visor): recibo individual (asignaciones/deducciones/neto/firmas) y relación por departamento se ven correctos, números al centavo (total asig 71.905,54, neto 69.068,67). Se corrigió un bug de ancho de la última columna de la relación (reescrito el modelo de columnas por array). Typecheck API+Web verde. Datos de prueba limpiados.
+
+**Fase 5 — Deducción de crédito/CxC (MÓDULO COMPLETO):**
+- **Backend** (`payroll-runs.service.ts`): `findOne` **adjunta la deuda CxC pendiente** de cada empleado (`employee.customerDebtUsd` = suma de saldos de sus `Receivable` PENDING/PARTIAL/OVERDUE). `close(id, userId)` ahora, dentro de la transacción, **aplica la `creditDeductionBs` de cada línea contra las CxC del empleado FIFO** (÷ tasa → USD): crea `ReceivablePayment` (sin recibo ni caja — `receiptId`/`methodId` null, ref "Nomina NOM-####") y baja `paidAmountUsd`/`status`. **Guard:** si la deducción supera la deuda, lanza error y NO cierra (rollback). No toca caja (según el alcance).
+- **Frontend** `/payroll/runs/[id]`: bajo cada empleado se muestra **"Deuda CxC: $X"** con botones **todo** (descuenta el saldo completo) y **descontar…** (popover: chips 25/50/75/100% o % libre, con preview en $ y Bs, tope = deuda). El campo "Deduc. créd. Bs" sigue editable para afinar el monto exacto.
+- **Verificado end-to-end** (JWT): empleado con CxC $30 → deducir $20 baja la CxC a PARTIAL ($10 restante) con `ReceivablePayment` de $20/11.265,80 Bs; deducir $50 sobre deuda $10 → error claro y corrida queda DRAFT. Typecheck API+Web verde. Datos de prueba limpiados.
+
+**✅ MÓDULO DE NÓMINA COMPLETO (Fases 0-5)** en la rama `feature/nomina`. Pendiente: (1) confirmar con RRHH la regla del neto vs horas extra; (2) merge a `main` + deploy cuando el jefe lo apruebe.
+
 ## 🧾 Session 77 (2026-07-18) — Recibo de pago: distinguir origen del CxP (factura de compra vs manual)
 
 En **`/receipts/new?type=PAYMENT`**, la columna **"Tipo"** de Documentos pendientes ahora distingue el origen de cada CxP:
