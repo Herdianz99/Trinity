@@ -6,7 +6,9 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { productSearchTsQuery } from '../../common/product-search';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
+import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { IvaType, Prisma } from '@prisma/client';
+import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { StoreExportService } from '../store-export/store-export.service';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
@@ -22,6 +24,74 @@ export class ProductsService {
     private prisma: PrismaService,
     private storeExport: StoreExportService,
   ) {}
+
+  // Analisis de compra: productos (filtrables por categoria/marca/proveedor) con su existencia
+  // total y el total vendido en un periodo. "vendido" = suma neta (quantity - returnedQty) de
+  // los items de facturas cobradas (PAID/PARTIAL_RETURN/RETURNED) cuyo paidAt cae en el rango
+  // (dia-calendario Caracas). Por defecto lista TODOS los productos del filtro; onlyWithSales
+  // deja solo los que tuvieron ventas.
+  async purchaseAnalysis(dto: PurchaseAnalysisDto) {
+    const where: Prisma.ProductWhereInput = {};
+    if (dto.categoryId) where.categoryId = dto.categoryId;
+    if (dto.brandId) where.brandId = dto.brandId;
+    if (dto.supplierId) where.supplierId = dto.supplierId;
+
+    const from = caracasDayStart(dto.from);
+    const to = caracasDayEnd(dto.to);
+
+    // Productos del filtro, con su existencia (suma de stock en todos los almacenes).
+    const products = await this.prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        category: { select: { name: true } },
+        brand: { select: { name: true } },
+        supplier: { select: { name: true } },
+        stock: { select: { quantity: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Vendido por producto en el periodo (una sola agregacion; devuelve solo los que vendieron).
+    const soldGrouped = await this.prisma.invoiceItem.groupBy({
+      by: ['productId'],
+      where: {
+        invoice: {
+          status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
+          paidAt: { gte: from, lte: to },
+        },
+      },
+      _sum: { quantity: true, returnedQty: true },
+    });
+    const soldMap = new Map<string, number>();
+    for (const g of soldGrouped) {
+      const net = Math.round(((g._sum.quantity || 0) - (g._sum.returnedQty || 0)) * 1000) / 1000;
+      soldMap.set(g.productId, net);
+    }
+
+    let rows = products.map((p) => ({
+      code: p.code,
+      name: p.name,
+      category: p.category?.name || null,
+      brand: p.brand?.name || null,
+      supplier: p.supplier?.name || null,
+      stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+      sold: soldMap.get(p.id) || 0,
+    }));
+
+    if (dto.onlyWithSales === 'true') rows = rows.filter((r) => r.sold > 0);
+
+    return {
+      from: dto.from,
+      to: dto.to,
+      onlyWithSales: dto.onlyWithSales === 'true',
+      totalProducts: rows.length,
+      totalSold: Math.round(rows.reduce((s, r) => s + r.sold, 0) * 1000) / 1000,
+      rows,
+    };
+  }
 
   private async calculatePrices(
     costUsd: number,

@@ -11,6 +11,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
+import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
@@ -35,6 +36,11 @@ export class ProductsController {
   @Get('search')
   search(@Query('q') q: string) {
     return this.productsService.search(q);
+  }
+
+  @Get('purchase-analysis')
+  purchaseAnalysis(@Query() query: PurchaseAnalysisDto) {
+    return this.productsService.purchaseAnalysis(query);
   }
 
   @Get('price-adjustment')
