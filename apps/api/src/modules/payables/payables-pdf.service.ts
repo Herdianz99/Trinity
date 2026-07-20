@@ -11,16 +11,27 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-// Carta horizontal, area util 40..752
-const COLS = [
-  { label: 'Proveedor', x: 40, width: 220 },
-  { label: 'Documento', x: 264, width: 110 },
-  { label: 'Vence', x: 378, width: 80 },
-  { label: 'Neto USD', x: 462, width: 90, align: 'right' as const },
-  { label: 'Saldo USD', x: 556, width: 90, align: 'right' as const },
-  { label: 'Estado', x: 650, width: 102 },
-];
+// Carta horizontal, area util 40..752 (ancho 712). Documento/Vence/Neto/Saldo/Estado
+// ocupan solo lo necesario; el resto del ancho se lo lleva Proveedor. Posiciones (x)
+// calculadas a partir de los anchos + un gap fijo entre columnas.
 const RIGHT = 752;
+const COL_GAP = 6;
+const COL_DEFS = [
+  { label: 'Proveedor', width: 305 },
+  { label: 'Documento', width: 85 },
+  { label: 'Vence', width: 62 },
+  { label: 'Neto USD', width: 76, align: 'right' as const },
+  { label: 'Saldo USD', width: 76, align: 'right' as const },
+  { label: 'Estado', width: 78 },
+];
+const COLS = (() => {
+  let x = 40;
+  return COL_DEFS.map((c) => {
+    const col = { ...c, x };
+    x += c.width + COL_GAP;
+    return col;
+  });
+})();
 
 @Injectable()
 export class PayablesPdfService {
