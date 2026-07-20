@@ -3,6 +3,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
+const EMPLOYEE_INCLUDE = {
+  customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
+  department: { select: { id: true, name: true } },
+  position: { select: { id: true, name: true, defaultSalaryUsd: true, defaultBonusUsd: true } },
+};
+
 @Injectable()
 export class EmployeesService {
   constructor(private prisma: PrismaService) {}
@@ -20,15 +26,15 @@ export class EmployeesService {
     return `EMP-${next.toString().padStart(4, '0')}`;
   }
 
-  async findAll(query?: { search?: string; isActive?: string; department?: string }) {
+  async findAll(query?: { search?: string; isActive?: string; departmentId?: string }) {
     const where: any = {};
     if (query?.isActive === 'true') where.isActive = true;
     if (query?.isActive === 'false') where.isActive = false;
-    if (query?.department) where.department = query.department;
+    if (query?.departmentId) where.departmentId = query.departmentId;
     if (query?.search) {
       where.OR = [
         { code: { contains: query.search, mode: 'insensitive' } },
-        { cargo: { contains: query.search, mode: 'insensitive' } },
+        { position: { name: { contains: query.search, mode: 'insensitive' } } },
         { customer: { name: { contains: query.search, mode: 'insensitive' } } },
         { customer: { rif: { contains: query.search, mode: 'insensitive' } } },
       ];
@@ -36,18 +42,14 @@ export class EmployeesService {
     return this.prisma.employee.findMany({
       where,
       orderBy: [{ isActive: 'desc' }, { code: 'asc' }],
-      include: {
-        customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
-      },
+      include: EMPLOYEE_INCLUDE,
     });
   }
 
   async findOne(id: string) {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
-      include: {
-        customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
-      },
+      include: EMPLOYEE_INCLUDE,
     });
     if (!employee) throw new NotFoundException('Empleado no encontrado');
     return employee;
@@ -88,16 +90,15 @@ export class EmployeesService {
         data: {
           code,
           customerId,
-          department: dto.department,
-          cargo: dto.cargo || null,
+          departmentId: dto.departmentId || null,
+          positionId: dto.positionId || null,
           bank: dto.bank || null,
           salaryBaseUsd: dto.salaryBaseUsd ?? 0,
+          bonusUsd: dto.bonusUsd ?? 0,
           frequency: dto.frequency || 'WEEKLY',
           isActive: dto.isActive ?? true,
         },
-        include: {
-          customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
-        },
+        include: EMPLOYEE_INCLUDE,
       });
     });
   }
@@ -107,9 +108,7 @@ export class EmployeesService {
     return this.prisma.employee.update({
       where: { id },
       data: dto,
-      include: {
-        customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
-      },
+      include: EMPLOYEE_INCLUDE,
     });
   }
 
@@ -118,9 +117,7 @@ export class EmployeesService {
     return this.prisma.employee.update({
       where: { id },
       data: { isActive: !employee.isActive },
-      include: {
-        customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
-      },
+      include: EMPLOYEE_INCLUDE,
     });
   }
 }

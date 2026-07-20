@@ -18,8 +18,16 @@ export class PayrollPdfService {
       where: { id },
       include: {
         lines: {
-          include: { employee: { include: { customer: { select: { name: true, documentType: true, rif: true } } } } },
-          orderBy: [{ employee: { department: 'asc' } }, { employee: { code: 'asc' } }],
+          include: {
+            employee: {
+              include: {
+                customer: { select: { name: true, documentType: true, rif: true } },
+                department: { select: { name: true } },
+                position: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: [{ employee: { code: 'asc' } }],
         },
       },
     });
@@ -53,8 +61,8 @@ export class PayrollPdfService {
     const rowR = (label: string, value: string, yy: number) => { doc.font('Helvetica-Bold').text(label, L + 280, yy, { width: 90 }); doc.font('Helvetica').text(value, L + 372, yy, { width: 160 }); };
     rowL('Empleado:', cust.name, y); rowR('Recibo:', run.number || '-', y); y += 13;
     rowL('C.I./RIF:', `${cust.documentType || ''}${cust.rif ? '-' + cust.rif : ''}`, y); rowR('Codigo:', line.employee.code || '-', y); y += 13;
-    rowL('Departamento:', line.employee.department, y); rowR('Frecuencia:', TYPE_LABEL[run.type] || run.type, y); y += 13;
-    rowL('Cargo:', line.employee.cargo || '-', y); rowR('Periodo:', `${fmtDate(run.periodFrom)} - ${fmtDate(run.periodTo)}`, y); y += 13;
+    rowL('Departamento:', line.employee.department?.name || '-', y); rowR('Frecuencia:', TYPE_LABEL[run.type] || run.type, y); y += 13;
+    rowL('Cargo:', line.employee.position?.name || '-', y); rowR('Periodo:', `${fmtDate(run.periodFrom)} - ${fmtDate(run.periodTo)}`, y); y += 13;
     rowL('', '', y); rowR('Tasa BCV:', `${fmt(run.exchangeRate)} Bs/$`, y); y += 16;
 
     // Devengado
@@ -145,7 +153,7 @@ export class PayrollPdfService {
     // Agrupar por departamento
     const groups = new Map<string, Line[]>();
     for (const l of run.lines) {
-      const k = l.employee.department || '(sin departamento)';
+      const k = l.employee.department?.name || '(sin departamento)';
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(l);
     }

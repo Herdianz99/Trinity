@@ -7,6 +7,8 @@ import { UsersModule } from './modules/users/users.module';
 import { CompanyConfigModule } from './modules/company-config/company-config.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { BrandsModule } from './modules/brands/brands.module';
+import { DepartmentsModule } from './modules/departments/departments.module';
+import { PositionsModule } from './modules/positions/positions.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { ProductsModule } from './modules/products/products.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
@@ -74,6 +76,8 @@ import { PayrollModule } from './modules/payroll/payroll.module';
     CompanyConfigModule,
     CategoriesModule,
     BrandsModule,
+    DepartmentsModule,
+    PositionsModule,
     SuppliersModule,
     ProductsModule,
     WarehousesModule,
