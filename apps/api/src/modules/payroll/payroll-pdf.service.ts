@@ -205,9 +205,9 @@ export class PayrollPdfService {
       // Modelo de columnas: emp (izquierda) + 8 numéricas (derecha). Orden pedido por RRHH:
       // Salario, IVSS, FAOV, Otras, Total neto (salario − deducciones), HE diurna, HE nocturna,
       // Total (salario + HE, sin deducciones). Anchos suman ≤ W.
-      const NUM_W = { sal: 70, ivss: 52, faov: 52, otras: 58, neto: 78, heDia: 62, heNoc: 62, total: 78 };
-      const NUM_KEYS = ['sal', 'ivss', 'faov', 'otras', 'neto', 'heDia', 'heNoc', 'total'] as const;
-      const NUM_HEAD = { sal: 'Salario', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Total neto', heDia: 'HE Diurna', heNoc: 'HE Noct.', total: 'Total' };
+      const NUM_W = { sal: 66, ivss: 48, faov: 48, otras: 54, neto: 72, heDia: 58, heNoc: 58, heTot: 62, total: 72 };
+      const NUM_KEYS = ['sal', 'ivss', 'faov', 'otras', 'neto', 'heDia', 'heNoc', 'heTot', 'total'] as const;
+      const NUM_HEAD = { sal: 'Salario', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Total neto', heDia: 'HE Diurna', heNoc: 'HE Noct.', heTot: 'Total HE', total: 'Total' };
       const empW = W - NUM_KEYS.reduce((s, k) => s + NUM_W[k], 0); // ancho de la columna empleado
       const colX: Record<string, number> = {};
       let acc = L + empW;
@@ -238,13 +238,13 @@ export class PayrollPdfService {
       let y = header(40);
       y = tableHead(y);
 
-      const g = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, total: 0 };
+      const g = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, heTot: 0, total: 0 };
 
       for (const [dept, lines] of groups) {
         if (y > pageH - 70) { doc.addPage(); y = tableHead(40); }
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#1a4d2e').text(dept.toUpperCase(), L, y); y += 12;
 
-        const s = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, total: 0 };
+        const s = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, heTot: 0, total: 0 };
         doc.fontSize(7.5).font('Helvetica').fillColor('#000');
         for (const l of lines) {
           if (y > pageH - 60) { doc.addPage(); y = tableHead(40); }
@@ -259,7 +259,7 @@ export class PayrollPdfService {
           }, eng);
           const vals = {
             sal: l.salaryBs, ivss: l.ivssBs, faov: l.faovBs, otras, neto: netoSinHE,
-            heDia: c.otDayTotalBs, heNoc: c.otNightTotalBs, total: l.grossBs,
+            heDia: c.otDayTotalBs, heNoc: c.otNightTotalBs, heTot: c.overtimeBs, total: l.grossBs,
           };
           doc.font('Helvetica').fillColor('#000');
           doc.text(`${l.employee.code || ''} ${l.employee.customer.name}`.trim(), L, y, { width: empW - 4, ellipsis: true, lineBreak: false });
