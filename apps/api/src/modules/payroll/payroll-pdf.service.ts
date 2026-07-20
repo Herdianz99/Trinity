@@ -50,7 +50,7 @@ export class PayrollPdfService {
 
   // ------- Recibo de pago (un empleado por página) -------
 
-  private drawReceipt(doc: PDFKit.PDFDocument, run: RunWithLines, line: Line, company: { name: string; rif: string }, top: number, eng: PayrollParams): number {
+  private drawReceipt(doc: PDFKit.PDFDocument, run: RunWithLines, line: Line, company: { name: string; rif: string }, top: number, eng: PayrollParams, includeOvertime: boolean): number {
     const L = 40, W = doc.page.width - 80; // 532
     let y = top;
 
@@ -96,12 +96,18 @@ export class PayrollPdfService {
     const workedBs = r2(line.daysWorked * c.dailyUsd * run.exchangeRate);
     const restBs = r2(line.daysRest * c.dailyUsd * run.exchangeRate);
 
+    // Sin horas extra: el total/neto se recalcula solo con salario + deducciones
+    // (las HE se pagan aparte). Con horas extra: se usa el gross/neto completo.
+    const grossBs = includeOvertime ? c.grossBs : c.salaryBs;
+    const netBs = includeOvertime ? c.netBs : r2(c.salaryBs - c.totalDeductionsBs);
+    const netUsd = run.exchangeRate > 0 ? r2(netBs / run.exchangeRate) : 0;
+
     y = box('ASIGNACIONES', y);
     y = money(`Dias trabajados (${line.daysWorked})`, workedBs, y);
     y = money(`Dias de descanso (${line.daysRest})`, restBs, y);
-    if (line.overtimeDayHours > 0) y = money(`Horas extra diurnas (${line.overtimeDayHours})`, c.otDayTotalBs, y);
-    if (line.overtimeNightHours > 0) y = money(`Horas extra nocturnas (${line.overtimeNightHours})`, c.otNightTotalBs, y);
-    y = money('Total asignaciones', line.grossBs, y, true);
+    if (includeOvertime && line.overtimeDayHours > 0) y = money(`Horas extra diurnas (${line.overtimeDayHours})`, c.otDayTotalBs, y);
+    if (includeOvertime && line.overtimeNightHours > 0) y = money(`Horas extra nocturnas (${line.overtimeNightHours})`, c.otNightTotalBs, y);
+    y = money('Total asignaciones', grossBs, y, true);
     y += 6;
 
     y = box('DEDUCCIONES', y);
@@ -115,10 +121,10 @@ export class PayrollPdfService {
 
     doc.moveTo(L, y).lineTo(L + W, y).stroke('#999'); y += 8;
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#000');
-    doc.text('NETO A PAGAR', L + 10, y, { width: 250 });
-    doc.text(`${fmt(line.netBs)} Bs`, L + 260, y, { width: 272, align: 'right' });
+    doc.text(includeOvertime ? 'NETO A PAGAR' : 'NETO A PAGAR (sin horas extra)', L + 10, y, { width: 300 });
+    doc.text(`${fmt(netBs)} Bs`, L + 310, y, { width: 222, align: 'right' });
     y += 15;
-    doc.fontSize(9).font('Helvetica').fillColor('#333').text(`Equivalente: $${fmt(line.netUsd)}`, L + 260, y, { width: 272, align: 'right' });
+    doc.fontSize(9).font('Helvetica').fillColor('#333').text(`Equivalente: $${fmt(netUsd)}`, L + 260, y, { width: 272, align: 'right' });
     y += 40;
 
     // Firmas
@@ -132,7 +138,7 @@ export class PayrollPdfService {
     return y;
   }
 
-  async generateReceipt(runId: string, lineId: string): Promise<Buffer> {
+  async generateReceipt(runId: string, lineId: string, includeOvertime = true): Promise<Buffer> {
     const run = await this.loadRun(runId);
     const line = run.lines.find((l) => l.id === lineId);
     if (!line) throw new NotFoundException('Línea no encontrada en esta corrida');
@@ -144,13 +150,13 @@ export class PayrollPdfService {
       doc.on('data', (c: Buffer) => buffers.push(c));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
-      this.drawReceipt(doc, run, line, company, 40, eng);
+      this.drawReceipt(doc, run, line, company, 40, eng, includeOvertime);
       doc.end();
     });
   }
 
   // Todos los recibos de la corrida, 2 por página.
-  async generateAllReceipts(runId: string): Promise<Buffer> {
+  async generateAllReceipts(runId: string, includeOvertime = true): Promise<Buffer> {
     const run = await this.loadRun(runId);
     const company = await this.company();
     const eng = await this.engineFor(run.type);
@@ -165,7 +171,7 @@ export class PayrollPdfService {
         if (i > 0 && i % 2 === 0) doc.addPage();
         const top = i % 2 === 0 ? 40 : half + 10;
         if (i % 2 === 1) doc.moveTo(40, half).lineTo(doc.page.width - 40, half).dash(3, { space: 3 }).stroke('#bbb').undash();
-        this.drawReceipt(doc, run, line, company, top, eng);
+        this.drawReceipt(doc, run, line, company, top, eng, includeOvertime);
       });
       doc.end();
     });

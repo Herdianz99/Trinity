@@ -58,6 +58,14 @@ export default function PayrollRunDetailPage() {
   // Popover de deducción de crédito por % de la deuda (por línea)
   const [pctOpen, setPctOpen] = useState<string | null>(null);
   const [pctVal, setPctVal] = useState('30');
+  // Modal: preguntar si el recibo se genera con o sin horas extra. Guarda la URL base del PDF.
+  const [otAsk, setOtAsk] = useState<string | null>(null);
+
+  function openReceipt(includeOvertime: boolean) {
+    if (!otAsk) return;
+    window.open(`${otAsk}?overtime=${includeOvertime}`, '_blank', 'noopener,noreferrer');
+    setOtAsk(null);
+  }
 
   const fetchRun = useCallback(async () => {
     setLoading(true);
@@ -155,9 +163,9 @@ export default function PayrollRunDetailPage() {
           <a href={`/api/proxy/payroll-runs/${id}/relation/pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
             <FileText size={15} /> Relacion PDF
           </a>
-          <a href={`/api/proxy/payroll-runs/${id}/receipts/pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
+          <button onClick={() => setOtAsk(`/api/proxy/payroll-runs/${id}/receipts/pdf`)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
             <Files size={15} /> Recibos PDF
-          </a>
+          </button>
           {isDraft && (
             <>
               <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors disabled:opacity-50">
@@ -277,9 +285,9 @@ export default function PayrollRunDetailPage() {
                   <Td className="text-green-300 font-semibold">{fmt(l.netBs)}</Td>
                   <Td>${fmt(l.netUsd)}</Td>
                   <td className="px-2 py-2 text-center">
-                    <a href={`/api/proxy/payroll-runs/${id}/receipt/${l.id}/pdf`} target="_blank" rel="noopener noreferrer" className="inline-flex p-1 rounded text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Recibo PDF">
+                    <button onClick={() => setOtAsk(`/api/proxy/payroll-runs/${id}/receipt/${l.id}/pdf`)} className="inline-flex p-1 rounded text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Recibo PDF">
                       <FileText size={14} />
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -299,6 +307,28 @@ export default function PayrollRunDetailPage() {
           </table>
         </div>
       </div>
+
+      {/* Preguntar: recibo con o sin horas extra */}
+      {otAsk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOtAsk(null)} />
+          <div className="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-white mb-1">Generar recibo</h2>
+            <p className="text-sm text-slate-400 mb-5">¿Deseas incluir las horas extra en el recibo?</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => openReceipt(true)} className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
+                Con horas extra
+              </button>
+              <button onClick={() => openReceipt(false)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
+                Sin horas extra
+              </button>
+              <button onClick={() => setOtAsk(null)} className="w-full text-slate-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
