@@ -2,17 +2,11 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDateKey } from '../../common/timezone';
-import { computePayrollLine, PayrollParams } from './payroll-calc';
+import { computePayrollLine, buildEngineParams, DEFAULT_PAYROLL_PARAM } from './payroll-calc';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-// Defaults del schema, por si el singleton de parámetros aún no existe.
-const DEFAULT_PARAM = {
-  ivssBs: 0, faovBs: 0, incesBs: 0,
-  otDayFactor: 1.5, otNightFactor: 1.3, monthDays: 30, weeklyHours: 40,
-};
 
 const LINE_INCLUDE = {
   employee: {
@@ -41,24 +35,12 @@ export class PayrollRunsService {
     return `NOM-${next.toString().padStart(4, '0')}`;
   }
 
-  // Mapea los parámetros globales a los que espera el motor, según la frecuencia.
-  private engineParams(type: string, p: typeof DEFAULT_PARAM): PayrollParams {
-    const weekly = type === 'WEEKLY';
-    return {
-      ivssBs: p.ivssBs, faovBs: p.faovBs, incesBs: p.incesBs,
-      otDayFactor: p.otDayFactor, otNightFactor: p.otNightFactor,
-      monthDays: p.monthDays,
-      periodHours: weekly ? p.weeklyHours : p.weeklyHours * 2,
-      periodsPerYear: weekly ? 52 : 24,
-    };
-  }
-
   // Recalcula TODAS las líneas de la corrida con el motor + actualiza los totales.
   private async recompute(tx: Prisma.TransactionClient, runId: string) {
     const run = await tx.payrollRun.findUnique({ where: { id: runId }, include: { lines: true } });
     if (!run) throw new NotFoundException('Corrida no encontrada');
-    const param = (await tx.payrollParam.findUnique({ where: { id: 'singleton' } })) ?? DEFAULT_PARAM;
-    const eng = this.engineParams(run.type, param);
+    const param = (await tx.payrollParam.findUnique({ where: { id: 'singleton' } })) ?? DEFAULT_PAYROLL_PARAM;
+    const eng = buildEngineParams(run.type, param);
 
     let totalGross = 0, totalDed = 0, totalNet = 0;
     for (const line of run.lines) {

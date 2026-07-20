@@ -66,16 +66,17 @@ export class PayrollRunsController {
     res.end(buffer);
   }
 
+  // overtime=false genera los recibos SIN horas extra (total/neto solo salario + deducciones).
   @Get(':id/receipts/pdf')
-  async receiptsPdf(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.pdf.generateAllReceipts(id);
+  async receiptsPdf(@Param('id') id: string, @Query('overtime') overtime: string, @Res() res: Response) {
+    const buffer = await this.pdf.generateAllReceipts(id, overtime !== 'false');
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="recibos-nomina-${id}.pdf"`, 'Content-Length': buffer.length });
     res.end(buffer);
   }
 
   @Get(':id/receipt/:lineId/pdf')
-  async receiptPdf(@Param('id') id: string, @Param('lineId') lineId: string, @Res() res: Response) {
-    const buffer = await this.pdf.generateReceipt(id, lineId);
+  async receiptPdf(@Param('id') id: string, @Param('lineId') lineId: string, @Query('overtime') overtime: string, @Res() res: Response) {
+    const buffer = await this.pdf.generateReceipt(id, lineId, overtime !== 'false');
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="recibo-${lineId}.pdf"`, 'Content-Length': buffer.length });
     res.end(buffer);
   }

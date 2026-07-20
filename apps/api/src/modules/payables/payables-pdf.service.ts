@@ -11,16 +11,27 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-// Carta horizontal, area util 40..752
-const COLS = [
-  { label: 'Proveedor', x: 40, width: 220 },
-  { label: 'Documento', x: 264, width: 110 },
-  { label: 'Vence', x: 378, width: 80 },
-  { label: 'Neto USD', x: 462, width: 90, align: 'right' as const },
-  { label: 'Saldo USD', x: 556, width: 90, align: 'right' as const },
-  { label: 'Estado', x: 650, width: 102 },
-];
+// Carta horizontal, area util 40..752 (ancho 712). Documento/Vence/Neto/Saldo/Estado
+// ocupan solo lo necesario; el resto del ancho se lo lleva Proveedor. Posiciones (x)
+// calculadas a partir de los anchos + un gap fijo entre columnas.
 const RIGHT = 752;
+const COL_GAP = 6;
+const COL_DEFS = [
+  { label: 'Proveedor', width: 305 },
+  { label: 'Documento', width: 85 },
+  { label: 'Vence', width: 62 },
+  { label: 'Neto USD', width: 76, align: 'right' as const },
+  { label: 'Saldo USD', width: 76, align: 'right' as const },
+  { label: 'Estado', width: 78 },
+];
+const COLS = (() => {
+  let x = 40;
+  return COL_DEFS.map((c) => {
+    const col = { ...c, x };
+    x += c.width + COL_GAP;
+    return col;
+  });
+})();
 
 @Injectable()
 export class PayablesPdfService {
@@ -31,6 +42,17 @@ export class PayablesPdfService {
 
   private fmt(n: number): string {
     return (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Trunca el texto para que quepa en el ancho de la columna (con "…"), midiendo con la
+  // fuente actual. Evita que un nombre largo se monte sobre la columna siguiente.
+  private clip(doc: any, text: string, width: number): string {
+    if (!text) return '';
+    if (doc.widthOfString(text) <= width) return text;
+    const ell = '…';
+    let t = text;
+    while (t.length > 0 && doc.widthOfString(t + ell) > width) t = t.slice(0, -1);
+    return t + ell;
   }
 
   private dueDate(d: Date | string | null): string {
@@ -91,7 +113,9 @@ export class PayablesPdfService {
       }
       totalNeto += p.netPayableUsd || 0;
       totalSaldo += p.balanceUsd || 0;
-      const documento = p.number || p.purchaseOrder?.number || p.documentNumber || '—';
+      // Documento REAL que escribe el usuario (nro. de factura del proveedor), NO el
+      // correlativo del sistema: documentNumber (CxP manual) o supplierInvoiceNumber (de compra).
+      const documento = p.documentNumber || p.purchaseOrder?.supplierInvoiceNumber || '—';
       const values = [
         p.supplier?.name || '—',
         String(documento),
@@ -102,9 +126,11 @@ export class PayablesPdfService {
       ];
       doc.fillColor('#1e293b');
       for (let i = 0; i < COLS.length; i++) {
-        const opts: any = { width: COLS[i].width, lineBreak: false, ellipsis: true };
+        const opts: any = { width: COLS[i].width, lineBreak: false };
+        let text = values[i] || '';
         if (COLS[i].align === 'right') opts.align = 'right';
-        doc.text(values[i] || '', COLS[i].x, y, opts);
+        else text = this.clip(doc, text, COLS[i].width); // recorta columnas de texto para que no se monten
+        doc.text(text, COLS[i].x, y, opts);
       }
       doc.fillColor('#000');
       y += 13;
