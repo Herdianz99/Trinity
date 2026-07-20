@@ -182,6 +182,7 @@ export class PayrollPdfService {
   async generateRelation(runId: string): Promise<Buffer> {
     const run = await this.loadRun(runId);
     const company = await this.company();
+    const eng = await this.engineFor(run.type);
 
     // Agrupar por departamento
     const groups = new Map<string, Line[]>();
@@ -201,10 +202,12 @@ export class PayrollPdfService {
       const L = 36, W = doc.page.width - 72; // 720
       const pageH = doc.page.height;
 
-      // Modelo de columnas: emp (izquierda) + 7 numéricas (derecha). Anchos suman ≤ W.
-      const NUM_W = { sal: 82, he: 74, gross: 80, ivss: 54, faov: 54, otras: 62, neto: 92 };
-      const NUM_KEYS = ['sal', 'he', 'gross', 'ivss', 'faov', 'otras', 'neto'] as const;
-      const NUM_HEAD = { sal: 'Salario', he: 'H. Extra', gross: 'Total asig.', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Neto Bs' };
+      // Modelo de columnas: emp (izquierda) + 8 numéricas (derecha). Orden pedido por RRHH:
+      // Salario, IVSS, FAOV, Otras, Total neto (salario − deducciones), HE diurna, HE nocturna,
+      // Total (salario + HE, sin deducciones). Anchos suman ≤ W.
+      const NUM_W = { sal: 70, ivss: 52, faov: 52, otras: 58, neto: 78, heDia: 62, heNoc: 62, total: 78 };
+      const NUM_KEYS = ['sal', 'ivss', 'faov', 'otras', 'neto', 'heDia', 'heNoc', 'total'] as const;
+      const NUM_HEAD = { sal: 'Salario', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Total neto', heDia: 'HE Diurna', heNoc: 'HE Noct.', total: 'Total' };
       const empW = W - NUM_KEYS.reduce((s, k) => s + NUM_W[k], 0); // ancho de la columna empleado
       const colX: Record<string, number> = {};
       let acc = L + empW;
@@ -235,18 +238,29 @@ export class PayrollPdfService {
       let y = header(40);
       y = tableHead(y);
 
-      const g = { sal: 0, he: 0, gross: 0, ivss: 0, faov: 0, otras: 0, neto: 0 };
+      const g = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, total: 0 };
 
       for (const [dept, lines] of groups) {
         if (y > pageH - 70) { doc.addPage(); y = tableHead(40); }
         doc.fontSize(8).font('Helvetica-Bold').fillColor('#1a4d2e').text(dept.toUpperCase(), L, y); y += 12;
 
-        const s = { sal: 0, he: 0, gross: 0, ivss: 0, faov: 0, otras: 0, neto: 0 };
+        const s = { sal: 0, ivss: 0, faov: 0, otras: 0, neto: 0, heDia: 0, heNoc: 0, total: 0 };
         doc.fontSize(7.5).font('Helvetica').fillColor('#000');
         for (const l of lines) {
           if (y > pageH - 60) { doc.addPage(); y = tableHead(40); }
           const otras = Math.round((l.totalDeductionsBs - l.ivssBs - l.faovBs) * 100) / 100;
-          const vals = { sal: l.salaryBs, he: l.overtimeBs, gross: l.grossBs, ivss: l.ivssBs, faov: l.faovBs, otras, neto: l.netBs };
+          // Total neto = salario − deducciones (SIN horas extra). Total = salario + HE (SIN deducciones).
+          const netoSinHE = Math.round((l.salaryBs - l.totalDeductionsBs) * 100) / 100;
+          const c = computePayrollLine({
+            salaryBaseUsd: l.salaryBaseUsd, daysWorked: l.daysWorked, daysRest: l.daysRest,
+            overtimeDayHours: l.overtimeDayHours, overtimeNightHours: l.overtimeNightHours,
+            manualDeductionUsd: l.manualDeductionUsd, creditDeductionBs: l.creditDeductionBs,
+            rate: run.exchangeRate,
+          }, eng);
+          const vals = {
+            sal: l.salaryBs, ivss: l.ivssBs, faov: l.faovBs, otras, neto: netoSinHE,
+            heDia: c.otDayTotalBs, heNoc: c.otNightTotalBs, total: l.grossBs,
+          };
           doc.font('Helvetica').fillColor('#000');
           doc.text(`${l.employee.code || ''} ${l.employee.customer.name}`.trim(), L, y, { width: empW - 4, ellipsis: true, lineBreak: false });
           numCells(vals, y);
