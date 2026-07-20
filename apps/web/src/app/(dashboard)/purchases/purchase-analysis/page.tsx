@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, Loader2, Search } from 'lucide-react';
+import { BarChart3, Loader2, Search, FileText, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface Option { id: string; name: string }
 interface Row {
@@ -54,6 +55,8 @@ export default function PurchaseAnalysisPage() {
   const [data, setData] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Query string exacto que produjo los resultados actuales (para exportar respetando el filtro).
+  const [appliedQuery, setAppliedQuery] = useState('');
 
   useEffect(() => { document.title = 'Análisis de compra | Trinity ERP'; }, []);
 
@@ -92,9 +95,30 @@ export default function PurchaseAnalysisPage() {
         throw new Error(Array.isArray(e.message) ? e.message[0] : e.message || 'Error al analizar');
       }
       setData(await res.json());
-    } catch (e: any) { setError(e.message); setData(null); }
+      setAppliedQuery(params.toString());
+    } catch (e: any) { setError(e.message); setData(null); setAppliedQuery(''); }
     finally { setLoading(false); }
   }, [from, to, categoryId, brandId, supplierId, onlyWithSales]);
+
+  // Exporta a Excel los resultados actuales (respetan el filtro que los genero).
+  function exportExcel() {
+    if (!data) return;
+    const aoa = [
+      ['Código', 'Producto', 'Categoría', 'Marca', 'Proveedor', 'Existencia', 'Total vendidas'],
+      ...data.rows.map((r) => [r.code || '', r.name, r.category || '', r.brand || '', r.supplier || '', r.stock, r.sold]),
+      ['', '', '', '', 'TOTAL', data.rows.reduce((s, r) => s + r.stock, 0), data.totalSold],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 12 }, { wch: 48 }, { wch: 20 }, { wch: 18 }, { wch: 26 }, { wch: 12 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Análisis de compra');
+    XLSX.writeFile(wb, `analisis-de-compra-${data.from}_${data.to}.xlsx`);
+  }
+
+  function exportPdf() {
+    if (!appliedQuery) return;
+    window.open(`/api/proxy/products/purchase-analysis/pdf?${appliedQuery}`, '_blank', 'noopener,noreferrer');
+  }
 
   return (
     <div>
@@ -183,10 +207,18 @@ export default function PurchaseAnalysisPage() {
       {/* Resultados */}
       {data && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-700/50 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <div className="px-4 py-3 border-b border-slate-700/50 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <span className="text-slate-300"><b className="text-white">{fmt(data.totalProducts)}</b> artículos</span>
             <span className="text-slate-300">Total vendidas: <b className="text-green-400">{fmt(data.totalSold)}</b></span>
             <span className="text-slate-500 text-xs">{data.from} a {data.to} · {data.onlyWithSales ? 'solo con ventas' : 'todos'}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors">
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button onClick={exportPdf} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition-colors">
+                <FileText size={14} /> PDF
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">

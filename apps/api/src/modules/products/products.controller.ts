@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '@prisma/client';
@@ -12,6 +13,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
+import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
@@ -21,7 +23,10 @@ import { SetBarcodeDto } from './dto/set-barcode.dto';
 @UseGuards(AuthGuard('jwt'))
 @Controller('products')
 export class ProductsController {
-  constructor(private productsService: ProductsService) {}
+  constructor(
+    private productsService: ProductsService,
+    private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateProductDto) {
@@ -41,6 +46,17 @@ export class ProductsController {
   @Get('purchase-analysis')
   purchaseAnalysis(@Query() query: PurchaseAnalysisDto) {
     return this.productsService.purchaseAnalysis(query);
+  }
+
+  @Get('purchase-analysis/pdf')
+  async purchaseAnalysisPdfReport(@Query() query: PurchaseAnalysisDto, @Res() res: Response) {
+    const buffer = await this.purchaseAnalysisPdf.generate(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="analisis-de-compra.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('price-adjustment')
