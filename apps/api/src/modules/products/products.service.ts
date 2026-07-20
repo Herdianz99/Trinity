@@ -45,6 +45,7 @@ export class ProductsService {
       select: {
         id: true,
         code: true,
+        supplierRef: true,
         name: true,
         category: { select: { name: true } },
         brand: { select: { name: true } },
@@ -73,6 +74,7 @@ export class ProductsService {
 
     let rows = products.map((p) => ({
       code: p.code,
+      supplierRef: p.supplierRef || null,
       name: p.name,
       category: p.category?.name || null,
       brand: p.brand?.name || null,
