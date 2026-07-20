@@ -60,6 +60,9 @@
 - **Columna "Ref. Proveedor"** (`supplierRef` del producto) agregada a la lista, el PDF y el Excel.
 - **Gotcha de dev resuelto:** tras agregar el import de `xlsx` los botones no aparecían por una compilación viciada de Next → rebuild limpio (`rm -rf apps/web/.next`) + reinicio; al reiniciar el API cayó con `MODULE_NOT_FOUND` (no emitía `dist/main`) por `tsconfig.tsbuildinfo` viciado → borrar el `.tsbuildinfo` antes de arrancar (ver memoria del proyecto).
 
+**`/sales/invoices` — ícono de impresora siempre imprime ticket 80mm** (`fix/invoices-print-thermal`):
+- En la lista de facturas el ícono de impresora ya NO diferencia fiscal vs no fiscal: siempre reimprime el **ticket térmico de 80mm** (`handleReprintTicket`). Solo en esa pantalla (el PDF carta sigue disponible desde el detalle). Se eliminó `handlePrint` (PDF carta) que solo se usaba ahí.
+
 **Otros:** todos los cambios probados en local (BD = copia de la grande); `tsc --noEmit` API+Web verde en cada paso; dev local levantado (`turbo dev`, API 4000 / Web 3000).
 
 ## 👷 Nómina — Fase 0 (rama `feature/nomina`, 2026-07-18) — Fundación de datos + motor validado
