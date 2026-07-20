@@ -281,15 +281,21 @@ export class InvoicesService {
       }
     }
 
-    // Determine seller: from dto, from user's linked seller, or null
-    let sellerId: string | null = dto.sellerId || null;
-    if (!sellerId) {
-      const userSeller = await this.prisma.seller.findUnique({
-        where: { userId: user.id },
-      });
-      if (userSeller) {
-        sellerId = userSeller.id;
-      }
+    // Determine seller. BLINDAJE anti-fuga de vendedor: un usuario rol SELLER siempre
+    // factura a su PROPIO vendedor. En el POS, retomar una factura en espera de otro
+    // vendedor deja su sellerId "pegado" en la sesion (setSelectedSellerId), y sin este
+    // guard esa seleccion se colaba a las facturas NUEVAS que creaba despues -> ventas
+    // atribuidas al vendedor equivocado. Solo ADMIN/SUPERVISOR pueden asignar otro
+    // vendedor (dto.sellerId). El flujo legitimo de retomar-y-editar usa updateItems(),
+    // no este create(), asi que el vendedor original se respeta ahi.
+    const userSeller = await this.prisma.seller.findUnique({
+      where: { userId: user.id },
+    });
+    let sellerId: string | null;
+    if (user.role === 'SELLER') {
+      sellerId = userSeller?.id ?? null;
+    } else {
+      sellerId = dto.sellerId || userSeller?.id || null;
     }
 
     // Fetch products and calculate totals
