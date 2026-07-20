@@ -168,9 +168,6 @@ export default function InvoicesPage() {
     }
   }
 
-  function handlePrint(id: string) {
-    window.open(`/api/proxy/invoices/${id}/pdf`, '_blank');
-  }
 
   // Reimprimir ticket termico 80mm (notas de entrega). El listado solo trae resumen,
   // asi que se pide la factura completa (items/pagos) + config antes de imprimir.
@@ -377,10 +374,10 @@ export default function InvoicesPage() {
                       </Link>
                       {['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(inv.status) && (
                         <button
-                          onClick={() => inv.serie?.isFiscal ? handlePrint(inv.id) : handleReprintTicket(inv.id)}
+                          onClick={() => handleReprintTicket(inv.id)}
                           disabled={ticketBusyId === inv.id}
                           className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400 disabled:opacity-50"
-                          title={inv.serie?.isFiscal ? 'Imprimir PDF (carta)' : 'Imprimir ticket (80mm)'}
+                          title="Imprimir ticket (80mm)"
                         >
                           {ticketBusyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
                         </button>
