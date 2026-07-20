@@ -39,6 +39,24 @@ export interface PayrollLineResult {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// Defaults del schema, por si el singleton de parámetros aún no existe.
+export const DEFAULT_PAYROLL_PARAM = {
+  ivssBs: 0, faovBs: 0, incesBs: 0,
+  otDayFactor: 1.5, otNightFactor: 1.3, monthDays: 30, weeklyHours: 40,
+};
+
+// Mapea los parámetros globales a los que espera el motor, según la frecuencia.
+export function buildEngineParams(type: string, p: typeof DEFAULT_PAYROLL_PARAM): PayrollParams {
+  const weekly = type === 'WEEKLY';
+  return {
+    ivssBs: p.ivssBs, faovBs: p.faovBs, incesBs: p.incesBs,
+    otDayFactor: p.otDayFactor, otNightFactor: p.otNightFactor,
+    monthDays: p.monthDays,
+    periodHours: weekly ? p.weeklyHours : p.weeklyHours * 2,
+    periodsPerYear: weekly ? 52 : 24,
+  };
+}
+
 export function computePayrollLine(input: PayrollLineInput, p: PayrollParams): PayrollLineResult {
   const monthlyUsd = (input.salaryBaseUsd * p.periodsPerYear) / 12;
   const dailyUsd = monthlyUsd / p.monthDays;

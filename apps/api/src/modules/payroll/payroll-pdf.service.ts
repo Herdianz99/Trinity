@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
+import { computePayrollLine, buildEngineParams, DEFAULT_PAYROLL_PARAM, PayrollParams } from './payroll-calc';
 
+const r2 = (n: number) => Math.round(n * 100) / 100;
 const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d: Date) => new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' });
 const TYPE_LABEL: Record<string, string> = { WEEKLY: 'Semanal', BIWEEKLY: 'Quincenal' };
@@ -40,9 +42,15 @@ export class PayrollPdfService {
     return { name: c?.companyName || 'Trinity', rif: c?.rif || '' };
   }
 
+  // Parámetros del motor para la frecuencia de la corrida (para desglosar cada concepto).
+  private async engineFor(type: string): Promise<PayrollParams> {
+    const param = (await this.prisma.payrollParam.findUnique({ where: { id: 'singleton' } })) ?? DEFAULT_PAYROLL_PARAM;
+    return buildEngineParams(type, param);
+  }
+
   // ------- Recibo de pago (un empleado por página) -------
 
-  private drawReceipt(doc: PDFKit.PDFDocument, run: RunWithLines, line: Line, company: { name: string; rif: string }, top: number): number {
+  private drawReceipt(doc: PDFKit.PDFDocument, run: RunWithLines, line: Line, company: { name: string; rif: string }, top: number, eng: PayrollParams): number {
     const L = 40, W = doc.page.width - 80; // 532
     let y = top;
 
@@ -74,17 +82,34 @@ export class PayrollPdfService {
       return yy + 13;
     };
 
+    // Desglose por concepto: cada entrada editable en su propia línea (nunca agrupada).
+    const c = computePayrollLine({
+      salaryBaseUsd: line.salaryBaseUsd,
+      daysWorked: line.daysWorked,
+      daysRest: line.daysRest,
+      overtimeDayHours: line.overtimeDayHours,
+      overtimeNightHours: line.overtimeNightHours,
+      manualDeductionUsd: line.manualDeductionUsd,
+      creditDeductionBs: line.creditDeductionBs,
+      rate: run.exchangeRate,
+    }, eng);
+    const workedBs = r2(line.daysWorked * c.dailyUsd * run.exchangeRate);
+    const restBs = r2(line.daysRest * c.dailyUsd * run.exchangeRate);
+
     y = box('ASIGNACIONES', y);
-    y = money(`Salario del periodo (${line.daysWorked + line.daysRest} dias)`, line.salaryBs, y);
-    if (line.overtimeBs > 0) y = money(`Horas extra (D: ${line.overtimeDayHours}  N: ${line.overtimeNightHours})`, line.overtimeBs, y);
+    y = money(`Dias trabajados (${line.daysWorked})`, workedBs, y);
+    y = money(`Dias de descanso (${line.daysRest})`, restBs, y);
+    if (line.overtimeDayHours > 0) y = money(`Horas extra diurnas (${line.overtimeDayHours})`, c.otDayTotalBs, y);
+    if (line.overtimeNightHours > 0) y = money(`Horas extra nocturnas (${line.overtimeNightHours})`, c.otNightTotalBs, y);
     y = money('Total asignaciones', line.grossBs, y, true);
     y += 6;
 
     y = box('DEDUCCIONES', y);
-    if (line.ivssBs > 0) y = money('IVSS', line.ivssBs, y);
-    if (line.faovBs > 0) y = money('FAOV', line.faovBs, y);
-    const otras = Math.round((line.totalDeductionsBs - line.ivssBs - line.faovBs) * 100) / 100;
-    if (otras > 0.001) y = money('Otras deducciones', otras, y);
+    if (c.ivssBs > 0) y = money('IVSS', c.ivssBs, y);
+    if (c.faovBs > 0) y = money('FAOV', c.faovBs, y);
+    if (c.incesBs > 0) y = money('INCES', c.incesBs, y);
+    if (c.manualDeductionBs > 0) y = money('Deduccion manual', c.manualDeductionBs, y);
+    if (c.creditDeductionBs > 0) y = money('Deduccion de credito (CxC)', c.creditDeductionBs, y);
     y = money('Total deducciones', line.totalDeductionsBs, y, true);
     y += 6;
 
@@ -112,13 +137,14 @@ export class PayrollPdfService {
     const line = run.lines.find((l) => l.id === lineId);
     if (!line) throw new NotFoundException('Línea no encontrada en esta corrida');
     const company = await this.company();
+    const eng = await this.engineFor(run.type);
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
       const buffers: Buffer[] = [];
       doc.on('data', (c: Buffer) => buffers.push(c));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
-      this.drawReceipt(doc, run, line, company, 40);
+      this.drawReceipt(doc, run, line, company, 40, eng);
       doc.end();
     });
   }
@@ -127,6 +153,7 @@ export class PayrollPdfService {
   async generateAllReceipts(runId: string): Promise<Buffer> {
     const run = await this.loadRun(runId);
     const company = await this.company();
+    const eng = await this.engineFor(run.type);
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
       const buffers: Buffer[] = [];
@@ -138,7 +165,7 @@ export class PayrollPdfService {
         if (i > 0 && i % 2 === 0) doc.addPage();
         const top = i % 2 === 0 ? 40 : half + 10;
         if (i % 2 === 1) doc.moveTo(40, half).lineTo(doc.page.width - 40, half).dash(3, { space: 3 }).stroke('#bbb').undash();
-        this.drawReceipt(doc, run, line, company, top);
+        this.drawReceipt(doc, run, line, company, top, eng);
       });
       doc.end();
     });
