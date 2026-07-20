@@ -1108,6 +1108,9 @@ export default function POSPage() {
       setCustomerId(null);
       setCustomerName('');
       setExistingInvoiceId(null);
+      // Volver al vendedor propio: si esta factura era retomada de otro vendedor, su
+      // sellerId quedo "pegado" en la sesion; sin este reset se colaria a la proxima venta.
+      setSelectedSellerId(mySellerId);
       setIntendedMethod(null);
       setMobileView('search'); // volver a la pantalla de busqueda para la siguiente factura
       setMessage({ type: 'success', text: 'Factura guardada en espera' });
@@ -1150,6 +1153,7 @@ export default function POSPage() {
         setCustomerId(null);
         setCustomerName('');
         setExistingInvoiceId(null);
+        setSelectedSellerId(mySellerId);
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -1306,6 +1310,7 @@ export default function POSPage() {
       setCustomerName('');
       setCreditModalOpen(false);
       setExistingInvoiceId(null);
+      setSelectedSellerId(mySellerId);
       setMessage({ type: 'success', text: `Factura ${result.number} registrada a credito` });
       fetchPending();
     } catch (err: any) {
@@ -1509,6 +1514,7 @@ export default function POSPage() {
       setChangeUsdCash(0);
       setPayModalOpen(false);
       setExistingInvoiceId(null);
+      setSelectedSellerId(mySellerId);
       setMessage({ type: 'success', text: `Factura ${result.number} cobrada exitosamente` });
       fetchPending();
     } catch (err: any) {
