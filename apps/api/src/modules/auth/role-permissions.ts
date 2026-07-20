@@ -9,4 +9,5 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   BUYER: ['dashboard', 'catalog', 'purchases', 'payables', 'payment-schedules', 'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE'],
   ACCOUNTANT: ['dashboard', 'receivables', 'payables', 'payment-schedules', 'fiscal', 'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE', 'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE'],
   AUDITOR: ['dashboard', 'inventory'],
+  RRHH: ['dashboard', 'payroll'],
 };

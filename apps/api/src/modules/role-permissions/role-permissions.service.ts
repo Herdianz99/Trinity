@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { UserRole } from '@prisma/client';
+import { ROLE_PERMISSIONS } from '../auth/role-permissions';
 
 const VALID_MODULES = [
   'dashboard', 'sales', 'commands', 'quotations', 'catalog', 'inventory',
@@ -34,7 +35,6 @@ export class RolePermissionsService {
     const missing = allRoles.filter((r) => !existingRoles.has(r));
 
     if (missing.length > 0) {
-      const { ROLE_PERMISSIONS } = await import('../auth/role-permissions');
       for (const role of missing) {
         const modules = ROLE_PERMISSIONS[role] || ['dashboard'];
         const created = await this.prisma.rolePermission.create({
@@ -55,9 +55,17 @@ export class RolePermissionsService {
       return JSON.parse(cached);
     }
 
-    // Read from DB
+    // Read from DB. Si el rol aún no tiene registro (p.ej. recién agregado al enum),
+    // caer al mapa de permisos por defecto en vez de solo 'dashboard', para que el
+    // rol tenga sus módulos esperados desde el primer login (sin esperar al seed).
     const rp = await this.prisma.rolePermission.findUnique({ where: { role } });
-    const modules = rp?.modules || ['dashboard'];
+    let modules: string[];
+    if (rp) {
+      modules = rp.modules;
+    } else {
+      const def = ROLE_PERMISSIONS[role] || ['dashboard'];
+      modules = def.includes('*') ? VALID_MODULES : def;
+    }
 
     // Cache it
     await this.redis.set(`${CACHE_PREFIX}${role}`, JSON.stringify(modules), CACHE_TTL);

@@ -2479,3 +2479,8 @@ ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "positionId" TEXT;
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "bonusUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
 DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_positionId_fkey" FOREIGN KEY ("positionId") REFERENCES "Position"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =============================================================================
+-- SECTION: nuevo rol RRHH (Recursos Humanos)
+-- =============================================================================
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'RRHH';
