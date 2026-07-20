@@ -524,7 +524,7 @@ export class PayablesService {
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
       include: {
         supplier: { select: { id: true, name: true } },
-        purchaseOrder: { select: { id: true, number: true } },
+        purchaseOrder: { select: { id: true, number: true, supplierInvoiceNumber: true } },
       },
     });
     return data.map((p) => ({

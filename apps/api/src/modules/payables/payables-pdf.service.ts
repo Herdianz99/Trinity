@@ -33,6 +33,17 @@ export class PayablesPdfService {
     return (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // Trunca el texto para que quepa en el ancho de la columna (con "…"), midiendo con la
+  // fuente actual. Evita que un nombre largo se monte sobre la columna siguiente.
+  private clip(doc: any, text: string, width: number): string {
+    if (!text) return '';
+    if (doc.widthOfString(text) <= width) return text;
+    const ell = '…';
+    let t = text;
+    while (t.length > 0 && doc.widthOfString(t + ell) > width) t = t.slice(0, -1);
+    return t + ell;
+  }
+
   private dueDate(d: Date | string | null): string {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' });
@@ -91,7 +102,9 @@ export class PayablesPdfService {
       }
       totalNeto += p.netPayableUsd || 0;
       totalSaldo += p.balanceUsd || 0;
-      const documento = p.number || p.purchaseOrder?.number || p.documentNumber || '—';
+      // Documento REAL que escribe el usuario (nro. de factura del proveedor), NO el
+      // correlativo del sistema: documentNumber (CxP manual) o supplierInvoiceNumber (de compra).
+      const documento = p.documentNumber || p.purchaseOrder?.supplierInvoiceNumber || '—';
       const values = [
         p.supplier?.name || '—',
         String(documento),
@@ -102,9 +115,11 @@ export class PayablesPdfService {
       ];
       doc.fillColor('#1e293b');
       for (let i = 0; i < COLS.length; i++) {
-        const opts: any = { width: COLS[i].width, lineBreak: false, ellipsis: true };
+        const opts: any = { width: COLS[i].width, lineBreak: false };
+        let text = values[i] || '';
         if (COLS[i].align === 'right') opts.align = 'right';
-        doc.text(values[i] || '', COLS[i].x, y, opts);
+        else text = this.clip(doc, text, COLS[i].width); // recorta columnas de texto para que no se monten
+        doc.text(text, COLS[i].x, y, opts);
       }
       doc.fillColor('#000');
       y += 13;
