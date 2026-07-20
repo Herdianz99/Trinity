@@ -6,10 +6,11 @@ import * as PDFDocument from 'pdfkit';
 
 // Carta vertical, area util 40..572 (ancho 532).
 const COLS = [
-  { label: 'Código', x: 40, width: 90 },
-  { label: 'Producto', x: 130, width: 300 },
-  { label: 'Existencia', x: 430, width: 70, align: 'right' as const },
-  { label: 'Vendidas', x: 500, width: 72, align: 'right' as const },
+  { label: 'Código', x: 40, width: 72 },
+  { label: 'Ref. Prov.', x: 112, width: 78 },
+  { label: 'Producto', x: 190, width: 218 },
+  { label: 'Existencia', x: 408, width: 80, align: 'right' as const },
+  { label: 'Vendidas', x: 488, width: 84, align: 'right' as const },
 ];
 const RIGHT = 572;
 
@@ -85,7 +86,7 @@ export class PurchaseAnalysisPdfService {
         y = this.headerRow(doc, y);
         doc.fontSize(8).font('Helvetica');
       }
-      const values = [r.code || '—', r.name, this.fmt(r.stock), this.fmt(r.sold)];
+      const values = [r.code || '—', r.supplierRef || '—', r.name, this.fmt(r.stock), this.fmt(r.sold)];
       doc.fillColor('#1e293b');
       for (let i = 0; i < COLS.length; i++) {
         const opts: any = { width: COLS[i].width, lineBreak: false };
@@ -104,7 +105,7 @@ export class PurchaseAnalysisPdfService {
     doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
     doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
     doc.text(`TOTAL (${analysis.totalProducts} artículos)`, 46, y + 1, { width: 300, lineBreak: false });
-    doc.text(`Vendidas: ${this.fmt(analysis.totalSold)}`, COLS[2].x, y + 1, { width: RIGHT - COLS[2].x - 6, align: 'right' });
+    doc.text(`Vendidas: ${this.fmt(analysis.totalSold)}`, COLS[3].x, y + 1, { width: RIGHT - COLS[3].x - 6, align: 'right' });
     doc.fillColor('#000');
 
     // Paginación

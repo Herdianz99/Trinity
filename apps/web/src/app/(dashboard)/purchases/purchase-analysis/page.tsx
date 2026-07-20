@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 interface Option { id: string; name: string }
 interface Row {
   code: string | null;
+  supplierRef: string | null;
   name: string;
   category: string | null;
   brand: string | null;
@@ -104,12 +105,12 @@ export default function PurchaseAnalysisPage() {
   function exportExcel() {
     if (!data) return;
     const aoa = [
-      ['Código', 'Producto', 'Categoría', 'Marca', 'Proveedor', 'Existencia', 'Total vendidas'],
-      ...data.rows.map((r) => [r.code || '', r.name, r.category || '', r.brand || '', r.supplier || '', r.stock, r.sold]),
-      ['', '', '', '', 'TOTAL', data.rows.reduce((s, r) => s + r.stock, 0), data.totalSold],
+      ['Código', 'Ref. Proveedor', 'Producto', 'Categoría', 'Marca', 'Proveedor', 'Existencia', 'Total vendidas'],
+      ...data.rows.map((r) => [r.code || '', r.supplierRef || '', r.name, r.category || '', r.brand || '', r.supplier || '', r.stock, r.sold]),
+      ['', '', '', '', '', 'TOTAL', data.rows.reduce((s, r) => s + r.stock, 0), data.totalSold],
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 12 }, { wch: 48 }, { wch: 20 }, { wch: 18 }, { wch: 26 }, { wch: 12 }, { wch: 14 }];
+    ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 48 }, { wch: 20 }, { wch: 18 }, { wch: 26 }, { wch: 12 }, { wch: 14 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Análisis de compra');
     XLSX.writeFile(wb, `analisis-de-compra-${data.from}_${data.to}.xlsx`);
@@ -225,6 +226,7 @@ export default function PurchaseAnalysisPage() {
               <thead>
                 <tr className="bg-slate-800/80">
                   <Th>Código</Th>
+                  <Th>Ref. Prov.</Th>
                   <Th>Producto</Th>
                   <Th className="text-right">Existencia</Th>
                   <Th className="text-right">Total vendidas</Th>
@@ -232,10 +234,11 @@ export default function PurchaseAnalysisPage() {
               </thead>
               <tbody>
                 {data.rows.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-12 text-slate-500">No hay artículos para este filtro</td></tr>
+                  <tr><td colSpan={5} className="text-center py-12 text-slate-500">No hay artículos para este filtro</td></tr>
                 ) : data.rows.map((r, i) => (
                   <tr key={`${r.code}-${i}`} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-2.5 text-sm text-slate-300 font-mono">{r.code || '--'}</td>
+                    <td className="px-4 py-2.5 text-sm text-slate-400 font-mono">{r.supplierRef || '--'}</td>
                     <td className="px-4 py-2.5 text-sm text-slate-200">
                       {r.name}
                       {(r.brand || r.supplier) && <span className="block text-xs text-slate-500">{[r.brand, r.supplier].filter(Boolean).join(' · ')}</span>}
