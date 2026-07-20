@@ -2151,15 +2151,41 @@ model DispatchDelivery {
 // NÓMINA (básica) — ver docs/superpowers/plans/2026-07-17-nomina.md
 // ============================================
 
+// Maestro de departamentos de nómina (se carga una vez y se referencia).
+model Department {
+  id        String     @id @default(cuid())
+  name      String     @unique          // "ADMINISTRACION", "CAJA", "VENTAS", ...
+  isActive  Boolean    @default(true)
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// Maestro de cargos de nómina. Lleva sueldo y bonificación por defecto, que
+// autorellenan (de forma editable) los campos del empleado al asignarle el cargo.
+model Position {
+  id               String     @id @default(cuid())
+  name             String     @unique
+  defaultSalaryUsd Float      @default(0) // sueldo sugerido al asignar el cargo
+  defaultBonusUsd  Float      @default(0) // bonificación sugerida al asignar el cargo
+  isActive         Boolean    @default(true)
+  employees        Employee[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
 model Employee {
   id            String   @id @default(cuid())
   code          String?  @unique          // EMP-0001 (opcional)
   customerId    String   @unique          // ficha compartida: identidad + CxC
   customer      Customer @relation(fields: [customerId], references: [id])
-  department    String                    // "ADMINISTRACION", "CAJA", "VENTAS", ...
-  cargo         String?
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  positionId    String?
+  position      Position?   @relation(fields: [positionId], references: [id])
   bank          String?
-  salaryBaseUsd Float    @default(0)       // sueldo base del período, en USD
+  salaryBaseUsd Float    @default(0)       // sueldo base del período, en USD (autollenado del cargo, editable)
+  bonusUsd      Float    @default(0)       // bonificación del período, en USD (autollenado del cargo, editable)
   frequency     String   @default("WEEKLY") // WEEKLY | BIWEEKLY
   isActive      Boolean  @default(true)
   lines         PayrollRunLine[]

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsIn, Min, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsIn, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 // Edición de empleado: solo campos propios del empleado (la identidad se edita en la ficha Customer).
@@ -6,13 +6,12 @@ export class UpdateEmployeeDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @MinLength(2)
-  department?: string;
+  departmentId?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  cargo?: string;
+  positionId?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -24,6 +23,12 @@ export class UpdateEmployeeDto {
   @IsNumber()
   @Min(0)
   salaryBaseUsd?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  bonusUsd?: number;
 
   @ApiProperty({ required: false, enum: ['WEEKLY', 'BIWEEKLY'] })
   @IsOptional()

@@ -40,26 +40,32 @@ export class CreateEmployeeDto {
   @Type(() => NewEmployeeCustomerDto)
   newCustomer?: NewEmployeeCustomerDto;
 
-  @ApiProperty({ description: 'Departamento (ADMINISTRACION, CAJA, VENTAS, ...)' })
-  @IsString()
-  @MinLength(2)
-  department: string;
-
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Id del departamento (maestro)' })
   @IsOptional()
   @IsString()
-  cargo?: string;
+  departmentId?: string;
+
+  @ApiProperty({ required: false, description: 'Id del cargo (maestro)' })
+  @IsOptional()
+  @IsString()
+  positionId?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   bank?: string;
 
-  @ApiProperty({ default: 0, description: 'Sueldo base del período, en USD' })
+  @ApiProperty({ default: 0, description: 'Sueldo base del período, en USD (autollenado del cargo, editable)' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   salaryBaseUsd?: number;
+
+  @ApiProperty({ default: 0, description: 'Bonificación del período, en USD (autollenado del cargo, editable)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  bonusUsd?: number;
 
   @ApiProperty({ enum: ['WEEKLY', 'BIWEEKLY'], default: 'WEEKLY' })
   @IsOptional()

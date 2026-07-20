@@ -14,13 +14,28 @@ interface EmployeeCustomer {
   phone: string | null;
 }
 
+interface MasterRef {
+  id: string;
+  name: string;
+}
+
+interface PositionOption {
+  id: string;
+  name: string;
+  defaultSalaryUsd: number;
+  defaultBonusUsd: number;
+}
+
 interface Employee {
   id: string;
   code: string | null;
-  department: string;
-  cargo: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+  department: MasterRef | null;
+  position: MasterRef | null;
   bank: string | null;
   salaryBaseUsd: number;
+  bonusUsd: number;
   frequency: string;
   isActive: boolean;
   customer: EmployeeCustomer;
@@ -44,11 +59,16 @@ export default function EmployeesPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [selected, setSelected] = useState<Employee | null>(null);
 
+  // Masters (cargados una vez)
+  const [departments, setDepartments] = useState<MasterRef[]>([]);
+  const [positions, setPositions] = useState<PositionOption[]>([]);
+
   // Form (shared)
-  const [department, setDepartment] = useState('');
-  const [cargo, setCargo] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [positionId, setPositionId] = useState('');
   const [bank, setBank] = useState('');
   const [salaryBaseUsd, setSalaryBaseUsd] = useState(0);
+  const [bonusUsd, setBonusUsd] = useState(0);
   const [frequency, setFrequency] = useState('WEEKLY');
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
@@ -81,6 +101,19 @@ export default function EmployeesPage() {
 
   useEffect(() => { document.title = 'Empleados | Trinity ERP'; }, []);
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+  // Cargar maestros de departamentos y cargos (solo activos)
+  const fetchMasters = useCallback(async () => {
+    try {
+      const [dRes, pRes] = await Promise.all([
+        fetch('/api/proxy/departments'),
+        fetch('/api/proxy/positions'),
+      ]);
+      if (dRes.ok) setDepartments((await dRes.json()).filter((d: any) => d.isActive));
+      if (pRes.ok) setPositions((await pRes.json()).filter((p: any) => p.isActive));
+    } catch { /* empty */ }
+  }, []);
+  useEffect(() => { fetchMasters(); }, [fetchMasters]);
 
   // Debounced list search
   useEffect(() => {
@@ -116,7 +149,7 @@ export default function EmployeesPage() {
   }, []);
 
   function resetForm() {
-    setDepartment(''); setCargo(''); setBank(''); setSalaryBaseUsd(0); setFrequency('WEEKLY');
+    setDepartmentId(''); setPositionId(''); setBank(''); setSalaryBaseUsd(0); setBonusUsd(0); setFrequency('WEEKLY');
     setCustomerMode('new'); setNewName(''); setNewDocType('V'); setNewRif(''); setNewPhone('');
     setComboQuery(''); setComboResults([]); setPickedCustomer(null); setFormError('');
   }
@@ -125,13 +158,24 @@ export default function EmployeesPage() {
 
   function openEdit(emp: Employee) {
     setSelected(emp);
-    setDepartment(emp.department);
-    setCargo(emp.cargo || '');
+    setDepartmentId(emp.departmentId || '');
+    setPositionId(emp.positionId || '');
     setBank(emp.bank || '');
     setSalaryBaseUsd(emp.salaryBaseUsd);
+    setBonusUsd(emp.bonusUsd);
     setFrequency(emp.frequency);
     setFormError('');
     setShowEdit(true);
+  }
+
+  // Autollenado al elegir cargo: sueldo y bonificación toman el default del cargo (editables).
+  function onSelectPosition(id: string) {
+    setPositionId(id);
+    const pos = positions.find((p) => p.id === id);
+    if (pos) {
+      setSalaryBaseUsd(pos.defaultSalaryUsd);
+      setBonusUsd(pos.defaultBonusUsd);
+    }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -144,8 +188,8 @@ export default function EmployeesPage() {
     setFormLoading(true);
     try {
       const body: any = {
-        department, cargo: cargo || undefined, bank: bank || undefined,
-        salaryBaseUsd, frequency,
+        departmentId: departmentId || undefined, positionId: positionId || undefined,
+        bank: bank || undefined, salaryBaseUsd, bonusUsd, frequency,
       };
       if (customerMode === 'existing') {
         body.customerId = pickedCustomer!.id;
@@ -171,7 +215,7 @@ export default function EmployeesPage() {
     try {
       const res = await fetch(`/api/proxy/employees/${selected.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ department, cargo: cargo || undefined, bank: bank || undefined, salaryBaseUsd, frequency }),
+        body: JSON.stringify({ departmentId: departmentId || undefined, positionId: positionId || undefined, bank: bank || undefined, salaryBaseUsd, bonusUsd, frequency }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
@@ -231,15 +275,16 @@ export default function EmployeesPage() {
                 <Th>Cargo</Th>
                 <Th>Frecuencia</Th>
                 <Th className="text-right">Sueldo base USD</Th>
+                <Th className="text-right">Bono USD</Th>
                 <Th className="text-center">Estado</Th>
                 <Th className="text-right">Acciones</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-500">Cargando...</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-500">Cargando...</td></tr>
               ) : employees.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-500">No hay empleados registrados</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay empleados registrados</td></tr>
               ) : employees.map((emp) => (
                 <tr key={emp.id} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors">
                   <td className="px-4 py-3 text-sm text-slate-300 font-mono">{emp.code || '--'}</td>
@@ -251,10 +296,11 @@ export default function EmployeesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-300">{emp.department}</td>
-                  <td className="px-4 py-3 text-sm text-slate-300">{emp.cargo || <span className="text-slate-600">--</span>}</td>
+                  <td className="px-4 py-3 text-sm text-slate-300">{emp.department?.name || <span className="text-slate-600">--</span>}</td>
+                  <td className="px-4 py-3 text-sm text-slate-300">{emp.position?.name || <span className="text-slate-600">--</span>}</td>
                   <td className="px-4 py-3 text-sm text-slate-300">{FREQ_LABEL[emp.frequency] || emp.frequency}</td>
                   <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">${emp.salaryBaseUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">${(emp.bonusUsd ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${
                       emp.isActive ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
@@ -331,9 +377,12 @@ export default function EmployeesPage() {
             </div>
 
             <EmployeeFields
-              department={department} setDepartment={setDepartment}
-              cargo={cargo} setCargo={setCargo} bank={bank} setBank={setBank}
+              departments={departments} positions={positions}
+              departmentId={departmentId} setDepartmentId={setDepartmentId}
+              positionId={positionId} onSelectPosition={onSelectPosition}
+              bank={bank} setBank={setBank}
               salaryBaseUsd={salaryBaseUsd} setSalaryBaseUsd={setSalaryBaseUsd}
+              bonusUsd={bonusUsd} setBonusUsd={setBonusUsd}
               frequency={frequency} setFrequency={setFrequency}
             />
 
@@ -351,9 +400,12 @@ export default function EmployeesPage() {
               Código <span className="font-mono text-slate-400">{selected.code || '--'}</span>. Los datos de identidad (nombre, RIF) se editan en la ficha del cliente.
             </p>
             <EmployeeFields
-              department={department} setDepartment={setDepartment}
-              cargo={cargo} setCargo={setCargo} bank={bank} setBank={setBank}
+              departments={departments} positions={positions}
+              departmentId={departmentId} setDepartmentId={setDepartmentId}
+              positionId={positionId} onSelectPosition={onSelectPosition}
+              bank={bank} setBank={setBank}
               salaryBaseUsd={salaryBaseUsd} setSalaryBaseUsd={setSalaryBaseUsd}
+              bonusUsd={bonusUsd} setBonusUsd={setBonusUsd}
               frequency={frequency} setFrequency={setFrequency}
             />
             <FormActions loading={formLoading} onCancel={() => setShowEdit(false)} label="Guardar cambios" />
@@ -367,10 +419,12 @@ export default function EmployeesPage() {
 const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500';
 
 function EmployeeFields(props: {
-  department: string; setDepartment: (v: string) => void;
-  cargo: string; setCargo: (v: string) => void;
+  departments: MasterRef[]; positions: PositionOption[];
+  departmentId: string; setDepartmentId: (v: string) => void;
+  positionId: string; onSelectPosition: (v: string) => void;
   bank: string; setBank: (v: string) => void;
   salaryBaseUsd: number; setSalaryBaseUsd: (v: number) => void;
+  bonusUsd: number; setBonusUsd: (v: number) => void;
   frequency: string; setFrequency: (v: string) => void;
 }) {
   return (
@@ -378,13 +432,30 @@ function EmployeeFields(props: {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1.5">Departamento</label>
-          <input value={props.department} onChange={(e) => props.setDepartment(e.target.value)} required placeholder="ADMINISTRACION" className={inputCls} />
+          <select value={props.departmentId} onChange={(e) => props.setDepartmentId(e.target.value)} required className={inputCls}>
+            <option value="">Seleccionar...</option>
+            {props.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1.5">Cargo</label>
-          <input value={props.cargo} onChange={(e) => props.setCargo(e.target.value)} placeholder="Opcional" className={inputCls} />
+          <select value={props.positionId} onChange={(e) => props.onSelectPosition(e.target.value)} className={inputCls}>
+            <option value="">Sin cargo</option>
+            {props.positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">Sueldo base (USD)</label>
+          <MoneyInput value={props.salaryBaseUsd} onValueChange={props.setSalaryBaseUsd} className={`${inputCls} font-mono`} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">Bonificaciones (USD)</label>
+          <MoneyInput value={props.bonusUsd} onValueChange={props.setBonusUsd} className={`${inputCls} font-mono`} />
+        </div>
+      </div>
+      <p className="text-xs text-slate-500 -mt-1">El sueldo y las bonificaciones se autollenan del cargo, pero puedes editarlos.</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1.5">Frecuencia</label>
@@ -394,13 +465,9 @@ function EmployeeFields(props: {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1.5">Sueldo base (USD)</label>
-          <MoneyInput value={props.salaryBaseUsd} onValueChange={props.setSalaryBaseUsd} className={`${inputCls} font-mono`} />
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">Banco</label>
+          <input value={props.bank} onChange={(e) => props.setBank(e.target.value)} placeholder="Opcional" className={inputCls} />
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-300 mb-1.5">Banco</label>
-        <input value={props.bank} onChange={(e) => props.setBank(e.target.value)} placeholder="Opcional" className={inputCls} />
       </div>
     </>
   );

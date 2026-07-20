@@ -2457,3 +2457,25 @@ CREATE TABLE IF NOT EXISTS "PayrollRunLine" (
 CREATE UNIQUE INDEX IF NOT EXISTS "PayrollRunLine_payrollRunId_employeeId_key" ON "PayrollRunLine"("payrollRunId","employeeId");
 DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_payrollRunId_fkey" FOREIGN KEY ("payrollRunId") REFERENCES "PayrollRun"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =============================================================================
+-- SECTION: PAYROLL MASTERS (Department, Position) + Employee bonus/FK columns
+-- Aditivo; el backfill/drop de columnas viejas lo hace la migración correspondiente.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS "Department" (
+  "id" TEXT NOT NULL, "name" TEXT NOT NULL, "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Department_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX IF NOT EXISTS "Department_name_key" ON "Department"("name");
+CREATE TABLE IF NOT EXISTS "Position" (
+  "id" TEXT NOT NULL, "name" TEXT NOT NULL,
+  "defaultSalaryUsd" DOUBLE PRECISION NOT NULL DEFAULT 0, "defaultBonusUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Position_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX IF NOT EXISTS "Position_name_key" ON "Position"("name");
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "departmentId" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "positionId" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "bonusUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
+DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_positionId_fkey" FOREIGN KEY ("positionId") REFERENCES "Position"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

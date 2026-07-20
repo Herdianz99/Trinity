@@ -21,7 +21,7 @@ export class EmployeesController {
   }
 
   @Get()
-  findAll(@Query() query: { search?: string; isActive?: string; department?: string }) {
+  findAll(@Query() query: { search?: string; isActive?: string; departmentId?: string }) {
     return this.employeesService.findAll(query);
   }
 

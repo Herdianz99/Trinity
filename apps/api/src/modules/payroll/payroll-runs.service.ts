@@ -16,7 +16,11 @@ const DEFAULT_PARAM = {
 
 const LINE_INCLUDE = {
   employee: {
-    include: { customer: { select: { id: true, name: true, documentType: true, rif: true } } },
+    include: {
+      customer: { select: { id: true, name: true, documentType: true, rif: true } },
+      department: { select: { id: true, name: true } },
+      position: { select: { id: true, name: true } },
+    },
   },
 } satisfies Prisma.PayrollRunLineInclude;
 

@@ -21,7 +21,7 @@ interface Line {
   totalDeductionsBs: number;
   netBs: number;
   netUsd: number;
-  employee: { code: string | null; department: string; customerDebtUsd?: number; customer: { name: string } };
+  employee: { code: string | null; department: { name: string } | null; customerDebtUsd?: number; customer: { name: string } };
 }
 
 interface Run {
@@ -209,7 +209,7 @@ export default function PayrollRunDetailPage() {
                 <tr key={l.id} className="border-t border-slate-700/30 hover:bg-slate-800/30">
                   <td className={`px-3 py-2 sticky left-0 bg-slate-900/95 ${pctOpen === l.id ? 'z-40' : ''}`}>
                     <div className="font-medium text-slate-200">{l.employee.customer.name}</div>
-                    <div className="text-[10px] text-slate-500">{l.employee.code} · {l.employee.department} · ${fmt(l.salaryBaseUsd)}</div>
+                    <div className="text-[10px] text-slate-500">{l.employee.code} · {l.employee.department?.name || 's/depto'} · ${fmt(l.salaryBaseUsd)}</div>
                     {(l.employee.customerDebtUsd ?? 0) > 0.01 && (
                       <div className="relative text-[10px] text-amber-400/90 flex items-center gap-1.5">
                         Deuda CxC: ${fmt(l.employee.customerDebtUsd!)}
