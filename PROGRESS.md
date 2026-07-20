@@ -23,6 +23,41 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-20 — Nómina (maestros + reportes), rol RRHH, CxP, Análisis de compra
+
+> Todo **mergeado a `main` y pusheado** (varios merges no-ff). **PENDIENTE de desplegar a la grande** (`inversiones`) — el deploy incluye 2 migraciones aditivas nuevas (payroll_masters, role_rrhh) ya probadas en local. Correr en horario tranquilo.
+
+**Incidencias de datos en producción (grande) — resueltas por SQL directo:**
+- **Factura VTA-26-00000407 (vendedor cambiado):** un usuario-vendedor (JOSE ARTILES) creó 3 facturas seguidas atribuidas a otro vendedor (José Alejandro). **Causa raíz:** `retakeInvoice` en el POS copiaba el `sellerId` de una factura en espera retomada y quedaba "pegado" (bypass del gate `canSelectSeller`), contaminando las siguientes ventas NUEVAS. Se corrigieron las 3 facturas + 2 históricas (Daniel Cedeño). **Fix de código:** `create()` fuerza el vendedor propio si el usuario es rol SELLER; el POS resetea `selectedSellerId` tras cobrar/guardar.
+- **Retenciones IVA (grande):** se eliminaron 2 comprobantes PENDING duplicados (1395/1399 de PROARCA) y se renumeraron los reales de BRINK/EXPOIMCO a 1395/1399/1419/1420, se bajó `retentionNextNumber` a 1421 (correlativo sin huecos). Actualizado el número denormalizado en el libro de compras. Respaldo en `/root/ret-backup-*.txt`.
+
+**Nómina — cargos y departamentos como MAESTROS + bonificaciones** (`feat/payroll-masters`):
+- Nuevos modelos `Department` y `Position` (cargo con `defaultSalaryUsd` + `defaultBonusUsd`). `Employee`: `department`/`cargo` (texto) → `departmentId`/`positionId` (FK) + nuevo `bonusUsd`. Migración `20260720170000_payroll_masters` (aditiva, **backfill** de los textos existentes a maestros + drop de columnas viejas), red de seguridad en `fix-schema.sql`. Backend CRUD `departments`/`positions`, employees/payroll adaptados.
+- Frontend: form de empleado con **selects** de depto/cargo; al elegir cargo se **autollenan** sueldo y bonificaciones (editables). Páginas maestras `/payroll/departments` y `/payroll/positions` + sidebar. **Nota:** la bonificación se guarda en el empleado pero **aún NO entra en el cálculo de la corrida** (pendiente, a definir con RRHH).
+
+**Nómina — reportes (pedidos de RRHH)** (`feat/payroll-receipt-breakdown`):
+- **Recibo individual:** cada concepto editable en su propia línea (Días trab./desc., HE diurnas/nocturnas, deducciones IVSS/FAOV/INCES/manual/crédito) — ya no agrupado.
+- **Opción con/sin horas extra:** modal al generar el recibo; "sin HE" recalcula total y neto solo con salario + deducciones (las HE se pagan aparte).
+- **Relación PDF reordenada:** Salario · IVSS · FAOV · Otras · **Total neto** (salario − deducciones) · HE Diurna · HE Noct. · **Total HE** · **Total** (salario + HE, sin deducciones).
+- Se extrajeron `buildEngineParams` + `DEFAULT_PAYROLL_PARAM` a `payroll-calc.ts` (reusados por runs y pdf).
+
+**Reporte de Cuentas por Pagar PDF** (`payables-pdf.service.ts`):
+- Columna Documento muestra el **número real** del usuario (`documentNumber` o `purchaseOrder.supplierInvoiceNumber`), no el correlativo del sistema.
+- Nombres largos ya **no se montan** sobre la columna siguiente (helper `clip` que trunca por ancho real con "…").
+- Anchos de columna reajustados: más espacio a Proveedor (220→305), el resto ocupa lo necesario (posiciones calculadas).
+
+**Nuevo rol RRHH (Recursos Humanos)** (`feat/rol-rrhh`):
+- Enum `UserRole` + `RRHH` (migración `20260720190000_role_rrhh` con `ALTER TYPE ADD VALUE IF NOT EXISTS`, red de seguridad en `fix-schema.sql`). Default de permisos: `['dashboard', 'payroll']`.
+- `getModulesForRole` cae al mapa por defecto (no solo `dashboard`) cuando el rol aún no tiene registro en BD → RRHH ve Nómina desde el primer login.
+- Frontend: RRHH en Usuarios (crear/editar) y en Permisos por rol (color/etiqueta/orden).
+- **Crédito de clientes** (`MANAGE_CUSTOMER_CREDIT`): ya era configurable por rol (toggle en Permisos por rol + enforcement en `customers.service`); ahora también aplicable a RRHH o cualquier rol.
+
+**Nueva pantalla "Análisis de compra"** (`feat/analisis-compra`):
+- `GET /products/purchase-analysis`: filtra productos por categoría/marca/proveedor y, en un período (30/60/90 días o rango), lista cada artículo con **existencia** y **total vendidas** (neto `quantity − returnedQty` de facturas PAID/PARTIAL_RETURN/RETURNED por `paidAt`, día-calendario Caracas). `onlyWithSales` filtra; por defecto lista **todos**.
+- Frontend `/purchases/purchase-analysis` (sección Compras): selects de catálogo, presets de período + rango personalizado, toggle "solo con ventas", tabla + totales. Probado contra la BD local.
+
+**Otros:** todos los cambios probados en local (BD = copia de la grande); `tsc --noEmit` API+Web verde en cada paso; dev local levantado (`turbo dev`, API 4000 / Web 3000).
+
 ## 👷 Nómina — Fase 0 (rama `feature/nomina`, 2026-07-18) — Fundación de datos + motor validado
 
 > Trabajo en rama aparte `feature/nomina` (NO tocar `main`, que queda desplegable). Plan: `docs/superpowers/plans/2026-07-17-nomina.md`.
