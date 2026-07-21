@@ -23,6 +23,13 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (4) — POS: recordatorio de teléfono + separadores de miles en montos
+
+> Cambios en `main` (**sin desplegar aún**). Solo frontend (`sales/pos/page.tsx`). Probado en local (PC y móvil).
+
+1. **Recordatorio de teléfono al elegir cliente:** al seleccionar un cliente real (no el por defecto) **sin teléfono**, sale un aviso no bloqueante con botón **"Agregar teléfono"** que abre el modal de edición del cliente (`openEditClient`). El buscador ya devolvía `phone`. Se unificó la selección: el modal móvil "Seleccionar Cliente" asignaba el cliente inline (sin pasar por `pickCustomer`) → no avisaba; ahora ambas rutas (PC y móvil) usan `pickCustomer`. Aplica a todos los roles. **Pendiente opcional:** el reuso por match de RIF/SENIAT al crear cliente aún no dispara el aviso.
+2. **Separadores de miles en montos del modal de cobrar:** el `MoneyInput` (campos editables USD/Bs) ahora formatea **en vivo** con "." de miles y "," decimal (ej. `17.859,68`), preservando el cursor; normaliza a 2 decimales al salir. Los montos de solo lectura del modal (Subtotal, IVA, IGTF, Total, Pendiente, Vuelto) usan `fmtBs` (antes `.toFixed(2)` sin agrupar). Ayuda visual para los cajeros.
+
 ## 🗓️ Sesión 2026-07-21 (3) — POS: ADMIN/SUPERVISOR entran sin caja (solo ver / cambiar precios)
 
 > Cambios en `main` (**sin desplegar aún**). Probado en local. Sin migración (solo lógica).

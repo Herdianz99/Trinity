@@ -67,6 +67,11 @@ const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
 const fmtBs = (n: number) =>
   (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Agrupa la parte entera con "." de miles (estilo es-VE) para el input de montos en vivo.
+// "1234567" -> "1.234.567"
+const groupInt = (digits: string) =>
+  ((digits.replace(/^0+(?=\d)/, '')) || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
 interface CartItem {
   productId: string;
   code: string;
@@ -154,16 +159,19 @@ function MoneyInput({
   className?: string;
   readOnly?: boolean;
 }) {
-  const [text, setText] = useState<string>(String(value));
+  const ref = useRef<HTMLInputElement>(null);
+  // Se muestra formateado con separador de miles "." y decimal "," (ayuda visual al cajero).
+  const [text, setText] = useState<string>(value ? fmtBs(value) : '');
   const [editing, setEditing] = useState(false);
 
   // Si el valor cambia desde afuera (auto-relleno, campo enlazado), refrescar cuando no se edita.
   useEffect(() => {
-    if (!editing) setText(String(value));
+    if (!editing) setText(value ? fmtBs(value) : '');
   }, [value, editing]);
 
   return (
     <input
+      ref={ref}
       type="text"
       inputMode="decimal"
       value={text}
@@ -174,18 +182,43 @@ function MoneyInput({
         e.currentTarget.select();
       }}
       onChange={(e) => {
-        // permitir solo digitos y un punto
-        let v = e.target.value.replace(/[^0-9.]/g, '');
-        const parts = v.split('.');
-        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
-        setText(v);
-        const n = parseFloat(v);
-        onChange(isNaN(n) ? 0 : n);
+        const el = e.currentTarget;
+        const prev = el.value;
+        const caret = el.selectionStart ?? prev.length;
+        // Cuántos dígitos hay antes del cursor (para restaurar la posición tras reagrupar).
+        const digitsBefore = prev.slice(0, caret).replace(/\D/g, '').length;
+
+        // Limpiar: solo dígitos y una sola coma decimal.
+        let cleaned = prev.replace(/[^0-9,]/g, '');
+        const ci = cleaned.indexOf(',');
+        if (ci !== -1) cleaned = cleaned.slice(0, ci + 1) + cleaned.slice(ci + 1).replace(/,/g, '');
+        let [ip = '', dp] = cleaned.split(',');
+        if (dp !== undefined) dp = dp.slice(0, 2); // máx 2 decimales
+
+        const grouped = ip === '' ? (dp !== undefined ? '0' : '') : groupInt(ip);
+        const display = dp !== undefined ? `${grouped},${dp}` : grouped;
+        setText(display);
+
+        const num = parseFloat(`${ip || '0'}.${dp || '0'}`);
+        onChange(isNaN(num) ? 0 : num);
+
+        // Restaurar el cursor por conteo de dígitos (los "." de miles se insertan/quitan solos).
+        requestAnimationFrame(() => {
+          const node = ref.current;
+          if (!node) return;
+          if (digitsBefore === 0) { node.setSelectionRange(0, 0); return; }
+          let count = 0, pos = 0;
+          const s = node.value;
+          while (pos < s.length) {
+            if (/\d/.test(s[pos])) count++;
+            pos++;
+            if (count >= digitsBefore) break;
+          }
+          node.setSelectionRange(pos, pos);
+        });
       }}
       onBlur={() => {
-        setEditing(false);
-        const n = parseFloat(text);
-        setText(String(isNaN(n) ? 0 : n)); // normaliza ("12." -> "12", "" -> "0")
+        setEditing(false); // el efecto reformatea a 2 decimales ("12," -> "12,00")
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
@@ -212,6 +245,8 @@ export default function POSPage() {
   const [customerIsDefault, setCustomerIsDefault] = useState(false);
   // Aviso (no bloqueante) al aparcar una factura que quedaria con el cliente por defecto
   const [showCustomerReminder, setShowCustomerReminder] = useState(false);
+  // Aviso (no bloqueante) al elegir un cliente sin telefono registrado
+  const [showPhoneReminder, setShowPhoneReminder] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -882,6 +917,11 @@ export default function POSPage() {
     setCustomerSearch('');
     setCustomerResults([]);
     setShowCustomerSearch(false);
+    // Recordatorio: si el cliente (real, no el por defecto) no tiene telefono, invitar a agregarlo.
+    const isDefault = c.id === companyConfig?.defaultCustomerId || c.isDefault;
+    if (!isDefault && !String(c.phone || '').trim()) {
+      setShowPhoneReminder(true);
+    }
   }
 
   function updateQuantity(productId: string, delta: number) {
@@ -2548,31 +2588,31 @@ export default function POSPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Subtotal</span>
                   <div className="text-right">
-                    <span className="text-white">${subtotalUsd.toFixed(2)}</span>
-                    <span className="text-slate-500 text-xs ml-2">Bs {(subtotalUsd * exchangeRate).toFixed(2)}</span>
+                    <span className="text-white">${fmtBs(subtotalUsd)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {fmtBs(subtotalUsd * exchangeRate)}</span>
                   </div>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">IVA</span>
                   <div className="text-right">
-                    <span className="text-white">${totalIva.toFixed(2)}</span>
-                    <span className="text-slate-500 text-xs ml-2">Bs {(totalIva * exchangeRate).toFixed(2)}</span>
+                    <span className="text-white">${fmtBs(totalIva)}</span>
+                    <span className="text-slate-500 text-xs ml-2">Bs {fmtBs(totalIva * exchangeRate)}</span>
                   </div>
                 </div>
                 {igtfUsd > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-amber-400">IGTF ({companyConfig?.igtfPct || 3}%)</span>
                     <div className="text-right">
-                      <span className="text-amber-400">${igtfUsd.toFixed(2)}</span>
-                      <span className="text-amber-400/60 text-xs ml-2">Bs {igtfBs.toFixed(2)}</span>
+                      <span className="text-amber-400">${fmtBs(igtfUsd)}</span>
+                      <span className="text-amber-400/60 text-xs ml-2">Bs {fmtBs(igtfBs)}</span>
                     </div>
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-bold border-t border-slate-700/50 pt-1">
                   <span className="text-slate-300">Total</span>
                   <div className="text-right">
-                    <span className="text-green-400">${grandTotalUsd.toFixed(2)}</span>
-                    <span className="text-slate-400 text-xs ml-2">Bs {grandTotalBs.toFixed(2)}</span>
+                    <span className="text-green-400">${fmtBs(grandTotalUsd)}</span>
+                    <span className="text-slate-400 text-xs ml-2">Bs {fmtBs(grandTotalBs)}</span>
                   </div>
                 </div>
               </div>
@@ -2582,7 +2622,7 @@ export default function POSPage() {
                 <div className="card p-3 flex items-center justify-between">
                   <span className="text-sm text-slate-400">Pendiente por cobrar</span>
                   <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
-                    ${Math.max(0, remaining).toFixed(2)}
+                    ${fmtBs(Math.max(0, remaining))}
                   </span>
                 </div>
               ) : (
@@ -2590,11 +2630,11 @@ export default function POSPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Vuelto total</span>
                     <div className="text-right">
-                      <span className="text-lg font-bold text-amber-400">${changeUsd.toFixed(2)}</span>
+                      <span className="text-lg font-bold text-amber-400">${fmtBs(changeUsd)}</span>
                       <span className="text-slate-400 mx-2">×</span>
                       <span className="text-sm text-slate-400">{exchangeRate.toFixed(4)} Bs/$</span>
                       <span className="text-slate-400 mx-2">=</span>
-                      <span className="text-lg font-bold text-amber-300">Bs {changeBsCalc.toFixed(2)}</span>
+                      <span className="text-lg font-bold text-amber-300">Bs {fmtBs(changeBsCalc)}</span>
                     </div>
                   </div>
 
@@ -2631,8 +2671,8 @@ export default function POSPage() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-400">A entregar en Bs</span>
                         <span className="font-bold text-amber-300">
-                          Bs {changeBsRemaining.toFixed(2)}
-                          <span className="text-slate-500 font-normal ml-1">(${(changeUsd - changeUsdCashApplied).toFixed(2)})</span>
+                          Bs {fmtBs(changeBsRemaining)}
+                          <span className="text-slate-500 font-normal ml-1">(${fmtBs(changeUsd - changeUsdCashApplied)})</span>
                         </span>
                       </div>
                       <div>
@@ -2656,7 +2696,7 @@ export default function POSPage() {
                   ) : (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-400">A entregar en Bs</span>
-                      <span className="font-medium text-green-400">Bs 0.00 — todo el vuelto en efectivo USD</span>
+                      <span className="font-medium text-green-400">Bs 0,00 — todo el vuelto en efectivo USD</span>
                     </div>
                   )}
                 </div>
@@ -2941,13 +2981,7 @@ export default function POSPage() {
                 {customerResults.map(c => (
                   <button
                     key={c.id}
-                    onClick={() => {
-                      setCustomerId(c.id);
-                      setCustomerName(c.name);
-                      setCustomerSearch('');
-                      setCustomerResults([]);
-                      setShowCustomerSearch(false);
-                    }}
+                    onClick={() => pickCustomer(c)}
                     className="w-full text-left px-4 py-3.5 rounded-xl hover:bg-slate-700/40 active:bg-slate-700/60 transition-colors"
                   >
                     <p className="text-sm font-medium text-white">{c.name}</p>
@@ -3004,6 +3038,40 @@ export default function POSPage() {
                 className="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-colors"
               >
                 Si, asignar cliente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: cliente sin telefono — invita a agregarlo abriendo el modal de edicion */}
+      {showPhoneReminder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl max-w-sm w-full p-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <User size={18} className="text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">Cliente sin telefono</h3>
+                <p className="text-sm text-slate-300 mt-1">
+                  <span className="font-semibold text-white">{customerName}</span> no tiene un numero de
+                  telefono registrado. ¿Deseas agregarlo ahora?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowPhoneReminder(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm font-medium hover:bg-slate-700/50 transition-colors"
+              >
+                Ahora no
+              </button>
+              <button
+                onClick={() => { setShowPhoneReminder(false); openEditClient(); }}
+                className="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-colors"
+              >
+                Agregar telefono
               </button>
             </div>
           </div>
