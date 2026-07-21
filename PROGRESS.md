@@ -23,6 +23,16 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (6) — Devolución de ventas (NCV): campo "Motivo" obligatorio
+
+> Cambios en `main` (**sin desplegar aún**). Probado en local. Incluye **migración aditiva** (enum + columna).
+
+Se agregó un select **"Motivo de la devolución"** obligatorio al crear una **Nota de Crédito de Venta (NCV = devolución de ventas)**, con 4 opciones: **Asesoría, Cliente, Faltante en almacén, Producto defectuoso**.
+- **Schema:** enum `SalesReturnReason` + `CreditDebitNote.motivo` (opcional en BD; obligatorio para NCV por lógica). Migración `20260721160000_note_sales_return_reason` (crea el TYPE con guard + `ADD COLUMN IF NOT EXISTS`) + red de seguridad en `fix-schema.sql`.
+- **API:** `CreateNoteDto.motivo?` con `@IsEnum(SalesReturnReason)`; el service valida `type === 'NCV' && !motivo` → error y solo persiste el motivo en NCV.
+- **Frontend** (`credit-debit-notes/new`): select visible solo para NCV, borde rojo si vacío, bloquea el guardado sin motivo; se envía en el body solo para NCV.
+- **Pendiente opcional:** mostrar el motivo en el detalle/listado de notas y un reporte de devoluciones por motivo (por ahora solo se guarda).
+
 ## 🗓️ Sesión 2026-07-21 (5) — Reportes de comisiones (PDF): vertical, sin listado de facturas, "Vendido al grupo" en rojo
 
 > Cambios en `main` (**sin desplegar aún**). Solo API (`reports-pdf.service.ts`, PDFKit). Probado en local.

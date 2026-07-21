@@ -133,6 +133,10 @@ export class CreditDebitNotesService {
     if (['NCC', 'NDC'].includes(dto.type) && !dto.purchaseOrderId) {
       throw new BadRequestException('purchaseOrderId es requerido para notas de compra');
     }
+    // Motivo obligatorio en la devolución de ventas (NCV)
+    if (dto.type === 'NCV' && !dto.motivo) {
+      throw new BadRequestException('Debe seleccionar el motivo de la devolución');
+    }
 
     // Validate invoice status for sales notes
     if (['NCV', 'NDV'].includes(dto.type) && dto.invoiceId) {
@@ -509,6 +513,7 @@ export class CreditDebitNotesService {
         manualPct: dto.manualPct || null,
         documentDate: docDate,
         supplierDocNumber: dto.supplierDocNumber || null,
+        motivo: dto.type === 'NCV' ? dto.motivo || null : null,
         notes: dto.notes || null,
         createdById: userId,
         items: noteItems.length > 0 ? { create: noteItems } : undefined,

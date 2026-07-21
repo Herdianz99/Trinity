@@ -4,11 +4,13 @@ import {
   IsNumber,
   IsArray,
   IsIn,
+  IsEnum,
   IsDateString,
   ValidateNested,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SalesReturnReason } from '@prisma/client';
 
 class NoteItemDto {
   @IsString()
@@ -51,6 +53,11 @@ export class CreateNoteDto {
   @IsOptional()
   @IsNumber()
   manualPct?: number;
+
+  // Motivo de la devolución de ventas — obligatorio para NCV (se valida en el servicio)
+  @IsOptional()
+  @IsEnum(SalesReturnReason)
+  motivo?: SalesReturnReason;
 
   @IsOptional()
   @IsString()

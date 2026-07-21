@@ -62,6 +62,14 @@ enum NoteStatus {
   CANCELLED
 }
 
+// Motivo de una devolución de ventas (NCV). Obligatorio al crear la NCV.
+enum SalesReturnReason {
+  ASESORIA
+  CLIENTE
+  FALTANTE_ALMACEN
+  PRODUCTO_DEFECTUOSO
+}
+
 enum TransferStatus {
   PENDING
   APPROVED
@@ -1606,6 +1614,7 @@ model CreditDebitNote {
   manualPct            Float?
   documentDate         DateTime?
   supplierDocNumber    String?   // N° de la nota que da el proveedor (NCC/NDC de compra, para el libro)
+  motivo               SalesReturnReason?   // motivo de la devolución de ventas (solo NCV)
   notes                String?
   paidAmountUsd        Float                 @default(0)
   appliedAt            DateTime?

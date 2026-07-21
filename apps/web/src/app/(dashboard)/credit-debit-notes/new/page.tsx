@@ -59,6 +59,14 @@ const TYPE_TITLES: Record<string, string> = {
   NDC: 'Nueva Nota de Débito de Compra',
 };
 
+// Motivos de la devolución de ventas (NCV) — obligatorio elegir uno
+const SALES_RETURN_REASONS: { value: string; label: string }[] = [
+  { value: 'ASESORIA', label: 'Asesoría' },
+  { value: 'CLIENTE', label: 'Cliente' },
+  { value: 'FALTANTE_ALMACEN', label: 'Faltante en almacén' },
+  { value: 'PRODUCTO_DEFECTUOSO', label: 'Producto defectuoso' },
+];
+
 export default function NewCreditDebitNotePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,6 +93,7 @@ export default function NewCreditDebitNotePage() {
   const [manualPct, setManualPct] = useState<number>(0);
 
   const [notes, setNotes] = useState('');
+  const [motivo, setMotivo] = useState('');
   const [exchangeRate, setExchangeRate] = useState(0);
   const [noteDate, setNoteDate] = useState(() => {
     const d = new Date();
@@ -93,6 +102,7 @@ export default function NewCreditDebitNotePage() {
   const [supplierDocNumber, setSupplierDocNumber] = useState('');
 
   const isSale = ['NCV', 'NDV'].includes(noteType);
+  const isSalesReturn = noteType === 'NCV'; // la devolución de ventas exige motivo
 
   const fetchParentDoc = useCallback(async () => {
     setLoading(true);
@@ -249,6 +259,11 @@ export default function NewCreditDebitNotePage() {
       );
       if (!ok) return;
     }
+    // Motivo obligatorio en la devolución de ventas (NCV)
+    if (isSalesReturn && !motivo) {
+      setError('Debe seleccionar el motivo de la devolución');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -267,6 +282,7 @@ export default function NewCreditDebitNotePage() {
         manualAmountUsd: origin === 'MANUAL' && manualMode === 'fixed' ? manualAmountUsd : undefined,
         manualPct: origin === 'MANUAL' && manualMode === 'pct' ? manualPct : undefined,
         notes: notes || undefined,
+        motivo: isSalesReturn ? motivo : undefined,
         date: noteDate || undefined,
         supplierDocNumber: !isSale && supplierDocNumber.trim() ? supplierDocNumber.trim() : undefined,
       };
@@ -584,6 +600,24 @@ export default function NewCreditDebitNotePage() {
               placeholder="N° de la NC/ND que entregó el proveedor"
             />
             <p className="text-[11px] text-slate-500 mt-1">Es el número que aparece en la nota del proveedor; va al libro de compras (columna Nota Déb./Créd.).</p>
+          </div>
+        )}
+        {isSalesReturn && (
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">
+              Motivo de la devolución <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className={`input-field w-full sm:w-72 ${!motivo ? '!border-red-500/60' : ''}`}
+            >
+              <option value="">Selecciona un motivo...</option>
+              {SALES_RETURN_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">Obligatorio: indica por qué se hace la devolución.</p>
           </div>
         )}
         <div>
