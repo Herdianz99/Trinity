@@ -1,5 +1,28 @@
 ﻿# Trinity ERP — Progreso
 
+## 🚀 PENDIENTE DE DESPLEGAR — sesión 2026-07-21 (`main` en HEAD `e669dbd`)
+
+Ocho commits sin desplegar, con **3 migraciones aditivas** (`20260721120000`, `20260721140000`, `20260721160000`). Todo probado en local (restore de la grande).
+
+Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` POS admin/supervisor sin caja · `42fa0d1` POS teléfono+separadores · `19528cd` PDFs comisiones · `e0545cf` motivo devolución · `e669dbd` Reporte Zelle.
+
+**Deploy (por empresa):**
+```
+ssh root@134.209.164.59 "cd /opt/Trinity && git pull origin main && bash deploy.sh"   # grande (inversiones)
+ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"  # chica (eltrebol)
+```
+El `deploy.sh` corre las 3 migraciones + `fix-schema.sql`. Verificar health 200 al final.
+
+**Backfill de retenciones de CxC** (después del deploy, en CADA servidor — crea los documentos `CustomerIvaRetention` faltantes de las CxC viejas):
+```
+cd /opt/Trinity/apps/api && npx tsx scripts/backfill-cxc-retentions.ts             # dry-run: revisa
+cd /opt/Trinity/apps/api && npx tsx scripts/backfill-cxc-retentions.ts --execute   # aplica
+```
+
+**OJO:** el "Reporte Zelle" tiene la cabecera de la grande **hardcodeada** → en la CHICA también saldrá con los datos de la grande (es el requerimiento del cliente).
+
+---
+
 ## 📌 Pendientes (actualizado 2026-07-19)
 
 **Nómina — deploy de prueba con RRHH:**
