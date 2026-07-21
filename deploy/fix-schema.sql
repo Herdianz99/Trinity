@@ -2066,7 +2066,8 @@ ALTER TYPE "ReceiptItemType" ADD VALUE IF NOT EXISTS 'SALES_IVA_RETENTION';
 CREATE TABLE IF NOT EXISTS "CustomerIvaRetention" (
     "id" TEXT NOT NULL,
     "number" TEXT NOT NULL,
-    "invoiceId" TEXT NOT NULL,
+    "invoiceId" TEXT,
+    "receivableId" TEXT,
     "customerId" TEXT NOT NULL,
     "taxableBaseUsd" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "taxableBaseBs" DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -2091,6 +2092,11 @@ CREATE TABLE IF NOT EXISTS "CustomerIvaRetention" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "CustomerIvaRetention_number_key" ON "CustomerIvaRetention"("number");
 CREATE UNIQUE INDEX IF NOT EXISTS "CustomerIvaRetention_salesBookEntryId_key" ON "CustomerIvaRetention"("salesBookEntryId");
+
+-- Origen desde una CxC (Receivable): invoiceId opcional + columna receivableId
+ALTER TABLE "CustomerIvaRetention" ALTER COLUMN "invoiceId" DROP NOT NULL;
+ALTER TABLE "CustomerIvaRetention" ADD COLUMN IF NOT EXISTS "receivableId" TEXT;
+DO $$ BEGIN ALTER TABLE "CustomerIvaRetention" ADD CONSTRAINT "CustomerIvaRetention_receivableId_fkey" FOREIGN KEY ("receivableId") REFERENCES "Receivable"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 ALTER TABLE "ReceiptItem" ADD COLUMN IF NOT EXISTS "customerIvaRetentionId" TEXT;
 

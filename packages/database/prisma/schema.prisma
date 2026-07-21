@@ -1271,6 +1271,7 @@ model Receivable {
   payments         ReceivablePayment[]
   receiptItems     ReceiptItem[]
   salesBookEntries SalesBookEntry[]
+  ivaRetentions    CustomerIvaRetention[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
@@ -1859,8 +1860,11 @@ model RetentionVoucherLine {
 model CustomerIvaRetention {
   id                String          @id @default(cuid())
   number            String          @unique
-  invoiceId         String
-  invoice           Invoice         @relation(fields: [invoiceId], references: [id])
+  // Origen: una factura fiscal (reintegro) O una cuenta por cobrar fiscal (CxC). Uno de los dos.
+  invoiceId         String?
+  invoice           Invoice?        @relation(fields: [invoiceId], references: [id])
+  receivableId      String?
+  receivable        Receivable?     @relation(fields: [receivableId], references: [id])
   customerId        String
   customer          Customer        @relation(fields: [customerId], references: [id])
   taxableBaseUsd    Float           @default(0)

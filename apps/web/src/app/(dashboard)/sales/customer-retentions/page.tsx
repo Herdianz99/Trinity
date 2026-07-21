@@ -21,11 +21,19 @@ interface CustomerRetention {
   appliedAt: string | null;
   cancelledAt: string | null;
   salesBookEntryId: string | null;
+  salesBookEntry: { entryDate: string } | null;
   notes: string | null;
-  invoice: { id: string; number: string | null; controlNumber: string | null; totalBs: number };
+  // Origen: una factura fiscal (reintegro) O una cuenta por cobrar fiscal (CxC)
+  invoice: { id: string; number: string | null; controlNumber: string | null; totalBs: number } | null;
+  receivable: { id: string; number: string | null; documentNumber: string | null; amountBs: number } | null;
   customer: { id: string; name: string; rif: string | null; documentType: string | null };
   createdBy: { id: string; name: string };
   createdAt: string;
+}
+
+// Numero del documento de origen (factura o CxC) para mostrar en la tabla y modales
+function sourceDoc(r: { invoice: { number: string | null } | null; receivable: { number: string | null; documentNumber: string | null } | null }): string {
+  return r.invoice?.number || r.receivable?.number || r.receivable?.documentNumber || '--';
 }
 
 interface InvoiceResult {
@@ -48,6 +56,20 @@ function fmtDate(iso: string | null): string {
   if (!iso) return '--';
   const d = new Date(iso);
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+// Fecha del asiento del libro: se guarda a medianoche UTC (fecha-documento elegida por el
+// usuario), asi que se muestra en UTC para que coincida exactamente con el Libro de Ventas.
+function fmtDateUtc(iso: string | null): string {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
+}
+
+// Fecha a mostrar para una retencion: la del asiento del libro si existe (coincide con el
+// Libro de Ventas), si no la de creacion.
+function displayDate(r: { salesBookEntry: { entryDate: string } | null; createdAt: string }): string {
+  return r.salesBookEntry?.entryDate ? fmtDateUtc(r.salesBookEntry.entryDate) : fmtDate(r.createdAt);
 }
 
 function daysSince(iso: string): number {
@@ -245,7 +267,7 @@ export default function CustomerRetentionsPage() {
       const ids = new Set<string>(
         (Array.isArray(data) ? data : [])
           .filter((r: CustomerRetention) => !r.cancelledAt && r.invoice?.id)
-          .map((r: CustomerRetention) => r.invoice.id),
+          .map((r: CustomerRetention) => r.invoice!.id),
       );
       setTakenInvoiceIds(ids);
     } catch { /* ignore */ }
@@ -391,7 +413,7 @@ export default function CustomerRetentionsPage() {
                   <th className="text-left px-3 py-2.5">Número</th>
                   <th className="text-left px-3 py-2.5">Fecha</th>
                   <th className="text-left px-3 py-2.5">Cliente</th>
-                  <th className="text-left px-3 py-2.5">Factura</th>
+                  <th className="text-left px-3 py-2.5">Factura / CxC</th>
                   <th className="text-right px-3 py-2.5">%</th>
                   <th className="text-right px-3 py-2.5">Retenido Bs</th>
                   <th className="text-left px-3 py-2.5">Comprobante</th>
@@ -410,7 +432,7 @@ export default function CustomerRetentionsPage() {
                       st === 'cancelled' ? 'opacity-50' : ''
                     }`}>
                       <td className="px-3 py-2.5 font-mono text-purple-300">{r.number}</td>
-                      <td className="px-3 py-2.5 text-slate-400">{fmtDate(r.createdAt)}</td>
+                      <td className="px-3 py-2.5 text-slate-400">{displayDate(r)}</td>
                       <td className="px-3 py-2.5">
                         <span className="text-white">{r.customer?.name}</span>
                         {r.customer?.rif && (
@@ -419,7 +441,12 @@ export default function CustomerRetentionsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-300">{r.invoice?.number || '--'}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">
+                        {sourceDoc(r)}
+                        {r.receivable && !r.invoice && (
+                          <span className="ml-1.5 px-1 py-0.5 bg-blue-500/15 text-blue-400 text-[9px] rounded font-sans font-semibold align-middle">CxC</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{r.retentionPct}%</td>
                       <td className="px-3 py-2.5 text-right font-mono text-white">{fmt(r.retentionBs)}</td>
                       <td className="px-3 py-2.5">
@@ -482,7 +509,7 @@ export default function CustomerRetentionsPage() {
             <div className="p-5 space-y-4">
               <div className="bg-slate-700/40 rounded-lg p-3 text-sm space-y-1">
                 <div className="flex justify-between"><span className="text-slate-400">Cliente:</span><span className="text-white">{voucherModal.customer?.name}</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Factura:</span><span className="text-white font-mono">{voucherModal.invoice?.number}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Factura/CxC:</span><span className="text-white font-mono">{sourceDoc(voucherModal)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-400">Cálculo teórico ({voucherModal.retentionPct}% IVA):</span><span className="text-white font-mono">{fmt(Math.round(voucherModal.ivaAmountBs * (voucherModal.retentionPct / 100) * 100) / 100)} Bs</span></div>
               </div>
               <div>
@@ -544,7 +571,7 @@ export default function CustomerRetentionsPage() {
             <div className="p-5 space-y-4">
               <h3 className="text-lg font-semibold text-white">¿Anular retención {cancelModal.number}?</h3>
               <p className="text-sm text-slate-400">
-                El monto retenido (Bs {fmt(cancelModal.retentionBs)}) dejará de descontarse del cobro de la factura {cancelModal.invoice?.number}.
+                El monto retenido (Bs {fmt(cancelModal.retentionBs)}) dejará de descontarse del cobro de {cancelModal.invoice ? 'la factura' : 'la CxC'} {sourceDoc(cancelModal)}.
                 {cancelModal.salesBookEntryId ? ' También se eliminará la línea del libro de ventas.' : ''}
               </p>
               <div className="flex gap-3">

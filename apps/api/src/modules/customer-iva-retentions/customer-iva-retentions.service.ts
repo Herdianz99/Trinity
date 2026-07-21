@@ -197,6 +197,90 @@ export class CustomerIvaRetentionsService {
     return this.prisma.$transaction(async (tx) => this.applyVoucherInTx(tx, id, dto, userId));
   }
 
+  // Crea una retencion de IVA de cliente a partir de una CxC (Receivable), dentro de una
+  // transaccion ya abierta. Simetrico al RetentionVoucher que genera la CxP: crea el documento
+  // RVC-XXXX (visible en /sales/customer-retentions) y escribe de inmediato su linea en el
+  // libro de ventas (periodo del documento de la CxC). El neto de la CxC NO se toca: se netea
+  // al cobrar.
+  async createFromReceivableInTx(
+    tx: any,
+    params: {
+      receivableId: string;
+      customerId: string;
+      customerName: string;
+      customerRif: string | null;
+      documentNumber: string;
+      taxableBaseUsd: number;
+      taxableBaseBs: number;
+      ivaAmountUsd: number;
+      ivaAmountBs: number;
+      retentionPct: number;
+      retentionUsd: number;
+      retentionBs: number;
+      exchangeRate: number;
+      entryDate: Date;
+      voucherNumber?: string | null;
+      voucherDate?: Date | null;
+    },
+    userId: string,
+  ) {
+    const number = await this.generateNumber(tx);
+
+    const retention = await tx.customerIvaRetention.create({
+      data: {
+        number,
+        invoiceId: null,
+        receivableId: params.receivableId,
+        customerId: params.customerId,
+        taxableBaseUsd: params.taxableBaseUsd,
+        taxableBaseBs: params.taxableBaseBs,
+        ivaAmountUsd: params.ivaAmountUsd,
+        ivaAmountBs: params.ivaAmountBs,
+        retentionPct: params.retentionPct,
+        retentionUsd: params.retentionUsd,
+        retentionBs: params.retentionBs,
+        exchangeRate: params.exchangeRate,
+        voucherNumber: params.voucherNumber || null,
+        voucherDate: params.voucherDate || null,
+        voucherReceivedAt: params.voucherNumber ? new Date() : null,
+        createdById: userId,
+      },
+    });
+
+    const entry = await tx.salesBookEntry.create({
+      data: {
+        receivableId: params.receivableId,
+        entryDate: params.entryDate,
+        invoiceNumber: params.documentNumber,
+        // El Nro. de documento de la CxC va en la columna "Fiscal" del libro (via controlNumber);
+        // "Numero de Factura Afectada" se deja vacio en las retenciones.
+        controlNumber: params.documentNumber,
+        customerName: params.customerName,
+        customerRif: params.customerRif,
+        exemptAmountBs: 0,
+        taxableBaseBs: 0,
+        ivaAmountBs: 0,
+        igtfAmountBs: 0,
+        totalBs: 0,
+        isManual: true,
+        isRetentionLine: true,
+        documentType: 'RETENCION',
+        affectedDocNumber: null,
+        retentionAmountBs: params.retentionBs,
+        retentionVoucherNumber: params.voucherNumber || null,
+        notes: params.voucherNumber || null,
+        createdById: userId,
+      },
+    });
+
+    await tx.customerIvaRetention.update({
+      where: { id: retention.id },
+      data: { salesBookEntryId: entry.id },
+    });
+
+    return retention;
+  }
+
   async findAll(filters: { status?: string; search?: string; from?: string; to?: string; invoiceId?: string }) {
     const where: any = {};
     if (filters.invoiceId) where.invoiceId = filters.invoiceId;
@@ -214,6 +298,7 @@ export class CustomerIvaRetentionsService {
         { number: { contains: filters.search, mode: 'insensitive' } },
         { voucherNumber: { contains: filters.search, mode: 'insensitive' } },
         { invoice: { number: { contains: filters.search, mode: 'insensitive' } } },
+        { receivable: { number: { contains: filters.search, mode: 'insensitive' } } },
         { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
       ];
     }
@@ -230,7 +315,9 @@ export class CustomerIvaRetentionsService {
       where,
       include: {
         invoice: { select: { id: true, number: true, controlNumber: true, totalBs: true } },
+        receivable: { select: { id: true, number: true, documentNumber: true, amountBs: true } },
         customer: { select: { id: true, name: true, rif: true, documentType: true } },
+        salesBookEntry: { select: { entryDate: true } },
         createdBy: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },

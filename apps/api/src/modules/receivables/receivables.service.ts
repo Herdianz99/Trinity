@@ -7,10 +7,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { QueryReceivablesDto } from './dto/query-receivables.dto';
 import { CreateReceivableDto } from './dto/create-receivable.dto';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { CustomerIvaRetentionsService } from '../customer-iva-retentions/customer-iva-retentions.service';
 
 @Injectable()
 export class ReceivablesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly customerRetentions: CustomerIvaRetentionsService,
+  ) {}
 
   // Eliminar una CxC manual (no proveniente de factura) si no fue cruzada/cobrada en un recibo.
   async remove(id: string) {
@@ -171,6 +175,10 @@ export class ReceivablesService {
         const igtfBs = toBs(igtf);
         // Nro. de factura para el libro: el que ingresa el usuario, o el correlativo de la CxC.
         const bookInvoiceNumber = dto.documentNumber?.trim() || number;
+        // RIF con prefijo (V-, J-, E-, G-...) para que el libro se vea formal.
+        const bookRif = customer.rif
+          ? (customer.documentType ? `${customer.documentType}-${customer.rif}` : customer.rif)
+          : null;
 
         await tx.salesBookEntry.create({
           data: {
@@ -179,7 +187,7 @@ export class ReceivablesService {
             invoiceNumber: bookInvoiceNumber,
             controlNumber: null,
             customerName: customer.name,
-            customerRif: customer.rif || null,
+            customerRif: bookRif,
             exemptAmountBs: exemptBs,
             taxableBaseBs: taxableBs,
             ivaAmountBs: ivaBs,
@@ -191,36 +199,41 @@ export class ReceivablesService {
           },
         });
 
-        // Retencion de IVA sufrida (cliente contribuyente especial): linea negativa en el
-        // libro de ventas con el numero del comprobante del cliente. Simetrico a la CxP.
-        // No resta el neto de la CxC (se netea al cobrar); solo declara la retencion.
+        // Retencion de IVA sufrida (cliente contribuyente especial): se crea un documento
+        // CustomerIvaRetention (RVC-XXXX, visible en /sales/customer-retentions) mas su linea
+        // en el libro de ventas. Simetrico al RetentionVoucher de la CxP. No resta el neto de
+        // la CxC (se netea al cobrar); solo declara la retencion.
         if (dto.createRetention && totalIva > 0) {
           const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
           const retPct = dto.retentionPct ?? (config as any)?.ivaRetentionPct ?? 75;
+          const totalIvaUsd = toUsd(totalIva);
           const retentionBs = Math.round(ivaBs * (retPct / 100) * 100) / 100;
-          await tx.salesBookEntry.create({
-            data: {
+          const retentionUsd = Math.round(totalIvaUsd * (retPct / 100) * 100) / 100;
+          const taxableTotalCurr = taxableBase8 + taxableBase16 + taxableBase31;
+          const voucherNumber = dto.retentionDocNumber?.trim() || null;
+
+          await this.customerRetentions.createFromReceivableInTx(
+            tx,
+            {
               receivableId: receivable.id,
-              entryDate: originalDate || new Date(),
-              invoiceNumber: bookInvoiceNumber,
-              controlNumber: null,
+              customerId: customer.id,
               customerName: customer.name,
-              customerRif: customer.rif || null,
-              exemptAmountBs: 0,
-              taxableBaseBs: 0,
-              ivaAmountBs: 0,
-              igtfAmountBs: 0,
-              totalBs: 0,
-              isManual: true,
-              isRetentionLine: true,
-              documentType: 'RETENCION',
-              affectedDocNumber: bookInvoiceNumber,
-              retentionAmountBs: retentionBs,
-              retentionVoucherNumber: dto.retentionDocNumber?.trim() || null,
-              notes: dto.retentionDocNumber?.trim() || null,
-              createdById: userId,
+              customerRif: bookRif,
+              documentNumber: bookInvoiceNumber,
+              taxableBaseUsd: toUsd(taxableTotalCurr),
+              taxableBaseBs: toBs(taxableTotalCurr),
+              ivaAmountUsd: totalIvaUsd,
+              ivaAmountBs: ivaBs,
+              retentionPct: retPct,
+              retentionUsd,
+              retentionBs,
+              exchangeRate: r,
+              entryDate: originalDate || new Date(),
+              voucherNumber,
+              voucherDate: voucherNumber ? (originalDate || new Date()) : null,
             },
-          });
+            userId,
+          );
         }
       }
 

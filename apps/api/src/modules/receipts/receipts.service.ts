@@ -274,7 +274,7 @@ export class ReceiptsService {
       } else if (item.customerIvaRetentionId) {
         const retention = await this.prisma.customerIvaRetention.findUnique({
           where: { id: item.customerIvaRetentionId },
-          include: { invoice: { select: { number: true } } },
+          include: { invoice: { select: { number: true } }, receivable: { select: { number: true } } },
         });
         if (!retention) throw new BadRequestException(`Retención ${item.customerIvaRetentionId} no encontrada`);
         if (retention.appliedAt) throw new BadRequestException(`Retención ${retention.number} ya fue aplicada`);
@@ -283,7 +283,7 @@ export class ReceiptsService {
         items.push({
           itemType: 'SALES_IVA_RETENTION',
           customerIvaRetentionId: item.customerIvaRetentionId,
-          description: `Ret. IVA ${retention.number} (${retention.invoice?.number || ''})`,
+          description: `Ret. IVA ${retention.number} (${retention.invoice?.number || retention.receivable?.number || ''})`,
           amountUsd: retention.retentionUsd,
           amountBsHistoric: retention.retentionBs,
           amountBsToday: this.bsToday(retention.retentionUsd, retention.retentionBs, retention.exchangeRate, effectiveRate),
@@ -1021,7 +1021,7 @@ export class ReceiptsService {
     if (customerId) {
       salesRetentions = await this.prisma.customerIvaRetention.findMany({
         where: { customerId, appliedAt: null, cancelledAt: null },
-        include: { invoice: { select: { number: true } } },
+        include: { invoice: { select: { number: true } }, receivable: { select: { number: true } } },
         orderBy: { createdAt: 'asc' },
       });
     }
@@ -1086,7 +1086,7 @@ export class ReceiptsService {
         id: r.id,
         documentType: 'SALES_IVA_RETENTION',
         customerIvaRetentionId: r.id,
-        description: `Ret. IVA ${r.number} (${r.invoice?.number || ''})${r.voucherNumber ? ` — Comp. ${r.voucherNumber}` : ''}`,
+        description: `Ret. IVA ${r.number} (${r.invoice?.number || r.receivable?.number || ''})${r.voucherNumber ? ` — Comp. ${r.voucherNumber}` : ''}`,
         date: r.createdAt,
         amountUsd: r.retentionUsd,
         amountBsHistoric: r.retentionBs,

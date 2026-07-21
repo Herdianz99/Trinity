@@ -560,7 +560,7 @@ export default function LibroVentasPage() {
         isFactura ? correlativo(e.invoiceNumber) : '',
         e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
         e.invoice?.fiscalMachineSerial || '',
-        correlativo(e.affectedDocNumber),
+        isRet ? '' : correlativo(e.affectedDocNumber),
         isNDV ? correlativo(e.invoiceNumber) : '',
         isNCV ? correlativo(e.invoiceNumber) : '',
         '01 - reg',
@@ -648,7 +648,7 @@ export default function LibroVentasPage() {
         factura: ['FACTURA', 'CXC'].includes(e.documentType) ? correlativo(e.invoiceNumber) : '',
         control: e.invoice?.fiscalNumber || e.affectedFiscalNumber || e.controlNumber || '',
         maquinaFiscal: e.invoice?.fiscalMachineSerial || '',
-        factAfectada: correlativo(e.affectedDocNumber),
+        factAfectada: isRet ? '' : correlativo(e.affectedDocNumber),
         notaDebito: isNDV ? correlativo(e.invoiceNumber) : '',
         notaCredito: isNCV ? correlativo(e.invoiceNumber) : '',
         tipoTran: '01 - reg',
@@ -898,8 +898,8 @@ export default function LibroVentasPage() {
       unified.push({
         date: e.entryDate, rif: e.customerRif || '', name: e.customerName || '',
         machineSerial: '', zNumber: '', compInicial: '', compFinal: '',
-        factura: '', serie: '', fiscal: e.affectedFiscalNumber || '',
-        numFactAfectada: correlativo(e.affectedDocNumber), numND: '', numNC: '',
+        factura: '', serie: '', fiscal: e.affectedFiscalNumber || e.controlNumber || '',
+        numFactAfectada: '', numND: '', numNC: '',
         tipoTransac: '01 - reg', totalVentas: 0, ventasNoGravadas: 0, baseImponible16: 0,
         alicuota: '16,00', impuestoIva16: 0, igtf: 0, ivaRetenido: e.retentionAmountBs || 0,
         compRetencion: e.retentionVoucherNumber || e.notes || '', ivaPercibido: 0, cont: 'NO',
@@ -1060,8 +1060,8 @@ export default function LibroVentasPage() {
         machineSerial: '', zNumber: '',
         compInicial: '', compFinal: '',
         factura: '',
-        serie: '', fiscal: e.affectedFiscalNumber || '',
-        numFactAfectada: correlativo(e.affectedDocNumber),
+        serie: '', fiscal: e.affectedFiscalNumber || e.controlNumber || '',
+        numFactAfectada: '',
         numND: '', numNC: '',
         tipoTransac: '01 - reg',
         totalVentas: 0,
@@ -1562,7 +1562,7 @@ export default function LibroVentasPage() {
                               {['FACTURA', 'CXC'].includes(entry.documentType) ? correlativo(entry.invoiceNumber) : ''}
                             </td>
                             <td className="px-2 py-2 text-slate-400 font-mono text-[11px]">
-                              {correlativo(entry.affectedDocNumber) || '-'}
+                              {entry.isRetentionLine ? '-' : (correlativo(entry.affectedDocNumber) || '-')}
                             </td>
                             <td className="px-2 py-2 text-slate-200">
                               <div className="flex items-center gap-1.5">

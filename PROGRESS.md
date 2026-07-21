@@ -23,6 +23,29 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 — Retención de cliente desde CxC crea documento (RVC) + ajustes del Libro de Ventas
+
+> Cambios en `main` (**sin desplegar aún**). Probado en local (restore de la grande). Incluye **migración de schema** aditiva y **backfill**.
+
+**Bug reportado:** al crear una CxC fiscal con "Crear retención IVA" en producción, la retención **no aparecía** en `/sales/customer-retentions`.
+**Causa raíz:** una sesión previa implementó la retención de CxC como un **camino aparte** que solo insertaba una línea suelta en el Libro de Ventas (`SalesBookEntry.isRetentionLine`), **sin crear el documento** `CustomerIvaRetention`. El módulo `/sales/customer-retentions` nunca se tocaba. La retención sí quedaba en el libro, pero no como documento.
+
+**Arreglo — ahora es simétrico a la CxP (que crea su `RetentionVoucher`):**
+- **Schema** (`CustomerIvaRetention`): `invoiceId` pasa a **opcional** + nuevo `receivableId` (origen: factura **o** CxC). Migración `20260721120000_customer_iva_retention_from_receivable` (aditiva, `IF NOT EXISTS`, validada en local) + red de seguridad en `deploy/fix-schema.sql`.
+- **API**: nuevo `CustomerIvaRetentionsService.createFromReceivableInTx()` (crea el documento **RVC-XXXX** + su línea de libro en una sola transacción). `receivables.service.ts` reemplaza el bloque ad-hoc por esa llamada. `receivables.module.ts` importa el módulo de retenciones. `findAll` incluye `receivable` + `salesBookEntry.entryDate`.
+- **Recibos** (`receipts.service.ts`): la retención de CxC ahora es **documento cruzable en el recibo de cobro** (netear al cobrar), mostrando el N° de la CxC. Los `retention.invoice?.number` ya usaban optional-chaining → no rompe con `invoice` null.
+- **Frontend `/sales/customer-retentions`**: muestra retenciones de CxC (badge "CxC" cuando no hay factura).
+
+**3 ajustes de detalle pedidos tras probar:**
+1. **Fecha** en `/sales/customer-retentions` ahora = fecha del asiento del libro (`salesBookEntry.entryDate`), formateada en **UTC** para coincidir exacto con el Libro de Ventas (antes mostraba `createdAt`).
+2. **Libro de Ventas** (`fiscal/libro-ventas`): en las retenciones la columna **"Número de Factura Afectada"** queda vacía (Detallado + Reporte Z, pantalla/Excel/PDF); el **Nro. Documento** de la CxC va a la columna **"Fiscal"** (vía `controlNumber`; la columna Fiscal cae a `affectedFiscalNumber || controlNumber`).
+3. **N° RIF** en las líneas de libro creadas desde la CxC (línea CXC + retención) se guarda con **letra y guion** (`V-`, `J-`…).
+
+**Backfill:** `apps/api/scripts/backfill-cxc-retentions.ts` (idempotente, dry-run por defecto; `--execute` aplica) — crea los documentos `CustomerIvaRetention` faltantes para las CxC que ya generaron retención con el camino viejo. Ojo: solo crea el documento; NO normaliza `controlNumber`/RIF de las líneas viejas del libro (esos ajustes 2/3 aplican a registros nuevos).
+
+**Pendiente:** desplegar en las 2 empresas (el deploy corre la migración solo) y correr el backfill en cada servidor:
+`cd /opt/Trinity/apps/api && npx tsx scripts/backfill-cxc-retentions.ts` (dry-run) → `--execute`.
+
 ## 🗓️ Sesión 2026-07-20 — Nómina (maestros + reportes), rol RRHH, CxP, Análisis de compra
 
 > Todo **mergeado a `main` y pusheado** (varios merges no-ff). **✅ DESPLEGADO EN LAS 2 EMPRESAS el 2026-07-20** (grande `inversiones` 134.209.164.59 + chica `eltrebol` 134.209.220.233), ambas en HEAD `4b289d1`, PM2 API+Web online, health 200. Migraciones aplicadas y verificadas: en la grande `payroll_masters` + `role_rrhh` (backfill OK: 3 deptos/3 cargos, empleados enlazados, columnas viejas dropeadas, enum RRHH); en la chica **nómina por primera vez** (`payroll_module` + `payroll_masters` + `role_rrhh`; tablas creadas, 0 empleados, enum RRHH). **Continuamos mañana.**

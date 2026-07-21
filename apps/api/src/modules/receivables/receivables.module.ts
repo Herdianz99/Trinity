@@ -3,8 +3,10 @@ import { ReceivablesController } from './receivables.controller';
 import { ReceivablesService } from './receivables.service';
 import { ReceivablesCronService } from './receivables-cron.service';
 import { ReceivablesPdfService } from './receivables-pdf.service';
+import { CustomerIvaRetentionsModule } from '../customer-iva-retentions/customer-iva-retentions.module';
 
 @Module({
+  imports: [CustomerIvaRetentionsModule],
   controllers: [ReceivablesController],
   providers: [ReceivablesService, ReceivablesCronService, ReceivablesPdfService],
   exports: [ReceivablesService],
