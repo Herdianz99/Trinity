@@ -199,7 +199,9 @@ function buildReceiptHTML(invoice: any, company: CompanyInfo): string {
   // Header
   html += `<div class="center bold" style="font-size:14px;">${company.companyName || 'EMPRESA'}</div>`;
   if (company.rif) html += `<div class="center">RIF: ${company.rif}</div>`;
-  if (company.address) html += `<div class="center" style="font-size:11px;">${company.address}</div>`;
+  // nowrap + fuente ajustada: la dirección larga (ej. la grande) cabe en 1 línea como en la
+  // térmica; en direcciones cortas no se nota. Evita que el visor de print() la parta en 2.
+  if (company.address) html += `<div class="center" style="font-size:9px;white-space:nowrap;">${company.address}</div>`;
   if (company.phone) html += `<div class="center" style="font-size:11px;">Telf: ${company.phone}</div>`;
 
   html += `<div class="separator"></div>`;

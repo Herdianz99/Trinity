@@ -23,6 +23,13 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (7) — Detalle de factura: botón "Reporte Zelle" (ticket 80mm con cabecera grande hardcodeada)
+
+> Cambios en `main` (**sin desplegar aún**). Solo frontend. Probado en local (idéntico al ticket normal).
+
+- Nuevo ítem **"Reporte Zelle"** en el menú (⋯) de `/sales/invoices/[id]`: genera el **mismo ticket 80mm** que el de notas, pero **siempre disponible** (fiscal o nota, no ramifica a PDF) y con la **cabecera de la empresa grande HARDCODEADA**: `INVERSIONES EL TREBOL 2017, C.A` · RIF `J-40990760-0` · dirección `  Calle 31 con avenida 35, y 36, Acarigua 3303` (con espacios iniciales) · Telf `+58 424-5731353`. Reutiliza `printReceipt(invoice, empresaHardcodeada)` (agente térmico primero, HTML fallback).
+- **Fix HTML del ticket** (`print-receipt.ts`): la dirección larga se partía en 2 líneas en el visor de print() (el HTML a 11px cabe ~40 car vs ~48 de la térmica). Ahora la línea de dirección va `white-space:nowrap` + fuente ajustada → 1 línea, idéntica a la térmica. Los 2 espacios iniciales los honra el agente (offset del centrado); en HTML centrado no afectan.
+
 ## 🗓️ Sesión 2026-07-21 (6) — Devolución de ventas (NCV): campo "Motivo" obligatorio
 
 > Cambios en `main` (**sin desplegar aún**). Probado en local. Incluye **migración aditiva** (enum + columna).

@@ -397,6 +397,29 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  // "Reporte Zelle": mismo ticket 80mm pero con la cabecera de la empresa grande HARDCODEADA
+  // (el comprobante Zelle usa los datos de la cuenta que recibe el pago). Siempre disponible,
+  // sin importar si la factura es fiscal o nota.
+  const handlePrintZelle = async () => {
+    if (!invoice) return;
+    setTicketLoading(true);
+    setMessage(null);
+    try {
+      const { printReceipt } = await import('@/lib/print-receipt');
+      const zelleCompany = {
+        companyName: 'INVERSIONES EL TREBOL 2017, C.A',
+        rif: 'J-40990760-0',
+        address: '  Calle 31 con avenida 35, y 36, Acarigua 3303',
+        phone: '+58 424-5731353',
+      };
+      await printReceipt(invoice, zelleCompany);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `No se pudo generar el reporte Zelle: ${err.message}` });
+    } finally {
+      setTicketLoading(false);
+    }
+  };
+
   // Admin: manually update fiscal status
   const handleSaveFiscalStatus = async (markPrinted: boolean) => {
     setMessage(null);
@@ -565,6 +588,15 @@ export default function InvoiceDetailPage() {
                     className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
                   >
                     {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} {invoice.serie?.isFiscal ? 'Imprimir PDF (carta)' : 'Imprimir ticket'}
+                  </DropdownMenuItem>
+                )}
+                {canPrintPdf && (
+                  <DropdownMenuItem
+                    onClick={() => handlePrintZelle()}
+                    disabled={ticketLoading}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Reporte Zelle
                   </DropdownMenuItem>
                 )}
                 {canReturnInvoice && (
