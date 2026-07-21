@@ -260,17 +260,20 @@ export class ReportsPdfService {
   // ── Comisiones por Vendedor PDF ───────────────────────
   async generateCommissionPdf(data: any, sellerName: string, from: string, to: string): Promise<Buffer> {
     const company = await this.getCompanyName();
-    const doc = this.createDoc();
+    const doc = this.createDoc(false); // vertical
     let y = this.drawHeader(doc, `Reporte de Comisiones — ${sellerName}`, company, `${from} al ${to}`);
 
-    // KPIs
+    // KPIs (2 columnas para caber en vertical)
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text(`Total vendido: $${this.fmt(data.totalSoldUsd)}`, 40, y);
-    doc.text(`Total comision: $${this.fmt(data.totalCommissionUsd)}`, 220, y);
-    doc.text(`Total IVA Notas: $${this.fmt(data.totalIvaNotasUsd)}`, 400, y);
-    doc.text(`Facturas: ${data.invoiceCount}`, 580, y);
+    doc.text(`Total comision: $${this.fmt(data.totalCommissionUsd)}`, 300, y);
     y += 14;
-    doc.text(`Vendido al grupo (no comisiona): $${this.fmt(data.totalGroupSoldUsd)} (${data.groupInvoiceCount} fact.)`, 40, y);
+    doc.text(`Total IVA Notas: $${this.fmt(data.totalIvaNotasUsd)}`, 40, y);
+    doc.text(`Facturas: ${data.invoiceCount}`, 300, y);
+    y += 14;
+    // Resaltado en rojo para que llame la atencion (mismo tamaño que el resto)
+    doc.fillColor('#dc2626').text(`Vendido al grupo (no comisiona): $${this.fmt(data.totalGroupSoldUsd)} (${data.groupInvoiceCount} fact.)`, 40, y);
+    doc.fillColor('#000');
     y += 20;
 
     // Category breakdown
@@ -278,12 +281,12 @@ export class ReportsPdfService {
     y += 16;
 
     const cols = [
-      { label: 'Categoria', x: 40, width: 180 },
-      { label: 'Unidades', x: 220, width: 70, align: 'right' },
-      { label: 'Base USD', x: 300, width: 90, align: 'right' },
-      { label: 'Comision %', x: 400, width: 70, align: 'right' },
-      { label: 'IVA Notas', x: 480, width: 90, align: 'right' },
-      { label: 'Comision USD', x: 580, width: 100, align: 'right' },
+      { label: 'Categoria', x: 40, width: 150 },
+      { label: 'Unidades', x: 190, width: 45, align: 'right' },
+      { label: 'Base USD', x: 240, width: 75, align: 'right' },
+      { label: 'Comision %', x: 320, width: 55, align: 'right' },
+      { label: 'IVA Notas', x: 380, width: 75, align: 'right' },
+      { label: 'Comision USD', x: 460, width: 95, align: 'right' },
     ];
 
     y = this.drawTableHeader(doc, y, cols);
@@ -308,31 +311,7 @@ export class ReportsPdfService {
       `$${this.fmt(tIva)}`, `$${this.fmt(tComm)}`,
     ], true);
 
-    // Invoice list
-    const invoices = data.invoices || [];
-    if (invoices.length > 0) {
-      y += 18;
-      y = this.checkPage(doc, y, 60);
-      doc.fontSize(10).font('Helvetica-Bold').text('Facturas cobradas', 40, y);
-      y += 16;
-
-      const invCols = [
-        { label: '# Factura', x: 40, width: 100 },
-        { label: 'Cliente', x: 140, width: 320 },
-        { label: 'Total USD', x: 470, width: 110, align: 'right' },
-        { label: 'Fecha cobro', x: 590, width: 110 },
-      ];
-      y = this.drawTableHeader(doc, y, invCols);
-
-      for (const inv of invoices) {
-        y = this.checkPage(doc, y);
-        const cliente = (inv.customer?.name || 'Sin cliente') + (inv.isGroup ? ' (Grupo)' : '');
-        const fecha = inv.paidAt ? new Date(inv.paidAt).toLocaleDateString('es-VE') : '';
-        y = this.drawTableRow(doc, y, invCols, [
-          inv.number || 'Sin numero', cliente, `$${this.fmt(inv.totalUsd)}`, fecha,
-        ]);
-      }
-    }
+    // Nota: se omite el listado de "Facturas cobradas" (gastaba muchas paginas y no es necesario).
 
     return this.toBuffer(doc);
   }
@@ -340,15 +319,15 @@ export class ReportsPdfService {
   // ── Comisiones — TODOS los vendedores PDF ─────────────
   async generateCommissionAllPdf(data: any, from: string, to: string): Promise<Buffer> {
     const company = await this.getCompanyName();
-    const doc = this.createDoc();
+    const doc = this.createDoc(false); // vertical
     let y = this.drawHeader(doc, 'Comisiones por Vendedor (todos)', company, `${from} al ${to}`);
 
     const cols = [
-      { label: 'Categoria', x: 40, width: 200 },
-      { label: 'Base USD', x: 240, width: 100, align: 'right' },
-      { label: 'IVA Notas', x: 350, width: 100, align: 'right' },
-      { label: 'Comision %', x: 460, width: 70, align: 'right' },
-      { label: 'Comision USD', x: 540, width: 120, align: 'right' },
+      { label: 'Categoria', x: 40, width: 170 },
+      { label: 'Base USD', x: 215, width: 95, align: 'right' },
+      { label: 'IVA Notas', x: 315, width: 90, align: 'right' },
+      { label: 'Comision %', x: 410, width: 55, align: 'right' },
+      { label: 'Comision USD', x: 470, width: 85, align: 'right' },
     ];
 
     for (const seller of data.sellers || []) {
@@ -379,10 +358,11 @@ export class ReportsPdfService {
       ], true);
 
       if (seller.groupInvoiceCount > 0) {
-        doc.fontSize(7).font('Helvetica-Oblique').fillColor('#b45309')
+        // Resaltado en rojo, mismo tamaño que el resto, para que llame la atencion
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#dc2626')
           .text(`Vendido al grupo (no comisiona): $${this.fmt(seller.totalGroupSoldUsd)} (${seller.groupInvoiceCount} fact.)`, 40, y);
         doc.fillColor('#000');
-        y += 12;
+        y += 14;
       }
       y += 10;
     }

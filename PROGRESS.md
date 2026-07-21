@@ -23,6 +23,15 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (5) — Reportes de comisiones (PDF): vertical, sin listado de facturas, "Vendido al grupo" en rojo
+
+> Cambios en `main` (**sin desplegar aún**). Solo API (`reports-pdf.service.ts`, PDFKit). Probado en local.
+
+- **PDF individual** (`/sellers/:id/commission-report/pdf`): se **quitó el listado "Facturas cobradas"** (gastaba muchas páginas, innecesario) y se pasó a **vertical** (KPIs en 2 columnas + tabla de categorías recomprimida al ancho A4 vertical).
+- **PDF de todos** (`/sellers/commission-report-all/pdf`): también a **vertical**, columnas recomprimidas.
+- En **ambos**, la línea **"Vendido al grupo (no comisiona)"** ahora en **rojo** (`#dc2626`) y al mismo tamaño que el resto (en el de todos subió de 7 oblicua marrón → 9 negrita roja).
+- Verificado con render de prueba: orientación `MediaBox 595×842` (vertical); el individual con 12 categorías cabe en 1 página.
+
 ## 🗓️ Sesión 2026-07-21 (4) — POS: recordatorio de teléfono + separadores de miles en montos
 
 > Cambios en `main` (**sin desplegar aún**). Solo frontend (`sales/pos/page.tsx`). Probado en local (PC y móvil).
