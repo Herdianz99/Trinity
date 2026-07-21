@@ -550,18 +550,20 @@ export class InvoicesService {
 
     // The register where we cobramos must have an OPEN session, otherwise the sale
     // would not land in any cash count (arqueo). Shared registers may be opened by
-    // another user; non-shared registers must be opened by this cashier.
+    // another user; non-shared registers must be opened by this cashier. ADMIN/SUPERVISOR
+    // pueden cobrar en la caja abierta de un cajero (no tienen caja propia; ver el POS).
     const register = await this.prisma.cashRegister.findUnique({
       where: { id: serieCashRegisterId },
     });
     if (!register) {
       throw new BadRequestException('La caja indicada no existe');
     }
+    const privileged = user.role === 'ADMIN' || user.role === 'SUPERVISOR';
     const openSession = await this.prisma.cashSession.findFirst({
       where: {
         cashRegisterId: serieCashRegisterId,
         status: 'OPEN',
-        ...(register.isShared ? {} : { openedById: user.id }),
+        ...(register.isShared || privileged ? {} : { openedById: user.id }),
       },
     });
     if (!openSession) {

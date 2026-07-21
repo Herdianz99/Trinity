@@ -38,8 +38,8 @@ export class CashRegistersController {
   }
 
   @Get('cash-registers/available')
-  findAvailable(@CurrentUser() user: { id: string }) {
-    return this.service.findAvailable(user.id);
+  findAvailable(@CurrentUser() user: { id: string; role: UserRole }) {
+    return this.service.findAvailable(user);
   }
 
   @Get('cash-registers/:id')

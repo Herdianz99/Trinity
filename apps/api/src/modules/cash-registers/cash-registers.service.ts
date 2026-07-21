@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto } from './dto/open-session.dto';
@@ -27,16 +28,23 @@ export class CashRegistersService {
   /** GET /cash-registers/available — registers available for a given user:
    *  - Registers with an OPEN session opened by this user
    *  - Registers with an OPEN session that are isShared = true
+   *  - ADMIN/SUPERVISOR: cualquier caja con sesión abierta (no cobran normalmente, pero si
+   *    necesitan cobrar pueden elegir la caja abierta de un cajero — ver invoices.service).
    */
-  async findAvailable(userId: string) {
+  async findAvailable(user: { id: string; role: UserRole }) {
+    const privileged = user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR;
     return this.prisma.cashRegister.findMany({
       where: {
         isActive: true,
         showInPos: true, // las cajas de administración no aparecen en el POS
-        OR: [
-          { sessions: { some: { status: 'OPEN', openedById: userId } } },
-          { isShared: true, sessions: { some: { status: 'OPEN' } } },
-        ],
+        ...(privileged
+          ? { sessions: { some: { status: 'OPEN' } } }
+          : {
+              OR: [
+                { sessions: { some: { status: 'OPEN', openedById: user.id } } },
+                { isShared: true, sessions: { some: { status: 'OPEN' } } },
+              ],
+            }),
       },
       include: {
         serie: { select: { id: true, name: true, prefix: true, isFiscal: true, isVatExempt: true, comPort: true, fiscalMachineSerial: true } },

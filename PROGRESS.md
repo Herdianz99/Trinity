@@ -23,6 +23,21 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (3) — POS: ADMIN/SUPERVISOR entran sin caja (solo ver / cambiar precios)
+
+> Cambios en `main` (**sin desplegar aún**). Probado en local. Sin migración (solo lógica).
+
+**Problema:** al separar las cajas en producción (cada cajero su caja, no ve las de otros), los **ADMIN/SUPERVISOR** —que no tienen caja asignada y normalmente no cobran— quedaban **bloqueados al entrar al POS** (el modal exige caja abierta). Solo entran a ver facturas o cambiar un precio manual; no querían abrir una caja de mentira.
+
+**Solución (opción elegida: entrar sin caja; al cobrar, elegir una caja abierta disponible):**
+- **API `cash-registers` (`/available`)**: para ADMIN/SUPERVISOR devuelve **todas las cajas con sesión abierta** (no solo propias/compartidas) → pueden elegir la caja de un cajero para cobrar. El controller pasa `{id, role}`.
+- **API `invoices.service` (cobro)**: ADMIN/SUPERVISOR pueden cobrar en **cualquier caja abierta** (antes exigía `openedById === user.id` en cajas no compartidas).
+- **Frontend POS**: ADMIN/SUPERVISOR ya **no se les fuerza el modal** (entran como los vendedores, en modo ver/editar); `canOverridePrice` ahora incluye SUPERVISOR; al pulsar **Cobrar** sin caja se abre el **selector de cajas abiertas** (guard en `openPayModal`, cubre botón + F9); el modal de caja es **descartable** para ellos ("✕" + "Entrar sin caja").
+
+**Sin tocar** el flujo de cajeros (siguen forzados a su caja). Backend ya protege el cobro, así que no se abre ningún hueco.
+
+**Nota / posible fast-follow:** el botón "Facturar a crédito" sin caja aún cae al error del backend; se puede ponerle el mismo guard que a Cobrar (abrir el selector) si se pide. Y "cambiar precio directamente en la factura" se cubre en el **carrito del POS**; editar una factura ya emitida sería otro flujo.
+
 ## 🗓️ Sesión 2026-07-21 (2) — Nómina: editar fecha de la tasa + tasa en el detalle de la corrida
 
 > Cambios en `main` (**sin desplegar aún**). Probado en local. Incluye **migración aditiva**.

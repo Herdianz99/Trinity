@@ -309,7 +309,7 @@ export default function POSPage() {
   const [advanceNotes, setAdvanceNotes] = useState('');
   const [savingAdvance, setSavingAdvance] = useState(false);
 
-  const canOverridePrice = userRole === 'ADMIN' || userPermissions.includes('OVERRIDE_PRICE');
+  const canOverridePrice = userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userPermissions.includes('OVERRIDE_PRICE');
   const canSelectSeller = (userRole === 'ADMIN' || userRole === 'SUPERVISOR') && !userSellerName;
 
   // Guard de "salir sin guardar": hay venta cargada si el carrito tiene articulos.
@@ -498,14 +498,23 @@ export default function POSPage() {
   // Cash register selection — check localStorage on mount
   // SELLER role: no cash modal needed, they can't charge
   const isSeller = userRole === 'SELLER';
+  // ADMIN/SUPERVISOR entran al POS sin caja (por lo general no cobran; solo ven o cambian
+  // precios). Al cobrar eligen una caja abierta disponible. Como el vendedor, no se les
+  // fuerza el modal de caja al entrar.
+  const canEnterWithoutCash = isSeller || userRole === 'ADMIN' || userRole === 'SUPERVISOR';
 
   // Abre el modal de cobro reseteando pagos/vuelto (misma accion que el boton "Cobrar").
   const openPayModal = useCallback(() => {
+    // Admin/Supervisor pueden estar sin caja: para cobrar primero deben elegir una caja abierta.
+    if (!isSeller && !selectedCashRegister) {
+      setShowCashModal(true);
+      return;
+    }
     setPayments([]);
     setChangeMethodId(null);
     setChangeUsdCash(0);
     setPayModalOpen(true);
-  }, []);
+  }, [isSeller, selectedCashRegister]);
 
   // Atajo de teclado: F9 abre el cobro (los cajeros ya estan acostumbrados a esa tecla).
   // No aplica a vendedores (no cobran) ni con modales/otros procesos abiertos o carrito vacio.
@@ -544,17 +553,21 @@ export default function POSPage() {
             setSelectedCashRegister(data);
           } else {
             localStorage.removeItem('selectedCashRegisterId');
-            setShowCashModal(true);
+            if (!canEnterWithoutCash) setShowCashModal(true);
             fetchCashRegisters();
           }
           setLoadingCash(false);
         })
-        .catch(() => { localStorage.removeItem('selectedCashRegisterId'); setShowCashModal(true); fetchCashRegisters(); });
+        .catch(() => { localStorage.removeItem('selectedCashRegisterId'); if (!canEnterWithoutCash) setShowCashModal(true); fetchCashRegisters(); });
+    } else if (canEnterWithoutCash) {
+      // Admin/Supervisor: entran sin caja; se cargan las cajas abiertas por si van a cobrar.
+      fetchCashRegisters();
+      setLoadingCash(false);
     } else {
       setShowCashModal(true);
       fetchCashRegisters();
     }
-  }, [fetchCashRegisters, isSeller]);
+  }, [fetchCashRegisters, isSeller, canEnterWithoutCash]);
 
   function selectCashRegister(cr: any) {
     setSelectedCashRegister(cr);
@@ -1851,12 +1864,26 @@ export default function POSPage() {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900/98 flex items-center justify-center p-6">
         <div className="w-full max-w-2xl">
+          {/* Admin/Supervisor no están obligados a elegir caja: pueden cerrar y entrar sin caja */}
+          {canEnterWithoutCash && (
+            <button
+              onClick={() => setShowCashModal(false)}
+              className="absolute top-5 right-5 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors"
+              title="Entrar sin caja"
+            >
+              <X size={22} />
+            </button>
+          )}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 mb-4">
               <Monitor className="text-green-400" size={32} />
             </div>
-            <h2 className="text-2xl font-bold text-white">Selecciona una caja para comenzar</h2>
-            <p className="text-slate-400 mt-2">Elige la caja donde vas a operar</p>
+            <h2 className="text-2xl font-bold text-white">
+              {canEnterWithoutCash ? 'Elige una caja para cobrar' : 'Selecciona una caja para comenzar'}
+            </h2>
+            <p className="text-slate-400 mt-2">
+              {canEnterWithoutCash ? 'Elige la caja abierta donde entrará el cobro' : 'Elige la caja donde vas a operar'}
+            </p>
           </div>
 
           {/* Available registers (from /available endpoint — user's own + shared) */}
@@ -1886,8 +1913,24 @@ export default function POSPage() {
 
           {cashRegisters.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-slate-400 mb-4">No hay cajas abiertas disponibles. Abre una caja primero.</p>
+              <p className="text-slate-400 mb-4">
+                {canEnterWithoutCash
+                  ? 'No hay cajas abiertas. Puedes entrar sin caja solo para ver o cambiar precios.'
+                  : 'No hay cajas abiertas disponibles. Abre una caja primero.'}
+              </p>
               <button onClick={() => window.location.href = '/cash'} className="btn-primary px-6 py-2">Ir a cajas</button>
+            </div>
+          )}
+
+          {/* Admin/Supervisor: opción de entrar sin caja (solo ver / cambiar precios) */}
+          {canEnterWithoutCash && (
+            <div className="text-center mt-6 pt-6 border-t border-slate-700/60">
+              <button
+                onClick={() => setShowCashModal(false)}
+                className="text-sm text-slate-300 hover:text-white underline underline-offset-4"
+              >
+                Entrar sin caja (solo ver / cambiar precios)
+              </button>
             </div>
           )}
         </div>
