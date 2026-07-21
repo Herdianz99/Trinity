@@ -31,6 +31,7 @@ interface Run {
   periodFrom: string;
   periodTo: string;
   exchangeRate: number;
+  rateDate: string | null;
   status: string;
   totalGrossBs: number;
   totalDeductionsBs: number;
@@ -60,6 +61,12 @@ export default function PayrollRunDetailPage() {
   const [pctVal, setPctVal] = useState('30');
   // Modal: preguntar si el recibo se genera con o sin horas extra. Guarda la URL base del PDF.
   const [otAsk, setOtAsk] = useState<string | null>(null);
+  // Edición de la tasa: fecha de la tasa (editable) + tasa (editable). A veces la tasa se
+  // registra al día siguiente, por eso la fecha es aparte del período.
+  const [rateDateInput, setRateDateInput] = useState('');
+  const [rateInput, setRateInput] = useState('');
+  const [savingRate, setSavingRate] = useState(false);
+  const [rateHint, setRateHint] = useState<string | null>(null);
 
   function openReceipt(includeOvertime: boolean) {
     if (!otAsk) return;
@@ -78,8 +85,53 @@ export default function PayrollRunDetailPage() {
 
   useEffect(() => { fetchRun(); }, [fetchRun]);
   useEffect(() => { if (run) document.title = `${run.number || 'Corrida'} | Trinity ERP`; }, [run]);
+  // Sincroniza los campos editables de tasa con lo persistido cada vez que llega la corrida.
+  useEffect(() => {
+    if (run) {
+      setRateDateInput(run.rateDate ? run.rateDate.slice(0, 10) : '');
+      setRateInput(String(run.exchangeRate ?? ''));
+      setRateHint(null);
+    }
+  }, [run]);
 
   const isDraft = run?.status === 'DRAFT';
+
+  // Al cambiar la fecha de la tasa, trae la tasa registrada de ese día (editable después).
+  async function onRateDateChange(date: string) {
+    setRateDateInput(date);
+    setRateHint(null);
+    if (!date) return;
+    try {
+      const res = await fetch(`/api/proxy/exchange-rate/by-date?date=${date}`);
+      const data = await res.json().catch(() => null);
+      if (data && data.rate) {
+        setRateInput(String(data.rate));
+        setRateHint(`Tasa del ${fmtDate(date)}: ${fmt(data.rate)} Bs/$`);
+      } else {
+        setRateHint('No hay tasa registrada para ese día — ingrésala manualmente.');
+      }
+    } catch { /* empty */ }
+  }
+
+  async function handleSaveRate() {
+    if (!run) return;
+    const rateNum = Number(rateInput);
+    if (!rateNum || rateNum <= 0) { setMessage({ type: 'error', text: 'La tasa debe ser mayor a 0' }); return; }
+    setSavingRate(true); setMessage(null);
+    try {
+      const body: { exchangeRate: number; rateDate?: string } = { exchangeRate: rateNum };
+      if (rateDateInput) body.rateDate = rateDateInput;
+      const res = await fetch(`/api/proxy/payroll-runs/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setRun(data);
+      setMessage({ type: 'success', text: 'Tasa actualizada y montos recalculados' });
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+    setSavingRate(false);
+  }
 
   function setLineInput(lineId: string, field: InputField, value: number) {
     setRun((r) => r ? { ...r, lines: r.lines.map((l) => l.id === lineId ? { ...l, [field]: value } : l) } : r);
@@ -185,6 +237,39 @@ export default function PayrollRunDetailPage() {
       {message && (
         <div className={`p-3 rounded-lg border text-sm ${message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>{message.text}</div>
       )}
+
+      {/* Tasa de cambio (editable) — la fecha es aparte del período porque a veces la tasa se registra al día siguiente */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-[11px] font-medium text-slate-400 mb-1">Fecha de la tasa</label>
+          <input
+            type="date" value={rateDateInput} disabled={!isDraft}
+            onChange={(e) => onRateDateChange(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-green-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-400 mb-1">Tasa (Bs/$)</label>
+          <input
+            type="number" min={0} step="any" value={rateInput} disabled={!isDraft}
+            onChange={(e) => setRateInput(e.target.value)}
+            className="w-32 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-right font-mono text-slate-100 focus:outline-none focus:border-green-500 disabled:opacity-60 disabled:cursor-not-allowed"
+          />
+        </div>
+        {isDraft && (
+          <button
+            onClick={handleSaveRate} disabled={savingRate}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {savingRate ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Aplicar tasa
+          </button>
+        )}
+        <p className="text-[11px] text-slate-500 flex-1 min-w-[220px] self-center">
+          {rateHint || (isDraft
+            ? 'Al cambiar la fecha se trae la tasa de ese día; puedes ajustarla. Se recalculan todos los montos en Bs.'
+            : 'La corrida está cerrada; la tasa no se puede editar.')}
+        </p>
+      </div>
 
       {isDraft && (
         <p className="text-xs text-slate-500 flex items-center gap-1.5"><RefreshCw size={13} /> Las columnas calculadas se actualizan al pulsar <span className="text-slate-300">Guardar y recalcular</span>.</p>

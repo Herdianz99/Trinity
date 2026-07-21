@@ -5,6 +5,7 @@ import { caracasDateKey } from '../../common/timezone';
 import { computePayrollLine, buildEngineParams, DEFAULT_PAYROLL_PARAM } from './payroll-calc';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
+import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -182,6 +183,37 @@ export class PayrollRunsService {
         });
       }
       await this.recompute(tx, id);
+    });
+
+    return this.findOne(id);
+  }
+
+  // Editar cabecera (solo BORRADOR): fecha de la tasa y/o la tasa. Si viene rateDate y no viene
+  // exchangeRate explicita, intenta traer la tasa registrada de ese dia. La tasa igual es editable
+  // (si no hay tasa de ese dia se conserva la actual y el usuario puede escribirla). Recalcula Bs.
+  async update(id: string, dto: UpdatePayrollRunDto) {
+    const run = await this.prisma.payrollRun.findUnique({ where: { id } });
+    if (!run) throw new NotFoundException('Corrida no encontrada');
+    if (run.status !== 'DRAFT') throw new BadRequestException('La corrida ya está cerrada; no se puede editar');
+
+    const data: Prisma.PayrollRunUpdateInput = {};
+
+    if (dto.rateDate !== undefined) {
+      data.rateDate = caracasDateKey(dto.rateDate);
+    }
+
+    let newRate = run.exchangeRate;
+    if (dto.exchangeRate !== undefined && dto.exchangeRate > 0) {
+      newRate = dto.exchangeRate;
+    } else if (dto.rateDate !== undefined) {
+      const found = await this.prisma.exchangeRate.findUnique({ where: { date: caracasDateKey(dto.rateDate) } });
+      if (found) newRate = found.rate;
+    }
+    data.exchangeRate = newRate;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payrollRun.update({ where: { id }, data });
+      await this.recompute(tx, id); // recalcula todas las líneas con la nueva tasa
     });
 
     return this.findOne(id);

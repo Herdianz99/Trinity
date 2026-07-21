@@ -2448,6 +2448,7 @@ CREATE TABLE IF NOT EXISTS "PayrollRun" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "PayrollRun_pkey" PRIMARY KEY ("id"));
 CREATE UNIQUE INDEX IF NOT EXISTS "PayrollRun_number_key" ON "PayrollRun"("number");
+ALTER TABLE "PayrollRun" ADD COLUMN IF NOT EXISTS "rateDate" TIMESTAMP(3);
 
 CREATE TABLE IF NOT EXISTS "PayrollRunLine" (
   "id" TEXT NOT NULL, "payrollRunId" TEXT NOT NULL, "employeeId" TEXT NOT NULL,

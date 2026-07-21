@@ -23,6 +23,19 @@
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-21 (2) — Nómina: editar fecha de la tasa + tasa en el detalle de la corrida
+
+> Cambios en `main` (**sin desplegar aún**). Probado en local. Incluye **migración aditiva**.
+
+**Pedido:** en `/payroll/runs/[id]` poder editar la **tasa de cambio**, porque a veces la tasa BCV se registra al día siguiente. Se pidió una **fecha editable** que, al cambiarla, traiga la tasa de ese día (fecha y tasa ambas editables).
+
+**Solución (opción elegida: fecha de tasa aparte del período):**
+- **Schema**: nuevo `PayrollRun.rateDate` (`DateTime?`, opcional). Migración `20260721140000_payroll_run_rate_date` (aditiva) + red de seguridad en `fix-schema.sql`.
+- **API**: `PATCH /payroll-runs/:id` (solo BORRADOR) con `{ rateDate?, exchangeRate? }` (`UpdatePayrollRunDto`). Persiste `rateDate`+`exchangeRate` y llama `recompute()` → recalcula TODOS los Bs de las líneas + totales con la nueva tasa. Si viene solo `rateDate`, intenta resolver la tasa de ese día vía `ExchangeRate` (`caracasDateKey`); si viene `exchangeRate` explícita, manda esa.
+- **Frontend**: tarjeta editable "Fecha de la tasa" + "Tasa (Bs/$)"; al cambiar la fecha hace `GET /exchange-rate/by-date` y autollena la tasa (editable después; si no hay tasa de ese día, avisa para escribirla a mano). Botón "Aplicar tasa" → PATCH y recálculo. En corridas cerradas, solo-lectura.
+
+**Nota:** el período (Desde–Hasta) queda fijo; la fecha de tasa es un campo aparte solo para elegir de qué día tomar la tasa.
+
 ## 🗓️ Sesión 2026-07-21 — Retención de cliente desde CxC crea documento (RVC) + ajustes del Libro de Ventas
 
 > Cambios en `main` (**sin desplegar aún**). Probado en local (restore de la grande). Incluye **migración de schema** aditiva y **backfill**.

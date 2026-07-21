@@ -2217,6 +2217,7 @@ model PayrollRun {
   periodFrom        DateTime
   periodTo          DateTime
   exchangeRate      Float                  // tasa BCV usada (snapshot)
+  rateDate          DateTime?              // fecha-Caracas de la tasa (editable; a veces la tasa se registra al dia siguiente)
   status            String   @default("DRAFT") // DRAFT | CLOSED
   totalGrossBs      Float    @default(0)
   totalDeductionsBs Float    @default(0)

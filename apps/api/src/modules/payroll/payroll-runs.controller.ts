@@ -10,6 +10,7 @@ import { PayrollRunsService } from './payroll-runs.service';
 import { PayrollPdfService } from './payroll-pdf.service';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
+import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
 
 @ApiTags('Payroll - Runs')
 @ApiBearerAuth()
@@ -40,6 +41,12 @@ export class PayrollRunsController {
   @Patch(':id/lines')
   updateLines(@Param('id') id: string, @Body() dto: UpdatePayrollLinesDto) {
     return this.service.updateLines(id, dto);
+  }
+
+  // Editar cabecera: fecha de la tasa y/o la tasa. Recalcula todos los Bs de la corrida.
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdatePayrollRunDto) {
+    return this.service.update(id, dto);
   }
 
   @Post(':id/sync-employees')
