@@ -40,30 +40,12 @@ export class PurchaseBookService {
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
 
-    // Reordenar al estilo SENIAT/WenSoft: cada factura seguida inmediatamente de su(s)
-    // linea(s) de retencion (IVA/ISLR), emparejadas por N° de factura del proveedor + RIF.
-    const retLines = entries.filter((e) => e.isRetentionLine || e.isIslrRetentionLine);
-    const usedRet = new Set<string>();
-    const ordered: typeof entries = [];
-    for (const e of entries) {
-      if (e.isRetentionLine || e.isIslrRetentionLine) continue;
-      ordered.push(e);
-      for (const r of retLines) {
-        if (usedRet.has(r.id)) continue;
-        if (
-          e.supplierInvoiceNumber &&
-          r.supplierInvoiceNumber === e.supplierInvoiceNumber &&
-          r.supplierRif === e.supplierRif
-        ) {
-          ordered.push(r);
-          usedRet.add(r.id);
-        }
-      }
-    }
-    // Retenciones sin factura emparejada (factura fuera del periodo) van al final
-    for (const r of retLines) {
-      if (!usedRet.has(r.id)) ordered.push(r);
-    }
+    // Orden ESTRICTO cronologico por la fecha mostrada (documentDate ?? entryDate), ya aplicado en
+    // el sort de arriba. Antes se reordenaba al estilo SENIAT/WenSoft (cada retencion pegada debajo
+    // de su factura); pero como la linea de retencion muestra su fecha de EMISION —posterior a la de
+    // la factura— la columna "Fecha" saltaba. Ahora cada retencion aparece en su propia fecha, en
+    // orden ascendente junto al resto de los movimientos.
+    const ordered = entries;
 
     let totalExempt = 0;
     let totalTaxableBase = 0;
