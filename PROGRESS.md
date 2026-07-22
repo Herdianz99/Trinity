@@ -1,25 +1,20 @@
 ﻿# Trinity ERP — Progreso
 
-## 🚀 PENDIENTE DE DESPLEGAR — sesión 2026-07-21 (`main` en HEAD `e669dbd`)
+## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-21 (`main` en HEAD `e2df51c`)
 
-Ocho commits sin desplegar, con **3 migraciones aditivas** (`20260721120000`, `20260721140000`, `20260721160000`). Todo probado en local (restore de la grande).
+Los 8 commits de la sesión **desplegados el 2026-07-21** en ambas (`git pull` + `bash deploy.sh`), con **3 migraciones aditivas** (`20260721120000`, `20260721140000`, `20260721160000`). Ambas en HEAD `e2df51c`, PM2 API+Web online, health 200, columnas verificadas (`CustomerIvaRetention.receivableId`, `PayrollRun.rateDate`, `CreditDebitNote.motivo`).
 
 Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` POS admin/supervisor sin caja · `42fa0d1` POS teléfono+separadores · `19528cd` PDFs comisiones · `e0545cf` motivo devolución · `e669dbd` Reporte Zelle.
 
-**Deploy (por empresa):**
-```
-ssh root@134.209.164.59 "cd /opt/Trinity && git pull origin main && bash deploy.sh"   # grande (inversiones)
-ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"  # chica (eltrebol)
-```
-El `deploy.sh` corre las 3 migraciones + `fix-schema.sql`. Verificar health 200 al final.
+**Backfill retenciones CxC (ejecutado):**
+- **Grande (`inversiones`):** 1 huérfana → creada **RVC-0009** (CxC `VF-CXC-26-00000001`, ADDBOX LLC, Bs 2.158,03). Idempotencia verificada.
+- **Chica (`eltrebol`):** 0 líneas → no hizo falta.
 
-**Backfill de retenciones de CxC** (después del deploy, en CADA servidor — crea los documentos `CustomerIvaRetention` faltantes de las CxC viejas):
-```
-cd /opt/Trinity/apps/api && npx tsx scripts/backfill-cxc-retentions.ts             # dry-run: revisa
-cd /opt/Trinity/apps/api && npx tsx scripts/backfill-cxc-retentions.ts --execute   # aplica
-```
+**Extra (grande):** creada a mano **RVC-0010** para la CxC `VTA-CXC-26-00000001` de ADDBOX LLC (se había creado sin el checkbox de retención) — Bs 3.294,37 (75%), comprobante `20260600001528`, con su línea de libro. Se usó un script one-off que replica `createFromReceivableInTx` (ya borrado del server y de local).
 
-**OJO:** el "Reporte Zelle" tiene la cabecera de la grande **hardcodeada** → en la CHICA también saldrá con los datos de la grande (es el requerimiento del cliente).
+**Nota:** el "Reporte Zelle" tiene la cabecera de la grande **hardcodeada** → en la CHICA también sale con los datos de la grande (es el requerimiento del cliente).
+
+**▶ Continuamos mañana (2026-07-22).**
 
 ---
 
