@@ -65,6 +65,23 @@ export class RetentionVouchersController {
     res.send(Buffer.from(content, 'latin1'));
   }
 
+  @Get('report/pdf')
+  async reportPdf(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('status') status: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.pdfService.generateListReport({ from, to, status });
+    const suffix = from && to ? `${from}_${to}` : 'todas';
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="reporte-retenciones-${suffix}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

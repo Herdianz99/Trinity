@@ -405,4 +405,157 @@ export class RetentionVouchersPdfService {
       doc.end();
     });
   }
+
+  /**
+   * Reporte de listado de comprobantes de retención de IVA (compras), en PDF vertical.
+   * Filtra por fecha de EMISIÓN (issueDate), que es fecha fiscal date-only a medianoche UTC
+   * (NO anclar a Caracas — ver regla de fechas en CLAUDE.md). Muestra total retenido y conteos.
+   */
+  async generateListReport(params: { from?: string; to?: string; status?: string }): Promise<Buffer> {
+    const { from, to, status } = params;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (from || to) {
+      where.issueDate = {};
+      if (from) where.issueDate.gte = new Date(`${from}T00:00:00.000Z`);
+      if (to) {
+        // rango inclusivo: < (día siguiente a 'to')
+        const lt = new Date(`${to}T00:00:00.000Z`);
+        lt.setUTCDate(lt.getUTCDate() + 1);
+        where.issueDate.lt = lt;
+      }
+    }
+
+    const [config, vouchers] = await Promise.all([
+      this.prisma.companyConfig.findFirst({ select: { companyName: true, rif: true } }),
+      this.prisma.retentionVoucher.findMany({
+        where,
+        orderBy: { number: 'asc' },
+        select: {
+          number: true,
+          status: true,
+          issueDate: true,
+          retentionPct: true,
+          retentionAmountUsd: true,
+          retentionAmountBs: true,
+          supplier: { select: { name: true, rif: true } },
+          _count: { select: { lines: true } },
+        },
+      }),
+    ]);
+
+    const COMPANY = config?.companyName || 'Trinity ERP';
+    const RIF = config?.rif || '';
+    const periodLabel =
+      from && to
+        ? `Del ${fmtDate(new Date(`${from}T00:00:00.000Z`))} al ${fmtDate(new Date(`${to}T00:00:00.000Z`))} (por fecha de emisión)`
+        : 'Todas las retenciones';
+
+    const STATUS: Record<string, string> = { PENDING: 'Pendiente', ISSUED: 'Emitida', CANCELLED: 'Anulada' };
+    const STATUS_COLOR: Record<string, string> = { PENDING: '#b45309', ISSUED: '#047857', CANCELLED: '#b91c1c' };
+    const fmtUsd = (n: number) => `$ ${fmtBs(n)}`; // mismo separador es/VE
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
+      const buffers: Buffer[] = [];
+      doc.on('data', (c: Buffer) => buffers.push(c));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const W = doc.page.width;
+      const RIGHT = W - 40;
+      const BOTTOM = doc.page.height - 45;
+
+      const COLS = [
+        { label: 'Nº Retención', x: 40, w: 76, align: 'left' as const },
+        { label: 'Proveedor', x: 118, w: 134, align: 'left' as const },
+        { label: 'Fact.', x: 253, w: 24, align: 'right' as const },
+        { label: '%', x: 279, w: 24, align: 'right' as const },
+        { label: 'Ret. USD', x: 305, w: 70, align: 'right' as const },
+        { label: 'Ret. Bs', x: 377, w: 92, align: 'right' as const },
+        { label: 'Emisión', x: 471, w: 46, align: 'right' as const },
+        { label: 'Estado', x: 519, w: 36, align: 'right' as const },
+      ];
+
+      const header = (): number => {
+        doc.fontSize(13).font('Helvetica-Bold').fillColor('#111827').text(COMPANY, 40, 38, { width: RIGHT - 40 });
+        doc.fontSize(9).font('Helvetica').fillColor('#374151').text(`RIF: ${RIF}`, 40, 55);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#4c1d95').text('Retenciones de IVA (Compras)', 40, 69, { width: RIGHT - 40 });
+        doc.fontSize(8).font('Helvetica').fillColor('#6b7280')
+          .text(`${periodLabel} · ${vouchers.length} comprobantes`, 40, 85)
+          .text(`Generado: ${new Date().toLocaleString('es-VE')}`, 40, 95);
+        doc.moveTo(40, 108).lineTo(RIGHT, 108).strokeColor('#9ca3af').lineWidth(1).stroke();
+        return 116;
+      };
+
+      const tableHead = (y: number): number => {
+        doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#1f2937');
+        for (const c of COLS) doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false });
+        y += 12;
+        doc.moveTo(40, y).lineTo(RIGHT, y).strokeColor('#d1d5db').lineWidth(0.8).stroke();
+        return y + 4;
+      };
+
+      let y = header();
+      y = tableHead(y);
+
+      let zebra = 0;
+      for (const v of vouchers) {
+        doc.font('Helvetica').fontSize(7.5);
+        const name = v.supplier?.name || '--';
+        const rif = v.supplier?.rif || 'S/R';
+        const nameH = doc.heightOfString(name, { width: COLS[1].w });
+        const rifH = doc.heightOfString(rif, { width: COLS[1].w });
+        const rowH = Math.max(15, nameH + rifH + 5);
+
+        if (y + rowH > BOTTOM) { doc.addPage(); y = header(); y = tableHead(y); }
+        if (zebra % 2 === 1) doc.rect(40, y - 2, RIGHT - 40, rowH).fill('#f8fafc');
+        zebra++;
+
+        doc.font('Helvetica').fontSize(7.5).fillColor('#111827');
+        doc.text(name, COLS[1].x, y, { width: COLS[1].w });
+        doc.fillColor('#6b7280').fontSize(7);
+        doc.text(rif, COLS[1].x, y + nameH + 1, { width: COLS[1].w, lineBreak: false });
+
+        doc.font('Helvetica').fontSize(7.5).fillColor('#111827');
+        doc.text(v.number, COLS[0].x, y, { width: COLS[0].w, lineBreak: false });
+        doc.text(String(v._count.lines), COLS[2].x, y, { width: COLS[2].w, align: 'right', lineBreak: false });
+        doc.text(`${v.retentionPct}%`, COLS[3].x, y, { width: COLS[3].w, align: 'right', lineBreak: false });
+        doc.text(fmtUsd(v.retentionAmountUsd), COLS[4].x, y, { width: COLS[4].w, align: 'right', lineBreak: false });
+        doc.text(`Bs ${fmtBs(v.retentionAmountBs)}`, COLS[5].x, y, { width: COLS[5].w, align: 'right', lineBreak: false });
+        doc.text(fmtDate(v.issueDate), COLS[6].x, y, { width: COLS[6].w, align: 'right', lineBreak: false });
+        doc.fillColor(STATUS_COLOR[v.status] || '#111827').font('Helvetica-Bold');
+        doc.text(STATUS[v.status] || v.status, COLS[7].x, y, { width: COLS[7].w, align: 'right', lineBreak: false });
+
+        y += rowH;
+        doc.moveTo(40, y - 2).lineTo(RIGHT, y - 2).strokeColor('#eef2f7').lineWidth(0.5).stroke();
+      }
+
+      const valid = vouchers.filter((v) => v.status !== 'CANCELLED');
+      const totUsd = valid.reduce((s, v) => s + (v.retentionAmountUsd || 0), 0);
+      const totBs = valid.reduce((s, v) => s + (v.retentionAmountBs || 0), 0);
+      const nIssued = vouchers.filter((v) => v.status === 'ISSUED').length;
+      const nPending = vouchers.filter((v) => v.status === 'PENDING').length;
+      const nCancelled = vouchers.filter((v) => v.status === 'CANCELLED').length;
+
+      if (y + 60 > BOTTOM) { doc.addPage(); y = header(); }
+      y += 6;
+      doc.moveTo(40, y).lineTo(RIGHT, y).strokeColor('#9ca3af').lineWidth(1).stroke();
+      y += 8;
+      doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#111827');
+      doc.text('TOTAL RETENIDO (sin anuladas):', 40, y, { width: COLS[4].x - 43, align: 'right', lineBreak: false });
+      doc.fillColor('#4c1d95');
+      doc.text(fmtUsd(totUsd), COLS[4].x, y, { width: COLS[4].w, align: 'right', lineBreak: false });
+      doc.text(`Bs ${fmtBs(totBs)}`, COLS[5].x, y, { width: COLS[5].w, align: 'right', lineBreak: false });
+      y += 16;
+      doc.fontSize(8).font('Helvetica').fillColor('#374151');
+      doc.text(
+        `Comprobantes: ${vouchers.length}   ·   Emitidas: ${nIssued}   ·   Pendientes: ${nPending}   ·   Anuladas: ${nCancelled}`,
+        40, y, { lineBreak: false },
+      );
+
+      doc.end();
+    });
+  }
 }

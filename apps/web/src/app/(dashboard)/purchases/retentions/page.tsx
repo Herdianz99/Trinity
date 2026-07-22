@@ -225,6 +225,16 @@ export default function RetentionsPage() {
     }
   }
 
+  // ── Reporte PDF (listado) ─────────────────────────────────────────────
+
+  function handleReportPdf() {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (fromDate) params.set('from', fromDate);
+    if (toDate) params.set('to', toDate);
+    window.open(`/api/proxy/retention-vouchers/report/pdf?${params}`, '_blank');
+  }
+
   // ── Cancel handler ────────────────────────────────────────────────────
 
   async function handleCancel(id: string) {
@@ -257,6 +267,14 @@ export default function RetentionsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleReportPdf}
+            title="Genera un PDF con el listado de retenciones y el total retenido (usa el rango Desde/Hasta por fecha de emisión)"
+            className="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium text-sm flex items-center gap-2 transition-colors"
+          >
+            <FileText size={18} />
+            Reporte PDF
+          </button>
           <button
             onClick={handleExportTxt}
             title="Genera el TXT de la quincena (rango Desde/Hasta) para el portal SENIAT"
