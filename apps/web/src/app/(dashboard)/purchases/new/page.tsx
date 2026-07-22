@@ -227,11 +227,13 @@ export default function NewPurchaseBillPage() {
       if (seriesRes.ok) {
         const data = await seriesRes.json();
         const list = Array.isArray(data) ? data : data.data || [];
-        setSeries(list.filter((s: any) => s.isActive));
-        const fiscal = list.find((s: any) => s.isFiscal && s.isActive);
-        if (fiscal) {
-          setSerieId(fiscal.id);
-          setIsFiscal(true);
+        const active = list.filter((s: any) => s.isActive);
+        setSeries(active);
+        // Serie por defecto: la NO fiscal (si existe); si no hay ninguna, cae a la fiscal.
+        const preferida = active.find((s: any) => !s.isFiscal) || active.find((s: any) => s.isFiscal);
+        if (preferida) {
+          setSerieId(preferida.id);
+          setIsFiscal(!!preferida.isFiscal);
         }
       }
     } catch { /* ignore */ } finally {
