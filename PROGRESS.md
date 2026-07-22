@@ -41,6 +41,25 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-22 (2) — Retenciones/libro: filtro por emisión, orden por fecha, serie no fiscal por defecto + operaciones fiscales en prod
+
+> 3 cambios de código en `main` (**sin desplegar aún**). Verificados en local contra la BD de la grande (endpoints en vivo). Además, varias correcciones de datos directo en producción (chica y grande) con respaldo previo cada una.
+
+**Cambios de código (esta tanda):**
+- **`retention-vouchers.service.ts` — filtro por `issueDate`** (igual que el libro): `generateRetentionTxt` (TXT SENIAT) pasó de filtrar por `line.invoiceDate` a `issueDate` del comprobante (incluye TODAS sus líneas); y la lista `findAll` de `createdAt` → `issueDate` (límites UTC de medianoche; se quitó `caracasDayStart/End`). Ahora libro/lista/TXT cuadran (50 comprobantes · 53 filas para 01–15/07 en la grande). OJO: la lista ya NO muestra PENDIENTES al filtrar por fecha (no tienen issueDate), igual que el libro.
+- **`purchase-book.service.ts` — orden estricto por fecha**: se quitó el reordenamiento estilo SENIAT que pegaba cada retención debajo de su factura; ahora el libro respeta el orden cronológico por fecha mostrada (`documentDate ?? entryDate`). La retención aparece en su propia fecha de emisión.
+- **`purchases/new/page.tsx` — serie NO fiscal por defecto**: al abrir /purchases/new se preselecciona la serie no fiscal (si existe; si no, cae a la fiscal). En la grande queda "Nota de entrega compras (NEC)".
+
+**Operaciones fiscales directo en PRODUCCIÓN esta sesión (respaldo previo en `/root/backups` de cada server):**
+- **Chica — retenciones de IVA:** renumerada 527→522; borrada la 523 duplicada + renumerada 528→523 (factura FEBECA 07042611 duplicada PO/payable) + `retentionNextNumber` bajado a 527; corregido monto del libro de la 523; `documentDate` de las 18 líneas de retención = `issueDate`; borrado el registro duplicado de 07042611 (el de la OC FC-00056). TXT de julio Q1 generado a mano en local (workaround previo al fix del filtro). Ver [[txt-retenciones-filtro-fecha]].
+- **Grande — libro de compras:** eliminados los **18 registros que venían de facturas de compra (PO)**, dejando solo los de CxP (14 eran duplicados; 4 únicas quedaron fuera → recargar como CxP si aplica). Doble conteo quitado: base 19.623.227,69 / IVA 3.139.728,31 / total 22.870.330,64 Bs.
+- **Grande — facturas NE1-26-00000100 y NE1-26-00000096:** vendedor DANIEL CEDEÑO → **EMIN KHIR** (afecta comisiones, se calculan en vivo).
+- **Local:** BD local reemplazada por copia fresca de la grande de prod (dump plain SQL pg16→pg15, sin errores).
+
+**Pendiente:** desplegar estos 3 cambios; revisar el comprobante 1356 (grande, 4 líneas con fechas de declaración distintas en el libro); y las 4 facturas de compra únicas que salieron del libro de la grande.
+
+---
+
 ## 🗓️ Sesión 2026-07-22 (1) — Reporte PDF de retenciones de IVA (compras) + operaciones en la grande
 
 > Cambios de código en `main` (**sin desplegar aún** — pendiente de deploy). Verificado en local contra la BD de la grande (el endpoint en vivo devuelve el PDF con HTTP 200).
