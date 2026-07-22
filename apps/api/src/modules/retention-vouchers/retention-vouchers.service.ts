@@ -6,7 +6,6 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRetentionVoucherDto } from './dto/create-retention-voucher.dto';
 import { UpdateRetentionVoucherDto } from './dto/update-retention-voucher.dto';
-import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -67,12 +66,20 @@ export class RetentionVouchersService {
     if (query.supplierId) where.supplierId = query.supplierId;
 
     if (query.from || query.to) {
-      where.createdAt = {};
+      // Filtrar por fecha de EMISION (issueDate), igual que el libro de compras (que filtra por
+      // entryDate = fecha de declaracion). issueDate es fecha fiscal date-only a medianoche UTC, asi
+      // que se usan limites UTC (NO Caracas). Los comprobantes PENDIENTES (issueDate null) no entran
+      // en un rango de fechas (aun no estan declarados), igual que no aparecen en el libro.
+      where.issueDate = {};
       if (query.from) {
-        where.createdAt.gte = caracasDayStart(query.from);
+        const f = new Date(query.from);
+        f.setUTCHours(0, 0, 0, 0);
+        where.issueDate.gte = f;
       }
       if (query.to) {
-        where.createdAt.lte = caracasDayEnd(query.to);
+        const t = new Date(query.to);
+        t.setUTCHours(23, 59, 59, 999);
+        where.issueDate.lte = t;
       }
     }
 
@@ -555,16 +562,18 @@ export class RetentionVouchersService {
     });
     const agentRif = this.normalizeRif(config?.rif);
 
-    // Comprobantes emitidos con al menos una factura en el rango (por fecha de factura)
+    // Comprobantes emitidos en el rango, por FECHA DE EMISION (issueDate) — igual que el libro de
+    // compras (entryDate). Antes se filtraba por fecha de factura (invoiceDate), lo que dejaba fuera
+    // retenciones de facturas de un mes declaradas en una quincena posterior (no cuadraba con el libro).
+    // Se incluyen TODAS las lineas del comprobante (todas se declaran en el mismo periodo).
     const vouchers = await this.prisma.retentionVoucher.findMany({
       where: {
         status: 'ISSUED',
-        lines: { some: { invoiceDate: { gte: fromDate, lte: toDate } } },
+        issueDate: { gte: fromDate, lte: toDate },
       },
       include: {
         supplier: { select: { rif: true } },
         lines: {
-          where: { invoiceDate: { gte: fromDate, lte: toDate } },
           orderBy: { invoiceDate: 'desc' },
         },
       },
