@@ -41,6 +41,24 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-22 (1) — Reporte PDF de retenciones de IVA (compras) + operaciones en la grande
+
+> Cambios de código en `main` (**sin desplegar aún** — pendiente de deploy). Verificado en local contra la BD de la grande (el endpoint en vivo devuelve el PDF con HTTP 200).
+
+**Feature: Reporte PDF del listado de retenciones** (`/purchases/retentions`)
+- Nuevo botón **"Reporte PDF"** (junto a "Exportar TXT SENIAT") que genera un PDF **vertical (A4)** con el listado de comprobantes de retención de IVA y el **total retenido** ($ y Bs), conteos por estado, y proveedor+RIF con altura de fila dinámica (nombres largos no se cortan).
+- **Filtra por fecha de EMISIÓN (`issueDate`)** — respeta la regla de fechas date-only del CLAUDE.md (NO ancla a Caracas). Usa el rango Desde/Hasta (y Estado) de la página.
+- **API:** método `generateListReport({from,to,status})` en `retention-vouchers-pdf.service.ts` (pdfkit) + endpoint `GET /retention-vouchers/report/pdf?from&to&status` (declarado **antes** de `:id` para no colisionar).
+- **Web:** handler `handleReportPdf` + botón en `retentions/page.tsx` (abre el PDF en pestaña nueva vía `/api/proxy`).
+- **OJO — criterio de fecha:** el LISTADO en pantalla filtra por `createdAt`; el REPORTE PDF por `issueDate`. Con el mismo rango pueden diferir en casos borde. Pendiente decidir si se alinean.
+- `tsc --noEmit` OK en API y web. Probado end-to-end (JWT firmado en local → `HTTP 200 application/pdf`, 2 págs, datos reales de la grande).
+
+**Operaciones directas en producción GRANDE (`inversiones`) esta sesión — sin código (ver memorias):**
+- **Nómina: cargados 61 empleados** desde `NOMINA INV 2026.xlsx` (sueldo/bono en **$0 a propósito**; enlazados a `Customer` por cédula: 51 existentes + 10 nuevos; se crearon 10 departamentos + 20 cargos; limpieza de datos de prueba). **Excluidos:** 4 aprendices INCES + "Luis Rueda". Cédulas resueltas: SAUL=16861625, GUILLEN=20812095, MARIA I FIGUEREDO=33349981. Respaldo previo en `/root/backups/pre-nomina-*.sql.gz`. Ver memoria `nomina-carga-grande-empleados`.
+- **Caja "Caja Notas 3":** corregido el fondo de la sesión abierta (estaba en 0) → **$199 / Bs 56.500** (`openingBalanceUsd/Bs` de la `CashSession`).
+
+---
+
 ## 🗓️ Sesión 2026-07-21 (7) — Detalle de factura: botón "Reporte Zelle" (ticket 80mm con cabecera grande hardcodeada)
 
 > Cambios en `main` (**sin desplegar aún**). Solo frontend. Probado en local (idéntico al ticket normal).
