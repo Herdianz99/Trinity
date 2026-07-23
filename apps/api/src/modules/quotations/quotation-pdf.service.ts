@@ -19,6 +19,7 @@ export class QuotationPdfService {
       include: {
         customer: true,
         items: true,
+        seller: { select: { name: true, phone: true, code: true } },
       },
     });
 
@@ -87,6 +88,15 @@ export class QuotationPdfService {
         if (quotation.customer.address) { doc.text(`Direccion: ${quotation.customer.address}`, 40, y); y += 12; }
       } else {
         doc.text('Cliente: General / Consumidor Final', 40, y); y += 12;
+      }
+
+      // Vendedor (con telefono, para que el cliente pueda comunicarse con el)
+      if (quotation.seller) {
+        y += 4;
+        doc.fontSize(10).font('Helvetica-Bold').text('VENDEDOR', 40, y); y += 14;
+        doc.fontSize(9).font('Helvetica');
+        doc.text(`Nombre: ${quotation.seller.name}`, 40, y); y += 12;
+        if (quotation.seller.phone) { doc.text(`Tel: ${quotation.seller.phone}`, 40, y); y += 12; }
       }
 
       y += 10;

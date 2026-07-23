@@ -67,6 +67,7 @@ export class QuotationsService {
       include: {
         customer: true,
         items: true,
+        seller: { select: { id: true, code: true, name: true, phone: true } },
       },
     });
     if (!quotation) throw new NotFoundException('Cotizacion no encontrada');
@@ -83,6 +84,12 @@ export class QuotationsService {
     const config = await this.prisma.companyConfig.findFirst();
     const validityDays = config?.quotationValidityDays || 30;
     const exchangeRate = await this.getTodayRate();
+
+    // Vendedor de la cotizacion: el pasado en el DTO, o el vinculado al usuario en sesion.
+    const seller = dto.sellerId
+      ? await this.prisma.seller.findUnique({ where: { id: dto.sellerId } })
+      : await this.prisma.seller.findUnique({ where: { userId: user.id } });
+    const sellerId = seller?.id || null;
 
     // Fetch products
     const productIds = dto.items.map((i) => i.productId);
@@ -156,11 +163,13 @@ export class QuotationsService {
           notes: dto.notes,
           expiresAt,
           createdById: user.id,
+          sellerId,
           items: { create: itemsData },
         },
         include: {
           items: true,
           customer: true,
+          seller: { select: { id: true, code: true, name: true, phone: true } },
         },
       });
     });
@@ -309,39 +318,20 @@ export class QuotationsService {
 
     const totalBs = quotation.totalUsd * rate.rate;
 
-    // Get serie from cash register
-    const serie = await this.prisma.serie.findUnique({
-      where: { cashRegisterId },
-    });
-    if (!serie) {
-      throw new BadRequestException('Esta caja no tiene serie configurada');
-    }
-
+    // La factura nace EN ESPERA (pre-factura): sin serie ni numero correlativo. La caja/serie
+    // definitivas y el numero se asignan al COBRAR (igual que el POS: "number will be assigned at
+    // payment time to avoid gaps"). Asi un vendedor/supervisor/administrador puede convertir la
+    // cotizacion y dejarla en espera sin necesidad de tener una caja abierta con serie configurada.
     // Create invoice in transaction
     const invoice = await this.prisma.$transaction(async (tx) => {
-      // Lock the serie row for correlative increment
-      const series = await tx.$queryRaw<any[]>`
-        SELECT "id", "lastInvoiceNumber", "prefix" FROM "Serie"
-        WHERE id = ${serie.id} FOR UPDATE
-      `;
-      const s = series[0];
-      const nextNumber = s.lastInvoiceNumber + 1;
-
-      await tx.serie.update({
-        where: { id: serie.id },
-        data: { lastInvoiceNumber: nextNumber },
-      });
-
       const config = await tx.companyConfig.findFirst();
-      const year = new Date().getFullYear().toString().slice(-2);
-      const correlativo = nextNumber.toString().padStart(8, '0');
-      const invoiceNumber = `${s.prefix}-${year}-${correlativo}`;
 
-      const isSeller = user.role === 'SELLER';
-
-      // Get seller linked to current user
-      const userSeller = await tx.seller.findUnique({ where: { userId: user.id } });
-      const sellerId = userSeller?.id || null;
+      // Vendedor: el de la cotizacion (preserva la atribucion para comisiones); si la cotizacion no
+      // tiene vendedor (cotizaciones viejas), cae al vendedor del usuario que convierte.
+      const sellerId =
+        quotation.sellerId ||
+        (await tx.seller.findUnique({ where: { userId: user.id } }))?.id ||
+        null;
 
       // Use existing config for brega
       const bregaGlobalPct = config?.bregaGlobalPct || 0;
@@ -353,8 +343,7 @@ export class QuotationsService {
 
       const created = await tx.invoice.create({
         data: {
-          number: invoiceNumber,
-          serieId: serie.id,
+          number: null,
           cashRegisterId,
           customerId: quotation.customerId,
           status: 'PENDING',

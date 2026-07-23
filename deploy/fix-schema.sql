@@ -2493,3 +2493,10 @@ DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_positionId_fkey" FOR
 -- SECTION: nuevo rol RRHH (Recursos Humanos)
 -- =============================================================================
 ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'RRHH';
+
+-- =============================================================================
+-- SECTION: vendedor en cotizaciones (Quotation.sellerId)
+-- =============================================================================
+ALTER TABLE "Quotation" ADD COLUMN IF NOT EXISTS "sellerId" TEXT;
+CREATE INDEX IF NOT EXISTS "Quotation_sellerId_idx" ON "Quotation"("sellerId");
+DO $$ BEGIN ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_sellerId_fkey" FOREIGN KEY ("sellerId") REFERENCES "Seller"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

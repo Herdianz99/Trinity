@@ -34,6 +34,11 @@ export class CreateQuotationDto {
   @IsString()
   notes?: string;
 
+  @ApiProperty({ required: false, description: 'Vendedor (Seller.id). Si se omite, se usa el vendedor del usuario en sesion.' })
+  @IsOptional()
+  @IsString()
+  sellerId?: string;
+
   @ApiProperty({ type: [QuotationItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

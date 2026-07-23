@@ -413,6 +413,7 @@ model Seller {
   userId          String?   @unique
   user            User?     @relation(fields: [userId], references: [id])
   invoices        Invoice[]
+  quotations      Quotation[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -1559,8 +1560,12 @@ model Quotation {
   convertedToInvoiceId String?
   items                QuotationItem[]
   createdById          String
+  sellerId             String?         // vendedor de la cotizacion (se copia a la factura al convertir)
+  seller               Seller?         @relation(fields: [sellerId], references: [id])
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
+
+  @@index([sellerId])
 }
 
 model QuotationItem {
