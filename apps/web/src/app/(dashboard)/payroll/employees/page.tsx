@@ -286,7 +286,7 @@ export default function EmployeesPage() {
               ) : employees.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay empleados registrados</td></tr>
               ) : employees.map((emp) => (
-                <tr key={emp.id} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors">
+                <tr key={emp.id} onClick={() => openEdit(emp)} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors cursor-pointer">
                   <td className="px-4 py-3 text-sm text-slate-300 font-mono">{emp.code || '--'}</td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium text-slate-200">{emp.customer.name}</span>
@@ -308,8 +308,8 @@ export default function EmployeesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(emp)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Editar"><Pencil size={16} /></button>
-                      <button onClick={() => handleToggle(emp)} className={`p-1.5 rounded-lg transition-colors ${emp.isActive ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10' : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'}`} title={emp.isActive ? 'Desactivar' : 'Activar'}>
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(emp); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Editar"><Pencil size={16} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleToggle(emp); }} className={`p-1.5 rounded-lg transition-colors ${emp.isActive ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10' : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'}`} title={emp.isActive ? 'Desactivar' : 'Activar'}>
                         {emp.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                       </button>
                     </div>

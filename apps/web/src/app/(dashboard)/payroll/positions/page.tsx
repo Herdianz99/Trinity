@@ -109,7 +109,7 @@ export default function PositionsPage() {
               ) : items.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-12 text-slate-500">No hay cargos registrados</td></tr>
               ) : items.map((p) => (
-                <tr key={p.id} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors">
+                <tr key={p.id} onClick={() => openEdit(p)} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors cursor-pointer">
                   <td className="px-4 py-3 text-sm font-medium text-slate-200">{p.name}</td>
                   <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">{money(p.defaultSalaryUsd)}</td>
                   <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">{money(p.defaultBonusUsd)}</td>
@@ -119,8 +119,8 @@ export default function PositionsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Editar"><Pencil size={16} /></button>
-                      <button onClick={() => handleDelete(p)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar"><Trash2 size={16} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Editar"><Pencil size={16} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar"><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>

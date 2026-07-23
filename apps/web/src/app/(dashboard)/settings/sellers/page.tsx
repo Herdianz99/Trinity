@@ -267,7 +267,8 @@ export default function SellersPage() {
                 sellers.map((seller) => (
                   <tr
                     key={seller.id}
-                    className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors"
+                    onClick={() => openEdit(seller)}
+                    className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3 text-sm text-slate-300 font-mono">
                       {seller.code}
@@ -301,21 +302,21 @@ export default function SellersPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => openEdit(seller)}
+                          onClick={(e) => { e.stopPropagation(); openEdit(seller); }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                           title="Editar"
                         >
                           <Pencil size={16} />
                         </button>
                         <button
-                          onClick={() => openLinkUser(seller)}
+                          onClick={(e) => { e.stopPropagation(); openLinkUser(seller); }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
                           title="Vincular usuario"
                         >
                           <Link2 size={16} />
                         </button>
                         <button
-                          onClick={() => handleToggleActive(seller)}
+                          onClick={(e) => { e.stopPropagation(); handleToggleActive(seller); }}
                           className={`p-1.5 rounded-lg transition-colors ${
                             seller.isActive
                               ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10'
