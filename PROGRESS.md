@@ -1,5 +1,34 @@
 ﻿# Trinity ERP — Progreso
 
+## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-22 (`main` en HEAD `b84925a`)
+
+Todos los bloques de las sesiones **2026-07-21 (6/7)** y **2026-07-22 (1/2/3)** quedaron **desplegados el 2026-07-22** en ambas empresas (`git pull` + `bash deploy.sh`), incluyendo las migraciones aditivas de esas tandas (`20260721160000_note_sales_return_reason`, `20260722180000_quotation_seller`) + red de seguridad en `deploy/fix-schema.sql`. (El PROGRESS.md no se actualizó justo tras el deploy; se marca ahora.)
+
+**▶ Continuamos hoy (2026-07-23).**
+
+---
+
+## 🗓️ Sesión 2026-07-23 (1) — Retenciones en el libro de compras con su FECHA DE RECEPCIÓN (= "Fecha emisión")
+
+> Cambios de código en `main` (**pendiente de deploy — solo código, SIN migración**). Además, corrección de datos ya aplicada en **producción grande** (con respaldo previo). Verificado en local contra la copia de la grande.
+
+**Problema:** en el libro de compras las líneas de retención (IVA/ISLR) creadas desde una **CxP con retención inline** salían con la **fecha de la factura** en vez de su **fecha de recepción** (= `issueDate` del comprobante = "Fecha emisión" de `/purchases/retentions`). Se veían coladas en el mes de la factura en lugar de su fecha de declaración.
+
+**Causa raíz:** `payables.service.ts` guardaba la línea del libro con `documentDate = originalDate` (fecha de la factura), mientras `entryDate`/`issueDate` sí usaban `receptionDate`. Como el libro muestra/ordena por `documentDate ?? entryDate`, la retención aparecía en la fecha de la factura.
+
+**Arreglo por código (3 puntos):**
+- `payables.service.ts` — línea de retención **IVA**: `documentDate` ahora = `receptionDate || originalDate || new Date()` (= `entryDate` = `issueDate`).
+- `payables.service.ts` — línea de retención **ISLR**: igual.
+- `purchase-book.service.ts` `update()`: al editar la fecha de una factura, la retención sigue la **fecha de declaración** (`entryDate`), y el `documentDate` de la retención se fija a esa fecha; editar solo el `documentDate` (display) de la factura ya **no** mueve la retención. (El path de emisión manual `retention-vouchers.service.ts` ya estaba bien: `documentDate` null → cae a `entryDate = issueDate`.)
+
+**Datos en PRODUCCIÓN GRANDE (`inversiones`) — ya aplicado (respaldo `/root/backups/pre-retencion-fecha-libro-20260723-124351.sql.gz`):**
+- `UPDATE 76` líneas de retención **IVA** + `UPDATE 2` **ISLR** → `documentDate = issueDate`. Verificado: **0 desalineadas** (IVA 85/85, ISLR 5/5).
+- El mismo UPDATE se probó en **local** (copia de la grande): 76 IVA → 0 desalineadas.
+
+**Pendiente:** desplegar el código (para que las retenciones NUEVAS nazcan con la fecha correcta; hasta entonces las nuevas desde CxP vuelven a nacer con la fecha de la factura). **Falta hacer lo mismo en la CHICA** si aplica (revisar diagnóstico allí). El comprobante **1356** (grande) sigue pendiente aparte (3 líneas con `entryDate` de declaración distinto a su `issueDate`).
+
+---
+
 ## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-21 (`main` en HEAD `e2df51c`)
 
 Los 8 commits de la sesión **desplegados el 2026-07-21** en ambas (`git pull` + `bash deploy.sh`), con **3 migraciones aditivas** (`20260721120000`, `20260721140000`, `20260721160000`). Ambas en HEAD `e2df51c`, PM2 API+Web online, health 200, columnas verificadas (`CustomerIvaRetention.receivableId`, `PayrollRun.rateDate`, `CreditDebitNote.motivo`).
@@ -43,7 +72,7 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 
 ## 🗓️ Sesión 2026-07-22 (3) — Cotizaciones: conversión en espera + vendedor + página de detalle, y clic-en-fila en maestros
 
-> Cambios de código en `main` (**sin desplegar aún**). Verificados end-to-end en local contra la BD de la grande. **Trae 1 migración aditiva** (`20260722180000_quotation_seller`) + red de seguridad en `deploy/fix-schema.sql`.
+> **✅ Desplegado 2026-07-22 en ambas empresas.** Verificados end-to-end en local contra la BD de la grande. **Trajo 1 migración aditiva** (`20260722180000_quotation_seller`) + red de seguridad en `deploy/fix-schema.sql`.
 
 **Cotizaciones — conversión a factura EN ESPERA (bug bloqueante):**
 - Reportado: "convertir a factura" fallaba con *"Esta caja no tiene serie configurada"* cuando el vendedor/supervisor/admin no tenía caja abierta. Causa: la conversión resolvía una caja de respaldo y exigía que tuviera serie.
@@ -63,13 +92,13 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 
 **Verificado en local:** crear cotización como vendedor → sellerId seteado; convertir → factura hereda vendedor y nace `number: null`; PDF 200; login de prueba de DAVID VILLAFAÑE (`David10`, solo local). `tsc --noEmit` OK en API y web.
 
-**Pendiente:** desplegar (recordar que este bloque SÍ tiene migración); opcional: selector de vendedor en el formulario de crear cotización (para admin/supervisor).
+**Pendiente:** ~~desplegar~~ (✅ desplegado 2026-07-22, migración incluida); opcional: selector de vendedor en el formulario de crear cotización (para admin/supervisor).
 
 ---
 
 ## 🗓️ Sesión 2026-07-22 (2) — Retenciones/libro: filtro por emisión, orden por fecha, serie no fiscal por defecto + operaciones fiscales en prod
 
-> 3 cambios de código en `main` (**sin desplegar aún**). Verificados en local contra la BD de la grande (endpoints en vivo). Además, varias correcciones de datos directo en producción (chica y grande) con respaldo previo cada una.
+> **✅ Desplegado 2026-07-22 en ambas empresas.** 3 cambios de código verificados en local contra la BD de la grande (endpoints en vivo). Además, varias correcciones de datos directo en producción (chica y grande) con respaldo previo cada una.
 
 **Cambios de código (esta tanda):**
 - **`retention-vouchers.service.ts` — filtro por `issueDate`** (igual que el libro): `generateRetentionTxt` (TXT SENIAT) pasó de filtrar por `line.invoiceDate` a `issueDate` del comprobante (incluye TODAS sus líneas); y la lista `findAll` de `createdAt` → `issueDate` (límites UTC de medianoche; se quitó `caracasDayStart/End`). Ahora libro/lista/TXT cuadran (50 comprobantes · 53 filas para 01–15/07 en la grande). OJO: la lista ya NO muestra PENDIENTES al filtrar por fecha (no tienen issueDate), igual que el libro.
@@ -82,13 +111,13 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 - **Grande — facturas NE1-26-00000100 y NE1-26-00000096:** vendedor DANIEL CEDEÑO → **EMIN KHIR** (afecta comisiones, se calculan en vivo).
 - **Local:** BD local reemplazada por copia fresca de la grande de prod (dump plain SQL pg16→pg15, sin errores).
 
-**Pendiente:** desplegar estos 3 cambios; revisar el comprobante 1356 (grande, 4 líneas con fechas de declaración distintas en el libro); y las 4 facturas de compra únicas que salieron del libro de la grande.
+**Pendiente:** ~~desplegar estos 3 cambios~~ (✅ desplegado 2026-07-22); revisar el comprobante 1356 (grande, 4 líneas con fechas de declaración distintas en el libro); y las 4 facturas de compra únicas que salieron del libro de la grande.
 
 ---
 
 ## 🗓️ Sesión 2026-07-22 (1) — Reporte PDF de retenciones de IVA (compras) + operaciones en la grande
 
-> Cambios de código en `main` (**sin desplegar aún** — pendiente de deploy). Verificado en local contra la BD de la grande (el endpoint en vivo devuelve el PDF con HTTP 200).
+> **✅ Desplegado 2026-07-22 en ambas empresas.** Verificado en local contra la BD de la grande (el endpoint en vivo devuelve el PDF con HTTP 200).
 
 **Feature: Reporte PDF del listado de retenciones** (`/purchases/retentions`)
 - Nuevo botón **"Reporte PDF"** (junto a "Exportar TXT SENIAT") que genera un PDF **vertical (A4)** con el listado de comprobantes de retención de IVA y el **total retenido** ($ y Bs), conteos por estado, y proveedor+RIF con altura de fila dinámica (nombres largos no se cortan).
@@ -106,14 +135,14 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 
 ## 🗓️ Sesión 2026-07-21 (7) — Detalle de factura: botón "Reporte Zelle" (ticket 80mm con cabecera grande hardcodeada)
 
-> Cambios en `main` (**sin desplegar aún**). Solo frontend. Probado en local (idéntico al ticket normal).
+> **✅ Desplegado 2026-07-22 en ambas empresas.** Solo frontend. Probado en local (idéntico al ticket normal).
 
 - Nuevo ítem **"Reporte Zelle"** en el menú (⋯) de `/sales/invoices/[id]`: genera el **mismo ticket 80mm** que el de notas, pero **siempre disponible** (fiscal o nota, no ramifica a PDF) y con la **cabecera de la empresa grande HARDCODEADA**: `INVERSIONES EL TREBOL 2017, C.A` · RIF `J-40990760-0` · dirección `  Calle 31 con avenida 35, y 36, Acarigua 3303` (con espacios iniciales) · Telf `+58 424-5731353`. Reutiliza `printReceipt(invoice, empresaHardcodeada)` (agente térmico primero, HTML fallback).
 - **Fix HTML del ticket** (`print-receipt.ts`): la dirección larga se partía en 2 líneas en el visor de print() (el HTML a 11px cabe ~40 car vs ~48 de la térmica). Ahora la línea de dirección va `white-space:nowrap` + fuente ajustada → 1 línea, idéntica a la térmica. Los 2 espacios iniciales los honra el agente (offset del centrado); en HTML centrado no afectan.
 
 ## 🗓️ Sesión 2026-07-21 (6) — Devolución de ventas (NCV): campo "Motivo" obligatorio
 
-> Cambios en `main` (**sin desplegar aún**). Probado en local. Incluye **migración aditiva** (enum + columna).
+> **✅ Desplegado 2026-07-22 en ambas empresas.** Probado en local. Incluyó **migración aditiva** (enum + columna).
 
 Se agregó un select **"Motivo de la devolución"** obligatorio al crear una **Nota de Crédito de Venta (NCV = devolución de ventas)**, con 4 opciones: **Asesoría, Cliente, Faltante en almacén, Producto defectuoso**.
 - **Schema:** enum `SalesReturnReason` + `CreditDebitNote.motivo` (opcional en BD; obligatorio para NCV por lógica). Migración `20260721160000_note_sales_return_reason` (crea el TYPE con guard + `ADD COLUMN IF NOT EXISTS`) + red de seguridad en `fix-schema.sql`.

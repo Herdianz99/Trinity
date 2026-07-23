@@ -321,9 +321,11 @@ export class PayablesService {
             retentionVoucherId: retentionVoucher.id,
             retentionVoucherNumber: retNumber,
             payableId: payable.id,
-            // Misma fecha que su factura: periodo recepcion, display original
+            // La retencion se declara y se MUESTRA en el libro con su fecha de recepcion
+            // (= issueDate del comprobante = "Fecha emision" de /purchases/retentions), NO con la
+            // fecha de la factura. Asi sale en su propia fecha, en orden cronologico.
             entryDate: receptionDate || originalDate || new Date(),
-            documentDate: originalDate || receptionDate || new Date(),
+            documentDate: receptionDate || originalDate || new Date(),
             supplierControlNumber: dto.controlFiscal || null,
             supplierInvoiceNumber: dto.documentNumber || number,
             supplierName: supplier.name,
@@ -416,7 +418,8 @@ export class PayablesService {
             islrRetentionVoucherNumber: islrNumber,
             payableId: payable.id,
             entryDate: receptionDate || originalDate || new Date(),
-            documentDate: originalDate || receptionDate || new Date(),
+            // Retencion ISLR: display = fecha de recepcion (= issueDate), no la de la factura.
+            documentDate: receptionDate || originalDate || new Date(),
             supplierControlNumber: dto.controlFiscal || null,
             supplierInvoiceNumber: dto.documentNumber || number,
             supplierName: supplier.name,

@@ -151,11 +151,13 @@ export class PurchaseBookService {
         },
       });
 
-      // Si se cambio la fecha de una FACTURA (no una linea de retencion), arrastrar la misma
-      // fecha de declaracion (entryDate) y de documento (documentDate) a su(s) linea(s) de
-      // retencion del libro y al issueDate del/los comprobante(s), para que factura y retencion
-      // queden en el MISMO periodo de declaracion. El numero del comprobante (prefijo YYYYMM) se
-      // mantiene. Se emparejan por payableId (CxP manual) o purchaseOrderId (factura de compra).
+      // Si se cambio la fecha de DECLARACION (entryDate) de una FACTURA (no una linea de
+      // retencion), arrastrar esa fecha a su(s) linea(s) de retencion del libro (entryDate Y
+      // documentDate, porque la retencion se MUESTRA con su fecha de declaracion/recepcion, no con
+      // la de la factura) y al issueDate del/los comprobante(s), para que factura y retencion
+      // queden en el MISMO periodo. Un cambio de solo la fecha de documento de la factura
+      // (documentDate = display de la factura) NO mueve la retencion. El numero del comprobante
+      // (prefijo YYYYMM) se mantiene. Se emparejan por payableId o purchaseOrderId.
       const movedDate = dto.entryDate !== undefined || dto.documentDate !== undefined;
       const isFactura = !entry.isRetentionLine && !entry.isIslrRetentionLine;
       const link = entry.payableId
@@ -175,9 +177,16 @@ export class PurchaseBookService {
         });
         if (retLines.length > 0) {
           const retData: any = {};
-          if (dto.entryDate !== undefined) retData.entryDate = data.entryDate;
-          if (dto.documentDate !== undefined) retData.documentDate = data.documentDate;
-          await tx.purchaseBookEntry.updateMany({ where: retWhere, data: retData });
+          if (dto.entryDate !== undefined) {
+            retData.entryDate = data.entryDate;
+            // La retencion se muestra con su fecha de declaracion/recepcion (= issueDate), no con
+            // la fecha de la factura; al mover la declaracion de la factura, la retencion la sigue.
+            retData.documentDate = data.entryDate;
+          }
+          // NO copiar dto.documentDate (fecha de la factura) a la retencion.
+          if (Object.keys(retData).length > 0) {
+            await tx.purchaseBookEntry.updateMany({ where: retWhere, data: retData });
+          }
 
           // El issueDate del comprobante = fecha de declaracion de la retencion → mover con entryDate
           if (dto.entryDate !== undefined) {
