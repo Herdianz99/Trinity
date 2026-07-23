@@ -86,15 +86,9 @@ export default function QuotationsPage() {
     fetchQuotations();
   }, [fetchQuotations]);
 
-  async function openDetail(id: string) {
-    try {
-      const res = await fetch(`/api/proxy/quotations/${id}`);
-      const data = await res.json();
-      setDetail(data);
-      setDetailOpen(true);
-    } catch {
-      setMessage({ type: 'error', text: 'Error al cargar detalle' });
-    }
+  // El detalle ahora es una pagina dedicada (/quotations/[id]).
+  function openDetail(id: string) {
+    router.push(`/quotations/${id}`);
   }
 
   async function handlePrint(id: string, hideIva = false) {
@@ -313,7 +307,7 @@ export default function QuotationsPage() {
                   No se encontraron cotizaciones
                 </td></tr>
               ) : quotations.map(q => (
-                <tr key={q.id} className="border-b border-slate-700/30 hover:bg-slate-800/40">
+                <tr key={q.id} onClick={() => openDetail(q.id)} className="border-b border-slate-700/30 hover:bg-slate-800/40 cursor-pointer">
                   <td className="px-4 py-3 font-mono text-green-400 text-xs">{q.number}</td>
                   <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">{q.customer?.name || 'Sin cliente'}</td>
                   <td className="px-4 py-3 text-center text-slate-400">{q._count.items}</td>
@@ -329,15 +323,15 @@ export default function QuotationsPage() {
                   <td className="px-4 py-3 text-slate-400 text-xs hidden lg:table-cell">{new Date(q.createdAt).toLocaleDateString('es-VE')}</td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => openDetail(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Ver detalle">
+                      <button onClick={(e) => { e.stopPropagation(); openDetail(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Ver detalle">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => setPrintChoiceId(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
+                      <button onClick={(e) => { e.stopPropagation(); setPrintChoiceId(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
                         <Printer size={15} />
                       </button>
                       {['DRAFT', 'APPROVED'].includes(q.status) && (
                         <button
-                          onClick={() => handleConvert(q.id)}
+                          onClick={(e) => { e.stopPropagation(); handleConvert(q.id); }}
                           disabled={converting === q.id}
                           className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-emerald-400 disabled:opacity-40"
                           title="Convertir a factura"
@@ -346,7 +340,7 @@ export default function QuotationsPage() {
                         </button>
                       )}
                       {q.status === 'DRAFT' && (
-                        <button onClick={() => handleDelete(q.id)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400" title="Rechazar">
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400" title="Rechazar">
                           <Trash2 size={15} />
                         </button>
                       )}
