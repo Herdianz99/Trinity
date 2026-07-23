@@ -41,6 +41,32 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 - **Pedido online — tasa al facturar:** decisión del jefe (¿tasa del pedido o de emisión al facturar al día siguiente?). Ver memoria `pedido-online-tasa-facturacion`.
 - **eltrebol (chica) — deploy pendiente:** próximo deploy trae tienda online + captura + cron tasa BCV. Ver memoria `eltrebol-deploy-pendiente-tienda-cron`.
 
+## 🗓️ Sesión 2026-07-22 (3) — Cotizaciones: conversión en espera + vendedor + página de detalle, y clic-en-fila en maestros
+
+> Cambios de código en `main` (**sin desplegar aún**). Verificados end-to-end en local contra la BD de la grande. **Trae 1 migración aditiva** (`20260722180000_quotation_seller`) + red de seguridad en `deploy/fix-schema.sql`.
+
+**Cotizaciones — conversión a factura EN ESPERA (bug bloqueante):**
+- Reportado: "convertir a factura" fallaba con *"Esta caja no tiene serie configurada"* cuando el vendedor/supervisor/admin no tenía caja abierta. Causa: la conversión resolvía una caja de respaldo y exigía que tuviera serie.
+- Fix (`quotations.service.ts` `convertToInvoice`): la factura nace **en espera** (`number: null`, sin serie), igual que el POS ("el número se asigna al cobrar para evitar huecos"). La caja/serie/número se fijan al cobrar. Ya no exige caja con serie.
+
+**Cotizaciones — vendedor (`sellerId`):**
+- `Quotation.sellerId` (schema + migración `20260722180000_quotation_seller` con `IF NOT EXISTS` + FK a Seller + índice; `Seller.phone` ya existía).
+- Al **crear**: guarda el vendedor del usuario en sesión (o `dto.sellerId`). Al **convertir**: la factura hereda el vendedor **de la cotización** (preserva atribución para comisiones; fallback al que convierte). `create-quotation.dto.ts` acepta `sellerId?`.
+- **PDF de cotización** (`quotation-pdf.service.ts`): nuevo bloque **VENDEDOR** con nombre + teléfono (para que el cliente lo contacte). `findOne` ahora incluye el vendedor.
+
+**Cotizaciones — página de detalle + clic en fila:**
+- Nueva página `quotations/[id]/page.tsx` (encabezado/estado/acciones: enviar/aprobar/rechazar/convertir/imprimir; cliente, **vendedor con teléfono**, items, totales, notas).
+- El listado ahora **navega a la página** al hacer clic en la fila (tabla y tarjeta), con `stopPropagation` en los botones de acción.
+
+**Maestros — clic en fila abre el modal existente:**
+- En **vendedores** (`settings/sellers`), **empleados**, **departamentos** y **cargos** (`payroll/*`): clic en la fila abre el modal de edición (antes solo el botón de lápiz), con `cursor-pointer` y `stopPropagation` en los botones de acción para no disparar doble.
+
+**Verificado en local:** crear cotización como vendedor → sellerId seteado; convertir → factura hereda vendedor y nace `number: null`; PDF 200; login de prueba de DAVID VILLAFAÑE (`David10`, solo local). `tsc --noEmit` OK en API y web.
+
+**Pendiente:** desplegar (recordar que este bloque SÍ tiene migración); opcional: selector de vendedor en el formulario de crear cotización (para admin/supervisor).
+
+---
+
 ## 🗓️ Sesión 2026-07-22 (2) — Retenciones/libro: filtro por emisión, orden por fecha, serie no fiscal por defecto + operaciones fiscales en prod
 
 > 3 cambios de código en `main` (**sin desplegar aún**). Verificados en local contra la BD de la grande (endpoints en vivo). Además, varias correcciones de datos directo en producción (chica y grande) con respaldo previo cada una.
