@@ -23,6 +23,7 @@ export interface PayrollLineInput {
   daysRest: number;
   overtimeDayHours: number;
   overtimeNightHours: number;
+  bonusUsd: number;   // bonificación del período, en USD (se convierte a Bs con la tasa)
   manualDeductionUsd: number;
   creditDeductionBs: number;
   rate: number; // tasa BCV
@@ -31,7 +32,7 @@ export interface PayrollLineInput {
 export interface PayrollLineResult {
   monthlyUsd: number; dailyUsd: number; totalDays: number; periodSalaryUsd: number;
   salaryBs: number; hourlyBs: number; otDayRateBs: number; otNightRateBs: number;
-  otDayTotalBs: number; otNightTotalBs: number; overtimeBs: number;
+  otDayTotalBs: number; otNightTotalBs: number; overtimeBs: number; bonusBs: number;
   ivssBs: number; faovBs: number; incesBs: number; manualDeductionBs: number;
   creditDeductionBs: number; totalDeductionsBs: number;
   grossBs: number; netBs: number; netUsd: number;
@@ -71,6 +72,9 @@ export function computePayrollLine(input: PayrollLineInput, p: PayrollParams): P
   const otNightTotalBs = r2(input.overtimeNightHours * otNightRateBs);
   const overtimeBs = r2(otDayTotalBs + otNightTotalBs);
 
+  // Bonificación: monto en USD convertido a Bs. Es una asignación (se paga), igual que las HE.
+  const bonusBs = r2(input.bonusUsd * input.rate);
+
   const worked = totalDays > 0;
   const ivssBs = worked ? p.ivssBs : 0;
   const faovBs = worked ? p.faovBs : 0;
@@ -79,13 +83,13 @@ export function computePayrollLine(input: PayrollLineInput, p: PayrollParams): P
   const creditDeductionBs = r2(input.creditDeductionBs);
   const totalDeductionsBs = r2(ivssBs + faovBs + incesBs + manualDeductionBs + creditDeductionBs);
 
-  const grossBs = r2(salaryBs + overtimeBs);
+  const grossBs = r2(salaryBs + overtimeBs + bonusBs);
   const netBs = r2(grossBs - totalDeductionsBs);
   const netUsd = input.rate > 0 ? r2(netBs / input.rate) : 0;
 
   return {
     monthlyUsd, dailyUsd, totalDays, periodSalaryUsd, salaryBs, hourlyBs,
-    otDayRateBs, otNightRateBs, otDayTotalBs, otNightTotalBs, overtimeBs,
+    otDayRateBs, otNightRateBs, otDayTotalBs, otNightTotalBs, overtimeBs, bonusBs,
     ivssBs, faovBs, incesBs, manualDeductionBs, creditDeductionBs, totalDeductionsBs,
     grossBs, netBs, netUsd,
   };

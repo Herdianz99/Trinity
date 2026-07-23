@@ -35,6 +35,12 @@ export class PayrollLineInputDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  bonusUsd?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   manualDeductionUsd?: number;
 
   @ApiProperty({ required: false })

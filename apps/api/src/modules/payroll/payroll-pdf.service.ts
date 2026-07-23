@@ -89,6 +89,7 @@ export class PayrollPdfService {
       daysRest: line.daysRest,
       overtimeDayHours: line.overtimeDayHours,
       overtimeNightHours: line.overtimeNightHours,
+      bonusUsd: line.bonusUsd,
       manualDeductionUsd: line.manualDeductionUsd,
       creditDeductionBs: line.creditDeductionBs,
       rate: run.exchangeRate,
@@ -107,6 +108,8 @@ export class PayrollPdfService {
     y = money(`Dias de descanso (${line.daysRest})`, restBs, y);
     if (includeOvertime && line.overtimeDayHours > 0) y = money(`Horas extra diurnas (${line.overtimeDayHours})`, c.otDayTotalBs, y);
     if (includeOvertime && line.overtimeNightHours > 0) y = money(`Horas extra nocturnas (${line.overtimeNightHours})`, c.otNightTotalBs, y);
+    // Bonificación: solo en el recibo "con horas extra" (el "sin horas extra" no la incluye).
+    if (includeOvertime && line.bonusUsd > 0) y = money(`Bonificacion ($${fmt(line.bonusUsd)})`, c.bonusBs, y);
     y = money('Total asignaciones', grossBs, y, true);
     y += 6;
 
@@ -254,6 +257,7 @@ export class PayrollPdfService {
           const c = computePayrollLine({
             salaryBaseUsd: l.salaryBaseUsd, daysWorked: l.daysWorked, daysRest: l.daysRest,
             overtimeDayHours: l.overtimeDayHours, overtimeNightHours: l.overtimeNightHours,
+            bonusUsd: l.bonusUsd,
             manualDeductionUsd: l.manualDeductionUsd, creditDeductionBs: l.creditDeductionBs,
             rate: run.exchangeRate,
           }, eng);

@@ -2255,17 +2255,20 @@ model PayrollRunLine {
   daysRest           Float      @default(0)
   overtimeDayHours   Float      @default(0)
   overtimeNightHours Float      @default(0)
+  bonusUsd           Float      @default(0)   // bonificación del período, en USD (snapshot del empleado, editable)
   manualDeductionUsd Float      @default(0)
   creditDeductionBs  Float      @default(0)
   // Calculados
   salaryBs           Float      @default(0)
   overtimeBs         Float      @default(0)
+  bonusBs            Float      @default(0)   // bonificación convertida a Bs con la tasa de la corrida
   grossBs            Float      @default(0)
   ivssBs             Float      @default(0)
   faovBs             Float      @default(0)
   totalDeductionsBs  Float      @default(0)
   netBs              Float      @default(0)
   netUsd             Float      @default(0)
+  receiptSentAt      DateTime?              // último envío del recibo por correo (para mostrar estado)
 
   @@unique([payrollRunId, employeeId])
 }

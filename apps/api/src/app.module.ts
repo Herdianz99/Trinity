@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
+import { MailModule } from './modules/mail/mail.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CompanyConfigModule } from './modules/company-config/company-config.module';
@@ -70,6 +71,7 @@ import { PayrollModule } from './modules/payroll/payroll.module';
     ScheduleModule.forRoot(),
     RedisModule,
     PrismaModule,
+    MailModule,
     HealthModule,
     AuthModule,
     UsersModule,

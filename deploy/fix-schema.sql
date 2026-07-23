@@ -2466,6 +2466,9 @@ CREATE TABLE IF NOT EXISTS "PayrollRunLine" (
 CREATE UNIQUE INDEX IF NOT EXISTS "PayrollRunLine_payrollRunId_employeeId_key" ON "PayrollRunLine"("payrollRunId","employeeId");
 DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_payrollRunId_fkey" FOREIGN KEY ("payrollRunId") REFERENCES "PayrollRun"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "PayrollRunLine" ADD CONSTRAINT "PayrollRunLine_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE "PayrollRunLine" ADD COLUMN IF NOT EXISTS "bonusUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "PayrollRunLine" ADD COLUMN IF NOT EXISTS "bonusBs" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "PayrollRunLine" ADD COLUMN IF NOT EXISTS "receiptSentAt" TIMESTAMP(3);
 
 -- =============================================================================
 -- SECTION: PAYROLL MASTERS (Department, Position) + Employee bonus/FK columns

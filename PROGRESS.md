@@ -8,6 +8,28 @@ Todos los bloques de las sesiones **2026-07-21 (6/7)** y **2026-07-22 (1/2/3)** 
 
 ---
 
+## 🗓️ Sesión 2026-07-23 (2) — Nómina: bonificación por línea + envío de recibos por correo
+
+> **✅ Commiteado a `main` (pendiente de deploy).** **Trae 1 migración aditiva** (`20260723150000_payroll_line_bonus`: `bonusUsd`/`bonusBs`/`receiptSentAt` en `PayrollRunLine`) + red de seguridad en `deploy/fix-schema.sql`. Verificado end-to-end en local contra la copia de la grande. **Correo probado en local:** SMTP de Gmail verificado con App Password de `legoadh@gmail.com` (`smtp.gmail.com:465 SSL`) + envío real con PDF adjunto OK. **FALTA para producción:** agregar `MAIL_USER`/`MAIL_PASS`/`MAIL_FROM_NAME` al `apps/api/.env` del server + `pnpm install` (nodemailer) + reiniciar PM2.
+
+**1) Bonificación por línea (asignación que se paga, como las HE):**
+- Nuevo campo **`bonusUsd`** (snapshot del `Employee.bonusUsd` al crear/sincronizar, editable por corrida) + **`bonusBs`** (calculado = `bonusUsd × tasa`). El motor (`payroll-calc.ts`) la suma al bruto/neto.
+- **Recibo PDF "con horas extra"**: muestra el concepto **"Bonificación"**. El recibo **"sin horas extra"** la excluye (igual que las HE).
+- **Pantalla `/payroll/runs/[id]`**: columna editable **"Bonif. USD"** + calculada **"Bonif. Bs"**, reflejada en bruto/neto/totales.
+- Verificado: bonusBs = 50×736.9339 = 36.846,70; Δneto = +36.846,70; PDF con HE 2377 bytes vs sin HE 2313 (concepto ausente). `tsc --noEmit` OK API+web.
+- **PENDIENTE decisión:** la Relación PDF incluye la bonificación en su "Total" (vía bruto); decidir si se deja, se le agrega columna, o se excluye.
+
+**2) Envío de recibos PDF por correo (nodemailer):**
+- Nuevo **`MailModule` global** (`modules/mail/`) con `MailService` (SMTP configurable por env; defaults de Gmail). `isConfigured()` = hay `MAIL_USER`+`MAIL_PASS`.
+- Endpoint **`POST /payroll-runs/:id/send-receipts`** (`{ includeOvertime?, lineIds? }`): recorre empleados con email, adjunta su recibo PDF, marca `receiptSentAt`, devuelve resumen `sent/noEmail/failed`. Sin config → 400 con mensaje claro.
+- **Frontend**: botón **"Enviar recibos"** (modal con-HE/sin-HE + resumen) y **reenvío por fila** (icono correo + ✓ si ya se envió, tooltip con fecha).
+- Verificado con cuenta **Ethereal**: `sentCount:1, noEmail:1, failed:0`, `receiptSentAt` marcado. Todo lo temporal revertido.
+- **FALTA para producción**: agregar al **`apps/api/.env` del server** las variables `MAIL_USER` (correo Gmail), `MAIL_PASS` (**App Password**, requiere 2FA), `MAIL_FROM_NAME`. (Opcionales: `MAIL_HOST`/`MAIL_PORT`/`MAIL_SECURE`; por defecto Gmail 465 SSL.) Reiniciar PM2 tras editar el `.env`.
+
+**Dependencia nueva:** `nodemailer` + `@types/nodemailer` en `apps/api` (correr `pnpm install` en el deploy).
+
+---
+
 ## 🗓️ Sesión 2026-07-23 (1) — Retenciones en el libro de compras con su FECHA DE RECEPCIÓN (= "Fecha emisión")
 
 > Cambios de código en `main` (**pendiente de deploy — solo código, SIN migración**). Además, corrección de datos ya aplicada en **producción grande** (con respaldo previo). Verificado en local contra la copia de la grande.

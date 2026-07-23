@@ -6,13 +6,16 @@ import { computePayrollLine, buildEngineParams, DEFAULT_PAYROLL_PARAM } from './
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
 import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
+import { SendReceiptsDto } from './dto/send-receipts.dto';
+import { PayrollPdfService } from './payroll-pdf.service';
+import { MailService } from '../mail/mail.service';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const LINE_INCLUDE = {
   employee: {
     include: {
-      customer: { select: { id: true, name: true, documentType: true, rif: true } },
+      customer: { select: { id: true, name: true, documentType: true, rif: true, email: true } },
       department: { select: { id: true, name: true } },
       position: { select: { id: true, name: true } },
     },
@@ -21,7 +24,11 @@ const LINE_INCLUDE = {
 
 @Injectable()
 export class PayrollRunsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pdf: PayrollPdfService,
+    private mail: MailService,
+  ) {}
 
   private async generateNumber(): Promise<string> {
     const last = await this.prisma.payrollRun.findFirst({
@@ -51,6 +58,7 @@ export class PayrollRunsService {
         daysRest: line.daysRest,
         overtimeDayHours: line.overtimeDayHours,
         overtimeNightHours: line.overtimeNightHours,
+        bonusUsd: line.bonusUsd,
         manualDeductionUsd: line.manualDeductionUsd,
         creditDeductionBs: line.creditDeductionBs,
         rate: run.exchangeRate,
@@ -58,7 +66,7 @@ export class PayrollRunsService {
       await tx.payrollRunLine.update({
         where: { id: line.id },
         data: {
-          salaryBs: res.salaryBs, overtimeBs: res.overtimeBs, grossBs: res.grossBs,
+          salaryBs: res.salaryBs, overtimeBs: res.overtimeBs, bonusBs: res.bonusBs, grossBs: res.grossBs,
           ivssBs: res.ivssBs, faovBs: res.faovBs, totalDeductionsBs: res.totalDeductionsBs,
           netBs: res.netBs, netUsd: res.netUsd,
         },
@@ -105,6 +113,7 @@ export class PayrollRunsService {
             create: employees.map((e) => ({
               employeeId: e.id,
               salaryBaseUsd: e.salaryBaseUsd,
+              bonusUsd: e.bonusUsd,
             })),
           },
         },
@@ -177,6 +186,7 @@ export class PayrollRunsService {
             ...(l.daysRest !== undefined ? { daysRest: l.daysRest } : {}),
             ...(l.overtimeDayHours !== undefined ? { overtimeDayHours: l.overtimeDayHours } : {}),
             ...(l.overtimeNightHours !== undefined ? { overtimeNightHours: l.overtimeNightHours } : {}),
+            ...(l.bonusUsd !== undefined ? { bonusUsd: l.bonusUsd } : {}),
             ...(l.manualDeductionUsd !== undefined ? { manualDeductionUsd: l.manualDeductionUsd } : {}),
             ...(l.creditDeductionBs !== undefined ? { creditDeductionBs: l.creditDeductionBs } : {}),
           },
@@ -232,7 +242,7 @@ export class PayrollRunsService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payrollRunLine.createMany({
-        data: missing.map((e) => ({ payrollRunId: id, employeeId: e.id, salaryBaseUsd: e.salaryBaseUsd })),
+        data: missing.map((e) => ({ payrollRunId: id, employeeId: e.id, salaryBaseUsd: e.salaryBaseUsd, bonusUsd: e.bonusUsd })),
       });
       await this.recompute(tx, id);
     });
@@ -300,6 +310,79 @@ export class PayrollRunsService {
       await tx.payrollRun.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date() } });
     });
     return this.findOne(id);
+  }
+
+  // Envía por correo el recibo PDF individual de cada empleado con email. Si vienen lineIds, solo
+  // esas líneas (reenvío puntual). Devuelve el resumen enviados / sin-correo / fallidos. Marca
+  // receiptSentAt en cada línea enviada. No cambia el estado de la corrida (se puede reenviar).
+  async sendReceipts(id: string, dto: SendReceiptsDto) {
+    if (!this.mail.isConfigured()) {
+      throw new BadRequestException(
+        'El correo no está configurado en el servidor (falta MAIL_USER / MAIL_PASS). Configúrelo antes de enviar recibos.',
+      );
+    }
+    const run = await this.prisma.payrollRun.findUnique({
+      where: { id },
+      include: {
+        lines: {
+          include: { employee: { include: { customer: { select: { name: true, email: true } } } } },
+          orderBy: { employee: { code: 'asc' } },
+        },
+      },
+    });
+    if (!run) throw new NotFoundException('Corrida no encontrada');
+
+    const includeOvertime = dto.includeOvertime !== false;
+    const filter = dto.lineIds && dto.lineIds.length > 0 ? new Set(dto.lineIds) : null;
+    const targets = run.lines.filter((l) => !filter || filter.has(l.id));
+
+    const company = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { companyName: true },
+    });
+    const companyName = company?.companyName || 'Trinity';
+    const fmtD = (d: Date) => new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' });
+    const periodo = `${fmtD(run.periodFrom)} - ${fmtD(run.periodTo)}`;
+
+    const sent: { lineId: string; name: string; email: string }[] = [];
+    const noEmail: { lineId: string; name: string }[] = [];
+    const failed: { lineId: string; name: string; email: string; error: string }[] = [];
+
+    for (const line of targets) {
+      const cust = line.employee.customer;
+      const email = (cust.email || '').trim();
+      if (!email) {
+        noEmail.push({ lineId: line.id, name: cust.name });
+        continue;
+      }
+      try {
+        const pdfBuf = await this.pdf.generateReceipt(id, line.id, includeOvertime);
+        const safeName = (cust.name || 'empleado').replace(/[^a-zA-Z0-9]+/g, '_');
+        await this.mail.sendMail({
+          to: email,
+          subject: `Recibo de pago de nómina ${run.number || ''} - ${companyName}`.trim(),
+          html:
+            `<p>Estimado(a) ${cust.name},</p>` +
+            `<p>Adjunto encontrará su recibo de pago de nómina correspondiente al período <b>${periodo}</b>.</p>` +
+            `<p>Saludos cordiales,<br/>${companyName}</p>`,
+          attachments: [{ filename: `recibo-nomina-${run.number || id}-${safeName}.pdf`, content: pdfBuf }],
+        });
+        await this.prisma.payrollRunLine.update({ where: { id: line.id }, data: { receiptSentAt: new Date() } });
+        sent.push({ lineId: line.id, name: cust.name, email });
+      } catch (err: any) {
+        failed.push({ lineId: line.id, name: cust.name, email, error: err?.message || 'Error al enviar' });
+      }
+    }
+
+    return {
+      total: targets.length,
+      sentCount: sent.length,
+      noEmailCount: noEmail.length,
+      failedCount: failed.length,
+      sent,
+      noEmail,
+      failed,
+    };
   }
 
   async remove(id: string) {

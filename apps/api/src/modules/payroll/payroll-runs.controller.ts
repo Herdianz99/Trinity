@@ -11,6 +11,7 @@ import { PayrollPdfService } from './payroll-pdf.service';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
 import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
+import { SendReceiptsDto } from './dto/send-receipts.dto';
 
 @ApiTags('Payroll - Runs')
 @ApiBearerAuth()
@@ -62,6 +63,12 @@ export class PayrollRunsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
+  }
+
+  // Envía por correo el recibo PDF individual de cada empleado con email (o solo lineIds si se indican).
+  @Post(':id/send-receipts')
+  sendReceipts(@Param('id') id: string, @Body() dto: SendReceiptsDto) {
+    return this.service.sendReceipts(id, dto);
   }
 
   // ------- PDFs -------

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files } from 'lucide-react';
+import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files, Mail, Check, X } from 'lucide-react';
 
 interface Line {
   id: string;
@@ -11,17 +11,20 @@ interface Line {
   daysRest: number;
   overtimeDayHours: number;
   overtimeNightHours: number;
+  bonusUsd: number;
   manualDeductionUsd: number;
   creditDeductionBs: number;
   salaryBs: number;
   overtimeBs: number;
+  bonusBs: number;
   grossBs: number;
   ivssBs: number;
   faovBs: number;
   totalDeductionsBs: number;
   netBs: number;
   netUsd: number;
-  employee: { code: string | null; department: { name: string } | null; customerDebtUsd?: number; customer: { name: string } };
+  receiptSentAt: string | null;
+  employee: { code: string | null; department: { name: string } | null; customerDebtUsd?: number; customer: { name: string; email?: string | null } };
 }
 
 interface Run {
@@ -44,7 +47,7 @@ const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDig
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('es-VE', { timeZone: 'UTC' });
 
 // Campos capturables por el usuario
-const INPUT_FIELDS = ['daysWorked', 'daysRest', 'overtimeDayHours', 'overtimeNightHours', 'manualDeductionUsd', 'creditDeductionBs'] as const;
+const INPUT_FIELDS = ['daysWorked', 'daysRest', 'overtimeDayHours', 'overtimeNightHours', 'bonusUsd', 'manualDeductionUsd', 'creditDeductionBs'] as const;
 type InputField = typeof INPUT_FIELDS[number];
 
 export default function PayrollRunDetailPage() {
@@ -72,6 +75,48 @@ export default function PayrollRunDetailPage() {
     if (!otAsk) return;
     window.open(`${otAsk}?overtime=${includeOvertime}`, '_blank', 'noopener,noreferrer');
     setOtAsk(null);
+  }
+
+  // Envío de recibos por correo
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendOvertime, setSendOvertime] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ total: number; sentCount: number; noEmailCount: number; failedCount: number; noEmail: { name: string }[]; failed: { name: string; error: string }[] } | null>(null);
+
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  async function resendOne(l: Line) {
+    if (!(l.employee.customer.email || '').trim()) {
+      setMessage({ type: 'error', text: `${l.employee.customer.name} no tiene correo registrado` });
+      return;
+    }
+    setResendingId(l.id); setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/send-receipts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeOvertime: true, lineIds: [l.id] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      if (data.sentCount === 1) setMessage({ type: 'success', text: `Recibo enviado a ${l.employee.customer.name}` });
+      else setMessage({ type: 'error', text: data.failed?.[0]?.error || 'No se pudo enviar el recibo' });
+      await fetchRun();
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+    setResendingId(null);
+  }
+
+  async function handleSendReceipts(lineIds?: string[]) {
+    setSending(true); setSendResult(null); setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/send-receipts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeOvertime: sendOvertime, ...(lineIds ? { lineIds } : {}) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setSendResult(data);
+      await fetchRun(); // refresca receiptSentAt
+    } catch (err: any) { setMessage({ type: 'error', text: err.message }); setSendOpen(false); }
+    setSending(false);
   }
 
   const fetchRun = useCallback(async () => {
@@ -157,6 +202,7 @@ export default function PayrollRunDetailPage() {
             id: l.id,
             daysWorked: l.daysWorked, daysRest: l.daysRest,
             overtimeDayHours: l.overtimeDayHours, overtimeNightHours: l.overtimeNightHours,
+            bonusUsd: l.bonusUsd,
             manualDeductionUsd: l.manualDeductionUsd, creditDeductionBs: l.creditDeductionBs,
           })),
         }),
@@ -217,6 +263,9 @@ export default function PayrollRunDetailPage() {
           </a>
           <button onClick={() => setOtAsk(`/api/proxy/payroll-runs/${id}/receipts/pdf`)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
             <Files size={15} /> Recibos PDF
+          </button>
+          <button onClick={() => { setSendResult(null); setSendOpen(true); }} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-indigo-200 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 transition-colors">
+            <Mail size={15} /> Enviar recibos
           </button>
           {isDraft && (
             <>
@@ -286,10 +335,12 @@ export default function PayrollRunDetailPage() {
                 <Th>Días<br/>desc.</Th>
                 <Th>HE<br/>diurnas</Th>
                 <Th>HE<br/>noct.</Th>
+                <Th>Bonif.<br/>USD</Th>
                 <Th>Deduc.<br/>USD</Th>
                 <Th>Deduc.<br/>créd. Bs</Th>
                 <Th className="text-right bg-slate-800/60">Salario<br/>Bs</Th>
                 <Th className="text-right bg-slate-800/60">HE Bs</Th>
+                <Th className="text-right bg-slate-800/60">Bonif.<br/>Bs</Th>
                 <Th className="text-right bg-slate-800/60">Bruto<br/>Bs</Th>
                 <Th className="text-right bg-slate-800/60">Deduc.<br/>Bs</Th>
                 <Th className="text-right bg-slate-800/60">Neto Bs</Th>
@@ -365,14 +416,24 @@ export default function PayrollRunDetailPage() {
                   ))}
                   <Td>{fmt(l.salaryBs)}</Td>
                   <Td>{fmt(l.overtimeBs)}</Td>
+                  <Td className={l.bonusBs > 0 ? 'text-emerald-300' : ''}>{fmt(l.bonusBs)}</Td>
                   <Td className="text-slate-200">{fmt(l.grossBs)}</Td>
                   <Td className="text-red-300">{fmt(l.totalDeductionsBs)}</Td>
                   <Td className="text-green-300 font-semibold">{fmt(l.netBs)}</Td>
                   <Td>${fmt(l.netUsd)}</Td>
-                  <td className="px-2 py-2 text-center">
+                  <td className="px-2 py-2 text-center whitespace-nowrap">
                     <button onClick={() => setOtAsk(`/api/proxy/payroll-runs/${id}/receipt/${l.id}/pdf`)} className="inline-flex p-1 rounded text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Recibo PDF">
                       <FileText size={14} />
                     </button>
+                    <button
+                      onClick={() => resendOne(l)}
+                      disabled={resendingId === l.id || !(l.employee.customer.email || '').trim()}
+                      className="inline-flex p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={(l.employee.customer.email || '').trim() ? (l.receiptSentAt ? `Reenviar recibo (último envío: ${fmtDate(l.receiptSentAt)})` : 'Enviar recibo por correo') : 'Sin correo registrado'}
+                    >
+                      {resendingId === l.id ? <Loader2 className="animate-spin" size={14} /> : <Mail size={14} />}
+                    </button>
+                    {l.receiptSentAt && <Check size={12} className="inline text-green-400 ml-0.5" />}
                   </td>
                 </tr>
               ))}
@@ -380,8 +441,8 @@ export default function PayrollRunDetailPage() {
             <tfoot className="sticky bottom-0">
               <tr className="bg-slate-800 border-t-2 border-slate-600 font-semibold">
                 <td className="px-3 py-2.5 sticky left-0 bg-slate-800 text-slate-300">TOTALES ({run.lines.length})</td>
-                <td colSpan={6}></td>
-                <td colSpan={2}></td>
+                <td colSpan={7}></td>
+                <td colSpan={3}></td>
                 <Td className="text-slate-100">{fmt(run.totalGrossBs)}</Td>
                 <Td className="text-red-300">{fmt(run.totalDeductionsBs)}</Td>
                 <Td className="text-green-300">{fmt(run.totalNetBs)}</Td>
@@ -414,6 +475,64 @@ export default function PayrollRunDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Enviar recibos por correo */}
+      {sendOpen && (() => {
+        const withEmail = run.lines.filter((l) => (l.employee.customer.email || '').trim()).length;
+        const withoutEmail = run.lines.length - withEmail;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !sending && setSendOpen(false)} />
+            <div className="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+              <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2"><Mail size={18} /> Enviar recibos por correo</h2>
+              {!sendResult ? (
+                <>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Se enviará el recibo PDF individual a cada empleado con correo registrado.
+                    <br />
+                    <span className="text-slate-300">{withEmail}</span> con correo
+                    {withoutEmail > 0 && <> · <span className="text-amber-400">{withoutEmail}</span> sin correo (se omiten)</>}.
+                  </p>
+                  <label className="flex items-center gap-2 mb-5 text-sm text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={sendOvertime} onChange={(e) => setSendOvertime(e.target.checked)} className="accent-indigo-500" />
+                    Incluir horas extra / bonificación en el recibo
+                  </label>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSendReceipts()} disabled={sending || withEmail === 0}
+                      className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                      {sending ? <><Loader2 className="animate-spin" size={15} /> Enviando…</> : <><Mail size={15} /> Enviar {withEmail} recibo{withEmail === 1 ? '' : 's'}</>}
+                    </button>
+                    <button onClick={() => setSendOpen(false)} disabled={sending} className="px-4 py-2.5 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors disabled:opacity-50">
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-slate-300 mb-3 mt-2">
+                    <div className="flex items-center gap-2 text-green-400"><Check size={15} /> Enviados: <b>{sendResult.sentCount}</b></div>
+                    {sendResult.noEmailCount > 0 && <div className="flex items-center gap-2 text-amber-400 mt-1"><X size={15} /> Sin correo: <b>{sendResult.noEmailCount}</b></div>}
+                    {sendResult.failedCount > 0 && <div className="flex items-center gap-2 text-red-400 mt-1"><X size={15} /> Fallidos: <b>{sendResult.failedCount}</b></div>}
+                  </div>
+                  {sendResult.failedCount > 0 && (
+                    <div className="max-h-32 overflow-auto text-xs text-red-300/90 bg-red-500/5 border border-red-500/20 rounded-lg p-2 mb-3">
+                      {sendResult.failed.map((f, i) => <div key={i}>{f.name}: {f.error}</div>)}
+                    </div>
+                  )}
+                  {sendResult.noEmailCount > 0 && (
+                    <div className="max-h-24 overflow-auto text-xs text-amber-300/80 bg-amber-500/5 border border-amber-500/20 rounded-lg p-2 mb-3">
+                      Sin correo: {sendResult.noEmail.map((n) => n.name).join(', ')}
+                    </div>
+                  )}
+                  <button onClick={() => { setSendOpen(false); setSendResult(null); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
+                    Cerrar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
