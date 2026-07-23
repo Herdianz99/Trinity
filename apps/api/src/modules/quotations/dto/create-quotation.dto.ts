@@ -9,7 +9,7 @@ export class QuotationItemDto {
 
   @ApiProperty()
   @IsNumber()
-  @Min(1)
+  @Min(0.01) // productos por kilo/fracción (ej: 0.50 kg de electrodos), igual que la facturación del POS
   quantity: number;
 
   @ApiProperty({ required: false })

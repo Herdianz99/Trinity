@@ -8,6 +8,25 @@ Todos los bloques de las sesiones **2026-07-21 (6/7)** y **2026-07-22 (1/2/3)** 
 
 ---
 
+## 🗓️ Sesión 2026-07-23 (3) — Fixes: cotización con cantidad fraccionaria + modal de artículo en compras a paridad
+
+> Cambios de código en `main` (**pendiente de deploy — solo código, SIN migración**). Verificado en local: `tsc --noEmit` OK en API y web.
+
+**1) Cotización — permitir cantidad < 1 (productos por kilo):**
+- Reportado: guardar como cotización con un artículo por kilo (ej. `0.50` kg de electrodos) fallaba con `items.0.quantity must not be less than 1`.
+- Causa: `create-quotation.dto.ts` tenía `@Min(1)` en `quantity`, mientras la facturación del POS usa `@Min(0.01)`.
+- Fix: `QuotationItemDto.quantity` → `@Min(0.01)` (consistente con `create-invoice.dto.ts`). Es el único DTO de cotización (no hay update).
+
+**2) Modal de artículo en la factura de compras — a paridad con la ficha del artículo:**
+- Reportado: al crear/editar un artículo desde la compra, el modal no tenía todos los campos del formulario principal → los vendedores salían a la ficha del artículo para fijar el precio.
+- El modal (`product-form-modal.tsx`, usado en `/purchases/new` y `/purchases/[id]/edit`) ya tenía todos los datos básicos; solo le faltaba la lógica de la pestaña **"Precios"** de la ficha:
+  - **Precio de dos vías**: escribir ganancia % → precio, o escribir el **precio final (con IVA)** → deriva la ganancia (antes solo tenía vista previa de solo lectura).
+  - **Precio manual** (fijar Detal/Mayor final a mano) + **Costo manual 🔒** (congelar costo ante compras/reemplazos).
+  - Equivalente en Bs bajo cada precio + desglose de la fórmula.
+- El backend ya aceptaba `manualCost`/`manualPrice`/`priceDetal`/`priceMayor` (create/update DTO) → cambio 100% frontend.
+
+---
+
 ## 🗓️ Sesión 2026-07-23 (2) — Nómina: bonificación por línea + envío de recibos por correo
 
 > **✅ Commiteado a `main` (pendiente de deploy).** **Trae 1 migración aditiva** (`20260723150000_payroll_line_bonus`: `bonusUsd`/`bonusBs`/`receiptSentAt` en `PayrollRunLine`) + red de seguridad en `deploy/fix-schema.sql`. Verificado end-to-end en local contra la copia de la grande. **Correo probado en local:** SMTP de Gmail verificado con App Password de `legoadh@gmail.com` (`smtp.gmail.com:465 SSL`) + envío real con PDF adjunto OK. **FALTA para producción:** agregar `MAIL_USER`/`MAIL_PASS`/`MAIL_FROM_NAME` al `apps/api/.env` del server + `pnpm install` (nodemailer) + reiniciar PM2.

@@ -21,7 +21,9 @@ const defaultForm = {
   code: '', barcode: '', supplierRef: '', otherCode: '', name: '', description: '',
   categoryId: '', brandId: '', supplierId: '',
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
-  costUsd: '0', bregaApplies: true, gananciaPct: '0', gananciaMayorPct: '0',
+  costUsd: '0', manualCost: false, bregaApplies: true,
+  manualPrice: false, priceDetal: '0', priceMayor: '0',
+  gananciaPct: '0', gananciaMayorPct: '0',
   ivaType: 'GENERAL', minStock: 0, isActive: true, saleBlocked: false, isService: false,
   showInStore: false, storeFeatured: false,
 };
@@ -47,6 +49,43 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
 
+  // ── Precios de dos vías (ganancia ↔ precio final), como la ficha del articulo ──
+  const [priceGananciaPct, setPriceGananciaPct] = useState(0);
+  const [priceGananciaMayorPct, setPriceGananciaMayorPct] = useState(0);
+  const [priceFinalDetal, setPriceFinalDetal] = useState(0);
+  const [priceFinalMayor, setPriceFinalMayor] = useState(0);
+  // Borradores de texto (evitan que el punto borre el campo mientras se escribe)
+  const [detalGananciaStr, setDetalGananciaStr] = useState('0');
+  const [detalPriceStr, setDetalPriceStr] = useState('0');
+  const [mayorGananciaStr, setMayorGananciaStr] = useState('0');
+  const [mayorPriceStr, setMayorPriceStr] = useState('0');
+
+  const parseNum = (v: string | number) => {
+    const n = parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+  const sanitizeDecimal = (v: string) => v.replace(/[^0-9.,]/g, '');
+
+  // Siembra los estados de precios (ganancia + precio final + borradores) a partir de
+  // un costo/ganancias/IVA/brecha dados. brechaGlobal se pasa explicito por si aun no esta en estado.
+  const seedPrices = useCallback((opts: {
+    cost: number; ivaType: string; bregaApplies: boolean; brechaGlobal: number;
+    gananciaPct: number; gananciaMayorPct: number;
+    manualPrice?: boolean; priceDetal?: number; priceMayor?: number;
+  }) => {
+    const base = opts.cost * (opts.bregaApplies ? (1 + opts.brechaGlobal / 100) : 1) * (IVA_MULTIPLIERS[opts.ivaType] || 1.16);
+    setPriceGananciaPct(opts.gananciaPct);
+    setPriceGananciaMayorPct(opts.gananciaMayorPct);
+    setDetalGananciaStr(opts.gananciaPct.toFixed(2));
+    setMayorGananciaStr(opts.gananciaMayorPct.toFixed(2));
+    const pd = opts.manualPrice && opts.priceDetal != null ? opts.priceDetal : base * (1 + opts.gananciaPct / 100);
+    const pm = opts.manualPrice && opts.priceMayor != null ? opts.priceMayor : base * (1 + opts.gananciaMayorPct / 100);
+    setPriceFinalDetal(pd);
+    setPriceFinalMayor(pm);
+    setDetalPriceStr(pd.toFixed(2));
+    setMayorPriceStr(pm.toFixed(2));
+  }, []);
+
   const fetchMeta = useCallback(async () => {
     const [catRes, brandRes, supRes, configRes, rateRes] = await Promise.all([
       fetch('/api/proxy/categories'),
@@ -58,10 +97,11 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
     if (catRes.ok) setCategories(await catRes.json());
     if (brandRes.ok) setBrands(await brandRes.json());
     if (supRes.ok) setSuppliers(await supRes.json());
-    let defGanancia = 0, defGananciaMayor = 0;
+    let defGanancia = 0, defGananciaMayor = 0, brechaGlobal = 0;
     if (configRes.ok) {
       const cfg = await configRes.json();
-      setBregaGlobalPct(cfg.bregaGlobalPct || 0);
+      brechaGlobal = cfg.bregaGlobalPct || 0;
+      setBregaGlobalPct(brechaGlobal);
       defGanancia = cfg.defaultGananciaPct || 0;
       defGananciaMayor = cfg.defaultGananciaMayorPct || 0;
     }
@@ -69,7 +109,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
       const text = await rateRes.text();
       if (text) { try { const rate = JSON.parse(text); setExchangeRate(rate.rate || 0); } catch {} }
     }
-    return { defGanancia, defGananciaMayor };
+    return { defGanancia, defGananciaMayor, brechaGlobal };
   }, []);
 
   // Cargar meta + (editar) producto, o (crear) limpiar al abrir
@@ -78,7 +118,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
     setMessage(null);
     setLoading(true);
     (async () => {
-      const { defGanancia, defGananciaMayor } = await fetchMeta();
+      const { defGanancia, defGananciaMayor, brechaGlobal } = await fetchMeta();
       if (mode === 'edit' && productId) {
         const res = await fetch(`/api/proxy/products/${productId}`);
         if (res.ok) {
@@ -90,11 +130,19 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
             categoryId: p.categoryId || '', brandId: p.brandId || '', supplierId: p.supplierId || '',
             purchaseUnit: p.purchaseUnit || 'UNIT', saleUnit: p.saleUnit || 'UNIT',
             conversionFactor: p.conversionFactor ?? 1,
-            costUsd: String(p.costUsd ?? 0), bregaApplies: p.bregaApplies !== false,
+            costUsd: String(p.costUsd ?? 0), manualCost: !!p.manualCost, bregaApplies: p.bregaApplies !== false,
+            manualPrice: !!p.manualPrice,
+            priceDetal: String(p.priceDetal ?? 0), priceMayor: String(p.priceMayor ?? 0),
             gananciaPct: String(p.gananciaPct ?? 0), gananciaMayorPct: String(p.gananciaMayorPct ?? 0),
             ivaType: p.ivaType || 'GENERAL', minStock: p.minStock ?? 0,
             isActive: p.isActive !== false, saleBlocked: !!p.saleBlocked, isService: !!p.isService,
             showInStore: !!p.showInStore, storeFeatured: !!p.storeFeatured,
+          });
+          seedPrices({
+            cost: Number(p.costUsd ?? 0), ivaType: p.ivaType || 'GENERAL',
+            bregaApplies: p.bregaApplies !== false, brechaGlobal,
+            gananciaPct: Number(p.gananciaPct ?? 0), gananciaMayorPct: Number(p.gananciaMayorPct ?? 0),
+            manualPrice: !!p.manualPrice, priceDetal: Number(p.priceDetal ?? 0), priceMayor: Number(p.priceMayor ?? 0),
           });
         }
       } else {
@@ -104,20 +152,98 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
           gananciaMayorPct: String(defGananciaMayor),
           supplierId: defaultSupplierId || '',
         });
+        seedPrices({
+          cost: 0, ivaType: 'GENERAL', bregaApplies: true, brechaGlobal,
+          gananciaPct: defGanancia, gananciaMayorPct: defGananciaMayor,
+        });
       }
       setLoading(false);
     })();
-  }, [open, mode, productId, defaultSupplierId, fetchMeta]);
+  }, [open, mode, productId, defaultSupplierId, fetchMeta, seedPrices]);
 
-  const parseNum = (v: string | number) => {
-    const n = parseFloat(String(v).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-  };
-  const sanitizeDecimal = (v: string) => v.replace(/[^0-9.,]/g, '');
-
-  function calcPreviewPrice(costUsd: number, gananciaPct: number, bregaApplies: boolean, ivaType: string) {
-    const brecha = bregaApplies ? bregaGlobalPct : 0;
-    return costUsd * (1 + brecha / 100) * (1 + gananciaPct / 100) * (IVA_MULTIPLIERS[ivaType] || 1.16);
+  // ── Handlers de precios de dos vias (idénticos a la ficha del articulo) ──
+  function handleDetalGananciaChange(raw: string) {
+    setDetalGananciaStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
+    setPriceGananciaPct(value);
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
+    const price = cost * brechaM * (1 + value / 100) * ivaM;
+    setPriceFinalDetal(price);
+    setDetalPriceStr(price.toFixed(2));
+  }
+  function handleDetalPriceChange(raw: string) {
+    setDetalPriceStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
+    setPriceFinalDetal(value);
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
+    const base = cost * brechaM * ivaM;
+    if (base > 0) {
+      const g = ((value / base) - 1) * 100;
+      setPriceGananciaPct(g);
+      setDetalGananciaStr(g.toFixed(2));
+    }
+  }
+  function handleMayorGananciaChange(raw: string) {
+    setMayorGananciaStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
+    setPriceGananciaMayorPct(value);
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
+    const price = cost * brechaM * (1 + value / 100) * ivaM;
+    setPriceFinalMayor(price);
+    setMayorPriceStr(price.toFixed(2));
+  }
+  function handleMayorPriceChange(raw: string) {
+    setMayorPriceStr(sanitizeDecimal(raw));
+    const value = parseNum(raw);
+    setPriceFinalMayor(value);
+    const cost = parseNum(form.costUsd);
+    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
+    const base = cost * brechaM * ivaM;
+    if (base > 0) {
+      const g = ((value / base) - 1) * 100;
+      setPriceGananciaMayorPct(g);
+      setMayorGananciaStr(g.toFixed(2));
+    }
+  }
+  function recomputeFinalsFromGanancia(cost: number, brechaApplies: boolean, ivaType: string) {
+    const base = cost * (brechaApplies ? (1 + bregaGlobalPct / 100) : 1) * (IVA_MULTIPLIERS[ivaType] || 1.16);
+    const pd = base * (1 + priceGananciaPct / 100);
+    setPriceFinalDetal(pd);
+    setDetalPriceStr(pd.toFixed(2));
+    const pm = base * (1 + priceGananciaMayorPct / 100);
+    setPriceFinalMayor(pm);
+    setMayorPriceStr(pm.toFixed(2));
+  }
+  function handleCostChange(raw: string) {
+    const clean = sanitizeDecimal(raw);
+    setForm(f => ({ ...f, costUsd: clean }));
+    if (!form.manualPrice) recomputeFinalsFromGanancia(parseNum(clean), form.bregaApplies, form.ivaType);
+  }
+  function handleIvaChange(val: string) {
+    setForm(f => ({ ...f, ivaType: val }));
+    if (!form.manualPrice) recomputeFinalsFromGanancia(parseNum(form.costUsd), form.bregaApplies, val);
+  }
+  function handleBrechaToggle(checked: boolean) {
+    setForm(f => ({ ...f, bregaApplies: checked }));
+    if (!form.manualPrice) recomputeFinalsFromGanancia(parseNum(form.costUsd), checked, form.ivaType);
+  }
+  function handleManualPriceToggle(checked: boolean) {
+    setForm(f => {
+      const next = { ...f, manualPrice: checked };
+      if (checked) {
+        next.priceDetal = (priceFinalDetal || parseNum(f.priceDetal) || 0).toFixed(2);
+        next.priceMayor = (priceFinalMayor || parseNum(f.priceMayor) || 0).toFixed(2);
+      }
+      return next;
+    });
+    if (!checked) recomputeFinalsFromGanancia(parseNum(form.costUsd), form.bregaApplies, form.ivaType);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -137,9 +263,11 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
         costUsd: parseNum(form.costUsd),
+        manualCost: form.manualCost,
         bregaApplies: form.bregaApplies,
-        gananciaPct: parseNum(form.gananciaPct),
-        gananciaMayorPct: parseNum(form.gananciaMayorPct),
+        manualPrice: form.manualPrice,
+        gananciaPct: Number(priceGananciaPct.toFixed(2)),
+        gananciaMayorPct: Number(priceGananciaMayorPct.toFixed(2)),
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
         isActive: form.isActive,
@@ -148,6 +276,11 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
       };
+      // En precio manual se manda el precio final directo; si no, lo calcula el backend desde la ganancia.
+      if (form.manualPrice) {
+        body.priceDetal = parseNum(form.priceDetal);
+        body.priceMayor = parseNum(form.priceMayor);
+      }
       // El codigo solo se envia al crear (en edicion es el identificador y no se cambia aqui)
       if (mode === 'create' && form.code) body.code = form.code;
 
@@ -168,18 +301,26 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
   // Al elegir un articulo como plantilla: copia el nombre + atributos (categoria, IVA,
   // ganancias, brecha, unidades). NO copia codigos/costo/existencia (son propios del articulo).
   const applyTemplate = (p: any) => {
+    const gDetal = p.gananciaPct != null ? Number(p.gananciaPct) : priceGananciaPct;
+    const gMayor = p.gananciaMayorPct != null ? Number(p.gananciaMayorPct) : priceGananciaMayorPct;
+    const ivaType = p.ivaType || form.ivaType;
+    const brechaApplies = p.bregaApplies != null ? !!p.bregaApplies : form.bregaApplies;
     setForm(f => ({
       ...f,
       name: p.name || f.name,
       categoryId: p.categoryId || f.categoryId,
-      ivaType: p.ivaType || f.ivaType,
-      gananciaPct: p.gananciaPct != null ? String(p.gananciaPct) : f.gananciaPct,
-      gananciaMayorPct: p.gananciaMayorPct != null ? String(p.gananciaMayorPct) : f.gananciaMayorPct,
-      bregaApplies: p.bregaApplies != null ? !!p.bregaApplies : f.bregaApplies,
+      ivaType,
+      gananciaPct: String(gDetal),
+      gananciaMayorPct: String(gMayor),
+      bregaApplies: brechaApplies,
       purchaseUnit: p.purchaseUnit || f.purchaseUnit,
       saleUnit: p.saleUnit || f.saleUnit,
       conversionFactor: p.conversionFactor != null ? p.conversionFactor : f.conversionFactor,
     }));
+    seedPrices({
+      cost: parseNum(form.costUsd), ivaType, bregaApplies: brechaApplies, brechaGlobal: bregaGlobalPct,
+      gananciaPct: gDetal, gananciaMayorPct: gMayor,
+    });
   };
 
   const allCategories: { id: string; name: string; isChild: boolean }[] = [];
@@ -188,8 +329,8 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
     cat.children?.forEach(child => allCategories.push({ id: child.id, name: `  ${child.name}`, isChild: true }));
   });
 
-  const previewDetal = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaPct), form.bregaApplies, form.ivaType);
-  const previewMayor = calcPreviewPrice(parseNum(form.costUsd), parseNum(form.gananciaMayorPct), form.bregaApplies, form.ivaType);
+  const costUsd = parseNum(form.costUsd);
+  const brecha = form.bregaApplies ? bregaGlobalPct : 0;
 
   if (!open) return null;
 
@@ -297,55 +438,92 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
               </div>
             </div>
 
-            {/* Precios */}
+            {/* Precios (dos vias: ganancia ↔ precio final, + costo/precio manual) */}
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Precios</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
+                  <input type="text" inputMode="decimal" value={form.costUsd} onChange={e => handleCostChange(e.target.value)} className="input-field !py-2 text-sm font-mono" />
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">IVA</label>
-                  <select value={form.ivaType} onChange={e => setForm(f => ({ ...f, ivaType: e.target.value }))} className="input-field !py-2 text-sm">
+                  <select value={form.ivaType} onChange={e => handleIvaChange(e.target.value)} className="input-field !py-2 text-sm">
                     {IVA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div className="flex items-end pb-2">
-                  <Toggle checked={form.bregaApplies} onChange={v => setForm(f => ({ ...f, bregaApplies: v }))} label={`Aplica brecha (${bregaGlobalPct}%)`} />
+                  <Toggle checked={form.bregaApplies} onChange={handleBrechaToggle} disabled={form.manualPrice} label={`Brecha (${bregaGlobalPct}%)`} />
+                </div>
+                <div className="flex items-end pb-2">
+                  <Toggle checked={form.manualCost} onChange={v => setForm(f => ({ ...f, manualCost: v }))} label="Costo manual 🔒" />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Costo USD</label>
-                  <input type="text" inputMode="decimal" value={form.costUsd} onChange={e => setForm(f => ({ ...f, costUsd: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Detal %</label>
-                  <input type="text" inputMode="decimal" value={form.gananciaPct} onChange={e => setForm(f => ({ ...f, gananciaPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia Mayor %</label>
-                  <input type="text" inputMode="decimal" value={form.gananciaMayorPct} onChange={e => setForm(f => ({ ...f, gananciaMayorPct: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm" />
-                </div>
+              <div className="flex items-center gap-6 mt-3">
+                <Toggle checked={form.manualPrice} onChange={handleManualPriceToggle} color="amber" label="Precio manual (escribo el precio final)" />
               </div>
-              <div className="mt-4 p-4 rounded-xl bg-slate-900/60 border border-slate-700/50">
-                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Vista previa de precios</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">Detal USD</p>
-                    <p className="text-lg font-bold text-green-400 font-mono">${previewDetal.toFixed(2)}</p>
+              {form.manualCost && (
+                <p className="mt-2 text-xs text-emerald-400/90">Costo congelado: las compras y reemplazos no lo actualizan.</p>
+              )}
+
+              {form.manualPrice ? (
+                <>
+                  <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <p className="text-sm text-amber-400">Precio manual activo: escribe el precio final (con IVA). No se calcula desde la ganancia.</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">Mayor USD</p>
-                    <p className="text-lg font-bold text-blue-400 font-mono">${previewMayor.toFixed(2)}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="block text-xs font-medium text-amber-400 mb-1">Precio Detal (final c/IVA)</label>
+                      <input type="text" inputMode="decimal" value={form.priceDetal} onChange={e => setForm(f => ({ ...f, priceDetal: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm font-mono !border-amber-500/30 focus:!border-amber-500" />
+                      {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(parseNum(form.priceDetal) * exchangeRate).toFixed(2)}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-amber-400 mb-1">Precio Mayor (final c/IVA)</label>
+                      <input type="text" inputMode="decimal" value={form.priceMayor} onChange={e => setForm(f => ({ ...f, priceMayor: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm font-mono !border-amber-500/30 focus:!border-amber-500" />
+                      {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(parseNum(form.priceMayor) * exchangeRate).toFixed(2)}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">Detal Bs</p>
-                    <p className="text-lg font-bold text-slate-300 font-mono">{exchangeRate > 0 ? `Bs ${(previewDetal * exchangeRate).toFixed(2)}` : '—'}</p>
+                </>
+              ) : (
+                <>
+                  {/* Detal */}
+                  <div className="mt-4">
+                    <h4 className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wider">Precio Detal</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia detal (%)</label>
+                        <input type="text" inputMode="decimal" value={detalGananciaStr} onChange={e => handleDetalGananciaChange(e.target.value)} className="input-field !py-2 text-sm font-mono" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                        <input type="text" inputMode="decimal" value={detalPriceStr} onChange={e => handleDetalPriceChange(e.target.value)} className="input-field !py-2 text-sm font-mono" />
+                      </div>
+                    </div>
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalDetal * exchangeRate).toFixed(2)}</p>}
                   </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">Mayor Bs</p>
-                    <p className="text-lg font-bold text-slate-300 font-mono">{exchangeRate > 0 ? `Bs ${(previewMayor * exchangeRate).toFixed(2)}` : '—'}</p>
+                  {/* Mayor */}
+                  <div className="mt-4">
+                    <h4 className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wider">Precio Mayor</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Ganancia mayor (%)</label>
+                        <input type="text" inputMode="decimal" value={mayorGananciaStr} onChange={e => handleMayorGananciaChange(e.target.value)} className="input-field !py-2 text-sm font-mono" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Precio final USD</label>
+                        <input type="text" inputMode="decimal" value={mayorPriceStr} onChange={e => handleMayorPriceChange(e.target.value)} className="input-field !py-2 text-sm font-mono" />
+                      </div>
+                    </div>
+                    {exchangeRate > 0 && <p className="text-xs text-slate-500 mt-1 font-mono">= Bs {(priceFinalMayor * exchangeRate).toFixed(2)}</p>}
                   </div>
-                </div>
-              </div>
+                  {/* Formula */}
+                  <div className="mt-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700/30 text-[11px] font-mono text-slate-500 space-y-0.5">
+                    <p>Formula: costo x (1 + brecha%) x (1 + ganancia%) x (1 + IVA%)</p>
+                    <p>Detal: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalDetal.toFixed(2)}</p>
+                    <p>Mayor: ${costUsd.toFixed(2)} x {(1 + brecha / 100).toFixed(2)} x {(1 + priceGananciaMayorPct / 100).toFixed(4)} x {(IVA_MULTIPLIERS[form.ivaType] || 1.16).toFixed(2)} = ${priceFinalMayor.toFixed(2)}</p>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Inventario */}
