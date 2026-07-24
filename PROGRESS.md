@@ -1,10 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
-## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-22 (`main` en HEAD `b84925a`)
+## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesiones 2026-07-23 (1/2/3) (`main` en HEAD `de52a97`)
 
-Todos los bloques de las sesiones **2026-07-21 (6/7)** y **2026-07-22 (1/2/3)** quedaron **desplegados el 2026-07-22** en ambas empresas (`git pull` + `bash deploy.sh`), incluyendo las migraciones aditivas de esas tandas (`20260721160000_note_sales_return_reason`, `20260722180000_quotation_seller`) + red de seguridad en `deploy/fix-schema.sql`. (El PROGRESS.md no se actualizó justo tras el deploy; se marca ahora.)
+Los 3 bloques de hoy quedaron **desplegados en ambas empresas** — GRANDE (`inversiones`) el **2026-07-23** (HEAD `fdacd25`) y CHICA (`eltrebol`) el **2026-07-24** (HEAD `8ed6306`), ambas verificadas (migración aplicada, `nodemailer` instalado, PM2 online, health OK):
+- **Sesión (1)** — retención en libro de compras con su fecha de recepción (solo código, sin migración).
+- **Sesión (2)** — nómina: bonificación por línea + envío de recibos por correo (migración aditiva `20260723150000_payroll_line_bonus` + `nodemailer`).
+- **Sesión (3)** — fixes: cotización con cantidad fraccionaria + modal de artículo en compras a paridad.
 
-**▶ Continuamos hoy (2026-07-23).**
+**⏳ Único pendiente:** config `MAIL_*` real (cuenta + App Password del cliente) en el `apps/api/.env` de cada empresa + `pm2 restart trinity-api`, para activar "Enviar recibos". Sin eso, el botón responde "correo no configurado" y el resto funciona normal. (El cliente da las credenciales; probado en local con cuenta de prueba.)
+
+**Nota — consulta 2 empresas nuevas (RIF distinto):** decidida la arquitectura (dos instancias separadas + puente API de precios/traslados), **sin programar aún**; ver memoria `dos-empresas-integracion-precios-traslados`. Plan del cliente: instalar 1ra empresa el lunes 2026-07-27, luego la 2da, y al final la integración.
+
+**▶ Continuamos mañana (2026-07-24): config del correo.**
 
 ---
 
