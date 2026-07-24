@@ -29,6 +29,12 @@ export class QueryProductsDto {
   @IsBoolean()
   lowStock?: boolean;
 
+  @ApiProperty({ required: false, description: 'Solo articulos con existencia (suma de stock > 0)' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  inStock?: boolean;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)

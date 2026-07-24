@@ -192,9 +192,10 @@ export class ProductsService {
     return created;
   }
 
-  async findAll(query: QueryProductsDto) {
-    const { categoryId, brandId, supplierId, search, lowStock, isActive, includeInactive, page = 1, limit = 20 } = query;
-    const skip = (page - 1) * limit;
+  // Construye el `where` compartido por findAll y el reporte PDF de existencias.
+  // Devuelve null cuando el filtro garantiza 0 resultados (search / inStock sin coincidencias).
+  private async buildListWhere(query: QueryProductsDto): Promise<Prisma.ProductWhereInput | null> {
+    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive } = query;
 
     const where: Prisma.ProductWhereInput = {};
 
@@ -240,9 +241,7 @@ export class ProductsService {
         OR "otherCode" ILIKE ${like}
       `;
       const ids = searchResults.map((r) => r.id);
-      if (ids.length === 0) {
-        return { data: [], total: 0, page, limit, totalPages: 0 };
-      }
+      if (ids.length === 0) return null;
       where.id = { in: ids };
     }
 
@@ -262,11 +261,44 @@ export class ProductsService {
         AND p."isActive" = true
       `;
       const ids = lowStockProducts.map((r) => r.id);
-      if (ids.length === 0) {
-        return { data: [], total: 0, page, limit, totalPages: 0 };
-      }
+      if (ids.length === 0) return null;
       where.id = where.id ? { in: [...new Set([...(where.id as any).in || [], ...ids])] } : { in: ids };
     }
+
+    // Solo articulos con existencia: suma de stock por producto > 0 (misma definicion que
+    // la pantalla). Se intersecta con los ids ya filtrados por search si aplica.
+    if (inStock) {
+      const inStockRows = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT p.id FROM "Product" p
+        JOIN (
+          SELECT "productId", COALESCE(SUM(quantity), 0) as total_stock
+          FROM "Stock"
+          GROUP BY "productId"
+        ) s ON s."productId" = p.id
+        WHERE s.total_stock > 0
+      `;
+      const stockIds = inStockRows.map((r) => r.id);
+      if (stockIds.length === 0) return null;
+      const existing = (where.id as any)?.in as string[] | undefined;
+      if (existing) {
+        const stockSet = new Set(stockIds);
+        const inter = existing.filter((id) => stockSet.has(id));
+        if (inter.length === 0) return null;
+        where.id = { in: inter };
+      } else {
+        where.id = { in: stockIds };
+      }
+    }
+
+    return where;
+  }
+
+  async findAll(query: QueryProductsDto) {
+    const { page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    const where = await this.buildListWhere(query);
+    if (!where) return { data: [], total: 0, page, limit, totalPages: 0 };
 
     const [data, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -291,6 +323,31 @@ export class ProductsService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  // Lista completa (sin paginar) para el reporte PDF de existencias. Aplica los mismos
+  // filtros que findAll (search, inStock, etc.) y devuelve solo los campos del reporte.
+  async reportList(query: QueryProductsDto) {
+    const where = await this.buildListWhere(query);
+    if (!where) return [];
+
+    const products = await this.prisma.product.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      select: {
+        code: true,
+        supplierRef: true,
+        name: true,
+        stock: { select: { quantity: true } },
+      },
+    });
+
+    return products.map((p) => ({
+      code: p.code,
+      supplierRef: p.supplierRef,
+      name: p.name,
+      stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+    }));
   }
 
   async search(q: string) {

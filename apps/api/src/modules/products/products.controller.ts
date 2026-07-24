@@ -14,6 +14,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
+import { ProductsReportPdfService } from './products-report-pdf.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
@@ -26,6 +27,7 @@ export class ProductsController {
   constructor(
     private productsService: ProductsService,
     private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
+    private productsReportPdf: ProductsReportPdfService,
   ) {}
 
   @Post()
@@ -54,6 +56,17 @@ export class ProductsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="analisis-de-compra.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('report/pdf')
+  async reportPdf(@Query() query: QueryProductsDto, @Res() res: Response) {
+    const buffer = await this.productsReportPdf.generate(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="existencias-articulos.pdf"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

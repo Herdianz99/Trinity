@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  PackageSearch, Search, Loader2, X, ChevronLeft, ChevronRight, Activity, ScanLine,
+  PackageSearch, Search, Loader2, X, ChevronLeft, ChevronRight, Activity, ScanLine, FileText,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import Toggle from '@/components/toggle';
@@ -64,6 +64,7 @@ export default function InventoryArticlesPage() {
   const [total, setTotal] = useState(0);
   const [rate, setRate] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
+  const [inStock, setInStock] = useState(false);
 
   // Kardex panel
   const [selected, setSelected] = useState<Product | null>(null);
@@ -96,6 +97,7 @@ export default function InventoryArticlesPage() {
       // Tope alto (igual que el POS): trae muchos y se scrollea, en vez de paginar de 25 en 25.
       const params = new URLSearchParams({ page: String(page), limit: '500', isActive: 'true' });
       if (debounced) params.set('search', debounced);
+      if (inStock) params.set('inStock', 'true');
       const res = await fetch(`/api/proxy/products?${params}`);
       if (res.ok) {
         const d = await res.json();
@@ -106,7 +108,15 @@ export default function InventoryArticlesPage() {
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [page, debounced]);
+  }, [page, debounced, inStock]);
+
+  // Exporta el reporte PDF vertical respetando los filtros actuales (busqueda + solo con existencia).
+  function exportPdf() {
+    const params = new URLSearchParams({ isActive: 'true' });
+    if (debounced) params.set('search', debounced);
+    if (inStock) params.set('inStock', 'true');
+    window.open(`/api/proxy/products/report/pdf?${params}`, '_blank');
+  }
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -194,6 +204,22 @@ export default function InventoryArticlesPage() {
         >
           <ScanLine size={18} />
           <span className="hidden sm:inline text-sm">Escanear</span>
+        </button>
+      </div>
+
+      {/* Controles: filtro de existencia + exportar PDF */}
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+        <Toggle
+          checked={inStock}
+          onChange={(v) => { setInStock(v); setPage(1); }}
+          label="Solo con existencia"
+        />
+        <button
+          onClick={exportPdf}
+          className="btn-secondary !py-2 px-3 flex items-center gap-2 text-sm"
+          title="Exportar a PDF (respeta los filtros aplicados)"
+        >
+          <FileText size={16} /> Exportar PDF
         </button>
       </div>
 
