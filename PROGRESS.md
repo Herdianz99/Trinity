@@ -1,17 +1,35 @@
 ﻿# Trinity ERP — Progreso
 
-## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesiones 2026-07-23 (1/2/3) (`main` en HEAD `de52a97`)
+## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-24 (`main` en HEAD `17b2837`)
 
-Los 3 bloques de hoy quedaron **desplegados en ambas empresas** — GRANDE (`inversiones`) el **2026-07-23** (HEAD `fdacd25`) y CHICA (`eltrebol`) el **2026-07-24** (HEAD `8ed6306`), ambas verificadas (migración aplicada, `nodemailer` instalado, PM2 online, health OK):
-- **Sesión (1)** — retención en libro de compras con su fecha de recepción (solo código, sin migración).
-- **Sesión (2)** — nómina: bonificación por línea + envío de recibos por correo (migración aditiva `20260723150000_payroll_line_bonus` + `nodemailer`).
-- **Sesión (3)** — fixes: cotización con cantidad fraccionaria + modal de artículo en compras a paridad.
+Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** — GRANDE (`inversiones`) y CHICA (`eltrebol`) el **2026-07-24** en HEAD `17b2837` (PM2 `trinity-api`/`trinity-web` online, health 200, ruta nueva `/products/report/pdf` responde 401 = viva, sin migraciones):
+- **Búsqueda libre** en Recibos (cobro/pago) y Cuentas por Pagar (commit `ae14f45`).
+- **Reporte PDF de existencias + toggle "solo con existencia"** en Consultar Artículos (commit `17b2837`).
 
-**⏳ Único pendiente:** config `MAIL_*` real (cuenta + App Password del cliente) en el `apps/api/.env` de cada empresa + `pm2 restart trinity-api`, para activar "Enviar recibos". Sin eso, el botón responde "correo no configurado" y el resto funciona normal. (El cliente da las credenciales; probado en local con cuenta de prueba.)
+**⏳ Config de correo — BLOQUEADA por DigitalOcean, NO por la clave.** Se creó la App Password de Gmail (`rrhhgrupotrebol@gmail.com`) pero el droplet **bloquea los puertos SMTP salientes** (25/465/587 → timeout), así que Gmail directo no funcionará nunca desde el server. Puertos **2525 y 443 SÍ salen**. Plan: usar **Brevo** (gratis, SMTP por 2525); el `MailService` ya soporta host/puerto por env, solo falta agregar una `MAIL_FROM` (el `from` con Brevo ≠ user auth) y crear la cuenta. Credenciales y detalle en memoria `config-mail-produccion-pendiente`. La config Gmail que se probó en prod ya se **revirtió** (estado limpio para no colgar los recibos con el timeout).
 
 **Nota — consulta 2 empresas nuevas (RIF distinto):** decidida la arquitectura (dos instancias separadas + puente API de precios/traslados), **sin programar aún**; ver memoria `dos-empresas-integracion-precios-traslados`. Plan del cliente: instalar 1ra empresa el lunes 2026-07-27, luego la 2da, y al final la integración.
 
-**▶ Continuamos mañana (2026-07-24): config del correo.**
+---
+
+## 🗓️ Sesión 2026-07-24 (2) — Reporte PDF de existencias + filtro "solo con existencia" en Consultar Artículos
+
+> **✅ Desplegado en AMBAS empresas el 2026-07-24** (HEAD `17b2837`, sin migraciones, PM2 online, health 200, ruta `/products/report/pdf` responde 401). Verificado end-to-end en **local** contra la copia de la grande: los 3 variantes del PDF (todos / solo-con-existencia / con búsqueda) devuelven HTTP 200 y PDF válido; conteos cuadran con la BD (9.217 activos → 6.463 con existencia). `tsc --noEmit` OK API+web.
+
+- **Toggle "Solo con existencia"** en `/inventory/articulos`: activado → solo artículos con **suma de stock > 0** (filtra en el **backend**, no client-side, para no romper paginación/conteos); desactivado → todos.
+- **Botón "Exportar PDF"** → reporte **vertical** (Carta) con columnas **Código · Ref. Proveedor · Nombre · Existencias**, que **respeta los filtros activos** (búsqueda + toggle). El encabezado deja constancia de los filtros y el total.
+- **Backend:** nuevo filtro `inStock` en `QueryProductsDto`; se refactorizó el armado del `where` de `findAll` a un helper compartido **`buildListWhere`** (sin cambiar comportamiento existente) + método **`reportList`** (sin paginar); nuevo **`ProductsReportPdfService`** (pdfkit, mismo patrón que los demás reportes) y endpoint **`GET /products/report/pdf`**.
+- **Frontend:** `Toggle` + botón `Exportar PDF` (abre el endpoint vía `window.open`).
+
+---
+
+## 🗓️ Sesión 2026-07-24 (1) — Búsqueda libre en Recibos (cobro/pago) y Cuentas por Pagar
+
+> **✅ Desplegado en AMBAS empresas el 2026-07-24** (commit `ae14f45`, sin migraciones). Trabajo que había quedado sin commitear de una sesión previa del día; se revisó, commiteó y desplegó.
+
+- **Recibos (cobro y pago):** caja de búsqueda que filtra por **N° de recibo** y **nombre de cliente/proveedor** (filtro `search` con `OR` en Prisma; el filtro por `type` ya acota a cobro/pago).
+- **Cuentas por Pagar (CxP):** búsqueda por **nombre de proveedor, N° de documento, N° de factura de compra y correlativos** (CXP-/FC-).
+- Backend (DTO + service) + frontend (las 3 páginas con el input) commiteados juntos.
 
 ---
 
