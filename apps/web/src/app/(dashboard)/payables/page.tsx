@@ -19,6 +19,7 @@ import {
   Banknote,
   Trash2,
   Printer,
+  Search,
 } from 'lucide-react';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
 
@@ -28,7 +29,7 @@ interface Payable {
   supplierId: string;
   supplier: { id: string; name: string };
   purchaseOrderId: string | null;
-  purchaseOrder: { id: string; number: string } | null;
+  purchaseOrder: { id: string; number: string; supplierInvoiceNumber: string | null } | null;
   documentNumber: string | null;
   description: string | null;
   amountUsd: number;
@@ -113,7 +114,8 @@ export default function PayablesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [supplierId, setSupplierId] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -154,7 +156,7 @@ export default function PayablesPage() {
       const params = new URLSearchParams();
       params.set('page', page.toString());
       params.set('limit', '20');
-      if (supplierId) params.set('supplierId', supplierId);
+      if (search) params.set('search', search);
       if (status) params.set('status', status);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
@@ -170,12 +172,12 @@ export default function PayablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, supplierId, status, from, to, overdue, dueSoon, dueSoonDays]);
+  }, [page, search, status, from, to, overdue, dueSoon, dueSoonDays]);
 
   // Abre el reporte PDF con TODOS los registros del filtro actual (sin paginacion)
   function openReportPdf() {
     const params = new URLSearchParams();
-    if (supplierId) params.set('supplierId', supplierId);
+    if (search) params.set('search', search);
     if (status) params.set('status', status);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
@@ -319,6 +321,11 @@ export default function PayablesPage() {
   }
 
   useEffect(() => { document.title = 'Cuentas por Pagar | Trinity ERP'; }, []);
+  // Debounce de la caja de busqueda: aplica el filtro 400ms despues de dejar de escribir
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
   useEffect(() => { fetchPayables(); }, [fetchPayables]);
   useEffect(() => { fetchAdvances(); }, [fetchAdvances]);
   useEffect(() => { fetchSummary(); fetchSuppliers(); fetchPaymentMethods(); fetchOpenCashSessions(); fetchExchangeRate(); }, [fetchSummary, fetchSuppliers, fetchPaymentMethods, fetchOpenCashSessions, fetchExchangeRate]);
@@ -453,13 +460,23 @@ export default function PayablesPage() {
       {/* Filters */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
         <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Proveedor</label>
-            <select value={supplierId} onChange={e => { setSupplierId(e.target.value); setPage(1); }}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
-              <option value="">Todos</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="flex-1 min-w-[240px]">
+            <label className="text-xs text-slate-400 mb-1 block">Buscar</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                placeholder="Proveedor, N° documento, factura o correlativo (CXP/FC)"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-9 py-2 text-sm text-slate-200 placeholder:text-slate-500" />
+              {searchInput && (
+                <button onClick={() => setSearchInput('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300" title="Limpiar">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Estado</label>
@@ -512,8 +529,8 @@ export default function PayablesPage() {
               <tr className="border-b border-slate-700/50">
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Proveedor</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Orden</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Nro. documento</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto USD</th>
-                <th className="text-right px-4 py-3 text-slate-400 font-medium">Retencion</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Neto USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Pagado</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo</th>
@@ -539,11 +556,9 @@ export default function PayablesPage() {
                         {p.supplier.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.number || p.purchaseOrder?.number || p.documentNumber || '-'}</td>
+                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.number || p.purchaseOrder?.number || '-'}</td>
+                    <td className="px-4 py-3 text-slate-300 font-mono text-xs">{p.documentNumber || p.purchaseOrder?.supplierInvoiceNumber || '-'}</td>
                     <td className="px-4 py-3 text-right text-slate-200">${p.amountUsd.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-orange-400">
-                      {p.retentionUsd > 0 ? `$${p.retentionUsd.toFixed(2)}` : '-'}
-                    </td>
                     <td className="px-4 py-3 text-right text-slate-200">${p.netPayableUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right text-slate-300">${p.paidAmountUsd.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-100">${p.balanceUsd.toFixed(2)}</td>

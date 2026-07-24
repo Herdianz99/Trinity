@@ -41,6 +41,16 @@ export class ReceiptsService {
     if (query.status) where.status = query.status;
     if (query.customerId) where.customerId = query.customerId;
     if (query.supplierId) where.supplierId = query.supplierId;
+    // Busqueda libre por N° de recibo o nombre de cliente/proveedor. El filtro por `type`
+    // ya acota a cobro/pago, asi que incluir ambas relaciones en el OR es inocuo.
+    const search = query.search?.trim();
+    if (search) {
+      where.OR = [
+        { number: { contains: search, mode: 'insensitive' } },
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     if (query.from || query.to) {
       where.createdAt = {};
       if (query.from) {

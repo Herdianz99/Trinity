@@ -6,6 +6,12 @@ export class QueryPayablesDto {
   @IsString()
   supplierId?: string;
 
+  // Busqueda libre: nombre de proveedor, N° de documento de la CxP, N° de factura de
+  // compra, y correlativos (CXP/... y FC-...)
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsOptional()
   @IsString()
   status?: string;

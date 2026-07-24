@@ -17,6 +17,11 @@ export class QueryReceiptsDto {
   @IsString()
   supplierId?: string;
 
+  // Busqueda libre: N° de recibo y nombre de cliente/proveedor
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsOptional()
   @IsString()
   from?: string;

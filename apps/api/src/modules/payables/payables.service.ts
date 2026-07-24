@@ -455,6 +455,21 @@ export class PayablesService {
     if (query.supplierId) {
       where.supplierId = query.supplierId;
     }
+    // Busqueda libre por: nombre de proveedor, N° de documento de la CxP, N° de factura
+    // del proveedor (compra), y correlativos de los documentos (CXP/... y FC-...).
+    const search = query.search?.trim();
+    if (search) {
+      where.OR = [
+        { number: { contains: search, mode: 'insensitive' } },
+        { documentNumber: { contains: search, mode: 'insensitive' } },
+        { serieProveedor: { contains: search, mode: 'insensitive' } },
+        { controlFiscal: { contains: search, mode: 'insensitive' } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+        { purchaseOrder: { number: { contains: search, mode: 'insensitive' } } },
+        { purchaseOrder: { supplierInvoiceNumber: { contains: search, mode: 'insensitive' } } },
+        { purchaseOrder: { supplierControlNumber: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     if (query.status) {
       where.status = query.status;
     }
@@ -500,7 +515,7 @@ export class PayablesService {
         orderBy: { createdAt: 'desc' },
         include: {
           supplier: { select: { id: true, name: true } },
-          purchaseOrder: { select: { id: true, number: true } },
+          purchaseOrder: { select: { id: true, number: true, supplierInvoiceNumber: true } },
           serie: { select: { id: true, name: true, isFiscal: true } },
           payments: {
             orderBy: { createdAt: 'desc' },

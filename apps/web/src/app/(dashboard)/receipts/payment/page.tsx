@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Loader2, ChevronLeft, ChevronRight, Plus, Eye, Trash2,
+  FileText, Loader2, ChevronLeft, ChevronRight, Plus, Eye, Trash2, Search, X,
 } from 'lucide-react';
 
 interface Receipt {
@@ -43,6 +43,8 @@ export default function ReceiptsPaymentPage() {
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchReceipts = useCallback(async () => {
@@ -50,6 +52,7 @@ export default function ReceiptsPaymentPage() {
     try {
       const params = new URLSearchParams({ type: 'PAYMENT', page: String(page), limit: '20' });
       if (status) params.set('status', status);
+      if (search) params.set('search', search);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
 
@@ -60,9 +63,14 @@ export default function ReceiptsPaymentPage() {
       setTotalPages(json.totalPages || 1);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [page, status, from, to]);
+  }, [page, status, search, from, to]);
 
   useEffect(() => { document.title = 'Recibos de Pago | Trinity ERP'; }, []);
+  // Debounce de la caja de busqueda: aplica el filtro 400ms despues de dejar de escribir
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
   useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
 
   async function handleDelete(id: string, number: string) {
@@ -99,6 +107,22 @@ export default function ReceiptsPaymentPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Buscar por proveedor o N° de recibo"
+            className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg pl-9 pr-9 py-2 text-sm placeholder:text-slate-500"
+          />
+          {searchInput && (
+            <button onClick={() => setSearchInput('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300" title="Limpiar">
+              <X size={16} />
+            </button>
+          )}
+        </div>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
@@ -121,9 +145,9 @@ export default function ReceiptsPaymentPage() {
           onChange={(e) => { setTo(e.target.value); setPage(1); }}
           className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm"
         />
-        {(status || from || to) && (
+        {(status || from || to || searchInput) && (
           <button
-            onClick={() => { setStatus(''); setFrom(''); setTo(''); setPage(1); }}
+            onClick={() => { setStatus(''); setFrom(''); setTo(''); setSearchInput(''); setPage(1); }}
             className="text-xs text-slate-400 hover:text-white"
           >
             Limpiar filtros
