@@ -12,9 +12,9 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
-## 🗓️ Sesión 2026-07-25 — Botón "Destrabar impresora" en factura fiscal (comando 7 crudo)
+## 🗓️ Sesión 2026-07-25 — Impresora fiscal: botón "Destrabar" (comando 7 crudo) + fix puerto COM que se desincronizaba
 
-> **⏳ Commiteado y pusheado a `main` (commit `93c31c7`), PENDIENTE de deploy.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado `tsc --noEmit` OK en el web. Probado en local (API 4000 + Web 3000 arriba contra copia de la grande); la prueba con impresora real requiere Chrome/Edge + HKA por COM.
+> **⏳ Commiteado y pusheado a `main` (commits `93c31c7` destrabar + `d7efadd` fix COM), PENDIENTE de deploy.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado `tsc --noEmit` OK en el web. Probado en local (API 4000 + Web 3000 arriba contra copia de la grande); la prueba con impresora real requiere Chrome/Edge + HKA por COM.
 
 **Problema reportado:** las facturas fiscales a veces se quedan **trabadas a mitad**; el comando 7 (anular) para reintentar **no funcionaba desde Trinity** y había que ir a "el otro sistema" (utilitario del fabricante) a destrabar y luego volver a Trinity a imprimir la original. Además una "alerta" que el usuario no reconoce.
 
@@ -27,6 +27,11 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 **Implementado:**
 - Nueva función **`unstickFiscalPrinter()`** (`apps/web/src/lib/fiscal-printer.ts`): refactoricé la apertura de puerto a **`openFiscalConnection()`** (sin flush/SV/waitForReady) y la reutilizo para mandar el **`7` CRUDO** — solo un `ENQ` de sincronización (siempre válido incluso con documento abierto, Tabla 6) y luego el 7; después relee S1 best-effort para confirmar que volvió a espera (`0x40/0x60`).
 - Botón rojo **"Destrabar impresora"** (ícono ↺) en el detalle de la factura, **junto al naranja "Imprimir Fiscal"**, con las mismas condiciones (fiscal + por imprimir + no anulada). Pide confirmación. Flujo: **Destrabar** → luego **Imprimir Fiscal** para reenviar, sin salir a otro sistema.
+
+**Fix adicional — el PC se "desincronizaba" y volvía a pedir el puerto COM (commit `d7efadd`):**
+- **Causa:** `openFiscalConnection()` hacía **`port.forget()`** (revoca el permiso de Web Serial) a cada puerto guardado que no respondiera al `ENQ` en 2s. Como eso pasa por causas **pasajeras** (impresora ocupada imprimiendo el recibo anterior con el **DTR abajo**, puerto bloqueado un instante por otra pestaña, timeout corto), terminaba **borrando el permiso del puerto bueno** → reaparecía el diálogo de selección de COM. Era el propio Trinity el que lo borraba, no Windows/Chrome.
+- **Fix:** se eliminó el `forget()` automático — un puerto que no responde **ahora** se **salta** (puede estar solo ocupado) y se reintenta la próxima vez **conservando el permiso**. Además el `ENQ` de verificación **reintenta 3× (2.5s c/u)** para no descartar una impresora ocupada.
+- **Otras causas posibles a vigilar** (no las tocaba este bug): entrar a Trinity por **orígenes distintos** (los permisos Web Serial son por origen exacto: `https://…eltrebol.app` vs IP vs `http://`), limpiar datos del navegador, o reconectar el adaptador USB-serial en otro puerto.
 
 **Pendiente:** (1) identificar la "alerta" real que ve el usuario; (2) recuperación del caso **multi-pago trabado** (cerrar documento en vez de anular).
 
