@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   readPrinterStatus, sendRawFiscalCommand, sendMultipleFiscalCommands, isFiscalPrinterSupported,
-  readLastZReport,
+  readLastZReport, pairFiscalPrinter,
   type FiscalStatusResult, type PrinterModelInfo, type ZReportRawResult,
 } from '@/lib/fiscal-printer';
 import { FISCAL_PAYMENT_POSITIONS } from '@/lib/fiscal-payment-codes';
@@ -46,6 +46,8 @@ export default function SerieDetailPage() {
   const [checking, setChecking] = useState(false);
   const [printerInfo, setPrinterInfo] = useState<{ model: PrinterModelInfo; status: FiscalStatusResult } | null>(null);
   const [checkError, setCheckError] = useState('');
+  const [pairing, setPairing] = useState(false);
+  const [pairMsg, setPairMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [printingConfig, setPrintingConfig] = useState(false);
   const [printConfigMsg, setPrintConfigMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [manualCmd, setManualCmd] = useState('');
@@ -339,6 +341,66 @@ export default function SerieDetailPage() {
                       Guardar
                     </button>
                   </div>
+                </div>
+
+                {/* Vincular impresora fiscal */}
+                <div className="border-t border-slate-700/50 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-200 mb-1 flex items-center gap-2">
+                    <Printer size={16} className="text-emerald-400" />
+                    Vincular impresora fiscal
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-3">
+                    Elige el puerto COM de la impresora <b>una sola vez</b>. Trinity lo verifica y lo deja
+                    fijo para esta PC, borrando cualquier puerto viejo. Úsalo solo si el navegador vuelve a
+                    pedir el puerto o si cambias de impresora.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={pairing}
+                    onClick={async () => {
+                      const support = isFiscalPrinterSupported();
+                      if (!support.supported) {
+                        setPairMsg({ type: 'error', text: support.reason || 'Web Serial API no disponible.' });
+                        return;
+                      }
+                      setPairing(true);
+                      setPairMsg(null);
+                      try {
+                        const result = await pairFiscalPrinter();
+                        setPrinterInfo(result);
+                        if (result.status.machineSerial && result.status.machineSerial !== serie.fiscalMachineSerial) {
+                          await fetch(`/api/proxy/series/${serie.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fiscalMachineSerial: result.status.machineSerial }),
+                          });
+                          fetchSerie();
+                        }
+                        setPairMsg({ type: 'success', text: `Impresora vinculada: ${result.model.modelName} · Serial ${result.status.machineSerial || '—'}` });
+                      } catch (err: any) {
+                        setPairMsg({ type: 'error', text: err.message });
+                      } finally {
+                        setPairing(false);
+                      }
+                    }}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                  >
+                    {pairing ? <Loader2 className="animate-spin" size={16} /> : <Printer size={16} />}
+                    Vincular / cambiar impresora
+                  </button>
+
+                  {pairMsg && (
+                    <div className={`mt-3 p-3 rounded-lg border text-sm flex items-start gap-2 ${
+                      pairMsg.type === 'success'
+                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                    }`}>
+                      {pairMsg.type === 'success'
+                        ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+                        : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                      {pairMsg.text}
+                    </div>
+                  )}
                 </div>
 
                 {/* Comprobar impresora */}

@@ -1120,6 +1120,83 @@ export async function readPrinterStatus(): Promise<{
 }
 
 /**
+ * "Vincular impresora fiscal": abre el selector de puerto UNA vez (acción del
+ * admin, requiere gesto del usuario), verifica con ENQ que sea de verdad la
+ * impresora fiscal, lee su modelo + estado (serial/RIF), y LIMPIA todos los
+ * demás permisos guardados dejando SOLO el elegido.
+ *
+ * Este es el ÚNICO `forget()` del sistema y solo ocurre por esta acción
+ * explícita — la operación normal (imprimir) NUNCA revoca permisos. Así se
+ * evita la acumulación de puertos muertos y la desincronización, y queda una
+ * única impresora vinculada a esta PC/serie.
+ */
+export async function pairFiscalPrinter(): Promise<{
+  model: PrinterModelInfo;
+  status: FiscalStatusResult;
+}> {
+  const support = isFiscalPrinterSupported();
+  if (!support.supported) {
+    throw new Error(support.reason || 'Web Serial API no disponible.');
+  }
+
+  const chosen = await (navigator as any).serial.requestPort();
+  if (!chosen) {
+    throw new Error('No se seleccionó ningún puerto serial');
+  }
+
+  let io: SerialIO | null = null;
+  try {
+    await chosen.open(SERIAL_CONFIG);
+    if (!chosen.readable || !chosen.writable) {
+      throw new Error('No se pudo abrir el puerto seleccionado');
+    }
+    io = new SerialIO(chosen.readable.getReader(), chosen.writable.getWriter());
+
+    // Verificar con ENQ (reintentando por si está ocupada) que ES la fiscal.
+    let ok = false;
+    for (let t = 0; t < 3 && !ok; t++) {
+      try {
+        await io.write(new Uint8Array([ENQ]));
+        const resp = await io.read(5, 2500);
+        if (resp[0] === STX && resp[3] === ETX) ok = true;
+      } catch {
+        // sin respuesta en este intento — reintentar
+      }
+    }
+    if (!ok) {
+      throw new Error(
+        'El puerto elegido no respondió como impresora fiscal. Verifica que seleccionaste el COM correcto y que la impresora esté encendida y conectada.',
+      );
+    }
+
+    // Limpiar estado pendiente, detectar modelo y leer estado.
+    await io.flush();
+    const model = await detectPrinterModel(io);
+    await waitForReady(io);
+    const status = await readStatusS1(io, model.family);
+
+    // Cleanup: olvidar TODOS los demás puertos autorizados, dejando solo el elegido.
+    // getPorts() devuelve la MISMA instancia para un puerto ya concedido, así que la
+    // comparación por identidad no olvida el elegido.
+    try {
+      const all = await (navigator as any).serial.getPorts();
+      for (const p of all) {
+        if (p !== chosen) {
+          try { await p.forget(); } catch {}
+        }
+      }
+    } catch {
+      // Si getPorts/forget no está disponible, igual quedó vinculado el elegido.
+    }
+
+    return { model, status };
+  } finally {
+    io?.releaseLocks();
+    try { await chosen.close(); } catch {}
+  }
+}
+
+/**
  * Connects to the printer and sends a single raw command.
  * Useful for diagnostics: "D" (print config), "7" (void document),
  * "I0X" (X report), "I0Z" (Z close), etc.
