@@ -899,51 +899,63 @@ async function readStatusS1(
 // ─── Connection helper ───────────────────────────────────────────
 
 /**
- * Opens the serial port to the fiscal printer: tries saved ports first (verifying
- * each with a quick ENQ), and falls back to prompting the user to pick one.
- * Does NOT flush, detect the model, or wait for ready — that lets recovery
- * commands (like "7" to void a stuck document) reach the printer even when a
- * fiscal transaction is open and read commands (SV) would be rejected.
+ * Opens the serial port to the fiscal printer: tries the ports the user already
+ * authorized (verifying each with an ENQ) and only prompts to pick one if none
+ * responds. Does NOT flush, detect the model, or wait for ready — that lets
+ * recovery commands (like "7" to void a stuck document) reach the printer even
+ * when a fiscal transaction is open and read commands (SV) would be rejected.
+ *
+ * IMPORTANTE — NO se hace `port.forget()`: revocar el permiso ante un fallo
+ * PASAJERO (impresora ocupada imprimiendo el recibo anterior con el DTR abajo,
+ * puerto bloqueado un instante por otra pestaña, timeout corto) obligaba al
+ * usuario a re-seleccionar el COM cada rato ("desincronización"). Un puerto que
+ * no responde AHORA puede estar solo ocupado; se salta y se reintenta la próxima
+ * vez, conservando el permiso guardado.
  */
 async function openFiscalConnection(): Promise<{ port: any; io: SerialIO }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let port: any = null;
   let io: SerialIO | null = null;
 
-  // Try saved port first; if ENQ fails, forget it and ask the user to pick
   const savedPorts = await (navigator as any).serial.getPorts();
 
   for (const saved of savedPorts) {
+    let testIO: SerialIO | null = null;
     try {
       await saved.open(SERIAL_CONFIG);
       if (saved.readable && saved.writable) {
-        const testIO = new SerialIO(saved.readable.getReader(), saved.writable.getWriter());
-        try {
-          // Quick ENQ to verify the printer is actually on this port
-          await testIO.write(new Uint8Array([ENQ]));
-          const resp = await testIO.read(5, 2000);
-          if (resp[0] === STX && resp[3] === ETX) {
-            // Printer responded — use this port
-            port = saved;
-            io = testIO;
-            console.log('[FISCAL] Puerto guardado OK — impresora respondió');
-            break;
+        testIO = new SerialIO(saved.readable.getReader(), saved.writable.getWriter());
+        // Verificar con ENQ, reintentando: la impresora puede estar OCUPADA
+        // imprimiendo el recibo anterior (DTR off) y no contestar al primer intento.
+        // Eso NO significa que sea el puerto equivocado — por eso NO se hace forget().
+        let responded = false;
+        for (let t = 0; t < 3 && !responded; t++) {
+          try {
+            await testIO.write(new Uint8Array([ENQ]));
+            const resp = await testIO.read(5, 2500);
+            if (resp[0] === STX && resp[3] === ETX) responded = true;
+          } catch {
+            // Sin respuesta en este intento — reintentar.
           }
-        } catch {
-          // No response — wrong port
         }
-        testIO.releaseLocks();
+        if (responded) {
+          port = saved;
+          io = testIO;
+          testIO = null; // se devuelve activo: no liberar sus locks abajo
+          console.log('[FISCAL] Puerto guardado OK — impresora respondió');
+          break;
+        }
       }
-      await saved.close();
     } catch {
-      // Port busy or can't open — skip
+      // Puerto ocupado/bloqueado en este momento — se SALTA (no se olvida).
+    } finally {
+      if (testIO) testIO.releaseLocks();
+      // Cerrar solo si este puerto NO quedó como el activo.
+      if (!port) { try { await saved.close(); } catch {} }
     }
-
-    // Forget this non-working port so it doesn't get reused
-    try { await saved.forget(); } catch {}
   }
 
-  // No saved port worked — ask the user to pick
+  // Ningún puerto guardado respondió — pedir al usuario que elija uno.
   if (!port) {
     port = await (navigator as any).serial.requestPort();
     if (!port) {
