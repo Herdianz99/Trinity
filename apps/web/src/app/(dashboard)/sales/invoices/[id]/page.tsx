@@ -211,6 +211,7 @@ export default function InvoiceDetailPage() {
   }, []);
 
   const [fiscalLoading, setFiscalLoading] = useState(false);
+  const [unstickLoading, setUnstickLoading] = useState(false);
   const [reprintLoading, setReprintLoading] = useState(false);
   const [ticketLoading, setTicketLoading] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -358,6 +359,29 @@ export default function InvoiceDetailPage() {
       setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
     } finally {
       setFiscalLoading(false);
+    }
+  };
+
+  // "Destrabar impresora": manda el comando 7 (anular documento en curso) CRUDO
+  // para recuperar la impresora cuando una factura se queda trabada a mitad. Tras
+  // destrabar, la factura sigue "Por Imprimir" para volver a mandarla con el botón naranja.
+  const handleUnstickPrinter = async () => {
+    if (!invoice?.serie?.isFiscal) return;
+    if (!confirm('Esto enviará a la impresora la orden de ANULAR el documento fiscal que quedó abierto/trabado. ¿Continuar?')) return;
+    setUnstickLoading(true);
+    setMessage(null);
+    try {
+      const { unstickFiscalPrinter } = await import('@/lib/fiscal-printer');
+      const res = await unstickFiscalPrinter();
+      if (res.success) {
+        setMessage({ type: 'success', text: 'Impresora destrabada. Ya puedes volver a imprimir la factura con "Imprimir Fiscal".' });
+      } else {
+        setMessage({ type: 'error', text: `No se pudo destrabar: ${res.error || 'error desconocido'}` });
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Error al destrabar: ${err.message}` });
+    } finally {
+      setUnstickLoading(false);
     }
   };
 
@@ -551,6 +575,12 @@ export default function InvoiceDetailPage() {
           {invoice.serie?.isFiscal && !invoice.fiscalPrinted && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
             <button onClick={handleFiscalPrint} disabled={fiscalLoading} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50">
               {fiscalLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir Fiscal
+            </button>
+          )}
+          {/* Fiscal: Destrabar impresora (cuando la factura no se imprimió por documento trabado) */}
+          {invoice.serie?.isFiscal && !invoice.fiscalPrinted && invoice.status !== 'PENDING' && invoice.status !== 'CANCELLED' && (
+            <button onClick={handleUnstickPrinter} disabled={unstickLoading} title="Anula el documento fiscal que quedó abierto/trabado en la impresora (comando 7)" className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition-colors disabled:opacity-50">
+              {unstickLoading ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Destrabar impresora
             </button>
           )}
           {/* Fiscal: Reimprimir (already printed) */}

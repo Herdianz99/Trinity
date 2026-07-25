@@ -899,6 +899,67 @@ async function readStatusS1(
 // ─── Connection helper ───────────────────────────────────────────
 
 /**
+ * Opens the serial port to the fiscal printer: tries saved ports first (verifying
+ * each with a quick ENQ), and falls back to prompting the user to pick one.
+ * Does NOT flush, detect the model, or wait for ready — that lets recovery
+ * commands (like "7" to void a stuck document) reach the printer even when a
+ * fiscal transaction is open and read commands (SV) would be rejected.
+ */
+async function openFiscalConnection(): Promise<{ port: any; io: SerialIO }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let port: any = null;
+  let io: SerialIO | null = null;
+
+  // Try saved port first; if ENQ fails, forget it and ask the user to pick
+  const savedPorts = await (navigator as any).serial.getPorts();
+
+  for (const saved of savedPorts) {
+    try {
+      await saved.open(SERIAL_CONFIG);
+      if (saved.readable && saved.writable) {
+        const testIO = new SerialIO(saved.readable.getReader(), saved.writable.getWriter());
+        try {
+          // Quick ENQ to verify the printer is actually on this port
+          await testIO.write(new Uint8Array([ENQ]));
+          const resp = await testIO.read(5, 2000);
+          if (resp[0] === STX && resp[3] === ETX) {
+            // Printer responded — use this port
+            port = saved;
+            io = testIO;
+            console.log('[FISCAL] Puerto guardado OK — impresora respondió');
+            break;
+          }
+        } catch {
+          // No response — wrong port
+        }
+        testIO.releaseLocks();
+      }
+      await saved.close();
+    } catch {
+      // Port busy or can't open — skip
+    }
+
+    // Forget this non-working port so it doesn't get reused
+    try { await saved.forget(); } catch {}
+  }
+
+  // No saved port worked — ask the user to pick
+  if (!port) {
+    port = await (navigator as any).serial.requestPort();
+    if (!port) {
+      throw new Error('No se seleccionó ningún puerto serial');
+    }
+    await port.open(SERIAL_CONFIG);
+    if (!port.readable || !port.writable) {
+      throw new Error('No se pudo abrir el puerto serial');
+    }
+    io = new SerialIO(port.readable.getReader(), port.writable.getWriter());
+  }
+
+  return { port, io: io! };
+}
+
+/**
  * Opens the serial port (trying saved ports first, then prompting the user),
  * flushes any pending state, detects the printer model, and calls `fn`
  * with the SerialIO and model info. Cleans up (release locks, close port)
@@ -912,51 +973,7 @@ async function withFiscalPrinter<T>(
   let io: SerialIO | null = null;
 
   try {
-    // Try saved port first; if ENQ fails, forget it and ask the user to pick
-    const savedPorts = await (navigator as any).serial.getPorts();
-
-    for (const saved of savedPorts) {
-      try {
-        await saved.open(SERIAL_CONFIG);
-        if (saved.readable && saved.writable) {
-          const testIO = new SerialIO(saved.readable.getReader(), saved.writable.getWriter());
-          try {
-            // Quick ENQ to verify the printer is actually on this port
-            await testIO.write(new Uint8Array([ENQ]));
-            const resp = await testIO.read(5, 2000);
-            if (resp[0] === STX && resp[3] === ETX) {
-              // Printer responded — use this port
-              port = saved;
-              io = testIO;
-              console.log('[FISCAL] Puerto guardado OK — impresora respondió');
-              break;
-            }
-          } catch {
-            // No response — wrong port
-          }
-          testIO.releaseLocks();
-        }
-        await saved.close();
-      } catch {
-        // Port busy or can't open — skip
-      }
-
-      // Forget this non-working port so it doesn't get reused
-      try { await saved.forget(); } catch {}
-    }
-
-    // No saved port worked — ask the user to pick
-    if (!port) {
-      port = await (navigator as any).serial.requestPort();
-      if (!port) {
-        throw new Error('No se seleccionó ningún puerto serial');
-      }
-      await port.open(SERIAL_CONFIG);
-      if (!port.readable || !port.writable) {
-        throw new Error('No se pudo abrir el puerto serial');
-      }
-      io = new SerialIO(port.readable.getReader(), port.writable.getWriter());
-    }
+    ({ port, io } = await openFiscalConnection());
 
     // Flush pending state from previous interrupted sessions
     await io!.flush();
@@ -1107,6 +1124,70 @@ export async function sendRawFiscalCommand(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * "Destrabar impresora": envía el comando "7" (anular el documento fiscal en curso)
+ * de forma CRUDA — solo abre el puerto y escribe la trama, SIN el preámbulo de
+ * withFiscalPrinter (flush + detección de modelo con SV + waitForReady).
+ *
+ * Por qué crudo: cuando una factura se traba, la impresora queda con un documento
+ * fiscal ABIERTO (status 0x61). En ese estado la HKA rechaza los comandos de lectura
+ * como SV, así que el withFiscalPrinter normal falla ANTES de enviar el 7 y el
+ * documento nunca se anula. Mandando el 7 directo, el comando sí llega.
+ *
+ * OJO (manual The Factory §Tabla 16): si ya se aplicó uno o más PAGOS PARCIALES al
+ * documento, el 7 NO lo anula — la impresora sigue totalizando. Ese caso (multi-pago
+ * trabado) requiere cerrar el documento, no anularlo; este botón no lo resuelve.
+ *
+ * Tras enviar el 7, intenta (best-effort) releer S1 para confirmar que la impresora
+ * volvió a estado de espera (0x40/0x60).
+ */
+export async function unstickFiscalPrinter(): Promise<{
+  success: boolean;
+  error?: string;
+  status?: FiscalStatusResult;
+}> {
+  const support = isFiscalPrinterSupported();
+  if (!support.supported) {
+    return { success: false, error: support.reason || 'Web Serial API no disponible.' };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let port: any = null;
+  let io: SerialIO | null = null;
+  try {
+    ({ port, io } = await openFiscalConnection());
+
+    // Sincroniza el límite de trama con un ENQ (siempre válido, incluso con un
+    // documento abierto — manual Tabla 6) y descarta bytes viejos. NO es un comando
+    // de lectura tipo SV, así que la impresora no lo rechaza en estado trabado.
+    try {
+      await io.write(new Uint8Array([ENQ]));
+      await io.read(5, 2000);
+    } catch {
+      // Sin respuesta al ENQ: igual intentamos el 7.
+    }
+
+    // Anular el documento fiscal en curso.
+    await sendSimpleCommand(io, '7', 8000);
+
+    // Best-effort: confirmar que volvió a estado de espera leyendo S1.
+    let status: FiscalStatusResult | undefined;
+    try {
+      await waitForReady(io, 8000);
+      status = await readStatusS1(io, 'A');
+    } catch {
+      // No se pudo leer el estado; el 7 igual se envió.
+    }
+
+    return { success: true, status };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  } finally {
+    io?.releaseLocks();
+    try { await port?.close(); } catch {}
   }
 }
 
