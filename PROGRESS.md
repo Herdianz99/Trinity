@@ -12,6 +12,26 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-25 — Botón "Destrabar impresora" en factura fiscal (comando 7 crudo)
+
+> **⏳ Commiteado y pusheado a `main` (commit `93c31c7`), PENDIENTE de deploy.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado `tsc --noEmit` OK en el web. Probado en local (API 4000 + Web 3000 arriba contra copia de la grande); la prueba con impresora real requiere Chrome/Edge + HKA por COM.
+
+**Problema reportado:** las facturas fiscales a veces se quedan **trabadas a mitad**; el comando 7 (anular) para reintentar **no funcionaba desde Trinity** y había que ir a "el otro sistema" (utilitario del fabricante) a destrabar y luego volver a Trinity a imprimir la original. Además una "alerta" que el usuario no reconoce.
+
+**Diagnóstico (código + manual The Factory HKA V8.5.0):**
+- **Por qué se traba:** el POS manda los comandos fiscales uno por uno; si cualquiera falla a mitad (NAK/timeout/puerto), el bucle se corta con el **documento fiscal abierto** en la impresora (status `0x61`, Tabla 7). La máquina cree que sigue facturando y no deja abrir otra.
+- **Por qué el 7 no destrababa (Causa B, bug nuestro):** `sendRawFiscalCommand`/`withFiscalPrinter` hacían **antes** del 7 un `flush` + **detección de modelo con `SV`** (comando de lectura) + `waitForReady`. Con un documento abierto la HKA **rechaza el `SV`**, así que todo el setup fallaba **antes** de enviar el 7 → el 7 nunca llegaba. El utilitario del fabricante funciona porque manda el 7 crudo.
+- **Causa A (por diseño de la HKA, manual Tabla 16):** si el documento ya recibió **uno o más pagos parciales**, el 7 **no anula** — la impresora "sigue totalizando". Ese caso (multi-pago trabado) requiere **cerrar** el documento, no anularlo → **queda pendiente**.
+- **La "alerta":** `showFiscalCommands()` hace un `alert()` con el volcado crudo de comandos (`iR*…`, `!00000…`) en cualquier fallo fiscal. El usuario dijo que la suya es **otro** mensaje → **pendiente** de identificar (falta el texto/foto exactos).
+
+**Implementado:**
+- Nueva función **`unstickFiscalPrinter()`** (`apps/web/src/lib/fiscal-printer.ts`): refactoricé la apertura de puerto a **`openFiscalConnection()`** (sin flush/SV/waitForReady) y la reutilizo para mandar el **`7` CRUDO** — solo un `ENQ` de sincronización (siempre válido incluso con documento abierto, Tabla 6) y luego el 7; después relee S1 best-effort para confirmar que volvió a espera (`0x40/0x60`).
+- Botón rojo **"Destrabar impresora"** (ícono ↺) en el detalle de la factura, **junto al naranja "Imprimir Fiscal"**, con las mismas condiciones (fiscal + por imprimir + no anulada). Pide confirmación. Flujo: **Destrabar** → luego **Imprimir Fiscal** para reenviar, sin salir a otro sistema.
+
+**Pendiente:** (1) identificar la "alerta" real que ve el usuario; (2) recuperación del caso **multi-pago trabado** (cerrar documento en vez de anular).
+
+---
+
 ## 🗓️ Sesión 2026-07-24 (2) — Reporte PDF de existencias + filtro "solo con existencia" en Consultar Artículos
 
 > **✅ Desplegado en AMBAS empresas el 2026-07-24** (HEAD `17b2837`, sin migraciones, PM2 online, health 200, ruta `/products/report/pdf` responde 401). Verificado end-to-end en **local** contra la copia de la grande: los 3 variantes del PDF (todos / solo-con-existencia / con búsqueda) devuelven HTTP 200 y PDF válido; conteos cuadran con la BD (9.217 activos → 6.463 con existencia). `tsc --noEmit` OK API+web.
