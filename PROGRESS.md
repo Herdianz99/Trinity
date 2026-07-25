@@ -12,9 +12,9 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
-## 🗓️ Sesión 2026-07-25 — Impresora fiscal: botón "Destrabar" (comando 7 crudo) + fix puerto COM que se desincronizaba
+## 🗓️ Sesión 2026-07-25 — Impresora fiscal: botón "Destrabar" (comando 7) + fix puerto COM que se desincronizaba + botón "Vincular impresora"
 
-> **⏳ Commiteado y pusheado a `main` (commits `93c31c7` destrabar + `d7efadd` fix COM), PENDIENTE de deploy.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado `tsc --noEmit` OK en el web. Probado en local (API 4000 + Web 3000 arriba contra copia de la grande); la prueba con impresora real requiere Chrome/Edge + HKA por COM.
+> **⏳ Commiteado y pusheado a `main` (commits `93c31c7` destrabar + `d7efadd` fix COM + `3528e86` vincular), PENDIENTE de deploy.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). **NO toca los comandos de facturación/NC** (siguen idénticos). Verificado `tsc --noEmit` OK en el web. Probado en local (API 4000 + Web 3000 arriba contra copia de la grande); la prueba con impresora real requiere Chrome/Edge + HKA por COM. **Las 2 empresas en prod NO necesitan re-configurar la impresora tras el deploy** — el permiso del COM vive en el navegador (por origen), no en el código.
 
 **Problema reportado:** las facturas fiscales a veces se quedan **trabadas a mitad**; el comando 7 (anular) para reintentar **no funcionaba desde Trinity** y había que ir a "el otro sistema" (utilitario del fabricante) a destrabar y luego volver a Trinity a imprimir la original. Además una "alerta" que el usuario no reconoce.
 
@@ -32,6 +32,12 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 - **Causa:** `openFiscalConnection()` hacía **`port.forget()`** (revoca el permiso de Web Serial) a cada puerto guardado que no respondiera al `ENQ` en 2s. Como eso pasa por causas **pasajeras** (impresora ocupada imprimiendo el recibo anterior con el **DTR abajo**, puerto bloqueado un instante por otra pestaña, timeout corto), terminaba **borrando el permiso del puerto bueno** → reaparecía el diálogo de selección de COM. Era el propio Trinity el que lo borraba, no Windows/Chrome.
 - **Fix:** se eliminó el `forget()` automático — un puerto que no responde **ahora** se **salta** (puede estar solo ocupado) y se reintenta la próxima vez **conservando el permiso**. Además el `ENQ` de verificación **reintenta 3× (2.5s c/u)** para no descartar una impresora ocupada.
 - **Otras causas posibles a vigilar** (no las tocaba este bug): entrar a Trinity por **orígenes distintos** (los permisos Web Serial son por origen exacto: `https://…eltrebol.app` vs IP vs `http://`), limpiar datos del navegador, o reconectar el adaptador USB-serial en otro puerto.
+
+**Botón "Vincular impresora fiscal" en la serie (commit `3528e86`):**
+- Nueva función **`pairFiscalPrinter()`** (`fiscal-printer.ts`): abre el selector de puerto **una sola vez** (acción del admin, requiere gesto), **verifica con ENQ** que sea la fiscal (si eliges mal, avisa y no guarda), lee modelo+serial+RIF, guarda el serial en la serie, y **limpia (`forget`) todos los demás puertos** dejando solo el elegido.
+- **Es el ÚNICO `forget()` del sistema** y solo por esta acción explícita — la operación normal nunca revoca permisos. Complementa al fix `d7efadd`: "configúralo una vez y no vuelve a pedir el COM".
+- UI: botón **"Vincular / cambiar impresora"** en `/settings/series/[id]`, sobre "Comprobar impresora". Mismo botón sirve para cambiar de impresora en el futuro.
+- **Aclaración Web Serial (limitación del navegador, no de Trinity):** no se puede "fijar" un COM por número desde el código; el navegador obliga a elegir con su diálogo tras un gesto del usuario. El campo `comPort` de la serie es decorativo (el navegador lo ignora); el pareo real es este permiso guardado.
 
 **Pendiente:** (1) identificar la "alerta" real que ve el usuario; (2) recuperación del caso **multi-pago trabado** (cerrar documento en vez de anular).
 
