@@ -8,7 +8,7 @@ import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { IvaType, Prisma } from '@prisma/client';
-import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 import { StoreExportService } from '../store-export/store-export.service';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
@@ -195,7 +195,7 @@ export class ProductsService {
   // Construye el `where` compartido por findAll y el reporte PDF de existencias.
   // Devuelve null cuando el filtro garantiza 0 resultados (search / inStock sin coincidencias).
   private async buildListWhere(query: QueryProductsDto): Promise<Prisma.ProductWhereInput | null> {
-    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive } = query;
+    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive, saleBlocked } = query;
 
     const where: Prisma.ProductWhereInput = {};
 
@@ -206,6 +206,8 @@ export class ProductsService {
     // El catalogo /catalog/products pasa includeInactive=true para gestionarlos; isActive explicito manda.
     if (isActive !== undefined) where.isActive = isActive;
     else if (!includeInactive) where.isActive = true;
+    // Filtro del catalogo: solo productos bloqueados para la venta.
+    if (saleBlocked) where.saleBlocked = true;
 
     if (lowStock) {
       where.stock = {
@@ -348,6 +350,55 @@ export class ProductsService {
       name: p.name,
       stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
     }));
+  }
+
+  // Lista completa (sin paginar) para el reporte del catalogo (Excel/PDF). Aplica los mismos
+  // filtros que la pantalla /catalog/products (search, categoria, marca, proveedor, stock bajo,
+  // solo desactivados, solo bloqueados para venta) e incluye precio, estado y tasa del dia.
+  async catalogReportList(query: QueryProductsDto) {
+    const where = await this.buildListWhere(query);
+    const today = caracasDateKey();
+    const [rateRow, products] = await Promise.all([
+      this.prisma.exchangeRate.findUnique({ where: { date: today } }),
+      where
+        ? this.prisma.product.findMany({
+            where,
+            orderBy: { name: 'asc' },
+            select: {
+              code: true,
+              supplierRef: true,
+              name: true,
+              costUsd: true,
+              priceDetal: true,
+              priceMayor: true,
+              isActive: true,
+              saleBlocked: true,
+              category: { select: { name: true } },
+              brand: { select: { name: true } },
+              supplier: { select: { name: true } },
+              stock: { select: { quantity: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const rate = rateRow?.rate || 0;
+    const items = products.map((p) => ({
+      code: p.code,
+      supplierRef: p.supplierRef || '',
+      name: p.name,
+      category: p.category?.name || '',
+      brand: p.brand?.name || '',
+      supplier: p.supplier?.name || '',
+      cost: p.costUsd,
+      priceDetal: p.priceDetal,
+      priceMayor: p.priceMayor,
+      priceDetalBs: Math.round(p.priceDetal * rate * 100) / 100,
+      stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+      status: !p.isActive ? 'Inactivo' : p.saleBlocked ? 'Bloq. venta' : 'Activo',
+    }));
+
+    return { items, rate };
   }
 
   async search(q: string) {

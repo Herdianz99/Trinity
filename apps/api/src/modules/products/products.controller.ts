@@ -15,6 +15,7 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
 import { ProductsReportPdfService } from './products-report-pdf.service';
+import { ProductsCatalogReportService } from './products-catalog-report.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
@@ -28,6 +29,7 @@ export class ProductsController {
     private productsService: ProductsService,
     private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
     private productsReportPdf: ProductsReportPdfService,
+    private catalogReport: ProductsCatalogReportService,
   ) {}
 
   @Post()
@@ -67,6 +69,29 @@ export class ProductsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="existencias-articulos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('report/catalog/pdf')
+  async catalogReportPdf(@Query() query: QueryProductsDto, @Res() res: Response) {
+    const buffer = await this.catalogReport.generatePdf(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="catalogo-productos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('report/catalog/xlsx')
+  async catalogReportXlsx(@Query() query: QueryProductsDto, @Res() res: Response) {
+    const buffer = await this.catalogReport.generateXlsx(query);
+    res.set({
+      // octet-stream para que el proxy del web lo reenvie como binario intacto.
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': 'attachment; filename="catalogo-productos.xlsx"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

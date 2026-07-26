@@ -11,18 +11,18 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-// Carta horizontal, area util 40..752 (ancho 712). Documento/Vence/Neto/Saldo/Estado
+// Carta vertical, area util 40..572 (ancho 532). Documento/Vence/Neto/Saldo/Estado
 // ocupan solo lo necesario; el resto del ancho se lo lleva Proveedor. Posiciones (x)
 // calculadas a partir de los anchos + un gap fijo entre columnas.
-const RIGHT = 752;
+const RIGHT = 572;
 const COL_GAP = 6;
 const COL_DEFS = [
-  { label: 'Proveedor', width: 305 },
-  { label: 'Documento', width: 85 },
-  { label: 'Vence', width: 62 },
-  { label: 'Neto USD', width: 76, align: 'right' as const },
-  { label: 'Saldo USD', width: 76, align: 'right' as const },
-  { label: 'Estado', width: 78 },
+  { label: 'Proveedor', width: 167 },
+  { label: 'Documento', width: 78 },
+  { label: 'Vence', width: 55 },
+  { label: 'Neto USD', width: 70, align: 'right' as const },
+  { label: 'Saldo USD', width: 70, align: 'right' as const },
+  { label: 'Estado', width: 62 },
 ];
 const COLS = (() => {
   let x = 40;
@@ -78,7 +78,7 @@ export class PayablesPdfService {
     const config = await this.prisma.companyConfig.findFirst();
     const company = config?.companyName || 'Trinity ERP';
 
-    const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
 
     // Encabezado
     doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
@@ -141,8 +141,8 @@ export class PayablesPdfService {
     y += 4;
     doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
     doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
-    doc.text('TOTAL', 46, y + 1, { width: 300, lineBreak: false });
-    doc.text(`Neto: $${this.fmt(totalNeto)}     Saldo: $${this.fmt(totalSaldo)}`, 402, y + 1, { width: RIGHT - 402 - 6, align: 'right' });
+    doc.text('TOTAL', 46, y + 1, { width: 150, lineBreak: false });
+    doc.text(`Neto: $${this.fmt(totalNeto)}     Saldo: $${this.fmt(totalSaldo)}`, 220, y + 1, { width: RIGHT - 220 - 6, align: 'right' });
     doc.fillColor('#000');
 
     // Paginacion

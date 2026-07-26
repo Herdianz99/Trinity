@@ -11,16 +11,16 @@ const STATUS_LABELS: Record<string, string> = {
   OVERDUE: 'Vencido',
 };
 
-// Carta horizontal, area util 40..752. El CLIENTE va como encabezado de grupo (no columna),
+// Carta vertical, area util 40..572. El CLIENTE va como encabezado de grupo (no columna),
 // para ubicar las cuentas por cliente mas facil.
 const COLS = [
-  { label: 'Documento', x: 40, width: 190 },
-  { label: 'Vence', x: 240, width: 95 },
-  { label: 'Monto USD', x: 345, width: 120, align: 'right' as const },
-  { label: 'Saldo USD', x: 475, width: 120, align: 'right' as const },
-  { label: 'Estado', x: 605, width: 147 },
+  { label: 'Documento', x: 40, width: 150 },
+  { label: 'Vence', x: 196, width: 70 },
+  { label: 'Monto USD', x: 272, width: 88, align: 'right' as const },
+  { label: 'Saldo USD', x: 366, width: 88, align: 'right' as const },
+  { label: 'Estado', x: 460, width: 112 },
 ];
-const RIGHT = 752;
+const RIGHT = 572;
 
 @Injectable()
 export class ReceivablesPdfService {
@@ -60,8 +60,8 @@ export class ReceivablesPdfService {
     doc.rect(40, y - 2, RIGHT - 40, 15).fill('#e2e8f0');
     doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold');
     const title = `${name}${rif ? '  ·  ' + rif : ''}  (${count})${cont ? '  — cont.' : ''}`;
-    doc.text(title, 46, y + 1, { width: 430, lineBreak: false, ellipsis: true });
-    doc.text(`Monto $${this.fmt(monto)}     Saldo $${this.fmt(saldo)}`, RIGHT - 266, y + 1, { width: 260, align: 'right', lineBreak: false });
+    doc.text(title, 46, y + 1, { width: 250, lineBreak: false, ellipsis: true });
+    doc.text(`Monto $${this.fmt(monto)}     Saldo $${this.fmt(saldo)}`, RIGHT - 246, y + 1, { width: 240, align: 'right', lineBreak: false });
     doc.fillColor('#000');
     return y + 18;
   }
@@ -71,7 +71,7 @@ export class ReceivablesPdfService {
     const config = await this.prisma.companyConfig.findFirst();
     const company = config?.companyName || 'Trinity ERP';
 
-    const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'portrait', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
 
     // Encabezado
     doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
@@ -156,8 +156,8 @@ export class ReceivablesPdfService {
     y += 4;
     doc.rect(40, y - 2, RIGHT - 40, 16).fill('#0f172a');
     doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold');
-    doc.text(`TOTAL  (${ordered.length} clientes)`, 46, y + 1, { width: 300, lineBreak: false });
-    doc.text(`Monto: $${this.fmt(totalMonto)}     Saldo: $${this.fmt(totalSaldo)}`, 402, y + 1, { width: RIGHT - 402 - 6, align: 'right' });
+    doc.text(`TOTAL  (${ordered.length} clientes)`, 46, y + 1, { width: 180, lineBreak: false });
+    doc.text(`Monto: $${this.fmt(totalMonto)}     Saldo: $${this.fmt(totalSaldo)}`, 230, y + 1, { width: RIGHT - 230 - 6, align: 'right' });
     doc.fillColor('#000');
 
     // Paginacion

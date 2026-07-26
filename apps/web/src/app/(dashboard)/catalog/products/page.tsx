@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Package, Plus, Search, ChevronLeft, ChevronRight,
-  Edit2, Trash2, Loader2, AlertTriangle,
+  Edit2, Trash2, Loader2, AlertTriangle, PowerOff, Ban,
+  FileSpreadsheet, FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -13,6 +14,7 @@ interface Product {
   code: string;
   barcode: string | null;
   otherCode: string | null;
+  supplierRef: string | null;
   saleBlocked?: boolean;
   name: string;
   categoryId: string | null;
@@ -49,6 +51,8 @@ export default function ProductsPage() {
   const [filterBrand, setFilterBrand] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('');
   const [lowStock, setLowStock] = useState(false);
+  const [onlyInactive, setOnlyInactive] = useState(false);
+  const [onlySaleBlocked, setOnlySaleBlocked] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchProducts = useCallback(async () => {
@@ -64,6 +68,8 @@ export default function ProductsPage() {
       if (filterBrand) params.set('brandId', filterBrand);
       if (filterSupplier) params.set('supplierId', filterSupplier);
       if (lowStock) params.set('lowStock', 'true');
+      if (onlyInactive) params.set('isActive', 'false');
+      if (onlySaleBlocked) params.set('saleBlocked', 'true');
 
       const res = await fetch(`/api/proxy/products?${params}`);
       if (res.ok) {
@@ -75,7 +81,7 @@ export default function ProductsPage() {
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock]);
+  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock, onlyInactive, onlySaleBlocked]);
 
   const fetchMeta = useCallback(async () => {
     const [catRes, brandRes, supRes, rateRes] = await Promise.all([
@@ -99,6 +105,22 @@ export default function ProductsPage() {
 
   function getTotalStock(product: Product) {
     return product.stock?.reduce((sum, s) => sum + s.quantity, 0) || 0;
+  }
+
+  // Reporte del catalogo: abre el endpoint con EXACTAMENTE los mismos filtros que la tabla
+  // (sin paginar). El backend genera PDF/Excel respetando search, categoria, marca, proveedor,
+  // stock bajo, solo desactivados y solo bloqueados para la venta.
+  function exportReport(format: 'pdf' | 'xlsx') {
+    const params = new URLSearchParams();
+    params.set('includeInactive', 'true');
+    if (search) params.set('search', search);
+    if (filterCategory) params.set('categoryId', filterCategory);
+    if (filterBrand) params.set('brandId', filterBrand);
+    if (filterSupplier) params.set('supplierId', filterSupplier);
+    if (lowStock) params.set('lowStock', 'true');
+    if (onlyInactive) params.set('isActive', 'false');
+    if (onlySaleBlocked) params.set('saleBlocked', 'true');
+    window.open(`/api/proxy/products/report/catalog/${format}?${params}`, '_blank');
   }
 
   async function handleDelete(id: string) {
@@ -132,9 +154,25 @@ export default function ProductsPage() {
             <p className="text-slate-400 text-sm">{total} productos registrados</p>
           </div>
         </div>
-        <Link href="/catalog/products/new" className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> Nuevo producto
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportReport('xlsx')}
+            title="Exportar a Excel (respeta los filtros)"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-600/15 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/25 transition-colors"
+          >
+            <FileSpreadsheet size={16} /> Excel
+          </button>
+          <button
+            onClick={() => exportReport('pdf')}
+            title="Exportar a PDF (respeta los filtros)"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-600/15 text-red-400 border border-red-600/30 hover:bg-red-600/25 transition-colors"
+          >
+            <FileText size={16} /> PDF
+          </button>
+          <Link href="/catalog/products/new" className="btn-primary flex items-center gap-2">
+            <Plus size={18} /> Nuevo producto
+          </Link>
+        </div>
       </div>
 
       {message && (
@@ -183,7 +221,7 @@ export default function ProductsPage() {
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
           <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -193,6 +231,26 @@ export default function ProductsPage() {
             />
             <AlertTriangle size={14} className="text-amber-400" />
             Solo stock bajo
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={onlyInactive}
+              onChange={(e) => { setOnlyInactive(e.target.checked); setPage(1); }}
+              className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+            />
+            <PowerOff size={14} className="text-red-400" />
+            Solo desactivados
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={onlySaleBlocked}
+              onChange={(e) => { setOnlySaleBlocked(e.target.checked); setPage(1); }}
+              className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+            />
+            <Ban size={14} className="text-orange-400" />
+            Solo desactivados para la venta
           </label>
         </div>
       </div>
@@ -204,7 +262,7 @@ export default function ProductsPage() {
             <thead>
               <tr className="border-b border-slate-700/50">
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Codigo</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Otro codigo</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Ref. proveedor</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Categoria</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Marca</th>
@@ -236,7 +294,7 @@ export default function ProductsPage() {
                         {product.code}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-400 font-mono text-xs">{product.otherCode || '—'}</td>
+                    <td className="px-4 py-3 text-slate-400 font-mono text-xs">{product.supplierRef || '—'}</td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/catalog/products/${product.code}`}

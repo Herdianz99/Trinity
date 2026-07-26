@@ -12,9 +12,13 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
-## 🗓️ Sesión 2026-07-26 — Fix POS: al convertir a cotización no se llevaba el vendedor seleccionado manualmente (admin sin vendedor)
+## 🗓️ Sesión 2026-07-26 — Fix vendedor en cotización POS + catálogo (2 toggles, Ref. proveedor, reporte Excel/PDF) + PDFs CxP/CxC a vertical
 
-> **⏳ SIN DESPLEGAR.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado en local (dev con la copia de la grande): un usuario **admin sin vendedor asignado** ahora selecciona un vendedor a mano y "convertir a cotización" **sí lo lleva**. Confirmado que **NO hay regresión** para usuarios con vendedor asignado (ver lógica abajo).
+> **⏳ SIN DESPLEGAR.** Verificado todo en local (dev con la copia de la grande). **1 dependencia nueva en el API** (`xlsx` para el Excel del catálogo) → el `deploy.sh` la instala solo con su `pnpm install` (no hay paso manual, pero el `pnpm-lock.yaml` va commiteado). **Sin migraciones ni cambios de schema.** Bloques de la sesión: (1) fix vendedor cotización POS, (2) filtros del catálogo + fix `enableImplicitConversion`, (3) reporte del catálogo Excel/PDF, (4) PDFs de CxP/CxC a vertical.
+
+### (1) Fix POS: al convertir a cotización no se llevaba el vendedor seleccionado manualmente (admin sin vendedor)
+
+> Cambio 100% frontend/web. Un usuario **admin sin vendedor asignado** ahora selecciona un vendedor a mano y "convertir a cotización" **sí lo lleva**. Confirmado que **NO hay regresión** para usuarios con vendedor asignado (ver lógica abajo).
 
 **Bug:** en el POS, `handleSaveQuotation()` (`apps/web/src/app/(dashboard)/sales/pos/page.tsx`) armaba el payload a `POST /quotations` **sin** el campo `sellerId`. El backend (`quotations.service.ts`) usa el fallback: `dto.sellerId ?? seller vinculado al userId en sesión`. Como un admin no tiene `Seller` vinculado, el vendedor quedaba en `null` aunque lo hubiera elegido en la interfaz. Solo "funcionaba" cuando el usuario ya tenía vendedor propio (porque el backend lo resolvía por su cuenta, no por lo seleccionado).
 
@@ -22,7 +26,26 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 **Por qué no rompe a los vendedores:** al cargar el POS, si el usuario tiene `Seller` vinculado se ejecuta `setSelectedSellerId(data.seller.id)` (línea ~496), así que `selectedSellerId` **ya arranca con su propio vendedor** → el payload manda su ID (comportamiento idéntico al previo). Para el admin sin vendedor, `selectedSellerId` queda en `null` hasta que elige uno manualmente, que es justo el caso que se arregló.
 
-**Pendiente:** desplegar en ambas empresas (`git pull` + `bash deploy.sh`, sin migraciones).
+### (2) Catálogo `/catalog/products`: 2 toggles nuevos + columna "Ref. proveedor" + fix `enableImplicitConversion`
+
+- **Toggle "Solo desactivados"** → envía `isActive=false`; **Toggle "Solo desactivados para la venta"** → envía `saleBlocked=true` (campo nuevo en `QueryProductsDto` + `if (saleBlocked) where.saleBlocked = true`).
+- **Columna "Otro codigo" → "Ref. proveedor"** (muestra `product.supplierRef`, que ya venía en la respuesta).
+- **BUG DE FONDO ENCONTRADO Y ARREGLADO:** el `ValidationPipe` global corre con `enableImplicitConversion: true`, que convertía el string `'false'` a booleano con `Boolean('false') = true` **antes** de que corriera el `@Transform`. Por eso "solo desactivados" (`isActive=false`) se invertía y mostraba los activos, mientras `saleBlocked=true` sí funcionaba (siempre recibe `'true'`). **Fix:** el `@Transform` de todos los booleanos de `QueryProductsDto` ahora lee el valor CRUDO del querystring (`obj[key]`) vía un helper `toBool`, no `value` (ya convertido). Verificado en vivo: `isActive=false` → 149 inactivos (antes devolvía 9214 activos).
+
+### (3) Reporte del catálogo en Excel y PDF (respeta los filtros)
+
+- 2 botones en el encabezado de `/catalog/products` (**Excel** y **PDF**) que arman el querystring con los filtros ACTUALES (sin paginar) y abren el endpoint por el proxy.
+- Backend nuevo: `catalogReportList()` en `products.service.ts` (reusa `buildListWhere`, incluye código, ref. proveedor, nombre, categoría, marca, proveedor, **costo USD**, precio USD/mayor, precio Bs con tasa del día, stock y estado) + servicio `products-catalog-report.service.ts` (PDF con `pdfkit`, Excel con `xlsx`) + endpoints `GET /products/report/catalog/pdf` y `/products/report/catalog/xlsx`.
+- El Excel se sirve como `application/octet-stream` para que el proxy del web (`api/proxy/[...path]`) lo reenvíe como binario intacto (solo trata como binario `pdf` y `octet-stream`).
+- **PDF del catálogo** (por pedido del usuario): **vertical**, columnas `Código | Ref. Prov. | Nombre | Costo $ | Precio USD | Stock` (se quitaron Marca, Categoría, Estado y Precio Bs). El **Excel** sí trae todas las columnas + Costo USD.
+- Verificado en vivo: PDF firma `%PDF`, XLSX firma `PK` (zip), y ambos respetan los filtros (solo desactivados → 149; bloqueados venta → 5).
+
+### (4) PDFs de `/payables` (CxP) y `/receivables` (CxC) a vertical
+
+- Ambos pasaron de `landscape` a `portrait`. Se recalcularon anchos/posiciones de columna para el ancho útil vertical (532px vs 712px), y se reubicaron las filas de TOTAL y (en CxC) la barra de encabezado por cliente. Los nombres largos siguen recortándose con "…".
+- Verificado vía MediaBox `612x792` (= carta vertical) en ambos; responden 200 con PDF válido y respetan sus filtros (vencidas, estado, fechas).
+
+**Pendiente:** desplegar en ambas empresas (`git pull` + `bash deploy.sh`; el `pnpm install` del script instala `xlsx`; sin migraciones).
 
 ---
 
