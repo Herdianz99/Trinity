@@ -1187,6 +1187,7 @@ export default function POSPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: customerId || undefined,
+          sellerId: selectedSellerId || undefined,
           items: cart.map(i => ({
             productId: i.productId,
             quantity: i.quantity,

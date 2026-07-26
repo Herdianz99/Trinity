@@ -12,6 +12,20 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-26 — Fix POS: al convertir a cotización no se llevaba el vendedor seleccionado manualmente (admin sin vendedor)
+
+> **⏳ SIN DESPLEGAR.** Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). Verificado en local (dev con la copia de la grande): un usuario **admin sin vendedor asignado** ahora selecciona un vendedor a mano y "convertir a cotización" **sí lo lleva**. Confirmado que **NO hay regresión** para usuarios con vendedor asignado (ver lógica abajo).
+
+**Bug:** en el POS, `handleSaveQuotation()` (`apps/web/src/app/(dashboard)/sales/pos/page.tsx`) armaba el payload a `POST /quotations` **sin** el campo `sellerId`. El backend (`quotations.service.ts`) usa el fallback: `dto.sellerId ?? seller vinculado al userId en sesión`. Como un admin no tiene `Seller` vinculado, el vendedor quedaba en `null` aunque lo hubiera elegido en la interfaz. Solo "funcionaba" cuando el usuario ya tenía vendedor propio (porque el backend lo resolvía por su cuenta, no por lo seleccionado).
+
+**Fix:** agregar `sellerId: selectedSellerId || undefined` al payload de `handleSaveQuotation()` — mismo patrón que ya usaban `doSaveInvoice` y `syncExistingInvoiceItems`.
+
+**Por qué no rompe a los vendedores:** al cargar el POS, si el usuario tiene `Seller` vinculado se ejecuta `setSelectedSellerId(data.seller.id)` (línea ~496), así que `selectedSellerId` **ya arranca con su propio vendedor** → el payload manda su ID (comportamiento idéntico al previo). Para el admin sin vendedor, `selectedSellerId` queda en `null` hasta que elige uno manualmente, que es justo el caso que se arregló.
+
+**Pendiente:** desplegar en ambas empresas (`git pull` + `bash deploy.sh`, sin migraciones).
+
+---
+
 ## 🗓️ Sesión 2026-07-25 — Impresora fiscal: botón "Destrabar" (comando 7) + fix puerto COM que se desincronizaba + botón "Vincular impresora"
 
 > **✅ DESPLEGADO en la GRANDE (`inversiones`) el 2026-07-25** (HEAD `87d88f6`, PM2 `trinity-api`/`trinity-web` online y estables, health API `/docs` 200, web 307; sin migraciones). **⏳ CHICA (`eltrebol`) PENDIENTE** — se despliega tras validar la máquina fiscal en la grande mañana (2026-07-26). Commits: `93c31c7` destrabar + `d7efadd` fix COM + `3528e86` vincular. Cambio 100% frontend/web (no toca schema ni migraciones → deploy seguro). **NO toca los comandos de facturación/NC** (siguen idénticos). Verificado `tsc --noEmit` OK en el web. **Las 2 empresas en prod NO necesitan re-configurar la impresora tras el deploy** — el permiso del COM vive en el navegador (por origen), no en el código.
