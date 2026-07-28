@@ -31,11 +31,9 @@ export class ReceiptsService {
     return this.round2(amountUsd * effectiveRate);
   }
 
-  async findAll(query: QueryReceiptsDto) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 20;
-    const skip = (page - 1) * limit;
-
+  // Construye el filtro Prisma compartido por el listado paginado y el reporte PDF,
+  // asi ambos respetan EXACTAMENTE los mismos criterios (type, status, fechas, busqueda).
+  private buildWhere(query: QueryReceiptsDto): any {
     const where: any = {};
     if (query.type) where.type = query.type;
     if (query.status) where.status = query.status;
@@ -53,13 +51,18 @@ export class ReceiptsService {
     }
     if (query.from || query.to) {
       where.createdAt = {};
-      if (query.from) {
-        where.createdAt.gte = caracasDayStart(query.from);
-      }
-      if (query.to) {
-        where.createdAt.lte = caracasDayEnd(query.to);
-      }
+      if (query.from) where.createdAt.gte = caracasDayStart(query.from);
+      if (query.to) where.createdAt.lte = caracasDayEnd(query.to);
     }
+    return where;
+  }
+
+  async findAll(query: QueryReceiptsDto) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildWhere(query);
 
     const [data, total] = await Promise.all([
       this.prisma.receipt.findMany({
@@ -77,6 +80,19 @@ export class ReceiptsService {
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  // Todos los recibos que cumplen los filtros (sin paginar), para el reporte PDF.
+  async reportList(query: QueryReceiptsDto) {
+    const where = this.buildWhere(query);
+    return this.prisma.receipt.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      include: {
+        customer: { select: { name: true, rif: true } },
+        supplier: { select: { name: true, rif: true } },
+      },
+    });
   }
 
   async findOne(id: string) {

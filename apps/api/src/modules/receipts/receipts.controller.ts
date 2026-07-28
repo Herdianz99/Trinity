@@ -16,6 +16,7 @@ import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReceiptsService } from './receipts.service';
 import { ReceiptPdfService } from './receipt-pdf.service';
+import { ReceiptsReportPdfService } from './receipts-report-pdf.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
@@ -29,6 +30,7 @@ export class ReceiptsController {
   constructor(
     private readonly receiptsService: ReceiptsService,
     private readonly pdfService: ReceiptPdfService,
+    private readonly reportPdfService: ReceiptsReportPdfService,
   ) {}
 
   @Get()
@@ -39,6 +41,20 @@ export class ReceiptsController {
   @Get('pending-documents')
   getPendingDocuments(@Query() query: QueryPendingDocumentsDto) {
     return this.receiptsService.getPendingDocuments(query);
+  }
+
+  // Reporte PDF de la lista completa (respeta los filtros de la pantalla). Debe ir ANTES
+  // de las rutas con :id para que 'report' no se interprete como un id de recibo.
+  @Get('report/pdf')
+  async getReportPdf(@Query() query: QueryReceiptsDto, @Res() res: Response) {
+    const buffer = await this.reportPdfService.generate(query);
+    const kind = query.type === 'PAYMENT' ? 'pago' : 'cobro';
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="reporte-recibos-${kind}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id/pdf')

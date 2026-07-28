@@ -137,13 +137,13 @@ export class RetentionVouchersService {
         if (!po) throw new BadRequestException('Factura de compra no encontrada');
         if (po.supplierId !== dto.supplierId) throw new BadRequestException(`La factura ${po.number} no pertenece al proveedor seleccionado`);
         if (po.status !== 'PROCESSED') throw new BadRequestException(`La factura ${po.number} no está procesada`);
-        return { line: l, kind: 'PO' as const, id: po.id, totalUsd: po.totalUsd, totalBs: po.totalBs, ivaUsd: po.totalIvaUsd, ivaBs: po.totalIvaBs, exchangeRate: po.exchangeRate, invoiceDate: po.invoiceDate, controlNumber: po.supplierControlNumber, invoiceNumber: po.supplierInvoiceNumber };
+        return { line: l, kind: 'PO' as const, id: po.id, totalUsd: po.totalUsd, totalBs: po.totalBs, ivaUsd: po.totalIvaUsd, ivaBs: po.totalIvaBs, exemptUsd: po.exemptAmountUsd || 0, exemptBs: po.exemptAmountBs || 0, exchangeRate: po.exchangeRate, invoiceDate: po.invoiceDate, controlNumber: po.supplierControlNumber, invoiceNumber: po.supplierInvoiceNumber };
       }
       if (l.payableId) {
         const p = await this.prisma.payable.findUnique({ where: { id: l.payableId } });
         if (!p) throw new BadRequestException('Cuenta por pagar no encontrada');
         if (p.supplierId !== dto.supplierId) throw new BadRequestException(`La CxP ${p.number} no pertenece al proveedor seleccionado`);
-        return { line: l, kind: 'PAY' as const, id: p.id, totalUsd: p.amountUsd, totalBs: p.amountBs, ivaUsd: p.totalIvaUsd, ivaBs: p.totalIvaBs, exchangeRate: p.exchangeRate, invoiceDate: p.originalDate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
+        return { line: l, kind: 'PAY' as const, id: p.id, totalUsd: p.amountUsd, totalBs: p.amountBs, ivaUsd: p.totalIvaUsd, ivaBs: p.totalIvaBs, exemptUsd: p.exemptBaseUsd || 0, exemptBs: p.exemptBaseBs || 0, exchangeRate: p.exchangeRate, invoiceDate: p.originalDate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
       }
       throw new BadRequestException('Cada linea debe referir una factura de compra o una CxP');
     }));
@@ -194,9 +194,9 @@ export class RetentionVouchersService {
           retBs = round2(rdoc.ivaBs * (linePct / 100));
         }
 
-        // taxable base = total - IVA
-        const taxBaseUsd = round2(rdoc.totalUsd - rdoc.ivaUsd);
-        const taxBaseBs = round2(rdoc.totalBs - rdoc.ivaBs);
+        // taxable base = total - IVA - exento (el exento va en su propia columna del PDF)
+        const taxBaseUsd = round2(rdoc.totalUsd - rdoc.ivaUsd - rdoc.exemptUsd);
+        const taxBaseBs = round2(rdoc.totalBs - rdoc.ivaBs - rdoc.exemptBs);
 
         totalRetUsd += retUsd;
         totalRetBs += retBs;
@@ -273,6 +273,8 @@ export class RetentionVouchersService {
             totalIvaBs: true,
             totalUsd: true,
             totalBs: true,
+            exemptAmountUsd: true,
+            exemptAmountBs: true,
             exchangeRate: true,
             invoiceDate: true,
             supplierControlNumber: true,
@@ -340,8 +342,8 @@ export class RetentionVouchersService {
             retBs = round2(po.totalIvaBs * (linePct / 100));
           }
 
-          const taxBaseUsd = round2(po.totalUsd - po.totalIvaUsd);
-          const taxBaseBs = round2(po.totalBs - po.totalIvaBs);
+          const taxBaseUsd = round2(po.totalUsd - po.totalIvaUsd - (po.exemptAmountUsd || 0));
+          const taxBaseBs = round2(po.totalBs - po.totalIvaBs - (po.exemptAmountBs || 0));
 
           totalRetUsd += retUsd;
           totalRetBs += retBs;

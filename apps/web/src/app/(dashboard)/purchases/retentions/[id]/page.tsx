@@ -65,6 +65,11 @@ function fmt(n: number): string {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Monto exento = total factura - base imponible - IVA (igual que el PDF del comprobante)
+function exentoBs(line: RetentionVoucherLine): number {
+  return Math.max(0, line.invoiceTotalBs - line.taxableBaseBs - line.ivaAmountBs);
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '--';
   const d = new Date(iso);
@@ -236,7 +241,7 @@ export default function RetentionVoucherDetailPage() {
   if (!voucher) return null;
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className="p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -385,6 +390,7 @@ export default function RetentionVoucherDetailPage() {
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Nº Control</th>
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Fecha</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Total Bs</th>
+                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Exento Bs</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base imp. Bs</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">IVA Bs</th>
                 <th className="text-center px-3 py-2.5 text-slate-400 font-medium">%</th>
@@ -410,6 +416,7 @@ export default function RetentionVoucherDetailPage() {
                   <td className="px-3 py-2.5 text-slate-300 font-mono text-xs">{line.supplierControlNumber || '--'}</td>
                   <td className="px-3 py-2.5 text-slate-300 text-xs">{fmtFiscalDate(line.invoiceDate)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.invoiceTotalBs)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(exentoBs(line))}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.taxableBaseBs)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.ivaAmountBs)}</td>
                   <td className="px-3 py-2.5 text-center text-slate-400">{line.retentionPct}%</td>
@@ -422,6 +429,9 @@ export default function RetentionVoucherDetailPage() {
                 <td colSpan={4} className="px-3 py-2.5 text-right text-slate-400 font-medium">Totales:</td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
                   Bs {fmt(voucher.lines.reduce((s, l) => s + l.invoiceTotalBs, 0))}
+                </td>
+                <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
+                  Bs {fmt(voucher.lines.reduce((s, l) => s + exentoBs(l), 0))}
                 </td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
                   Bs {fmt(voucher.lines.reduce((s, l) => s + l.taxableBaseBs, 0))}

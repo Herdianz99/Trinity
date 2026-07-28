@@ -12,6 +12,27 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-27 — Retenciones IVA: monto exento + Reporte PDF de recibos + POS muestra cédula/RIF del cliente
+
+**⏳ SIN DESPLEGAR — pendiente deploy + backfill del exento en la grande.**
+
+### 1) Retenciones de IVA — el monto exento ahora se refleja
+- **Bug de fondo:** al crear la retención la base imponible se calculaba como `total − IVA`, lo que **metía el monto exento dentro de la base**. Como el PDF deriva el exento por resta (`total − base − IVA`), siempre daba 0.
+- **Fix** (`retention-vouchers.service.ts`): base = `total − IVA − exento`, tomando el exento de la CxP (`exemptBaseBs/Usd`) o de la factura de compra (`exemptAmountBs/Usd`). Corregidos los **dos paths**: creación (`resolved`) y auto-generación desde facturas de compra (con su `select`).
+- **PDF del comprobante** (`retention-vouchers-pdf.service.ts`): la columna "Compras sin der." se renombró a **"Exento"**.
+- **Detalle web** (`purchases/retentions/[id]`): nueva columna **"Exento Bs"** (Total → Exento → Base imp. → IVA → % → Ret.) con su total; helper `exentoBs()`. Además se quitó el `max-w-5xl` para que la página use **todo el ancho**.
+- **Backfill:** en LOCAL se recalcularon 23 líneas históricas (idempotente, base = total − IVA − exento; todas de CxP). **PENDIENTE correr el mismo `UPDATE` en la grande tras el deploy** — las retenciones viejas en prod siguen con la base inflada.
+
+### 2) Reporte PDF de recibos (respeta los filtros de la lista)
+- **Backend** (`receipts/`): `receipts.service.ts` extrae `buildWhere()` (compartido con el listado) + `reportList()` (sin paginar); nuevo `receipts-report-pdf.service.ts` (pdfkit); endpoint `GET /receipts/report/pdf` (registrado ANTES de `:id/pdf` para que 'report' no se tome como id); provider en el módulo.
+- **PDF vertical** con encabezado (empresa, título, filtros aplicados, fecha, cantidad) + fila de **TOTALES** (Total USD, Bs hist.). Columnas: **N° Recibo · Cliente/Proveedor · Fecha · Estado · Tasa · Total USD · Bs hist.** (anchos ajustados al contenido; el nombre toma el espacio restante).
+- **Frontend:** botón **"Reporte PDF"** en `/receipts/collection` y `/receipts/payment`, abre el PDF con los mismos filtros activos (type, status, from, to, search).
+
+### 3) POS — cédula/RIF junto al nombre del cliente
+- Se guarda el RIF del cliente (`customerRif`, poblado en los 5 caminos de selección) y en el panel de cobro de **escritorio** (bloque `RIGHT: Cart`, no el móvil) se antepone al nombre cuando el panel supera **480px**: `V-27860712 - Diego Hernandez`. Gate `isLg && checkoutWidth >= 480`. Nota: hubo un primer intento en el bloque móvil (líneas ~2120) que no se veía en escritorio; corregido al bloque real (~3506).
+
+---
+
 ## 🗓️ Sesión 2026-07-26 — Fix vendedor en cotización POS + catálogo (2 toggles, Ref. proveedor, reporte Excel/PDF) + PDFs CxP/CxC a vertical
 
 > **⏳ SIN DESPLEGAR.** Verificado todo en local (dev con la copia de la grande). **1 dependencia nueva en el API** (`xlsx` para el Excel del catálogo) → el `deploy.sh` la instala solo con su `pnpm install` (no hay paso manual, pero el `pnpm-lock.yaml` va commiteado). **Sin migraciones ni cambios de schema.** Bloques de la sesión: (1) fix vendedor cotización POS, (2) filtros del catálogo + fix `enableImplicitConversion`, (3) reporte del catálogo Excel/PDF, (4) PDFs de CxP/CxC a vertical.

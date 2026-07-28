@@ -241,6 +241,7 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
+  const [customerRif, setCustomerRif] = useState('');
   const [customerIsSpecial, setCustomerIsSpecial] = useState(false);
   const [customerIsDefault, setCustomerIsDefault] = useState(false);
   // Aviso (no bloqueante) al aparcar una factura que quedaria con el cliente por defecto
@@ -670,6 +671,7 @@ export default function POSPage() {
           if (data.customer) {
             setCustomerId(data.customer.id);
             setCustomerName(data.customer.name);
+            setCustomerRif(data.customer.rif || '');
           }
           if (data.exchangeRate) setExchangeRate(data.exchangeRate);
         }
@@ -914,6 +916,7 @@ export default function POSPage() {
   function pickCustomer(c: any) {
     setCustomerId(c.id);
     setCustomerName(c.name);
+    setCustomerRif(c.rif || '');
     setCustomerSearch('');
     setCustomerResults([]);
     setShowCustomerSearch(false);
@@ -1625,6 +1628,7 @@ export default function POSPage() {
       const data = await res.json();
       setCustomerId(data.id);
       setCustomerName(data.name);
+      setCustomerRif(data.rif || '');
       setShowCreateClient(false);
       setShowEditClient(false);
     } catch (err: any) {
@@ -1685,6 +1689,7 @@ export default function POSPage() {
       if (fullInvoice.customer) {
         setCustomerId(fullInvoice.customer.id);
         setCustomerName(fullInvoice.customer.name);
+        setCustomerRif(fullInvoice.customer.rif || '');
       } else {
         setCustomerId(null);
         setCustomerName('');
@@ -2850,6 +2855,7 @@ export default function POSPage() {
                         onClick={() => {
                           setCustomerId(clientRifMatch.id);
                           setCustomerName(clientRifMatch.name);
+                          setCustomerRif(clientRifMatch.rif || '');
                           setShowCreateClient(false);
                           setShowCustomerSearch(false);
                           setCustomerSearch('');
@@ -3494,7 +3500,10 @@ export default function POSPage() {
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-700/30">
                   <div className="flex items-center gap-2">
                     <User size={14} className="text-green-400" />
-                    <span className="text-sm text-white">{customerName}</span>
+                    {/* Al ensanchar el panel (>=480px) se antepone la cedula/RIF: "V-27860712 - Diego Hernandez" */}
+                    <span className="text-sm text-white">
+                      {isLg && checkoutWidth >= 480 && customerRif ? `${customerRif} - ${customerName}` : customerName}
+                    </span>
                     {creditBalance?.hasBalance && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 border border-green-500/30">
                         Saldo: ${creditBalance.totalUsd.toFixed(2)}

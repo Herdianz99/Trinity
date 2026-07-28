@@ -217,7 +217,7 @@ export class RetentionVouchersPdfService {
         { label: 'Nº Nota\nCrédito',       x: L + 168,   w: 38,  align: 'center' as const },
         { label: 'Nº Nota\nDébito',        x: L + 206,   w: 38,  align: 'center' as const },
         { label: 'Total fact.\ninc. IVA',  x: L + 244,   w: 52,  align: 'right' as const },
-        { label: 'Compras\nsin der.',      x: L + 296,   w: 38,  align: 'right' as const },
+        { label: 'Exento',                 x: L + 296,   w: 38,  align: 'right' as const },
         { label: 'Base\nimponible',        x: L + 334,   w: 50,  align: 'right' as const },
         { label: '%\nIVA',                 x: L + 384,   w: 22,  align: 'center' as const },
         { label: 'Impuesto\nIVA',          x: L + 406,   w: 45,  align: 'right' as const },

@@ -83,6 +83,16 @@ export default function ReceiptsCollectionPage() {
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Abre el reporte PDF con los mismos filtros activos en la pantalla.
+  function openReport() {
+    const params = new URLSearchParams({ type: 'COLLECTION' });
+    if (status) params.set('status', status);
+    if (search) params.set('search', search);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    window.open(`/api/proxy/receipts/report/pdf?${params}`, '_blank');
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -96,13 +106,22 @@ export default function ReceiptsCollectionPage() {
             {total} recibo{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
           </p>
         </div>
-        <Link
-          href="/receipts/new?type=COLLECTION"
-          className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Nuevo recibo
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openReport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-medium transition-colors border border-slate-600"
+          >
+            <FileText size={18} />
+            Reporte PDF
+          </button>
+          <Link
+            href="/receipts/new?type=COLLECTION"
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors"
+          >
+            <Plus size={18} />
+            Nuevo recibo
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
