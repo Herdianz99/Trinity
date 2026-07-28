@@ -12,16 +12,16 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
-## 🗓️ Sesión 2026-07-27 — Retenciones IVA: monto exento + Reporte PDF de recibos + POS muestra cédula/RIF del cliente
+## 🗓️ Sesión 2026-07-27 — Retenciones IVA: monto exento + Reporte PDF de recibos + POS cédula/RIF + endurecer deploy/respaldos de total
 
-**⏳ SIN DESPLEGAR — pendiente deploy + backfill del exento en la grande.**
+**✅ DESPLEGADO Y VERIFICADO EN LAS 3 (4 instancias) — commit `3d82deb`.** GRANDE (`inversiones`), CHICA (`eltrebol`), `total` y `totalturen`: HEAD `3d82deb`, PM2 online, health `database:ok`, endpoint nuevo `/receipts/report/pdf` responde 401 (vivo). Sin migraciones. **Backfill del exento corrido en prod:** grande 25 líneas, chica 6 líneas (total/turen 0 retenciones → no aplica); verificado que `base + IVA + exento = total` en cada línea.
 
 ### 1) Retenciones de IVA — el monto exento ahora se refleja
 - **Bug de fondo:** al crear la retención la base imponible se calculaba como `total − IVA`, lo que **metía el monto exento dentro de la base**. Como el PDF deriva el exento por resta (`total − base − IVA`), siempre daba 0.
 - **Fix** (`retention-vouchers.service.ts`): base = `total − IVA − exento`, tomando el exento de la CxP (`exemptBaseBs/Usd`) o de la factura de compra (`exemptAmountBs/Usd`). Corregidos los **dos paths**: creación (`resolved`) y auto-generación desde facturas de compra (con su `select`).
 - **PDF del comprobante** (`retention-vouchers-pdf.service.ts`): la columna "Compras sin der." se renombró a **"Exento"**.
 - **Detalle web** (`purchases/retentions/[id]`): nueva columna **"Exento Bs"** (Total → Exento → Base imp. → IVA → % → Ret.) con su total; helper `exentoBs()`. Además se quitó el `max-w-5xl` para que la página use **todo el ancho**.
-- **Backfill:** en LOCAL se recalcularon 23 líneas históricas (idempotente, base = total − IVA − exento; todas de CxP). **PENDIENTE correr el mismo `UPDATE` en la grande tras el deploy** — las retenciones viejas en prod siguen con la base inflada.
+- **Backfill:** `UPDATE` idempotente (base = total − IVA − exento, todas de CxP) corrido en LOCAL (23 líneas) y en PROD: **grande 25 líneas, chica 6 líneas** — verificado con muestras. Total/turen: 0 retenciones, no aplica.
 
 ### 2) Reporte PDF de recibos (respeta los filtros de la lista)
 - **Backend** (`receipts/`): `receipts.service.ts` extrae `buildWhere()` (compartido con el listado) + `reportList()` (sin paginar); nuevo `receipts-report-pdf.service.ts` (pdfkit); endpoint `GET /receipts/report/pdf` (registrado ANTES de `:id/pdf` para que 'report' no se tome como id); provider en el módulo.
@@ -30,6 +30,11 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ### 3) POS — cédula/RIF junto al nombre del cliente
 - Se guarda el RIF del cliente (`customerRif`, poblado en los 5 caminos de selección) y en el panel de cobro de **escritorio** (bloque `RIGHT: Cart`, no el móvil) se antepone al nombre cuando el panel supera **480px**: `V-27860712 - Diego Hernandez`. Gate `isLg && checkoutWidth >= 480`. Nota: hubo un primer intento en el bloque móvil (líneas ~2120) que no se veía en escritorio; corregido al bloque real (~3506).
+
+### 4) Infra del server de `total` (161.35.52.221) — endurecido (cambios FUERA del repo, por SSH)
+- **Deploy endurecido** (`/opt/deploy-trinity.sh`): se le agregaron las defensas que ya tenía el `deploy.sh` del repo — guard de `DATABASE_URL` vacío, verificación de estado PM2 `online` (aborta si no), y health check con reintentos que **falla ruidosamente** (antes terminaba en silencio). Ya tenía: `pnpm install` incondicional, `rm tsbuildinfo`, verificar `dist/main.js`, `fix-schema.sql`, `pm2 save`. Con `set -e` un fallo aborta ANTES del `pm2 restart` → queda corriendo la versión anterior. Backup del original en `/opt/deploy-trinity.sh.bak-20260728`.
+- **⚠️ Los 2 scripts de deploy NO están en git-sync:** `deploy.sh` (repo, eltrebol/inversiones) vs `/opt/deploy-trinity.sh` (server total, fuera del repo). **Todo cambio futuro en `deploy.sh` debe replicarse a mano en el de total.** (memoria `deploy-scripts-sync`).
+- **Respaldos CON certificación automática** (`/root/backup-trinity.sh`, cron 3 AM, ambas BD, retención 7 días): por cada BD hace `pg_dump -Fc` y luego **certifica** restaurando el dump en una BD temporal (`cert_verify_<db>`) y verificando que trae tablas; `CERT OK/FAIL` en log + `exit 1` si falla. Gotcha resuelto: el dump vive en `/root` (`drwx------`), inaccesible para el usuario `postgres`, así que se copia a `/tmp` solo para el restore. Probado: total_db 81 tablas, totalturen_db 80 tablas. **Hallazgo:** grande/chica NO re-certifican por corrida (su cron es `pg_dump` + retención; la certificación fue manual única el 2026-07-05). Total quedó como el más robusto. Pendiente opcional: llevar la misma certificación por-corrida a grande/chica.
 
 ---
 
