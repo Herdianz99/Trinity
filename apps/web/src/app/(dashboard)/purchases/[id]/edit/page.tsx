@@ -60,6 +60,7 @@ interface FormItem {
   supplierRef?: string;
   quantity: number;
   costUsd: number;
+  previousCostUsd: number; // costo actual del producto en $ (antes de esta compra)
   discountPct: number;
   ivaType: string;
   isService: boolean;
@@ -302,6 +303,7 @@ export default function EditPurchaseBillPage() {
             supplierRef: item.product.supplierRef || '',
             quantity: item.quantity,
             costUsd: bill.currency === 'BS' ? item.costBs : item.costUsd,
+            previousCostUsd: item.product.costUsd ?? 0,
             discountPct: item.discountPct,
             ivaType: item.product.ivaType,
             isService: item.product.isService,
@@ -400,6 +402,7 @@ export default function EditPurchaseBillPage() {
       supplierRef,
       quantity: newItems[rowIdx]?.quantity || 1,
       costUsd: costValue,
+      previousCostUsd: costUsd,
       discountPct: newItems[rowIdx]?.discountPct || 0,
       ivaType,
       isService: p.isService || false,
@@ -420,6 +423,7 @@ export default function EditPurchaseBillPage() {
         name: '',
         quantity: 1,
         costUsd: 0,
+        previousCostUsd: 0,
         discountPct: 0,
         ivaType: 'GENERAL',
         isService: false,
@@ -477,7 +481,7 @@ export default function EditPurchaseBillPage() {
     const costValue = currency === 'BS' ? Math.round(costUsd * exchangeRate * 100) / 100 : costUsd;
     const filled: FormItem = {
       productId: prod.id, code: prod.code || '', name: prod.name || '',
-      quantity: 1, costUsd: costValue, discountPct: 0,
+      quantity: 1, costUsd: costValue, previousCostUsd: costUsd, discountPct: 0,
       ivaType: prod.ivaType || 'GENERAL', isService: prod.isService || false,
     };
     if (productModalMode === 'create') {
@@ -1142,6 +1146,7 @@ export default function EditPurchaseBillPage() {
                 <th className="text-left px-3 py-3 text-slate-400 font-medium min-w-[220px]">Articulo</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Cantidad</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Precio {currency === 'BS' ? 'Bs' : 'USD'}</th>
+                <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Costo ant. $</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-20">% Dto.</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-24">Precio c/Dto</th>
                 <th className="text-right px-3 py-3 text-slate-400 font-medium w-28">Importe {currency === 'BS' ? 'Bs' : 'USD'}</th>
@@ -1270,6 +1275,13 @@ export default function EditPurchaseBillPage() {
                         className="input-field !py-1.5 text-sm w-full text-right font-mono"
                         disabled={!item.productId}
                       />
+                    </td>
+
+                    {/* Costo anterior (costo actual del producto en $, siempre USD) */}
+                    <td className="px-3 py-2 text-right">
+                      <span className="font-mono text-slate-400 text-sm">
+                        {item.productId ? `$${fmt(item.previousCostUsd || 0)}` : '-'}
+                      </span>
                     </td>
 
                     {/* % Dto */}
