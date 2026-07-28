@@ -12,6 +12,22 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-28 — Factura de compra: columna "Costo ant. $" junto a Precio USD
+
+**✅ DESPLEGADO Y VERIFICADO SOLO EN `total` — commit `7383d48`.** El usuario solo hizo deploy en la empresa `total` (161.35.52.221, dir `/opt/total`) porque es donde se necesitaba: HEAD `7383d48`, PM2 `trinity-api-total`/`trinity-web-total` online, health `database:ok`, build fresco 07:31 (BUILD_ID `fY8titbxNTlXPLxyuQ3p7`) con el label "Costo ant. $" y `previousCostUsd` presentes en los chunks compilados de ambas páginas. **Sin migraciones, cambio 100% frontend.**
+
+**⏳ DEPLOY PENDIENTE en las otras 3 instancias:** GRANDE (`inversiones`), CHICA (`eltrebol`) y `totalturen` — el commit ya está en `main`, solo falta correr el deploy en cada una cuando se decida:
+- grande/chica: `ssh root@<ip> "cd /opt/Trinity && git pull origin main && bash deploy.sh"`
+- totalturen: `ssh root@161.35.52.221 "bash /opt/deploy-trinity.sh totalturen"`
+
+### Qué se agregó
+- Nueva columna **"Costo ant. $"** en la tabla de ítems de la factura de compra, **a la derecha de "Precio USD"**, tanto en **crear** (`purchases/new/page.tsx`) como en **editar** (`purchases/[id]/edit/page.tsx`).
+- Muestra el **costo actual del producto en dólares** (`product.costUsd`) — el costo *antes* de esa compra —, siempre en USD aunque la factura esté en Bs. Es de **solo lectura** (referencia para comparar contra el precio nuevo que se carga); `-` cuando aún no hay producto en la fila.
+- Implementación: campo `previousCostUsd` agregado a la interface `FormItem`, poblado al seleccionar producto (búsqueda), al crear/editar producto desde el modal, y en fila vacía (0). En **editar** se toma de `item.product.costUsd` del detalle de la factura (ya venía en el `includeDetail` del `purchase-orders.service.ts` → **no hizo falta tocar backend**).
+- **Sin cambios de API ni de base de datos.**
+
+---
+
 ## 🗓️ Sesión 2026-07-27 — Retenciones IVA: monto exento + Reporte PDF de recibos + POS cédula/RIF + endurecer deploy/respaldos de total
 
 **✅ DESPLEGADO Y VERIFICADO EN LAS 3 (4 instancias) — commit `3d82deb`.** GRANDE (`inversiones`), CHICA (`eltrebol`), `total` y `totalturen`: HEAD `3d82deb`, PM2 online, health `database:ok`, endpoint nuevo `/receipts/report/pdf` responde 401 (vivo). Sin migraciones. **Backfill del exento corrido en prod:** grande 25 líneas, chica 6 líneas (total/turen 0 retenciones → no aplica); verificado que `base + IVA + exento = total` en cada línea.

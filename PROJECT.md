@@ -99,6 +99,10 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 2026-07-28 — Factura de compra: columna "Costo ant. $" junto a Precio USD
+- Nueva columna **"Costo ant. $"** en la tabla de ítems de la factura de compra, a la derecha de "Precio USD", en crear (`purchases/new/page.tsx`) y editar (`purchases/[id]/edit/page.tsx`). Muestra el costo actual del producto en dólares (`product.costUsd`, el costo previo a esa compra), **siempre en USD** aunque la factura esté en Bs; solo lectura, `-` sin producto. Campo `previousCostUsd` en `FormItem` poblado al seleccionar/crear/editar producto; en editar se lee de `item.product.costUsd` del detalle (ya venía en `includeDetail`). **Sin backend ni migraciones.**
+- **Deploy:** solo en `total` (commit `7383d48`, verificado). **PENDIENTE** en `inversiones` (grande), `eltrebol` (chica) y `totalturen`.
+
 #### Sesión 69 (2026-07-11) — Agilizar facturación: F9 cobra, duplicar factura, devolución completa/parcial
 Tres mejoras de flujo:
 - **POS: tecla F9 abre el cobro** (`sales/pos/page.tsx`). Helper `openPayModal()` + listener global; no aplica a SELLER, carrito vacío ni con otro modal/proceso abierto. Los botones "Cobrar" (móvil + escritorio) lo reusan; el de escritorio muestra badge **F9**.
