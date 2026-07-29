@@ -26,6 +26,11 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 ### 2) Catálogo clonado total → totalturen (sucursal)
 - Se borró el seed de `totalturen` (49 prod) y se **clonó verbatim** el catálogo de `total` (1972 prod + 1134 fotos, costos/precios, categorías/marcas/proveedores; mismos ids). **Fotos compartidas** del bucket `trinity-total` en solo-lectura (`SPACES_CDN_BASE` en el `.env` de turen). Stock en 0 (pendiente Excel de existencias). En `total`/`totalturen` se backfilleó `supplierRef = code` (1972/1972). Detalle en memoria `totalturen-catalogo-clonado-de-total`.
 
+### 3) Fix IGTF en métodos que generan CxC (Cashea/Crediagro) — total y totalturen
+- **Bug de config (no código):** el IGTF se dispara por `PaymentMethod.isDivisa` (+ empresa contribuyente + caja fiscal), **no** por `createsReceivable`. En `total`/`totalturen` los métodos **Cashea** y **Crediagro** (que generan CxC) estaban en `isDivisa=true` → cobrarían IGTF indebido. En grande (`inversiones`) y chica (`eltrebol`) ya estaban en `isDivisa=false` (correcto).
+- **Fix aplicado** en prod (161.35.52.221, sin deploy, aplica en vivo): `UPDATE "PaymentMethod" SET "isDivisa"=false WHERE "createsReceivable"=true AND "isDivisa"=true;` en `total_db` (2 filas) y `totalturen_db` (2 filas).
+- **Impacto histórico: NINGUNO** — total tiene **0 facturas con `igtfUsd>0`** (Cashea usado 22×, Crediagro 2×, ninguno cobró IGTF; lo que se veía era la vista previa del POS). Memoria `igtf-metodos-cxc-isdivisa`.
+
 ---
 
 ## 🗓️ Sesión 2026-07-28 — Factura de compra: columna "Costo ant. $" junto a Precio USD
