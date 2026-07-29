@@ -10,8 +10,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.useBodyParser('json', { limit: '2mb' });
-  app.useBodyParser('urlencoded', { limit: '2mb', extended: true });
+  app.useBodyParser('json', { limit: '15mb' });
+  app.useBodyParser('urlencoded', { limit: '15mb', extended: true });
 
   app.use(cookieParser());
   app.use(helmet());

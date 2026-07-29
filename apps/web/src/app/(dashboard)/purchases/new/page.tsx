@@ -13,9 +13,11 @@ import {
   Plus,
   Pencil,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import SupplierFormModal from '@/components/supplier-form-modal';
 import ProductFormModal from '@/components/product-form-modal';
+import PurchaseAiImportModal, { AiImportResult } from '@/components/purchase-ai-import-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -171,6 +173,38 @@ export default function NewPurchaseBillPage() {
   const [surchargeDistribution, setSurchargeDistribution] = useState<'PROPORTIONAL' | 'EQUAL'>('PROPORTIONAL');
   const [surchargeTouched, setSurchargeTouched] = useState(false);
   const [discountGlobalPct, setDiscountGlobalPct] = useState<number>(0);
+
+  // ---- Importar factura con IA ----
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  function handleAiImport(result: AiImportResult) {
+    const h = result.header;
+    if (h.supplierId) {
+      setSupplierId(h.supplierId);
+      setSupplierSearch('');
+    }
+    if (h.supplierInvoiceNumber) setSupplierInvoiceNumber(h.supplierInvoiceNumber);
+    if (h.supplierControlNumber) setSupplierControlNumber(h.supplierControlNumber);
+    if (h.invoiceDate) setInvoiceDate(h.invoiceDate);
+    if (h.currency) setCurrency(h.currency);
+    if (h.exchangeRate) setExchangeRate(h.exchangeRate);
+    if (h.discountGlobalPct != null) setDiscountGlobalPct(h.discountGlobalPct);
+    setItems(
+      result.items.map((it) => ({
+        productId: it.productId,
+        code: it.code,
+        name: it.name,
+        supplierRef: it.supplierRef,
+        quantity: it.quantity,
+        costUsd: it.costUsd,
+        previousCostUsd: it.previousCostUsd,
+        discountPct: it.discountPct,
+        ivaType: it.ivaType,
+        isService: it.isService,
+      })),
+    );
+    setMessage({ type: 'success', text: `${result.items.length} línea(s) cargadas desde la factura. Revísalas antes de guardar.` });
+  }
   const [retentionVoucherNumber, setRetentionVoucherNumber] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -713,6 +747,13 @@ export default function NewPurchaseBillPage() {
           <h1 className="text-2xl font-bold text-white">Nueva Factura de Compra</h1>
           <p className="text-slate-400 text-sm">Registra una factura de compra al proveedor</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setAiModalOpen(true)}
+          className="ml-auto flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+        >
+          <Sparkles size={16} /> Cargar con IA
+        </button>
       </div>
 
       {/* ═══ Message ═══ */}
@@ -1541,6 +1582,12 @@ export default function NewPurchaseBillPage() {
         defaultSupplierId={supplierId || null}
         onClose={() => { setProductModalOpen(false); setProductModalId(null); setProductModalRow(null); }}
         onSaved={handleProductSaved}
+      />
+      <PurchaseAiImportModal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        supplierId={supplierId || undefined}
+        onApply={handleAiImport}
       />
 
     </div>

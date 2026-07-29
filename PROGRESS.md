@@ -12,6 +12,22 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-29 — Lectura de facturas de compra con IA (OCR vía OpenRouter) + clon de catálogo total→totalturen
+
+> **⏳ SIN DESPLEGAR (feature IA).** Construido y **validado end-to-end en local** contra la data real de `total`. Falta: deploy a la instancia `total` + agregar `OPENROUTER_*` al `.env` de prod. **Sin migraciones ni cambios de schema.** Plan completo en `docs/PLAN-LECTURA-FACTURAS-IA.md`, detalle en memoria `lectura-facturas-ia-purchase-ai`.
+
+### 1) Feature "Cargar factura con IA" — leer factura (PDF/foto) y pre-llenar la factura de compra
+- **Backend** — módulo nuevo `apps/api/src/modules/purchase-ai/`: `POST /purchases/ai/extract` `{ file (dataURI base64 img/pdf), instructions?, supplierId?, preciseModel? }`. `LlmExtractionService` llama a **OpenRouter** (`fetch`, formato OpenAI: imagen `image_url`, PDF `file/file_data`), `response_format: json_object`, **reintentos (3)** ante truncado intermitente, `max_tokens: 8000`, `normalizeDate` a YYYY-MM-DD. `PurchaseAiService`: **match por línea** (`supplierRef`/`code` acotado al proveedor → fuzzy por nombre → nuevo), sugiere proveedor por RIF/nombre, guarda el archivo en Spaces best-effort. `main.ts`: body **2mb → 15mb** (para PDFs). Registrado en `app.module.ts`.
+- **Frontend** — botón **"Cargar con IA"** en `purchases/new/page.tsx` + `components/purchase-ai-import-modal.tsx` (tema oscuro): sube y **reduce la imagen en el navegador** (2000px), caja de instrucciones en lenguaje natural, toggle **"Factura difícil"** (usa modelo Pro), panel de revisión con match (auto/enlazar/crear) + **semáforo de cuadre**; "Cargar al formulario" rellena encabezado + `items` del flujo normal.
+- **Modelo** vía `.env` (agnóstico): default `google/gemini-2.5-flash`; `preciseModel:true` → `google/gemini-2.5-pro`.
+- **Hallazgos de la prueba real (2 facturas de total):** factura limpia → Flash casi perfecta CON códigos (~$0.002); factura densa/foto mala → Flash falla, **Pro** la lee bien (~$0.14). Los códigos que lee bien matchean directo (en `total` el `supplierRef` = `code`); los mal leídos (OCR) caen a sugerencia por nombre. Prueba end-to-end contra `total_db` local: **1 exacto + 2 sugeridos + 0 nuevos** ✓.
+- **Deploy pendiente:** commit + push (hecho esta sesión), luego en `total`: agregar `OPENROUTER_BASE_URL`/`OPENROUTER_API_KEY`/`OPENROUTER_MODEL` al `.env` y `bash /opt/deploy-trinity.sh total`.
+
+### 2) Catálogo clonado total → totalturen (sucursal)
+- Se borró el seed de `totalturen` (49 prod) y se **clonó verbatim** el catálogo de `total` (1972 prod + 1134 fotos, costos/precios, categorías/marcas/proveedores; mismos ids). **Fotos compartidas** del bucket `trinity-total` en solo-lectura (`SPACES_CDN_BASE` en el `.env` de turen). Stock en 0 (pendiente Excel de existencias). En `total`/`totalturen` se backfilleó `supplierRef = code` (1972/1972). Detalle en memoria `totalturen-catalogo-clonado-de-total`.
+
+---
+
 ## 🗓️ Sesión 2026-07-28 — Factura de compra: columna "Costo ant. $" junto a Precio USD
 
 **✅ DESPLEGADO Y VERIFICADO SOLO EN `total` — commit `7383d48`.** El usuario solo hizo deploy en la empresa `total` (161.35.52.221, dir `/opt/total`) porque es donde se necesitaba: HEAD `7383d48`, PM2 `trinity-api-total`/`trinity-web-total` online, health `database:ok`, build fresco 07:31 (BUILD_ID `fY8titbxNTlXPLxyuQ3p7`) con el label "Costo ant. $" y `previousCostUsd` presentes en los chunks compilados de ambas páginas. **Sin migraciones, cambio 100% frontend.**

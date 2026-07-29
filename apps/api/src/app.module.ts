@@ -64,6 +64,7 @@ import { PublicModule } from './modules/public/public.module';
 import { OnlineOrdersModule } from './modules/online-orders/online-orders.module';
 import { DispatchModule } from './modules/dispatch/dispatch.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
+import { PurchaseAiModule } from './modules/purchase-ai/purchase-ai.module';
 
 @Module({
   imports: [
@@ -132,6 +133,7 @@ import { PayrollModule } from './modules/payroll/payroll.module';
     OnlineOrdersModule,
     DispatchModule,
     PayrollModule,
+    PurchaseAiModule,
   ],
 })
 export class AppModule {}
