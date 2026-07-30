@@ -1218,6 +1218,22 @@ model QuotationItem {
 
 ---
 
+## Versionado — Rama y tags de versiones estables
+
+El desarrollo del día a día ocurre **siempre en `main`**. Aparte, se mantiene un registro de **checkpoints de rescate**: versiones que ya fueron **probadas y funcionan correctamente en la nube**.
+
+- **Rama `versiones-estables`** + **tags `estable-YYYY-MM-DD`**: apuntan al commit exacto que está corriendo y validado en producción. NO son ramas para trabajar encima — son solo para poder **recuperar una versión buena** ante una falla grave.
+- La fuente de verdad de "qué versión es estable" es **lo que corre en la nube** (típicamente la empresa grande `inversiones`): se toma su `git rev-parse HEAD` desplegado y se le pone el tag.
+- **Regla:** solo se etiqueta lo ya desplegado y validado en la nube. Código en `main` que aún no se ha desplegado **no** es estable todavía.
+- **Cómo crear un checkpoint** (tras validar un deploy en la nube):
+  1. `ssh root@<server> "cd /opt/Trinity && git rev-parse HEAD"` → obtener el commit desplegado.
+  2. `git tag -a estable-YYYY-MM-DD <commit> -m "..."` y `git push origin estable-YYYY-MM-DD`.
+  3. Opcional: mover la rama `versiones-estables` a ese commit (`git branch -f versiones-estables <commit> && git push -f origin versiones-estables`).
+- **Cómo recuperar:** `git checkout estable-YYYY-MM-DD` (o el tag/rama que corresponda).
+- Primer checkpoint: **`estable-2026-07-27`** = commit `3d82deb` (versión de la grande en la nube: retenciones IVA con exento + reporte PDF de recibos + POS cédula/RIF).
+
+---
+
 ## Credenciales Iniciales
 - Admin: admin@trinity.com / Admin1234!
 - Vendedor: seller@trinity.com / Seller1234!
