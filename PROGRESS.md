@@ -12,6 +12,29 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-29 (cont.) — Existencias totalturen + sync de precios y barcodes entre empresas + rama de checkpoints estables
+
+> **Operaciones de DATOS en producción (sin deploy de código, sin migraciones).** Todas con respaldo previo y reversibles.
+
+### 1) Carga de existencias en `totalturen` (Excel `existencias-turen.xlsx`)
+- Del Excel (863 filas: Referencia/Artículo/Existencias) se cargaron las **501 con existencia > 0** (se omitieron 362 en 0, igual que en `total`). Suma = **3695.75 uds**. Match 862/863 por `code`.
+- El único sin match, `TSP2604` "CASCO ROJO 380G", era un **typo del sistema anterior** → remapeado al código real **`TSP8604`** (ya existía en el catálogo clonado).
+- Método (idéntico a `total`): por cada producto `Stock` (almacén `Almacen Principal`) + `StockMovement` `ADJUSTMENT_IN` "Carga inicial", `costUsd` = costo del producto, `stockAfter` = qty. Verificado: 501 Stock + 501 movimientos, ambos suman 3695.75. Respaldo `/root/totalturen-preStock-20260729-192618.dump`.
+
+### 2) Sincronización de precios `total` → `totalturen`
+- Al revisar precios se detectó que `turen` quedó **~26% por debajo** de `total` pese a tener costo y ganancia% idénticos. **Causa:** el precio real = `costo × (1+ganancia%) × 1.16 (IVA) × BRECHA`, y la **brecha global de +35%** (factor 1.35 en 1918/1936 productos) se perdió en el clon. NO vive en costo ni ganancia%.
+- **Fix correcto = ajustar la brecha en la config de la empresa** (Diego la puso a 35%), NO copiar precios a mano. Tras la brecha, `priceDetal`/`priceMayor` de turen quedaron **idénticos** a total (0 diffs en detal/mayor/costo). Sin precios manuales (`manualPrice`=0 en ambas). Memoria `totalturen-catalogo-clonado-de-total`.
+
+### 3) Traspaso de códigos de barra `total` → `ferre` (empresa chica) por match de `code`
+- `ferre` comparte ~1931 de los 1972 artículos de `total` con el **mismo `code`** (productos Total Tools). Se copiaron los barcodes de `total` donde ferre tenía `barcode` NULL: **1752 productos** llenados; ferre pasó de **522 → 2274** con barcode.
+- Rename previo `TSP2604 → TSP8604` en ferre (mismo typo). Verificado antes: **0 colisiones, 0 duplicados en el lote, 0 sobrescrituras** (índice `unique` de barcode intacto). Respaldo `/root/ferre-preBarcode-20260729-235612.dump`. Memoria `ferre-total-barcodes-sync`.
+
+### 4) Rama de checkpoints estables + tag
+- Nueva rama **`versiones-estables`** (Git no admite espacios en el nombre) + tag anotado **`estable-2026-07-27`**, ambos apuntando al commit **`3d82deb`** = la versión **probada y corriendo en la nube de la GRANDE** (`inversiones`, working tree del server limpio).
+- **Convención:** la rama/tags son **checkpoints de rescate** de versiones ya validadas en la nube, NO para trabajar encima. Se sigue desarrollando en `main`. Cuando se despliegue y valide una versión nueva, se mueve/crea otro tag `estable-YYYY-MM-DD`.
+
+---
+
 ## 🗓️ Sesión 2026-07-29 — Lectura de facturas de compra con IA (OCR vía OpenRouter) + clon de catálogo total→totalturen
 
 > **⏳ SIN DESPLEGAR (feature IA).** Construido y **validado end-to-end en local** contra la data real de `total`. Falta: deploy a la instancia `total` + agregar `OPENROUTER_*` al `.env` de prod. **Sin migraciones ni cambios de schema.** Plan completo en `docs/PLAN-LECTURA-FACTURAS-IA.md`, detalle en memoria `lectura-facturas-ia-purchase-ai`.
