@@ -224,23 +224,25 @@ export class ReportsPdfService {
   // ── Profit Margin PDF ─────────────────────────────────
   async generateProfitMarginPdf(data: any, from: string, to: string): Promise<Buffer> {
     const company = await this.getCompanyName();
-    const doc = this.createDoc();
+    const doc = this.createDoc(false); // vertical (portrait)
     let y = this.drawHeader(doc, 'Margen de Ganancia', company, `${from} al ${to}`);
 
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text(`Margen Promedio: ${data.totals.avgMarginPct}%`, 40, y);
-    doc.text(`Ganancia Total: $${this.fmt(data.totals.totalProfitUsd)}`, 250, y);
-    doc.text(`Mas Rentable: ${data.mostProfitable}`, 480, y);
+    doc.text(`Ganancia Total: $${this.fmt(data.totals.totalProfitUsd)}`, 260, y);
+    y += 16;
+    doc.text(`Mas Rentable: ${data.mostProfitable}`, 40, y, { width: 515 });
     y += 20;
 
+    // Columnas ajustadas al ancho portrait (usable 40 -> 555 pt).
     const cols = [
-      { label: 'Codigo', x: 40, width: 70 },
-      { label: 'Producto', x: 110, width: 180 },
-      { label: 'Categoria', x: 290, width: 100 },
-      { label: 'Ventas USD', x: 400, width: 90, align: 'right' },
-      { label: 'Costo USD', x: 500, width: 90, align: 'right' },
-      { label: 'Ganancia', x: 600, width: 80, align: 'right' },
-      { label: 'Margen%', x: 690, width: 60, align: 'right' },
+      { label: 'Codigo', x: 40, width: 52 },
+      { label: 'Producto', x: 92, width: 150 },
+      { label: 'Categoria', x: 242, width: 78 },
+      { label: 'Ventas USD', x: 320, width: 58, align: 'right' },
+      { label: 'Costo USD', x: 378, width: 58, align: 'right' },
+      { label: 'Ganancia', x: 436, width: 58, align: 'right' },
+      { label: 'Margen%', x: 494, width: 58, align: 'right' },
     ];
 
     y = this.drawTableHeader(doc, y, cols);

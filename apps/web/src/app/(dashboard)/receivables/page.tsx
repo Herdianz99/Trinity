@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   HandCoins,
   Loader2,
@@ -112,6 +112,8 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function ReceivablesPage() {
   const router = useRouter();
+  // Filtros iniciales desde la URL (deep-link, ej. KPIs Cashea/Crediagro del dashboard).
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'cxc' | 'advances'>('cxc');
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -119,11 +121,11 @@ export default function ReceivablesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [type, setType] = useState('');
+  const [type, setType] = useState(searchParams.get('type') || '');
   const [status, setStatus] = useState('');
   const [reference, setReference] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(searchParams.get('from') || '');
+  const [to, setTo] = useState(searchParams.get('to') || '');
   const [overdue, setOverdue] = useState(false);
   const [dueSoon, setDueSoon] = useState(false);
   const [dueSoonDays, setDueSoonDays] = useState(7);

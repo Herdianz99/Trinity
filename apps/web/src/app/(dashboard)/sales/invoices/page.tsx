@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileText,
   Search,
@@ -69,18 +69,20 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export default function InvoicesPage() {
   const router = useRouter();
+  // Filtros iniciales desde la URL (deep-link, ej. desde los KPIs del dashboard).
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [status, setStatus] = useState('');
-  const [paymentType, setPaymentType] = useState('');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [paymentType, setPaymentType] = useState(searchParams.get('paymentType') || '');
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
-  const [sellerId, setSellerId] = useState('');
+  const [sellerId, setSellerId] = useState(searchParams.get('sellerId') || '');
   const [sellers, setSellers] = useState<Seller[]>([]);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(searchParams.get('from') || '');
+  const [to, setTo] = useState(searchParams.get('to') || '');
   const [loading, setLoading] = useState(true);
   const [ticketBusyId, setTicketBusyId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);

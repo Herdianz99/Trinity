@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BarChart3, Loader2, Download, Calendar, Percent, DollarSign, TrendingUp, ShoppingCart, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -62,8 +63,10 @@ function barColor(pct: number): string {
 /* ---------- Component ---------- */
 
 export default function ProfitMarginReportPage() {
-  const [from, setFrom] = useState(defaultFrom);
-  const [to, setTo] = useState(defaultTo);
+  // Rango inicial desde la URL (deep-link del KPI "Ganancia"); si no, mes en curso.
+  const searchParams = useSearchParams();
+  const [from, setFrom] = useState(() => searchParams.get('from') || defaultFrom());
+  const [to, setTo] = useState(() => searchParams.get('to') || defaultTo());
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [report, setReport] = useState<ProfitMarginReport | null>(null);
@@ -94,7 +97,29 @@ export default function ProfitMarginReportPage() {
       if (categoryId) params.set('categoryId', categoryId);
       const res = await fetch(`/api/proxy/reports/profit-margin?${params}`);
       if (!res.ok) throw new Error('Error al cargar reporte');
-      const data: ProfitMarginReport = await res.json();
+      // El API devuelve otros nombres de campo (productName, totalProfitUsd, ...); se normaliza
+      // a la forma que usa el componente para evitar undefined.
+      const raw = await res.json();
+      const rows: MarginRow[] = (raw.rows ?? []).map((r: any) => ({
+        code: r.productCode ?? '',
+        name: r.productName ?? '',
+        categoryName: r.category ?? '',
+        units: r.unitsSold ?? 0,
+        salesUsd: r.salesUsd ?? 0,
+        costUsd: r.costUsd ?? 0,
+        profitUsd: r.profitUsd ?? 0,
+        marginPct: r.marginPct ?? 0,
+      }));
+      const data: ProfitMarginReport = {
+        totals: {
+          avgMarginPct: raw.totals?.avgMarginPct ?? 0,
+          profitUsd: raw.totals?.totalProfitUsd ?? 0,
+          salesUsd: raw.totals?.totalSalesUsd ?? 0,
+          costUsd: raw.totals?.totalCostUsd ?? 0,
+        },
+        mostProfitable: rows[0] ? { name: rows[0].name, marginPct: rows[0].marginPct } : null,
+        rows,
+      };
       setReport(data);
       setLoaded(true);
     } catch (err: any) {
@@ -103,6 +128,12 @@ export default function ProfitMarginReportPage() {
       setLoading(false);
     }
   }, [from, to, categoryId]);
+
+  /* Si se llega con rango en la URL (deep-link del KPI "Ganancia"), generar automaticamente. */
+  useEffect(() => {
+    if (searchParams.get('from')) fetchReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* Export PDF */
   const exportPdf = () => {

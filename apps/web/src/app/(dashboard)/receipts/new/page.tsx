@@ -467,6 +467,7 @@ export default function NewReceiptPage() {
           amountUsd: d.selectedAmountUsd,
         })),
         notes,
+        date: rateDate,
         exchangeRate: rate,
       };
       if (isCollection && sourceTab === 'platform') {
@@ -514,6 +515,7 @@ export default function NewReceiptPage() {
           amountUsd: d.selectedAmountUsd,
         })),
         notes,
+        date: rateDate,
         exchangeRate: rate,
       };
       if (isCollection && sourceTab === 'platform') {
@@ -714,7 +716,7 @@ export default function NewReceiptPage() {
           </h1>
           <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <label className="flex items-center gap-2">
-              <span>Fecha tasa:</span>
+              <span>Fecha:</span>
               <input
                 type="date"
                 value={rateDate}

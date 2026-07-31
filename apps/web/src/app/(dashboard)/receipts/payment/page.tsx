@@ -19,6 +19,7 @@ interface Receipt {
   differentialBs: number;
   hasDifferential: boolean;
   exchangeRate: number;
+  documentDate: string | null;
   createdAt: string;
 }
 
@@ -219,7 +220,7 @@ export default function ReceiptsPaymentPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-400">
-                      {new Date(r.createdAt).toLocaleDateString('es-VE')}
+                      {new Date(r.documentDate ?? r.createdAt).toLocaleDateString('es-VE', { timeZone: 'UTC' })}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">

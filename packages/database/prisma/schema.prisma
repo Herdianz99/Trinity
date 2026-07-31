@@ -1414,6 +1414,7 @@ model Receipt {
   differentialBs     Float               @default(0)
   hasDifferential    Boolean             @default(false)
   notes              String?
+  documentDate       DateTime?           // fecha del recibo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   items              ReceiptItem[]
   payments           ReceiptPayment[]
   receivablePayments ReceivablePayment[]

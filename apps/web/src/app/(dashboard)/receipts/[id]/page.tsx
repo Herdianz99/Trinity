@@ -50,6 +50,7 @@ interface Receipt {
   notes: string | null;
   items: ReceiptItem[];
   payments: ReceiptPayment[];
+  documentDate: string | null;
   createdAt: string;
 }
 
@@ -399,7 +400,7 @@ export default function ReceiptDetailPage() {
                 </div>
                 <div>
                   <span className="text-slate-500 block">Fecha</span>
-                  <span className="text-white">{new Date(receipt.createdAt).toLocaleDateString('es-VE')}</span>
+                  <span className="text-white">{new Date(receipt.documentDate ?? receipt.createdAt).toLocaleDateString('es-VE', { timeZone: 'UTC' })}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 block">Tasa del dia</span>

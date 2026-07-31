@@ -51,6 +51,8 @@ export class DashboardService {
       prevFinancing,
       salesByType,
       prevSalesByType,
+      profit,
+      prevProfit,
     ] = await Promise.all([
       this.getSales(dateRange),
       this.getSales(prevDateRange),
@@ -67,6 +69,8 @@ export class DashboardService {
       this.getFinancingSales(prevDateRange),
       this.getSalesByPaymentType(dateRange),
       this.getSalesByPaymentType(prevDateRange),
+      this.getProfit(dateRange),
+      this.getProfit(prevDateRange),
     ]);
 
     return {
@@ -115,6 +119,11 @@ export class DashboardService {
         creditoCount: salesByType.creditoCount,
         vsContado: pctChange(salesByType.contadoUsd, prevSalesByType.contadoUsd),
         vsCredito: pctChange(salesByType.creditoUsd, prevSalesByType.creditoUsd),
+      },
+      profit: {
+        totalUsd: profit.profitUsd,
+        marginPct: profit.marginPct,
+        vsLastPeriod: pctChange(profit.profitUsd, prevProfit.profitUsd),
       },
     };
   }
@@ -573,6 +582,90 @@ export class DashboardService {
     };
   }
 
+  // ── Ganancia (neta de devoluciones) ───────────────────────────────────────
+  // Ganancia por linea = ingreso - costo con brecha. El ingreso descuenta IVA solo si la
+  // serie es fiscal (en notas/no-fiscales el IVA cuenta como ganancia; regla de negocio en
+  // CLAUDE.md). El costo con brecha YA viene guardado en InvoiceItem.costUsd. Se resta la
+  // ganancia de lo devuelto (NCV POSTED) del periodo, con el costo historico de la factura
+  // original (fallback: costo actual del producto, con brecha).
+  private async getProfit(dateRange: { gte: Date; lte: Date }) {
+    const [invoices, notes, config] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+        select: {
+          serie: { select: { isFiscal: true } },
+          items: { select: { totalUsd: true, ivaAmount: true, costUsd: true, quantity: true } },
+        },
+      }),
+      this.prisma.creditDebitNote.findMany({
+        where: { type: 'NCV', status: 'POSTED', documentDate: dateRange },
+        select: {
+          serie: { select: { isFiscal: true } },
+          items: { select: { productId: true, quantity: true, totalUsd: true, ivaAmount: true } },
+          invoice: { select: { items: { select: { productId: true, costUsd: true } } } },
+        },
+      }),
+      this.prisma.companyConfig.findUnique({
+        where: { id: 'singleton' }, select: { bregaGlobalPct: true },
+      }),
+    ]);
+
+    let salesProfit = 0, salesRevenue = 0;
+    for (const inv of invoices) {
+      const fiscal = !!inv.serie?.isFiscal;
+      for (const it of inv.items) {
+        const revenue = fiscal ? it.totalUsd - it.ivaAmount : it.totalUsd;
+        salesRevenue += revenue;
+        salesProfit += revenue - (it.costUsd || 0) * it.quantity;
+      }
+    }
+
+    // Resolver el costo de lo devuelto. 1ro el costo historico de la factura original; lo que
+    // no se halle ahi se junta para un unico fallback al costo actual del producto (con brecha).
+    const bregaPct = config?.bregaGlobalPct || 0;
+    const pending: { productId: string | null; quantity: number; revenue: number; histCost?: number }[] = [];
+    const missing = new Set<string>();
+    for (const note of notes) {
+      const fiscal = !!note.serie?.isFiscal;
+      const costMap = new Map<string, number>();
+      for (const ii of note.invoice?.items ?? []) {
+        if (ii.productId) costMap.set(ii.productId, ii.costUsd || 0);
+      }
+      for (const it of note.items) {
+        const revenue = fiscal ? it.totalUsd - it.ivaAmount : it.totalUsd;
+        const histCost = it.productId ? costMap.get(it.productId) : undefined;
+        if (histCost === undefined && it.productId) missing.add(it.productId);
+        pending.push({ productId: it.productId, quantity: it.quantity, revenue, histCost });
+      }
+    }
+    const fallbackCost = new Map<string, number>();
+    if (missing.size > 0) {
+      const prods = await this.prisma.product.findMany({
+        where: { id: { in: Array.from(missing) } },
+        select: { id: true, costUsd: true, bregaApplies: true },
+      });
+      for (const p of prods) {
+        fallbackCost.set(p.id, p.bregaApplies ? p.costUsd * (1 + bregaPct / 100) : p.costUsd);
+      }
+    }
+
+    let returnsProfit = 0, returnsRevenue = 0;
+    for (const r of pending) {
+      const unitCost = r.histCost !== undefined
+        ? r.histCost
+        : (r.productId ? fallbackCost.get(r.productId) || 0 : 0);
+      returnsRevenue += r.revenue;
+      returnsProfit += r.revenue - unitCost * r.quantity;
+    }
+
+    const netProfit = salesProfit - returnsProfit;
+    const netRevenue = salesRevenue - returnsRevenue;
+    return {
+      profitUsd: round2(netProfit),
+      marginPct: netRevenue > 0 ? round2((netProfit / netRevenue) * 100) : 0,
+    };
+  }
+
   // ── Sales by seller ───────────────────────────────────────────────────────
 
   private async getSalesBySeller(dateRange: { gte: Date; lte: Date }) {
@@ -706,40 +799,40 @@ export class DashboardService {
   // ── Cash summary ──────────────────────────────────────────────────────────
 
   private async getCashSummary(dateRange: { gte: Date; lte: Date }) {
-    const movements = await this.prisma.cashMovement.findMany({
+    // El resumen de caja se calcula sobre el libro mayor (CashLedgerEntry), que registra
+    // TODO el flujo de dinero: pagos de ventas, cobros/pagos de recibos, anticipos, gastos,
+    // vuelto y movimientos manuales. (Antes se leia CashMovement, que NO incluye los pagos
+    // de ventas -> los ingresos salian siempre en 0.) direction IN = ingreso, OUT = egreso.
+    const entries = await this.prisma.cashLedgerEntry.findMany({
       where: { createdAt: dateRange },
+      select: {
+        direction: true,
+        amountUsd: true,
+        amountBs: true,
+        method: { select: { name: true } },
+      },
     });
-
-    // Get dynamic key names for grouping income
-    const keyIds = [...new Set(movements.filter(m => m.dynamicKeyId).map(m => m.dynamicKeyId!))];
-    const keyMap = new Map<string, string>();
-    if (keyIds.length > 0) {
-      const keys = await this.prisma.dynamicKey.findMany({
-        where: { id: { in: keyIds } },
-        select: { id: true, name: true },
-      });
-      for (const k of keys) keyMap.set(k.id, k.name);
-    }
 
     let totalIncomeUsd = 0, totalIncomeBs = 0;
     let totalExpensesUsd = 0, totalExpensesBs = 0;
+    // "Por metodo" agrupa los INGRESOS por metodo de pago (efectivo, Zelle, PdV, Cashea...).
     const methodMap = new Map<string, { methodName: string; totalUsd: number; totalBs: number }>();
 
-    for (const m of movements) {
-      if (m.type === 'INCOME') {
-        totalIncomeUsd += m.amountUsd;
-        totalIncomeBs += m.amountBs;
-        const name = m.dynamicKeyId ? (keyMap.get(m.dynamicKeyId) || 'Otros') : 'Otros';
+    for (const e of entries) {
+      if (e.direction === 'IN') {
+        totalIncomeUsd += e.amountUsd;
+        totalIncomeBs += e.amountBs;
+        const name = e.method?.name || 'Otros';
         const existing = methodMap.get(name);
         if (existing) {
-          existing.totalUsd += m.amountUsd;
-          existing.totalBs += m.amountBs;
+          existing.totalUsd += e.amountUsd;
+          existing.totalBs += e.amountBs;
         } else {
-          methodMap.set(name, { methodName: name, totalUsd: m.amountUsd, totalBs: m.amountBs });
+          methodMap.set(name, { methodName: name, totalUsd: e.amountUsd, totalBs: e.amountBs });
         }
       } else {
-        totalExpensesUsd += m.amountUsd;
-        totalExpensesBs += m.amountBs;
+        totalExpensesUsd += e.amountUsd;
+        totalExpensesBs += e.amountBs;
       }
     }
 

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsIn, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ReceiptItemDto {
@@ -71,6 +71,12 @@ export class CreateReceiptDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Fecha del recibo elegida por el usuario ('YYYY-MM-DD'). En cobro es además la fecha
+  // de la tasa. Si no se envía, se usa el día de hoy (Caracas).
+  @IsOptional()
+  @IsDateString()
+  date?: string;
 
   // Tasa a usar para los Bs "de hoy" y el diferencial. Cobro: tasa del dia segun la fecha
   // elegida; Pago: tasa manual del proveedor. Si no se envia, se usa la tasa del dia.

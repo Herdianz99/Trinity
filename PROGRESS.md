@@ -12,6 +12,26 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-07-31 — Fecha del recibo (`documentDate`) + Dashboard por rol (server-side) + KPIs con deep-link
+
+> **⏳ SIN DESPLEGAR — commiteado y pusheado a `main` esta sesión.** Validado en local (API + Web levantados, compilan). **TIENE MIGRACIÓN** (`Receipt.documentDate`) → al desplegar cada instancia corre `prisma migrate deploy` (o el `deploy/fix-schema.sql`, ya actualizado como red de seguridad). Pendiente: `git pull + deploy.sh` en las 4 instancias (grande/chica/total/totalturen).
+
+### 1) `Receipt.documentDate` — fecha del recibo elegida por el usuario
+- Antes el recibo solo tenía `createdAt` (día de carga). Se agregó **`documentDate` (TIMESTAMP, nullable)** = fecha del recibo que elige el usuario; en **cobro** es además la fecha de la tasa del día.
+- **Schema** (`schema.prisma`) + **migración** `20260729180000_receipt_document_date` (con `IF NOT EXISTS` y **backfill** de existentes: `createdAt` → su día-calendario Caracas a medianoche UTC) + **`deploy/fix-schema.sql`** actualizado con el mismo `ALTER`/`UPDATE` como red de seguridad.
+- **API**: DTO `create-receipt` acepta `date?` (`YYYY-MM-DD`, `IsDateString`, default hoy-Caracas). `receipts.service` guarda `documentDate` con `caracasDateKey`, **filtra por rango** `from/to` sobre `documentDate` con `caracasDateKey` (date-only a medianoche UTC — respeta la regla TZ) y ordena `documentDate desc, createdAt desc`. `receipt-pdf.service` imprime la fecha del recibo (`documentDate ?? createdAt`, `timeZone: 'UTC'`).
+- **Web**: `receipts/new` envía `date`; `collection`/`payment`/`[id]` muestran `documentDate ?? createdAt`.
+
+### 2) Dashboard decidido por ROL en el servidor (anti-fuga de totales)
+- `dashboard/page.tsx` pasó de client component (655 líneas) a **server component** (35 líneas): lee el rol vía `/auth/me` con la cookie y **redirige antes de mandar HTML** — `SELLER`→`/dashboard/seller`, no-admin/supervisor→`/dashboard/home`, solo `ADMIN`/`SUPERVISOR` reciben el gerencial. Antes el gate era en cliente (fetch + `router.replace`), lo que dejaba una ventana de segundos donde vendedores/cajeros/auditores alcanzaban a ver el total vendido.
+- El código gerencial completo se movió tal cual a **`dashboard/gerencial-client.tsx`** (archivo NUEVO — imprescindible para el build).
+
+### 3) KPIs del dashboard con deep-link a listados filtrados
+- Los KPIs ahora enlazan a listados ya filtrados. `receivables`, `sales/invoices`, `credit-debit-notes` y `reports/profit-margin` leen sus **filtros iniciales desde la URL** (`useSearchParams`: `type`/`status`/`paymentType`/`sellerId`/`from`/`to`). `dashboard.service` amplió KPIs (incluye NCV/Devoluciones por `documentDate`).
+- **PDF profit-margin** (`reports-pdf.service`): pasado a **portrait** con columnas reajustadas al ancho; la página normaliza los nombres de campo que devuelve el API (`productName`/`totalProfitUsd`…) para evitar `undefined`.
+
+---
+
 ## 🗓️ Sesión 2026-07-29 (cont.) — Existencias totalturen + sync de precios y barcodes entre empresas + rama de checkpoints estables
 
 > **Operaciones de DATOS en producción (sin deploy de código, sin migraciones).** Todas con respaldo previo y reversibles.

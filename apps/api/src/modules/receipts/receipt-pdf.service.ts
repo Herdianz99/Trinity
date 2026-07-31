@@ -72,7 +72,7 @@ export class ReceiptPdfService {
       ry += 20;
       doc.fontSize(9).font('Helvetica');
       doc.text(`No: ${receipt.number}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
-      doc.text(`Fecha: ${new Date(receipt.createdAt).toLocaleDateString('es-VE')}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
+      doc.text(`Fecha: ${new Date(receipt.documentDate ?? receipt.createdAt).toLocaleDateString('es-VE', { timeZone: 'UTC' })}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
       doc.text(`Tasa: Bs ${this.fmt(receipt.exchangeRate)}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
       doc.text(`Estado: ${receipt.status === 'POSTED' ? 'Procesado' : receipt.status}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
 

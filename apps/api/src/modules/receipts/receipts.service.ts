@@ -9,7 +9,7 @@ import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
 import { QueryPendingDocumentsDto } from './dto/query-pending-documents.dto';
-import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
+import { caracasDateKey } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
@@ -50,9 +50,10 @@ export class ReceiptsService {
       ];
     }
     if (query.from || query.to) {
-      where.createdAt = {};
-      if (query.from) where.createdAt.gte = caracasDayStart(query.from);
-      if (query.to) where.createdAt.lte = caracasDayEnd(query.to);
+      // documentDate es date-only a medianoche UTC de la fecha-Caracas → se compara con caracasDateKey.
+      where.documentDate = {};
+      if (query.from) where.documentDate.gte = caracasDateKey(query.from);
+      if (query.to) where.documentDate.lte = caracasDateKey(query.to);
     }
     return where;
   }
@@ -69,7 +70,7 @@ export class ReceiptsService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ documentDate: 'desc' }, { createdAt: 'desc' }],
         include: {
           customer: { select: { id: true, name: true, rif: true } },
           supplier: { select: { id: true, name: true, rif: true } },
@@ -87,7 +88,7 @@ export class ReceiptsService {
     const where = this.buildWhere(query);
     return this.prisma.receipt.findMany({
       where,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ documentDate: 'asc' }, { createdAt: 'asc' }],
       include: {
         customer: { select: { name: true, rif: true } },
         supplier: { select: { name: true, rif: true } },
@@ -422,6 +423,7 @@ export class ReceiptsService {
           differentialBs,
           hasDifferential,
           notes: dto.notes || null,
+          documentDate: caracasDateKey(dto.date), // fecha elegida (o hoy) a medianoche UTC de la fecha-Caracas
           createdById: userId,
           items: {
             create: items.map((item) => ({

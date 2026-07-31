@@ -60,10 +60,11 @@ export default function CreditDebitNotesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [type, setType] = useState('');
-  const [status, setStatus] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // Filtros iniciales desde la URL (deep-link, ej. KPI "Devoluciones" del dashboard).
+  const [type, setType] = useState(searchParams.get('type') || '');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [from, setFrom] = useState(searchParams.get('from') || '');
+  const [to, setTo] = useState(searchParams.get('to') || '');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
