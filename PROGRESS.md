@@ -12,6 +12,31 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ---
 
+## 🗓️ Sesión 2026-08-01 — Utilidad temporal AGOSTO + Reporte de utilidad exportable + Integración total↔totalturen (4 fases)
+
+> **OJO estado de despliegue:** el único cambio **aplicado en producción** hoy fue el ajuste de utilidad de agosto (operación de datos en la grande). El **código nuevo** (reporte de utilidad + integración) está **commiteado y pusheado a `main` pero NO desplegado**. Cada uno indica su estado abajo.
+
+### 1) Utilidad temporal de AGOSTO en la grande — ✅ APLICADO EN PRODUCCIÓN (operación de datos, sin código)
+- El cliente pidió cambiar la utilidad de **1745 productos** (marcas INGCO/JADEVER/WADFOW/PROMAKER) según `~/Downloads/utilidad-marcas-AGOSTO COSTO.xlsx`, **solo por agosto**. Nueva utilidad varía por producto (18/25/33/43/60%).
+- **Método:** copia de prod grande (`trinity_db`) → local `grande_db` (PG16→PG15 dump plano), validado por el cliente en la app local, y **solo con OK** aplicado a prod por SQL directo (dry-run BEGIN..ROLLBACK, luego COMMIT). Solo se cambió `gananciaPct` (detal) + `priceDetal`; **mayor intacto**. Fórmula del sistema (brecha 15% + IVA por producto). Impacto real: 195 prod cambiaron de precio (90 bajan, 105 suben); los demás ya estaban en esa utilidad.
+- **Respaldos + REVERSIÓN A FIN DE AGOSTO:** `_backup-utilidad-PROD-2026-08-01.json` (estado previo) + `_grande-prod-PREUTIL-2026-08-01.sql.gz` (dump). Script de reversión listo: `_util-agosto-restore-body.sql` (restaura `gananciaPct` previo, recalcula con costo vigente). Ver memoria `utilidad-agosto-temporal-grande`.
+
+### 2) Reporte de utilidad exportable (Excel + PDF) — ⏳ CÓDIGO EN `main`, SIN DESPLEGAR (commit `db48e2c`)
+- Botones **Excel/PDF** en `/catalog/price-adjustment` que descargan un reporte de utilidad respetando los filtros activos (categoría, subcategoría, marca, proveedor, brecha, costo min/max); sin filtros = todos.
+- Backend: `products.service.utilidadReportList` (reusa `buildPriceAdjustmentWhere`, incluye existencia + costo+brecha + precio s/IVA), `products-utilidad-report.service` (xlsx 13 cols con autofiltro / PDF landscape), endpoints `GET /products/price-adjustment/report/{xlsx,pdf}`.
+
+### 3) Integración total ↔ totalturen — ⏳ CÓDIGO EN `main`, SIN DESPLEGAR — 4 FASES COMPLETAS
+> Módulo `integration` **aditivo y opt-in**: dormido sin las 5 env vars → cero efecto en eltrebol/inversiones/empresa nueva aunque reciban el código. Puente 1-a-1 por localhost (co-locadas), guard por `X-Integration-Token`, `PartnerClient` con fallo seguro (el socio caído nunca rompe nada). Spec y planes en `docs/superpowers/{specs,plans}/2026-08-01-integracion-*`.
+- **Fase 1 (commits `875a022`/`72b9e9b`)** — Consulta de existencia: panel "En {socio}" en la ficha de producto (stock/precio del mismo `code` en la otra empresa). Endpoints `integration/{ping,products/lookup,partner/product/:code,status}`.
+- **Fase 2 (commits `a6e80bb`/`8c8e3ef`)** — Copiar precios: `GET products/prices` (entrante), `partner/prices/{preview,apply}`; aplica el precio del socio como **precio manual** (log + re-export tienda). Página `/catalog/partner-prices` + botón condicional en Ajuste de precios.
+- **Fase 3 (commit `38816c2`)** — Sync de altas: al crear un producto se **empuja async** al socio (fire-and-forget, no bloquea); `receiveUpsert` crea-si-falta por `code` (copia costo+precio, marca por nombre/categoría por code-nombre, barcode sin choque); endpoints `products/{upsert,catalog}` + `partner/sync/reconcile` (ADMIN); **cron cada 30 min** de reconciliación (red de seguridad).
+- **Fase 4 (commit `33c904a`)** — Traslados bidireccionales: tabla **`PartnerTransfer`** (migración `20260801170000_partner_transfer` con `IF NOT EXISTS` + red en `deploy/fix-schema.sql`). Flujos **enviar** (push, descuenta stock) / **solicitar** / **aprobar** / **rechazar** / **recibir** con movimiento de stock + kardex (`TRANSFER_OUT/IN`, `sourceType PARTNER_TRANSFER`). Idempotente por `number` (prefijo `SELF_CODE`), cron reintenta envíos no notificados. UI `/catalog/partner-transfers` + botón "Solicitar traslado" en ficha de producto.
+- **Menú (commit `e8c14d5`)** — "Precios socio" y "Traslados socio" en el sidebar (CATÁLOGO), **solo visibles si la integración está activa**.
+- **Verificación:** typecheck API+web 0 errores; probado E2E en local (loopback / socio-inalcanzable contra `grande_db`): consulta, precios (preview 9241 / apply), upsert (create/exists), y los 5 flujos de traslado con efecto real de stock. Datos de prueba revertidos.
+- **PARA DESPLEGAR:** `git pull` + `bash /opt/deploy-trinity.sh total` y `... totalturen` (la migración corre sola) **+ setear 5 env vars por instancia**: `PARTNER_API_URL` (total→`http://localhost:4001`, turen→`http://localhost:4000`), `PARTNER_API_TOKEN`, `INTEGRATION_TOKEN` (tokens cruzados), `PARTNER_NAME`, `SELF_CODE` (TOT/TUR). Ver memoria `dos-empresas-integracion-precios-traslados`.
+
+---
+
 ## 🗓️ Sesión 2026-07-31 — Fecha del recibo (`documentDate`) + Dashboard por rol (server-side) + KPIs con deep-link
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 4 EMPRESAS — commit `fc124e3`.** Desplegado el 2026-07-31 (noche Caracas) en grande (`inversiones`), chica (`eltrebol`/`ferre`), `total` y `totalturen`. Las 4 con HEAD `fc124e3`, PM2 `online`, health `database:ok`, `/auth/me`→401 (gate por rol vivo). **Migración `20260729180000_receipt_document_date` aplicada en las 4** + backfill sin huecos: grande 285/285, chica 75/75, total 3/3, totalturen 0/0. **Respaldo pre-deploy de las 4 BD** en `/root/backups/predeploy-documentdate-<db>-20260731-*.sql.gz` (SQL plano gzip, verificados con `gzip -t` + conteo de tablas 82/80/81/80).
