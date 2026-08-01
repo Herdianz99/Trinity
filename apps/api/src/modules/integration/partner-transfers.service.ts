@@ -46,6 +46,14 @@ export class PartnerTransfersService {
     return r?.rate || 0;
   }
 
+  // Devuelve el userId solo si existe en ESTA base (createdById es FK). Evita romper
+  // la operacion si llega un id de usuario de la otra empresa (o inexistente).
+  private async safeUserId(tx: any, userId?: string): Promise<string | null> {
+    if (!userId) return null;
+    const u = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+    return u ? userId : null;
+  }
+
   // CxC en la empresa que ENVIA: el socio (cliente del grupo) le debe la mercancia (a costo).
   private async createReceivable(tx: any, opts: { partnerName: string; number: string; amountUsd: number; userId: string }) {
     if (opts.amountUsd <= 0) return;
@@ -64,7 +72,7 @@ export class PartnerTransfersService {
         reference: opts.number,
         documentNumber: opts.number,
         status: 'PENDING',
-        createdById: opts.userId,
+        createdById: await this.safeUserId(tx, opts.userId),
       },
     });
   }
@@ -89,7 +97,7 @@ export class PartnerTransfersService {
         description: `Traslado de ${opts.partnerName} ${opts.number} (a costo)`,
         documentNumber: opts.number,
         status: 'PENDING',
-        createdById: opts.userId,
+        createdById: await this.safeUserId(tx, opts.userId),
       },
     });
   }
