@@ -803,6 +803,14 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
               )}
+              {partner.available && partner.product?.exists && (
+                <a
+                  href={`/catalog/partner-transfers?requestCode=${encodeURIComponent(code)}`}
+                  className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-sky-400 hover:text-sky-300"
+                >
+                  Solicitar traslado de este artículo →
+                </a>
+              )}
             </div>
           )}
           <div className="card overflow-hidden">

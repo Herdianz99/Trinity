@@ -409,13 +409,22 @@ export default function PriceAdjustmentPage() {
           )}
 
           {integration?.enabled && (
-            <Link
-              href="/catalog/partner-prices"
-              className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-sky-600/15 text-sky-400 border border-sky-600/30 hover:bg-sky-600/25 transition-colors"
-              title={`Traer los precios de ${integration.partnerName}`}
-            >
-              <ArrowLeftRight size={16} /> Precios de {integration.partnerName}
-            </Link>
+            <>
+              <Link
+                href="/catalog/partner-prices"
+                className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-sky-600/15 text-sky-400 border border-sky-600/30 hover:bg-sky-600/25 transition-colors"
+                title={`Traer los precios de ${integration.partnerName}`}
+              >
+                <ArrowLeftRight size={16} /> Precios de {integration.partnerName}
+              </Link>
+              <Link
+                href="/catalog/partner-transfers"
+                className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-indigo-600/15 text-indigo-400 border border-indigo-600/30 hover:bg-indigo-600/25 transition-colors"
+                title={`Traslados con ${integration.partnerName}`}
+              >
+                <ArrowLeftRight size={16} /> Traslados
+              </Link>
+            </>
           )}
 
           {/* Reporte de utilidad — respeta los filtros activos (sin filtros = todos los articulos) */}

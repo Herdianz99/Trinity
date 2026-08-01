@@ -638,6 +638,26 @@ model TransferItem {
   quantity   Float
 }
 
+// Traslado de inventario ENTRE EMPRESAS socias (integracion). Cada instancia guarda su
+// propia fila del mismo traslado logico, enlazada por `number`. Los items son un snapshot
+// JSON (code + nombre + cantidad + costo que viaja), sin FK al Product del otro lado.
+model PartnerTransfer {
+  id              String   @id @default(cuid())
+  number          String   @unique // p.ej. TOT-PTR-00001 (prefijo SELF_CODE del que inicia)
+  kind            String   // SEND | REQUEST
+  direction       String   // OUTGOING | INCOMING (respecto a esta instancia)
+  status          String   // REQUESTED|APPROVED|SENT|PENDING_RECEIPT|RECEIVED|REJECTED|CANCELLED
+  partnerName     String
+  notes           String?
+  items           Json     // [{ code, name, quantity, unitCost }]
+  fromWarehouseId String?  // almacen origen (en el lado que envia)
+  toWarehouseId   String?  // almacen destino (elegido al recibir)
+  notified        Boolean  @default(false) // el push al socio ya se confirmo
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 // ============================================
 // CONTEO FISICO
 // ============================================

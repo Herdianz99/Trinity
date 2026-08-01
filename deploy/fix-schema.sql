@@ -2509,3 +2509,25 @@ DO $$ BEGIN ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_sellerId_fkey" FOR
 -- =============================================================================
 ALTER TABLE "Receipt" ADD COLUMN IF NOT EXISTS "documentDate" TIMESTAMP(3);
 UPDATE "Receipt" SET "documentDate" = ((("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date)::timestamp WHERE "documentDate" IS NULL;
+
+-- =============================================================================
+-- SECTION: traslados entre empresas socias (PartnerTransfer) - integracion
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS "PartnerTransfer" (
+  "id"              TEXT NOT NULL,
+  "number"          TEXT NOT NULL,
+  "kind"            TEXT NOT NULL,
+  "direction"       TEXT NOT NULL,
+  "status"          TEXT NOT NULL,
+  "partnerName"     TEXT NOT NULL,
+  "notes"           TEXT,
+  "items"           JSONB NOT NULL,
+  "fromWarehouseId" TEXT,
+  "toWarehouseId"   TEXT,
+  "notified"        BOOLEAN NOT NULL DEFAULT false,
+  "createdById"     TEXT,
+  "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PartnerTransfer_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PartnerTransfer_number_key" ON "PartnerTransfer"("number");
