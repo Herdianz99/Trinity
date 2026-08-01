@@ -46,14 +46,17 @@ export class IntegrationService {
   }
 
   // Para MI frontend: consulta el mismo code en la empresa SOCIA.
+  // `enabled` = hay integracion configurada (si es false, el frontend no muestra el panel).
   async lookupPartner(
     code: string,
-  ): Promise<{ available: boolean; partnerName: string; product?: ProductLookup }> {
+  ): Promise<{ enabled: boolean; available: boolean; partnerName: string; product?: ProductLookup }> {
     const cfg = getIntegrationConfig();
+    const enabled = this.partner.isConfigured();
+    if (!enabled) return { enabled: false, available: false, partnerName: cfg.partnerName };
     const r = await this.partner.get<ProductLookup>(
       `/integration/products/lookup?code=${encodeURIComponent(code)}`,
     );
-    if (!r.ok || !r.data) return { available: false, partnerName: cfg.partnerName };
-    return { available: true, partnerName: cfg.partnerName, product: r.data };
+    if (!r.ok || !r.data) return { enabled: true, available: false, partnerName: cfg.partnerName };
+    return { enabled: true, available: true, partnerName: cfg.partnerName, product: r.data };
   }
 }

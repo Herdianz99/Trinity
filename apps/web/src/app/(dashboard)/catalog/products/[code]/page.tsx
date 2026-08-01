@@ -101,6 +101,14 @@ export default function ProductDetailPage() {
   const [exchangeRate, setExchangeRate] = useState(0);
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
 
+  // Existencia del mismo articulo en la empresa socia (integracion, opt-in)
+  const [partner, setPartner] = useState<{
+    enabled: boolean;
+    available: boolean;
+    partnerName: string;
+    product?: { exists: boolean; isActive?: boolean; name?: string; stock?: number; priceDetal?: number; priceMayor?: number };
+  } | null>(null);
+
   // ── Form state ──
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
@@ -267,6 +275,17 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (product) document.title = `${product.code} - ${product.name} | Trinity ERP`;
   }, [product]);
+
+  // Consulta la existencia del articulo en la empresa socia (dormido si no hay integracion)
+  useEffect(() => {
+    if (!code) return;
+    let cancel = false;
+    fetch(`/api/proxy/integration/partner/product/${encodeURIComponent(code)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancel) setPartner(d); })
+      .catch(() => { if (!cancel) setPartner(null); });
+    return () => { cancel = true; };
+  }, [code]);
 
   // Lazy load: fetch movements only when tab is active
   useEffect(() => {
@@ -760,6 +779,32 @@ export default function ProductDetailPage() {
 
         {/* ═══ TAB: Existencias ═══ */}
         <TabsContent value="stock">
+          {/* Existencia en la empresa socia (integracion, opt-in) */}
+          {partner?.enabled && (
+            <div className="card p-4 mb-4">
+              <h3 className="text-sm font-semibold text-slate-300 mb-2">En {partner.partnerName}</h3>
+              {!partner.available ? (
+                <p className="text-sm text-slate-500">No disponible (empresa socia sin conexion).</p>
+              ) : !partner.product?.exists ? (
+                <p className="text-sm text-slate-500">Este articulo no existe en {partner.partnerName}.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">Existencia</div>
+                    <div className="text-white font-semibold">{partner.product.stock ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Precio detal</div>
+                    <div className="text-white font-semibold">${(partner.product.priceDetal ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Precio mayor</div>
+                    <div className="text-white font-semibold">${(partner.product.priceMayor ?? 0).toFixed(2)}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
