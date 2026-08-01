@@ -31,6 +31,7 @@ export default function PartnerTransferDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [wh, setWh] = useState('');
+  const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -67,7 +68,7 @@ export default function PartnerTransferDetailPage() {
     if (kind === 'reject' && !confirm('¿Rechazar esta solicitud?')) return;
     setBusy(true); setMsg(null);
     try {
-      const body = kind === 'receive' ? { toWarehouseId: wh } : kind === 'approve' ? { fromWarehouseId: wh } : {};
+      const body = kind === 'receive' ? { toWarehouseId: wh } : kind === 'approve' ? { fromWarehouseId: wh, costBasis } : {};
       const res = await fetch(`/api/proxy/integration/transfers/${t!.id}/${kind}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
@@ -119,6 +120,15 @@ export default function PartnerTransferDetailPage() {
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
+            {canApprove && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Valuación</label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-900/60 rounded-lg p-1">
+                  <button type="button" onClick={() => setCostBasis('COST')} className={`py-1.5 px-3 rounded-md text-xs font-semibold ${costBasis === 'COST' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Costo</button>
+                  <button type="button" onClick={() => setCostBasis('COST_BREGA')} className={`py-1.5 px-3 rounded-md text-xs font-semibold ${costBasis === 'COST_BREGA' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Costo + brecha</button>
+                </div>
+              </div>
+            )}
             {canReceive && (
               <button onClick={() => act('receive')} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
                 {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Recibir

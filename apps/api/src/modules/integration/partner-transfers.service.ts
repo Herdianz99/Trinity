@@ -95,17 +95,30 @@ export class PartnerTransfersService {
   }
 
   // Resuelve items {code,quantity} a snapshot con nombre y costo; valida existencia de producto.
-  private async resolveItems(items: ItemInput[]): Promise<{ productId: string; snap: ItemSnapshot }[]> {
+  // costBasis: 'COST' = costo puro | 'COST_BREGA' = costo + brecha (si el producto lleva brecha),
+  // igual que el ajuste de precios. El unitCost resultante es el que viaja y valora el CxC/CxP.
+  private async resolveItems(
+    items: ItemInput[],
+    costBasis: 'COST' | 'COST_BREGA' = 'COST',
+  ): Promise<{ productId: string; snap: ItemSnapshot }[]> {
     if (!items?.length) throw new BadRequestException('El traslado no tiene items');
+    const bregaPct =
+      costBasis === 'COST_BREGA'
+        ? (await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } }))?.bregaGlobalPct || 0
+        : 0;
     const out: { productId: string; snap: ItemSnapshot }[] = [];
     for (const it of items) {
       const p = await this.prisma.product.findUnique({
         where: { code: it.code },
-        select: { id: true, code: true, name: true, costUsd: true },
+        select: { id: true, code: true, name: true, costUsd: true, bregaApplies: true },
       });
       if (!p) throw new BadRequestException(`Producto no encontrado: ${it.code}`);
       if (!it.quantity || it.quantity <= 0) throw new BadRequestException(`Cantidad invalida para ${it.code}`);
-      out.push({ productId: p.id, snap: { code: p.code, name: p.name, quantity: it.quantity, unitCost: p.costUsd } });
+      const unitCost =
+        costBasis === 'COST_BREGA' && p.bregaApplies
+          ? round2(p.costUsd * (1 + bregaPct / 100))
+          : p.costUsd;
+      out.push({ productId: p.id, snap: { code: p.code, name: p.name, quantity: it.quantity, unitCost } });
     }
     return out;
   }
@@ -132,10 +145,13 @@ export class PartnerTransfersService {
   }
 
   // ── ENVIAR (push): descuenta MI stock y notifica al socio ──
-  async send(dto: { fromWarehouseId: string; items: ItemInput[]; notes?: string }, userId: string) {
+  async send(
+    dto: { fromWarehouseId: string; items: ItemInput[]; notes?: string; costBasis?: 'COST' | 'COST_BREGA' },
+    userId: string,
+  ) {
     if (!this.partner.isConfigured()) throw new BadRequestException('Integracion no configurada');
     if (!dto.fromWarehouseId) throw new BadRequestException('Falta el almacen origen');
-    const resolved = await this.resolveItems(dto.items);
+    const resolved = await this.resolveItems(dto.items, dto.costBasis);
 
     // Validar stock
     for (const r of resolved) {
@@ -233,7 +249,7 @@ export class PartnerTransfersService {
   }
 
   // ── APROBAR una solicitud entrante: descuenta MI stock y la despacha ──
-  async approve(id: string, dto: { fromWarehouseId: string }, userId: string) {
+  async approve(id: string, dto: { fromWarehouseId: string; costBasis?: 'COST' | 'COST_BREGA' }, userId: string) {
     const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
     if (!rec) throw new NotFoundException('Traslado no encontrado');
     if (rec.kind !== 'REQUEST' || rec.direction !== 'INCOMING' || rec.status !== 'REQUESTED') {
@@ -241,7 +257,7 @@ export class PartnerTransfersService {
     }
     if (!dto.fromWarehouseId) throw new BadRequestException('Falta el almacen origen');
     const items = rec.items as unknown as ItemSnapshot[];
-    const resolved = await this.resolveItems(items.map((i) => ({ code: i.code, quantity: i.quantity })));
+    const resolved = await this.resolveItems(items.map((i) => ({ code: i.code, quantity: i.quantity })), dto.costBasis);
 
     for (const r of resolved) {
       const st = await this.prisma.stock.findUnique({

@@ -30,6 +30,7 @@ export default function PartnerTransfersPage() {
   const [modal, setModal] = useState<null | 'receive' | 'approve'>(null);
   const [active, setActive] = useState<Transfer | null>(null);
   const [wh, setWh] = useState('');
+  const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
@@ -54,7 +55,7 @@ export default function PartnerTransfersPage() {
   useEffect(() => { load(); }, [load]);
 
   function openModal(kind: 'receive' | 'approve', t: Transfer) {
-    setActive(t); setWh(''); setModal(kind);
+    setActive(t); setWh(''); setCostBasis('COST'); setModal(kind);
   }
 
   async function submit() {
@@ -65,7 +66,7 @@ export default function PartnerTransfersPage() {
       const url = modal === 'receive'
         ? `/api/proxy/integration/transfers/${active!.id}/receive`
         : `/api/proxy/integration/transfers/${active!.id}/approve`;
-      const body = modal === 'receive' ? { toWarehouseId: wh } : { fromWarehouseId: wh };
+      const body = modal === 'receive' ? { toWarehouseId: wh } : { fromWarehouseId: wh, costBasis };
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         setMsg({ type: 'success', text: 'Operación realizada.' });
@@ -176,6 +177,15 @@ export default function PartnerTransfersPage() {
               <option value="">Selecciona…</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+            {modal === 'approve' && (
+              <div className="mb-4">
+                <label className="block text-xs text-slate-400 mb-1">Valuación (CxC/CxP)</label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-900/60 rounded-lg p-1">
+                  <button type="button" onClick={() => setCostBasis('COST')} className={`py-1.5 px-3 rounded-md text-xs font-semibold ${costBasis === 'COST' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Costo</button>
+                  <button type="button" onClick={() => setCostBasis('COST_BREGA')} className={`py-1.5 px-3 rounded-md text-xs font-semibold ${costBasis === 'COST_BREGA' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Costo + brecha</button>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button onClick={() => setModal(null)} disabled={busy} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">Cancelar</button>
               <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2">

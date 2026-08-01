@@ -106,7 +106,7 @@ export class IntegrationController {
   @Post('transfers/send')
   @UseGuards(AuthGuard('jwt'))
   sendTransfer(
-    @Body() body: { fromWarehouseId: string; items: { code: string; quantity: number }[]; notes?: string },
+    @Body() body: { fromWarehouseId: string; items: { code: string; quantity: number }[]; notes?: string; costBasis?: 'COST' | 'COST_BREGA' },
     @CurrentUser('id') userId: string,
   ) {
     return this.transfers.send(body, userId);
@@ -125,7 +125,7 @@ export class IntegrationController {
   @UseGuards(AuthGuard('jwt'))
   approveTransfer(
     @Param('id') id: string,
-    @Body() body: { fromWarehouseId: string },
+    @Body() body: { fromWarehouseId: string; costBasis?: 'COST' | 'COST_BREGA' },
     @CurrentUser('id') userId: string,
   ) {
     return this.transfers.approve(id, body, userId);

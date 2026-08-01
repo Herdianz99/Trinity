@@ -18,6 +18,7 @@ export default function NewPartnerTransferPage() {
   const [rows, setRows] = useState<{ code: string; name: string; quantity: string }[]>([]);
   const [wh, setWh] = useState('');
   const [notes, setNotes] = useState('');
+  const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -54,7 +55,7 @@ export default function NewPartnerTransferPage() {
     setBusy(true);
     setMsg(null);
     try {
-      const body = kind === 'send' ? { fromWarehouseId: wh, items, notes } : { items, notes };
+      const body = kind === 'send' ? { fromWarehouseId: wh, items, notes, costBasis } : { items, notes };
       const res = await fetch(`/api/proxy/integration/transfers/${kind}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
@@ -109,13 +110,22 @@ export default function NewPartnerTransferPage() {
 
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
         {kind === 'send' && (
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Almacén origen</label>
-            <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2.5 text-sm max-w-sm">
-              <option value="">Selecciona…</option>
-              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </div>
+          <>
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Almacén origen</label>
+              <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2.5 text-sm max-w-sm">
+                <option value="">Selecciona…</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Valuación (define el CxC/CxP)</label>
+              <div className="grid grid-cols-2 gap-1 bg-slate-900/60 rounded-lg p-1 max-w-xs">
+                <button type="button" onClick={() => setCostBasis('COST')} className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${costBasis === 'COST' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>Costo</button>
+                <button type="button" onClick={() => setCostBasis('COST_BREGA')} className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${costBasis === 'COST_BREGA' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>Costo + brecha</button>
+              </div>
+            </div>
+          </>
         )}
 
         <label className="block text-xs font-medium text-slate-400 mb-1">Artículos</label>
