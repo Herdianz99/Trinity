@@ -14,7 +14,7 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 
 ## 🗓️ Sesión 2026-07-31 — Fecha del recibo (`documentDate`) + Dashboard por rol (server-side) + KPIs con deep-link
 
-> **⏳ SIN DESPLEGAR — commiteado y pusheado a `main` esta sesión.** Validado en local (API + Web levantados, compilan). **TIENE MIGRACIÓN** (`Receipt.documentDate`) → al desplegar cada instancia corre `prisma migrate deploy` (o el `deploy/fix-schema.sql`, ya actualizado como red de seguridad). Pendiente: `git pull + deploy.sh` en las 4 instancias (grande/chica/total/totalturen).
+> **✅ DESPLEGADO Y VERIFICADO EN LAS 4 EMPRESAS — commit `fc124e3`.** Desplegado el 2026-07-31 (noche Caracas) en grande (`inversiones`), chica (`eltrebol`/`ferre`), `total` y `totalturen`. Las 4 con HEAD `fc124e3`, PM2 `online`, health `database:ok`, `/auth/me`→401 (gate por rol vivo). **Migración `20260729180000_receipt_document_date` aplicada en las 4** + backfill sin huecos: grande 285/285, chica 75/75, total 3/3, totalturen 0/0. **Respaldo pre-deploy de las 4 BD** en `/root/backups/predeploy-documentdate-<db>-20260731-*.sql.gz` (SQL plano gzip, verificados con `gzip -t` + conteo de tablas 82/80/81/80).
 
 ### 1) `Receipt.documentDate` — fecha del recibo elegida por el usuario
 - Antes el recibo solo tenía `createdAt` (día de carga). Se agregó **`documentDate` (TIMESTAMP, nullable)** = fecha del recibo que elige el usuario; en **cobro** es además la fecha de la tasa del día.
