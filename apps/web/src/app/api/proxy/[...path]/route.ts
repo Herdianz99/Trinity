@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// API_PROXY_TARGET permite fijar el backend en RUNTIME (no se congela en build como
+// NEXT_PUBLIC_*). Util para correr 2 instancias desde un mismo build (pruebas locales).
+const API_URL = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 async function handler(request: NextRequest, { params }: { params: { path: string[] } }) {
   const token = request.cookies.get('accessToken')?.value;
