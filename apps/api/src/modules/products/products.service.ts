@@ -10,6 +10,7 @@ import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { IvaType, Prisma } from '@prisma/client';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 import { StoreExportService } from '../store-export/store-export.service';
+import { IntegrationService } from '../integration/integration.service';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -23,6 +24,7 @@ export class ProductsService {
   constructor(
     private prisma: PrismaService,
     private storeExport: StoreExportService,
+    private integration: IntegrationService,
   ) {}
 
   // Analisis de compra: productos (filtrables por categoria/marca/proveedor) con su existencia
@@ -189,6 +191,7 @@ export class ProductsService {
       },
     });
     this.storeExport.scheduleExport(); // republica el snapshot de la tienda
+    void this.integration.pushNewProduct(created.id); // sync del alta al socio (async, no bloquea)
     return created;
   }
 

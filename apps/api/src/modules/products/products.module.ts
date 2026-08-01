@@ -6,9 +6,10 @@ import { ProductsReportPdfService } from './products-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { StoreExportModule } from '../store-export/store-export.module';
+import { IntegrationModule } from '../integration/integration.module';
 
 @Module({
-  imports: [StoreExportModule],
+  imports: [StoreExportModule, IntegrationModule],
   controllers: [ProductsController],
   providers: [ProductsService, PurchaseAnalysisPdfService, ProductsReportPdfService, ProductsCatalogReportService, ProductsUtilidadReportService],
   exports: [ProductsService],

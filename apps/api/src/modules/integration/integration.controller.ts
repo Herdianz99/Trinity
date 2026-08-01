@@ -34,6 +34,18 @@ export class IntegrationController {
     return this.service.localPrices();
   }
 
+  @Post('products/upsert')
+  @UseGuards(IntegrationTokenGuard)
+  upsert(@Body() body: any) {
+    return this.service.receiveUpsert(body);
+  }
+
+  @Get('products/catalog')
+  @UseGuards(IntegrationTokenGuard)
+  catalog() {
+    return this.service.localCatalog();
+  }
+
   // ── INTERNO (lo llama MI frontend, protegido por JWT de usuario) ──
 
   @Get('status')
@@ -59,5 +71,12 @@ export class IntegrationController {
   @Roles(UserRole.ADMIN)
   pricesApply(@Body() body: { codes: string[] }, @CurrentUser('id') userId: string) {
     return this.service.applyPartnerPrices(body.codes || [], userId);
+  }
+
+  @Post('partner/sync/reconcile')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  reconcile() {
+    return this.service.reconcileFromPartner();
   }
 }
