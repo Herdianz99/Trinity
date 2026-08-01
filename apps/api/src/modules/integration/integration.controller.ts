@@ -1,6 +1,10 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { IntegrationTokenGuard } from './integration-token.guard';
 import { IntegrationService } from './integration.service';
 import { getIntegrationConfig } from './integration.config';
@@ -24,11 +28,36 @@ export class IntegrationController {
     return this.service.lookupLocal(code);
   }
 
+  @Get('products/prices')
+  @UseGuards(IntegrationTokenGuard)
+  prices() {
+    return this.service.localPrices();
+  }
+
   // ── INTERNO (lo llama MI frontend, protegido por JWT de usuario) ──
+
+  @Get('status')
+  @UseGuards(AuthGuard('jwt'))
+  status() {
+    return this.service.status();
+  }
 
   @Get('partner/product/:code')
   @UseGuards(AuthGuard('jwt'))
   partnerProduct(@Param('code') code: string) {
     return this.service.lookupPartner(code);
+  }
+
+  @Get('partner/prices/preview')
+  @UseGuards(AuthGuard('jwt'))
+  pricesPreview() {
+    return this.service.partnerPricesPreview();
+  }
+
+  @Post('partner/prices/apply')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  pricesApply(@Body() body: { codes: string[] }, @CurrentUser('id') userId: string) {
+    return this.service.applyPartnerPrices(body.codes || [], userId);
   }
 }
