@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { PartnerClient } from './partner-client.service';
 import { getIntegrationConfig } from './integration.config';
+import { caracasDateKey } from '../../common/timezone';
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 interface ItemInput {
   code: string;
@@ -36,6 +39,59 @@ export class PartnerTransfersService {
       if (!isNaN(v)) n = v + 1;
     }
     return `${prefix}${String(n).padStart(5, '0')}`;
+  }
+
+  private async currentRate(tx: any): Promise<number> {
+    const r = await tx.exchangeRate.findUnique({ where: { date: caracasDateKey() } });
+    return r?.rate || 0;
+  }
+
+  // CxC en la empresa que ENVIA: el socio (cliente del grupo) le debe la mercancia (a costo).
+  private async createReceivable(tx: any, opts: { partnerName: string; number: string; amountUsd: number; userId: string }) {
+    if (opts.amountUsd <= 0) return;
+    const rate = await this.currentRate(tx);
+    const customer =
+      (await tx.customer.findFirst({ where: { name: opts.partnerName } })) ??
+      (await tx.customer.create({ data: { name: opts.partnerName, isGroupCompany: true } }));
+    await tx.receivable.create({
+      data: {
+        type: 'MANUAL',
+        customerId: customer.id,
+        amountUsd: round2(opts.amountUsd),
+        amountBs: round2(opts.amountUsd * rate),
+        exchangeRate: rate,
+        description: `Traslado a ${opts.partnerName} ${opts.number} (a costo)`,
+        reference: opts.number,
+        documentNumber: opts.number,
+        status: 'PENDING',
+        createdById: opts.userId,
+      },
+    });
+  }
+
+  // CxP en la empresa que RECIBE: le debe al socio (proveedor) la mercancia (a costo).
+  private async createPayable(tx: any, opts: { partnerName: string; number: string; amountUsd: number; userId: string }) {
+    if (opts.amountUsd <= 0) return;
+    const rate = await this.currentRate(tx);
+    const supplier =
+      (await tx.supplier.findFirst({ where: { name: opts.partnerName } })) ??
+      (await tx.supplier.create({ data: { name: opts.partnerName } }));
+    const usd = round2(opts.amountUsd);
+    const bs = round2(opts.amountUsd * rate);
+    await tx.payable.create({
+      data: {
+        supplierId: supplier.id,
+        amountUsd: usd,
+        amountBs: bs,
+        exchangeRate: rate,
+        netPayableUsd: usd,
+        netPayableBs: bs,
+        description: `Traslado de ${opts.partnerName} ${opts.number} (a costo)`,
+        documentNumber: opts.number,
+        status: 'PENDING',
+        createdById: opts.userId,
+      },
+    });
   }
 
   // Resuelve items {code,quantity} a snapshot con nombre y costo; valida existencia de producto.
@@ -133,6 +189,12 @@ export class PartnerTransfersService {
           },
         });
       }
+      await this.createReceivable(tx, {
+        partnerName: cfg.partnerName,
+        number,
+        amountUsd: resolved.reduce((s, r) => s + r.snap.unitCost * r.snap.quantity, 0),
+        userId,
+      });
       return rec;
     });
 
@@ -214,7 +276,7 @@ export class PartnerTransfersService {
           },
         });
       }
-      return tx.partnerTransfer.update({
+      const upd = await tx.partnerTransfer.update({
         where: { id },
         data: {
           status: 'SENT',
@@ -223,6 +285,13 @@ export class PartnerTransfersService {
           notified: false,
         },
       });
+      await this.createReceivable(tx, {
+        partnerName: cfg.partnerName,
+        number: rec.number,
+        amountUsd: resolved.reduce((s, r) => s + r.snap.unitCost * r.snap.quantity, 0),
+        userId,
+      });
+      return upd;
     });
 
     await this.pushIncoming(updated);
@@ -287,6 +356,12 @@ export class PartnerTransfersService {
       await tx.partnerTransfer.update({
         where: { id },
         data: { status: 'RECEIVED', toWarehouseId: dto.toWarehouseId },
+      });
+      await this.createPayable(tx, {
+        partnerName: rec.partnerName,
+        number: rec.number,
+        amountUsd: items.reduce((s, i) => s + (i.unitCost || 0) * i.quantity, 0),
+        userId,
       });
     });
 

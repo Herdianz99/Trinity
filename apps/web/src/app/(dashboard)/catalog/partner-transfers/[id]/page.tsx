@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertTriangle, Check, X } from 'lucide-react';
 
 interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
 interface Transfer {
@@ -30,26 +30,27 @@ export default function PartnerTransferDetailPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [wh, setWh] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [tr, whs] = await Promise.all([
-          fetch(`/api/proxy/integration/transfers/${encodeURIComponent(id)}`),
-          fetch('/api/proxy/warehouses'),
-        ]);
-        if (!tr.ok) { setError('No se encontró el traslado.'); return; }
-        setT(await tr.json());
-        if (whs.ok) setWarehouses(await whs.json());
-      } catch {
-        setError('Error al cargar el traslado.');
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    try {
+      const [tr, whs] = await Promise.all([
+        fetch(`/api/proxy/integration/transfers/${encodeURIComponent(id)}`),
+        fetch('/api/proxy/warehouses'),
+      ]);
+      if (!tr.ok) { setError('No se encontró el traslado.'); return; }
+      setT(await tr.json());
+      if (whs.ok) setWarehouses(await whs.json());
+    } catch {
+      setError('Error al cargar el traslado.');
+    } finally {
+      setLoading(false);
     }
-    load();
   }, [id]);
 
+  useEffect(() => { load(); }, [load]);
   useEffect(() => { if (t) document.title = `Traslado ${t.number} | Trinity ERP`; }, [t]);
 
   const whName = (wid?: string | null) => warehouses.find((w) => w.id === wid)?.name || (wid ? '—' : null);
@@ -57,6 +58,23 @@ export default function PartnerTransferDetailPage() {
   function tipoLabel(x: Transfer) {
     if (x.kind === 'SEND') return x.direction === 'OUTGOING' ? 'Envío (salida de mi inventario)' : 'Envío recibido';
     return x.direction === 'OUTGOING' ? 'Solicitud mía' : 'Solicitud recibida';
+  }
+
+  async function act(kind: 'receive' | 'approve' | 'reject') {
+    if ((kind === 'receive' || kind === 'approve') && !wh) {
+      setMsg({ type: 'error', text: 'Elige el almacén.' }); return;
+    }
+    if (kind === 'reject' && !confirm('¿Rechazar esta solicitud?')) return;
+    setBusy(true); setMsg(null);
+    try {
+      const body = kind === 'receive' ? { toWarehouseId: wh } : kind === 'approve' ? { fromWarehouseId: wh } : {};
+      const res = await fetch(`/api/proxy/integration/transfers/${t!.id}/${kind}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (res.ok) { setMsg({ type: 'success', text: 'Operación realizada.' }); await load(); }
+      else { const e = await res.json().catch(() => ({})); setMsg({ type: 'error', text: e.message || 'No se pudo completar.' }); }
+    } catch { setMsg({ type: 'error', text: 'Error de red.' }); }
+    finally { setBusy(false); }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="animate-spin mr-2" size={20} /> Cargando…</div>;
@@ -72,6 +90,8 @@ export default function PartnerTransferDetailPage() {
   }
 
   const totalUsd = (t.items || []).reduce((s, i) => s + (i.unitCost || 0) * i.quantity, 0);
+  const canReceive = t.status === 'PENDING_RECEIPT';
+  const canApprove = t.kind === 'REQUEST' && t.direction === 'INCOMING' && t.status === 'REQUESTED';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -83,6 +103,40 @@ export default function PartnerTransferDetailPage() {
         <h1 className="text-2xl font-bold text-white font-mono">{t.number}</h1>
         <span className={`text-sm font-semibold ${STATUS_COLOR[t.status] || 'text-slate-300'}`}>{STATUS_LABEL[t.status] || t.status}</span>
       </div>
+
+      {msg && (
+        <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${msg.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'}`}>{msg.text}</div>
+      )}
+
+      {/* Acciones */}
+      {(canReceive || canApprove) && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px]">
+              <label className="block text-xs text-slate-400 mb-1">{canReceive ? 'Almacén destino' : 'Almacén origen'}</label>
+              <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2 text-sm">
+                <option value="">Selecciona…</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </div>
+            {canReceive && (
+              <button onClick={() => act('receive')} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Recibir
+              </button>
+            )}
+            {canApprove && (
+              <>
+                <button onClick={() => act('approve')} disabled={busy} className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                  {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Aprobar y enviar
+                </button>
+                <button onClick={() => act('reject')} disabled={busy} className="bg-red-600/80 hover:bg-red-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                  <X size={15} /> Rechazar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 mb-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
         <div><div className="text-xs text-slate-500">Tipo</div><div className="text-slate-200">{tipoLabel(t)}</div></div>
@@ -125,6 +179,9 @@ export default function PartnerTransferDetailPage() {
           </tfoot>
         </table>
       </div>
+      <p className="text-xs text-slate-500 mt-2">
+        Al enviarse genera Cuenta por Cobrar al socio; al recibirse genera Cuenta por Pagar (a costo).
+      </p>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Loader2, Send, Download, Check, X, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
@@ -30,6 +31,7 @@ export default function PartnerTransfersPage() {
   const [active, setActive] = useState<Transfer | null>(null);
   const [wh, setWh] = useState('');
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   useEffect(() => { document.title = 'Traslados socio | Trinity ERP'; }, []);
 
@@ -136,13 +138,13 @@ export default function PartnerTransfersPage() {
             {transfers.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin traslados.</td></tr>
             ) : transfers.map((t) => (
-              <tr key={t.id} className="border-b border-slate-700/30">
-                <td className="px-3 py-2 font-mono"><Link href={`/catalog/partner-transfers/${t.id}`} className="text-sky-400 hover:text-sky-300">{t.number}</Link></td>
+              <tr key={t.id} onClick={() => router.push(`/catalog/partner-transfers/${t.id}`)} className="border-b border-slate-700/30 hover:bg-slate-800/40 cursor-pointer">
+                <td className="px-3 py-2 font-mono text-sky-400">{t.number}</td>
                 <td className="px-3 py-2 text-slate-300">{tipoLabel(t)}</td>
                 <td className="px-3 py-2 text-right text-slate-300">{t.items?.length ?? 0}</td>
                 <td className="px-3 py-2"><span className="text-slate-200">{STATUS_LABEL[t.status] || t.status}</span></td>
                 <td className="px-3 py-2 text-slate-400">{new Date(t.createdAt).toLocaleDateString('es-VE')}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                   {t.status === 'PENDING_RECEIPT' && (
                     <button onClick={() => openModal('receive', t)} className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold px-2 py-1">Recibir</button>
                   )}
