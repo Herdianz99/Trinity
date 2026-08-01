@@ -35,6 +35,18 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 - **Verificación:** typecheck API+web 0 errores; probado E2E en local (loopback / socio-inalcanzable contra `grande_db`): consulta, precios (preview 9241 / apply), upsert (create/exists), y los 5 flujos de traslado con efecto real de stock. Datos de prueba revertidos.
 - **PARA DESPLEGAR:** `git pull` + `bash /opt/deploy-trinity.sh total` y `... totalturen` (la migración corre sola) **+ setear 5 env vars por instancia**: `PARTNER_API_URL` (total→`http://localhost:4001`, turen→`http://localhost:4000`), `PARTNER_API_TOKEN`, `INTEGRATION_TOKEN` (tokens cruzados), `PARTNER_NAME`, `SELF_CODE` (TOT/TUR). Ver memoria `dos-empresas-integracion-precios-traslados`.
 
+### 4) Integración — refinamientos de UI, detalle de traslado, CxC/CxP y valuación (misma sesión, SIN DESPLEGAR)
+- **Reporte de utilidad:** buscador con autocompletado en traslados; el reporte respeta filtros. (`db48e2c` ya arriba.)
+- **Traslados — página aparte para crear** (`c6a48c5`): Enviar/Solicitar en `/catalog/partner-transfers/new` (pantalla completa con `ProductSearch`, lista de items, almacén, notas). La lista quedó con modales chicos de recibir/aprobar.
+- **Proxy web configurable en runtime** (`3ab3129`): `API_PROXY_TARGET` (antes de `NEXT_PUBLIC_API_URL`), para correr varias instancias desde un mismo build.
+- **Detalle de traslado** (`48fdf48`, `c887b99`): página `/catalog/partner-transfers/[id]` (endpoint `GET /integration/transfers/:key` por id o número). Muestra items/costos/totales y **acciones recibir/aprobar/rechazar**. La **fila de la lista es clickeable** al detalle. Los movimientos de traslado guardan `sourceId` y `PARTNER_TRANSFER` se agregó al mapa de orígenes → en la pestaña Movimientos del producto sale **"Ver traslado"**.
+- **CxC/CxP automáticas** (`c887b99`): al **enviar/aprobar** la empresa que envía genera **Cuenta por Cobrar** contra el socio (cliente del grupo, se crea si no existe); al **recibir** la que recibe genera **Cuenta por Pagar** al socio (proveedor). Monto = costo que viaja, USD+Bs a tasa del día, enlazadas por número.
+- **Valuación Costo / Costo+brecha** (`005aa59`): al enviar/aprobar se elige la base (`COST` o `COST_BREGA`, respeta `bregaApplies` + brecha global), define el `unitCost` que viaja y por ende kardex + CxC/CxP. Toggle en página nueva, detalle (aprobar) y modal de lista.
+- **Fix** (`df86acb`): CxC/CxP ya no revientan (FK `createdById`) si el usuario no existe en esa BD (artefacto de la prueba local con cookie compartida entre :3000/:3001); se guarda `createdById=null`. En prod no aplica (dominios/usuarios separados) pero blinda la operación.
+- **Menú lateral** (`e8c14d5`): "Precios socio" y "Traslados socio" bajo CATÁLOGO, solo visibles si la integración está activa.
+- **Prueba local con datos REALES:** se clonaron de producción `total_db` y `totalturen_db` a local; se levantaron 2 instancias cruzadas (TOTAL :3000 / TOTAL TUREN :3001) desde un build único (`node dist/main` + `next start`, `API_PROXY_TARGET`), y se validaron consulta, precios (8 diffs reales), sync de altas y los 5 flujos de traslado con CxC/CxP y kardex. Copias locales: `grande_db`/`grande_db_b`/`total_db`/`totalturen_db`.
+- **DECISIÓN PENDIENTE (Feature C — copiar precios):** hoy aplica el precio del socio como **precio manual** (exacto pero congelado). Se evalúa opción de aplicarlo como **% de ganancia** (recalculado desde el costo propio → queda automático) — ver conversación; con costos distintos entre empresas el % puede salir raro/negativo.
+
 ---
 
 ## 🗓️ Sesión 2026-07-31 — Fecha del recibo (`documentDate`) + Dashboard por rol (server-side) + KPIs con deep-link
