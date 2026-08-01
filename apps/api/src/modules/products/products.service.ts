@@ -654,6 +654,59 @@ export class ProductsService {
     return products;
   }
 
+  // Lista para el REPORTE de utilidad (pantalla /catalog/price-adjustment). Respeta los
+  // mismos filtros que la vista previa (categoria, subcategoria, marca, proveedor, brecha,
+  // costo min/max) via buildPriceAdjustmentWhere, e incluye existencia + columnas derivadas
+  // (costo+brecha, precio s/IVA) usando la MISMA formula del sistema.
+  async utilidadReportList(query: PriceAdjustmentQueryDto) {
+    const where = this.buildPriceAdjustmentWhere(query);
+    const [config, products] = await Promise.all([
+      this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: [{ brand: { name: 'asc' } }, { gananciaPct: 'desc' }, { code: 'asc' }],
+        select: {
+          code: true,
+          name: true,
+          costUsd: true,
+          gananciaPct: true,
+          gananciaMayorPct: true,
+          priceDetal: true,
+          priceMayor: true,
+          ivaType: true,
+          bregaApplies: true,
+          category: { select: { name: true } },
+          brand: { select: { name: true } },
+          supplier: { select: { name: true } },
+          stock: { select: { quantity: true } },
+        },
+      }),
+    ]);
+
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const items = products.map((p) => {
+      const bregaPct = p.bregaApplies ? bregaGlobalPct : 0;
+      const costoBrecha = Math.round(p.costUsd * (1 + bregaPct / 100) * 100) / 100;
+      const ivaMult = IVA_MULTIPLIERS[p.ivaType];
+      const precioSinIva = Math.round((p.priceDetal / ivaMult) * 100) / 100;
+      return {
+        code: p.code,
+        name: p.name,
+        brand: p.brand?.name || '',
+        supplier: p.supplier?.name || '',
+        category: p.category?.name || '',
+        brega: p.bregaApplies,
+        stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+        cost: Math.round(p.costUsd * 100) / 100,
+        costoBrecha,
+        precioSinIva,
+        gananciaPct: Math.round(p.gananciaPct * 100) / 100,
+        gananciaMayorPct: Math.round(p.gananciaMayorPct * 100) / 100,
+      };
+    });
+    return { items, bregaGlobalPct };
+  }
+
   async applyPriceAdjustment(dto: ApplyPriceAdjustmentDto, userId: string) {
     // Si vienen productIds seleccionados, se ajustan SOLO esos. Si no, se cae al filtro (compatibilidad).
     const where: Prisma.ProductWhereInput =

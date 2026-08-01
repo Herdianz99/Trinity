@@ -16,6 +16,7 @@ import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
 import { ProductsReportPdfService } from './products-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
+import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
@@ -30,6 +31,7 @@ export class ProductsController {
     private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
     private productsReportPdf: ProductsReportPdfService,
     private catalogReport: ProductsCatalogReportService,
+    private utilidadReport: ProductsUtilidadReportService,
   ) {}
 
   @Post()
@@ -115,6 +117,29 @@ export class ProductsController {
   @Get('price-adjustment/history')
   getPriceAdjustmentHistory() {
     return this.productsService.getPriceAdjustmentHistory();
+  }
+
+  // Reporte de utilidad (respeta los filtros de la pantalla de ajuste de precios).
+  @Get('price-adjustment/report/xlsx')
+  async utilidadReportXlsx(@Query() query: PriceAdjustmentQueryDto, @Res() res: Response) {
+    const buffer = await this.utilidadReport.generateXlsx(query);
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': 'attachment; filename="reporte-utilidad.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('price-adjustment/report/pdf')
+  async utilidadReportPdf(@Query() query: PriceAdjustmentQueryDto, @Res() res: Response) {
+    const buffer = await this.utilidadReport.generatePdf(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="reporte-utilidad.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('by-code/:code')

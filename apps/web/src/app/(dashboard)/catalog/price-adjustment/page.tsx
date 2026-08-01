@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   SlidersHorizontal, Search, Replace, PlusCircle,
   Loader2, AlertTriangle, CheckCircle2, History, X,
-  TrendingUp, TrendingDown
+  TrendingUp, TrendingDown, FileSpreadsheet, FileText
 } from 'lucide-react';
 
 interface Product {
@@ -158,6 +158,19 @@ export default function PriceAdjustmentPage() {
     } finally {
       setLoadingHistory(false);
     }
+  }
+
+  // Reporte de utilidad: descarga xlsx/pdf respetando los filtros activos (vacio = todos).
+  function exportReport(format: 'xlsx' | 'pdf') {
+    const params = new URLSearchParams();
+    if (filterCategory) params.set('categoryId', filterCategory);
+    if (filterSubcategory) params.set('subcategoryId', filterSubcategory);
+    if (filterBrand) params.set('brandId', filterBrand);
+    if (filterSupplier) params.set('supplierId', filterSupplier);
+    if (filterBrega) params.set('bregaApplies', filterBrega);
+    if (costMin) params.set('costMin', costMin);
+    if (costMax) params.set('costMax', costMax);
+    window.open(`/api/proxy/products/price-adjustment/report/${format}?${params}`, '_blank');
   }
 
   // ── Selection helpers ──
@@ -390,6 +403,25 @@ export default function PriceAdjustmentPage() {
               Limpiar
             </button>
           )}
+
+          {/* Reporte de utilidad — respeta los filtros activos (sin filtros = todos los articulos) */}
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-xs text-slate-500 hidden sm:inline">Reporte de utilidad:</span>
+            <button
+              onClick={() => exportReport('xlsx')}
+              title="Descargar reporte de utilidad en Excel con los filtros aplicados"
+              className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-emerald-600/15 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/25 transition-colors"
+            >
+              <FileSpreadsheet size={16} /> Excel
+            </button>
+            <button
+              onClick={() => exportReport('pdf')}
+              title="Descargar reporte de utilidad en PDF con los filtros aplicados"
+              className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-rose-600/15 text-rose-400 border border-rose-600/30 hover:bg-rose-600/25 transition-colors"
+            >
+              <FileText size={16} /> PDF
+            </button>
+          </div>
         </div>
       </div>
 
