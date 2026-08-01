@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import {
   SlidersHorizontal, Search, Replace, PlusCircle,
   Loader2, AlertTriangle, CheckCircle2, History, X,
-  TrendingUp, TrendingDown, FileSpreadsheet, FileText
+  TrendingUp, TrendingDown, FileSpreadsheet, FileText, ArrowLeftRight
 } from 'lucide-react';
 
 interface Product {
@@ -64,6 +65,7 @@ export default function PriceAdjustmentPage() {
   const [costMin, setCostMin] = useState('');
   const [costMax, setCostMax] = useState('');
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
+  const [integration, setIntegration] = useState<{ enabled: boolean; partnerName: string } | null>(null);
 
   // Product preview state
   const [products, setProducts] = useState<Product[]>([]);
@@ -99,11 +101,12 @@ export default function PriceAdjustmentPage() {
   // Fetch metadata
   useEffect(() => {
     async function fetchMeta() {
-      const [catRes, brandRes, supRes, configRes] = await Promise.all([
+      const [catRes, brandRes, supRes, configRes, integRes] = await Promise.all([
         fetch('/api/proxy/categories'),
         fetch('/api/proxy/brands'),
         fetch('/api/proxy/suppliers'),
         fetch('/api/proxy/config'),
+        fetch('/api/proxy/integration/status'),
       ]);
       if (catRes.ok) setCategories(await catRes.json());
       if (brandRes.ok) setBrands(await brandRes.json());
@@ -112,6 +115,7 @@ export default function PriceAdjustmentPage() {
         const cfg = await configRes.json();
         setBregaGlobalPct(cfg.bregaGlobalPct || 0);
       }
+      if (integRes.ok) setIntegration(await integRes.json());
     }
     fetchMeta();
     fetchHistory();
@@ -402,6 +406,16 @@ export default function PriceAdjustmentPage() {
             >
               Limpiar
             </button>
+          )}
+
+          {integration?.enabled && (
+            <Link
+              href="/catalog/partner-prices"
+              className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold bg-sky-600/15 text-sky-400 border border-sky-600/30 hover:bg-sky-600/25 transition-colors"
+              title={`Traer los precios de ${integration.partnerName}`}
+            >
+              <ArrowLeftRight size={16} /> Precios de {integration.partnerName}
+            </Link>
           )}
 
           {/* Reporte de utilidad — respeta los filtros activos (sin filtros = todos los articulos) */}
