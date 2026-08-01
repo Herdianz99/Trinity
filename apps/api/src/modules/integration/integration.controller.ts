@@ -97,6 +97,12 @@ export class IntegrationController {
     return this.transfers.findAll({ status, direction, kind });
   }
 
+  @Get('transfers/:key')
+  @UseGuards(AuthGuard('jwt'))
+  getTransfer(@Param('key') key: string) {
+    return this.transfers.findOne(key);
+  }
+
   @Post('transfers/send')
   @UseGuards(AuthGuard('jwt'))
   sendTransfer(

@@ -12,6 +12,7 @@ export type MovementSourceType =
   | 'INVENTORY_COUNT'
   | 'CREDIT_DEBIT_NOTE'
   | 'TRANSFER' // sin pagina de detalle todavia
+  | 'PARTNER_TRANSFER' // traslado entre empresas socias (integracion)
   | 'REPLACEMENT'; // reemplazos de inventario (a futuro)
 
 const SOURCE_MAP: Record<string, { href: (id: string) => string; label: string }> = {
@@ -22,6 +23,7 @@ const SOURCE_MAP: Record<string, { href: (id: string) => string; label: string }
   CREDIT_DEBIT_NOTE: { href: (id) => `/credit-debit-notes/${id}`, label: 'Ver nota' },
   REPLACEMENT: { href: (id) => `/inventory/replacements/${id}`, label: 'Ver reemplazo' },
   TRANSFER: { href: (id) => `/inventory/transfers/${id}`, label: 'Ver transferencia' },
+  PARTNER_TRANSFER: { href: (id) => `/catalog/partner-transfers/${id}`, label: 'Ver traslado' },
 };
 
 /**

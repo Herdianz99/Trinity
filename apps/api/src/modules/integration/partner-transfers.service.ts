@@ -66,6 +66,15 @@ export class PartnerTransfersService {
     return this.list(where);
   }
 
+  // Detalle por id O por numero (los movimientos de inventario enlazan por id).
+  async findOne(key: string) {
+    const rec = await this.prisma.partnerTransfer.findFirst({
+      where: { OR: [{ id: key }, { number: key }] },
+    });
+    if (!rec) throw new NotFoundException('Traslado no encontrado');
+    return rec;
+  }
+
   // ── ENVIAR (push): descuenta MI stock y notifica al socio ──
   async send(dto: { fromWarehouseId: string; items: ItemInput[]; notes?: string }, userId: string) {
     if (!this.partner.isConfigured()) throw new BadRequestException('Integracion no configurada');
@@ -87,6 +96,21 @@ export class PartnerTransfersService {
     const cfg = getIntegrationConfig();
     const record = await this.prisma.$transaction(async (tx) => {
       const number = await this.nextNumber(tx);
+      // Se crea el registro PRIMERO para tener su id y enlazarlo en los movimientos (sourceId).
+      const rec = await tx.partnerTransfer.create({
+        data: {
+          number,
+          kind: 'SEND',
+          direction: 'OUTGOING',
+          status: 'SENT',
+          partnerName: cfg.partnerName,
+          notes: dto.notes ?? null,
+          items: resolved.map((r) => r.snap) as any,
+          fromWarehouseId: dto.fromWarehouseId,
+          notified: false,
+          createdById: userId,
+        },
+      });
       for (const r of resolved) {
         const st = await tx.stock.update({
           where: { productId_warehouseId: { productId: r.productId, warehouseId: dto.fromWarehouseId } },
@@ -104,24 +128,12 @@ export class PartnerTransfersService {
             reason: `Traslado a ${cfg.partnerName} ${number}`,
             reference: number,
             sourceType: 'PARTNER_TRANSFER',
+            sourceId: rec.id,
             createdById: userId,
           },
         });
       }
-      return tx.partnerTransfer.create({
-        data: {
-          number,
-          kind: 'SEND',
-          direction: 'OUTGOING',
-          status: 'SENT',
-          partnerName: cfg.partnerName,
-          notes: dto.notes ?? null,
-          items: resolved.map((r) => r.snap) as any,
-          fromWarehouseId: dto.fromWarehouseId,
-          notified: false,
-          createdById: userId,
-        },
-      });
+      return rec;
     });
 
     await this.pushIncoming(record);
@@ -197,6 +209,7 @@ export class PartnerTransfersService {
             reason: `Traslado a ${cfg.partnerName} ${rec.number} (solicitud aprobada)`,
             reference: rec.number,
             sourceType: 'PARTNER_TRANSFER',
+            sourceId: id,
             createdById: userId,
           },
         });
@@ -266,6 +279,7 @@ export class PartnerTransfersService {
             reason: `Traslado de ${rec.partnerName} ${rec.number} (entrada)`,
             reference: rec.number,
             sourceType: 'PARTNER_TRANSFER',
+            sourceId: id,
             createdById: userId,
           },
         });

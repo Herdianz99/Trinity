@@ -137,7 +137,7 @@ export default function PartnerTransfersPage() {
               <tr><td colSpan={6} className="text-center py-8 text-slate-500">Sin traslados.</td></tr>
             ) : transfers.map((t) => (
               <tr key={t.id} className="border-b border-slate-700/30">
-                <td className="px-3 py-2 font-mono text-slate-200">{t.number}</td>
+                <td className="px-3 py-2 font-mono"><Link href={`/catalog/partner-transfers/${t.id}`} className="text-sky-400 hover:text-sky-300">{t.number}</Link></td>
                 <td className="px-3 py-2 text-slate-300">{tipoLabel(t)}</td>
                 <td className="px-3 py-2 text-right text-slate-300">{t.items?.length ?? 0}</td>
                 <td className="px-3 py-2"><span className="text-slate-200">{STATUS_LABEL[t.status] || t.status}</span></td>
