@@ -63,6 +63,8 @@ interface MenuItem {
   // permiso de la seccion O este permiso. Sirve para dar acceso fino (ej. solo
   // "Consultar articulos" + "Etiquetas" sin todo el modulo inventory).
   permission?: string;
+  // Solo visible si la integracion con la empresa socia esta activa.
+  integrationOnly?: boolean;
 }
 
 interface MenuSection {
@@ -117,6 +119,8 @@ const menuSections: MenuSection[] = [
       { label: 'Categorias', href: '/catalog/categories', icon: <Layers size={18} /> },
       { label: 'Marcas', href: '/catalog/brands', icon: <Tag size={18} /> },
       { label: 'Ajuste de precios', href: '/catalog/price-adjustment', icon: <SlidersHorizontal size={18} /> },
+      { label: 'Precios socio', href: '/catalog/partner-prices', icon: <ArrowLeftRight size={18} />, integrationOnly: true },
+      { label: 'Traslados socio', href: '/catalog/partner-transfers', icon: <ArrowLeftRight size={18} />, integrationOnly: true },
       { label: 'Sesion de fotos', href: '/catalog/photo-session', icon: <Camera size={18} /> },
       { label: 'Sesion de codigos de barras', href: '/catalog/barcode-session', icon: <Barcode size={18} /> },
     ],
@@ -292,8 +296,17 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [integrationOn, setIntegrationOn] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  // Estado de la integracion con la empresa socia (para mostrar/ocultar sus items)
+  useEffect(() => {
+    fetch('/api/proxy/integration/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setIntegrationOn(!!d?.enabled))
+      .catch(() => setIntegrationOn(false));
+  }, []);
 
   // Load saved state from localStorage
   useEffect(() => {
@@ -352,9 +365,10 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   // Items visibles de una seccion: si el usuario tiene el permiso de la seccion,
   // ve todos; si no, solo los items que tengan su propio permiso y el usuario lo tenga.
   const visibleItemsFor = (section: MenuSection): MenuItem[] => {
-    if (section.key === 'settings' || section.key === 'reports') return section.items;
-    if (hasPermission(permissions, section.permission)) return section.items;
-    return section.items.filter((it) => it.permission && hasPermission(permissions, it.permission));
+    const gate = (items: MenuItem[]) => items.filter((it) => !it.integrationOnly || integrationOn);
+    if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
+    if (hasPermission(permissions, section.permission)) return gate(section.items);
+    return gate(section.items.filter((it) => it.permission && hasPermission(permissions, it.permission)));
   };
 
   const filteredSections = menuSections.filter((section) => {
