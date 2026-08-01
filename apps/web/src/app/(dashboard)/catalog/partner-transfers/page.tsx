@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Send, Download, Check, X, Plus, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Loader2, Send, Download, Check, X, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
+import ProductSearch, { ProductSearchResult } from '@/components/product-search';
 
 interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
 interface Transfer {
@@ -29,7 +30,7 @@ export default function PartnerTransfersPage() {
   // Modal state
   const [modal, setModal] = useState<null | 'send' | 'request' | 'receive' | 'approve'>(null);
   const [active, setActive] = useState<Transfer | null>(null);
-  const [rows, setRows] = useState<{ code: string; quantity: string }[]>([{ code: '', quantity: '' }]);
+  const [rows, setRows] = useState<{ code: string; name: string; quantity: string }[]>([]);
   const [wh, setWh] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -66,15 +67,17 @@ export default function PartnerTransfersPage() {
     setNotes('');
     setWh('');
     if (kind === 'send' || kind === 'request') {
-      setRows(prefillCode ? [{ code: prefillCode, quantity: '1' }] : [{ code: '', quantity: '' }]);
+      setRows(prefillCode ? [{ code: prefillCode, name: prefillCode, quantity: '1' }] : []);
     }
     setModal(kind);
   }
 
-  function addRow() { setRows((r) => [...r, { code: '', quantity: '' }]); }
+  function addProduct(p: ProductSearchResult) {
+    setRows((r) => (r.some((x) => x.code === p.code) ? r : [...r, { code: p.code, name: p.name, quantity: '1' }]));
+  }
   function rmRow(i: number) { setRows((r) => r.filter((_, idx) => idx !== i)); }
-  function setRow(i: number, k: 'code' | 'quantity', v: string) {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
+  function setQty(i: number, v: string) {
+    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, quantity: v } : row)));
   }
 
   async function submit() {
@@ -211,14 +214,30 @@ export default function PartnerTransfersPage() {
 
             {(modal === 'send' || modal === 'request') && (
               <>
-                {rows.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-2">
-                    <input placeholder="Código" value={r.code} onChange={(e) => setRow(i, 'code', e.target.value)} className="input-field flex-1 !py-2 text-sm" />
-                    <input placeholder="Cant." type="number" min="0" value={r.quantity} onChange={(e) => setRow(i, 'quantity', e.target.value)} className="input-field w-24 !py-2 text-sm" />
-                    <button onClick={() => rmRow(i)} className="text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
+                <div className="mb-2">
+                  <ProductSearch
+                    onSelect={addProduct}
+                    warehouseId={modal === 'send' ? (wh || undefined) : undefined}
+                    isAdded={(p) => rows.some((r) => r.code === p.code)}
+                    placeholder="Buscar artículo por código o nombre…"
+                  />
+                </div>
+                {rows.length === 0 ? (
+                  <p className="text-xs text-slate-500 mb-3">Busca y selecciona los artículos a {modal === 'send' ? 'enviar' : 'solicitar'}.</p>
+                ) : (
+                  <div className="mb-3 max-h-48 overflow-y-auto">
+                    {rows.map((r, i) => (
+                      <div key={r.code} className="flex items-center gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white truncate">{r.name}</div>
+                          <div className="text-[11px] font-mono text-green-400">{r.code}</div>
+                        </div>
+                        <input aria-label="Cantidad" placeholder="Cant." type="number" min="0" value={r.quantity} onChange={(e) => setQty(i, e.target.value)} className="input-field w-24 !py-2 text-sm" />
+                        <button onClick={() => rmRow(i)} className="text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <button onClick={addRow} className="text-xs text-sky-400 flex items-center gap-1 mb-3"><Plus size={13} /> Agregar item</button>
+                )}
               </>
             )}
 
