@@ -45,7 +45,7 @@ Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** 
 - **Fix** (`df86acb`): CxC/CxP ya no revientan (FK `createdById`) si el usuario no existe en esa BD (artefacto de la prueba local con cookie compartida entre :3000/:3001); se guarda `createdById=null`. En prod no aplica (dominios/usuarios separados) pero blinda la operación.
 - **Menú lateral** (`e8c14d5`): "Precios socio" y "Traslados socio" bajo CATÁLOGO, solo visibles si la integración está activa.
 - **Prueba local con datos REALES:** se clonaron de producción `total_db` y `totalturen_db` a local; se levantaron 2 instancias cruzadas (TOTAL :3000 / TOTAL TUREN :3001) desde un build único (`node dist/main` + `next start`, `API_PROXY_TARGET`), y se validaron consulta, precios (8 diffs reales), sync de altas y los 5 flujos de traslado con CxC/CxP y kardex. Copias locales: `grande_db`/`grande_db_b`/`total_db`/`totalturen_db`.
-- **DECISIÓN PENDIENTE (Feature C — copiar precios):** hoy aplica el precio del socio como **precio manual** (exacto pero congelado). Se evalúa opción de aplicarlo como **% de ganancia** (recalculado desde el costo propio → queda automático) — ver conversación; con costos distintos entre empresas el % puede salir raro/negativo.
+- **DECISIÓN (Feature C — copiar precios): se mantiene como PRECIO MANUAL.** Se evaluó aplicarlo como % de ganancia (recalculado desde el costo propio) pero se descartó: con costos distintos entre empresas, un % calculado haría que el precio de venta cambie al entrar el producto a un nuevo costo; manual mantiene el mismo precio de venta pase lo que pase con el costo. (Confirmado por Diego.)
 
 ---
 
