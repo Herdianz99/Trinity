@@ -805,7 +805,7 @@ export default function ProductDetailPage() {
               )}
               {partner.available && partner.product?.exists && (
                 <a
-                  href={`/catalog/partner-transfers?requestCode=${encodeURIComponent(code)}`}
+                  href={`/catalog/partner-transfers/new?kind=request&requestCode=${encodeURIComponent(code)}`}
                   className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-sky-400 hover:text-sky-300"
                 >
                   Solicitar traslado de este artículo →

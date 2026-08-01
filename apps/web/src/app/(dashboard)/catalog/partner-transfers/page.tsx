@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Loader2, Send, Download, Check, X, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
-import ProductSearch, { ProductSearchResult } from '@/components/product-search';
+import Link from 'next/link';
+import { Loader2, Send, Download, Check, X, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
 interface Transfer {
@@ -19,7 +18,6 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function PartnerTransfersPage() {
-  const search = useSearchParams();
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -27,12 +25,10 @@ export default function PartnerTransfersPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Modal state
-  const [modal, setModal] = useState<null | 'send' | 'request' | 'receive' | 'approve'>(null);
+  // Modales chicos: recibir / aprobar (solo eligen almacén)
+  const [modal, setModal] = useState<null | 'receive' | 'approve'>(null);
   const [active, setActive] = useState<Transfer | null>(null);
-  const [rows, setRows] = useState<{ code: string; name: string; quantity: string }[]>([]);
   const [wh, setWh] = useState('');
-  const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { document.title = 'Traslados socio | Trinity ERP'; }, []);
@@ -55,58 +51,20 @@ export default function PartnerTransfersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Prefill de "Solicitar traslado" desde la ficha de producto (?requestCode=)
-  useEffect(() => {
-    const rc = search.get('requestCode');
-    if (rc && enabled) openModal('request', null, rc);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  function openModal(kind: 'send' | 'request' | 'receive' | 'approve', t: Transfer | null, prefillCode?: string) {
-    setActive(t);
-    setNotes('');
-    setWh('');
-    if (kind === 'send' || kind === 'request') {
-      setRows(prefillCode ? [{ code: prefillCode, name: prefillCode, quantity: '1' }] : []);
-    }
-    setModal(kind);
-  }
-
-  function addProduct(p: ProductSearchResult) {
-    setRows((r) => (r.some((x) => x.code === p.code) ? r : [...r, { code: p.code, name: p.name, quantity: '1' }]));
-  }
-  function rmRow(i: number) { setRows((r) => r.filter((_, idx) => idx !== i)); }
-  function setQty(i: number, v: string) {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, quantity: v } : row)));
+  function openModal(kind: 'receive' | 'approve', t: Transfer) {
+    setActive(t); setWh(''); setModal(kind);
   }
 
   async function submit() {
+    if (!wh) { setMsg({ type: 'error', text: 'Elige el almacén.' }); return; }
     setBusy(true);
     setMsg(null);
     try {
-      let res: Response;
-      if (modal === 'send' || modal === 'request') {
-        const items = rows
-          .filter((r) => r.code.trim() && Number(r.quantity) > 0)
-          .map((r) => ({ code: r.code.trim(), quantity: Number(r.quantity) }));
-        if (items.length === 0) { setMsg({ type: 'error', text: 'Agrega al menos un item válido.' }); setBusy(false); return; }
-        if (modal === 'send' && !wh) { setMsg({ type: 'error', text: 'Elige el almacén origen.' }); setBusy(false); return; }
-        const body = modal === 'send' ? { fromWarehouseId: wh, items, notes } : { items, notes };
-        res = await fetch(`/api/proxy/integration/transfers/${modal}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-      } else if (modal === 'receive') {
-        if (!wh) { setMsg({ type: 'error', text: 'Elige el almacén destino.' }); setBusy(false); return; }
-        res = await fetch(`/api/proxy/integration/transfers/${active!.id}/receive`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toWarehouseId: wh }),
-        });
-      } else {
-        // approve
-        if (!wh) { setMsg({ type: 'error', text: 'Elige el almacén origen.' }); setBusy(false); return; }
-        res = await fetch(`/api/proxy/integration/transfers/${active!.id}/approve`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromWarehouseId: wh }),
-        });
-      }
+      const url = modal === 'receive'
+        ? `/api/proxy/integration/transfers/${active!.id}/receive`
+        : `/api/proxy/integration/transfers/${active!.id}/approve`;
+      const body = modal === 'receive' ? { toWarehouseId: wh } : { fromWarehouseId: wh };
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         setMsg({ type: 'success', text: 'Operación realizada.' });
         setModal(null);
@@ -152,8 +110,8 @@ export default function PartnerTransfersPage() {
           <p className="text-sm text-slate-400">Envía o solicita inventario a la empresa socia.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => openModal('send', null)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-3 rounded-lg text-sm"><Send size={16} /> Enviar</button>
-          <button onClick={() => openModal('request', null)} className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-3 rounded-lg text-sm"><Download size={16} /> Solicitar</button>
+          <Link href="/catalog/partner-transfers/new?kind=send" className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-3 rounded-lg text-sm"><Send size={16} /> Enviar</Link>
+          <Link href="/catalog/partner-transfers/new?kind=request" className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2 px-3 rounded-lg text-sm"><Download size={16} /> Solicitar</Link>
           <button onClick={load} className="text-slate-400 hover:text-slate-200 p-2"><RefreshCw size={16} /></button>
         </div>
       </div>
@@ -201,75 +159,21 @@ export default function PartnerTransfersPage() {
         </table>
       </div>
 
-      {/* Modal */}
-      {modal && (
+      {/* Modal chico: recibir / aprobar (solo elegir almacén) */}
+      {modal && active && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !busy && setModal(null)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-3">
-              {modal === 'send' && `Enviar a ${partnerName}`}
-              {modal === 'request' && `Solicitar a ${partnerName}`}
-              {modal === 'receive' && `Recibir ${active?.number}`}
-              {modal === 'approve' && `Aprobar y enviar ${active?.number}`}
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-1">
+              {modal === 'receive' ? `Recibir ${active.number}` : `Aprobar y enviar ${active.number}`}
             </h3>
-
-            {(modal === 'send' || modal === 'request') && (
-              <>
-                <div className="mb-2">
-                  <ProductSearch
-                    onSelect={addProduct}
-                    warehouseId={modal === 'send' ? (wh || undefined) : undefined}
-                    isAdded={(p) => rows.some((r) => r.code === p.code)}
-                    placeholder="Buscar artículo por código o nombre…"
-                  />
-                </div>
-                {rows.length === 0 ? (
-                  <p className="text-xs text-slate-500 mb-3">Busca y selecciona los artículos a {modal === 'send' ? 'enviar' : 'solicitar'}.</p>
-                ) : (
-                  <div className="mb-3 max-h-48 overflow-y-auto">
-                    {rows.map((r, i) => (
-                      <div key={r.code} className="flex items-center gap-2 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-white truncate">{r.name}</div>
-                          <div className="text-[11px] font-mono text-green-400">{r.code}</div>
-                        </div>
-                        <input aria-label="Cantidad" placeholder="Cant." type="number" min="0" value={r.quantity} onChange={(e) => setQty(i, e.target.value)} className="input-field w-24 !py-2 text-sm" />
-                        <button onClick={() => rmRow(i)} className="text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {(modal === 'send' || modal === 'approve') && (
-              <div className="mb-3">
-                <label className="block text-xs text-slate-400 mb-1">Almacén origen</label>
-                <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2 text-sm">
-                  <option value="">Selecciona…</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-            )}
-            {modal === 'receive' && (
-              <div className="mb-3">
-                <label className="block text-xs text-slate-400 mb-1">Almacén destino</label>
-                <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2 text-sm">
-                  <option value="">Selecciona…</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-            )}
-
-            {(modal === 'send' || modal === 'request') && (
-              <input placeholder="Notas (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="input-field w-full !py-2 text-sm mb-3" />
-            )}
-
-            {modal === 'approve' && active && (
-              <div className="mb-3 text-sm text-slate-300">
-                Se despacharán: {active.items?.map((i) => `${i.code} x${i.quantity}`).join(', ')}
-              </div>
-            )}
-
+            <p className="text-sm text-slate-400 mb-3">
+              {active.items?.map((i) => `${i.code} x${i.quantity}`).join(', ')}
+            </p>
+            <label className="block text-xs text-slate-400 mb-1">{modal === 'receive' ? 'Almacén destino' : 'Almacén origen'}</label>
+            <select value={wh} onChange={(e) => setWh(e.target.value)} className="input-field w-full !py-2 text-sm mb-4">
+              <option value="">Selecciona…</option>
+              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setModal(null)} disabled={busy} className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm">Cancelar</button>
               <button onClick={submit} disabled={busy} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2">
