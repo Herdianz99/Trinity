@@ -619,7 +619,7 @@ export default function InvoiceDetailPage() {
                     <Printer size={14} /> Imprimir PDF (carta)
                   </DropdownMenuItem>
                 )}
-                {canPrintPdf && !invoice.serie?.isFiscal && (
+                {canPrintPdf && (
                   <DropdownMenuItem
                     onClick={() => handleReprintTicket()}
                     disabled={ticketLoading}
