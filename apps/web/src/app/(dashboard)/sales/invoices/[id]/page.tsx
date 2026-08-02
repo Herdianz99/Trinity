@@ -613,11 +613,19 @@ export default function InvoiceDetailPage() {
                 )}
                 {canPrintPdf && (
                   <DropdownMenuItem
-                    onClick={() => { if (invoice.serie?.isFiscal) { window.open(`/api/proxy/invoices/${id}/pdf`, '_blank'); } else { handleReprintTicket(); } }}
+                    onClick={() => window.open(`/api/proxy/invoices/${id}/pdf`, '_blank')}
+                    className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+                  >
+                    <Printer size={14} /> Imprimir PDF (carta)
+                  </DropdownMenuItem>
+                )}
+                {canPrintPdf && !invoice.serie?.isFiscal && (
+                  <DropdownMenuItem
+                    onClick={() => handleReprintTicket()}
                     disabled={ticketLoading}
                     className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
                   >
-                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} {invoice.serie?.isFiscal ? 'Imprimir PDF (carta)' : 'Imprimir ticket'}
+                    {ticketLoading ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir ticket
                   </DropdownMenuItem>
                 )}
                 {canPrintPdf && (
