@@ -16,6 +16,11 @@ const IVA_LABELS: Record<string, string> = {
 export class InvoicePdfService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Formatea kg sin decimales innecesarios: 37 -> "37", 37.5 -> "37,5", 3.75 -> "3,75".
+  private fmtWeight(kg: number): string {
+    return kg.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
   // Reporte de ventas agrupado por vendedor: por factura (correlativo - cliente)
   // y debajo los items (descripcion, cantidad, precio, descuento). Respeta los
   // mismos filtros que el listado de facturas.
@@ -191,6 +196,17 @@ export class InvoicePdfService {
 
     const config = await this.prisma.companyConfig.findFirst();
 
+    // Peso por articulo (kg): el InvoiceItem no lo guarda, se lee del producto actual.
+    // Solo se muestra la columna de peso si algun articulo de la factura tiene peso
+    // configurado (asi las empresas que no manejan peso ven la factura igual que siempre).
+    const weightProductIds = [...new Set(invoice.items.map((it) => it.productId))];
+    const weightProducts = weightProductIds.length
+      ? await this.prisma.product.findMany({ where: { id: { in: weightProductIds } }, select: { id: true, weight: true } })
+      : [];
+    const weightMap = new Map(weightProducts.map((p) => [p.id, p.weight || 0]));
+    const hasWeight = invoice.items.some((it) => (weightMap.get(it.productId) || 0) > 0);
+    let totalWeight = 0;
+
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
       const buffers: Buffer[] = [];
@@ -254,17 +270,27 @@ export class InvoicePdfService {
 
       y += 10;
 
-      // Items table header
-      const colX = { code: 40, desc: 100, qty: 320, price: 370, iva: 430, total: 490 };
+      // Items table header. Con peso, se comprimen las columnas para encajar "Peso"
+      // (guia de carga); sin peso, el layout es identico al de siempre.
+      const cols = hasWeight
+        ? {
+            code: { x: 40, w: 50 }, desc: { x: 94, w: 214 }, qty: { x: 312, w: 34 },
+            price: { x: 350, w: 46 }, iva: { x: 398, w: 52 }, peso: { x: 454, w: 44 }, total: { x: 502, w: 70 },
+          }
+        : {
+            code: { x: 40, w: 55 }, desc: { x: 100, w: 215 }, qty: { x: 320, w: 40 },
+            price: { x: 370, w: 50 }, iva: { x: 430, w: 50 }, peso: null, total: { x: 490, w: 70 },
+          };
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 5;
       doc.fontSize(8).font('Helvetica-Bold');
-      doc.text('Codigo', colX.code, y);
-      doc.text('Descripcion', colX.desc, y);
-      doc.text('Cant.', colX.qty, y, { width: 40, align: 'right' });
-      doc.text('P. Unit.', colX.price, y, { width: 50, align: 'right' });
-      doc.text('% IVA', colX.iva, y, { width: 50, align: 'right' });
-      doc.text('Total USD', colX.total, y, { width: 70, align: 'right' });
+      doc.text('Codigo', cols.code.x, y);
+      doc.text('Descripcion', cols.desc.x, y);
+      doc.text('Cant.', cols.qty.x, y, { width: cols.qty.w, align: 'right' });
+      doc.text('P. Unit.', cols.price.x, y, { width: cols.price.w, align: 'right' });
+      doc.text('% IVA', cols.iva.x, y, { width: cols.iva.w, align: 'right' });
+      if (cols.peso) doc.text('Peso', cols.peso.x, y, { width: cols.peso.w, align: 'right' });
+      doc.text('Total USD', cols.total.x, y, { width: cols.total.w, align: 'right' });
       y += 14;
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 5;
@@ -274,18 +300,23 @@ export class InvoicePdfService {
       for (const item of invoice.items) {
         // Altura dinamica: la descripcion puede ocupar 2 lineas.
         doc.fontSize(8).font('Helvetica');
-        const descH = doc.heightOfString(item.productName, { width: 215 });
+        const descH = doc.heightOfString(item.productName, { width: cols.desc.w });
         const rowH = Math.max(14, descH + 2);
         if (y + rowH > 720) {
           doc.addPage();
           y = 40;
         }
-        doc.text(item.productId.slice(0, 8), colX.code, y, { width: 55 });
-        doc.text(item.productName, colX.desc, y, { width: 215 });
-        doc.text(item.quantity.toString(), colX.qty, y, { width: 40, align: 'right', lineBreak: false });
-        doc.text(`$${item.unitPrice.toFixed(2)}`, colX.price, y, { width: 50, align: 'right', lineBreak: false });
-        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right', lineBreak: false });
-        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right', lineBreak: false });
+        doc.text(item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w });
+        doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
+        doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
+        doc.text(`$${item.unitPrice.toFixed(2)}`, cols.price.x, y, { width: cols.price.w, align: 'right', lineBreak: false });
+        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, cols.iva.x, y, { width: cols.iva.w, align: 'right', lineBreak: false });
+        if (cols.peso) {
+          const lineWeight = item.quantity * (weightMap.get(item.productId) || 0);
+          totalWeight += lineWeight;
+          doc.text(lineWeight > 0 ? `${this.fmtWeight(lineWeight)} kg` : '—', cols.peso.x, y, { width: cols.peso.w, align: 'right', lineBreak: false });
+        }
+        doc.text(`$${item.totalUsd.toFixed(2)}`, cols.total.x, y, { width: cols.total.w, align: 'right', lineBreak: false });
         y += rowH;
       }
 
@@ -300,27 +331,39 @@ export class InvoicePdfService {
       }
 
       const totalsX = 380;
+      const amtX = cols.total.x;
+      const amtW = cols.total.w;
       doc.fontSize(9).font('Helvetica');
-      doc.text('Subtotal:', totalsX, y); doc.text(`$${invoice.subtotalUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 14;
+      doc.text('Subtotal:', totalsX, y); doc.text(`$${invoice.subtotalUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
 
       for (const [type, amount] of Object.entries(ivaByType)) {
         if (amount > 0) {
-          doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 14;
+          doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
         }
       }
 
       // IGTF line (if applicable)
       if (invoice.igtfUsd > 0) {
-        doc.text(`IGTF (3%):`, totalsX, y); doc.text(`$${invoice.igtfUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 14;
+        doc.text(`IGTF (3%):`, totalsX, y); doc.text(`$${invoice.igtfUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
       }
 
       y += 2;
       doc.moveTo(totalsX, y).lineTo(40 + pageWidth, y).stroke('#333333');
       y += 5;
       doc.fontSize(11).font('Helvetica-Bold');
-      doc.text('TOTAL USD:', totalsX, y); doc.text(`$${invoice.totalUsd.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 16;
+      doc.text('TOTAL USD:', totalsX, y); doc.text(`$${invoice.totalUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 16;
       doc.fontSize(9).font('Helvetica');
-      doc.text('TOTAL Bs:', totalsX, y); doc.text(`Bs ${invoice.totalBs.toFixed(2)}`, colX.total, y, { width: 70, align: 'right' }); y += 20;
+      doc.text('TOTAL Bs:', totalsX, y); doc.text(`Bs ${invoice.totalBs.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 20;
+
+      // Peso total (guia de carga para el camion) — solo si hay pesos configurados.
+      if (hasWeight && totalWeight > 0) {
+        doc.moveTo(40, y - 6).lineTo(40 + pageWidth, y - 6).stroke('#cccccc');
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000');
+        doc.text('PESO TOTAL DE LA CARGA:', 40, y);
+        doc.text(`${this.fmtWeight(totalWeight)} kg`, amtX, y, { width: amtW, align: 'right' });
+        y += 20;
+        doc.fontSize(9).font('Helvetica');
+      }
 
       // Payments
       if (invoice.payments.length > 0) {

@@ -24,7 +24,7 @@ const defaultForm = {
   costUsd: '0', manualCost: false, bregaApplies: true,
   manualPrice: false, priceDetal: '0', priceMayor: '0',
   gananciaPct: '0', gananciaMayorPct: '0',
-  ivaType: 'GENERAL', minStock: 0, isActive: true, saleBlocked: false, isService: false,
+  ivaType: 'GENERAL', minStock: 0, weight: '0', isActive: true, saleBlocked: false, isService: false,
   showInStore: false, storeFeatured: false,
 };
 
@@ -134,7 +134,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
             manualPrice: !!p.manualPrice,
             priceDetal: String(p.priceDetal ?? 0), priceMayor: String(p.priceMayor ?? 0),
             gananciaPct: String(p.gananciaPct ?? 0), gananciaMayorPct: String(p.gananciaMayorPct ?? 0),
-            ivaType: p.ivaType || 'GENERAL', minStock: p.minStock ?? 0,
+            ivaType: p.ivaType || 'GENERAL', minStock: p.minStock ?? 0, weight: String(p.weight ?? 0),
             isActive: p.isActive !== false, saleBlocked: !!p.saleBlocked, isService: !!p.isService,
             showInStore: !!p.showInStore, storeFeatured: !!p.storeFeatured,
           });
@@ -270,6 +270,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         gananciaMayorPct: Number(priceGananciaMayorPct.toFixed(2)),
         ivaType: form.ivaType,
         minStock: Number(form.minStock),
+        weight: parseNum(form.weight),
         isActive: form.isActive,
         saleBlocked: form.saleBlocked,
         isService: form.isService,
@@ -533,6 +534,11 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
                   <input type="number" step="1" value={form.minStock} onChange={e => setForm(f => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Peso unitario (kg)</label>
+                  <input type="text" inputMode="decimal" value={form.weight} onChange={e => setForm(f => ({ ...f, weight: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm font-mono" placeholder="0" />
+                  <p className="text-[10px] text-slate-500 mt-1">Sale en la guia de carga del PDF de factura (peso total por linea)</p>
                 </div>
                 <div className="flex items-center gap-6 pb-1">
                   <Toggle checked={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} label="Producto activo" />

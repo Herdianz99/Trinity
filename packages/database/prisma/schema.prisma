@@ -519,6 +519,7 @@ model Product {
   ivaType          IvaType                  @default(GENERAL)
   priceDetal       Float                    @default(0)
   priceMayor       Float                    @default(0)
+  weight           Float                    @default(0) // peso unitario en kg (para guia de carga en el PDF de factura)
   minStock         Float                    @default(0)
   isActive         Boolean                  @default(true)
   saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar

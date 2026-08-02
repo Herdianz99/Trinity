@@ -36,6 +36,7 @@ interface Product {
   ivaType: string;
   priceDetal: number;
   priceMayor: number;
+  weight: number;
   minStock: number;
   isActive: boolean;
   saleBlocked?: boolean;
@@ -191,6 +192,7 @@ export default function ProductDetailPage() {
         gananciaMayorPct: String(data.gananciaMayorPct ?? ''),
         ivaType: data.ivaType,
         minStock: data.minStock,
+        weight: String(data.weight ?? 0),
         isActive: data.isActive,
         saleBlocked: data.saleBlocked ?? false,
         showInStore: data.showInStore ?? false,
@@ -339,6 +341,7 @@ export default function ProductDetailPage() {
         saleUnit: form.saleUnit,
         conversionFactor: Number(form.conversionFactor),
         minStock: Number(form.minStock),
+        weight: parseNum(form.weight),
         isActive: form.isActive,
         saleBlocked: form.saleBlocked,
         showInStore: form.showInStore,
@@ -704,6 +707,10 @@ export default function ProductDetailPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Stock minimo</label>
                   <input type="number" step="1" value={form.minStock ?? ''} onChange={e => setForm((f: any) => ({ ...f, minStock: Number(e.target.value) }))} className="input-field !py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Peso unitario (kg)</label>
+                  <input type="text" inputMode="decimal" value={form.weight ?? ''} onChange={e => setForm((f: any) => ({ ...f, weight: sanitizeDecimal(e.target.value) }))} className="input-field !py-2 text-sm font-mono" placeholder="0" />
                 </div>
                 <div className="flex items-end pb-1">
                   <Toggle checked={form.isService ?? false} onChange={v => setForm((f: any) => ({ ...f, isService: v }))} label="Es servicio (no maneja inventario)" color="cyan" />

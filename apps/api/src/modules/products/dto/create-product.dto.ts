@@ -114,6 +114,12 @@ export class CreateProductDto {
   @IsEnum(IvaType)
   ivaType?: IvaType;
 
+  @ApiProperty({ required: false, default: 0, description: 'Peso unitario en kg (para la guia de carga del PDF de factura)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weight?: number;
+
   @ApiProperty({ required: false, default: 0 })
   @IsOptional()
   @IsNumber()
