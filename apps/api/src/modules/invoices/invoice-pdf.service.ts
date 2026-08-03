@@ -189,12 +189,18 @@ export class InvoicePdfService {
         cashRegister: true,
         items: true,
         payments: { include: { method: true } },
+        serie: true,
       },
     });
 
     if (!invoice) throw new NotFoundException('Factura no encontrada');
 
     const config = await this.prisma.companyConfig.findFirst();
+
+    // Series fiscales -> "FACTURA" con desglose de IVA. Series no fiscales
+    // (notas de entrega, ej. aceros) -> "NOTA DE ENTREGA" sin ninguna referencia a IVA.
+    const isFiscal = invoice.serie?.isFiscal === true;
+    const docTitle = isFiscal ? 'FACTURA' : 'NOTA DE ENTREGA';
 
     // Peso por articulo (kg): el InvoiceItem no lo guarda, se lee del producto actual.
     // Solo se muestra la columna de peso si algun articulo de la factura tiene peso
@@ -241,7 +247,7 @@ export class InvoicePdfService {
       // Invoice info (right side)
       const rightX = 350;
       let ry = 40;
-      doc.fontSize(12).font('Helvetica-Bold').text('FACTURA', rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
+      doc.fontSize(12).font('Helvetica-Bold').text(docTitle, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
       ry += 18;
       doc.fontSize(9).font('Helvetica');
       doc.text(`No: ${invoice.number || 'S/N'}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 12;
@@ -272,15 +278,27 @@ export class InvoicePdfService {
 
       // Items table header. Con peso, se comprimen las columnas para encajar "Peso"
       // (guia de carga); sin peso, el layout es identico al de siempre.
-      const cols = hasWeight
-        ? {
-            code: { x: 40, w: 50 }, desc: { x: 94, w: 214 }, qty: { x: 312, w: 34 },
-            price: { x: 350, w: 46 }, iva: { x: 398, w: 52 }, peso: { x: 454, w: 44 }, total: { x: 502, w: 70 },
-          }
-        : {
-            code: { x: 40, w: 55 }, desc: { x: 100, w: 215 }, qty: { x: 320, w: 40 },
-            price: { x: 370, w: 50 }, iva: { x: 430, w: 50 }, peso: null, total: { x: 490, w: 70 },
-          };
+      // La columna "% IVA" solo existe en series fiscales. En notas de entrega
+      // se elimina y su espacio se reparte a descripcion / demas columnas.
+      const cols = isFiscal
+        ? (hasWeight
+            ? {
+                code: { x: 40, w: 50 }, desc: { x: 94, w: 214 }, qty: { x: 312, w: 34 },
+                price: { x: 350, w: 46 }, iva: { x: 398, w: 52 }, peso: { x: 454, w: 44 }, total: { x: 502, w: 70 },
+              }
+            : {
+                code: { x: 40, w: 55 }, desc: { x: 100, w: 215 }, qty: { x: 320, w: 40 },
+                price: { x: 370, w: 50 }, iva: { x: 430, w: 50 }, peso: null, total: { x: 490, w: 70 },
+              })
+        : (hasWeight
+            ? {
+                code: { x: 40, w: 50 }, desc: { x: 94, w: 250 }, qty: { x: 350, w: 40 },
+                price: { x: 398, w: 52 }, iva: null, peso: { x: 456, w: 46 }, total: { x: 506, w: 66 },
+              }
+            : {
+                code: { x: 40, w: 55 }, desc: { x: 100, w: 260 }, qty: { x: 366, w: 44 },
+                price: { x: 416, w: 60 }, iva: null, peso: null, total: { x: 482, w: 90 },
+              });
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 5;
       doc.fontSize(8).font('Helvetica-Bold');
@@ -288,7 +306,7 @@ export class InvoicePdfService {
       doc.text('Descripcion', cols.desc.x, y);
       doc.text('Cant.', cols.qty.x, y, { width: cols.qty.w, align: 'right' });
       doc.text('P. Unit.', cols.price.x, y, { width: cols.price.w, align: 'right' });
-      doc.text('% IVA', cols.iva.x, y, { width: cols.iva.w, align: 'right' });
+      if (cols.iva) doc.text('% IVA', cols.iva.x, y, { width: cols.iva.w, align: 'right' });
       if (cols.peso) doc.text('Peso', cols.peso.x, y, { width: cols.peso.w, align: 'right' });
       doc.text('Total USD', cols.total.x, y, { width: cols.total.w, align: 'right' });
       y += 14;
@@ -310,7 +328,7 @@ export class InvoicePdfService {
         doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
         doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
         doc.text(`$${item.unitPrice.toFixed(2)}`, cols.price.x, y, { width: cols.price.w, align: 'right', lineBreak: false });
-        doc.text(IVA_LABELS[item.ivaType] || item.ivaType, cols.iva.x, y, { width: cols.iva.w, align: 'right', lineBreak: false });
+        if (cols.iva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, cols.iva.x, y, { width: cols.iva.w, align: 'right', lineBreak: false });
         if (cols.peso) {
           const lineWeight = item.quantity * (weightMap.get(item.productId) || 0);
           totalWeight += lineWeight;
@@ -324,21 +342,25 @@ export class InvoicePdfService {
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 10;
 
-      // IVA breakdown
-      const ivaByType: Record<string, number> = {};
-      for (const item of invoice.items) {
-        ivaByType[item.ivaType] = (ivaByType[item.ivaType] || 0) + item.ivaAmount;
-      }
-
       const totalsX = 380;
       const amtX = cols.total.x;
       const amtW = cols.total.w;
       doc.fontSize(9).font('Helvetica');
-      doc.text('Subtotal:', totalsX, y); doc.text(`$${invoice.subtotalUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
+      // Subtotal: solo en series fiscales. Las notas de entrega van directo al TOTAL.
+      if (isFiscal) {
+        doc.text('Subtotal:', totalsX, y); doc.text(`$${invoice.subtotalUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
+      }
 
-      for (const [type, amount] of Object.entries(ivaByType)) {
-        if (amount > 0) {
-          doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
+      // Desglose de IVA: solo en series fiscales. Las notas de entrega no muestran IVA.
+      if (isFiscal) {
+        const ivaByType: Record<string, number> = {};
+        for (const item of invoice.items) {
+          ivaByType[item.ivaType] = (ivaByType[item.ivaType] || 0) + item.ivaAmount;
+        }
+        for (const [type, amount] of Object.entries(ivaByType)) {
+          if (amount > 0) {
+            doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 14;
+          }
         }
       }
 
@@ -353,14 +375,19 @@ export class InvoicePdfService {
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text('TOTAL USD:', totalsX, y); doc.text(`$${invoice.totalUsd.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 16;
       doc.fontSize(9).font('Helvetica');
-      doc.text('TOTAL Bs:', totalsX, y); doc.text(`Bs ${invoice.totalBs.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 20;
+      // TOTAL Bs: solo en series fiscales (requisito legal). Las notas de entrega no lo muestran.
+      if (isFiscal) {
+        doc.text('TOTAL Bs:', totalsX, y); doc.text(`Bs ${invoice.totalBs.toFixed(2)}`, amtX, y, { width: amtW, align: 'right' }); y += 20;
+      } else {
+        y += 4;
+      }
 
       // Peso total (guia de carga para el camion) — solo si hay pesos configurados.
       if (hasWeight && totalWeight > 0) {
         doc.moveTo(40, y - 6).lineTo(40 + pageWidth, y - 6).stroke('#cccccc');
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#000');
-        doc.text('PESO TOTAL DE LA CARGA:', 40, y);
-        doc.text(`${this.fmtWeight(totalWeight)} kg`, amtX, y, { width: amtW, align: 'right' });
+        doc.text('PESO TOTAL DE LA CARGA:  ', 40, y, { continued: true });
+        doc.text(`${this.fmtWeight(totalWeight)} kg`);
         y += 20;
         doc.fontSize(9).font('Helvetica');
       }
