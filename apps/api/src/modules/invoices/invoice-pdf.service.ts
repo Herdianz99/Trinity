@@ -327,7 +327,13 @@ export class InvoicePdfService {
         doc.text(item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w });
         doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
         doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
-        doc.text(`$${item.unitPrice.toFixed(2)}`, cols.price.x, y, { width: cols.price.w, align: 'right', lineBreak: false });
+        // En notas de entrega (no fiscal) el P. Unit se muestra CON IVA incluido
+        // (unitPrice + IVA por unidad), para que P.Unit x Cant cuadre con el Total.
+        // En facturas fiscales el P. Unit va sin IVA (el IVA se desglosa aparte).
+        const unitPriceShown = isFiscal
+          ? item.unitPrice
+          : item.unitPrice + (item.quantity > 0 ? item.ivaAmount / item.quantity : 0);
+        doc.text(`$${unitPriceShown.toFixed(2)}`, cols.price.x, y, { width: cols.price.w, align: 'right', lineBreak: false });
         if (cols.iva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, cols.iva.x, y, { width: cols.iva.w, align: 'right', lineBreak: false });
         if (cols.peso) {
           const lineWeight = item.quantity * (weightMap.get(item.productId) || 0);

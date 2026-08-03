@@ -272,6 +272,9 @@ model CompanyConfig {
   igtfPct                 Float    @default(3)
   fiscalCreditCode        String   @default("10")
   allowNegativeStock      Boolean  @default(true)
+  // Si true, al elegir un cliente sin direccion en el POS se muestra un aviso (patron del telefono).
+  // Opt-in por empresa (default false = sin cambios para las demas).
+  requireCustomerAddress  Boolean  @default(false)
   defaultCustomerId       String?
   logo                    String?  @db.Text
   stampImage              String?  @db.Text

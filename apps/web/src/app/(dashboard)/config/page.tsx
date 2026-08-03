@@ -22,6 +22,7 @@ interface CompanyConfig {
   isIGTFContributor: boolean;
   igtfPct: number;
   allowNegativeStock: boolean;
+  requireCustomerAddress: boolean;
   defaultCustomerId: string;
   retentionProvidencia: string;
   retentionNextNumber: number;
@@ -55,6 +56,7 @@ export default function ConfigPage() {
     isIGTFContributor: false,
     igtfPct: 3,
     allowNegativeStock: true,
+    requireCustomerAddress: false,
     defaultCustomerId: '',
     retentionProvidencia: 'SNAT/2025/000054',
     retentionNextNumber: 1,
@@ -194,6 +196,7 @@ export default function ConfigPage() {
           isIGTFContributor: data.isIGTFContributor || false,
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
+          requireCustomerAddress: data.requireCustomerAddress ?? false,
           defaultCustomerId: data.defaultCustomerId || '',
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
           retentionNextNumber: data.retentionNextNumber ?? 1,
@@ -266,6 +269,7 @@ export default function ConfigPage() {
           isIGTFContributor: config.isIGTFContributor,
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
+          requireCustomerAddress: config.requireCustomerAddress,
           defaultCustomerId: config.defaultCustomerId || null,
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
@@ -336,8 +340,8 @@ export default function ConfigPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 500 * 1024) {
-      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 500KB' });
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 2MB' });
       return;
     }
 
@@ -361,8 +365,8 @@ export default function ConfigPage() {
   function handleStampChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 500 * 1024) {
-      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 500KB' });
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'La imagen debe pesar menos de 2MB' });
       return;
     }
     const reader = new FileReader();
@@ -493,7 +497,7 @@ export default function ConfigPage() {
             <h2 className="text-lg font-semibold text-white">Logo de la Empresa</h2>
           </div>
           <p className="text-sm text-slate-400 mb-4">
-            Este logo aparecera en facturas, cotizaciones, recibos y notas de credito/debito. Maximo 500KB.
+            Este logo aparecera en facturas, cotizaciones, recibos y notas de credito/debito. Maximo 2MB.
           </p>
           <div className="flex items-start gap-6">
             {logoPreview ? (
@@ -555,7 +559,7 @@ export default function ConfigPage() {
             <h2 className="text-lg font-semibold text-white">Firma y Sello (Retenciones)</h2>
           </div>
           <p className="text-sm text-slate-400 mb-4">
-            Imagen de firma y sello que aparecera en los comprobantes de retencion IVA. Maximo 500KB.
+            Imagen de firma y sello que aparecera en los comprobantes de retencion IVA. Maximo 2MB.
           </p>
           <div className="flex items-start gap-6">
             {stampPreview ? (
@@ -878,6 +882,18 @@ export default function ConfigPage() {
                 <div>
                   <span className="text-sm text-white">Permitir ventas sin stock</span>
                   <p className="text-xs text-slate-500">Si esta desactivado, no se podran facturar productos con stock insuficiente</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.requireCustomerAddress}
+                  onChange={(e) => handleChange('requireCustomerAddress', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Direccion del cliente obligatoria</span>
+                  <p className="text-xs text-slate-500">Si esta activado, al elegir un cliente sin direccion en el POS aparece un aviso para agregarla</p>
                 </div>
               </label>
             </div>

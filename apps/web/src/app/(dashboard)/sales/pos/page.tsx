@@ -248,6 +248,7 @@ export default function POSPage() {
   const [showCustomerReminder, setShowCustomerReminder] = useState(false);
   // Aviso (no bloqueante) al elegir un cliente sin telefono registrado
   const [showPhoneReminder, setShowPhoneReminder] = useState(false);
+  const [showAddressReminder, setShowAddressReminder] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -264,7 +265,7 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean; defaultCustomerId?: string | null } | null>(null);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean; requireCustomerAddress?: boolean; defaultCustomerId?: string | null } | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
@@ -520,6 +521,7 @@ export default function POSPage() {
           address: data.address || '',
           phone: data.phone || '',
           allowNegativeStock: data.allowNegativeStock ?? true,
+          requireCustomerAddress: data.requireCustomerAddress ?? false,
           defaultCustomerId: data.defaultCustomerId || null,
         });
       });
@@ -920,9 +922,15 @@ export default function POSPage() {
     setCustomerSearch('');
     setCustomerResults([]);
     setShowCustomerSearch(false);
-    // Recordatorio: si el cliente (real, no el por defecto) no tiene telefono, invitar a agregarlo.
+    // Recordatorio: si el cliente (real, no el por defecto) no tiene direccion/telefono, invitar a agregarlo.
+    // La direccion solo se exige si la empresa activo el flag requireCustomerAddress (opt-in).
+    // Se prioriza el aviso de direccion para no encimar dos modales a la vez.
     const isDefault = c.id === companyConfig?.defaultCustomerId || c.isDefault;
-    if (!isDefault && !String(c.phone || '').trim()) {
+    const needAddress = companyConfig?.requireCustomerAddress && !isDefault && !String(c.address || '').trim();
+    const needPhone = !isDefault && !String(c.phone || '').trim();
+    if (needAddress) {
+      setShowAddressReminder(true);
+    } else if (needPhone) {
       setShowPhoneReminder(true);
     }
   }
@@ -1610,6 +1618,11 @@ export default function POSPage() {
   async function handleSaveClient(isEdit: boolean) {
     if (!clientForm.phone.trim()) {
       setMessage({ type: 'error', text: 'El telefono del cliente es obligatorio' });
+      return;
+    }
+    // Direccion obligatoria solo si la empresa activo el flag (opt-in).
+    if (companyConfig?.requireCustomerAddress && !clientForm.address.trim()) {
+      setMessage({ type: 'error', text: 'La direccion del cliente es obligatoria' });
       return;
     }
     setSavingClient(true);
@@ -2880,7 +2893,7 @@ export default function POSPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Direccion</label>
+                  <label className="text-xs text-slate-500 mb-1 block">Direccion {companyConfig?.requireCustomerAddress && <span className="text-red-400">*</span>}</label>
                   <input
                     type="text"
                     value={clientForm.address}
@@ -2904,7 +2917,7 @@ export default function POSPage() {
                 <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={() => handleSaveClient(showEditClient)}
-                  disabled={savingClient || !clientForm.name.trim() || !clientForm.phone.trim()}
+                  disabled={savingClient || !clientForm.name.trim() || !clientForm.phone.trim() || (companyConfig?.requireCustomerAddress && !clientForm.address.trim())}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
                 >
                   {savingClient && <Loader2 className="animate-spin" size={14} />}
@@ -3079,6 +3092,40 @@ export default function POSPage() {
                 className="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-colors"
               >
                 Agregar telefono
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: cliente sin direccion (solo si la empresa exige direccion) — invita a agregarla */}
+      {showAddressReminder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl max-w-sm w-full p-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <User size={18} className="text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">Cliente sin direccion</h3>
+                <p className="text-sm text-slate-300 mt-1">
+                  <span className="font-semibold text-white">{customerName}</span> no tiene una direccion
+                  registrada. ¿Deseas agregarla ahora?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowAddressReminder(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm font-medium hover:bg-slate-700/50 transition-colors"
+              >
+                Ahora no
+              </button>
+              <button
+                onClick={() => { setShowAddressReminder(false); openEditClient(); }}
+                className="flex-1 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-colors"
+              >
+                Agregar direccion
               </button>
             </div>
           </div>

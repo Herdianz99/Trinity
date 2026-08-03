@@ -87,6 +87,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   allowNegativeStock?: boolean;
 
+  // Opt-in: si true, el POS avisa al elegir un cliente sin direccion (patron del telefono).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  requireCustomerAddress?: boolean;
+
   // Interruptor del libro mayor de caja (arqueo lee del CashLedgerEntry). Reversa instantánea.
   @ApiProperty({ required: false })
   @IsOptional()

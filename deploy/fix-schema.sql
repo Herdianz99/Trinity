@@ -2533,3 +2533,6 @@ CREATE TABLE IF NOT EXISTS "PartnerTransfer" (
   CONSTRAINT "PartnerTransfer_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "PartnerTransfer_number_key" ON "PartnerTransfer"("number");
+
+-- Flag opt-in: exigir direccion del cliente (aviso en POS). Ses. aceros/acerosmayor.
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "requireCustomerAddress" BOOLEAN NOT NULL DEFAULT false;
