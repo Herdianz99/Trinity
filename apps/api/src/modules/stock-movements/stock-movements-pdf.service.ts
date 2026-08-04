@@ -68,6 +68,153 @@ export class StockMovementsPdfService {
     });
   }
 
+  async generateCostReport(
+    rows: {
+      createdAt: Date;
+      code: string;
+      name: string;
+      warehouse: string;
+      type: string;
+      quantity: number;
+      unitCost: number;
+      lineCost: number;
+    }[],
+    summary: Summary,
+    totalCost: number,
+  ): Promise<Buffer> {
+    const company = await this.getCompanyName();
+    const doc = new PDFDocument({
+      size: 'LETTER',
+      layout: 'portrait',
+      margins: { top: 40, bottom: 40, left: 30, right: 30 },
+      bufferPages: true,
+    });
+
+    const pageRight = doc.page.width - 30;
+    const m$ = (n: number) => (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // ── Encabezado ──
+    doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 30, 36);
+    doc.fontSize(11).font('Helvetica-Bold').text('Costo de Movimientos de Stock', 30, 56);
+
+    const parts: string[] = [];
+    if (summary.from || summary.to) parts.push(`Periodo: ${summary.from || '...'} a ${summary.to || '...'}`);
+    if (summary.warehouseName) parts.push(`Almacen: ${summary.warehouseName}`);
+    if (summary.type) parts.push(`Tipo: ${TYPE_LABELS[summary.type] || summary.type}`);
+    if (summary.supplierName) parts.push(`Proveedor: ${summary.supplierName}`);
+    if (summary.product) parts.push(`Producto: ${summary.product}`);
+    doc.fontSize(8).font('Helvetica').fillColor('#475569');
+    doc.text(parts.length ? parts.join('   |   ') : 'Sin filtros (todos los movimientos)', 30, 74, { width: pageRight - 30 });
+    doc.text(`Generado: ${this.fmtDateTime(new Date())}   |   ${rows.length} movimientos`, 30, 86);
+    doc.fillColor('#000');
+    doc.moveTo(30, 100).lineTo(pageRight, 100).stroke('#94a3b8');
+
+    // ── Columnas (carta vertical, x de 30 a 582) ──
+    const columns = [
+      { label: 'Fecha', x: 30, width: 66 },
+      { label: 'Codigo', x: 96, width: 58 },
+      { label: 'Producto', x: 154, width: 168 },
+      { label: 'Tipo', x: 322, width: 54 },
+      { label: 'Cantidad', x: 376, width: 52, align: 'right' as const },
+      { label: 'Costo unit.', x: 428, width: 68, align: 'right' as const },
+      { label: 'Costo total', x: 496, width: 86, align: 'right' as const },
+    ];
+
+    let y = 108;
+
+    const drawColHeaders = () => {
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
+      for (const c of columns) doc.text(c.label, c.x, y, { width: c.width, align: (c as any).align });
+      doc.fillColor('#000');
+      y += 13;
+      doc.moveTo(30, y).lineTo(pageRight, y).stroke('#e2e8f0');
+      y += 4;
+    };
+
+    const ensureSpace = (needed: number) => {
+      if (y + needed > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        y = 40;
+        drawColHeaders();
+        return true;
+      }
+      return false;
+    };
+
+    drawColHeaders();
+    doc.fontSize(8).font('Helvetica');
+    for (const r of rows) {
+      const values = [
+        this.fmtDateTime(r.createdAt),
+        r.code,
+        r.name,
+        TYPE_LABELS[r.type] || r.type,
+        `${r.quantity}`,
+        `$${m$(r.unitCost)}`,
+        `$${m$(r.lineCost)}`,
+      ];
+
+      let rowHeight = 11;
+      for (let i = 0; i < columns.length; i++) {
+        const h = doc.heightOfString(values[i] || '', { width: columns[i].width });
+        if (h > rowHeight) rowHeight = h;
+      }
+      rowHeight += 3;
+
+      ensureSpace(rowHeight);
+
+      doc.fillColor('#1e293b');
+      for (let i = 0; i < columns.length; i++) {
+        doc.text(values[i] || '', columns[i].x, y, {
+          width: columns[i].width,
+          align: (columns[i] as any).align,
+          lineBreak: true,
+        });
+      }
+      doc.fillColor('#000');
+      y += rowHeight;
+    }
+
+    // ── Total general ──
+    ensureSpace(30);
+    doc.moveTo(30, y).lineTo(pageRight, y).stroke('#94a3b8');
+    y += 5;
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#0f766e');
+    doc.text(`COSTO TOTAL:  $${m$(totalCost)}`, 30, y, { width: pageRight - 30, align: 'right' });
+    doc.fillColor('#000');
+
+    if (rows.length === 0) {
+      doc.fontSize(10).font('Helvetica').fillColor('#64748b');
+      doc.text('No hay movimientos que coincidan con los filtros seleccionados.', 30, 120);
+      doc.fillColor('#000');
+    }
+
+    // ── Paginacion ──
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const oldBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('#64748b')
+        .text(`Pagina ${i + 1} de ${range.count}`, 30, doc.page.height - 26, {
+          align: 'center',
+          width: doc.page.width - 60,
+        });
+      doc.fillColor('#000');
+      doc.page.margins.bottom = oldBottom;
+    }
+
+    doc.end();
+    return new Promise((resolve) => {
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+  }
+
   async generateByCategory(
     groups: Group[],
     summary: Summary,

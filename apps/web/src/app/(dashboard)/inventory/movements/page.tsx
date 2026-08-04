@@ -144,6 +144,11 @@ export default function MovementsPage() {
     window.open(`/api/proxy/stock-movements/report/by-category?${params}`, '_blank');
   }
 
+  function openCostReport() {
+    const params = buildFilterParams();
+    window.open(`/api/proxy/stock-movements/report/costs?${params}`, '_blank');
+  }
+
   const fetchWarehouses = useCallback(async () => {
     const res = await fetch('/api/proxy/warehouses');
     if (res.ok) setWarehouses(await res.json());
@@ -178,6 +183,14 @@ export default function MovementsPage() {
         >
           <FileText size={16} />
           <span className="hidden sm:inline">Reporte por categoria</span>
+        </button>
+        <button
+          onClick={openCostReport}
+          className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
+          title="Generar PDF con el costo (costo + brecha) de cada movimiento filtrado y el total"
+        >
+          <FileText size={16} />
+          <span className="hidden sm:inline">Reporte de costos</span>
         </button>
       </div>
 

@@ -93,4 +93,37 @@ export class StockMovementsController {
     });
     res.end(buffer);
   }
+
+  @Get('report/costs')
+  @ApiQuery({ name: 'productId', required: false })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  async reportCosts(
+    @Res() res: Response,
+    @Query('productId') productId?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('type') type?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { rows, summary, totalCost } = await this.stockMovementsService.getCostReport({
+      productId,
+      warehouseId,
+      type,
+      supplierId,
+      from,
+      to,
+    });
+    const buffer = await this.stockMovementsPdf.generateCostReport(rows as any, summary, totalCost);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="costo-movimientos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 }

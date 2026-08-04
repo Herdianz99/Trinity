@@ -192,6 +192,107 @@ export class StockMovementsService {
   }
 
   /**
+   * Todos los movimientos que matchean los filtros (sin paginar) con el COSTO de cada uno:
+   * costo unitario x cantidad, y el total al final. El costo unitario ya incluye brecha.
+   * - Ventas (SALE_INVOICE): se toma el costo HISTORICO del InvoiceItem (capturado al facturar,
+   *   ya con brecha aplicada). El StockMovement de venta no guarda costo.
+   * - Otros tipos: se usa el costo ACTUAL del producto + brecha global (si bregaApplies).
+   * Para el reporte PDF "de costos" de /inventory/movements.
+   */
+  async getCostReport(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const where = this.buildWhere(filters);
+
+    const movements = await this.prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: { select: { code: true, name: true, costUsd: true, bregaApplies: true } },
+        warehouse: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const config = await this.prisma.companyConfig.findFirst();
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+
+    // Costo historico de ventas: viene del InvoiceItem (ya con brecha aplicada al facturar).
+    const saleInvoiceIds = [
+      ...new Set(
+        movements
+          .filter((m) => m.sourceType === 'SALE_INVOICE' && m.sourceId)
+          .map((m) => m.sourceId as string),
+      ),
+    ];
+    const histCostByKey = new Map<string, number>();
+    if (saleInvoiceIds.length) {
+      const items = await this.prisma.invoiceItem.findMany({
+        where: { invoiceId: { in: saleInvoiceIds } },
+        select: { invoiceId: true, productId: true, costUsd: true },
+      });
+      for (const it of items) histCostByKey.set(`${it.invoiceId}|${it.productId}`, it.costUsd);
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
+    const rows = movements.map((m) => {
+      const histKey =
+        m.sourceType === 'SALE_INVOICE' && m.sourceId ? `${m.sourceId}|${m.productId}` : null;
+      // Costo unitario con brecha: ventas -> historico del InvoiceItem; resto -> costo actual + brecha.
+      const unitCost =
+        histKey && histCostByKey.has(histKey)
+          ? histCostByKey.get(histKey)!
+          : m.product.bregaApplies
+            ? m.product.costUsd * (1 + bregaGlobalPct / 100)
+            : m.product.costUsd;
+      const qty = Math.abs(m.quantity);
+      return {
+        createdAt: m.createdAt,
+        code: m.product.code,
+        name: m.product.name,
+        warehouse: m.warehouse.name,
+        type: m.type,
+        quantity: qty,
+        unitCost: r2(unitCost),
+        lineCost: r2(qty * unitCost),
+      };
+    });
+
+    const totalCost = r2(rows.reduce((s, r) => s + r.lineCost, 0));
+
+    const [warehouse, supplier, product] = await Promise.all([
+      filters.warehouseId
+        ? this.prisma.warehouse.findUnique({ where: { id: filters.warehouseId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.supplierId
+        ? this.prisma.supplier.findUnique({ where: { id: filters.supplierId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.productId
+        ? this.prisma.product.findUnique({ where: { id: filters.productId }, select: { code: true, name: true } })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      rows,
+      totalCost,
+      totalCount: movements.length,
+      summary: {
+        from: filters.from || null,
+        to: filters.to || null,
+        warehouseName: warehouse?.name || null,
+        supplierName: supplier?.name || null,
+        type: filters.type || null,
+        product: product ? `${product.code} — ${product.name}` : null,
+      },
+    };
+  }
+
+  /**
    * Kardex: returns ALL movements for a product ordered ASC with computed running balance.
    * Groups all warehouses into a single running total.
    */
