@@ -2,6 +2,8 @@
 
 ## 🗓️ Sesión 2026-08-03 — Fix columna "Base USD" en reporte de comisiones + Reporte de costos de movimientos
 
+> **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-03, `main` @ `8daae39`): chica, grande, total, totalturen, aceros, acerosmayor. En todas: git HEAD=`8daae39`, PM2 online, API `/health` 200, web 307, las **3 migraciones** aplicadas (`partner_transfer`, `product_weight`, `require_customer_address`) y columna `Product.weight` presente, endpoints nuevos (`report/costs`, `commission-report-all/pdf`) vivos (401). **Integración socio:** confirmada **DORMIDA** en chica/grande (sin env vars de socio) y **ACTIVA** en total/totalturen y aceros/acerosmayor (env `PARTNER_API_URL` intactas tras el deploy).
+
 ### 1) Reporte de comisiones: "Base USD" del reporte de TODOS ahora cuadra con el individual — ✅ commiteado
 - **Bug:** en `/reports/commissions`, el PDF de **todos los vendedores** (`commission-report-all/pdf`) ponía en la columna **"Base USD"** el `totalSoldUsd` (venta **CON IVA**), mientras que el PDF **individual** (`:id/commission-report/pdf`) ponía la suma de bases por categoría (**SIN IVA**). Resultado: el mismo vendedor daba un número mayor en el reporte de todos, y encima el subtotal **no cuadraba** con las filas de categoría de arriba.
 - **Fix** (`reports-pdf.service.ts` → `generateCommissionAllPdf`): el subtotal por vendedor y el **TOTAL GENERAL** ahora usan la **suma de `baseUsd` sin IVA** (`sBase`/`grandBase`), igual que el individual. La **comisión** ya coincidía en ambos (no se tocó). El `totalSoldUsd` con IVA sigue saliendo solo como KPI "Total vendido" arriba del reporte individual (correcto).
