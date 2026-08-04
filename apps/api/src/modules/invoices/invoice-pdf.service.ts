@@ -207,9 +207,13 @@ export class InvoicePdfService {
     // configurado (asi las empresas que no manejan peso ven la factura igual que siempre).
     const weightProductIds = [...new Set(invoice.items.map((it) => it.productId))];
     const weightProducts = weightProductIds.length
-      ? await this.prisma.product.findMany({ where: { id: { in: weightProductIds } }, select: { id: true, weight: true } })
+      ? await this.prisma.product.findMany({ where: { id: { in: weightProductIds } }, select: { id: true, weight: true, code: true } })
       : [];
     const weightMap = new Map(weightProducts.map((p) => [p.id, p.weight || 0]));
+    // Codigo real del producto (Product.code). El InvoiceItem solo guarda el
+    // productId (CUID interno), asi que sin este mapa la columna "Codigo" mostraba
+    // un pedazo del id de la BD en vez del codigo del producto.
+    const codeMap = new Map(weightProducts.map((p) => [p.id, p.code]));
     const hasWeight = invoice.items.some((it) => (weightMap.get(it.productId) || 0) > 0);
     let totalWeight = 0;
 
@@ -324,7 +328,7 @@ export class InvoicePdfService {
           doc.addPage();
           y = 40;
         }
-        doc.text(item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w });
+        doc.text(codeMap.get(item.productId) || item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w });
         doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
         doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
         // En notas de entrega (no fiscal) el P. Unit se muestra CON IVA incluido
