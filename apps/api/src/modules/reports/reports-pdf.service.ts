@@ -332,6 +332,7 @@ export class ReportsPdfService {
       { label: 'Comision USD', x: 470, width: 85, align: 'right' },
     ];
 
+    let grandBase = 0;
     for (const seller of data.sellers || []) {
       // Espacio para encabezado + cabecera de tabla + al menos una fila
       y = this.checkPage(doc, y, 70);
@@ -342,8 +343,13 @@ export class ReportsPdfService {
 
       y = this.drawTableHeader(doc, y, cols);
 
+      // Base USD del subtotal = suma de las bases por categoria (SIN IVA), igual que el
+      // reporte individual. NO usar totalSoldUsd (venta CON IVA): confundia y no cuadraba
+      // con las filas de categoria de arriba.
+      let sBase = 0;
       for (const cat of seller.categories || []) {
         y = this.checkPage(doc, y);
+        sBase += cat.baseUsd;
         y = this.drawTableRow(doc, y, cols, [
           cat.categoryName, `$${this.fmt(cat.baseUsd)}`, `$${this.fmt(cat.ivaNotasUsd)}`,
           `${cat.commissionPct.toFixed(2)}%`, `$${this.fmt(cat.commissionUsd)}`,
@@ -355,9 +361,10 @@ export class ReportsPdfService {
       doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#cbd5e1');
       y += 4;
       y = this.drawTableRow(doc, y, cols, [
-        `Total ${seller.sellerName}`, `$${this.fmt(seller.totalSoldUsd)}`,
+        `Total ${seller.sellerName}`, `$${this.fmt(sBase)}`,
         `$${this.fmt(seller.totalIvaNotasUsd)}`, '', `$${this.fmt(seller.totalCommissionUsd)}`,
       ], true);
+      grandBase += sBase;
 
       if (seller.groupInvoiceCount > 0) {
         // Resaltado en rojo, mismo tamaño que el resto, para que llame la atencion
@@ -375,7 +382,7 @@ export class ReportsPdfService {
     doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#0f172a');
     y += 6;
     y = this.drawTableRow(doc, y, cols, [
-      'TOTAL GENERAL', `$${this.fmt(gt.totalSoldUsd || 0)}`,
+      'TOTAL GENERAL', `$${this.fmt(grandBase)}`,
       `$${this.fmt(gt.totalIvaNotasUsd || 0)}`, '', `$${this.fmt(gt.totalCommissionUsd || 0)}`,
     ], true);
 

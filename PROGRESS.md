@@ -1,5 +1,51 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-03 — Fix columna "Base USD" en reporte de comisiones + Reporte de costos de movimientos
+
+### 1) Reporte de comisiones: "Base USD" del reporte de TODOS ahora cuadra con el individual — ✅ commiteado
+- **Bug:** en `/reports/commissions`, el PDF de **todos los vendedores** (`commission-report-all/pdf`) ponía en la columna **"Base USD"** el `totalSoldUsd` (venta **CON IVA**), mientras que el PDF **individual** (`:id/commission-report/pdf`) ponía la suma de bases por categoría (**SIN IVA**). Resultado: el mismo vendedor daba un número mayor en el reporte de todos, y encima el subtotal **no cuadraba** con las filas de categoría de arriba.
+- **Fix** (`reports-pdf.service.ts` → `generateCommissionAllPdf`): el subtotal por vendedor y el **TOTAL GENERAL** ahora usan la **suma de `baseUsd` sin IVA** (`sBase`/`grandBase`), igual que el individual. La **comisión** ya coincidía en ambos (no se tocó). El `totalSoldUsd` con IVA sigue saliendo solo como KPI "Total vendido" arriba del reporte individual (correcto).
+- **Verificado** con data real de inversiones restaurada en local: TOTAL GENERAL Base = $49.477,08 (suma de bases), no $56.520,70 (con IVA); VEN-004 = $9.609,69 idéntico en ambos PDFs.
+
+### 2) Reporte de COSTOS de movimientos de stock — ✅ commiteado (venía de sesión previa, sin commitear)
+- Nuevo botón **"Reporte de costos"** en `/inventory/movements` → endpoint `GET /stock-movements/report/costs` (respeta los mismos filtros del listado: producto, almacén, tipo, proveedor, fechas).
+- PDF carta con Fecha / Código / Producto / Tipo / Cantidad / Costo unit. / Costo total + **COSTO TOTAL** al final. El costo unitario incluye **brecha**: ventas usan el **costo histórico del `InvoiceItem`** (capturado al facturar); el resto usa costo actual + brecha global (si `bregaApplies`).
+
+---
+
+## 🗓️ Sesión 2026-08-02 — Campo de PESO en factura + 3er server co-locado NUEVO (aceros/acerosmayor) montado y con datos cargados
+
+> Server nuevo `147.182.130.6` (aceros + acerosmayor co-locadas). Detalle de accesos en memoria `servidores-produccion`; montaje/cargas en `aceros-acerosmayor-servidor`.
+
+### 1) Campo de PESO por producto + columna en el PDF de factura — ✅ EN `main` (commit `3cd3684`), desplegado en el server nuevo
+- Nuevo `Product.weight` (kg, migración `20260802120000_product_weight` con `IF NOT EXISTS` + red en `fix-schema.sql`). Editable en el modal y la ficha de producto (input texto con `sanitizeDecimal`, acepta `.` y `,`).
+- En el **PDF carta de la factura** (`invoice-pdf.service`): columna **"Peso"** (cantidad × peso unitario por línea) + fila **"PESO TOTAL DE LA CARGA"** (guía para el camión). **Auto-activable:** solo aparece si algún producto de la factura tiene peso > 0 → las otras empresas ven la factura idéntica. Peso "en vivo" (no se congela). Verificado con render real (positivos, dash para 0, total).
+
+### 2) Servidor NUEVO aceros + acerosmayor (2 empresas de acero, RIF distinto) — ✅ MONTADO Y OPERATIVO (`147.182.130.6`)
+- **Infra** (calcada de total/totalturen): Ubuntu 24.04, 2vCPU/4GB + 2GB swap, Node 20/pnpm/PM2, Postgres 16, Redis, nginx, certbot, firewall. Rol PG único `trebol`, secretos en `/root/trinity-secrets.txt`.
+- **aceros** (detal): `aceros.eltrebol.app`/`api.aceros...` (3000/4000), DB `aceros_db`, RedisDB 0, `/opt/aceros`, PM2 `trinity-api-aceros`/`trinity-web-aceros`, SELF_CODE `ACE`. **acerosmayor** (crédito mayor): `acerosmayor.eltrebol.app` (3001/4001), DB `acerosmayor_db`, RedisDB 1, SELF_CODE `ACM`.
+- **SSL** en los 4 subdominios (certbot), **integración** traslados/precios por localhost (tokens cruzados, ping verificado), **backup certificado** 3AM/7días (`/root/backup-trinity.sh`, probado), pm2 startup enabled. `deploy-trinity.sh aceros|acerosmayor` parametrizado. Login E2E OK en ambas.
+
+### 3) Carga de datos (ambas empresas) — ✅
+- **Clientes:** 14.025 desde `aceros_limpios.csv` (parseo RIF→documentType V/J/E/C=consejos comunales/G) en cada BD.
+- **Catálogo:** 1.819 productos (se omitieron 8 "DISPONIBLE"), 14 categorías / 32 marcas / 32 proveedores. **Seed demo limpiado** (49 prod + categorías/marcas/proveedores + 10 clientes ficticios) — 0 transacciones, seguro. Gotcha PrintArea default resuelto (como turen). Marcas/proveedores enlazados donde el Excel los traía (360 con marca / 892 con proveedor).
+- **Stock:** aceros con existencias reales incl. **52 negativas** + kardex "Carga inicial"; acerosmayor **todo en 0**. **Pesos:** 150 productos en ambas.
+- **Permisos por rol:** copiados en vivo de `inversiones` (`pg_dump` de `RolePermission`) a las 2 empresas (9 roles idénticos).
+
+### 4) Precios — ✅ (método: despejar ganancia, NO precio manual; brecha por grupo)
+- **Fórmula:** `ganancia% = (PVP_sinIVA/(costo×B)−1)×100`, precio = `costo×B×(1+gan)×IVA` (= PVP con IVA, no cambia). **B = 1.15 (brecha 15%) para DIVISA/vacío; B = 1.0 (sin brecha) para grupo BCV** (columna `Grupo` del Excel de artículos → `bregaApplies=false` en los 119 BCV, en ambas empresas).
+- **aceros (detal, `precio-detal.xlsx`, tarifas COSTO2/PVP2):** 1.660 con ganancia calculada + 12 con precio manual (margen negativo / costo malo) → `priceDetal`. 147 sin precio (venían en 0; de esos ~13 con stock).
+- **acerosmayor (`precio-mayor.xlsx`, tarifas COSTO2/CREDITO MAYOR):** **filtro** = solo los que tienen ambas líneas con valores>0 → **990 preciados** (979 calc + 11 manual), 829 sin precio (no los vende). CREDITO MAYOR → `priceDetal` (el POS cobra ese campo). El crédito mayor es más alto que el detal (recargo por crédito) — normal.
+
+### 5) Factura: PDF carta y ticket siempre en "Más acciones" — ⏳ EN `main` (commits `1d2e450`, `203a8b5`), desplegándose en aceros/acerosmayor
+- Antes el ítem era dual (fiscal→PDF carta, no fiscal→ticket) → el PDF carta (con la guía de carga/pesos) solo salía en fiscales. Se separó: **"Imprimir PDF (carta)"** y **"Imprimir ticket"** ahora salen **siempre** (ambos condicionados solo a `canPrintPdf`). Cambio aditivo, aplica a todas las empresas al desplegar.
+
+### Pendiente go-live aceros/acerosmayor
+- **Datos legales** (nombre/RIF/dirección/teléfono) de cada empresa en Ajustes — ahora imprimen el placeholder del seed (crítico).
+- Los ~13 productos de aceros con stock sin precio; fotos (opcional, sin Spaces día 1); precio-mayor-por-cantidad en POS (diferido).
+
+---
+
 ## ✅ DESPLEGADO EN LAS 2 EMPRESAS — sesión 2026-07-24 (`main` en HEAD `17b2837`)
 
 Los dos bloques de hoy quedaron **desplegados y verificados en ambas empresas** — GRANDE (`inversiones`) y CHICA (`eltrebol`) el **2026-07-24** en HEAD `17b2837` (PM2 `trinity-api`/`trinity-web` online, health 200, ruta nueva `/products/report/pdf` responde 401 = viva, sin migraciones):
