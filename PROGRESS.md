@@ -2,7 +2,7 @@
 
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
-> **Estado deploy (`main` @ `c87b898`):** ✅ **DESPLEGADO Y VERIFICADO en GRANDE, total y totalturen** (2026-08-05: git HEAD `c87b898`, PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 vivo, web/login 200). ⏳ **PENDIENTE chica** (Diego la hará en un rato) y **aceros/acerosmayor** (para mañana). Todo aditivo, sin migraciones ni schema.
+> **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)
 
 ### 1) Fix: exportar XML SENIAT de retenciones ISLR no descargaba (`/purchases/islr-retentions`)
 - **Causa:** el proxy de Next (`apps/web/src/app/api/proxy/[...path]/route.ts`) solo reenviaba `Content-Disposition` para PDF/octet-stream; el XML (`application/xml`) caía en la rama de texto que **descartaba el header** → el navegador lo mostraba en vez de descargarlo, y `res.text()` habría **corrompido** el windows-1252.
@@ -20,7 +20,7 @@
 
 ## 🗓️ Sesión 2026-08-05 — Reporte PDF de Devoluciones por vendedor
 
-> **✅ DESPLEGADO Y VERIFICADO en GRANDE, total y totalturen** (`main` @ `c87b898`, 2026-08-05); ⏳ pendiente chica y aceros/acerosmayor. Solo frontend + backend (sin migraciones ni schema). Verificado en local contra `grande_db`: PDF real (155 devoluciones, $11.213,39), typecheck limpio, endpoint mapeado.
+> **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (`main` @ `c87b898`, 2026-08-05). Solo frontend + backend (sin migraciones ni schema). Verificado en local contra `grande_db`: PDF real (155 devoluciones, $11.213,39), typecheck limpio, endpoint mapeado.
 
 - **Qué:** en `/credit-debit-notes?scope=sale`, botón **"PDF Devoluciones por vendedor"** que descarga un PDF con las **devoluciones (solo NCV — se excluyen a propósito las notas de débito NDV)** agrupadas por el **vendedor de la factura origen**. Por vendedor: barra con nombre + conteo, tabla de sus devoluciones (**N° Nota, Fecha, Factura, Cliente, Motivo, Total $**), subtotal, y **TOTAL GENERAL** al final. Respeta los filtros activos de la pantalla (rango de fechas, estado, búsqueda). Notas no confirmadas se marcan en ámbar con su estado.
 - **Backend** (`credit-debit-notes`): helper compartido `buildNotesWhere` (extraído de `findAll`); `reportBySellerDetailed(query)` fuerza `type=NCV`, agrupa por `note.invoice.seller` ("Sin vendedor" al final, resto por monto USD desc); `CreditDebitNotesPdfService.generateBySellerReport()` (PDFKit, carta). Endpoint `GET /credit-debit-notes/report/by-seller/pdf`.
