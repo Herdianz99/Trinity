@@ -1,8 +1,8 @@
 ﻿# Trinity ERP — Progreso
 
-## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC (por vendedor y ajustes al original)
+## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
-> **⏳ CÓDIGO EN `main`, SIN DESPLEGAR.** Solo frontend + backend, sin migraciones ni schema. Verificado en local contra `grande_db` (PDFs reales + cross-check de montos).
+> **Estado deploy (`main` @ `c87b898`):** ✅ **DESPLEGADO Y VERIFICADO en GRANDE, total y totalturen** (2026-08-05: git HEAD `c87b898`, PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 vivo, web/login 200). ⏳ **PENDIENTE chica** (Diego la hará en un rato) y **aceros/acerosmayor** (para mañana). Todo aditivo, sin migraciones ni schema.
 
 ### 1) Fix: exportar XML SENIAT de retenciones ISLR no descargaba (`/purchases/islr-retentions`)
 - **Causa:** el proxy de Next (`apps/web/src/app/api/proxy/[...path]/route.ts`) solo reenviaba `Content-Disposition` para PDF/octet-stream; el XML (`application/xml`) caía en la rama de texto que **descartaba el header** → el navegador lo mostraba en vez de descargarlo, y `res.text()` habría **corrompido** el windows-1252.
@@ -14,11 +14,13 @@
 - **Empresas del grupo** (`Customer.isGroupCompany`) marcadas en **rojo** con etiqueta `[EMPRESA DEL GRUPO]`.
 - **Ambos reportes:** solo **CxC reales** (saldo pendiente > 0; se ocultan las pagadas). Y el **encabezado de cliente/vendedor/subtotales/total** ahora muestra **"Saldo" + "Vencido"** (antes Monto/Saldo); *Vencido* en rojo si > 0. "Vencido" = `dueDate < hoy-Caracas` (mismo criterio que las tarjetas de CxC).
 - **Backend:** `receivables.service.findAllForReport` ahora incluye `invoice.seller` + `customer.isGroupCompany` (aditivo, reusado por ambos). Lógica en `receivables-pdf.service` (`generate` + nuevo `generateBySeller`, helpers de barras/subtotal compartidos).
-- **PARA DESPLEGAR:** `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas). Aditivo, sin migraciones.
+
+### 3) POS: etiqueta "Disponible / en espera" en rojo y más grande (commit `c87b898`)
+- La etiqueta de disponibilidad de los artículos reservados por facturas en espera (`sales/pos/page.tsx`, 2 vistas) pasó de azul/10px a **roja siempre, 12px, negrita**. Puro frontend.
 
 ## 🗓️ Sesión 2026-08-05 — Reporte PDF de Devoluciones por vendedor
 
-> **⏳ CÓDIGO EN `main`, SIN DESPLEGAR.** Solo frontend + backend (sin migraciones ni cambios de schema). Verificado en local contra `grande_db`: PDF real generado (155 devoluciones, $11.213,39), typecheck API+web limpio, endpoint mapeado.
+> **✅ DESPLEGADO Y VERIFICADO en GRANDE, total y totalturen** (`main` @ `c87b898`, 2026-08-05); ⏳ pendiente chica y aceros/acerosmayor. Solo frontend + backend (sin migraciones ni schema). Verificado en local contra `grande_db`: PDF real (155 devoluciones, $11.213,39), typecheck limpio, endpoint mapeado.
 
 - **Qué:** en `/credit-debit-notes?scope=sale`, botón **"PDF Devoluciones por vendedor"** que descarga un PDF con las **devoluciones (solo NCV — se excluyen a propósito las notas de débito NDV)** agrupadas por el **vendedor de la factura origen**. Por vendedor: barra con nombre + conteo, tabla de sus devoluciones (**N° Nota, Fecha, Factura, Cliente, Motivo, Total $**), subtotal, y **TOTAL GENERAL** al final. Respeta los filtros activos de la pantalla (rango de fechas, estado, búsqueda). Notas no confirmadas se marcan en ámbar con su estado.
 - **Backend** (`credit-debit-notes`): helper compartido `buildNotesWhere` (extraído de `findAll`); `reportBySellerDetailed(query)` fuerza `type=NCV`, agrupa por `note.invoice.seller` ("Sin vendedor" al final, resto por monto USD desc); `CreditDebitNotesPdfService.generateBySellerReport()` (PDFKit, carta). Endpoint `GET /credit-debit-notes/report/by-seller/pdf`.
