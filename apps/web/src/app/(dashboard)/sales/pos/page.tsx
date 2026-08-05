@@ -2095,7 +2095,7 @@ export default function POSPage() {
                         )}
                       </div>
                       {!blockNoStock && reserved > 0 && (
-                        <p className={`text-[10px] mt-0.5 ${available > 0 ? 'text-sky-400' : 'text-red-400'}`}>Disponible: {available} <span className="text-slate-500">({reserved} en espera)</span></p>
+                        <p className="text-xs font-semibold mt-0.5 text-red-500">Disponible: {available} <span className="text-red-400 font-normal">({reserved} en espera)</span></p>
                       )}
                       {blockNoStock && <p className="text-[10px] text-amber-400 mt-0.5 inline-flex items-center gap-1"><Lock size={10} /> Sin stock · Autorizar</p>}
                     </button>
@@ -3485,8 +3485,8 @@ export default function POSPage() {
                         Stock: {prodStock}
                       </span>
                       {reserved > 0 && (
-                        <span className={`text-[10px] whitespace-nowrap ${available > 0 ? 'text-sky-400' : 'text-red-400'}`}>
-                          Disponible: {available} <span className="text-slate-500">({reserved} en espera)</span>
+                        <span className="text-xs font-semibold whitespace-nowrap text-red-500">
+                          Disponible: {available} <span className="text-red-400 font-normal">({reserved} en espera)</span>
                         </span>
                       )}
                     </div>
