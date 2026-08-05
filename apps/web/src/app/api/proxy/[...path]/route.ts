@@ -32,12 +32,26 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
     });
 
     const resContentType = res.headers.get('content-type') || 'application/json';
+    const disposition = res.headers.get('content-disposition');
 
-    // Binary responses (PDF, images, etc.) must be forwarded as ArrayBuffer
-    if (resContentType.includes('application/pdf') || resContentType.includes('application/octet-stream')) {
+    // Respuestas binarias o DESCARGABLES se reenvían como ArrayBuffer (bytes crudos):
+    //  - preserva el Content-Disposition -> el navegador descarga en vez de mostrar
+    //  - preserva la codificacion original (ej. XML/TXT SENIAT en windows-1252, que
+    //    res.text() decodificaria como UTF-8 y corromperia las tildes/enes).
+    // Cubre PDF, XML, TXT, xlsx/office e imagenes, y cualquier endpoint que declare
+    // una descarga con Content-Disposition.
+    if (
+      disposition ||
+      resContentType.includes('application/pdf') ||
+      resContentType.includes('application/octet-stream') ||
+      resContentType.includes('xml') ||
+      resContentType.includes('text/plain') ||
+      resContentType.includes('spreadsheet') ||
+      resContentType.includes('application/vnd') ||
+      resContentType.includes('image/')
+    ) {
       const buffer = await res.arrayBuffer();
       const responseHeaders: Record<string, string> = { 'Content-Type': resContentType };
-      const disposition = res.headers.get('content-disposition');
       if (disposition) responseHeaders['Content-Disposition'] = disposition;
       return new NextResponse(buffer, { status: res.status, headers: responseHeaders });
     }

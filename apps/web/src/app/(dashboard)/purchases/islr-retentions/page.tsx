@@ -180,7 +180,14 @@ export default function IslrRetentionsPage() {
       to = toLocalDateStr(new Date(y, m + 1, 0));
     }
     const params = new URLSearchParams({ from, to });
-    window.open(`/api/proxy/islr-retention-vouchers/xml?${params}`, '_blank');
+    // Descarga directa via anchor: el endpoint responde con Content-Disposition: attachment,
+    // asi que baja el .xml sin dejar una pestana en blanco (como haria window.open).
+    const a = document.createElement('a');
+    a.href = `/api/proxy/islr-retention-vouchers/xml?${params}`;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   async function handleCancel(id: string) {
