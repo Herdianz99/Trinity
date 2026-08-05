@@ -9,12 +9,195 @@ const TYPE_LABELS: Record<string, string> = {
   NDC: 'NOTA DE DEBITO - COMPRA',
 };
 
+const MOTIVO_LABELS: Record<string, string> = {
+  PRODUCTO_DEFECTUOSO: 'Prod. defectuoso',
+  ASESORIA: 'Asesoria',
+  CLIENTE: 'Cliente',
+  FALTANTE_ALMACEN: 'Faltante almacen',
+  DEVOLUCION: 'Devolucion',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Borrador',
+  POSTED: 'Confirmada',
+  CANCELLED: 'Anulada',
+};
+
+// Estructura que produce CreditDebitNotesService.reportBySellerDetailed
+interface SellerReportData {
+  filters: { from: string | null; to: string | null; status: string | null };
+  groups: {
+    sellerCode: string | null;
+    sellerName: string;
+    subtotalUsd: number;
+    subtotalBs: number;
+    notes: {
+      number: string;
+      date: Date;
+      invoiceNumber: string | null;
+      customerName: string;
+      motivo: string | null;
+      status: string;
+      totalUsd: number;
+      totalBs: number;
+    }[];
+  }[];
+  grandTotal: { count: number; totalUsd: number; totalBs: number };
+}
+
 @Injectable()
 export class CreditDebitNotesPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
   private fmt(n: number): string {
     return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  private fmtDate(d: Date): string {
+    // documentDate se guarda a medianoche de Caracas (04:00 UTC); formatear en UTC
+    // evita que se corra un día.
+    return new Date(d).toLocaleDateString('es-VE', {
+      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+    });
+  }
+
+  // Reporte PDF de DEVOLUCIONES (NCV) agrupadas por vendedor. Cada grupo lista sus
+  // devoluciones con montos y datos, subtotal por vendedor, y gran total al final.
+  async generateBySellerReport(data: SellerReportData): Promise<Buffer> {
+    const config = await this.prisma.companyConfig.findFirst();
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+      const buffers: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const left = 40;
+      const pageWidth = doc.page.width - 80; // 532
+      const bottom = 740;
+
+      // Columnas de la tabla de devoluciones (x, ancho). Sin "Total Bs" → el espacio
+      // liberado se le da al Cliente (nombres largos).
+      const COL = {
+        nota: { x: 40, w: 110 },
+        fecha: { x: 152, w: 52 },
+        factura: { x: 206, w: 76 },
+        cliente: { x: 284, w: 150 },
+        motivo: { x: 436, w: 76 },
+        usd: { x: 512, w: 60 },
+      };
+
+      let y = 40;
+
+      // Encabezado de empresa
+      doc.fontSize(14).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', left, y);
+      y += 18;
+      if (config?.rif) {
+        doc.fontSize(9).font('Helvetica').text(`RIF: ${config.rif}`, left, y);
+        y += 12;
+      }
+
+      // Título
+      y += 6;
+      doc.fontSize(13).font('Helvetica-Bold')
+        .text('DEVOLUCIONES POR VENDEDOR', left, y, { align: 'center', width: pageWidth });
+      y += 18;
+
+      // Subtítulo: período y estado
+      const periodo = data.filters.from || data.filters.to
+        ? `Periodo: ${data.filters.from ? this.fmtDate(new Date(data.filters.from)) : '...'} al ${data.filters.to ? this.fmtDate(new Date(data.filters.to)) : '...'}`
+        : 'Periodo: todas las fechas';
+      const estado = data.filters.status
+        ? `Estado: ${STATUS_LABELS[data.filters.status] || data.filters.status}`
+        : 'Estado: todas';
+      doc.fontSize(8).font('Helvetica').fillColor('#555')
+        .text(`${periodo}   ·   ${estado}   ·   Solo notas de credito de venta (devoluciones)`, left, y, { align: 'center', width: pageWidth });
+      doc.fillColor('#000');
+      y += 20;
+
+      const drawColHeader = () => {
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
+        doc.text('N Nota', COL.nota.x, y, { width: COL.nota.w });
+        doc.text('Fecha', COL.fecha.x, y, { width: COL.fecha.w });
+        doc.text('Factura', COL.factura.x, y, { width: COL.factura.w });
+        doc.text('Cliente', COL.cliente.x, y, { width: COL.cliente.w });
+        doc.text('Motivo', COL.motivo.x, y, { width: COL.motivo.w });
+        doc.text('Total $', COL.usd.x, y, { width: COL.usd.w, align: 'right' });
+        y += 11;
+        doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#ccc').lineWidth(0.3).stroke();
+        y += 4;
+      };
+
+      const ensureSpace = (needed: number) => {
+        if (y + needed > bottom) {
+          doc.addPage();
+          y = 40;
+        }
+      };
+
+      if (data.groups.length === 0) {
+        doc.fontSize(10).font('Helvetica').text('No hay devoluciones para los filtros seleccionados.', left, y);
+        doc.end();
+        return;
+      }
+
+      for (const g of data.groups) {
+        // Encabezado del vendedor (barra). Reservar espacio para barra + header + 1 fila.
+        ensureSpace(60);
+        doc.rect(left, y, pageWidth, 16).fill('#eef2ff');
+        doc.fillColor('#1e293b').fontSize(9.5).font('Helvetica-Bold');
+        const sellerLabel = g.sellerCode ? `${g.sellerCode}  ${g.sellerName}` : g.sellerName;
+        doc.text(sellerLabel, left + 6, y + 4, { width: pageWidth - 180 });
+        doc.text(`${g.notes.length} devolucion${g.notes.length !== 1 ? 'es' : ''}`, left + pageWidth - 174, y + 4, { width: 168, align: 'right' });
+        doc.fillColor('#000');
+        y += 22;
+
+        drawColHeader();
+
+        // Filas de devoluciones del vendedor
+        doc.font('Helvetica').fontSize(8);
+        for (const n of g.notes) {
+          const cliente = n.customerName || '—';
+          const motivo = n.motivo ? (MOTIVO_LABELS[n.motivo] || n.motivo) : '—';
+          const clienteH = doc.heightOfString(cliente, { width: COL.cliente.w });
+          const notaH = doc.heightOfString(n.number, { width: COL.nota.w });
+          const rowH = Math.max(12, clienteH, notaH) + 3;
+          ensureSpace(rowH + 2);
+
+          doc.font('Helvetica').fontSize(8).fillColor('#000');
+          doc.text(n.number, COL.nota.x, y, { width: COL.nota.w });
+          doc.text(this.fmtDate(n.date), COL.fecha.x, y, { width: COL.fecha.w, lineBreak: false });
+          doc.text(n.invoiceNumber || '—', COL.factura.x, y, { width: COL.factura.w, lineBreak: false });
+          doc.text(cliente, COL.cliente.x, y, { width: COL.cliente.w });
+          // Motivo; si la nota no está confirmada, marcarlo en gris
+          const motivoTxt = n.status !== 'POSTED' ? `${motivo} (${STATUS_LABELS[n.status] || n.status})` : motivo;
+          doc.fillColor(n.status !== 'POSTED' ? '#b45309' : '#000').text(motivoTxt, COL.motivo.x, y, { width: COL.motivo.w });
+          doc.fillColor('#000');
+          doc.text(this.fmt(n.totalUsd), COL.usd.x, y, { width: COL.usd.w, align: 'right', lineBreak: false });
+          y += rowH;
+        }
+
+        // Subtotal del vendedor
+        y += 2;
+        doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#999').lineWidth(0.5).stroke();
+        y += 4;
+        doc.font('Helvetica-Bold').fontSize(8.5);
+        doc.text(`Subtotal ${g.sellerName}`, COL.nota.x, y, { width: COL.motivo.x + COL.motivo.w - COL.nota.x, align: 'right' });
+        doc.text(this.fmt(g.subtotalUsd), COL.usd.x, y, { width: COL.usd.w, align: 'right', lineBreak: false });
+        y += 20;
+      }
+
+      // Gran total
+      ensureSpace(40);
+      doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#000').lineWidth(1).stroke();
+      y += 6;
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000');
+      doc.text(`TOTAL GENERAL  (${data.grandTotal.count} devoluciones)`, left, y, { width: COL.motivo.x + COL.motivo.w - left, align: 'right' });
+      doc.text(this.fmt(data.grandTotal.totalUsd), COL.usd.x, y, { width: COL.usd.w, align: 'right', lineBreak: false });
+
+      doc.end();
+    });
   }
 
   async generate(noteId: string): Promise<Buffer> {

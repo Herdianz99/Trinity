@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-05 — Reporte PDF de Devoluciones por vendedor
+
+> **⏳ CÓDIGO EN `main`, SIN DESPLEGAR.** Solo frontend + backend (sin migraciones ni cambios de schema). Verificado en local contra `grande_db`: PDF real generado (155 devoluciones, $11.213,39), typecheck API+web limpio, endpoint mapeado.
+
+- **Qué:** en `/credit-debit-notes?scope=sale`, botón **"PDF Devoluciones por vendedor"** que descarga un PDF con las **devoluciones (solo NCV — se excluyen a propósito las notas de débito NDV)** agrupadas por el **vendedor de la factura origen**. Por vendedor: barra con nombre + conteo, tabla de sus devoluciones (**N° Nota, Fecha, Factura, Cliente, Motivo, Total $**), subtotal, y **TOTAL GENERAL** al final. Respeta los filtros activos de la pantalla (rango de fechas, estado, búsqueda). Notas no confirmadas se marcan en ámbar con su estado.
+- **Backend** (`credit-debit-notes`): helper compartido `buildNotesWhere` (extraído de `findAll`); `reportBySellerDetailed(query)` fuerza `type=NCV`, agrupa por `note.invoice.seller` ("Sin vendedor" al final, resto por monto USD desc); `CreditDebitNotesPdfService.generateBySellerReport()` (PDFKit, carta). Endpoint `GET /credit-debit-notes/report/by-seller/pdf`.
+- **Frontend** (`credit-debit-notes/page.tsx`): botón en el header (solo `scope=sale`) → `window.open` del PDF por el proxy con los filtros; sin modal.
+- **PARA DESPLEGAR:** `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas). Aditivo, sin migraciones.
+
 ## 🗓️ Sesión 2026-08-03 — Fix columna "Base USD" en reporte de comisiones + Reporte de costos de movimientos
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-03, `main` @ `8daae39`): chica, grande, total, totalturen, aceros, acerosmayor. En todas: git HEAD=`8daae39`, PM2 online, API `/health` 200, web 307, las **3 migraciones** aplicadas (`partner_transfer`, `product_weight`, `require_customer_address`) y columna `Product.weight` presente, endpoints nuevos (`report/costs`, `commission-report-all/pdf`) vivos (401). **Integración socio:** confirmada **DORMIDA** en chica/grande (sin env vars de socio) y **ACTIVA** en total/totalturen y aceros/acerosmayor (env `PARTNER_API_URL` intactas tras el deploy).

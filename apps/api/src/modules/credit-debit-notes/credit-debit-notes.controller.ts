@@ -34,6 +34,18 @@ export class CreditDebitNotesController {
     return this.service.findAll(query);
   }
 
+  @Get('report/by-seller/pdf')
+  async reportBySellerPdf(@Query() query: QueryNotesDto, @Res() res: Response) {
+    const data = await this.service.reportBySellerDetailed(query);
+    const buffer = await this.pdfService.generateBySellerReport(data);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="devoluciones-por-vendedor.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('invoice-return-summary/:invoiceId')
   invoiceReturnSummary(@Param('invoiceId') invoiceId: string) {
     return this.service.getInvoiceReturnSummary(invoiceId);

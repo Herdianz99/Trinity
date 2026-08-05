@@ -30,11 +30,9 @@ export class CreditDebitNotesService {
     }
   }
 
-  async findAll(query: QueryNotesDto) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const skip = (page - 1) * limit;
-
+  // Filtros compartidos por el listado y los reportes: aseguran que el reporte
+  // (agrupado por vendedor) opere sobre EXACTAMENTE el mismo conjunto que la tabla.
+  private buildNotesWhere(query: QueryNotesDto) {
     const where: any = {};
     if (query.type) where.type = query.type;
     else if (query.scope === 'sale') where.type = { in: ['NCV', 'NDV'] };
@@ -56,6 +54,15 @@ export class CreditDebitNotesService {
         where.createdAt.lte = caracasDayEnd(query.to);
       }
     }
+    return where;
+  }
+
+  async findAll(query: QueryNotesDto) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildNotesWhere(query);
 
     const [data, total] = await Promise.all([
       this.prisma.creditDebitNote.findMany({
@@ -78,6 +85,125 @@ export class CreditDebitNotesService {
     ]);
 
     return { data, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  // Datos para el reporte PDF de DEVOLUCIONES por vendedor. Solo notas de crédito de
+  // venta (NCV = devoluciones); las notas de débito (NDV) quedan EXCLUIDAS a propósito.
+  // Respeta los demás filtros del listado (estado, rango de fechas, búsqueda). Agrupa
+  // por el vendedor de la factura origen, con el detalle de cada devolución y subtotal
+  // por vendedor + gran total.
+  async reportBySellerDetailed(query: QueryNotesDto) {
+    const where = this.buildNotesWhere(query);
+    // Forzar solo devoluciones (NCV), sin importar el filtro de tipo/scope entrante.
+    where.type = 'NCV';
+
+    const notes = await this.prisma.creditDebitNote.findMany({
+      where,
+      orderBy: { documentDate: 'asc' },
+      select: {
+        number: true,
+        documentDate: true,
+        createdAt: true,
+        motivo: true,
+        origin: true,
+        status: true,
+        totalUsd: true,
+        totalBs: true,
+        invoice: {
+          select: {
+            number: true,
+            customer: { select: { name: true } },
+            seller: { select: { id: true, code: true, name: true } },
+          },
+        },
+      },
+    });
+
+    type Group = {
+      sellerId: string | null;
+      sellerCode: string | null;
+      sellerName: string;
+      notes: {
+        number: string;
+        date: Date;
+        invoiceNumber: string | null;
+        customerName: string;
+        motivo: string | null;
+        origin: string;
+        status: string;
+        totalUsd: number;
+        totalBs: number;
+      }[];
+      subtotalUsd: number;
+      subtotalBs: number;
+    };
+    const NONE = '__none__';
+    const map = new Map<string, Group>();
+
+    for (const n of notes) {
+      const seller = n.invoice?.seller || null;
+      const key = seller?.id || NONE;
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          sellerId: seller?.id || null,
+          sellerCode: seller?.code || null,
+          sellerName: seller?.name || 'Sin vendedor',
+          notes: [],
+          subtotalUsd: 0,
+          subtotalBs: 0,
+        };
+        map.set(key, g);
+      }
+      g.notes.push({
+        number: n.number,
+        date: n.documentDate || n.createdAt,
+        invoiceNumber: n.invoice?.number || null,
+        customerName: n.invoice?.customer?.name || 'Cliente General',
+        motivo: n.motivo || null,
+        origin: n.origin,
+        status: n.status,
+        totalUsd: n.totalUsd || 0,
+        totalBs: n.totalBs || 0,
+      });
+      g.subtotalUsd += n.totalUsd || 0;
+      g.subtotalBs += n.totalBs || 0;
+    }
+
+    const groups = Array.from(map.values())
+      .map((g) => ({
+        ...g,
+        subtotalUsd: this.round2(g.subtotalUsd),
+        subtotalBs: this.round2(g.subtotalBs),
+      }))
+      // "Sin vendedor" al final; el resto por monto devuelto (USD) desc.
+      .sort((a, b) => {
+        if (!a.sellerId && b.sellerId) return 1;
+        if (a.sellerId && !b.sellerId) return -1;
+        return b.subtotalUsd - a.subtotalUsd;
+      });
+
+    const grandTotal = groups.reduce(
+      (acc, g) => {
+        acc.count += g.notes.length;
+        acc.totalUsd += g.subtotalUsd;
+        acc.totalBs += g.subtotalBs;
+        return acc;
+      },
+      { count: 0, totalUsd: 0, totalBs: 0 },
+    );
+    grandTotal.totalUsd = this.round2(grandTotal.totalUsd);
+    grandTotal.totalBs = this.round2(grandTotal.totalBs);
+
+    return {
+      filters: {
+        from: query.from || null,
+        to: query.to || null,
+        status: query.status || null,
+      },
+      groups,
+      grandTotal,
+    };
   }
 
   async findOne(id: string) {

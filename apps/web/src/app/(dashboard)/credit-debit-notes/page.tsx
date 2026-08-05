@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileX2, Search, Loader2, ChevronLeft, ChevronRight, Eye, AlertTriangle,
+  FileText,
 } from 'lucide-react';
 
 interface Note {
@@ -68,16 +69,25 @@ export default function CreditDebitNotesPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Filtros comunes a la tabla y al reporte PDF (sin paginación) → el reporte agrupa
+  // exactamente el mismo conjunto (por fechas/estado/búsqueda) que se ve en la lista.
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    else if (scope) params.set('scope', scope);
+    if (status) params.set('status', status);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (search) params.set('search', search);
+    return params;
+  }, [type, scope, status, from, to, search]);
+
   const fetchNotes = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (type) params.set('type', type);
-      else if (scope) params.set('scope', scope);
-      if (status) params.set('status', status);
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      if (search) params.set('search', search);
+      const params = buildFilterParams();
+      params.set('page', String(page));
+      params.set('limit', '20');
 
       const res = await fetch(`/api/proxy/credit-debit-notes?${params}`);
       const json = await res.json();
@@ -86,7 +96,13 @@ export default function CreditDebitNotesPage() {
       setTotalPages(json.totalPages || 1);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [page, type, status, from, to, search, scope]);
+  }, [page, buildFilterParams]);
+
+  // Abre el PDF de devoluciones (solo NCV) agrupadas por vendedor, con los filtros activos.
+  const openSellerReportPdf = useCallback(() => {
+    const params = buildFilterParams();
+    window.open(`/api/proxy/credit-debit-notes/report/by-seller/pdf?${params}`, '_blank');
+  }, [buildFilterParams]);
 
   useEffect(() => {
     document.title = `Notas Cr/Db ${scopeTitle} | Trinity ERP`.replace('  ', ' ');
@@ -113,6 +129,12 @@ export default function CreditDebitNotesPage() {
             {total} nota{total !== 1 ? 's' : ''} encontrada{total !== 1 ? 's' : ''}
           </p>
         </div>
+        {scope === 'sale' && (
+          <button onClick={openSellerReportPdf} className="btn-secondary flex items-center gap-2">
+            <FileText size={16} />
+            PDF Devoluciones por vendedor
+          </button>
+        )}
       </div>
 
       {/* Filters */}
