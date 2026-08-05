@@ -186,8 +186,8 @@ export default function ReceivablesPage() {
     }
   }, [page, type, status, reference, from, to, overdue, dueSoon, dueSoonDays, employeeOnly]);
 
-  // Abre el reporte PDF con TODOS los registros del filtro actual (sin paginacion)
-  function openReportPdf() {
+  // Filtros actuales del listado de CxC (compartidos por ambos reportes PDF).
+  function buildReceivablesReportParams() {
     const params = new URLSearchParams();
     if (type) params.set('type', type);
     if (status) params.set('status', status);
@@ -197,7 +197,17 @@ export default function ReceivablesPage() {
     if (overdue) params.set('overdue', 'true');
     else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
     if (employeeOnly) params.set('employeeOnly', 'true');
-    window.open(`/api/proxy/receivables/report/pdf?${params}`, '_blank');
+    return params;
+  }
+
+  // Abre el reporte PDF con TODOS los registros del filtro actual (sin paginacion)
+  function openReportPdf() {
+    window.open(`/api/proxy/receivables/report/pdf?${buildReceivablesReportParams()}`, '_blank');
+  }
+
+  // Reporte PDF agrupado por vendedor y luego por cliente (mismos filtros)
+  function openReportBySellerPdf() {
+    window.open(`/api/proxy/receivables/report/by-seller/pdf?${buildReceivablesReportParams()}`, '_blank');
   }
 
   const fetchSummary = useCallback(async () => {
@@ -389,6 +399,13 @@ export default function ReceivablesPage() {
             title="Ver todas las cuentas por cobrar del filtro actual en PDF"
           >
             <FileText size={16} /> Reporte PDF
+          </button>
+          <button
+            onClick={openReportBySellerPdf}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+            title="Reporte PDF agrupado por vendedor y luego por cliente (mismos filtros)"
+          >
+            <FileText size={16} /> PDF por vendedor
           </button>
           <button
             onClick={() => { setAdvanceForm({ customerId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}

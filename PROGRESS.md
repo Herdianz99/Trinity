@@ -1,5 +1,21 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC (por vendedor y ajustes al original)
+
+> **⏳ CÓDIGO EN `main`, SIN DESPLEGAR.** Solo frontend + backend, sin migraciones ni schema. Verificado en local contra `grande_db` (PDFs reales + cross-check de montos).
+
+### 1) Fix: exportar XML SENIAT de retenciones ISLR no descargaba (`/purchases/islr-retentions`)
+- **Causa:** el proxy de Next (`apps/web/src/app/api/proxy/[...path]/route.ts`) solo reenviaba `Content-Disposition` para PDF/octet-stream; el XML (`application/xml`) caía en la rama de texto que **descartaba el header** → el navegador lo mostraba en vez de descargarlo, y `res.text()` habría **corrompido** el windows-1252.
+- **Fix:** el proxy reenvía como **bytes crudos** (ArrayBuffer) cualquier respuesta con `Content-Disposition` o de tipo xml/text-plain/spreadsheet/office/imagen → preserva header y codificación. Beneficia también a otros exports (TXT SENIAT, xlsx). En la página ISLR el botón pasó de `window.open` a un anchor `download` (sin pestaña en blanco). Verificado: proxy entrega `attachment` y bytes idénticos al API directo.
+
+### 2) Reporte PDF de CxC "por vendedor" (nuevo) + ajustes al reporte original
+- **Nuevo botón "PDF por vendedor"** en `/receivables` (junto al "Reporte PDF"): endpoint `GET /receivables/report/by-seller/pdf`. Agrupa en **2 niveles: vendedor → cliente** (vía `Receivable.invoice.seller`), ordenado por **mayor saldo**, con subtotal por cliente, por vendedor y **TOTAL GENERAL**. CxC manuales (sin factura) caen en "Sin vendedor".
+- **Excluye CxC de plataformas** (Cashea/Crediagro = `FINANCING_PLATFORM`) — solo en el por-vendedor.
+- **Empresas del grupo** (`Customer.isGroupCompany`) marcadas en **rojo** con etiqueta `[EMPRESA DEL GRUPO]`.
+- **Ambos reportes:** solo **CxC reales** (saldo pendiente > 0; se ocultan las pagadas). Y el **encabezado de cliente/vendedor/subtotales/total** ahora muestra **"Saldo" + "Vencido"** (antes Monto/Saldo); *Vencido* en rojo si > 0. "Vencido" = `dueDate < hoy-Caracas` (mismo criterio que las tarjetas de CxC).
+- **Backend:** `receivables.service.findAllForReport` ahora incluye `invoice.seller` + `customer.isGroupCompany` (aditivo, reusado por ambos). Lógica en `receivables-pdf.service` (`generate` + nuevo `generateBySeller`, helpers de barras/subtotal compartidos).
+- **PARA DESPLEGAR:** `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas). Aditivo, sin migraciones.
+
 ## 🗓️ Sesión 2026-08-05 — Reporte PDF de Devoluciones por vendedor
 
 > **⏳ CÓDIGO EN `main`, SIN DESPLEGAR.** Solo frontend + backend (sin migraciones ni cambios de schema). Verificado en local contra `grande_db`: PDF real generado (155 devoluciones, $11.213,39), typecheck API+web limpio, endpoint mapeado.

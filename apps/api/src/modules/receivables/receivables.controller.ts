@@ -55,6 +55,18 @@ export class ReceivablesController {
     res.end(buffer);
   }
 
+  // Reporte PDF agrupado por vendedor y luego por cliente (mismos filtros)
+  @Get('report/by-seller/pdf')
+  async reportBySeller(@Query() query: QueryReceivablesDto, @Res() res: Response) {
+    const buffer = await this.pdfService.generateBySeller(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="cuentas-por-cobrar-por-vendedor.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('summary')
   summary() {
     return this.receivablesService.summary();
