@@ -45,6 +45,12 @@
 - **Schema:** `documentDate` en `CustomerAdvance` + `SupplierAdvance`. Migración **`20260806140000_advance_document_date`** (`ADD COLUMN IF NOT EXISTS`) + red en `fix-schema.sql`. DTOs: `date?` + `exchangeRate?`. Services (`customer-advances`/`supplier-advances`): tasa = editable → tasa de la fecha → hoy; guarda `documentDate`; usa la tasa en `amountBs`, `CashMovement` y ledger. Las listas muestran `documentDate`.
 - Verificado E2E contra `grande_db`: anticipo con `date=2026-07-15` + `tasa=99.99` → guardó `documentDate=2026-07-15`, `exchangeRate=99.99`, `amountBs=999.90` (10×99.99); prueba limpiada.
 
+### 9) Fix: validación de cupo de crédito ignoraba los abonos (sin migración)
+- **Bug (detectado en prod, grande):** al facturar a crédito, `invoices.service.ts` calculaba la deuda del cliente con `receivable.aggregate _sum: amountUsd` = **monto ORIGINAL**, sin restar `paidAmountUsd`. Para receivables PARTIAL contaba como deuda todo, ignorando lo abonado → bloqueaba con "excede el cupo" aunque hubiera cupo real. Además el modal de clave de supervisor no aparecía porque el frontend (que usa `receivables.service`, correcto) sí veía cupo y no seteaba `overrideCreditBlockAuthorized` → discrepancia que trababa la venta.
+- **Fix:** `currentDebt` ahora es la suma del **saldo pendiente** (`amountUsd − paidAmountUsd`), trayendo los receivables y sumando en JS (mismo criterio que `receivables.service.ts`, la fuente que consume el frontend). Backend y frontend quedan alineados. No se tocó la lógica de vencidos ni `receivables.service`.
+- Verificado contra la data real de prod (restaurada a local): cliente Khaldun Ssaeb, 5 receivables, original $2980.85, abonado $714.48, saldo real $2266.37 → con cupo $4000 el disponible correcto es **$1733.63** (el buggy daba $1019.15).
+- **Pendiente tras deploy:** el cupo de ese cliente se subió temporalmente a $4000 como parche; bajarlo a $3000 si ese era el valor correcto.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

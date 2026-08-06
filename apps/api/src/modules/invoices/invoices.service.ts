@@ -625,15 +625,18 @@ export class InvoicesService {
     // vencidas. Solo se salta con la clave dinamica OVERRIDE_CREDIT_BLOCK (frontend-gated, se pasa
     // el flag overrideCreditBlockAuthorized), reservada a excepciones que autoriza administracion.
     if (dto.isCredit && invoice.customer) {
-      // 1) Cupo
-      const pendingReceivables = await this.prisma.receivable.aggregate({
+      // 1) Cupo — la deuda es el SALDO PENDIENTE (amountUsd - paidAmountUsd), no el monto
+      // original: para receivables PARTIAL hay que descontar lo ya abonado. Prisma no agrega
+      // expresiones calculadas, así que se traen y se suman en JS (mismo criterio que
+      // receivables.service.ts, la fuente que consume el frontend para mostrar el cupo).
+      const pending = await this.prisma.receivable.findMany({
         where: {
           customerId: invoice.customerId,
           status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
         },
-        _sum: { amountUsd: true },
+        select: { amountUsd: true, paidAmountUsd: true },
       });
-      const currentDebt = pendingReceivables._sum.amountUsd || 0;
+      const currentDebt = pending.reduce((s, r) => s + (r.amountUsd - r.paidAmountUsd), 0);
       const availableCredit = invoice.customer.creditLimit - currentDebt;
       const overLimit = effectiveTotalUsd > availableCredit + 0.01;
 
