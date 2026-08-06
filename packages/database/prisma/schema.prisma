@@ -1726,6 +1726,9 @@ model ExpenseCategory {
   id          String    @id @default(cuid())
   name        String    @unique
   description String?
+  // Clasificacion del gasto: FIXED (fijo/recurrente: alquiler, sueldos, servicios) o
+  // EXTRAORDINARY (extraordinario/eventual). Se usa para agrupar y totalizar en reportes.
+  expenseType String    @default("EXTRAORDINARY") // FIXED | EXTRAORDINARY
   isActive    Boolean   @default(true)
   isDefault   Boolean   @default(false)
   expenses    Expense[]

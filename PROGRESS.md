@@ -2,7 +2,7 @@
 
 ## 🗓️ Sesión 2026-08-06 — CxP igualado a CxC + Exportar Excel en CxC/CxP + Reporte detallado de recibos
 
-> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Todo aditivo: sin migraciones, sin cambios de schema. Solo backend (API) + frontend (Web). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel generados con data real). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas).
+> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Los puntos 1-3 son solo backend+frontend (sin migraciones). El **punto 4 SÍ trae una migración** (`expense_category_type`, `ADD COLUMN IF NOT EXISTS` + red en `fix-schema.sql`). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel con data real, migración aplicada). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas) — `deploy.sh` corre `prisma migrate deploy` solo.
 
 ### 1) Reporte PDF de CxP igualado al de CxC (`payables/report/pdf`)
 - El reporte de **Cuentas por Pagar** pasó a **agruparse por proveedor** (espejo del de CxC agrupado por cliente): el proveedor es ahora un **encabezado de grupo** (barra con nombre + RIF + N° docs) en vez de columna; subtotal por proveedor `Saldo / Vencido` (vencido en rojo, criterio `dueDate < hoy-Caracas`), columnas Documento · Vence · Neto USD · Saldo USD · Estado, y **TOTAL** global. Solo con saldo pendiente (>0), como CxC.
@@ -19,6 +19,12 @@
 - Columnas: **Tipo** (Factura / Nota de Crédito / Nota de Débito / Retención IVA·ISLR / Anticipo / Diferencial) · N° Documento · Debe · Haber. Cabecera del recibo con **fecha · N° recibo · cliente/proveedor · RIF · Estado** (coloreado). Línea de **métodos de pago** del recibo (cómo se cobró/pagó). **Fondo zebra** alternado por recibo (alto del bloque precalculado para el salto de página y la zebra).
 - **Frontend:** el botón "Reporte PDF" de `/receipts/collection` y `/receipts/payment` pasó a dropdown **`Reportes ▾`** con **Reporte resumen** (el existente) + **Reporte detallado (documentos)**.
 - Verificado con data real: NETO por recibo cuadra con `receipt.totalUsd`; cobro (118 recibos) y pago (191) generan sin errores.
+
+### 4) Gastos: clasificación Fijo/Extraordinario en categorías + reporte agrupado (CON migración)
+- Nuevo campo **`ExpenseCategory.expenseType`** (`FIXED` | `EXTRAORDINARY`, default `EXTRAORDINARY`). Migración **`20260806120000_expense_category_type`** (`ADD COLUMN IF NOT EXISTS`) + red en `deploy/fix-schema.sql`. Categorías existentes quedan Extraordinario (se marcan las fijas a mano). DTO (`@IsIn`) + `createCategory`/`updateCategory` lo persisten.
+- **Reporte PDF agrupado en 2 niveles** (`ExpenseReportPdfService.generateGroupedReport` + `GET /expenses/report-grouped-pdf`): nivel 1 = Fijo/Extraordinario (barra de color), nivel 2 = categoría (Cant · Total USD · Total Bs), con **subtotal por tipo** y **TOTAL GENERAL**. Rango de fechas sobre `Expense.date` **anclado a Caracas** (`caracasDayStart/End`, como el dashboard — corrige el `setUTCHours` del reporte viejo).
+- **Frontend:** `/expenses/categories` con columna Tipo (badge) + selector en el modal; `/expenses` con el botón de reporte convertido en dropdown **`Reportes ▾`** (Reporte detallado + Fijo/Extraordinario por categoría).
+- Verificado con data real (marcando 2 categorías FIXED y revirtiendo): agrupa EXTRAORDINARY (34 cats/$112.286,72) y FIXED (2 cats/$9.363,06) sin errores.
 
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 

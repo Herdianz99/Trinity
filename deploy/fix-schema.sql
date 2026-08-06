@@ -2536,3 +2536,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PartnerTransfer_number_key" ON "PartnerTransf
 
 -- Flag opt-in: exigir direccion del cliente (aviso en POS). Ses. aceros/acerosmayor.
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "requireCustomerAddress" BOOLEAN NOT NULL DEFAULT false;
+
+-- Clasificacion de categorias de gasto: FIXED (fijo) | EXTRAORDINARY (extraordinario). Ses. 2026-08-06.
+ALTER TABLE "ExpenseCategory" ADD COLUMN IF NOT EXISTS "expenseType" TEXT NOT NULL DEFAULT 'EXTRAORDINARY';

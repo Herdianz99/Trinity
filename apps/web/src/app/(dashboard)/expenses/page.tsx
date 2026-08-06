@@ -15,9 +15,14 @@ import {
   X,
   FileText,
   FileDown,
+  ChevronDown,
+  Layers,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface Expense {
   id: string;
@@ -387,12 +392,23 @@ export default function ExpensesPage() {
 
   const totalPages = Math.ceil(total / 25);
 
-  function openReportPdf() {
+  // Params de reporte con los filtros activos (compartido por ambos reportes).
+  function reportParams() {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (categoryId) params.set('categoryId', categoryId);
-    window.open(`/api/proxy/expenses/report-pdf?${params}`, '_blank');
+    return params;
+  }
+
+  // Reporte detallado (resumen por categoria + detalle de gastos).
+  function openReportPdf() {
+    window.open(`/api/proxy/expenses/report-pdf?${reportParams()}`, '_blank');
+  }
+
+  // Reporte agrupado por Fijo/Extraordinario -> categoria, con subtotales.
+  function openGroupedReportPdf() {
+    window.open(`/api/proxy/expenses/report-grouped-pdf?${reportParams()}`, '_blank');
   }
 
   return (
@@ -409,13 +425,24 @@ export default function ExpensesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={openReportPdf}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
-          >
-            <FileText size={16} />
-            Reporte PDF
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
+                title="Reportes de gastos (mismos filtros del listado)"
+              >
+                <FileText size={16} /> Reportes <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[260px]">
+              <DropdownMenuItem onClick={openReportPdf} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileText size={14} /> Reporte detallado
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openGroupedReportPdf} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <Layers size={14} /> Fijo / Extraordinario (por categoria)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {canManage && (
             <button
               onClick={openCreateModal}

@@ -30,7 +30,7 @@ export class ExpensesService {
       throw new ForbiddenException('Solo ADMIN puede crear categorías de gastos');
     }
     return this.prisma.expenseCategory.create({
-      data: { name: dto.name, description: dto.description },
+      data: { name: dto.name, description: dto.description, expenseType: dto.expenseType || 'EXTRAORDINARY' },
     });
   }
 

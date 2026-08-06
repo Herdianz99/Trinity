@@ -107,6 +107,23 @@ export class ExpensesController {
     res!.end(buffer);
   }
 
+  // Reporte AGRUPADO: nivel 1 = Fijo/Extraordinario, nivel 2 = categoria, con subtotales.
+  @Get('expenses/report-grouped-pdf')
+  async getGroupedReportPdf(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('categoryId') categoryId?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.reportPdfService.generateGroupedReport({ from, to, categoryId });
+    res!.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="reporte-gastos-fijo-extraordinario.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res!.end(buffer);
+  }
+
   @Get('expenses/:id/pdf')
   async getExpensePdf(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.pdfService.generateOne(id);

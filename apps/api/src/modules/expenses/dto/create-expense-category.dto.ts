@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsIn } from 'class-validator';
 
 export class CreateExpenseCategoryDto {
   @IsString()
@@ -7,4 +7,9 @@ export class CreateExpenseCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  // Fijo (recurrente) o Extraordinario (eventual). Default EXTRAORDINARY si no se envia.
+  @IsOptional()
+  @IsIn(['FIXED', 'EXTRAORDINARY'])
+  expenseType?: string;
 }

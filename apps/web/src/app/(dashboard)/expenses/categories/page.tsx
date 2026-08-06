@@ -16,6 +16,7 @@ interface ExpenseCategory {
   id: string;
   name: string;
   description: string | null;
+  expenseType: string; // FIXED | EXTRAORDINARY
   isActive: boolean;
   isDefault: boolean;
   createdAt: string;
@@ -28,6 +29,7 @@ export default function ExpenseCategoriesPage() {
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
+  const [formType, setFormType] = useState('EXTRAORDINARY');
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [userRole, setUserRole] = useState('');
@@ -68,6 +70,7 @@ export default function ExpenseCategoriesPage() {
     setEditing(null);
     setFormName('');
     setFormDescription('');
+    setFormType('EXTRAORDINARY');
     setModalOpen(true);
   }
 
@@ -75,6 +78,7 @@ export default function ExpenseCategoriesPage() {
     setEditing(cat);
     setFormName(cat.name);
     setFormDescription(cat.description || '');
+    setFormType(cat.expenseType || 'EXTRAORDINARY');
     setModalOpen(true);
   }
 
@@ -82,7 +86,7 @@ export default function ExpenseCategoriesPage() {
     e.preventDefault();
     setProcessing(true);
     try {
-      const body = { name: formName, description: formDescription || undefined };
+      const body = { name: formName, description: formDescription || undefined, expenseType: formType };
       const url = editing ? `/api/proxy/expense-categories/${editing.id}` : '/api/proxy/expense-categories';
       const method = editing ? 'PATCH' : 'POST';
 
@@ -167,6 +171,7 @@ export default function ExpenseCategoriesPage() {
             <tr className="bg-slate-800/60 border-b border-slate-700/50">
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Descripcion</th>
+              <th className="text-center px-4 py-3 text-slate-400 font-medium">Tipo</th>
               <th className="text-center px-4 py-3 text-slate-400 font-medium">Predefinida</th>
               <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
               <th className="text-center px-4 py-3 text-slate-400 font-medium">Acciones</th>
@@ -174,14 +179,23 @@ export default function ExpenseCategoriesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="text-center py-12"><Loader2 className="animate-spin inline-block text-slate-500" size={24} /></td></tr>
+              <tr><td colSpan={6} className="text-center py-12"><Loader2 className="animate-spin inline-block text-slate-500" size={24} /></td></tr>
             ) : categories.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-12 text-slate-500">No hay categorias</td></tr>
+              <tr><td colSpan={6} className="text-center py-12 text-slate-500">No hay categorias</td></tr>
             ) : (
               categories.map((cat) => (
                 <tr key={cat.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 text-slate-200 font-medium">{cat.name}</td>
                   <td className="px-4 py-3 text-slate-400">{cat.description || '-'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      cat.expenseType === 'FIXED'
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    }`}>
+                      {cat.expenseType === 'FIXED' ? 'Fijo' : 'Extraordinario'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-center">
                     {cat.isDefault && (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30">
@@ -249,6 +263,20 @@ export default function ExpenseCategoriesPage() {
                   className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
                   placeholder="Descripcion opcional"
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Tipo de gasto *</label>
+                <select
+                  value={formType}
+                  onChange={(e) => setFormType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+                >
+                  <option value="EXTRAORDINARY">Extraordinario (eventual)</option>
+                  <option value="FIXED">Fijo (recurrente)</option>
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Los gastos fijos son recurrentes (alquiler, sueldos, servicios); los extraordinarios son eventuales.
+                </p>
               </div>
               <button
                 type="submit"
