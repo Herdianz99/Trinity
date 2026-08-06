@@ -219,6 +219,16 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    key: 'incidents',
+    label: 'SEGURIDAD',
+    icon: <Shield size={20} />,
+    permission: 'incidents',
+    items: [
+      { label: 'Incidencias', href: '/incidents', icon: <AlertTriangle size={18} /> },
+      { label: 'Tipos de incidencia', href: '/incidents/types', icon: <Layers size={18} /> },
+    ],
+  },
+  {
     key: 'fiscal',
     label: 'FISCAL',
     icon: <BookOpen size={20} />,

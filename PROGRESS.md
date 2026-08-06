@@ -60,6 +60,14 @@
   - **Sidebar**: badge con el nombre (de `/config`) + botón "Cambiar empresa" con el mismo selector.
 - En **localhost** el login muestra el fallback genérico (el hostname no matchea ningún subdominio); en producción cada subdominio muestra su empresa. Sin backend/migraciones.
 
+### 11) Módulo de INCIDENCIAS (seguridad) — nuevo, mobile-first (CON migración)
+- Log de incidencias para el personal de seguridad. Núcleo pedido (tipo + observación + fecha) + agregados: **hora** (`occurredAt`), **gravedad** (Baja/Media/Alta), **involucrado**, **correlativo INC-XXXX**, **registrado por**. Histórico puro (sin estado abierto/resuelto), sección **SEGURIDAD**, tipos **configurables por cualquiera con el módulo** (NO solo ADMIN).
+- **Schema + migración `20260806160000_incidents_module`**: `IncidentType` + `Incident` (+ relación en `User`). CREATE TABLE `IF NOT EXISTS` + FKs en `DO $$`, **7 tipos por defecto** sembrados, y habilita el módulo `incidents` a ADMIN/SUPERVISOR existentes (`array_append` idempotente). Red en `fix-schema.sql`. `'incidents'` agregado a `VALID_MODULES` + defaults de rol.
+- **Backend** (`modules/incidents/`, gateado `@RequireModule('incidents')`): CRUD de tipos (sin check ADMIN), listar/crear incidencias, `summary` (KPIs + datos de gráfica), reporte **PDF agrupado por tipo** y **Excel**. `occurredAt` se manda con offset `-04:00` (hora Caracas).
+- **Frontend**: `/incidents` (KPIs, **gráfica de barras por tipo** con recharts, filtros, tabla/**tarjetas móviles**, modal Registrar, dropdown Reportes) + `/incidents/types` (gestión). Sección **SEGURIDAD** en sidebar + ruta en middleware. **Adaptado mobile-first** (seguridad registra desde el teléfono): header sin amontonarse, lista en tarjetas en móvil, modal con campos apilados, filtros a lo ancho.
+- Verificado E2E contra `grande_db`: INC-0001 con hora Caracas correcta, summary por tipo/gravedad, PDF+Excel válidos; prueba eliminada. Typecheck API+Web limpio; endpoints 401 (gated); ADMIN/SUPERVISOR ya tienen el módulo.
+- **Deploy:** trae migración (la corre `deploy.sh`). Para dar acceso a seguridad (no admin): marcar el módulo SEGURIDAD al rol correspondiente en `/settings/role-permissions`. Tras desplegar, los usuarios logueados quizá deban re-entrar para ver la sección.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

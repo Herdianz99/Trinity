@@ -344,6 +344,7 @@ model User {
   lostSales           LostSale[]
   dispatchesCreated   Dispatch[]          @relation("DispatchCreator")
   dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
+  incidentsCreated    Incident[]          @relation("IncidentCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -1766,6 +1767,37 @@ model Expense {
   createdBy     User            @relation(fields: [createdById], references: [id])
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+}
+
+// ============================================
+// INCIDENCIAS (SEGURIDAD)
+// ============================================
+
+model IncidentType {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  isActive  Boolean    @default(true)
+  incidents Incident[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Incident {
+  id           String       @id @default(cuid())
+  number       String       @unique              // correlativo INC-XXXX
+  typeId       String
+  type         IncidentType @relation(fields: [typeId], references: [id])
+  description  String                              // la observación (qué pasó)
+  involvedName String?                             // persona involucrada (opcional)
+  severity     String       @default("MEDIUM")     // LOW | MEDIUM | HIGH
+  occurredAt   DateTime                            // fecha+hora del suceso (default hoy Caracas)
+  createdById  String
+  createdBy    User         @relation("IncidentCreator", fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([typeId])
+  @@index([occurredAt])
 }
 
 // ============================================

@@ -23,6 +23,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/payment-schedules', ['payment-schedules']],
   ['/payables', ['payables']],
   ['/fiscal', ['fiscal']],
+  ['/incidents', ['incidents']],
   ['/settings', ['settings']],
   ['/config', ['settings']],
   ['/users', ['settings']],
