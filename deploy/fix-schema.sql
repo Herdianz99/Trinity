@@ -2539,3 +2539,7 @@ ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "requireCustomerAddress" BO
 
 -- Clasificacion de categorias de gasto: FIXED (fijo) | EXTRAORDINARY (extraordinario). Ses. 2026-08-06.
 ALTER TABLE "ExpenseCategory" ADD COLUMN IF NOT EXISTS "expenseType" TEXT NOT NULL DEFAULT 'EXTRAORDINARY';
+
+-- Fecha del anticipo (documentDate) en anticipos de cliente y proveedor. Ses. 2026-08-06.
+ALTER TABLE "CustomerAdvance" ADD COLUMN IF NOT EXISTS "documentDate" TIMESTAMP(3);
+ALTER TABLE "SupplierAdvance" ADD COLUMN IF NOT EXISTS "documentDate" TIMESTAMP(3);

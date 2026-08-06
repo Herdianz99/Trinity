@@ -936,6 +936,7 @@ model CustomerAdvance {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
+  documentDate  DateTime?             // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   paidAmountUsd Float                 @default(0)
   paidAmountBs  Float                 @default(0)
   status        CustomerAdvanceStatus @default(AVAILABLE)
@@ -958,6 +959,7 @@ model SupplierAdvance {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
+  documentDate  DateTime?             // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   paidAmountUsd Float                 @default(0)
   paidAmountBs  Float                 @default(0)
   status        SupplierAdvanceStatus @default(AVAILABLE)

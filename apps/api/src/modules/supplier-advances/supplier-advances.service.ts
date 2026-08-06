@@ -65,11 +65,19 @@ export class SupplierAdvancesService {
     if (!session) throw new NotFoundException('Sesion de caja no encontrada');
     if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
 
-    const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    // Fecha del anticipo (elegida por el usuario) y tasa: si el usuario mandó una tasa
+    // editable se usa esa; si no, se busca la tasa de la fecha elegida (o de hoy).
+    const docDate = dto.date ? caracasDateKey(dto.date) : caracasDateKey();
+    let rateVal: number;
+    if (dto.exchangeRate && dto.exchangeRate > 0) {
+      rateVal = dto.exchangeRate;
+    } else {
+      const rate = await this.prisma.exchangeRate.findUnique({ where: { date: docDate } });
+      if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para esa fecha. Ingresa la tasa manualmente.');
+      rateVal = rate.rate;
+    }
 
-    const amountBs = Math.round(dto.amountUsd * rate.rate * 100) / 100;
+    const amountBs = Math.round(dto.amountUsd * rateVal * 100) / 100;
 
     return this.prisma.$transaction(async (tx) => {
       const advance = await tx.supplierAdvance.create({
@@ -77,7 +85,8 @@ export class SupplierAdvancesService {
           supplierId: dto.supplierId,
           amountUsd: dto.amountUsd,
           amountBs,
-          exchangeRate: rate.rate,
+          exchangeRate: rateVal,
+          documentDate: docDate,
           methodId: dto.methodId,
           cashSessionId: dto.cashSessionId,
           reference: dto.reference || null,
@@ -96,7 +105,7 @@ export class SupplierAdvancesService {
           type: 'EXPENSE',
           amountUsd: dto.amountUsd,
           amountBs,
-          exchangeRate: rate.rate,
+          exchangeRate: rateVal,
           currency: method.isDivisa ? 'USD' : 'BS',
           isCash: method.isCash, // transferencia/Zelle NO sale de la gaveta física
           reason: `Anticipo proveedor: ${supplier.name}`,
@@ -109,7 +118,7 @@ export class SupplierAdvancesService {
         cashSessionId: dto.cashSessionId,
         direction: 'OUT',
         amountUsd: dto.amountUsd, amountBs, currency: method.isDivisa ? 'USD' : 'BS',
-        exchangeRate: rate.rate,
+        exchangeRate: rateVal,
         methodId: dto.methodId, isCash: method.isCash,
         sourceType: 'SUPPLIER_ADVANCE', sourceId: advance.id,
         reason: `Anticipo proveedor: ${supplier.name}`, createdById: userId,

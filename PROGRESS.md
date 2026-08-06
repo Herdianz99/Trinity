@@ -39,6 +39,12 @@
 - El campo **"motivo"** (lista `SalesReturnReason`) se pensó para la **devolución de mercancía** (NCV origin `MERCHANDISE`, que reingresa stock), pero el código lo exigía para **cualquier NCV**, incluso la nota por **monto** (origin `MANUAL`, que solo baja el total sin devolver mercancía).
 - **Fix:** motivo se pide/valida **solo si `origin === 'MERCHANDISE'`**. Frontend (`credit-debit-notes/new`): `isSalesReturn = noteType === 'NCV' && origin === 'MERCHANDISE'` (afecta render del select, validación y envío). Backend (`credit-debit-notes.service`): `if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE' && !dto.motivo)`. En la nota por monto queda "Observaciones" (texto libre, opcional).
 
+### 8) Anticipos CxC/CxP: igualados + campo de FECHA y TASA editable (CON migración)
+- **Bug hallado ("no funcionan igual"):** la página de **CxP** traía la tasa de `/exchange-rate` (historial → lista) y leía `data.rate` = `undefined` → tasa **0** → la conversión USD↔Bs del modal de CxP estaba rota. CxC usaba `/exchange-rate/today`. Arreglado (CxP ahora usa `/today`).
+- **Feature (aplicada a AMBOS para que queden iguales):** campo **Fecha** (default hoy) + **Tasa (Bs/$) editable**; al cambiar la fecha se carga la tasa de ese día vía `exchange-rate/by-date` y queda editable; la conversión usa la tasa del form.
+- **Schema:** `documentDate` en `CustomerAdvance` + `SupplierAdvance`. Migración **`20260806140000_advance_document_date`** (`ADD COLUMN IF NOT EXISTS`) + red en `fix-schema.sql`. DTOs: `date?` + `exchangeRate?`. Services (`customer-advances`/`supplier-advances`): tasa = editable → tasa de la fecha → hoy; guarda `documentDate`; usa la tasa en `amountBs`, `CashMovement` y ledger. Las listas muestran `documentDate`.
+- Verificado E2E contra `grande_db`: anticipo con `date=2026-07-15` + `tasa=99.99` → guardó `documentDate=2026-07-15`, `exchangeRate=99.99`, `amountBs=999.90` (10×99.99); prueba limpiada.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

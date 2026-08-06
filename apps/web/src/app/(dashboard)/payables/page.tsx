@@ -81,6 +81,7 @@ interface SupplierAdvance {
   reference: string | null;
   notes: string | null;
   method: { id: string; name: string } | null;
+  documentDate: string | null;
   createdAt: string;
 }
 
@@ -148,7 +149,7 @@ export default function PayablesPage() {
 
   // Advance modal states
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
-  const [advanceForm, setAdvanceForm] = useState({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
+  const [advanceForm, setAdvanceForm] = useState({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '', date: '', rate: '' });
   const [savingAdvance, setSavingAdvance] = useState(false);
   const [deleteAdvance, setDeleteAdvance] = useState<any>(null);
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
@@ -258,9 +259,10 @@ export default function PayablesPage() {
 
   const fetchExchangeRate = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/exchange-rate');
+      // Tasa de HOY (antes pegaba a /exchange-rate = historial y data.rate salía undefined → 0).
+      const res = await fetch('/api/proxy/exchange-rate/today');
       const data = await res.json();
-      setExchangeRate(data.rate || 0);
+      setExchangeRate(data?.rate || 0);
     } catch {}
   }, []);
 
@@ -288,6 +290,34 @@ export default function PayablesPage() {
     } catch {}
   }, []);
 
+  // Fecha local (YYYY-MM-DD) — hora del navegador = Caracas para el usuario.
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  // Carga la tasa de una fecha (by-date) al form del anticipo y recalcula el monto Bs.
+  async function loadAdvanceRate(dateStr: string) {
+    try {
+      const res = await fetch(`/api/proxy/exchange-rate/by-date?date=${dateStr}`);
+      const data = res.ok ? await res.json() : null;
+      const r = data?.rate ? Number(data.rate) : 0;
+      setAdvanceForm(f => ({
+        ...f,
+        rate: r ? String(r) : '',
+        amountBs: f.amountUsd && r ? (Number(f.amountUsd) * r).toFixed(2) : f.amountBs,
+      }));
+    } catch { /* ignore */ }
+  }
+
+  // Abre el modal de anticipo con la fecha de hoy y su tasa cargada (editable).
+  function openAdvanceModal() {
+    const today = todayLocal();
+    setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '', date: today, rate: exchangeRate ? String(exchangeRate) : '' });
+    setAdvanceModalOpen(true);
+    loadAdvanceRate(today);
+  }
+
   async function submitAdvance() {
     if (!advanceForm.supplierId || !advanceForm.amountUsd || !advanceForm.methodId || !advanceForm.cashSessionId) return;
     setSavingAdvance(true);
@@ -300,6 +330,8 @@ export default function PayablesPage() {
           amountUsd: Number(advanceForm.amountUsd),
           methodId: advanceForm.methodId,
           cashSessionId: advanceForm.cashSessionId,
+          date: advanceForm.date || undefined,
+          exchangeRate: advanceForm.rate ? Number(advanceForm.rate) : undefined,
           reference: advanceForm.reference || undefined,
           notes: advanceForm.notes || undefined,
         }),
@@ -310,7 +342,7 @@ export default function PayablesPage() {
       }
       setMessage({ type: 'success', text: 'Anticipo registrado exitosamente' });
       setAdvanceModalOpen(false);
-      setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '' });
+      setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: '', reference: '', notes: '', date: '', rate: '' });
       fetchAdvances();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -405,7 +437,7 @@ export default function PayablesPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <button
-            onClick={() => { setAdvanceForm({ supplierId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}
+            onClick={openAdvanceModal}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
           >
             <Banknote size={16} /> Registrar anticipo
@@ -728,7 +760,7 @@ export default function PayablesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-300">{a.method?.name || '-'}</td>
-                      <td className="px-4 py-3 text-slate-300 text-xs">{new Date(a.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-slate-300 text-xs">{a.documentDate ? new Date(a.documentDate).toLocaleDateString('es-VE', { timeZone: 'UTC' }) : new Date(a.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs font-mono">{a.reference || '-'}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="inline-flex items-center gap-2">
@@ -968,11 +1000,29 @@ export default function PayablesPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Fecha *</label>
+                  <input type="date" value={advanceForm.date}
+                    onChange={e => { const d = e.target.value; setAdvanceForm(f => ({ ...f, date: d })); if (d) loadAdvanceRate(d); }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Tasa (Bs/$) *</label>
+                  <input type="number" value={advanceForm.rate} onChange={e => {
+                    const r = e.target.value;
+                    const rn = Number(r) || 0;
+                    setAdvanceForm(f => ({ ...f, rate: r, amountBs: f.amountUsd && rn ? (Number(f.amountUsd) * rn).toFixed(2) : f.amountBs }));
+                  }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.0001" min="0.0001" placeholder="0.0000" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="text-xs text-slate-400 mb-1 block">Monto USD *</label>
                   <input type="number" value={advanceForm.amountUsd}
                     onChange={e => {
                       const usd = e.target.value;
-                      const bs = usd && exchangeRate ? (Number(usd) * exchangeRate).toFixed(2) : '';
+                      const rn = Number(advanceForm.rate) || 0;
+                      const bs = usd && rn > 0 ? (Number(usd) * rn).toFixed(2) : '';
                       setAdvanceForm(f => ({ ...f, amountUsd: usd, amountBs: bs }));
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.01" min="0.01" placeholder="0.00" />
@@ -982,15 +1032,13 @@ export default function PayablesPage() {
                   <input type="number" value={advanceForm.amountBs}
                     onChange={e => {
                       const bs = e.target.value;
-                      const usd = bs && exchangeRate ? (Number(bs) / exchangeRate).toFixed(2) : '';
+                      const rn = Number(advanceForm.rate) || 0;
+                      const usd = bs && rn > 0 ? (Number(bs) / rn).toFixed(2) : '';
                       setAdvanceForm(f => ({ ...f, amountBs: bs, amountUsd: usd }));
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" step="0.01" min="0.01" placeholder="0.00" />
                 </div>
               </div>
-              {exchangeRate > 0 && (
-                <p className="text-xs text-slate-500">Tasa: Bs {exchangeRate.toFixed(4)} / USD</p>
-              )}
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Metodo de pago *</label>
                 <select value={advanceForm.methodId} onChange={e => setAdvanceForm(f => ({ ...f, methodId: e.target.value }))}

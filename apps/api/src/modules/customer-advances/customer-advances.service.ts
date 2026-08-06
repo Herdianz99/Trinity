@@ -67,11 +67,19 @@ export class CustomerAdvancesService {
     if (!session) throw new NotFoundException('Sesion de caja no encontrada');
     if (session.status !== 'OPEN') throw new BadRequestException('La sesion de caja no esta abierta');
 
-    const today = caracasDateKey();
-    const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
-    if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
+    // Fecha del anticipo (elegida por el usuario) y tasa: si el usuario mandó una tasa
+    // editable se usa esa; si no, se busca la tasa de la fecha elegida (o de hoy).
+    const docDate = dto.date ? caracasDateKey(dto.date) : caracasDateKey();
+    let rateVal: number;
+    if (dto.exchangeRate && dto.exchangeRate > 0) {
+      rateVal = dto.exchangeRate;
+    } else {
+      const rate = await this.prisma.exchangeRate.findUnique({ where: { date: docDate } });
+      if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para esa fecha. Ingresa la tasa manualmente.');
+      rateVal = rate.rate;
+    }
 
-    const amountBs = Math.round(dto.amountUsd * rate.rate * 100) / 100;
+    const amountBs = Math.round(dto.amountUsd * rateVal * 100) / 100;
 
     return this.prisma.$transaction(async (tx) => {
       const advance = await tx.customerAdvance.create({
@@ -79,7 +87,8 @@ export class CustomerAdvancesService {
           customerId: dto.customerId,
           amountUsd: dto.amountUsd,
           amountBs,
-          exchangeRate: rate.rate,
+          exchangeRate: rateVal,
+          documentDate: docDate,
           methodId: dto.methodId,
           cashSessionId: dto.cashSessionId,
           reference: dto.reference || null,
@@ -98,7 +107,7 @@ export class CustomerAdvancesService {
           type: 'INCOME',
           amountUsd: dto.amountUsd,
           amountBs,
-          exchangeRate: rate.rate,
+          exchangeRate: rateVal,
           currency: method.isDivisa ? 'USD' : 'BS',
           isCash: method.isCash, // Zelle/transferencia NO entra a la gaveta física
           reason: `Anticipo cliente: ${customer.name}`,
@@ -111,7 +120,7 @@ export class CustomerAdvancesService {
         cashSessionId: dto.cashSessionId,
         direction: 'IN',
         amountUsd: dto.amountUsd, amountBs, currency: method.isDivisa ? 'USD' : 'BS',
-        exchangeRate: rate.rate,
+        exchangeRate: rateVal,
         methodId: dto.methodId, isCash: method.isCash,
         sourceType: 'CUSTOMER_ADVANCE', sourceId: advance.id,
         reason: `Anticipo cliente: ${customer.name}`, createdById: userId,
