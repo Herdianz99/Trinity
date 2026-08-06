@@ -2596,3 +2596,11 @@ ON CONFLICT ("name") DO NOTHING;
 UPDATE "RolePermission" SET modules = array_append(modules,'incidents')
 WHERE role IN ('ADMIN','SUPERVISOR') AND NOT ('incidents' = ANY(modules));
 
+
+-- Vendedor opcional en el recibo (solo cobro). Ses. 2026-08-06.
+ALTER TABLE "Receipt" ADD COLUMN IF NOT EXISTS "sellerId" TEXT;
+CREATE INDEX IF NOT EXISTS "Receipt_sellerId_idx" ON "Receipt"("sellerId");
+DO $$ BEGIN
+  ALTER TABLE "Receipt" ADD CONSTRAINT "Receipt_sellerId_fkey"
+    FOREIGN KEY ("sellerId") REFERENCES "Seller"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

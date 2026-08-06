@@ -68,6 +68,12 @@
 - Verificado E2E contra `grande_db`: INC-0001 con hora Caracas correcta, summary por tipo/gravedad, PDF+Excel válidos; prueba eliminada. Typecheck API+Web limpio; endpoints 401 (gated); ADMIN/SUPERVISOR ya tienen el módulo.
 - **Deploy:** trae migración (la corre `deploy.sh`). Para dar acceso a seguridad (no admin): marcar el módulo SEGURIDAD al rol correspondiente en `/settings/role-permissions`. Tras desplegar, los usuarios logueados quizá deban re-entrar para ver la sección.
 
+### 12) Recibo de cobro: campo "Vendedor" (opcional) + creado por + filtro por vendedor (CON migración)
+- **Schema + migración `20260806180000_receipt_seller`:** `Receipt.sellerId` (opcional, FK a `Seller` `ON DELETE SET NULL`) + índice. Aditiva/idempotente + red en `fix-schema.sql`. Relación `receipts` agregada a `Seller`.
+- **Backend:** DTO create + query con `sellerId`; `create` guarda el vendedor **solo en cobro** (`type === 'COLLECTION'`); `buildWhere` filtra por `sellerId`; `findAll`/`findOne` incluyen `seller`; `findOne` resuelve además **createdBy** (lookup por `createdById`, que no es relación Prisma).
+- **Frontend:** `/receipts/new` (solo cobro) selector **Vendedor** en el encabezado junto a Fecha/Tasa (se envía en ambos flujos); `/receipts/[id]` muestra **Vendedor** y **Creado por**; `/receipts/collection` **filtro por vendedor** + columna Vendedor (respeta los reportes y "Limpiar filtros").
+- Verificado E2E contra `grande_db`: detalle con vendedor+creador, filtro por vendedor OK (prueba revertida). Typecheck API+Web limpio.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

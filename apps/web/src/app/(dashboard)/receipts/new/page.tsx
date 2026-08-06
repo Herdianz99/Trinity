@@ -118,6 +118,9 @@ export default function NewReceiptPage() {
 
   // Notes
   const [notes, setNotes] = useState('');
+  // Vendedor opcional (solo cobro)
+  const [sellers, setSellers] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [sellerId, setSellerId] = useState('');
 
   // Saving
   const [saving, setSaving] = useState(false);
@@ -136,6 +139,15 @@ export default function NewReceiptPage() {
   const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   useEffect(() => { document.title = `Nuevo Recibo de ${isCollection ? 'Cobro' : 'Pago'} | Trinity ERP`; }, [isCollection]);
+
+  // Vendedores (solo cobro) para el campo opcional "Vendedor"
+  useEffect(() => {
+    if (!isCollection) return;
+    fetch('/api/proxy/sellers')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setSellers(Array.isArray(d) ? d : d.data || []))
+      .catch(() => {});
+  }, [isCollection]);
 
   // Fetch today's rate
   useEffect(() => {
@@ -477,6 +489,7 @@ export default function NewReceiptPage() {
       } else {
         body.supplierId = entityId;
       }
+      if (isCollection && sellerId) body.sellerId = sellerId;
       const res = await fetch('/api/proxy/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -525,6 +538,7 @@ export default function NewReceiptPage() {
       } else {
         body.supplierId = entityId;
       }
+      if (isCollection && sellerId) body.sellerId = sellerId;
       const res = await fetch('/api/proxy/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -735,6 +749,21 @@ export default function NewReceiptPage() {
             </label>
             {todayRate > 0 && Math.abs(rate - todayRate) > 0.0001 && (
               <span className="text-[11px] text-amber-400">Tasa de hoy: {fmtRate(todayRate)}</span>
+            )}
+            {isCollection && (
+              <label className="flex items-center gap-2">
+                <span>Vendedor:</span>
+                <select
+                  value={sellerId}
+                  onChange={(e) => setSellerId(e.target.value)}
+                  className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-2 py-1 text-sm"
+                >
+                  <option value="">Sin vendedor</option>
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>
+                  ))}
+                </select>
+              </label>
             )}
           </div>
         </div>

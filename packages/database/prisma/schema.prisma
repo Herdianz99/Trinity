@@ -418,6 +418,7 @@ model Seller {
   user            User?     @relation(fields: [userId], references: [id])
   invoices        Invoice[]
   quotations      Quotation[]
+  receipts        Receipt[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -1433,6 +1434,8 @@ model Receipt {
   customer           Customer?           @relation(fields: [customerId], references: [id])
   supplierId         String?
   supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  sellerId           String?             // vendedor asociado al recibo (opcional, solo cobro)
+  seller             Seller?             @relation(fields: [sellerId], references: [id])
   status             ReceiptStatus       @default(DRAFT)
   totalUsd           Float               @default(0)
   totalBsHistoric    Float               @default(0)

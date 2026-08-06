@@ -52,6 +52,8 @@ interface Receipt {
   payments: ReceiptPayment[];
   documentDate: string | null;
   createdAt: string;
+  seller: { id: string; code: string; name: string } | null;
+  createdBy: { id: string; name: string } | null;
 }
 
 interface PaymentMethodData {
@@ -405,6 +407,16 @@ export default function ReceiptDetailPage() {
                 <div>
                   <span className="text-slate-500 block">Tasa del dia</span>
                   <span className="text-white font-mono">{fmtRate(receipt.exchangeRate)} Bs/$</span>
+                </div>
+                {isCollection && (
+                  <div>
+                    <span className="text-slate-500 block">Vendedor</span>
+                    <span className="text-white">{receipt.seller ? (receipt.seller.code ? `${receipt.seller.code} — ${receipt.seller.name}` : receipt.seller.name) : '—'}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500 block">Creado por</span>
+                  <span className="text-white">{receipt.createdBy?.name || '—'}</span>
                 </div>
               </div>
               {receipt.notes && (

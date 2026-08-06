@@ -39,6 +39,7 @@ export class ReceiptsService {
     if (query.status) where.status = query.status;
     if (query.customerId) where.customerId = query.customerId;
     if (query.supplierId) where.supplierId = query.supplierId;
+    if (query.sellerId) where.sellerId = query.sellerId;
     // Busqueda libre por N° de recibo o nombre de cliente/proveedor. El filtro por `type`
     // ya acota a cobro/pago, asi que incluir ambas relaciones en el OR es inocuo.
     const search = query.search?.trim();
@@ -74,6 +75,7 @@ export class ReceiptsService {
         include: {
           customer: { select: { id: true, name: true, rif: true } },
           supplier: { select: { id: true, name: true, rif: true } },
+          seller: { select: { id: true, code: true, name: true } },
           items: true,
         },
       }),
@@ -122,6 +124,7 @@ export class ReceiptsService {
       include: {
         customer: true,
         supplier: true,
+        seller: { select: { id: true, code: true, name: true } },
         items: {
           include: {
             receivable: {
@@ -142,7 +145,13 @@ export class ReceiptsService {
       },
     });
     if (!receipt) throw new NotFoundException('Recibo no encontrado');
-    return receipt;
+    // createdById es solo columna (sin relación Prisma) → se resuelve el nombre a mano
+    // para mostrar "quién lo creó" en el detalle.
+    const creator = await this.prisma.user.findUnique({
+      where: { id: receipt.createdById },
+      select: { id: true, name: true },
+    });
+    return { ...receipt, createdBy: creator };
   }
 
   async create(dto: CreateReceiptDto, userId: string) {
@@ -435,6 +444,7 @@ export class ReceiptsService {
           type: dto.type,
           customerId: dto.customerId || null,
           supplierId: dto.supplierId || null,
+          sellerId: dto.type === 'COLLECTION' ? (dto.sellerId || null) : null,
           status: 'DRAFT',
           totalUsd,
           totalBsHistoric,

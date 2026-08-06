@@ -15,6 +15,7 @@ interface Receipt {
   number: string;
   type: string;
   customer: { id: string; name: string; rif: string | null } | null;
+  seller: { id: string; code: string; name: string } | null;
   status: string;
   totalUsd: number;
   totalBsHistoric: number;
@@ -49,6 +50,8 @@ export default function ReceiptsCollectionPage() {
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  const [sellers, setSellers] = useState<{ id: string; code: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchReceipts = useCallback(async () => {
@@ -57,6 +60,7 @@ export default function ReceiptsCollectionPage() {
       const params = new URLSearchParams({ type: 'COLLECTION', page: String(page), limit: '20' });
       if (status) params.set('status', status);
       if (search) params.set('search', search);
+      if (sellerId) params.set('sellerId', sellerId);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
 
@@ -67,9 +71,12 @@ export default function ReceiptsCollectionPage() {
       setTotalPages(json.totalPages || 1);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [page, status, search, from, to]);
+  }, [page, status, search, sellerId, from, to]);
 
   useEffect(() => { document.title = 'Recibos de Cobro | Trinity ERP'; }, []);
+  useEffect(() => {
+    fetch('/api/proxy/sellers').then((r) => (r.ok ? r.json() : [])).then((d) => setSellers(Array.isArray(d) ? d : d.data || [])).catch(() => {});
+  }, []);
   // Debounce de la caja de busqueda: aplica el filtro 400ms despues de dejar de escribir
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 400);
@@ -92,6 +99,7 @@ export default function ReceiptsCollectionPage() {
     const params = new URLSearchParams({ type: 'COLLECTION' });
     if (status) params.set('status', status);
     if (search) params.set('search', search);
+    if (sellerId) params.set('sellerId', sellerId);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     return params;
@@ -177,6 +185,14 @@ export default function ReceiptsCollectionPage() {
           <option value="POSTED">Procesado</option>
           <option value="CANCELLED">Cancelado</option>
         </select>
+        <select
+          value={sellerId}
+          onChange={(e) => { setSellerId(e.target.value); setPage(1); }}
+          className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">Todos los vendedores</option>
+          {sellers.map((s) => <option key={s.id} value={s.id}>{s.code ? `${s.code} — ${s.name}` : s.name}</option>)}
+        </select>
         <input
           type="date"
           value={from}
@@ -189,9 +205,9 @@ export default function ReceiptsCollectionPage() {
           onChange={(e) => { setTo(e.target.value); setPage(1); }}
           className="bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm"
         />
-        {(status || from || to || searchInput) && (
+        {(status || from || to || searchInput || sellerId) && (
           <button
-            onClick={() => { setStatus(''); setFrom(''); setTo(''); setSearchInput(''); setPage(1); }}
+            onClick={() => { setStatus(''); setFrom(''); setTo(''); setSearchInput(''); setSellerId(''); setPage(1); }}
             className="text-xs text-slate-400 hover:text-white"
           >
             Limpiar filtros
@@ -216,6 +232,7 @@ export default function ReceiptsCollectionPage() {
                 <tr className="border-b border-slate-700/50">
                   <th className="text-left px-4 py-3 text-slate-400 font-medium">Numero</th>
                   <th className="text-left px-4 py-3 text-slate-400 font-medium">Cliente</th>
+                  <th className="text-left px-4 py-3 text-slate-400 font-medium">Vendedor</th>
                   <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
                   <th className="text-right px-4 py-3 text-slate-400 font-medium">Total Bs hist.</th>
                   <th className="text-right px-4 py-3 text-slate-400 font-medium">Diferencial Bs</th>
@@ -233,6 +250,7 @@ export default function ReceiptsCollectionPage() {
                   >
                     <td className="px-4 py-3 text-white font-mono font-medium">{r.number}</td>
                     <td className="px-4 py-3 text-slate-300">{r.customer?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-300 text-xs">{r.seller?.name || '—'}</td>
                     <td className="px-4 py-3 text-right text-white font-mono">${fmt(r.totalUsd)}</td>
                     <td className="px-4 py-3 text-right text-slate-300 font-mono">{fmt(r.totalBsHistoric)} Bs</td>
                     <td className={`px-4 py-3 text-right font-mono ${r.differentialBs > 0 ? 'text-amber-400' : r.differentialBs < 0 ? 'text-green-400' : 'text-slate-500'}`}>

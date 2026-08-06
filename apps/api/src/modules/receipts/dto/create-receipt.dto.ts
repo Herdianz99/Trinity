@@ -63,6 +63,11 @@ export class CreateReceiptDto {
   @IsString()
   platformName?: string;
 
+  // Vendedor asociado al recibo (opcional, solo cobro).
+  @IsOptional()
+  @IsString()
+  sellerId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ReceiptItemDto)
