@@ -102,7 +102,9 @@ export default function NewCreditDebitNotePage() {
   const [supplierDocNumber, setSupplierDocNumber] = useState('');
 
   const isSale = ['NCV', 'NDV'].includes(noteType);
-  const isSalesReturn = noteType === 'NCV'; // la devolución de ventas exige motivo
+  // El motivo (lista de motivos de devolución) solo aplica a la DEVOLUCIÓN de mercancía;
+  // en la nota de crédito por MONTO (origin MANUAL) no se pide (queda Observaciones libre).
+  const isSalesReturn = noteType === 'NCV' && origin === 'MERCHANDISE'; // la devolución de ventas exige motivo
 
   const fetchParentDoc = useCallback(async () => {
     setLoading(true);

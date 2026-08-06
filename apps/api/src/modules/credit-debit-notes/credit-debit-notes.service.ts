@@ -259,8 +259,9 @@ export class CreditDebitNotesService {
     if (['NCC', 'NDC'].includes(dto.type) && !dto.purchaseOrderId) {
       throw new BadRequestException('purchaseOrderId es requerido para notas de compra');
     }
-    // Motivo obligatorio en la devolución de ventas (NCV)
-    if (dto.type === 'NCV' && !dto.motivo) {
+    // Motivo obligatorio SOLO en la devolución de mercancía (NCV con origin MERCHANDISE).
+    // La nota de crédito por MONTO (origin MANUAL) no devuelve mercancía → no exige motivo.
+    if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE' && !dto.motivo) {
       throw new BadRequestException('Debe seleccionar el motivo de la devolución');
     }
 

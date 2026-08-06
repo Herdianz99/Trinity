@@ -35,6 +35,10 @@
 - **Backend (`invoices.service.pay`):** nuevo `effectiveCreditDays` — si el cliente tiene días fijos **> 0** se usan esos (fuente de verdad, no editable); si tiene **0**, se usa el valor **manual** del cajero (`dto.creditDays`). Aplicado en los 2 cálculos de vencimiento (el `Receivable` de la CxC y el `Invoice.dueDate`/`creditDays`).
 - **Frontend POS:** estado `adminCreditDays`; el campo "Días de crédito" se **desbloquea solo si `adminCreditDays === 0`** (si el cliente tiene días fijos, sigue de solo lectura). Label/aviso ámbar cuando es editable, y el cobro a crédito envía `creditDays` en el payload (el backend solo lo aplica si el cliente tiene 0). `creditDays` ya estaba decorado en `pay-invoice.dto` (pasa el whitelist).
 
+### 7) Nota de crédito por MONTO no debe exigir "motivo" (solo la devolución) (sin migración)
+- El campo **"motivo"** (lista `SalesReturnReason`) se pensó para la **devolución de mercancía** (NCV origin `MERCHANDISE`, que reingresa stock), pero el código lo exigía para **cualquier NCV**, incluso la nota por **monto** (origin `MANUAL`, que solo baja el total sin devolver mercancía).
+- **Fix:** motivo se pide/valida **solo si `origin === 'MERCHANDISE'`**. Frontend (`credit-debit-notes/new`): `isSalesReturn = noteType === 'NCV' && origin === 'MERCHANDISE'` (afecta render del select, validación y envío). Backend (`credit-debit-notes.service`): `if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE' && !dto.motivo)`. En la nota por monto queda "Observaciones" (texto libre, opcional).
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)
