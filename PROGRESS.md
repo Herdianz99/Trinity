@@ -51,6 +51,15 @@
 - Verificado contra la data real de prod (restaurada a local): cliente Khaldun Ssaeb, 5 receivables, original $2980.85, abonado $714.48, saldo real $2266.37 → con cupo $4000 el disponible correcto es **$1733.63** (el buggy daba $1019.15).
 - **Pendiente tras deploy:** el cupo de ese cliente se subió temporalmente a $4000 como parche; bajarlo a $3000 si ese era el valor correcto.
 
+### 10) Menú de empresas (salto entre subdominios) + nombre de empresa en el login (sin migración, sin endpoint)
+- **Problema:** usuarios que operan varias empresas no distinguen en qué empresa entran (no entienden de subdominios); además el login tenía "Inversiones El Trebol" **hardcodeado para TODAS** (mismo código) → todos los logins mentían.
+- **Solución (100% frontend, hardcodeada, sin endpoint = sin superficie de seguridad):**
+  - Nuevo `apps/web/src/lib/companies.ts`: directorio de las 6 empresas (`key`, `name`, `host`, `url`) + `findCompanyByHost(hostname)`. Nombres: Inversiones El Trébol · Ferreconstrucciones El Trébol · Total Tools · Total Tools Turén · Aceros Portuguesa · Aceros Mayor.
+  - Nuevo `components/company-switcher.tsx`: dropdown que detecta la empresa actual por `window.location.hostname`, la marca (✓ actual) y en las demás abre su URL en **pestaña nueva**.
+  - **Login** (`(auth)/login`): muestra el nombre de la empresa en grande (badge, por hostname) + el selector + footer corregido (antes decía "Inversiones El Trebol" en todas).
+  - **Sidebar**: badge con el nombre (de `/config`) + botón "Cambiar empresa" con el mismo selector.
+- En **localhost** el login muestra el fallback genérico (el hostname no matchea ningún subdominio); en producción cada subdominio muestra su empresa. Sin backend/migraciones.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

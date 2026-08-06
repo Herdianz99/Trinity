@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { findCompanyByHost, type Company } from '@/lib/companies';
+import CompanySwitcher from '@/components/company-switcher';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +13,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Empresa actual por hostname — para que el usuario sepa a qué empresa está entrando
+  // (no distinguen subdominios). Hardcodeado en lib/companies, sin endpoint.
+  const [company, setCompany] = useState<Company | undefined>(undefined);
+  useEffect(() => { setCompany(findCompanyByHost(window.location.hostname)); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,9 +79,17 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">
             Trinity <span className="text-green-400">ERP</span>
           </h1>
-          <p className="text-slate-400 mt-2 text-sm">
-            Sistema de gestion empresarial
-          </p>
+          {/* Empresa a la que se está entrando (grande y clara, para que no se confundan) */}
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <Building2 size={18} className="text-emerald-400 flex-shrink-0" />
+            <span className="text-emerald-300 font-semibold text-base sm:text-lg">
+              {company?.name || 'Sistema de gestión empresarial'}
+            </span>
+          </div>
+          {/* Selector para entrar a otra empresa (abre en pestaña nueva) */}
+          <div className="mt-3 flex justify-center">
+            <CompanySwitcher align="center" />
+          </div>
         </div>
 
         {/* Login card */}
@@ -149,7 +163,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-600 text-xs mt-6">
-          Trinity ERP v0.1 &mdash; Inversiones El Trebol
+          Trinity ERP{company ? ` — ${company.name}` : ''}
         </p>
       </div>
     </div>

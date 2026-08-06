@@ -54,6 +54,7 @@ import {
   Camera,
   Barcode,
 } from 'lucide-react';
+import CompanySwitcher from '@/components/company-switcher';
 
 interface MenuItem {
   label: string;
@@ -531,6 +532,16 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
           <div className="px-2 mb-2 flex items-start gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-1.5" title={`Empresa activa: ${companyName}`}>
             <Building2 size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
             <span className="text-xs font-semibold text-emerald-300 leading-tight break-words">{companyName}</span>
+          </div>
+        )}
+        {/* Selector para saltar a otra empresa (abre en pestaña nueva) */}
+        {!collapsed && (
+          <div className="px-2 mb-3">
+            <CompanySwitcher
+              label="Cambiar empresa"
+              align="start"
+              triggerClassName="flex items-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-700/60 hover:text-white transition-colors"
+            />
           </div>
         )}
         {!collapsed && user && (
