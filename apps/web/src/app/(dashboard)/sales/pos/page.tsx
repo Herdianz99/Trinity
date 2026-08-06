@@ -258,7 +258,8 @@ export default function POSPage() {
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [isCredit, setIsCredit] = useState(false);
   const [creditKeyOpen, setCreditKeyOpen] = useState(false); // modal de clave dinamica para autorizar el credito
-  const [creditDays, setCreditDays] = useState(30); // dias fijos del cliente (definidos por administracion)
+  const [creditDays, setCreditDays] = useState(30); // dias de credito (editables por el cajero solo si el cliente tiene 0 dias fijos)
+  const [adminCreditDays, setAdminCreditDays] = useState(30); // dias fijos definidos por admin en el cliente (0 = el cajero los coloca manual)
   const [creditStatus, setCreditStatus] = useState<{ availableCredit: number; totalOverdue: number } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -776,14 +777,16 @@ export default function POSPage() {
 
   // Fetch contribuyente especial / cliente default flags + dias de credito when customer changes
   useEffect(() => {
-    if (!customerId) { setCustomerIsSpecial(false); setCustomerIsDefault(false); setCreditDays(30); return; }
+    if (!customerId) { setCustomerIsSpecial(false); setCustomerIsDefault(false); setCreditDays(30); setAdminCreditDays(30); return; }
     fetch(`/api/proxy/customers/${customerId}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data) {
           setCustomerIsSpecial(!!data.isSpecialTaxpayer);
           setCustomerIsDefault(!!data.isDefault);
-          setCreditDays(data.creditDays ?? 0); // dias fijos definidos por administracion
+          const days = data.creditDays ?? 0; // dias fijos definidos por administracion
+          setCreditDays(days);
+          setAdminCreditDays(days);
         }
       })
       .catch(() => { /* ignore */ });
@@ -1309,6 +1312,8 @@ export default function POSPage() {
         body: JSON.stringify({
           payments: [],
           isCredit: true,
+          // Dias de credito manuales del cajero (solo se usan si el cliente tiene 0 dias fijos).
+          creditDays,
           cashRegisterId: selectedCashRegister?.id || undefined,
           negativeStockAuthorized: forceNegAuth || cart.some(i => i.authorizedNegative) || undefined,
           overrideCreditBlockAuthorized: override || undefined,
@@ -2773,14 +2778,25 @@ export default function POSPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-slate-300 mb-1.5 block">Dias de credito (definidos por administracion)</label>
+                  <label className="text-sm text-slate-300 mb-1.5 block">
+                    {adminCreditDays === 0
+                      ? 'Dias de credito (el cliente no tiene dias fijos — colocalos manualmente)'
+                      : 'Dias de credito (definidos por administracion)'}
+                  </label>
                   <input
                     type="number"
+                    min={0}
                     value={creditDays}
-                    readOnly
-                    disabled
-                    className="input-field !py-3 md:!py-2 opacity-70 cursor-not-allowed"
+                    onChange={adminCreditDays === 0 ? (e) => setCreditDays(Math.max(0, parseInt(e.target.value, 10) || 0)) : undefined}
+                    readOnly={adminCreditDays !== 0}
+                    disabled={adminCreditDays !== 0}
+                    className={`input-field !py-3 md:!py-2 ${adminCreditDays !== 0 ? 'opacity-70 cursor-not-allowed' : ''}`}
                   />
+                  {adminCreditDays === 0 && (
+                    <p className="text-xs text-amber-400 mt-1">
+                      Si lo dejas en 0, la factura vence hoy mismo.
+                    </p>
+                  )}
                 </div>
                 {creditStatus && (
                   <div className="text-xs text-slate-400">

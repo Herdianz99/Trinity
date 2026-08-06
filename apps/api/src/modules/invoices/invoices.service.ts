@@ -912,10 +912,16 @@ export class InvoicesService {
         }
       }
 
+      // Dias de credito efectivos: los definidos por administracion en el cliente son la
+      // fuente de verdad; pero si el cliente tiene 0 dias fijos, el cajero pudo fijarlos
+      // manualmente en el POS (dto.creditDays) para que la factura no venza el mismo dia.
+      const effectiveCreditDays = (invoice.customer?.creditDays || 0) > 0
+        ? (invoice.customer!.creditDays as number)
+        : (dto.creditDays ?? 0);
+
       // Create credit receivable (uses totals with IGTF included)
       if (dto.isCredit && invoice.customerId) {
-        // Dias fijos definidos por administracion en el cliente (fuente unica de verdad).
-        const creditDays = invoice.customer?.creditDays ?? dto.creditDays ?? 30;
+        const creditDays = effectiveCreditDays;
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + creditDays);
 
@@ -1055,9 +1061,9 @@ export class InvoicesService {
           status: 'PAID',
           paymentType: dto.isCredit ? 'CREDIT' : 'CASH',
           isCredit: dto.isCredit || false,
-          creditDays: dto.isCredit ? (invoice.customer?.creditDays ?? dto.creditDays ?? 30) : 0,
+          creditDays: dto.isCredit ? effectiveCreditDays : 0,
           dueDate: dto.isCredit
-            ? new Date(Date.now() + (invoice.customer?.creditDays ?? dto.creditDays ?? 30) * 86400000)
+            ? new Date(Date.now() + effectiveCreditDays * 86400000)
             : null,
           paidAt: new Date(),
           cashierId: user.id,
