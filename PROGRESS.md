@@ -26,6 +26,10 @@
 - **Frontend:** `/expenses/categories` con columna Tipo (badge) + selector en el modal; `/expenses` con el botón de reporte convertido en dropdown **`Reportes ▾`** (Reporte detallado + Fijo/Extraordinario por categoría).
 - Verificado con data real (marcando 2 categorías FIXED y revirtiendo): agrupa EXTRAORDINARY (34 cats/$112.286,72) y FIXED (2 cats/$9.363,06) sin errores.
 
+### 5) Cambios chicos: contado neto en dashboard + nombre de empresa en el sidebar (sin migración)
+- **Dashboard `/dashboard`:** el KPI **"Ventas de contado"** ahora resta los montos de **Cashea + Crediagro** (que se contabilizan como CASH pero se muestran en sus propios KPIs). Hecho en `dashboard.service` (ensamblado de `getGerencial`): `contadoUsd/Bs = contado − cashea − crediagro`, y el **% vs período anterior** usa el mismo neto en ambos períodos. El conteo de facturas se dejó igual (la resta es solo de montos). Validado con data real (julio): neto $250.962,62 = bruto $340.556,27 − cashea $88.617,67 − crediagro $975,98.
+- **Sidebar:** debajo del menú, sobre el nombre/rol del usuario, se muestra el **nombre de la empresa activa** (franja verde con ícono, de `/config` `companyName`) para que el usuario sepa siempre en qué empresa está (varios operan varias empresas por subdominio). Envuelve a 2+ líneas mostrando el nombre completo (sin truncar).
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

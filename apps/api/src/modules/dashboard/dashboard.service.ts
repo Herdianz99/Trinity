@@ -111,13 +111,19 @@ export class DashboardService {
         vsCrediagro: pctChange(financing.crediagroUsd, prevFinancing.crediagroUsd),
       },
       salesByType: {
-        contadoUsd: salesByType.contadoUsd,
-        contadoBs: salesByType.contadoBs,
+        // Ventas de contado NETAS: al contado se le restan los montos financiados por
+        // Cashea/Crediagro (que se cuentan como CASH pero se muestran en sus propios KPIs),
+        // para no duplicarlos. El % vs periodo anterior usa el mismo neto para ser consistente.
+        contadoUsd: round2(salesByType.contadoUsd - financing.casheaUsd - financing.crediagroUsd),
+        contadoBs: round2(salesByType.contadoBs - financing.casheaBs - financing.crediagroBs),
         contadoCount: salesByType.contadoCount,
         creditoUsd: salesByType.creditoUsd,
         creditoBs: salesByType.creditoBs,
         creditoCount: salesByType.creditoCount,
-        vsContado: pctChange(salesByType.contadoUsd, prevSalesByType.contadoUsd),
+        vsContado: pctChange(
+          salesByType.contadoUsd - financing.casheaUsd - financing.crediagroUsd,
+          prevSalesByType.contadoUsd - prevFinancing.casheaUsd - prevFinancing.crediagroUsd,
+        ),
         vsCredito: pctChange(salesByType.creditoUsd, prevSalesByType.creditoUsd),
       },
       profit: {

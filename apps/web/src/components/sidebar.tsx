@@ -297,6 +297,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [integrationOn, setIntegrationOn] = useState(false);
+  const [companyName, setCompanyName] = useState('');
   const pathname = usePathname();
   const router = useRouter();
 
@@ -306,6 +307,15 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setIntegrationOn(!!d?.enabled))
       .catch(() => setIntegrationOn(false));
+  }, []);
+
+  // Nombre de la empresa activa: se muestra junto al usuario para que siempre sepa en
+  // que empresa esta (varios usuarios operan varias empresas en subdominios distintos).
+  useEffect(() => {
+    fetch('/api/proxy/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setCompanyName(d?.companyName || ''))
+      .catch(() => {});
   }, []);
 
   // Load saved state from localStorage
@@ -517,6 +527,12 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
 
       {/* User section */}
       <div className="border-t border-slate-700/50 p-3 flex-shrink-0">
+        {!collapsed && companyName && (
+          <div className="px-2 mb-2 flex items-start gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 py-1.5" title={`Empresa activa: ${companyName}`}>
+            <Building2 size={14} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+            <span className="text-xs font-semibold text-emerald-300 leading-tight break-words">{companyName}</span>
+          </div>
+        )}
         {!collapsed && user && (
           <div className="px-2 mb-3">
             <p className="text-sm font-medium text-slate-200 truncate">{user.name}</p>
