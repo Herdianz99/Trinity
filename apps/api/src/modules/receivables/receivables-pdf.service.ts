@@ -4,12 +4,19 @@ import { ReceivablesService } from './receivables.service';
 import { QueryReceivablesDto } from './dto/query-receivables.dto';
 import { caracasDateKey } from '../../common/timezone';
 import * as PDFDocument from 'pdfkit';
+import * as XLSX from 'xlsx';
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
   PARTIAL: 'Parcial',
   PAID: 'Pagado',
   OVERDUE: 'Vencido',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  CUSTOMER_CREDIT: 'Credito',
+  FINANCING_PLATFORM: 'Plataforma',
+  MANUAL: 'Manual',
 };
 
 // Carta vertical, area util 40..572. El CLIENTE va como encabezado de grupo (no columna),
@@ -228,6 +235,42 @@ export class ReceivablesPdfService {
       doc.on('data', (c: Buffer) => chunks.push(c));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
     });
+  }
+
+  // Exporta la lista de CxC a Excel — plana (sin agrupar), tal como se ve en la
+  // pantalla, respetando los mismos filtros del listado. Todas las filas del filtro
+  // (sin paginacion). Los montos van como numeros (para poder sumar en Excel).
+  async generateXlsx(query: QueryReceivablesDto): Promise<Buffer> {
+    const data = await this.receivablesService.findAllForReport(query);
+
+    const rows = (data as any[]).map((r) => {
+      const c = r.customer || r.invoice?.customer;
+      return {
+        'Tipo': r.platformName || TYPE_LABELS[r.type] || r.type,
+        'Cliente': r.customer?.name || r.invoice?.customer?.name || r.platformName || '',
+        'Cedula/RIF': c?.rif ? `${c.documentType || ''}-${c.rif}` : '',
+        'Factura': r.number || r.invoice?.number || r.documentNumber || '',
+        'Ref / Orden': r.reference || '',
+        'Vendedor': r.invoice?.seller
+          ? (r.invoice.seller.code ? `${r.invoice.seller.code} ${r.invoice.seller.name}` : r.invoice.seller.name)
+          : '',
+        'Monto USD': Math.round((r.amountUsd || 0) * 100) / 100,
+        'Cobrado USD': Math.round((r.paidAmountUsd || 0) * 100) / 100,
+        'Saldo USD': Math.round((r.balanceUsd || 0) * 100) / 100,
+        'Vence': this.dueDate(r.dueDate),
+        'Estado': STATUS_LABELS[r.status] || r.status,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 34 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 22 },
+      { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 },
+    ];
+    if (rows.length) ws['!autofilter'] = { ref: `A1:K${rows.length + 1}` };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'CxC');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
   // Reporte de CxC agrupado en DOS niveles: primero por VENDEDOR (de la factura),

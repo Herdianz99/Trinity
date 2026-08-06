@@ -57,6 +57,20 @@ export class ReceiptsController {
     res.end(buffer);
   }
 
+  // Reporte PDF DETALLADO: un bloque por recibo con los documentos cobrados/pagados
+  // (facturas/notas) y totales DEBE/HABER/TOTAL. Respeta los filtros de la pantalla.
+  @Get('report/detailed/pdf')
+  async getDetailedReportPdf(@Query() query: QueryReceiptsDto, @Res() res: Response) {
+    const buffer = await this.reportPdfService.generateDetailed(query);
+    const kind = query.type === 'PAYMENT' ? 'pago' : 'cobro';
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="reporte-recibos-${kind}-detallado.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id/pdf')
   async getPdf(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.pdfService.generatePdf(id);

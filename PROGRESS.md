@@ -1,5 +1,25 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-06 — CxP igualado a CxC + Exportar Excel en CxC/CxP + Reporte detallado de recibos
+
+> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Todo aditivo: sin migraciones, sin cambios de schema. Solo backend (API) + frontend (Web). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel generados con data real). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas).
+
+### 1) Reporte PDF de CxP igualado al de CxC (`payables/report/pdf`)
+- El reporte de **Cuentas por Pagar** pasó a **agruparse por proveedor** (espejo del de CxC agrupado por cliente): el proveedor es ahora un **encabezado de grupo** (barra con nombre + RIF + N° docs) en vez de columna; subtotal por proveedor `Saldo / Vencido` (vencido en rojo, criterio `dueDate < hoy-Caracas`), columnas Documento · Vence · Neto USD · Saldo USD · Estado, y **TOTAL** global. Solo con saldo pendiente (>0), como CxC.
+- **Nombre de proveedor a 2 líneas sin solaparse**: `drawSupplierBar` mide el ancho del nombre y **crece el alto de la barra** a 2 líneas (con `…` si aún se pasa); el encabezado de columnas se dibuja debajo del fondo → no se monta sobre la fila. (`payables-pdf.service.ts` + `rif` agregado al select de `findAllForReport`.)
+
+### 2) Exportar a Excel en CxC y CxP (lista plana, mismos filtros)
+- Nuevos endpoints `GET /receivables/report/xlsx` y `GET /payables/report/xlsx` (`generateXlsx` en cada `*-pdf.service`, reusan la librería `xlsx` como el reporte de utilidad). Lista **plana, sin agrupar**, tal como se ve en pantalla, respetando los filtros (sin paginación). Montos como **números** (para sumar), autofiltro, `Content-Disposition: attachment` (el proxy ya reenvía octet-stream como bytes crudos → descarga directa).
+  - CxC: Tipo · Cliente · Cédula/RIF · Factura · Ref/Orden · Vendedor · Monto/Cobrado/Saldo USD · Vence · Estado. (Se agregó `documentType` + `invoice.customer` al select de `findAllForReport`.)
+  - CxP: Proveedor · RIF · Orden · Nro. documento · Monto/Neto/Pagado/Saldo USD · Vence · Estado.
+- **Botón `Reportes ▾`** (dropdown, reusa `@/components/ui/dropdown-menu`) en ambas pantallas, agrupando los reportes; afuera quedan **Registrar anticipo** y **Registrar documento**. CxC: Reporte PDF · PDF por vendedor · Exportar Excel. CxP: Reporte PDF · Exportar Excel.
+
+### 3) Reporte DETALLADO de recibos (cobro y pago) — tipo "Listado de recibo de ingreso" (WenSoft)
+- Nuevo `GET /receipts/report/detailed/pdf` (`ReceiptsReportPdfService.generateDetailed` + `receipts.service.reportListDetailed` que incluye `items` + `payments`). Un **bloque por recibo** con los documentos cobrados/pagados: facturas (sign +1) → **HABER**, notas de crédito/débito y retenciones (sign −1) → **DEBE**, línea de totales **DEBE / HABER / TOTAL** (neto = `receipt.totalUsd`) por recibo, y **TOTAL GENERAL**. Respeta los filtros de la pantalla; más reciente primero.
+- Columnas: **Tipo** (Factura / Nota de Crédito / Nota de Débito / Retención IVA·ISLR / Anticipo / Diferencial) · N° Documento · Debe · Haber. Cabecera del recibo con **fecha · N° recibo · cliente/proveedor · RIF · Estado** (coloreado). Línea de **métodos de pago** del recibo (cómo se cobró/pagó). **Fondo zebra** alternado por recibo (alto del bloque precalculado para el salto de página y la zebra).
+- **Frontend:** el botón "Reporte PDF" de `/receipts/collection` y `/receipts/payment` pasó a dropdown **`Reportes ▾`** con **Reporte resumen** (el existente) + **Reporte detallado (documentos)**.
+- Verificado con data real: NETO por recibo cuadra con `receipt.totalUsd`; cobro (118 recibos) y pago (191) generan sin errores.
+
 ## 🗓️ Sesión 2026-08-05 (cont.) — Fix descarga XML SENIAT + Reportes de CxC + etiqueta POS
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 6 INSTANCIAS** (2026-08-05, `main` @ `c87b898`/`5f582bf`): grande, chica, total, totalturen, aceros, acerosmayor. En todas: PM2 online, `/health` 200 `database:ok`, endpoint `report/by-seller/pdf` 401 (vivo), web/login 200. Todo aditivo, sin migraciones ni schema. (grande/total/totalturen en `c87b898`; chica/aceros/acerosmayor en `5f582bf` = mismo código + doc PROGRESS.)

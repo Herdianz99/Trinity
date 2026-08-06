@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Loader2, ChevronLeft, ChevronRight, Plus, Eye, Trash2, Search, X,
+  FileText, Loader2, ChevronLeft, ChevronRight, ChevronDown, Plus, Eye, Trash2, Search, X, ListTree,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface Receipt {
   id: string;
@@ -84,14 +87,24 @@ export default function ReceiptsPaymentPage() {
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Abre el reporte PDF con los mismos filtros activos en la pantalla.
-  function openReport() {
+  // Construye los params con los filtros activos (compartido por ambos reportes).
+  function reportParams() {
     const params = new URLSearchParams({ type: 'PAYMENT' });
     if (status) params.set('status', status);
     if (search) params.set('search', search);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    window.open(`/api/proxy/receipts/report/pdf?${params}`, '_blank');
+    return params;
+  }
+
+  // Reporte resumen (una fila por recibo).
+  function openReport() {
+    window.open(`/api/proxy/receipts/report/pdf?${reportParams()}`, '_blank');
+  }
+
+  // Reporte detallado: cada recibo con los documentos que se pagaron (facturas/notas).
+  function openDetailedReport() {
+    window.open(`/api/proxy/receipts/report/detailed/pdf?${reportParams()}`, '_blank');
   }
 
   return (
@@ -108,13 +121,24 @@ export default function ReceiptsPaymentPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={openReport}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-medium transition-colors border border-slate-600"
-          >
-            <FileText size={18} />
-            Reporte PDF
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-medium transition-colors border border-slate-600"
+                title="Reportes de recibos de pago (mismos filtros del listado)"
+              >
+                <FileText size={18} /> Reportes <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[260px]">
+              <DropdownMenuItem onClick={openReport} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileText size={14} /> Reporte resumen
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openDetailedReport} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <ListTree size={14} /> Reporte detallado (documentos)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Link
             href="/receipts/new?type=PAYMENT"
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"

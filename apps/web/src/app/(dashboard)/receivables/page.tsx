@@ -14,6 +14,8 @@ import {
   X,
   CreditCard,
   FileText,
+  FileSpreadsheet,
+  ChevronDown,
   Plus,
   Banknote,
   Trash2,
@@ -21,6 +23,9 @@ import {
 } from 'lucide-react';
 import CustomerSearchSelect from '@/components/customer-search-select';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface Receivable {
   id: string;
@@ -210,6 +215,11 @@ export default function ReceivablesPage() {
     window.open(`/api/proxy/receivables/report/by-seller/pdf?${buildReceivablesReportParams()}`, '_blank');
   }
 
+  // Exporta la lista a Excel (plana, sin agrupar) con el filtro actual
+  function openReportXlsx() {
+    window.open(`/api/proxy/receivables/report/xlsx?${buildReceivablesReportParams()}`, '_blank');
+  }
+
   const fetchSummary = useCallback(async () => {
     try {
       const res = await fetch('/api/proxy/receivables/summary');
@@ -393,20 +403,27 @@ export default function ReceivablesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={openReportPdf}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
-            title="Ver todas las cuentas por cobrar del filtro actual en PDF"
-          >
-            <FileText size={16} /> Reporte PDF
-          </button>
-          <button
-            onClick={openReportBySellerPdf}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
-            title="Reporte PDF agrupado por vendedor y luego por cliente (mismos filtros)"
-          >
-            <FileText size={16} /> PDF por vendedor
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium transition-colors"
+                title="Reportes de cuentas por cobrar (mismos filtros del listado)"
+              >
+                <FileText size={16} /> Reportes <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[220px]">
+              <DropdownMenuItem onClick={openReportPdf} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileText size={14} /> Reporte PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openReportBySellerPdf} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileText size={14} /> PDF por vendedor
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openReportXlsx} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileSpreadsheet size={14} /> Exportar Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             onClick={() => { setAdvanceForm({ customerId: '', amountUsd: '', amountBs: '', methodId: '', cashSessionId: openCashSessions.length === 1 ? openCashSessions[0].id : '', reference: '', notes: '' }); setAdvanceModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"

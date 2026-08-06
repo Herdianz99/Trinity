@@ -541,7 +541,7 @@ export class PayablesService {
       where,
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
       include: {
-        supplier: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true, rif: true } },
         purchaseOrder: { select: { id: true, number: true, supplierInvoiceNumber: true } },
       },
     });

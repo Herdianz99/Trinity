@@ -96,6 +96,26 @@ export class ReceiptsService {
     });
   }
 
+  // Igual que reportList pero incluye los ITEMS de cada recibo (documentos cobrados/pagados),
+  // para el reporte DETALLADO tipo "listado de recibo de ingreso" (un bloque por recibo con
+  // sus facturas/notas). Cada ReceiptItem ya guarda su `description` = N° de documento.
+  async reportListDetailed(query: QueryReceiptsDto) {
+    const where = this.buildWhere(query);
+    return this.prisma.receipt.findMany({
+      where,
+      orderBy: [{ documentDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        customer: { select: { name: true, rif: true, documentType: true } },
+        supplier: { select: { name: true, rif: true } },
+        items: true,
+        payments: {
+          orderBy: { createdAt: 'asc' },
+          include: { method: { select: { name: true } } },
+        },
+      },
+    });
+  }
+
   async findOne(id: string) {
     const receipt = await this.prisma.receipt.findUnique({
       where: { id },

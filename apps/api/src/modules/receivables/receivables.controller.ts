@@ -67,6 +67,18 @@ export class ReceivablesController {
     res.end(buffer);
   }
 
+  // Exportar la lista a Excel (plana, mismos filtros, sin paginacion)
+  @Get('report/xlsx')
+  async reportXlsx(@Query() query: QueryReceivablesDto, @Res() res: Response) {
+    const buffer = await this.pdfService.generateXlsx(query);
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': 'attachment; filename="cuentas-por-cobrar.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('summary')
   summary() {
     return this.receivablesService.summary();
