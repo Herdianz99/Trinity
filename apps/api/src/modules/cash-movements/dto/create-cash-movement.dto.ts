@@ -16,6 +16,12 @@ export class CreateCashMovementDto {
   @IsString()
   reason: string;
 
+  // Metodo de pago elegido por el cajero. Si viene, se deriva de el la moneda
+  // (divisa->USD, resto->Bs) y si afecta la gaveta (isCash). Opcional por compatibilidad.
+  @IsOptional()
+  @IsString()
+  methodId?: string;
+
   @IsString()
   dynamicKey: string;
 }

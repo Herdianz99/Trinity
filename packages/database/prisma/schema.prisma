@@ -1008,6 +1008,7 @@ model PaymentMethod {
   supplierAdvances   SupplierAdvance[]
   ledgerEntries      CashLedgerEntry[]
   intendedInvoices   Invoice[]           @relation("IntendedPayment")
+  cashMovements      CashMovement[]      @relation("CashMovementMethod")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -1141,6 +1142,10 @@ model CashMovement {
   // Un movimiento electrónico (ej. anticipo por Zelle) NO debe restar/sumar del efectivo del arqueo.
   // default true = comportamiento viejo para filas existentes (todo se contaba como efectivo).
   isCash        Boolean          @default(true)
+  // Metodo de pago del movimiento manual (efectivo, pago movil, transferencia, etc.).
+  // Null = movimientos viejos (se asumen efectivo). isCash/currency se derivan del metodo.
+  methodId      String?
+  method        PaymentMethod?   @relation("CashMovementMethod", fields: [methodId], references: [id])
   expenseId     String?          @unique
   expense       Expense?         @relation(fields: [expenseId], references: [id])
   dynamicKeyId  String?

@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-07 (cont.) — Movimiento manual de caja con método de pago
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Cambio de caja, retrocompatible y aditivo. Verificado en local (BD `total_db`): typecheck API+Web limpio, sistema levantado (API :4000 / Web :3000 OK). Migración aplicada también al `total_db` local.
+
+- **Problema:** el "Movimiento manual" de caja solo permitía efectivo (forzaba `isCash:true` y no guardaba método). El cliente necesita que el cajero **elija cualquier método de pago** (Pago Móvil, Zelle, Transferencia, Punto de Venta, etc.) y que ese movimiento **salga en el libro mayor** bajo su método real (no atado a documento).
+- **Modelo:** nueva columna **`methodId`** en `CashMovement` (migración `20260807140000` aditiva `IF NOT EXISTS` + red en `fix-schema.sql`). Compatible con movimientos viejos (`methodId` null = efectivo).
+- **Backend (`cash-movements.service.ts`):** el `create()` resuelve el método elegido y **deriva de él** la moneda (`isDivisa`→USD, resto→Bs) y si afecta la gaveta (`isCash`). Bloquea métodos `createsReceivable` (Cashea/Crediagro) y Saldo a Favor. Escribe `methodId`/`isCash` en el `CashMovement` **y** en la fila del `CashLedgerEntry` (que ya se creaba) → el libro mayor lo agrupa bajo su método. El arqueo ya respeta `isCash`, así que un método electrónico suma al total pero no a la gaveta.
+- **Frontend (`cash/[id]/page.tsx`):** selector **Método de pago** en el modal (todos los activos menos crédito/financiamiento); la moneda la fija el método (indicador bloqueado); nueva columna **Método** en la tabla de movimientos.
+- **Deploy (Diego):** en las **6** empresas (`prisma migrate deploy` agrega `methodId` + `fix-schema.sql`). Sin flag nuevo. Probar: en una caja abierta, Movimiento manual → elegir Pago Móvil → aparece en el libro mayor bajo "Pago Móvil" sin mover el efectivo de la gaveta.
+
 ## 🗓️ Sesión 2026-08-07 (cont.) — Traslados entre socios: el que envía edita las cantidades
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main` (HEAD `781b80a`), PENDIENTE DE DEPLOY en el par integrado (aceros/acerosmayor).** Feature del módulo `integration` (traslados entre socios), **opt-in** por la integración ya activa; no afecta a otras empresas. Verificado en local (`grande_db`): typecheck API+Web limpio; backend probado end-to-end con token forjado (piden 10, apruebo enviando **5** → stock −5, snapshot `quantity:5`/`requestedQuantity:10`, `sendNote` guardada; `availability` devuelve el stock por línea). El sync completo A↔B se prueba al desplegar. Spec: `docs/superpowers/specs/2026-08-07-editar-cantidades-traslado-socio-design.md`; Plan: `docs/superpowers/plans/2026-08-07-editar-cantidades-traslado-socio.md`.

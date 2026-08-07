@@ -461,6 +461,7 @@ export class CashRegistersService {
       where: { cashSessionId: sessionId },
       include: {
         createdBy: { select: { id: true, name: true } },
+        method: { select: { id: true, name: true } },
         expense: { select: { id: true, description: true, category: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },

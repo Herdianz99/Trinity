@@ -17,6 +17,7 @@ export class CashMovementsService {
       where: { cashSessionId },
       include: {
         createdBy: { select: { id: true, name: true } },
+        method: { select: { id: true, name: true } },
         expense: { select: { id: true, description: true, category: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -44,10 +45,34 @@ export class CashMovementsService {
     const rate = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
     if (!rate) throw new BadRequestException('No hay tasa de cambio registrada para hoy');
 
+    // 3b. Resolver metodo de pago (si el cajero eligio uno). La moneda y si afecta la
+    // gaveta (isCash) las MANDA el metodo, no el cliente: divisa->USD, resto->Bs.
+    // Los metodos de credito/financiamiento (Cashea, Crediagro) no aplican a un
+    // movimiento manual — crearian una cuenta por cobrar sin documento.
+    let methodId: string | null = null;
+    let isCash = true; // sin metodo => efectivo (comportamiento viejo)
+    let currency: 'USD' | 'BS' = dto.currency;
+    if (dto.methodId) {
+      const method = await this.prisma.paymentMethod.findUnique({
+        where: { id: dto.methodId },
+      });
+      if (!method || !method.isActive) {
+        throw new BadRequestException('Metodo de pago invalido o inactivo');
+      }
+      if (method.createsReceivable) {
+        throw new BadRequestException(
+          `No se permite "${method.name}" en un movimiento manual: es un metodo de credito/financiamiento (cuenta por cobrar).`,
+        );
+      }
+      methodId = method.id;
+      isCash = method.isCash;
+      currency = method.isDivisa ? 'USD' : 'BS';
+    }
+
     // 4. Calculate amounts
     let amountUsd: number;
     let amountBs: number;
-    if (dto.currency === 'USD') {
+    if (currency === 'USD') {
       amountUsd = dto.amount;
       amountBs = Math.round(dto.amount * rate.rate * 100) / 100;
     } else {
@@ -64,21 +89,25 @@ export class CashMovementsService {
           amountUsd,
           amountBs,
           exchangeRate: rate.rate,
-          currency: dto.currency,
+          currency,
           reason: dto.reason,
           isManual: true,
+          methodId,
+          isCash, // derivado del metodo (efectivo si; electronico no)
           createdById: userId,
         },
         include: {
           createdBy: { select: { id: true, name: true } },
+          method: { select: { id: true, name: true } },
         },
       });
       await writeCashLedger(tx, {
         cashSessionId: dto.cashSessionId,
         direction: dto.type === 'INCOME' ? 'IN' : 'OUT',
-        amountUsd, amountBs, currency: dto.currency as 'USD' | 'BS',
+        amountUsd, amountBs, currency,
         exchangeRate: rate.rate,
-        isCash: true, // movimiento manual = efectivo fisico de gaveta
+        methodId, // el movimiento sale bajo su metodo real en el libro mayor
+        isCash, // solo afecta la gaveta si el metodo es efectivo
         sourceType: 'MANUAL', sourceId: mov.id,
         reason: dto.reason, createdById: userId,
       });

@@ -25,6 +25,9 @@ import { sendToFiscalPrinter, extractAndPrintZReport } from '@/lib/fiscal-printe
 interface PaymentMethodOption {
   id: string;
   name: string;
+  isDivisa?: boolean;
+  isCash?: boolean;
+  createsReceivable?: boolean;
 }
 
 export default function CashDetailPage() {
@@ -64,7 +67,7 @@ export default function CashDetailPage() {
 
   // Manual movement modal
   const [movementModalOpen, setMovementModalOpen] = useState(false);
-  const [movementForm, setMovementForm] = useState({ type: 'INCOME' as 'INCOME' | 'EXPENSE', amount: '', currency: 'USD' as 'USD' | 'BS', reason: '', dynamicKey: '' });
+  const [movementForm, setMovementForm] = useState({ type: 'INCOME' as 'INCOME' | 'EXPENSE', amount: '', currency: 'USD' as 'USD' | 'BS', methodId: '', reason: '', dynamicKey: '' });
   const [movementSaving, setMovementSaving] = useState(false);
   const [movementError, setMovementError] = useState('');
   const [showDynKey, setShowDynKey] = useState(false);
@@ -204,7 +207,7 @@ export default function CashDetailPage() {
   }
 
   function openMovementModal() {
-    setMovementForm({ type: 'INCOME', amount: '', currency: 'USD', reason: '', dynamicKey: '' });
+    setMovementForm({ type: 'INCOME', amount: '', currency: 'USD', methodId: '', reason: '', dynamicKey: '' });
     setMovementError('');
     setShowDynKey(false);
     setMovementModalOpen(true);
@@ -212,7 +215,7 @@ export default function CashDetailPage() {
 
   async function handleCreateMovement(e: React.FormEvent) {
     e.preventDefault();
-    if (!sessionId || !movementForm.amount || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()) return;
+    if (!sessionId || !movementForm.amount || !movementForm.methodId || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()) return;
     setMovementSaving(true);
     setMovementError('');
     try {
@@ -224,6 +227,7 @@ export default function CashDetailPage() {
           type: movementForm.type,
           amount: parseFloat(movementForm.amount),
           currency: movementForm.currency,
+          methodId: movementForm.methodId,
           reason: movementForm.reason.trim(),
           dynamicKey: movementForm.dynamicKey.trim(),
         }),
@@ -705,6 +709,7 @@ export default function CashDetailPage() {
                       <tr className="border-b border-slate-700/50 text-slate-400 text-left">
                         <th className="px-4 py-2 font-medium">Hora</th>
                         <th className="px-4 py-2 font-medium">Tipo</th>
+                        <th className="px-4 py-2 font-medium">Metodo</th>
                         <th className="px-4 py-2 font-medium">Razon</th>
                         <th className="px-4 py-2 font-medium">Usuario</th>
                         <th className="px-4 py-2 font-medium text-right">USD</th>
@@ -732,6 +737,7 @@ export default function CashDetailPage() {
                               ) : null}
                             </div>
                           </td>
+                          <td className="px-4 py-2 text-slate-300">{mov.method?.name || <span className="text-slate-500">Efectivo</span>}</td>
                           <td className="px-4 py-2 text-slate-300">{mov.reason}</td>
                           <td className="px-4 py-2 text-slate-400">{mov.createdBy?.name}</td>
                           <td className={`px-4 py-2 text-right font-medium ${mov.type === 'INCOME' ? 'text-green-400' : 'text-red-400'}`}>
@@ -893,7 +899,32 @@ export default function CashDetailPage() {
                 </div>
               </div>
 
-              {/* Amount + currency */}
+              {/* Metodo de pago */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Metodo de pago</label>
+                <select
+                  value={movementForm.methodId}
+                  onChange={e => {
+                    const m = paymentMethods.find(pm => pm.id === e.target.value);
+                    setMovementForm(p => ({
+                      ...p,
+                      methodId: e.target.value,
+                      currency: m?.isDivisa ? 'USD' : 'BS',
+                    }));
+                  }}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Seleccione un metodo...</option>
+                  {paymentMethods
+                    .filter(m => !m.createsReceivable && m.id !== 'pm_saldo_favor')
+                    .map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Amount + currency (la moneda la define el metodo) */}
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Monto</label>
                 <div className="flex gap-2">
@@ -908,14 +939,9 @@ export default function CashDetailPage() {
                     required
                     autoFocus
                   />
-                  <select
-                    value={movementForm.currency}
-                    onChange={e => setMovementForm(p => ({ ...p, currency: e.target.value as 'USD' | 'BS' }))}
-                    className="input-field !w-24"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="BS">Bs</option>
-                  </select>
+                  <div className="input-field !w-24 flex items-center justify-center text-slate-300 select-none" title="La moneda la define el metodo de pago">
+                    {movementForm.currency === 'USD' ? 'USD' : 'Bs'}
+                  </div>
                 </div>
               </div>
 
@@ -961,7 +987,7 @@ export default function CashDetailPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={movementSaving || !movementForm.amount || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()}
+                  disabled={movementSaving || !movementForm.methodId || !movementForm.amount || !movementForm.reason.trim() || !movementForm.dynamicKey.trim()}
                   className={`flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors ${
                     movementForm.type === 'INCOME'
                       ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
