@@ -12,6 +12,8 @@ import {
   Banknote,
   Clock,
   Menu,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react';
 
 interface NavItem {
@@ -44,6 +46,10 @@ const ROLE_NAV: Record<string, NavItem[]> = {
     { label: 'POS', href: '/sales/pos', icon: <Monitor size={20} /> },
     { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={20} /> },
     { label: 'Inventario', href: '/inventory/stock', icon: <Package size={20} /> },
+  ],
+  SEGURIDAD: [
+    { label: 'Incidencias', href: '/incidents', icon: <AlertTriangle size={20} /> },
+    { label: 'Tipos', href: '/incidents/types', icon: <Layers size={20} /> },
   ],
 };
 

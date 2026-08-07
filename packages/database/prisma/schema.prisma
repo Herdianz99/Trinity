@@ -21,6 +21,7 @@ enum UserRole {
   ACCOUNTANT
   AUDITOR
   RRHH
+  SEGURIDAD
 }
 
 enum IvaType {

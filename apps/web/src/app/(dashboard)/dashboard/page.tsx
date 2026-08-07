@@ -28,6 +28,8 @@ export default async function DashboardPage() {
 
   const role = await getRole(token);
   if (role === 'SELLER') redirect('/dashboard/seller');
+  // SEGURIDAD no tiene modulo 'dashboard': entra directo a su unico modulo (incidencias).
+  if (role === 'SEGURIDAD') redirect('/incidents');
   if (role !== 'ADMIN' && role !== 'SUPERVISOR') redirect('/dashboard/home');
 
   // Solo ADMIN / SUPERVISOR llegan aqui y reciben el gerencial (con los totales).

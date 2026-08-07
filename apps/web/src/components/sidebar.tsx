@@ -288,6 +288,8 @@ const ROLE_LABELS: Record<string, string> = {
   BUYER: 'Comprador',
   ACCOUNTANT: 'Contador',
   AUDITOR: 'Auditor',
+  RRHH: 'Recursos Humanos',
+  SEGURIDAD: 'Seguridad',
 };
 
 interface SidebarProps {

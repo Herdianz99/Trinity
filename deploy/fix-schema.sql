@@ -2500,6 +2500,11 @@ DO $$ BEGIN ALTER TABLE "Employee" ADD CONSTRAINT "Employee_positionId_fkey" FOR
 ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'RRHH';
 
 -- =============================================================================
+-- SECTION: nuevo rol SEGURIDAD (por defecto solo el modulo de incidencias)
+-- =============================================================================
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SEGURIDAD';
+
+-- =============================================================================
 -- SECTION: vendedor en cotizaciones (Quotation.sellerId)
 -- =============================================================================
 ALTER TABLE "Quotation" ADD COLUMN IF NOT EXISTS "sellerId" TEXT;

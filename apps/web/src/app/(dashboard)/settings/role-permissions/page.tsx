@@ -20,6 +20,7 @@ const ROLE_COLORS: Record<string, string> = {
   ACCOUNTANT: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
   AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
   RRHH: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+  SEGURIDAD: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -32,6 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
   ACCOUNTANT: 'Contador',
   AUDITOR: 'Auditor',
   RRHH: 'Recursos Humanos',
+  SEGURIDAD: 'Seguridad',
 };
 
 const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[] = [
@@ -51,6 +53,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'payables', label: 'Cuentas por Pagar' },
       { key: 'expenses', label: 'Gastos' },
       { key: 'payroll', label: 'Nómina' },
+      { key: 'incidents', label: 'Incidencias (seguridad)' },
       { key: 'payment-schedules', label: 'Programación de Pagos' },
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
@@ -80,7 +83,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
 
 const AVAILABLE_MODULES = MODULE_GROUPS.flatMap(g => g.items);
 
-const ROLE_ORDER = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH'];
+const ROLE_ORDER = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD'];
 
 export default function RolePermissionsPage() {
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);

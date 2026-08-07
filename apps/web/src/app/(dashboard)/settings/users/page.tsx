@@ -35,6 +35,7 @@ const ROLE_COLORS: Record<string, string> = {
   ACCOUNTANT: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
   AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
   RRHH: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+  SEGURIDAD: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -47,9 +48,10 @@ const ROLE_LABELS: Record<string, string> = {
   ACCOUNTANT: 'Contador',
   AUDITOR: 'Auditor',
   RRHH: 'Recursos Humanos',
+  SEGURIDAD: 'Seguridad',
 };
 
-const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH'];
+const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD'];
 
 function formatDate(date: string | null) {
   if (!date) return 'Nunca';

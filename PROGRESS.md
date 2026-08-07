@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-06 (cont.) — Nuevo rol SEGURIDAD (solo módulo de Incidencias)
+
+> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Trae **1 migración** (`20260806200000_role_seguridad`, `ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SEGURIDAD'`, idéntica al patrón del RRHH ya desplegado) + red en `deploy/fix-schema.sql`. Verificado en local contra `grande_db`: migración aplicada (enum `... RRHH, SEGURIDAD`), typecheck API+Web limpio, login del rol devuelve `permissions:["incidents"]` + `mustChangePassword:false`.
+
+- **Requerimiento:** un rol de "seguridad" con acceso **solo** al módulo de Incidencias (creado esta sesión), que funcione como rol normal (extensible después desde `/settings/role-permissions`). Cajeros/vendedores ya no tenían acceso a incidencias (su default no lo incluye).
+- **Backend:** `SEGURIDAD` agregado al enum `UserRole` (`schema.prisma`) + migración + `fix-schema.sql`. `auth/role-permissions.ts`: `SEGURIDAD: ['incidents']` (default). El backend de incidencias ya se gatea por `@RequireModule('incidents')` (por módulo, no por rol) → acceso completo con solo tener el módulo.
+- **Frontend:** `dashboard/page.tsx` redirige `SEGURIDAD → /incidents` (no tiene `dashboard`, no pasa por el landing gerencial/home). `sidebar.tsx` label "Seguridad" (el sidebar ya gatea por módulo → solo ve la sección Incidencias). `mobile-bottom-nav.tsx` nav móvil propio (Incidencias/Tipos, es mobile-first). `settings/users` y `settings/role-permissions`: color + label + orden del rol. **Además** se agregó `incidents` a la lista de módulos togglables de `/settings/role-permissions` (faltaba desde que se creó el módulo hoy → ahora se puede dar/quitar a cualquier rol desde la UI).
+- **Usuario de prueba (solo BD local):** `seguridad@trinity.com` / `seguridad10`, rol Seguridad, sin forzar cambio de clave. En prod se crea desde `/settings/users`.
+
 ## 🗓️ Sesión 2026-08-06 — CxP igualado a CxC + Exportar Excel en CxC/CxP + Reporte detallado de recibos
 
 > **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Los puntos 1-3 son solo backend+frontend (sin migraciones). El **punto 4 SÍ trae una migración** (`expense_category_type`, `ADD COLUMN IF NOT EXISTS` + red en `fix-schema.sql`). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel con data real, migración aplicada). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas) — `deploy.sh` corre `prisma migrate deploy` solo.
