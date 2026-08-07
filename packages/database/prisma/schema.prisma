@@ -659,7 +659,8 @@ model PartnerTransfer {
   status          String   // REQUESTED|APPROVED|SENT|PENDING_RECEIPT|RECEIVED|REJECTED|CANCELLED
   partnerName     String
   notes           String?
-  items           Json     // [{ code, name, quantity, unitCost }]
+  sendNote        String?  // Nota del que ENVIA al aprobar (ej. "bajo stock, te mando 5"). Viaja al socio.
+  items           Json     // [{ code, name, requestedQuantity, quantity, unitCost }]
   fromWarehouseId String?  // almacen origen (en el lado que envia)
   toWarehouseId   String?  // almacen destino (elegido al recibir)
   notified        Boolean  @default(false) // el push al socio ya se confirmo

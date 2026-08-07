@@ -1,0 +1,1 @@
+ALTER TABLE "PartnerTransfer" ADD COLUMN IF NOT EXISTS "sendNote" TEXT;

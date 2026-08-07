@@ -2612,3 +2612,6 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Opt-in despacho verificado por escaneo (/dispatch/scan). Ses. 2026-08-07.
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "useScanDispatch" BOOLEAN NOT NULL DEFAULT false;
+
+-- Nota del que envía en traslados entre socios. Ses. 2026-08-07.
+ALTER TABLE "PartnerTransfer" ADD COLUMN IF NOT EXISTS "sendNote" TEXT;
