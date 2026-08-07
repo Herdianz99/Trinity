@@ -1,0 +1,1 @@
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "useScanDispatch" BOOLEAN NOT NULL DEFAULT false;

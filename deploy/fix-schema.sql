@@ -2609,3 +2609,6 @@ DO $$ BEGIN
   ALTER TABLE "Receipt" ADD CONSTRAINT "Receipt_sellerId_fkey"
     FOREIGN KEY ("sellerId") REFERENCES "Seller"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Opt-in despacho verificado por escaneo (/dispatch/scan). Ses. 2026-08-07.
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "useScanDispatch" BOOLEAN NOT NULL DEFAULT false;

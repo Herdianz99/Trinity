@@ -288,6 +288,9 @@ model CompanyConfig {
   // Interruptor del libro mayor de caja: true = el arqueo lee del CashLedgerEntry (tabla madre);
   // false = método viejo (3 fuentes). Reversa instantánea sin redeploy si algo sale mal.
   useCashLedger           Boolean  @default(false)
+  // Opt-in por empresa: habilita la pantalla nueva de "Despacho verificado por escaneo"
+  // (/dispatch/scan). Default false = las demás empresas no la ven ni cambia nada.
+  useScanDispatch         Boolean  @default(false)
   updatedAt               DateTime @updatedAt
 }
 

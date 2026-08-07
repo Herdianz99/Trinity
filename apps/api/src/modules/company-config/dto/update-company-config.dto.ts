@@ -99,6 +99,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   useCashLedger?: boolean;
 
+  // Opt-in: habilita la pantalla de despacho verificado por escaneo (/dispatch/scan).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  useScanDispatch?: boolean;
+
   @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
