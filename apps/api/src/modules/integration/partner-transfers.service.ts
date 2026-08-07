@@ -152,6 +152,27 @@ export class PartnerTransfersService {
     return rec;
   }
 
+  // Stock disponible de los items de un traslado en un almacén dado (para la UI de aprobar).
+  async availability(id: string, warehouseId: string): Promise<{ code: string; available: number }[]> {
+    if (!warehouseId) throw new BadRequestException('Falta el almacen');
+    const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
+    if (!rec) throw new NotFoundException('Traslado no encontrado');
+    const items = rec.items as unknown as { code: string }[];
+    const out: { code: string; available: number }[] = [];
+    for (const it of items) {
+      const p = await this.prisma.product.findUnique({ where: { code: it.code }, select: { id: true } });
+      let available = 0;
+      if (p) {
+        const st = await this.prisma.stock.findUnique({
+          where: { productId_warehouseId: { productId: p.id, warehouseId } },
+        });
+        available = st?.quantity ?? 0;
+      }
+      out.push({ code: it.code, available });
+    }
+    return out;
+  }
+
   // ── ENVIAR (push): descuenta MI stock y notifica al socio ──
   async send(
     dto: { fromWarehouseId: string; items: ItemInput[]; notes?: string; costBasis?: 'COST' | 'COST_BREGA' },

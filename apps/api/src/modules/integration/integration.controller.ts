@@ -103,6 +103,12 @@ export class IntegrationController {
     return this.transfers.findOne(key);
   }
 
+  @Get('transfers/:id/availability')
+  @UseGuards(AuthGuard('jwt'))
+  transferAvailability(@Param('id') id: string, @Query('warehouseId') warehouseId: string) {
+    return this.transfers.availability(id, warehouseId);
+  }
+
   @Post('transfers/send')
   @UseGuards(AuthGuard('jwt'))
   sendTransfer(
