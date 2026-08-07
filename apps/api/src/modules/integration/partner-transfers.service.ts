@@ -241,7 +241,7 @@ export class PartnerTransfersService {
           status: 'REQUESTED',
           partnerName: cfg.partnerName,
           notes: dto.notes ?? null,
-          items: resolved.map((r) => ({ code: r.snap.code, name: r.snap.name, quantity: r.snap.quantity, unitCost: 0 })) as any,
+          items: resolved.map((r) => ({ code: r.snap.code, name: r.snap.name, requestedQuantity: r.snap.quantity, quantity: r.snap.quantity, unitCost: 0 })) as any,
           notified: false,
           createdById: userId,
         },
