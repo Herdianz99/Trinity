@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, ScanLine, Check, AlertTriangle, X } from 'lucide-react';
+import { Loader2, ScanLine, Check, AlertTriangle, X, Camera, Search } from 'lucide-react';
 
 type Line = {
   dispatchItemId: string;
@@ -42,9 +42,17 @@ function beep(ok: boolean) {
 
 const norm = (s: string) => (s || '').trim().toUpperCase();
 
+// Formatos 1D retail + restricciones de cámara (cámara trasera en móvil). Mismo set que el POS.
+const NATIVE_BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+const SCANNER_VIDEO_CONSTRAINTS: MediaStreamConstraints = {
+  video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+};
+
 export default function DispatchScanPage() {
   const [flagOn, setFlagOn] = useState<boolean | null>(null); // null = cargando
   const [invoiceInput, setInvoiceInput] = useState('');
+  const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
+  const [searchingInv, setSearchingInv] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resolved, setResolved] = useState<Resolved | null>(null);
   // scanned[dispatchItemId] = cuánto se ha verificado en ESTA sesión
@@ -54,9 +62,16 @@ export default function DispatchScanPage() {
   const [partialModal, setPartialModal] = useState<Line[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [scannerActive, setScannerActive] = useState(false);
 
   const scanRef = useRef<HTMLInputElement | null>(null);
-  const lastScanRef = useRef<{ token: string; at: number }>({ token: '', at: 0 });
+  const lastKeyRef = useRef<{ token: string; at: number }>({ token: '', at: 0 });
+  const invTimer = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const confirmRef = useRef<{ code: string; count: number }>({ code: '', count: 0 });
+  const camCooldownRef = useRef<Map<string, number>>(new Map());
+  const acceptCodeRef = useRef<(raw: string) => void>(() => {});
 
   useEffect(() => { document.title = 'Despacho verificado | Trinity ERP'; }, []);
 
@@ -67,6 +82,22 @@ export default function DispatchScanPage() {
       .then((d) => setFlagOn(!!d?.useScanDispatch))
       .catch(() => setFlagOn(false));
   }, []);
+
+  // Buscador de facturas con debounce (mismo patrón que /dispatch): número, N° fiscal, cliente, RIF.
+  useEffect(() => {
+    if (resolved || !invoiceInput.trim()) { setInvoiceResults([]); return; }
+    if (invTimer.current) clearTimeout(invTimer.current);
+    invTimer.current = setTimeout(async () => {
+      setSearchingInv(true);
+      try {
+        const res = await fetch(`/api/proxy/invoices?search=${encodeURIComponent(invoiceInput)}&limit=10&status=PAID`);
+        const data = await res.json();
+        setInvoiceResults(Array.isArray(data.data) ? data.data : []);
+      } catch { setInvoiceResults([]); }
+      finally { setSearchingInv(false); }
+    }, 250);
+    return () => { if (invTimer.current) clearTimeout(invTimer.current); };
+  }, [resolved, invoiceInput]);
 
   // Índices para validar cada lectura en el cliente (barcode exacto o código exacto).
   const byBarcode = useMemo(() => {
@@ -83,7 +114,7 @@ export default function DispatchScanPage() {
   const resolveInvoice = useCallback(async (number: string) => {
     const num = number.trim();
     if (!num) return;
-    setLoading(true); setBanner(null);
+    setLoading(true); setBanner(null); setInvoiceResults([]);
     try {
       const res = await fetch('/api/proxy/dispatches/resolve', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -117,14 +148,10 @@ export default function DispatchScanPage() {
     });
   }, []);
 
-  const handleScan = useCallback((raw: string) => {
+  // Núcleo de validación de una lectura (lo usan el teclado y la cámara).
+  const acceptCode = useCallback((raw: string) => {
     const token = norm(raw);
     if (!token || !resolved) return;
-    // Anti-doble-lectura: ignora el mismo token repetido en <150ms (gatillo doble).
-    const now = Date.now();
-    if (lastScanRef.current.token === token && now - lastScanRef.current.at < 150) return;
-    lastScanRef.current = { token, at: now };
-
     const line = byBarcode.get(token) || byCode.get(token);
     if (!line) {
       beep(false);
@@ -134,12 +161,20 @@ export default function DispatchScanPage() {
     addToLine(line, 1);
   }, [resolved, byBarcode, byCode, addToLine]);
 
+  // Mantener una ref a la última versión de acceptCode para los callbacks de la cámara.
+  useEffect(() => { acceptCodeRef.current = acceptCode; }, [acceptCode]);
+
+  // Tecleado / lector físico (HID): Enter dispara. Anti-doble-lectura corto (150ms).
   const onScanKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleScan(scanInput);
-      setScanInput('');
-    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const raw = scanInput;
+    setScanInput('');
+    const token = norm(raw);
+    const now = Date.now();
+    if (lastKeyRef.current.token === token && now - lastKeyRef.current.at < 150) return;
+    lastKeyRef.current = { token, at: now };
+    acceptCode(raw);
   };
 
   // Cantidad manual para bultos: pide cuánto agregar de una línea (respeta el tope).
@@ -154,6 +189,110 @@ export default function DispatchScanPage() {
     addToLine(line, n);
     scanRef.current?.focus();
   };
+
+  // ---- Escáner por cámara (reutiliza el patrón del POS) ----
+  const stopScanner = useCallback(() => {
+    if (scannerControlsRef.current) { scannerControlsRef.current.stop(); scannerControlsRef.current = null; }
+    confirmRef.current = { code: '', count: 0 };
+    camCooldownRef.current.clear();
+  }, []);
+
+  // Exige 2 lecturas iguales seguidas + cooldown por código (para escaneo continuo sin repetir).
+  const onCameraCode = useCallback((code: string) => {
+    if (!code) return;
+    if (confirmRef.current.code === code) confirmRef.current.count += 1;
+    else confirmRef.current = { code, count: 1 };
+    if (confirmRef.current.count < 2) return;
+    const now = Date.now();
+    const last = camCooldownRef.current.get(code) || 0;
+    if (now - last < 1500) return; // misma unidad en cámara: no recontar por 1.5s
+    camCooldownRef.current.set(code, now);
+    acceptCodeRef.current(code);
+  }, []);
+
+  const toggleScanner = useCallback(async () => {
+    if (scannerActive) { setScannerActive(false); stopScanner(); return; }
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setErrorModal({ title: 'CÁMARA NO DISPONIBLE', detail: 'La cámara requiere HTTPS (no funciona en HTTP).' });
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrorModal({ title: 'CÁMARA NO SOPORTADA', detail: 'Este navegador no soporta acceso a la cámara.' });
+      return;
+    }
+    try {
+      confirmRef.current = { code: '', count: 0 };
+      setScannerActive(true);
+      await new Promise((r) => setTimeout(r, 100)); // esperar a que React monte el <video>
+
+      // 1) BarcodeDetector nativo (Android -> instantáneo)
+      const BD = (window as any).BarcodeDetector;
+      let startedNative = false;
+      if (BD && videoRef.current) {
+        let formats = NATIVE_BARCODE_FORMATS;
+        try {
+          const supported: string[] = await BD.getSupportedFormats();
+          formats = NATIVE_BARCODE_FORMATS.filter((f) => supported.includes(f));
+        } catch { /* usar default */ }
+        if (formats.length > 0) {
+          const detector = new BD({ formats });
+          const stream = await navigator.mediaDevices.getUserMedia(SCANNER_VIDEO_CONSTRAINTS);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play().catch(() => {});
+            let stopped = false; let rafId = 0;
+            const tick = async () => {
+              if (stopped || !videoRef.current) return;
+              try {
+                const codes = await detector.detect(videoRef.current);
+                if (codes && codes.length > 0) onCameraCode(codes[0].rawValue as string);
+              } catch { /* frame error */ }
+              rafId = requestAnimationFrame(tick);
+            };
+            rafId = requestAnimationFrame(tick);
+            scannerControlsRef.current = {
+              stop: () => { stopped = true; cancelAnimationFrame(rafId); stream.getTracks().forEach((t) => t.stop()); if (videoRef.current) videoRef.current.srcObject = null; },
+            };
+            startedNative = true;
+          } else {
+            stream.getTracks().forEach((t) => t.stop());
+          }
+        }
+      }
+
+      // 2) Fallback ZXing (iPhone/Safari)
+      if (!startedNative) {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+        const hints = new Map<number, any>();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+        ]);
+        const codeReader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
+        if (!videoRef.current) throw new Error('No se pudo inicializar el video');
+        const controls = await codeReader.decodeFromConstraints(
+          SCANNER_VIDEO_CONSTRAINTS, videoRef.current,
+          (result) => { if (result) onCameraCode(result.getText()); },
+        );
+        scannerControlsRef.current = { stop: () => controls.stop() };
+      }
+    } catch (err: any) {
+      const msg = err instanceof DOMException && err.name === 'NotAllowedError'
+        ? 'Permiso de cámara denegado. Revisa los permisos del navegador.'
+        : err instanceof DOMException && err.name === 'NotFoundError'
+        ? 'No se encontró ninguna cámara en este dispositivo.'
+        : 'No se pudo acceder a la cámara.';
+      setErrorModal({ title: 'CÁMARA', detail: msg });
+      setScannerActive(false); stopScanner();
+    }
+  }, [scannerActive, stopScanner, onCameraCode]);
+
+  // Apagar la cámara al desmontar o al soltar la factura.
+  useEffect(() => () => stopScanner(), [stopScanner]);
+  useEffect(() => { if (!resolved && scannerActive) { setScannerActive(false); stopScanner(); } }, [resolved, scannerActive, stopScanner]);
+
+  const closeInvoice = () => { setResolved(null); setScanned({}); setInvoiceInput(''); setScannerActive(false); stopScanner(); };
 
   const totals = useMemo(() => {
     if (!resolved) return { done: 0, target: 0, complete: false };
@@ -181,15 +320,15 @@ export default function DispatchScanPage() {
       if (!res.ok) throw new Error(json.message || 'No se pudo registrar el despacho');
       setPartialModal(null);
       setBanner({ type: 'ok', text: json.status === 'COMPLETADO' ? `Despacho COMPLETO — ${resolved.number}` : `Despacho PARCIAL (quedó abierta) — ${resolved.number}` });
+      setScannerActive(false); stopScanner();
       setResolved(null); setScanned({}); setInvoiceInput('');
     } catch (err: any) { setBanner({ type: 'err', text: err.message }); }
     finally { setSaving(false); }
-  }, [resolved, scanned]);
+  }, [resolved, scanned, stopScanner]);
 
   const onFinalize = () => {
     if (!resolved) return;
     if (totals.complete) { submit(); return; }
-    // Falta algo → modal con lo que queda pendiente, para confirmar parcial.
     const missing = resolved.lines
       .map((l) => ({ ...l, faltan: Math.round((l.remaining - (scanned[l.dispatchItemId] || 0)) * 1000) / 1000 }))
       .filter((l) => l.faltan > 0.001);
@@ -200,7 +339,7 @@ export default function DispatchScanPage() {
   if (!flagOn) return <div className="p-6 text-slate-400">Esta función no está habilitada para esta empresa.</div>;
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-3 sm:p-6 max-w-4xl mx-auto pb-24 md:pb-6">
       <h1 className="text-xl font-semibold text-slate-100 flex items-center gap-2 mb-4">
         <ScanLine size={22} /> Despacho verificado
       </h1>
@@ -212,19 +351,35 @@ export default function DispatchScanPage() {
       )}
 
       {!resolved && (
-        <div className="flex gap-2">
-          <input
-            autoFocus
-            value={invoiceInput}
-            onChange={(e) => setInvoiceInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') resolveInvoice(invoiceInput); }}
-            placeholder="N° de factura (escanear o teclear) + Enter"
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-          />
-          <button onClick={() => resolveInvoice(invoiceInput)} disabled={loading}
-            className="px-4 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 disabled:opacity-40 flex items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={16} /> : 'Buscar'}
-          </button>
+        <div className="relative">
+          <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3">
+            <Search size={18} className="text-slate-500 shrink-0" />
+            <input
+              autoFocus
+              value={invoiceInput}
+              onChange={(e) => setInvoiceInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') resolveInvoice(invoiceInput); }}
+              placeholder="Factura, cliente o cédula/RIF…"
+              className="flex-1 bg-transparent py-3 text-base text-slate-100 outline-none"
+            />
+            {(searchingInv || loading) && <Loader2 className="animate-spin text-slate-500 shrink-0" size={16} />}
+          </div>
+
+          {invoiceResults.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-80 overflow-auto">
+              {invoiceResults.map((inv) => (
+                <button key={inv.id} onClick={() => resolveInvoice(inv.number)}
+                  className="w-full text-left px-3 py-3 border-b border-slate-700/60 last:border-0 hover:bg-slate-700/60 active:bg-slate-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-indigo-300 text-sm">{inv.number}</span>
+                    <span className="text-xs text-slate-400">${Number(inv.totalUsd || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="text-sm text-slate-200 truncate">{inv.customer?.name || 'Sin cliente'}</div>
+                  {inv.customer?.rif && <div className="text-xs text-slate-500">{inv.customer.rif}</div>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -235,19 +390,36 @@ export default function DispatchScanPage() {
               <span className="font-semibold text-slate-100">Factura {resolved.invoiceNumber}</span>
               {resolved.customerName ? ` · ${resolved.customerName}` : ''} · Comanda {resolved.number}
             </div>
-            <button onClick={() => { setResolved(null); setScanned({}); setInvoiceInput(''); }}
-              className="text-xs text-slate-400 hover:text-slate-200">Cambiar factura</button>
+            <button onClick={closeInvoice} className="text-xs text-slate-400 hover:text-slate-200">Cambiar factura</button>
           </div>
 
+          {/* Escáner de cámara (mobile) */}
+          {scannerActive && (
+            <div className="mb-3 rounded-lg overflow-hidden border-2 border-indigo-500/40 relative">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-64 object-cover bg-black" />
+              <button onClick={toggleScanner} className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5">
+                <X size={18} />
+              </button>
+              <div className="absolute inset-x-0 bottom-0 text-center text-xs text-white/90 bg-black/40 py-1">Apunta al código de barras</div>
+            </div>
+          )}
+
+          {/* Entrada de escaneo + botón de cámara */}
           <div className="mb-4">
-            <input
-              ref={scanRef}
-              value={scanInput}
-              onChange={(e) => setScanInput(e.target.value)}
-              onKeyDown={onScanKeyDown}
-              placeholder="Escanear/teclear código de artículo + Enter"
-              className="w-full bg-slate-800 border-2 border-indigo-500/40 rounded-lg px-3 py-3 text-lg text-slate-100"
-            />
+            <div className="flex gap-2">
+              <input
+                ref={scanRef}
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onKeyDown={onScanKeyDown}
+                placeholder="Escanear/teclear código + Enter"
+                className="flex-1 min-w-0 bg-slate-800 border-2 border-indigo-500/40 rounded-lg px-3 py-3 text-lg text-slate-100"
+              />
+              <button onClick={toggleScanner}
+                className={`shrink-0 px-4 rounded-lg border flex items-center gap-2 font-medium ${scannerActive ? 'bg-red-500/20 border-red-500/30 text-red-300' : 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'}`}>
+                <Camera size={20} /><span className="hidden sm:inline">{scannerActive ? 'Cerrar' : 'Escanear'}</span>
+              </button>
+            </div>
             <div className="mt-2 text-sm text-slate-400">Progreso: {totals.done} / {totals.target}</div>
           </div>
 
@@ -269,7 +441,7 @@ export default function DispatchScanPage() {
                   <div className={`text-lg font-semibold tabular-nums ${complete ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {s}/{l.remaining}{complete && <Check className="inline ml-1" size={16} />}
                   </div>
-                  <button onClick={() => manualAdd(l)} className="text-xs px-2 py-1 rounded border border-slate-600 text-slate-300 hover:bg-slate-700">+ cant.</button>
+                  <button onClick={() => manualAdd(l)} className="shrink-0 text-xs px-3 py-2 rounded border border-slate-600 text-slate-300 hover:bg-slate-700 active:bg-slate-600">+ cant.</button>
                 </div>
               );
             })}
@@ -287,10 +459,10 @@ export default function DispatchScanPage() {
       {/* Modal de ERROR (grande, rojo) */}
       {errorModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => { setErrorModal(null); scanRef.current?.focus(); }}>
-          <div className="bg-red-950 border-2 border-red-500 rounded-2xl p-8 max-w-md text-center" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-red-950 border-2 border-red-500 rounded-2xl p-6 sm:p-8 max-w-md w-full text-center" onClick={(e) => e.stopPropagation()}>
             <AlertTriangle className="mx-auto mb-3 text-red-400" size={56} />
-            <div className="text-3xl font-extrabold text-red-300 mb-2">⛔ {errorModal.title}</div>
-            <div className="text-red-200 mb-5">{errorModal.detail}</div>
+            <div className="text-2xl sm:text-3xl font-extrabold text-red-300 mb-2">⛔ {errorModal.title}</div>
+            <div className="text-red-200 mb-5 break-words">{errorModal.detail}</div>
             <button onClick={() => { setErrorModal(null); scanRef.current?.focus(); }}
               className="px-6 py-2 rounded-lg bg-red-500/20 text-red-200 border border-red-500/40 font-medium">Entendido</button>
           </div>
