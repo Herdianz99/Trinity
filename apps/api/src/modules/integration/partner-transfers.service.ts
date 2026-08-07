@@ -256,25 +256,64 @@ export class PartnerTransfersService {
     return this.prisma.partnerTransfer.findUnique({ where: { id: record.id } });
   }
 
-  // ── APROBAR una solicitud entrante: descuenta MI stock y la despacha ──
-  async approve(id: string, dto: { fromWarehouseId: string; costBasis?: 'COST' | 'COST_BREGA' }, userId: string) {
+  // ── APROBAR una solicitud entrante: el que ENVIA decide la cantidad por línea ──
+  async approve(
+    id: string,
+    dto: {
+      fromWarehouseId: string;
+      costBasis?: 'COST' | 'COST_BREGA';
+      sendNote?: string;
+      items?: { code: string; sendQuantity: number }[];
+    },
+    userId: string,
+  ) {
     const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
     if (!rec) throw new NotFoundException('Traslado no encontrado');
     if (rec.kind !== 'REQUEST' || rec.direction !== 'INCOMING' || rec.status !== 'REQUESTED') {
       throw new BadRequestException('Solo se aprueban solicitudes entrantes pendientes');
     }
     if (!dto.fromWarehouseId) throw new BadRequestException('Falta el almacen origen');
-    const items = rec.items as unknown as ItemSnapshot[];
-    const resolved = await this.resolveItems(items.map((i) => ({ code: i.code, quantity: i.quantity })), dto.costBasis);
 
+    // Snapshot solicitado. requestedQuantity: si no viene (traslados viejos) usa quantity.
+    const reqItems = rec.items as unknown as (ItemSnapshot & { requestedQuantity?: number })[];
+    const reqMap = new Map(reqItems.map((i) => [i.code, i.requestedQuantity ?? i.quantity]));
+
+    // Cantidad a enviar por linea: del dto.items si viene; si no, lo solicitado (compat).
+    const sendMap = new Map<string, number>();
+    if (dto.items?.length) for (const it of dto.items) sendMap.set(it.code, Number(it.sendQuantity) || 0);
+    const sendOf = (code: string) =>
+      dto.items?.length ? (sendMap.get(code) ?? 0) : (reqMap.get(code) as number);
+
+    const toSend = reqItems.map((i) => ({ code: i.code, send: sendOf(i.code) })).filter((x) => x.send > 0);
+    if (toSend.length === 0) throw new BadRequestException('No hay nada que enviar; usa Rechazar');
+
+    // Solo las lineas con cantidad > 0 se resuelven (costo/nombre) y descuentan.
+    const resolved = await this.resolveItems(toSend.map((x) => ({ code: x.code, quantity: x.send })), dto.costBasis);
+    const costMap = new Map(resolved.map((r) => [r.snap.code, r.snap.unitCost]));
+
+    // Validar stock disponible por linea (tope = stock; sin negativos).
     for (const r of resolved) {
       const st = await this.prisma.stock.findUnique({
         where: { productId_warehouseId: { productId: r.productId, warehouseId: dto.fromWarehouseId } },
       });
       if (!st || st.quantity < r.snap.quantity) {
-        throw new BadRequestException(`Stock insuficiente de ${r.snap.code} (disponible ${st?.quantity ?? 0})`);
+        throw new BadRequestException(
+          `Solo tienes ${st?.quantity ?? 0} de ${r.snap.code} (quieres enviar ${r.snap.quantity})`,
+        );
       }
     }
+
+    // Snapshot COMPLETO (incluye lineas en 0) para mostrar "Solicitaste X / Enviaste Y" en ambos lados.
+    const fullItems = reqItems.map((i) => {
+      const send = sendOf(i.code);
+      return {
+        code: i.code,
+        name: i.name,
+        requestedQuantity: reqMap.get(i.code) ?? i.quantity,
+        quantity: send,
+        unitCost: send > 0 ? (costMap.get(i.code) ?? 0) : 0,
+      };
+    });
 
     const cfg = getIntegrationConfig();
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -305,7 +344,8 @@ export class PartnerTransfersService {
         data: {
           status: 'SENT',
           fromWarehouseId: dto.fromWarehouseId,
-          items: resolved.map((r) => r.snap) as any, // ahora con unitCost real
+          items: fullItems as any,
+          sendNote: dto.sendNote ?? null,
           notified: false,
         },
       });

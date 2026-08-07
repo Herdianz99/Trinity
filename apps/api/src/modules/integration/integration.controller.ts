@@ -125,7 +125,7 @@ export class IntegrationController {
   @UseGuards(AuthGuard('jwt'))
   approveTransfer(
     @Param('id') id: string,
-    @Body() body: { fromWarehouseId: string; costBasis?: 'COST' | 'COST_BREGA' },
+    @Body() body: { fromWarehouseId: string; costBasis?: 'COST' | 'COST_BREGA'; sendNote?: string; items?: { code: string; sendQuantity: number }[] },
     @CurrentUser('id') userId: string,
   ) {
     return this.transfers.approve(id, body, userId);
