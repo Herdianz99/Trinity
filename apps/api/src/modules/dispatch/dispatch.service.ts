@@ -131,6 +131,10 @@ export class DispatchService {
       include: {
         items: true,
         invoice: { select: { number: true, customer: { select: { name: true } } } },
+        deliveries: {
+          include: { deliveredBy: { select: { name: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!dispatch) throw new NotFoundException('Comanda de retiro no encontrada');
@@ -157,12 +161,19 @@ export class DispatchService {
       };
     });
 
+    const deliveries = ((dispatch as any).deliveries || []).map((dv: any) => ({
+      by: dv.deliveredBy?.name || '—',
+      at: dv.createdAt,
+      count: Array.isArray(dv.lines) ? dv.lines.reduce((s: number, l: any) => s + (Number(l?.qty) || 0), 0) : 0,
+    }));
+
     return {
       dispatchId: dispatch.id,
       number: dispatch.number,
       status: dispatch.status,
       invoiceNumber: (dispatch as any).invoice?.number ?? num,
       customerName: (dispatch as any).invoice?.customer?.name ?? null,
+      deliveries,
       lines,
     };
   }

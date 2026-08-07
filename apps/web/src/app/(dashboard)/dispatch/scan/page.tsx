@@ -19,6 +19,7 @@ type Resolved = {
   status: string;
   invoiceNumber: string;
   customerName: string | null;
+  deliveries: { by: string; at: string; count: number }[];
   lines: Line[];
 };
 
@@ -41,6 +42,10 @@ function beep(ok: boolean) {
 }
 
 const norm = (s: string) => (s || '').trim().toUpperCase();
+const fmtDateTime = (iso: string) => {
+  try { return new Date(iso).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+};
 
 // Formatos 1D retail + restricciones de cámara (cámara trasera en móvil). Mismo set que el POS.
 const NATIVE_BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
@@ -447,6 +452,20 @@ export default function DispatchScanPage() {
             <span className="font-semibold text-slate-100">Factura {resolved.invoiceNumber}</span>
             {resolved.customerName ? ` · ${resolved.customerName}` : ''} · Comanda {resolved.number}
           </div>
+
+          {resolved.deliveries.length > 0 && (
+            <div className="mb-4 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+              <div className="text-xs uppercase tracking-wide text-slate-500 mb-1">Entregado por</div>
+              <ul className="space-y-0.5">
+                {resolved.deliveries.map((d, i) => (
+                  <li key={i} className="text-sm text-slate-200 flex justify-between gap-2">
+                    <span className="truncate">{d.by}</span>
+                    <span className="text-slate-400 text-xs shrink-0">{fmtDateTime(d.at)}{d.count ? ` · ${d.count} und` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {consultMode ? (
             <div>
