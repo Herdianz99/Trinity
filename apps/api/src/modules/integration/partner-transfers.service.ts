@@ -386,6 +386,7 @@ export class PartnerTransfersService {
     const missing: string[] = [];
     const resolved: { productId: string; snap: ItemSnapshot }[] = [];
     for (const it of items) {
+      if (!it.quantity || it.quantity <= 0) continue; // línea no enviada (0): no suma stock
       const p = await this.prisma.product.findUnique({ where: { code: it.code }, select: { id: true } });
       if (!p) missing.push(it.code);
       else resolved.push({ productId: p.id, snap: it });
@@ -434,11 +435,12 @@ export class PartnerTransfersService {
   }
 
   // ── Push del envio al socio (idempotente por number) ──
-  private async pushIncoming(rec: { id: string; number: string; items: any; notes: string | null }) {
+  private async pushIncoming(rec: { id: string; number: string; items: any; notes: string | null; sendNote?: string | null }) {
     const r = await this.partner.post('/integration/transfers/incoming', {
       number: rec.number,
       items: rec.items,
       notes: rec.notes,
+      sendNote: (rec as any).sendNote ?? null,
     });
     if (r.ok) await this.prisma.partnerTransfer.update({ where: { id: rec.id }, data: { notified: true } });
   }
@@ -446,7 +448,7 @@ export class PartnerTransfersService {
   // ═══ ENTRANTES (los llama el socio) ═══
 
   // El socio me ENVIA (o aprobo mi solicitud): registro/actualizo a PENDING_RECEIPT.
-  async receiveIncoming(body: { number: string; items: any; notes?: string }) {
+  async receiveIncoming(body: { number: string; items: any; notes?: string; sendNote?: string }) {
     const cfg = getIntegrationConfig();
     const existing = await this.prisma.partnerTransfer.findUnique({ where: { number: body.number } });
     if (existing) {
@@ -454,7 +456,7 @@ export class PartnerTransfersService {
       if (existing.status === 'RECEIVED' || existing.status === 'PENDING_RECEIPT') return { ok: true };
       await this.prisma.partnerTransfer.update({
         where: { number: body.number },
-        data: { status: 'PENDING_RECEIPT', items: body.items },
+        data: { status: 'PENDING_RECEIPT', items: body.items, sendNote: body.sendNote ?? existing.sendNote },
       });
       return { ok: true };
     }
@@ -466,6 +468,7 @@ export class PartnerTransfersService {
         status: 'PENDING_RECEIPT',
         partnerName: cfg.partnerName,
         notes: body.notes ?? null,
+        sendNote: body.sendNote ?? null,
         items: body.items,
         notified: true,
       },

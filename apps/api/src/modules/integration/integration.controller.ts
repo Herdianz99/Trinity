@@ -150,7 +150,7 @@ export class IntegrationController {
   // ── Entrantes (los llama el SOCIO, token) ──
   @Post('transfers/incoming')
   @UseGuards(IntegrationTokenGuard)
-  transferIncoming(@Body() body: { number: string; items: any; notes?: string }) {
+  transferIncoming(@Body() body: { number: string; items: any; notes?: string; sendNote?: string }) {
     return this.transfers.receiveIncoming(body);
   }
 
