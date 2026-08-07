@@ -81,14 +81,16 @@ export class RetentionVouchersPdfService {
     const config = await this.prisma.companyConfig.findFirst() as any;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, left: 40, right: 40, bottom: 0 } });
+      // Horizontal (landscape): más ancho útil (712 vs 532) para que las columnas de montos
+      // en Bs no se desborden cuando el exento/base pasa del millón (los decimales caían debajo).
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margins: { top: 40, left: 40, right: 40, bottom: 0 } });
       const buffers: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      const pageWidth = doc.page.width - 80; // 532
+      const pageWidth = doc.page.width - 80; // 712 en landscape
       const L = 40; // left margin
       const R = L + pageWidth; // right edge
       let y = 40;
@@ -209,20 +211,22 @@ export class RetentionVouchersPdfService {
       // LINES TABLE — Matching Wensoft columns (sin "Bs" redundante)
       // ═══════════════════════════════════════════════════════════════════
 
+      // Landscape: ancho útil 712. Columnas de montos (7,8,9,11,13) ensanchadas para que
+      // los importes en Bs > 1.000.000,00 quepan en una sola línea sin montarse. Suma = 712.
       const cols = [
-        { label: 'Oper\nNº',              x: L,         w: 22,  align: 'center' as const },
-        { label: 'Fecha\nfact.',           x: L + 22,    w: 42,  align: 'center' as const },
-        { label: 'Nº Factura',            x: L + 64,    w: 52,  align: 'center' as const },
-        { label: 'Nº Control\nFiscal',     x: L + 116,   w: 52,  align: 'center' as const },
-        { label: 'Nº Nota\nCrédito',       x: L + 168,   w: 38,  align: 'center' as const },
-        { label: 'Nº Nota\nDébito',        x: L + 206,   w: 38,  align: 'center' as const },
-        { label: 'Total fact.\ninc. IVA',  x: L + 244,   w: 52,  align: 'right' as const },
-        { label: 'Exento',                 x: L + 296,   w: 38,  align: 'right' as const },
-        { label: 'Base\nimponible',        x: L + 334,   w: 50,  align: 'right' as const },
-        { label: '%\nIVA',                 x: L + 384,   w: 22,  align: 'center' as const },
-        { label: 'Impuesto\nIVA',          x: L + 406,   w: 45,  align: 'right' as const },
-        { label: '%\nRet.',                x: L + 451,   w: 22,  align: 'center' as const },
-        { label: 'IVA\nRetenido',          x: L + 473,   w: 59,  align: 'right' as const },
+        { label: 'Oper\nNº',              x: L,         w: 28,  align: 'center' as const },
+        { label: 'Fecha\nfact.',           x: L + 28,    w: 50,  align: 'center' as const },
+        { label: 'Nº Factura',            x: L + 78,    w: 66,  align: 'center' as const },
+        { label: 'Nº Control\nFiscal',     x: L + 144,   w: 66,  align: 'center' as const },
+        { label: 'Nº Nota\nCrédito',       x: L + 210,   w: 44,  align: 'center' as const },
+        { label: 'Nº Nota\nDébito',        x: L + 254,   w: 44,  align: 'center' as const },
+        { label: 'Total fact.\ninc. IVA',  x: L + 298,   w: 72,  align: 'right' as const },
+        { label: 'Exento',                 x: L + 370,   w: 66,  align: 'right' as const },
+        { label: 'Base\nimponible',        x: L + 436,   w: 72,  align: 'right' as const },
+        { label: '%\nIVA',                 x: L + 508,   w: 28,  align: 'center' as const },
+        { label: 'Impuesto\nIVA',          x: L + 536,   w: 64,  align: 'right' as const },
+        { label: '%\nRet.',                x: L + 600,   w: 28,  align: 'center' as const },
+        { label: 'IVA\nRetenido',          x: L + 628,   w: 84,  align: 'right' as const },
       ];
 
       // Table header background
@@ -230,7 +234,7 @@ export class RetentionVouchersPdfService {
       doc.rect(L, y, pageWidth, headerH).lineWidth(0.5).fillAndStroke('#e0e0e0', '#333333');
 
       // Header text
-      doc.fillColor('#000000').fontSize(5.5).font('Helvetica-Bold');
+      doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
       for (const col of cols) {
         const lines = col.label.split('\n');
         const lineH = 7;
@@ -247,7 +251,7 @@ export class RetentionVouchersPdfService {
       y += headerH;
 
       // Table rows
-      doc.font('Helvetica').fontSize(6).fillColor('#000000');
+      doc.font('Helvetica').fontSize(6.5).fillColor('#000000');
       const rowH = 13;
 
       let totalInvoiceBs = 0;
@@ -289,7 +293,7 @@ export class RetentionVouchersPdfService {
         totalRetentionBs += retentionBs;
 
         const cellY = y + 3.5;
-        doc.font('Helvetica').fontSize(6);
+        doc.font('Helvetica').fontSize(6.5);
 
         doc.text(String(idx + 1), cols[0].x + 2, cellY, { width: cols[0].w - 4, align: 'center', lineBreak: false });
 
@@ -320,7 +324,7 @@ export class RetentionVouchersPdfService {
 
       y += 1;
       doc.rect(L, y, pageWidth, 15).lineWidth(0.5).fillAndStroke('#e0e0e0', '#333333');
-      doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
+      doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold');
 
       const totY = y + 4;
       doc.text('TOTALES', cols[0].x + 2, totY, { width: cols[5].x + cols[5].w - cols[0].x - 4, align: 'right', lineBreak: false });

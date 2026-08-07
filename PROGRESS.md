@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-06 (cont.) — Comprobantes de retención (IVA e ISLR) en horizontal
+
+> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Solo presentación de 2 PDFs, sin cambios de datos/cálculo ni migraciones. Verificado en local: typecheck API limpio, ambos PDFs renderizan con MediaBox `[0 0 792 612]` (landscape), probado con un comprobante real de 14.877.809 Bs sin desbordes.
+
+- **Problema:** en el comprobante de **retención de IVA** (`/retention-vouchers/:id/pdf`), cuando el campo Exento (o base) pasaba de 1.000.000, los decimales caían debajo y algunas columnas se montaban (LETTER vertical, ancho útil solo 532pt).
+- **Fix:** ambos comprobantes individuales (**IVA** `retention-vouchers-pdf.service` e **ISLR** `islr-retention-vouchers-pdf.service`) pasaron a **LETTER horizontal (landscape)** → ancho útil **712pt**. Ese espacio extra se repartió a las columnas de montos en Bs (IVA: Exento 38→66, IVA Retenido 59→84, etc.; ISLR: Monto/Base/Sustraendo/Retenido y Concepto ensanchadas) y se subió la fuente medio punto. **Mismo contenido, mismas columnas/orden, mismos cálculos** — solo orientación + anchos + fuente.
+
 ## 🗓️ Sesión 2026-08-06 (cont.) — Nuevo rol SEGURIDAD (solo módulo de Incidencias)
 
 > **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Trae **1 migración** (`20260806200000_role_seguridad`, `ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SEGURIDAD'`, idéntica al patrón del RRHH ya desplegado) + red en `deploy/fix-schema.sql`. Verificado en local contra `grande_db`: migración aplicada (enum `... RRHH, SEGURIDAD`), typecheck API+Web limpio, login del rol devuelve `permissions:["incidents"]` + `mustChangePassword:false`.

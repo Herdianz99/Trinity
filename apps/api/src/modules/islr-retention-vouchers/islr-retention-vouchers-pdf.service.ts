@@ -60,13 +60,15 @@ export class IslrRetentionVouchersPdfService {
     const config = (await this.prisma.companyConfig.findFirst()) as any;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, left: 40, right: 40, bottom: 0 } });
+      // Horizontal (landscape): más ancho útil (712 vs 532) para que las columnas de montos
+      // en Bs no se desborden cuando el monto/base pasa del millón (los decimales caían debajo).
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margins: { top: 40, left: 40, right: 40, bottom: 0 } });
       const buffers: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      const pageWidth = doc.page.width - 80;
+      const pageWidth = doc.page.width - 80; // 712 en landscape
       const L = 40;
       const R = L + pageWidth;
       let y = 40;
@@ -147,28 +149,30 @@ export class IslrRetentionVouchersPdfService {
       y = doc.y + 10;
 
       // ── TABLA (columnas en Bs, sin $ ni UT) ─────────────────────────────
+      // Landscape: ancho útil 712. Columnas de montos (monto/base/sust/retenido) y concepto
+      // ensanchadas para que los importes en Bs > 1.000.000,00 quepan en una línea. Suma = 712.
       const cols = {
-        fecha:    { x: 40,  w: 48,  align: 'center' as const },
-        factura:  { x: 88,  w: 52,  align: 'center' as const },
-        control:  { x: 140, w: 58,  align: 'center' as const },
-        monto:    { x: 198, w: 56,  align: 'right' as const },
-        concepto: { x: 254, w: 132, align: 'left' as const },
-        base:     { x: 386, w: 54,  align: 'right' as const },
-        pct:      { x: 440, w: 34,  align: 'center' as const },
-        sust:     { x: 474, w: 46,  align: 'right' as const },
-        retenido: { x: 520, w: 52,  align: 'right' as const },
+        fecha:    { x: 40,  w: 56,  align: 'center' as const },
+        factura:  { x: 96,  w: 66,  align: 'center' as const },
+        control:  { x: 162, w: 72,  align: 'center' as const },
+        monto:    { x: 234, w: 80,  align: 'right' as const },
+        concepto: { x: 314, w: 170, align: 'left' as const },
+        base:     { x: 484, w: 80,  align: 'right' as const },
+        pct:      { x: 564, w: 40,  align: 'center' as const },
+        sust:     { x: 604, w: 64,  align: 'right' as const },
+        retenido: { x: 668, w: 84,  align: 'right' as const },
       };
 
       const drawTableHeader = (): number => {
         const hTop = y;
         const hH = 26;
         doc.rect(L, hTop, pageWidth, hH).lineWidth(0.5).fillAndStroke('#e8e8e8', '#333333');
-        doc.fillColor('#000000').fontSize(6).font('Helvetica-Bold');
+        doc.fillColor('#000000').fontSize(6.5).font('Helvetica-Bold');
         // Etiquetas de columna (centradas verticalmente)
-        const lblY = hTop + 7;
+        const lblY = hTop + 6;
         const put = (c: { x: number; w: number; align: 'center' | 'right' | 'left' }, text: string) => {
           const parts = text.split('\n');
-          parts.forEach((p, i) => doc.text(p, c.x + 2, lblY + i * 6.5, { width: c.w - 4, align: c.align, lineBreak: false }));
+          parts.forEach((p, i) => doc.text(p, c.x + 2, lblY + i * 7, { width: c.w - 4, align: c.align, lineBreak: false }));
         };
         put(cols.fecha, 'Fecha');
         put(cols.factura, 'Nº factura');
