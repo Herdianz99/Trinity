@@ -53,6 +53,7 @@ import {
   PackageX,
   Camera,
   Barcode,
+  ScanLine,
 } from 'lucide-react';
 import CompanySwitcher from '@/components/company-switcher';
 
@@ -66,6 +67,8 @@ interface MenuItem {
   permission?: string;
   // Solo visible si la integracion con la empresa socia esta activa.
   integrationOnly?: boolean;
+  // Solo visible si la empresa activó el flag useScanDispatch (opt-in por empresa).
+  scanDispatchOnly?: boolean;
 }
 
 interface MenuSection {
@@ -99,6 +102,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Control de Comandas', href: '/commands', icon: <ClipboardList size={18} /> },
       { label: 'Por despachar', href: '/dispatch', icon: <Truck size={18} /> },
+      { label: 'Despacho verificado', href: '/dispatch/scan', icon: <ScanLine size={18} />, scanDispatchOnly: true },
     ],
   },
   {
@@ -310,6 +314,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [integrationOn, setIntegrationOn] = useState(false);
+  const [scanDispatchOn, setScanDispatchOn] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const pathname = usePathname();
   const router = useRouter();
@@ -327,7 +332,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   useEffect(() => {
     fetch('/api/proxy/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setCompanyName(d?.companyName || ''))
+      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); })
       .catch(() => {});
   }, []);
 
@@ -388,7 +393,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   // Items visibles de una seccion: si el usuario tiene el permiso de la seccion,
   // ve todos; si no, solo los items que tengan su propio permiso y el usuario lo tenga.
   const visibleItemsFor = (section: MenuSection): MenuItem[] => {
-    const gate = (items: MenuItem[]) => items.filter((it) => !it.integrationOnly || integrationOn);
+    const gate = (items: MenuItem[]) =>
+      items.filter((it) => (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
     if (hasPermission(permissions, section.permission)) return gate(section.items);
     return gate(section.items.filter((it) => it.permission && hasPermission(permissions, it.permission)));
