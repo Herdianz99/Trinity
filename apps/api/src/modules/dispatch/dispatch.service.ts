@@ -4,6 +4,7 @@ import { CreateDispatchDto } from './dto/create-dispatch.dto';
 import { UpdateDispatchDto } from './dto/update-dispatch.dto';
 import { DeliverDispatchDto } from './dto/deliver-dispatch.dto';
 import { ResolveDispatchDto } from './dto/resolve-dispatch.dto';
+import { caracasDayStart } from '../../common/timezone';
 
 const EPS = 0.001;
 function round2(n: number) { return Math.round(n * 100) / 100; }
@@ -183,7 +184,7 @@ export class DispatchService {
     };
   }
 
-  async findAll(filters: { status?: string; search?: string }) {
+  async findAll(filters: { status?: string; search?: string; today?: boolean }) {
     const where: any = {};
     // 'PENDIENTES' = comandas con mercancia aun por retirar (PENDIENTE + PARCIAL); es el
     // filtro por defecto del front. Ausente o 'TODAS' = sin filtro. Otro valor = estado exacto.
@@ -192,6 +193,8 @@ export class DispatchService {
         ? { in: ['PENDIENTE', 'PARCIAL'] }
         : filters.status;
     }
+    // Opt-in: solo las comandas creadas HOY (dia-calendario Caracas). Lo usa /dispatch/scan.
+    if (filters.today) where.createdAt = { gte: caracasDayStart() };
     const s = filters.search?.trim();
     if (s) {
       const digits = s.replace(/\D/g, '');

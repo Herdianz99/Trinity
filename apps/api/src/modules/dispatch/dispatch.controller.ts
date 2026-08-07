@@ -24,8 +24,8 @@ export class DispatchController {
   }
 
   @Get()
-  findAll(@Query('status') status?: string, @Query('search') search?: string) {
-    return this.service.findAll({ status, search });
+  findAll(@Query('status') status?: string, @Query('search') search?: string, @Query('today') today?: string) {
+    return this.service.findAll({ status, search, today: today === '1' || today === 'true' });
   }
 
   // Vista por artículos de una zona (tabs). Antes de :id para no ser capturada.

@@ -48,6 +48,13 @@ const SCANNER_VIDEO_CONSTRAINTS: MediaStreamConstraints = {
   video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
 };
 
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  PENDIENTE: { label: 'Pendiente', cls: 'bg-slate-600/30 text-slate-300 border-slate-600' },
+  PARCIAL: { label: 'Parcial', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+  COMPLETADO: { label: 'Entregada', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+  CANCELADO: { label: 'Cancelada', cls: 'bg-red-500/15 text-red-300 border-red-500/30' },
+};
+
 export default function DispatchScanPage() {
   const [flagOn, setFlagOn] = useState<boolean | null>(null); // null = cargando
   const [invoiceInput, setInvoiceInput] = useState('');
@@ -63,6 +70,8 @@ export default function DispatchScanPage() {
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
+  const [recent, setRecent] = useState<any[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
 
   const scanRef = useRef<HTMLInputElement | null>(null);
   const lastKeyRef = useRef<{ token: string; at: number }>({ token: '', at: 0 });
@@ -98,6 +107,19 @@ export default function DispatchScanPage() {
     }, 250);
     return () => { if (invTimer.current) clearTimeout(invTimer.current); };
   }, [resolved, invoiceInput]);
+
+  // Comandas de HOY (todas: entregadas, parciales, pendientes). Se refresca al volver a la lista.
+  useEffect(() => {
+    if (resolved) return;
+    let cancel = false;
+    setLoadingRecent(true);
+    fetch('/api/proxy/dispatches?status=TODAS&today=1')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (!cancel) setRecent(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancel) setRecent([]); })
+      .finally(() => { if (!cancel) setLoadingRecent(false); });
+    return () => { cancel = true; };
+  }, [resolved]);
 
   // Índices para validar cada lectura en el cliente (barcode exacto o código exacto).
   const byBarcode = useMemo(() => {
@@ -351,6 +373,7 @@ export default function DispatchScanPage() {
       )}
 
       {!resolved && (
+        <div>
         <div className="relative">
           <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3">
             <Search size={18} className="text-slate-500 shrink-0" />
@@ -380,6 +403,34 @@ export default function DispatchScanPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Comandas de hoy: tocar una PARCIAL/PENDIENTE la reabre para seguir escaneando;
+            las ENTREGADAS se abren como consulta (registro compartido con /dispatch). */}
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Comandas de hoy</div>
+          {loadingRecent && recent.length === 0 ? (
+            <div className="text-slate-500 text-sm flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Cargando…</div>
+          ) : recent.length === 0 ? (
+            <div className="text-slate-500 text-sm">Aún no hay comandas hoy.</div>
+          ) : (
+            <div className="space-y-2">
+              {recent.map((d) => {
+                const st = STATUS_META[d.status] || STATUS_META.PENDIENTE;
+                return (
+                  <button key={d.id} onClick={() => d.invoice?.number && resolveInvoice(d.invoice.number)}
+                    className="w-full text-left rounded-lg border border-slate-700 bg-slate-800/60 hover:bg-slate-700/60 active:bg-slate-700 p-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm text-slate-100 truncate">{d.invoice?.customer?.name || d.contactName || 'Sin cliente'}</div>
+                      <div className="text-xs text-slate-500 font-mono">{d.invoice?.number || d.number}</div>
+                    </div>
+                    <span className={`shrink-0 text-xs px-2 py-1 rounded-full border ${st.cls}`}>{st.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         </div>
       )}
 
