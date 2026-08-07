@@ -2,21 +2,21 @@
 
 ## 🗓️ Sesión 2026-08-06 (cont.) — Fix: N° Documento se encimaba en el reporte detallado de recibos
 
-> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Solo presentación de 1 PDF, sin cambios de datos ni migraciones.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-06): HEAD `3a1e7f4`, PM2 online, health 200, migraciones aplicadas.** Solo presentación de 1 PDF, sin cambios de datos ni migraciones.
 
 - **Bug:** en el reporte **detallado de recibos** (`receipts/report/detailed/pdf`, `ReceiptsReportPdfService.generateDetailed`), la columna **N° DOCUMENTO** se montaba una fila sobre otra y no se leía. Causa raíz: en esa versión de PDFKit, `text(..., { width, lineBreak: false, ellipsis: true })` **ignora `lineBreak:false` cuando hay `width`** y parte el texto largo en 2 líneas (las descripciones de notas/retenciones son `"NE1-NC-26-00000021 (NE1-26-00000811)"` ≈ 228px en una columna de 104px). La 2ª línea caía a +9px y chocaba con la fila siguiente (que avanza 12px).
 - **Fix:** se agregó `height: LINE_H` (9.5) a los 4 `text()` con ellipsis del reporte (nombre del cliente, Tipo, N° Documento y línea de métodos de pago). Con `height` acotado, PDFKit fuerza **una sola línea** y recorta el sobrante con "…". Verificado extrayendo posiciones del PDF: antes había líneas a dY≈2.8 (encimadas); ahora todas las filas de ítems quedan a dY=12 exacto, sin desborde horizontal (anchos ≤84px < 104). Decisión del usuario: se deja vertical con recorte (la factura afectada entre paréntesis puede recortarse; el N° de la nota/retención siempre se ve).
 
 ## 🗓️ Sesión 2026-08-06 (cont.) — Comprobantes de retención (IVA e ISLR) en horizontal
 
-> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Solo presentación de 2 PDFs, sin cambios de datos/cálculo ni migraciones. Verificado en local: typecheck API limpio, ambos PDFs renderizan con MediaBox `[0 0 792 612]` (landscape), probado con un comprobante real de 14.877.809 Bs sin desbordes.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-06): HEAD `3a1e7f4`, PM2 online, health 200, migraciones aplicadas.** Solo presentación de 2 PDFs, sin cambios de datos/cálculo ni migraciones. Verificado en local: typecheck API limpio, ambos PDFs renderizan con MediaBox `[0 0 792 612]` (landscape), probado con un comprobante real de 14.877.809 Bs sin desbordes.
 
 - **Problema:** en el comprobante de **retención de IVA** (`/retention-vouchers/:id/pdf`), cuando el campo Exento (o base) pasaba de 1.000.000, los decimales caían debajo y algunas columnas se montaban (LETTER vertical, ancho útil solo 532pt).
 - **Fix:** ambos comprobantes individuales (**IVA** `retention-vouchers-pdf.service` e **ISLR** `islr-retention-vouchers-pdf.service`) pasaron a **LETTER horizontal (landscape)** → ancho útil **712pt**. Ese espacio extra se repartió a las columnas de montos en Bs (IVA: Exento 38→66, IVA Retenido 59→84, etc.; ISLR: Monto/Base/Sustraendo/Retenido y Concepto ensanchadas) y se subió la fuente medio punto. **Mismo contenido, mismas columnas/orden, mismos cálculos** — solo orientación + anchos + fuente.
 
 ## 🗓️ Sesión 2026-08-06 (cont.) — Nuevo rol SEGURIDAD (solo módulo de Incidencias)
 
-> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Trae **1 migración** (`20260806200000_role_seguridad`, `ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SEGURIDAD'`, idéntica al patrón del RRHH ya desplegado) + red en `deploy/fix-schema.sql`. Verificado en local contra `grande_db`: migración aplicada (enum `... RRHH, SEGURIDAD`), typecheck API+Web limpio, login del rol devuelve `permissions:["incidents"]` + `mustChangePassword:false`.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-06): HEAD `3a1e7f4`, PM2 online, health 200, migraciones aplicadas.** Aditivo. Trae **1 migración** (`20260806200000_role_seguridad`, `ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SEGURIDAD'`, idéntica al patrón del RRHH ya desplegado) + red en `deploy/fix-schema.sql`. Verificado en local contra `grande_db`: migración aplicada (enum `... RRHH, SEGURIDAD`), typecheck API+Web limpio, login del rol devuelve `permissions:["incidents"]` + `mustChangePassword:false`.
 
 - **Requerimiento:** un rol de "seguridad" con acceso **solo** al módulo de Incidencias (creado esta sesión), que funcione como rol normal (extensible después desde `/settings/role-permissions`). Cajeros/vendedores ya no tenían acceso a incidencias (su default no lo incluye).
 - **Backend:** `SEGURIDAD` agregado al enum `UserRole` (`schema.prisma`) + migración + `fix-schema.sql`. `auth/role-permissions.ts`: `SEGURIDAD: ['incidents']` (default). El backend de incidencias ya se gatea por `@RequireModule('incidents')` (por módulo, no por rol) → acceso completo con solo tener el módulo.
@@ -25,7 +25,7 @@
 
 ## 🗓️ Sesión 2026-08-06 — CxP igualado a CxC + Exportar Excel en CxC/CxP + Reporte detallado de recibos
 
-> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Aditivo. Los puntos 1-3 son solo backend+frontend (sin migraciones). El **punto 4 SÍ trae una migración** (`expense_category_type`, `ADD COLUMN IF NOT EXISTS` + red en `fix-schema.sql`). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel con data real, migración aplicada). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas) — `deploy.sh` corre `prisma migrate deploy` solo.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-06): HEAD `3a1e7f4`, PM2 online, health 200, migraciones aplicadas.** Aditivo. Los puntos 1-3 son solo backend+frontend (sin migraciones). El **punto 4 SÍ trae una migración** (`expense_category_type`, `ADD COLUMN IF NOT EXISTS` + red en `fix-schema.sql`). Verificado en local contra `grande_db` (typecheck API+Web limpio, PDFs/Excel con data real, migración aplicada). Para desplegar: `git pull` + `bash deploy.sh` (chica/grande) o `bash /opt/deploy-trinity.sh <inst>` (co-locadas) — `deploy.sh` corre `prisma migrate deploy` solo.
 
 ### 1) Reporte PDF de CxP igualado al de CxC (`payables/report/pdf`)
 - El reporte de **Cuentas por Pagar** pasó a **agruparse por proveedor** (espejo del de CxC agrupado por cliente): el proveedor es ahora un **encabezado de grupo** (barra con nombre + RIF + N° docs) en vez de columna; subtotal por proveedor `Saldo / Vencido` (vencido en rojo, criterio `dueDate < hoy-Caracas`), columnas Documento · Vence · Neto USD · Saldo USD · Estado, y **TOTAL** global. Solo con saldo pendiente (>0), como CxC.
