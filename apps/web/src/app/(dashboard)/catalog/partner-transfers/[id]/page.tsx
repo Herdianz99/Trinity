@@ -5,10 +5,10 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, ArrowLeft, AlertTriangle, Check, X } from 'lucide-react';
 
-interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
+interface TItem { code: string; name?: string; quantity: number; requestedQuantity?: number; unitCost?: number }
 interface Transfer {
   id: string; number: string; kind: 'SEND' | 'REQUEST'; direction: 'OUTGOING' | 'INCOMING';
-  status: string; partnerName: string; notes?: string | null; items: TItem[];
+  status: string; partnerName: string; notes?: string | null; sendNote?: string | null; items: TItem[];
   fromWarehouseId?: string | null; toWarehouseId?: string | null;
   createdAt: string; updatedAt: string;
 }
@@ -32,6 +32,9 @@ export default function PartnerTransferDetailPage() {
   const [error, setError] = useState('');
   const [wh, setWh] = useState('');
   const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
+  const [sendQty, setSendQty] = useState<Record<string, number>>({});
+  const [avail, setAvail] = useState<Record<string, number> | null>(null);
+  const [sendNote, setSendNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -54,6 +57,33 @@ export default function PartnerTransferDetailPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (t) document.title = `Traslado ${t.number} | Trinity ERP`; }, [t]);
 
+  const canApproveNow = !!t && t.kind === 'REQUEST' && t.direction === 'INCOMING' && t.status === 'REQUESTED';
+
+  // Al cargar una solicitud aprobable, precargar "enviar" = lo solicitado.
+  useEffect(() => {
+    if (canApproveNow && t) {
+      const init: Record<string, number> = {};
+      (t.items || []).forEach((i) => { init[i.code] = i.requestedQuantity ?? i.quantity; });
+      setSendQty(init);
+    }
+  }, [canApproveNow, t]);
+
+  // Cuando el usuario elige almacén origen, consultar disponibilidad por línea.
+  useEffect(() => {
+    if (!canApproveNow || !wh) { setAvail(null); return; }
+    let cancel = false;
+    fetch(`/api/proxy/integration/transfers/${id}/availability?warehouseId=${encodeURIComponent(wh)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { code: string; available: number }[]) => {
+        if (cancel) return;
+        const m: Record<string, number> = {};
+        rows.forEach((x) => { m[x.code] = x.available; });
+        setAvail(m);
+      })
+      .catch(() => { if (!cancel) setAvail(null); });
+    return () => { cancel = true; };
+  }, [canApproveNow, wh, id]);
+
   const whName = (wid?: string | null) => warehouses.find((w) => w.id === wid)?.name || (wid ? '—' : null);
 
   function tipoLabel(x: Transfer) {
@@ -68,7 +98,17 @@ export default function PartnerTransferDetailPage() {
     if (kind === 'reject' && !confirm('¿Rechazar esta solicitud?')) return;
     setBusy(true); setMsg(null);
     try {
-      const body = kind === 'receive' ? { toWarehouseId: wh } : kind === 'approve' ? { fromWarehouseId: wh, costBasis } : {};
+      const body =
+        kind === 'receive'
+          ? { toWarehouseId: wh }
+          : kind === 'approve'
+          ? {
+              fromWarehouseId: wh,
+              costBasis,
+              sendNote: sendNote.trim() || undefined,
+              items: (t!.items || []).map((i) => ({ code: i.code, sendQuantity: Number(sendQty[i.code] ?? 0) })),
+            }
+          : {};
       const res = await fetch(`/api/proxy/integration/transfers/${t!.id}/${kind}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
@@ -129,6 +169,14 @@ export default function PartnerTransferDetailPage() {
                 </div>
               </div>
             )}
+            {canApprove && (
+              <div className="flex-1 min-w-[220px]">
+                <label className="block text-xs text-slate-400 mb-1">Nota (opcional)</label>
+                <input value={sendNote} onChange={(e) => setSendNote(e.target.value)}
+                  placeholder="ej. bajo stock, te mando 5"
+                  className="input-field w-full !py-2 text-sm" />
+              </div>
+            )}
             {canReceive && (
               <button onClick={() => act('receive')} disabled={busy} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
                 {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Recibir
@@ -155,6 +203,7 @@ export default function PartnerTransferDetailPage() {
         {whName(t.fromWarehouseId) && <div><div className="text-xs text-slate-500">Almacén origen</div><div className="text-slate-200">{whName(t.fromWarehouseId)}</div></div>}
         {whName(t.toWarehouseId) && <div><div className="text-xs text-slate-500">Almacén destino</div><div className="text-slate-200">{whName(t.toWarehouseId)}</div></div>}
         {t.notes && <div className="col-span-2 md:col-span-3"><div className="text-xs text-slate-500">Notas</div><div className="text-slate-200">{t.notes}</div></div>}
+        {t.sendNote && <div className="col-span-2 md:col-span-3"><div className="text-xs text-slate-500">Nota del envío</div><div className="text-slate-200">{t.sendNote}</div></div>}
       </div>
 
       <div className="card overflow-hidden">
@@ -163,26 +212,52 @@ export default function PartnerTransferDetailPage() {
             <tr className="border-b border-slate-700/50 text-slate-400">
               <th className="px-4 py-2 text-left">Código</th>
               <th className="px-4 py-2 text-left">Artículo</th>
-              <th className="px-4 py-2 text-right">Cantidad</th>
+              <th className="px-4 py-2 text-right">Solicitado</th>
+              <th className="px-4 py-2 text-right">{canApprove ? 'Enviar' : 'Enviado'}</th>
               <th className="px-4 py-2 text-right">Costo unit. $</th>
               <th className="px-4 py-2 text-right">Subtotal $</th>
             </tr>
           </thead>
           <tbody>
-            {(t.items || []).map((i, idx) => (
-              <tr key={idx} className="border-b border-slate-700/30">
-                <td className="px-4 py-2 font-mono text-green-400">{i.code}</td>
-                <td className="px-4 py-2 text-slate-200">{i.name || '—'}</td>
-                <td className="px-4 py-2 text-right text-slate-200">{i.quantity}</td>
-                <td className="px-4 py-2 text-right text-slate-300">{i.unitCost != null ? `$${i.unitCost.toFixed(2)}` : '—'}</td>
-                <td className="px-4 py-2 text-right text-slate-300">{i.unitCost != null ? `$${(i.unitCost * i.quantity).toFixed(2)}` : '—'}</td>
-              </tr>
-            ))}
+            {(t.items || []).map((i, idx) => {
+              const requested = i.requestedQuantity ?? i.quantity;
+              const disponible = avail ? (avail[i.code] ?? 0) : null;
+              const diff = !canApprove && requested !== i.quantity;
+              return (
+                <tr key={idx} className="border-b border-slate-700/30">
+                  <td className="px-4 py-2 font-mono text-green-400">{i.code}</td>
+                  <td className="px-4 py-2 text-slate-200">{i.name || '—'}</td>
+                  <td className="px-4 py-2 text-right text-slate-300">{requested}</td>
+                  <td className={`px-4 py-2 text-right ${diff ? 'text-amber-300 font-semibold' : 'text-slate-200'}`}>
+                    {canApprove ? (
+                      <div className="flex flex-col items-end">
+                        <input
+                          type="number" min={0} max={disponible ?? undefined}
+                          value={sendQty[i.code] ?? ''}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value) || 0);
+                            const capped = disponible != null ? Math.min(v, disponible) : v;
+                            setSendQty((p) => ({ ...p, [i.code]: capped }));
+                          }}
+                          className="input-field w-24 !py-1 text-sm text-right"
+                        />
+                        {disponible != null && <span className="text-[11px] text-slate-500 mt-0.5">disponible: {disponible}</span>}
+                      </div>
+                    ) : (
+                      i.quantity
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right text-slate-300">{i.unitCost != null ? `$${i.unitCost.toFixed(2)}` : '—'}</td>
+                  <td className="px-4 py-2 text-right text-slate-300">{i.unitCost != null ? `$${(i.unitCost * i.quantity).toFixed(2)}` : '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-700/50 bg-slate-800/30">
               <td colSpan={2} className="px-4 py-2 text-slate-300 font-semibold">Totales</td>
-              <td className="px-4 py-2 text-right text-slate-200 font-semibold">{(t.items || []).reduce((s, i) => s + i.quantity, 0)}</td>
+              <td className="px-4 py-2 text-right text-slate-300 font-semibold">{(t.items || []).reduce((s, i) => s + (i.requestedQuantity ?? i.quantity), 0)}</td>
+              <td className="px-4 py-2 text-right text-slate-200 font-semibold">{canApprove ? (t.items || []).reduce((s, i) => s + Number(sendQty[i.code] ?? 0), 0) : (t.items || []).reduce((s, i) => s + i.quantity, 0)}</td>
               <td className="px-4 py-2"></td>
               <td className="px-4 py-2 text-right text-slate-200 font-semibold">${totalUsd.toFixed(2)}</td>
             </tr>
