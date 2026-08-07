@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, BookOpen, ArrowDownCircle, ArrowUpCircle,
-  Banknote, CreditCard, RotateCw, Filter, FileText, FileBarChart2,
+  Banknote, CreditCard, RotateCw, Filter, FileText, FileBarChart2, FileSpreadsheet,
+  FileDown, ChevronDown,
 } from 'lucide-react';
 
 const fmt = (n: number) => (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -106,8 +107,20 @@ export default function CashLedgerEntriesPage() {
     if (onlyCash) p.set('onlyCash', 'true');
     return p.toString();
   };
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const reportsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!reportsOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (reportsRef.current && !reportsRef.current.contains(e.target as Node)) setReportsOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [reportsOpen]);
+
   const openReport = () => window.open(`/api/proxy/cash/ledger-entries-report?${reportParams()}`, '_blank');
   const openSummary = () => window.open(`/api/proxy/cash/ledger-entries-summary?${reportParams()}`, '_blank');
+  const openExcel = () => window.open(`/api/proxy/cash/ledger-entries-excel?${reportParams()}`, '_blank');
 
   const toggleMethod = (id: string) =>
     setFilterMethodIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
@@ -132,12 +145,41 @@ export default function CashLedgerEntriesPage() {
           <h1 className="text-2xl font-bold text-white">Libro mayor de caja</h1>
           <p className="text-slate-400 text-sm">Tabla madre: todos los movimientos que tocan caja, de cualquier origen y método de pago</p>
         </div>
-        <button onClick={openSummary} className="btn-secondary flex items-center gap-2 text-sm" title="Resumen en PDF: solo el neto por método de pago (respeta los filtros)">
-          <FileBarChart2 size={16} /> Resumen
-        </button>
-        <button onClick={openReport} className="btn-secondary flex items-center gap-2 text-sm" title="Reporte detallado en PDF (respeta los filtros)">
-          <FileText size={16} /> Reporte detallado
-        </button>
+        <div className="relative" ref={reportsRef}>
+          <button
+            onClick={() => setReportsOpen(o => !o)}
+            className="btn-secondary flex items-center gap-2 text-sm"
+            title="Reportes del libro mayor (respetan los filtros)"
+          >
+            <FileDown size={16} /> Reportes
+            <ChevronDown size={14} className={`transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {reportsOpen && (
+            <div className="absolute right-0 mt-1 w-60 z-20 rounded-lg border border-slate-700 bg-slate-800 shadow-xl overflow-hidden">
+              <button
+                onClick={() => { setReportsOpen(false); openSummary(); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 text-left"
+                title="Resumen en PDF: solo el neto por método de pago"
+              >
+                <FileBarChart2 size={16} className="text-indigo-400" /> Resumen (PDF)
+              </button>
+              <button
+                onClick={() => { setReportsOpen(false); openReport(); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 text-left border-t border-slate-700/60"
+                title="Reporte detallado en PDF"
+              >
+                <FileText size={16} className="text-indigo-400" /> Reporte detallado (PDF)
+              </button>
+              <button
+                onClick={() => { setReportsOpen(false); openExcel(); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 text-left border-t border-slate-700/60"
+                title="Exportar a Excel editable"
+              >
+                <FileSpreadsheet size={16} className="text-green-400" /> Excel editable
+              </button>
+            </div>
+          )}
+        </div>
         <button onClick={load} className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700/50" title="Refrescar"><RotateCw size={16} /></button>
       </div>
 

@@ -15,6 +15,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CashRegistersService } from './cash-registers.service';
 import { CashSessionPdfService } from './cash-session-pdf.service';
+import { CashLedgerExcelService } from './cash-ledger-excel.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
@@ -30,6 +31,7 @@ export class CashRegistersController {
   constructor(
     private readonly service: CashRegistersService,
     private readonly pdfService: CashSessionPdfService,
+    private readonly excelService: CashLedgerExcelService,
   ) {}
 
   @Get('cash-registers')
@@ -188,6 +190,33 @@ export class CashRegistersController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="libro-mayor-resumen.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  /** Excel PLANO y editable del libro mayor (una fila por movimiento), respetando filtros */
+  @Get('cash/ledger-entries-excel')
+  async getLedgerEntriesExcel(
+    @Res() res: Response,
+    @Query('cashRegisterId') cashRegisterId?: string,
+    @Query('userId') userId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('methodIds') methodIds?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('currency') currency?: string,
+    @Query('onlyCash') onlyCash?: string,
+  ) {
+    const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const buffer = await this.excelService.generateLedgerExcel({
+      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      sourceType, currency, onlyCash: onlyCash === 'true',
+    });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="libro-mayor-caja.xlsx"`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);

@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-07 (cont.) — Libro mayor: export a Excel + botón "Reportes"
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY. Solo lee (no toca BD) → deploy solo de código.** Verificado en local (`total_db`): typecheck API+Web limpio; endpoint probado end-to-end (xlsx válido de 1057 filas, encabezado + columnas + totales correctos).
+
+- **Excel editable del libro mayor** (`/cash/ledger/entries`): nuevo `CashLedgerExcelService` (usa `getLedgerEntriesForReport`, misma fuente y **mismos filtros** que los PDF) + endpoint `GET /cash/ledger-entries-excel`. Tabla PLANA de una fila por movimiento: Fecha (Caracas), Caja, Cajero, Origen, Documento, Tercero, Referencia, Método, Tipo, Moneda, Monto USD, Monto Bs. Montos **con signo** (egreso negativo) en la columna de su moneda → suman el neto; bloque de totales al final (Ingresos/Egresos/Neto/Neto efectivo gaveta). Librería `xlsx` (ya en el repo).
+- **Botón "Reportes" desplegable:** los 3 botones sueltos (Resumen PDF, Reporte detallado PDF, Excel) se agruparon en un dropdown único "Reportes" (cierra al elegir o al clic afuera). Solo frontend.
+- **Deploy (Diego):** las 6 empresas, solo código (sin migración). Junto con el movimiento manual de más abajo.
+
 ## 🗓️ Sesión 2026-08-07 (cont.) — Movimiento manual de caja con método de pago
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Cambio de caja, retrocompatible y aditivo. Verificado en local (BD `total_db`): typecheck API+Web limpio, sistema levantado (API :4000 / Web :3000 OK). Migración aplicada también al `total_db` local.
