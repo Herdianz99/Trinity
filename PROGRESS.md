@@ -1,5 +1,16 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-07 — Despacho Verificado por Escaneo (opt-in por empresa)
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main` (HEAD `6da794e`), PENDIENTE DE DEPLOY.** Feature nueva, **opt-in por empresa** (flag `useScanDispatch`, default OFF) → las 6 instancias siguen igual hasta que se active. Verificado en local (BD `grande_db`): typecheck API+Web limpio; backend probado end-to-end con token forjado (`resolve` find-or-create ✓, `deliver` parcial → PARCIAL ✓, registro compartido ✓, tope duro rechaza exceso ✓). **Falta: prueba visual en navegador (escaneo/beep/modales) + deploy + activar flag SOLO en la empresa que lo usará.** Spec: `docs/superpowers/specs/2026-08-07-despacho-verificado-escaneo-design.md`; Plan: `docs/superpowers/plans/2026-08-07-despacho-verificado-escaneo.md`.
+
+- **Problema:** los despachadores se equivocan al entregar (pasan de más, o un artículo por otro) → pérdida de mercancía. Se pidió una **pantalla nueva e independiente** que verifique el despacho escaneando cada artículo contra la factura.
+- **Diseño (decisiones del brainstorming):** pantalla aparte `/dispatch/scan` que **NO toca `/dispatch`** (cada empresa le da otro uso); se monta **sobre el modelo `Dispatch` existente** (registro compartido, una sola verdad de "cuánto se despachó"); entrada por N° de factura pagada (find-or-create de la comanda por detrás); **Fase 1 sin barcode en el ticket** (se teclea/busca el número); escaneo **1 a 1** con opción de **teclear cantidad** para bultos; **tope duro** por línea.
+- **Backend:** flag `useScanDispatch` en `CompanyConfig` (migración `20260807120000` aditiva + red en `fix-schema.sql` + DTO). `dispatch.service.create()` ahora **netea `returnedQty`** (`quantity − returnedQty`; fuera las líneas devueltas por completo). Nuevo `POST /dispatches/resolve` (find-or-create + líneas con `barcode`+`code`+`remaining`). El cierre **reutiliza** `POST /dispatches/:id/deliver` (ya valida el tope y calcula `PARCIAL/COMPLETADO`).
+- **Frontend:** pantalla `apps/web/.../dispatch/scan/page.tsx` — validación instantánea en cliente (índice por barcode/código), **beep verde/rojo** (WebAudio), progreso `x/total` por línea (verde al completar), modales grandes **"SON SOLO N"** y **"⛔ NO ESTÁ EN LA FACTURA"** (con lo que escaneó), cantidad manual para bultos, cierre completo/parcial (modal de faltantes → "Despachar parcial" deja la comanda **abierta/PARCIAL**). Ítem de menú **"Despacho verificado"** (sección COMANDAS) gateado por el flag (mismo patrón que `integrationOnly`).
+- **Para desplegar (lo corre Diego):** deploy normal en la instancia de esa empresa (`prisma migrate deploy` aplica el flag; `fix-schema.sql` de red). Luego **activar solo ahí**: como ADMIN `PATCH /config {"useScanDispatch":true}` (o `UPDATE "CompanyConfig" SET "useScanDispatch"=true WHERE id='singleton';`). Las demás quedan en `false`.
+- **Fase 2 (futuro):** barcode del N° de factura impreso en el ticket de la comanda (requiere soporte ESC/POS en el agente `.exe` + redespliegue por PC); buscador por nombre de cliente; toggle del flag en `/config`; constancia impresa.
+
 ## 🗓️ Sesión 2026-08-06 (cont.) — Fix: N° Documento se encimaba en el reporte detallado de recibos
 
 > **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-06): HEAD `3a1e7f4`, PM2 online, health 200, migraciones aplicadas.** Solo presentación de 1 PDF, sin cambios de datos ni migraciones.
@@ -501,6 +512,21 @@ Commits: `12a8c36` retención CxC · `444ea6d` nómina fecha/tasa · `b0f40ee` P
 ---
 
 ## 📌 Pendientes (actualizado 2026-07-19)
+
+**[NUEVO 2026-08-07] Almacén "no vendible" (artículos dañados) — Opción C (a programar luego, EN PAUSA):**
+- **Contexto:** `total` maneja los artículos dañados en un almacén aparte. El cliente ya creó el almacén **"Artículos dañados"** en esa empresa. Antes de usarlo hay que arreglar cómo el sistema maneja 2+ almacenes.
+- **Problema de fondo (verificado en código):** el POS **suma el stock de TODOS los almacenes** para mostrar el "disponible" (`products.service.ts:415` → `SUM(s.quantity)` sin filtro de `warehouseId`; también líneas 261/279 y los `reduce` de reportes/análisis de compra), pero al facturar **descuenta SOLO del almacén default** (`invoices.service.ts:464-476` selecciona `config.defaultWarehouseId` → `isDefault` → primer activo; descuenta/crea movimiento en ese `warehouseId` en `993-1025`). O sea: meter dañados en un 2º almacén hoy los haría **contar como vendibles** (10 buenos + 2 dañados → POS muestra 12) y puede dejar el default en negativo. El kardex (`stock-movements.service.ts:304 getKardex`) trae **todos** los almacenes sin filtro (solo muestra el nombre del almacén por fila). El único módulo hoy multi-almacén de verdad es **Inventario/Stock** (tiene selector).
+- **Opción elegida = C (excluir almacenes "no vendibles" del disponible, NO multi-almacén completo):**
+  1. Nuevo campo en `Warehouse`, tipo `isSellable` (bool, default `true`) → migración aditiva `ADD COLUMN IF NOT EXISTS` + red en `fix-schema.sql`. "Artículos dañados" se marca `isSellable=false`. **Opt-in por dato: cero impacto para el resto de instancias.**
+  2. **POS/disponible:** el `SUM` de stock del POS pasa de "todos los almacenes" a "solo almacenes vendibles" (`SUM ... JOIN Warehouse w ... WHERE w."isSellable"`). En el ejemplo mostraría **10**.
+  3. **Bloqueo duro:** el backend rechaza facturar/descontar contra un almacén no vendible (blindaje además del filtro visual).
+  4. **Inventario/detalle del artículo:** NO se filtra — se siguen viendo AMBOS almacenes con su existencia real (10 y 2).
+  5. **Tab de movimientos (kardex):** agregar `warehouseId` opcional al endpoint (hoy solo filtra por `productId`) + en el frontend botones por almacén **generados dinámicamente** de los almacenes que tengan movimientos de ese producto (ej: Todos / Principal / Artículos Dañados) — escala solo si crean un 3er almacén.
+- **Preguntas abiertas antes de programar (quedaron sin responder):**
+  - ¿"No vendible" se excluye SOLO del disponible-para-vender del POS, o también de reportes de existencia / análisis de compra / valor de inventario? (Probable: el **valor de inventario contable** SÍ debe seguir contando los dañados como mercancía que se posee; el disponible-para-vender NO.)
+  - **Flujo bueno→dañado:** ¿existe un "traslado entre almacenes" o se hará con 2 ajustes (OUT de principal + IN a dañados)? Definir el flujo del día a día, no solo la vista.
+  - Extras opcionales: badge visual "No vendible" en Inventario; reporte simple de "qué hay en Artículos Dañados" (mermas).
+- **Estado:** en fase de **brainstorming** (aplicando skill). Falta cerrar las preguntas → escribir spec en `docs/superpowers/specs/` → `writing-plans` → implementar → deploy en `total` (y disponible para todas por opt-in).
 
 **Nómina — deploy de prueba con RRHH:**
 - **✅ DESPLEGADO a la GRANDE (`inversiones`, 134.209.164.59) el 2026-07-19** (commit `aff4bc0`): módulo de nómina (Fases 0-5) + fix de sobrepago del POS (`9944790`) + Session 77 (recibo distingue origen del CxP). Verificado: 4 tablas payroll creadas (migración aplicada), PM2 `trinity-api`/`trinity-web` online. **PENDIENTE de desplegar en la CHICA (`eltrebol`, 134.209.220.233)** cuando se apruebe.
