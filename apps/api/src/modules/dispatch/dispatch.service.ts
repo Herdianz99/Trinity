@@ -73,19 +73,23 @@ export class DispatchService {
         const area = p?.category?.printArea
           ? { id: p.category.printArea.id, name: p.category.printArea.name }
           : fallbackArea;
+        // Cantidad NETA a despachar = facturado menos lo ya devuelto (nota de crédito).
+        const net = round2(it.quantity - (it.returnedQty || 0));
         return {
           productId: it.productId,
           productName: it.productName,
           productCode: p?.code || null,
           printAreaId: area?.id || null,
           printAreaName: area?.name || null,
-          quantityInvoiced: it.quantity,
+          quantityInvoiced: net,
           quantityDelivered: 0,
         };
-      });
+      })
+      // Fuera las líneas sin nada por despachar (servicio ya filtrado; devuelto completo).
+      .filter((it) => it.quantityInvoiced > EPS);
 
     if (itemsData.length === 0) {
-      throw new BadRequestException('La factura no tiene artículos despachables (solo servicios)');
+      throw new BadRequestException('La factura no tiene artículos despachables (solo servicios o todo devuelto)');
     }
 
     return this.prisma.$transaction(async (tx) => {
