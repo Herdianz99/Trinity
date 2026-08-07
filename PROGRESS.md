@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-06 (cont.) — Fix: N° Documento se encimaba en el reporte detallado de recibos
+
+> **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Solo presentación de 1 PDF, sin cambios de datos ni migraciones.
+
+- **Bug:** en el reporte **detallado de recibos** (`receipts/report/detailed/pdf`, `ReceiptsReportPdfService.generateDetailed`), la columna **N° DOCUMENTO** se montaba una fila sobre otra y no se leía. Causa raíz: en esa versión de PDFKit, `text(..., { width, lineBreak: false, ellipsis: true })` **ignora `lineBreak:false` cuando hay `width`** y parte el texto largo en 2 líneas (las descripciones de notas/retenciones son `"NE1-NC-26-00000021 (NE1-26-00000811)"` ≈ 228px en una columna de 104px). La 2ª línea caía a +9px y chocaba con la fila siguiente (que avanza 12px).
+- **Fix:** se agregó `height: LINE_H` (9.5) a los 4 `text()` con ellipsis del reporte (nombre del cliente, Tipo, N° Documento y línea de métodos de pago). Con `height` acotado, PDFKit fuerza **una sola línea** y recorta el sobrante con "…". Verificado extrayendo posiciones del PDF: antes había líneas a dY≈2.8 (encimadas); ahora todas las filas de ítems quedan a dY=12 exacto, sin desborde horizontal (anchos ≤84px < 104). Decisión del usuario: se deja vertical con recorte (la factura afectada entre paréntesis puede recortarse; el N° de la nota/retención siempre se ve).
+
 ## 🗓️ Sesión 2026-08-06 (cont.) — Comprobantes de retención (IVA e ISLR) en horizontal
 
 > **⏳ CÓDIGO EN `main` (commiteado/pusheado), SIN DESPLEGAR.** Solo presentación de 2 PDFs, sin cambios de datos/cálculo ni migraciones. Verificado en local: typecheck API limpio, ambos PDFs renderizan con MediaBox `[0 0 792 612]` (landscape), probado con un comprobante real de 14.877.809 Bs sin desbordes.

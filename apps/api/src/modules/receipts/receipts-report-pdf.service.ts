@@ -100,6 +100,12 @@ export class ReceiptsReportPdfService {
     doc.fillColor('#000');
     doc.moveTo(40, 106).lineTo(RIGHT, 106).stroke('#94a3b8');
 
+    // Altura de UNA línea de texto. PDFKit, con `width` y `ellipsis`, ignora `lineBreak:false`
+    // y parte el texto largo en varias líneas (los N° de documento de notas/retenciones —
+    // "NE1-NC-26-00000021 (NE1-26-00000811)" — se montaban con la fila siguiente). Pasar
+    // `height: LINE_H` fuerza UNA sola línea y recorta con "…" lo que sobra.
+    const LINE_H = 9.5;
+
     // Columnas: Tipo + N° Documento (por item) y Debe/Haber/Total (dinero, a la derecha).
     const cTipo = { x: 150, w: 96 };
     const cDoc = { x: 248, w: 104 };
@@ -163,7 +169,7 @@ export class ReceiptsReportPdfService {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#0f172a');
       doc.text(this.receiptDate(r), 40, y, { width: 56, lineBreak: false });
       doc.text(r.number, 98, y, { width: 48, lineBreak: false });
-      doc.text(entity?.name || '—', cTipo.x, y, { width: 206, lineBreak: false, ellipsis: true });
+      doc.text(entity?.name || '—', cTipo.x, y, { width: 206, height: LINE_H, lineBreak: false, ellipsis: true });
       const rif = entity?.rif ? `${entity.documentType ? entity.documentType + '-' : ''}${entity.rif}` : '';
       if (rif) doc.fontSize(7.5).font('Helvetica').fillColor('#475569').text(rif, 360, y + 0.5, { width: 130, lineBreak: false });
       const stColor = r.status === 'POSTED' ? '#16a34a' : r.status === 'CANCELLED' ? '#dc2626' : '#d97706';
@@ -179,8 +185,8 @@ export class ReceiptsReportPdfService {
       for (const it of items) {
         if (y + 12 > bottom()) { doc.addPage(); y = 40; drawHeaderRow(); doc.fontSize(8).font('Helvetica'); }
         const neg = (it.sign || 1) < 0;
-        doc.fillColor('#475569').text(this.itemTypeName(it.itemType), cTipo.x, y, { width: cTipo.w, lineBreak: false, ellipsis: true });
-        doc.fillColor('#334155').text(it.description || '', cDoc.x, y, { width: cDoc.w, lineBreak: false, ellipsis: true });
+        doc.fillColor('#475569').text(this.itemTypeName(it.itemType), cTipo.x, y, { width: cTipo.w, height: LINE_H, lineBreak: false, ellipsis: true });
+        doc.fillColor('#334155').text(it.description || '', cDoc.x, y, { width: cDoc.w, height: LINE_H, lineBreak: false, ellipsis: true });
         doc.fillColor('#1e293b');
         if (neg) doc.text(this.fmt(Math.abs(it.amountUsd || 0)), cDebe.x, y, { width: cDebe.w, align: 'right' });
         else doc.text(this.fmt(Math.abs(it.amountUsd || 0)), cHaber.x, y, { width: cHaber.w, align: 'right' });
@@ -193,7 +199,7 @@ export class ReceiptsReportPdfService {
         if (y + 12 > bottom()) { doc.addPage(); y = 40; drawHeaderRow(); }
         const payText = 'Pago: ' + pays.map((p: any) => `${p.method?.name || 'Pago'} $${this.fmt(p.amountUsd)}`).join('   ·   ');
         doc.fontSize(7.5).font('Helvetica-Oblique').fillColor('#64748b')
-          .text(payText, cTipo.x, y, { width: cDebe.x - cTipo.x - 6, lineBreak: false, ellipsis: true });
+          .text(payText, cTipo.x, y, { width: cDebe.x - cTipo.x - 6, height: LINE_H, lineBreak: false, ellipsis: true });
         doc.fillColor('#000');
         y += 12;
       }
