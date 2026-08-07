@@ -8,6 +8,7 @@ import { DispatchService } from './dispatch.service';
 import { CreateDispatchDto } from './dto/create-dispatch.dto';
 import { UpdateDispatchDto } from './dto/update-dispatch.dto';
 import { DeliverDispatchDto } from './dto/deliver-dispatch.dto';
+import { ResolveDispatchDto } from './dto/resolve-dispatch.dto';
 
 @ApiTags('Dispatch')
 @ApiBearerAuth()
@@ -31,6 +32,11 @@ export class DispatchController {
   @Get('items')
   getItems(@Query('printAreaId') printAreaId?: string, @Query('search') search?: string) {
     return this.service.getItems({ printAreaId, search });
+  }
+
+  @Post('resolve')
+  resolve(@Body() dto: ResolveDispatchDto, @CurrentUser() user: { id: string }) {
+    return this.service.resolve(dto, user.id);
   }
 
   @Get(':id')

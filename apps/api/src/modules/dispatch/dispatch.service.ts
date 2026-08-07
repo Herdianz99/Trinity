@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDispatchDto } from './dto/create-dispatch.dto';
 import { UpdateDispatchDto } from './dto/update-dispatch.dto';
 import { DeliverDispatchDto } from './dto/deliver-dispatch.dto';
+import { ResolveDispatchDto } from './dto/resolve-dispatch.dto';
 
 const EPS = 0.001;
 function round2(n: number) { return Math.round(n * 100) / 100; }
@@ -107,6 +108,62 @@ export class DispatchService {
         include: this.detailInclude(),
       });
     });
+  }
+
+  // Punto de entrada de la pantalla de escaneo: dado un N° de factura, busca su comanda;
+  // si no existe la crea (reutiliza create); devuelve las líneas con barcode+code para
+  // que el frontend valide cada lectura sin ir al servidor por cada escaneo.
+  async resolve(dto: ResolveDispatchDto, userId: string) {
+    const num = dto.invoiceNumber.trim();
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { number: num },
+      select: { id: true, dispatch: { select: { id: true } } },
+    });
+    if (!invoice) throw new NotFoundException(`No existe una factura con el número "${num}"`);
+
+    // Find-or-create. create() valida estado PAID/PARTIAL_RETURN y "solo servicios/todo devuelto".
+    const dispatchId = invoice.dispatch?.id
+      ?? (await this.create({ invoiceNumber: num }, userId)).id;
+
+    const dispatch = await this.prisma.dispatch.findUnique({
+      where: { id: dispatchId },
+      include: {
+        items: true,
+        invoice: { select: { number: true, customer: { select: { name: true } } } },
+      },
+    });
+    if (!dispatch) throw new NotFoundException('Comanda de retiro no encontrada');
+
+    // barcode no vive en DispatchItem → lo traemos del producto por productId.
+    const productIds = [...new Set(dispatch.items.map((i) => i.productId))];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, barcode: true, code: true },
+    });
+    const pMap = new Map(products.map((p) => [p.id, p]));
+
+    const lines = dispatch.items.map((it) => {
+      const p = pMap.get(it.productId);
+      return {
+        dispatchItemId: it.id,
+        productId: it.productId,
+        productName: it.productName,
+        productCode: it.productCode || p?.code || null,
+        barcode: p?.barcode || null,
+        quantityInvoiced: it.quantityInvoiced,
+        quantityDelivered: it.quantityDelivered,
+        remaining: round2(it.quantityInvoiced - it.quantityDelivered),
+      };
+    });
+
+    return {
+      dispatchId: dispatch.id,
+      number: dispatch.number,
+      status: dispatch.status,
+      invoiceNumber: (dispatch as any).invoice?.number ?? num,
+      customerName: (dispatch as any).invoice?.customer?.name ?? null,
+      lines,
+    };
   }
 
   private detailInclude() {
