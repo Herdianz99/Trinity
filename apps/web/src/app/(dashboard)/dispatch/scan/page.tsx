@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, ScanLine, Check, AlertTriangle, X, Camera, Search } from 'lucide-react';
+import { Loader2, ScanLine, Check, AlertTriangle, X, Camera, Search, ArrowLeft } from 'lucide-react';
 
 type Line = {
   dispatchItemId: string;
@@ -323,6 +323,9 @@ export default function DispatchScanPage() {
     return { done: Math.round(done * 1000) / 1000, target: Math.round(target * 1000) / 1000, complete: done >= target - 0.001 && target > 0 };
   }, [resolved, scanned]);
 
+  // Modo consulta (solo lectura): comanda ya entregada/cancelada o sin nada por despachar.
+  const consultMode = !!resolved && (resolved.status === 'COMPLETADO' || resolved.status === 'CANCELADO' || totals.target === 0);
+
   const buildPayload = () =>
     (resolved?.lines || [])
       .map((l) => ({ dispatchItemId: l.dispatchItemId, qty: scanned[l.dispatchItemId] || 0 }))
@@ -436,14 +439,41 @@ export default function DispatchScanPage() {
 
       {resolved && (
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="text-slate-300 text-sm">
-              <span className="font-semibold text-slate-100">Factura {resolved.invoiceNumber}</span>
-              {resolved.customerName ? ` · ${resolved.customerName}` : ''} · Comanda {resolved.number}
-            </div>
-            <button onClick={closeInvoice} className="text-xs text-slate-400 hover:text-slate-200">Cambiar factura</button>
+          <button onClick={closeInvoice}
+            className="mb-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 hover:bg-slate-700 active:bg-slate-600 text-sm font-medium">
+            <ArrowLeft size={16} /> Volver
+          </button>
+          <div className="text-slate-300 text-sm mb-3">
+            <span className="font-semibold text-slate-100">Factura {resolved.invoiceNumber}</span>
+            {resolved.customerName ? ` · ${resolved.customerName}` : ''} · Comanda {resolved.number}
           </div>
 
+          {consultMode ? (
+            <div>
+              <div className={`mb-4 rounded-xl border-2 p-5 text-center ${resolved.status === 'CANCELADO' ? 'border-red-500/50 bg-red-500/10' : 'border-emerald-500/50 bg-emerald-500/10'}`}>
+                <div className={`text-2xl font-extrabold ${resolved.status === 'CANCELADO' ? 'text-red-300' : 'text-emerald-300'}`}>
+                  {resolved.status === 'CANCELADO' ? 'COMANDA CANCELADA' : '✓ YA ENTREGADA'}
+                </div>
+                <div className="text-sm text-slate-300 mt-1">
+                  {resolved.status === 'CANCELADO'
+                    ? 'Esta comanda fue cancelada.'
+                    : 'Esta comanda ya se despachó completa. La estás viendo solo como consulta.'}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {resolved.lines.map((l) => (
+                  <div key={l.dispatchItemId} className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-slate-100 truncate">{l.productName}</div>
+                      <div className="text-xs text-slate-400">{l.productCode || l.barcode || '—'}</div>
+                    </div>
+                    <div className="shrink-0 text-sm text-emerald-300 font-semibold">Entregado: {l.quantityDelivered}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Escáner de cámara (mobile) */}
           {scannerActive && (
             <div className="mb-3 rounded-lg overflow-hidden border-2 border-indigo-500/40 relative">
@@ -504,6 +534,8 @@ export default function DispatchScanPage() {
               {saving ? <Loader2 className="animate-spin" size={18} /> : 'Finalizar despacho'}
             </button>
           </div>
+          </>
+          )}
         </div>
       )}
 
