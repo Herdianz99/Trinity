@@ -1,5 +1,23 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-08 — Fix POS: input de montos acepta punto decimal y el cursor no salta
+
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-08): HEAD `05404d6`, PM2 online, health 307 (redirect a login = sano). Solo frontend, sin migraciones ni cambios de datos.**
+
+- **Bug (reportado por cajeros):** al cobrar en el POS, los campos de monto (USD/Bs) **no aceptaban el `.`** del teclado numérico y, al teclear `,`, **el cursor saltaba antes de la coma**, impidiendo escribir los decimales.
+- **Causa raíz (un solo origen):** el componente `MoneyInput` (`apps/web/.../sales/pos/page.tsx`) agrupaba miles con `.` **en vivo**, lo que obligaba a (a) limpiar la entrada con `replace(/[^0-9,]/g,'')` → borraba cualquier `.` tecleado, y (b) recolocar el cursor a mano contando **solo dígitos** → lo dejaba tras el último dígito = antes de la coma.
+- **Fix:** el input ahora acepta **`.` y `,`** como decimal (último separador = decimal, previos = miles descartados; también tolera pegar `1.234,56`), **no agrupa miles mientras se escribe** (se reformatea agrupado al salir del campo vía `fmtBs`) y **elimina el reposicionamiento manual del cursor** (lo mantiene el navegador). Se borró el helper `groupInt`, ya sin uso. Verificado: typecheck Web limpio (`tsc --noEmit` exit 0), sistema levantado en local (`total_db`).
+- **Nota:** los inputs de **Anticipo** y **vuelto en efectivo** usan `type="number"` nativo (no este componente) → no tenían el problema, no se tocaron.
+
+## 🗓️ Sesión 2026-08-08 — Corrección de datos (grande): factura NE3-26-00001188 BIOPAGO→CASHEA + CxC
+
+> **✅ APLICADO EN PRODUCCIÓN (empresa grande / inversiones). Cambio de DATOS, no de código.** Respaldo previo de `Payment`/`CashLedgerEntry`/`Receivable` en el server: `/root/backup-cashea-fix-20260808-221545.sql.gz`.
+
+- **Problema:** el cajero registró un pago como **BIOPAGO** ($101.07 / Bs 76 564,62, ref 199581032) cuando en realidad era **CASHEA**. Faltaba además la CxC de Cashea.
+- **Por qué fue seguro:** en grande BIOPAGO y CASHEA son idénticos salvo `createsReceivable` (BIOPAGO=f, CASHEA=t); ambos `isDivisa=f`, `isCash=f` → el cambio **no** alteró IGTF (sigue 0), ni la moneda del ledger (sigue BS), ni la gaveta física.
+- **Qué se hizo (script Prisma transaccional, ya borrado del server):** `Payment.methodId` BIOPAGO→CASHEA; se movió la fila del `CashLedgerEntry` al método CASHEA (para que el arqueo/reporte por método cuadre); se creó la **CxC** `FINANCING_PLATFORM` (platformName `CASHEA`, $101.07 / Bs 76 564,62, ref 199581032, status PENDING) — idéntica a como la crea la app al facturar con Cashea. El otro pago (P.V mercantil, $67.38) quedó intacto; la factura sigue en $168.45 / PAID.
+- **Detalle de UI (para futuro):** el módulo "editar método de pago" **no** permite BIOPAGO↔CASHEA (distinto `createsReceivable`) ni crea la CxC → por eso se corrigió por script directo.
+
 ## 🗓️ Sesión 2026-08-07 (cont.) — Libro mayor: export a Excel + botón "Reportes"
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY. Solo lee (no toca BD) → deploy solo de código.** Verificado en local (`total_db`): typecheck API+Web limpio; endpoint probado end-to-end (xlsx válido de 1057 filas, encabezado + columnas + totales correctos).
