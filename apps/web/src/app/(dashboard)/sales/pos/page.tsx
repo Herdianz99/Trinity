@@ -67,11 +67,6 @@ const DOC_TYPES = ['V', 'E', 'J', 'G', 'C', 'P'];
 const fmtBs = (n: number) =>
   (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Agrupa la parte entera con "." de miles (estilo es-VE) para el input de montos en vivo.
-// "1234567" -> "1.234.567"
-const groupInt = (digits: string) =>
-  ((digits.replace(/^0+(?=\d)/, '')) || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
 interface CartItem {
   productId: string;
   code: string;
@@ -182,40 +177,26 @@ function MoneyInput({
         e.currentTarget.select();
       }}
       onChange={(e) => {
-        const el = e.currentTarget;
-        const prev = el.value;
-        const caret = el.selectionStart ?? prev.length;
-        // Cuántos dígitos hay antes del cursor (para restaurar la posición tras reagrupar).
-        const digitsBefore = prev.slice(0, caret).replace(/\D/g, '').length;
+        // Aceptar "." y "," como decimal (el cajero teclea el "." del teclado numérico).
+        // Sin agrupar miles en vivo: así el "." se admite sin ambigüedad y el cursor no
+        // salta (el navegador lo mantiene solo). Al salir del campo se reformatea agrupado.
+        const raw = e.currentTarget.value.replace(/[^0-9.,]/g, '');
+        // El último separador es el decimal; los anteriores son de miles y se descartan.
+        const lastSep = Math.max(raw.lastIndexOf('.'), raw.lastIndexOf(','));
+        let ip: string, dp: string | undefined;
+        if (lastSep === -1) {
+          ip = raw; dp = undefined;
+        } else {
+          ip = raw.slice(0, lastSep).replace(/[.,]/g, '');
+          dp = raw.slice(lastSep + 1).replace(/[.,]/g, '').slice(0, 2); // máx 2 decimales
+        }
+        ip = ip.replace(/^0+(?=\d)/, ''); // quitar ceros a la izquierda
 
-        // Limpiar: solo dígitos y una sola coma decimal.
-        let cleaned = prev.replace(/[^0-9,]/g, '');
-        const ci = cleaned.indexOf(',');
-        if (ci !== -1) cleaned = cleaned.slice(0, ci + 1) + cleaned.slice(ci + 1).replace(/,/g, '');
-        let [ip = '', dp] = cleaned.split(',');
-        if (dp !== undefined) dp = dp.slice(0, 2); // máx 2 decimales
-
-        const grouped = ip === '' ? (dp !== undefined ? '0' : '') : groupInt(ip);
-        const display = dp !== undefined ? `${grouped},${dp}` : grouped;
+        const display = dp !== undefined ? `${ip === '' ? '0' : ip},${dp}` : ip;
         setText(display);
 
         const num = parseFloat(`${ip || '0'}.${dp || '0'}`);
         onChange(isNaN(num) ? 0 : num);
-
-        // Restaurar el cursor por conteo de dígitos (los "." de miles se insertan/quitan solos).
-        requestAnimationFrame(() => {
-          const node = ref.current;
-          if (!node) return;
-          if (digitsBefore === 0) { node.setSelectionRange(0, 0); return; }
-          let count = 0, pos = 0;
-          const s = node.value;
-          while (pos < s.length) {
-            if (/\d/.test(s[pos])) count++;
-            pos++;
-            if (count >= digitsBefore) break;
-          }
-          node.setSelectionRange(pos, pos);
-        });
       }}
       onBlur={() => {
         setEditing(false); // el efecto reformatea a 2 decimales ("12," -> "12,00")
