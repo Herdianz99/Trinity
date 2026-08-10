@@ -30,7 +30,7 @@ const PERM_LABELS: Record<string, string> = {
   DELETE_PAYABLE: 'Eliminar CxP',
   DELETE_EXPENSE: 'Eliminar gasto',
   MODIFY_PRODUCT_PRICE: 'Modificar precio',
-  CANCEL_CASH_SESSION: 'Anular sesion caja',
+  CANCEL_CASH_SESSION: 'Editar fondo de caja',
   CHANGE_EXCHANGE_RATE: 'Cambiar tasa BCV',
   MANUAL_STOCK_ADJUSTMENT: 'Ajuste inventario',
   GIVE_DISCOUNT: 'Dar descuento POS',

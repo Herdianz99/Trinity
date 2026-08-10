@@ -4,12 +4,17 @@ import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
+import { EditOpeningBalanceDto } from './dto/edit-opening-balance.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 @Injectable()
 export class CashRegistersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dynamicKeysService: DynamicKeysService,
+  ) {}
 
   /** GET /cash-registers — all registers with their active session if any */
   async findAll() {
@@ -159,6 +164,50 @@ export class CashRegistersService {
         openingBalanceBs: dto.openingBalanceBs,
         notes: dto.notes,
       },
+      include: {
+        cashRegister: true,
+        openedBy: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  /**
+   * PATCH /cash-sessions/:id/opening-balance — editar el fondo de apertura de una
+   * sesion ABIERTA. Requiere clave dinamica (permiso CANCEL_CASH_SESSION, relabelado
+   * "Editar fondo de caja"). El arqueo de cierre recalcula el esperado sobre el fondo
+   * nuevo (el fondo se guarda solo en la sesion; no hay fila de ledger de apertura).
+   */
+  async editOpeningBalance(
+    sessionId: string,
+    dto: EditOpeningBalanceDto,
+    userId: string,
+  ) {
+    const session = await this.prisma.cashSession.findUnique({
+      where: { id: sessionId },
+      include: { cashRegister: { select: { name: true, code: true } } },
+    });
+    if (!session) throw new NotFoundException('Sesion no encontrada');
+    if (session.status !== 'OPEN') {
+      throw new BadRequestException('Solo se puede editar el fondo de una sesion abierta.');
+    }
+
+    const newUsd = dto.openingBalanceUsd ?? session.openingBalanceUsd;
+    const newBs = dto.openingBalanceBs ?? session.openingBalanceBs;
+    if (newUsd < 0 || newBs < 0) {
+      throw new BadRequestException('El fondo no puede ser negativo.');
+    }
+
+    await this.dynamicKeysService.validate({
+      key: dto.dynamicKey || '',
+      permission: 'CANCEL_CASH_SESSION',
+      action: `Editar fondo de apertura ${session.cashRegister.code} (${session.cashRegister.name}): USD ${newUsd.toFixed(2)} / Bs ${newBs.toFixed(2)}`,
+      entityType: 'CashSession',
+      entityId: sessionId,
+    });
+
+    return this.prisma.cashSession.update({
+      where: { id: sessionId },
+      data: { openingBalanceUsd: newUsd, openingBalanceBs: newBs },
       include: {
         cashRegister: true,
         openedBy: { select: { id: true, name: true } },

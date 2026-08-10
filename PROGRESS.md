@@ -1,5 +1,16 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-10 (cont.) — Editar el fondo de apertura de una caja abierta (con clave dinámica)
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración** (reutiliza un permiso ya existente). Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.
+
+- **Feature:** ícono de lápiz junto al título **"Fondos de apertura"** en la sesión abierta de una caja (`/cash/[id]`). Al darle clic pide una **clave de autorización** y luego permite editar el **Fondo USD / Bs** de apertura (antes solo se podía por SQL). El arqueo de cierre recalcula el esperado sobre el fondo nuevo (el fondo vive solo en la sesión; sin fila de ledger de apertura).
+- **Permiso reutilizado:** `CANCEL_CASH_SESSION` **estaba sin uso** (solo lo otorgaba el seed de la Clave Maestra; nadie lo validaba, no existe "anular sesión"). Se **relabeló** en el frontend de `"Anular sesion caja"` → **"Editar fondo de caja"** (en `/settings/dynamic-keys` y en los logs). **Sin migración**: el valor interno del enum `DynamicKeyPerm` queda igual, solo cambia el nombre visible. La Clave Maestra de cada empresa ya trae ese permiso.
+- **Backend (`cash-registers`):** nuevo `PATCH /cash-sessions/:id/opening-balance` (`editOpeningBalance()` + DTO `EditOpeningBalanceDto` + inyecta `DynamicKeysService`, import de `DynamicKeysModule`). Solo sobre sesiones `OPEN`, valida no-negativos, valida la clave (`CANCEL_CASH_SESSION`) y registra en `DynamicKeyLog` (`entityType='CashSession'`, action con caja + montos).
+- **Frontend (`cash/[id]/page.tsx`):** botón lápiz → `DynamicKeyModal` (permiso `CANCEL_CASH_SESSION`) → al autorizar, modal con inputs Fondo USD / Fondo Bs (precargados) → `PATCH` con la clave → refresca.
+- **Pruebas end-to-end (local, `total_db`):** editar Caja Notas con clave correcta → USD 404→500, Bs 39.460→41.350 + log de auditoría ✓; clave incorrecta → 401; sesión cerrada → 400 "Solo se puede editar el fondo de una sesión abierta" ✓.
+- **Para desplegar (Diego):** las **6 empresas**, deploy **code-only** (sin migración). Tras desplegar, el permiso aparece como "Editar fondo de caja" en `/settings/dynamic-keys`; la Clave Maestra ya lo tiene (o se crea una clave aparte).
+
 ## 🗓️ Sesión 2026-08-10 — Anulación de ajustes de inventario procesados (revierte stock + cancela CxC/CxP)
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Trae **1 migración** (`20260810160000_receivable_payable_cancelled`, `ALTER TYPE ... ADD VALUE IF NOT EXISTS 'CANCELLED'` para `ReceivableStatus` y `PayableStatus`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.

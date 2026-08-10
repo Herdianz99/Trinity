@@ -18,9 +18,11 @@ import {
   ArrowDownRight,
   Eye,
   EyeOff,
+  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 import { sendToFiscalPrinter, extractAndPrintZReport } from '@/lib/fiscal-printer';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 interface PaymentMethodOption {
   id: string;
@@ -72,6 +74,15 @@ export default function CashDetailPage() {
   const [movementError, setMovementError] = useState('');
   const [showDynKey, setShowDynKey] = useState(false);
 
+  // Editar fondo de apertura (gated por clave dinamica CANCEL_CASH_SESSION = "Editar fondo de caja")
+  const [fondoKeyOpen, setFondoKeyOpen] = useState(false); // modal de clave
+  const [fondoEditOpen, setFondoEditOpen] = useState(false); // modal de edicion
+  const [fondoKey, setFondoKey] = useState(''); // clave autorizada
+  const [fondoUsd, setFondoUsd] = useState('');
+  const [fondoBs, setFondoBs] = useState('');
+  const [fondoSaving, setFondoSaving] = useState(false);
+  const [fondoError, setFondoError] = useState('');
+
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
   const fetchRegister = useCallback(async () => {
@@ -108,6 +119,43 @@ export default function CashDetailPage() {
   // Fetch session summary when on session tab
   const openSession = register?.sessions?.[0];
   const sessionId = openSession?.id;
+
+  // ── Editar fondo de apertura (tras autorizar con clave dinamica) ──
+  function onFondoAuthorized(key: string) {
+    setFondoKey(key);
+    setFondoUsd(String(openSession?.openingBalanceUsd ?? 0));
+    setFondoBs(String(openSession?.openingBalanceBs ?? 0));
+    setFondoError('');
+    setFondoEditOpen(true);
+  }
+
+  async function saveFondo() {
+    if (!sessionId) return;
+    setFondoSaving(true);
+    setFondoError('');
+    try {
+      const usd = parseFloat(String(fondoUsd).replace(',', '.'));
+      const bs = parseFloat(String(fondoBs).replace(',', '.'));
+      if (isNaN(usd) || isNaN(bs) || usd < 0 || bs < 0) {
+        throw new Error('Ingresa montos validos (no negativos).');
+      }
+      const res = await fetch(`/api/proxy/cash-sessions/${sessionId}/opening-balance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openingBalanceUsd: usd, openingBalanceBs: bs, dynamicKey: fondoKey }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Error');
+      setFondoEditOpen(false);
+      setFondoKey('');
+      setMessage({ type: 'success', text: 'Fondo de apertura actualizado' });
+      fetchRegister();
+    } catch (err: any) {
+      setFondoError(err.message);
+    } finally {
+      setFondoSaving(false);
+    }
+  }
 
   const fetchSummary = useCallback(async () => {
     if (!sessionId) return;
@@ -388,7 +436,16 @@ export default function CashDetailPage() {
             {/* Left column - Summary (30%) */}
             <div className="w-[30%] space-y-4">
               <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Fondos de apertura</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Fondos de apertura</h3>
+                  <button
+                    onClick={() => setFondoKeyOpen(true)}
+                    className="p-1 rounded text-slate-500 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+                    title="Editar fondo de apertura (requiere clave de autorización)"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-slate-400">Fondo USD</span>
@@ -1156,6 +1213,66 @@ export default function CashDetailPage() {
               >
                 {processing ? <Loader2 className="animate-spin" size={16} /> : <DoorClosed size={16} />}
                 Confirmar cierre
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Clave dinamica para editar el fondo ═══ */}
+      <DynamicKeyModal
+        isOpen={fondoKeyOpen}
+        onClose={() => setFondoKeyOpen(false)}
+        onAuthorized={onFondoAuthorized}
+        permission="CANCEL_CASH_SESSION"
+        title="Editar fondo de apertura"
+        description="Ingresa la clave de autorización para editar el fondo de esta caja."
+        entityType="CashSession"
+        entityId={sessionId || ''}
+        action={`Editar fondo de apertura ${register?.name || ''}`}
+      />
+
+      {/* ═══ Modal de edicion del fondo ═══ */}
+      {fondoEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !fondoSaving && setFondoEditOpen(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Editar fondo de apertura</h2>
+              <button onClick={() => setFondoEditOpen(false)} disabled={fondoSaving} className="text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-400">
+                Cambia el fondo con el que se abrió la caja. El arqueo de cierre usará el nuevo fondo.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Fondo USD</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={fondoUsd}
+                  onChange={(e) => setFondoUsd(e.target.value.replace(/[^0-9.,]/g, ''))}
+                  className="input-field !py-2 text-sm w-full text-right font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Fondo Bs</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={fondoBs}
+                  onChange={(e) => setFondoBs(e.target.value.replace(/[^0-9.,]/g, ''))}
+                  className="input-field !py-2 text-sm w-full text-right font-mono"
+                />
+              </div>
+              {fondoError && (
+                <p className="text-xs text-red-400">{fondoError}</p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setFondoEditOpen(false)} disabled={fondoSaving} className="btn-secondary !py-2 text-sm">Cancelar</button>
+              <button type="button" onClick={saveFondo} disabled={fondoSaving} className="btn-primary !py-2 text-sm flex items-center gap-2">
+                {fondoSaving ? <Loader2 className="animate-spin" size={16} /> : <Pencil size={16} />}
+                Guardar fondo
               </button>
             </div>
           </div>

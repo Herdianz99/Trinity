@@ -18,6 +18,7 @@ import { CashSessionPdfService } from './cash-session-pdf.service';
 import { CashLedgerExcelService } from './cash-ledger-excel.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
+import { EditOpeningBalanceDto } from './dto/edit-opening-balance.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -99,6 +100,15 @@ export class CashRegistersController {
     @CurrentUser() user: { id: string },
   ) {
     return this.service.closeSession(id, dto, user.id);
+  }
+
+  @Patch('cash-sessions/:id/opening-balance')
+  editOpeningBalance(
+    @Param('id') id: string,
+    @Body() dto: EditOpeningBalanceDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.service.editOpeningBalance(id, dto, user.id);
   }
 
   @Get('cash-sessions/:id/summary')
