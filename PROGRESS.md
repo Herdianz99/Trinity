@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-10 (cont.) — Fix PDF nota de entrega: P. Unit. no cuadraba con descuento
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Solo presentación de 1 PDF, **sin migración ni cambios de datos**. Verificado en local (`total_db`): typecheck API limpio; PDF real regenerado (NE-26-00000657) → ahora P. Unit. × Cant. = Total.
+
+- **Problema:** en el PDF de una **nota de entrega (serie no fiscal)** con **descuento de línea** (`InvoiceItem.discountPct`), la columna **P. Unit. × Cant. no cuadraba con el Total**. Caso reportado NE-26-00000657: mostraba P. Unit. $117.83 × 2 = $235.66 ≠ Total $215.06 (desfasado justo por el 10% de descuento = $20.60). Los totales del pie SIEMPRE estuvieron bien; era solo la columna de precio unitario.
+- **Causa raíz (`invoice-pdf.service.ts`):** para no-fiscales el P. Unit. se calculaba como `unitPrice + ivaAmount/qty` (precio de lista + IVA), **sin restar el descuento** de la línea → no multiplicaba al `item.totalUsd` (que sí trae descuento + IVA).
+- **Fix:** para notas **no fiscales** el P. Unit. ahora se **deriva del total de la línea**: `item.totalUsd / item.quantity` (ya incluye descuento + IVA) → **P. Unit. × Cant. = Total siempre**, aunque haya descuento. Facturas **fiscales** sin cambios (P. Unit. sin IVA, IVA desglosado aparte).
+- **Alcance:** afecta a **todas las notas de entrega no fiscales con descuento** (antes todas mostraban un unitario inflado). Ningún dato estaba mal. **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-10 (cont.) — Ganancia negativa: permitir vender con pérdida (con confirmación)
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración.** Verificado en local (`total_db`): typecheck API+Web limpio; probado que el backend acepta ganancia negativa (`PATCH` producto con `gananciaPct:-15` → HTTP 200, `priceDetal` recalcula bajo costo; antes daba 400).
