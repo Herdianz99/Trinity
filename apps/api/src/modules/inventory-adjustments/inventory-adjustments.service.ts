@@ -11,6 +11,7 @@ import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
 import { RemoveItemsDto } from './dto/remove-items.dto';
 import { ProcessAdjustmentDto } from './dto/process-adjustment.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 const INCLUDE_LIST = {
   warehouse: true,
@@ -40,7 +41,10 @@ const INCLUDE_DETAIL = {
 
 @Injectable()
 export class InventoryAdjustmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dynamicKeysService: DynamicKeysService,
+  ) {}
 
   /** Correlativo ADJ-0001 con SELECT FOR UPDATE (regla de correlativos). */
   private async generateNumber(tx: any): Promise<string> {
@@ -515,6 +519,156 @@ export class InventoryAdjustmentsService {
     });
   }
 
+  /**
+   * Anula un ajuste YA PROCESADO: revierte el stock que movió (entrada o salida),
+   * cancela la CxC/CxP que generó (conserva su número) y marca el ajuste CANCELLED.
+   * Requiere clave dinámica con permiso "Ajuste inventario" (MANUAL_STOCK_ADJUSTMENT).
+   * - Permite dejar el stock en negativo (si la mercancía ya se movió).
+   * - BLOQUEA si la cuenta generada ya tiene pagos / está en un recibo o programación.
+   */
+  async voidAdjustment(id: string, userId: string, dynamicKey?: string) {
+    const adjustment = await this.prisma.inventoryAdjustment.findUnique({
+      where: { id },
+      include: { items: { include: { product: { select: { id: true, costUsd: true } } } } },
+    });
+    if (!adjustment) {
+      throw new NotFoundException(`Ajuste con id ${id} no encontrado`);
+    }
+    if (adjustment.status !== 'PROCESSED') {
+      throw new BadRequestException('Solo se pueden anular ajustes procesados.');
+    }
+
+    // Correlativo visible del ajuste (mismo que usó process() para la descripción de la cuenta).
+    const adjRef = adjustment.number || `ADJ-${adjustment.id.slice(0, 8)}`;
+
+    // ── Localizar la CxC/CxP generada por este ajuste ──
+    // No hay FK: process() la crea con description "Ajuste de inventario (...) - <adjRef>".
+    const receivable =
+      adjustment.type === 'OUT'
+        ? await this.prisma.receivable.findFirst({
+            where: {
+              type: 'MANUAL',
+              description: { endsWith: `- ${adjRef}` },
+              status: { not: 'CANCELLED' },
+            },
+            select: { id: true, number: true, status: true },
+          })
+        : null;
+    const payable =
+      adjustment.type === 'IN'
+        ? await this.prisma.payable.findFirst({
+            where: {
+              description: { endsWith: `- ${adjRef}` },
+              status: { not: 'CANCELLED' },
+            },
+            select: { id: true, number: true, status: true },
+          })
+        : null;
+
+    // ── Bloquear si la cuenta ya tiene pagos / movimientos ──
+    if (receivable) {
+      const [pays, receiptItems] = await Promise.all([
+        this.prisma.receivablePayment.count({ where: { receivableId: receivable.id } }),
+        this.prisma.receiptItem.count({ where: { receivableId: receivable.id } }),
+      ]);
+      if (pays > 0 || receiptItems > 0 || receivable.status === 'PAID' || receivable.status === 'PARTIAL') {
+        throw new BadRequestException(
+          `No se puede anular: la CxC ${receivable.number} ya tiene pagos o movimientos de cobro. Reversa esos pagos primero.`,
+        );
+      }
+    }
+    if (payable) {
+      const [pays, receiptItems, scheduleItems] = await Promise.all([
+        this.prisma.payablePayment.count({ where: { payableId: payable.id } }),
+        this.prisma.receiptItem.count({ where: { payableId: payable.id } }),
+        this.prisma.paymentScheduleItem.count({ where: { payableId: payable.id } }),
+      ]);
+      if (pays > 0 || receiptItems > 0 || scheduleItems > 0 || payable.status === 'PAID' || payable.status === 'PARTIAL') {
+        throw new BadRequestException(
+          `No se puede anular: la CxP ${payable.number} ya tiene pagos o está en un recibo/programación de pago. Reversa esos pagos primero.`,
+        );
+      }
+    }
+
+    // ── Clave dinámica (reutiliza el permiso "Ajuste inventario") ──
+    await this.dynamicKeysService.validate({
+      key: dynamicKey || '',
+      permission: 'MANUAL_STOCK_ADJUSTMENT',
+      action: `Anular ajuste procesado ${adjRef}`,
+      entityType: 'InventoryAdjustment',
+      entityId: id,
+    });
+
+    // ── Reversa atómica ──
+    return this.prisma.$transaction(async (tx) => {
+      for (const item of adjustment.items) {
+        // Reversa el delta original: IN sumó (+qty) → resta; OUT restó (−qty) → suma.
+        const reverseDelta = adjustment.type === 'IN' ? -item.quantity : item.quantity;
+        const reverseType = adjustment.type === 'IN' ? 'ADJUSTMENT_OUT' : 'ADJUSTMENT_IN';
+
+        await tx.stock.upsert({
+          where: {
+            productId_warehouseId: {
+              productId: item.productId,
+              warehouseId: adjustment.warehouseId,
+            },
+          },
+          // Permite quedar en negativo (decisión de negocio): sin Math.max.
+          update: { quantity: { increment: reverseDelta } },
+          create: {
+            productId: item.productId,
+            warehouseId: adjustment.warehouseId,
+            quantity: reverseDelta,
+          },
+        });
+
+        const updatedStock = await tx.stock.findUnique({
+          where: {
+            productId_warehouseId: {
+              productId: item.productId,
+              warehouseId: adjustment.warehouseId,
+            },
+          },
+        });
+
+        // Movimiento compensatorio (no borro el original → se conserva la auditoría).
+        await tx.stockMovement.create({
+          data: {
+            productId: item.productId,
+            warehouseId: adjustment.warehouseId,
+            type: reverseType,
+            quantity: reverseDelta,
+            costUsd: item.product.costUsd,
+            stockAfter: updatedStock?.quantity ?? 0,
+            reason: `Anulación de ajuste ${adjRef}`,
+            reference: adjRef,
+            sourceType: 'INVENTORY_ADJUSTMENT',
+            sourceId: adjustment.id,
+            createdById: userId,
+          },
+        });
+      }
+
+      // ── Cancelar la cuenta generada (conserva el número) ──
+      let cancelledAccount: { kind: 'CXC' | 'CXP'; number: string | null } | null = null;
+      if (receivable) {
+        await tx.receivable.update({ where: { id: receivable.id }, data: { status: 'CANCELLED' } });
+        cancelledAccount = { kind: 'CXC', number: receivable.number };
+      } else if (payable) {
+        await tx.payable.update({ where: { id: payable.id }, data: { status: 'CANCELLED' } });
+        cancelledAccount = { kind: 'CXP', number: payable.number };
+      }
+
+      const updated = await tx.inventoryAdjustment.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+        include: INCLUDE_LIST,
+      });
+
+      return { ...updated, cancelledAccount };
+    });
+  }
+
   async remove(id: string) {
     const adjustment = await this.prisma.inventoryAdjustment.findUnique({
       where: { id },
@@ -527,6 +681,14 @@ export class InventoryAdjustmentsService {
     if (adjustment.status === 'PROCESSED') {
       throw new BadRequestException(
         'No se puede eliminar un ajuste ya procesado (afecto el stock)',
+      );
+    }
+
+    // Un ajuste ANULADO (fue procesado y luego cancelado) conserva su registro para
+    // auditoría: no se puede borrar. Solo se elimina un borrador cancelado (sin procesar).
+    if (adjustment.status === 'CANCELLED' && adjustment.processedAt) {
+      throw new BadRequestException(
+        'No se puede eliminar un ajuste anulado; el registro debe conservarse.',
       );
     }
 

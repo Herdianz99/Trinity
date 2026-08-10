@@ -2623,3 +2623,7 @@ DO $$ BEGIN
   ALTER TABLE "CashMovement" ADD CONSTRAINT "CashMovement_methodId_fkey"
     FOREIGN KEY ("methodId") REFERENCES "PaymentMethod"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Estado CANCELLED en CxC/CxP para la anulacion de ajustes de inventario. Ses. 2026-08-10.
+ALTER TYPE "ReceivableStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+ALTER TYPE "PayableStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';

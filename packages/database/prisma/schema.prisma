@@ -179,6 +179,7 @@ enum ReceivableStatus {
   PARTIAL
   PAID
   OVERDUE
+  CANCELLED
 }
 
 enum PayableStatus {
@@ -186,6 +187,7 @@ enum PayableStatus {
   PARTIAL
   PAID
   OVERDUE
+  CANCELLED
 }
 
 enum PaymentScheduleStatus {

@@ -9,6 +9,7 @@ import {
 import CustomerSearchSelect from '@/components/customer-search-select';
 import SupplierSearchSelect from '@/components/supplier-search-select';
 import ProductSearch from '@/components/product-search';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 // ── Types ──────────────────────────────────────────────
 interface AdjustmentItem {
@@ -105,6 +106,9 @@ export default function InventoryAdjustmentDetailPage() {
   const [genAccount, setGenAccount] = useState(false);
   const [procEntityId, setProcEntityId] = useState('');
   const [procDueDate, setProcDueDate] = useState('');
+
+  // Anulacion de ajuste procesado (clave dinamica)
+  const [showVoidKey, setShowVoidKey] = useState(false);
 
   // ── Data fetching ──────────────────────────────────
   const fetchAdjustment = useCallback(async () => {
@@ -270,6 +274,33 @@ export default function InventoryAdjustmentDetailPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Error');
       }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Anular ajuste procesado (revierte stock + cancela la CxC/CxP) ──
+  async function handleVoid(dynamicKey: string) {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/inventory-adjustments/${id}/void`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dynamicKey }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Error');
+      const acc = data.cancelledAccount;
+      setMessage({
+        type: 'success',
+        text: acc
+          ? `Ajuste anulado: stock revertido y ${acc.kind === 'CXC' ? 'CxC' : 'CxP'} ${acc.number} cancelada.`
+          : 'Ajuste anulado: stock revertido.',
+      });
+      fetchAdjustment();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -632,24 +663,87 @@ export default function InventoryAdjustmentDetailPage() {
               </table>
             </div>
           </div>
+
+          {/* Barra de accion: anular ajuste procesado (con clave dinamica) */}
+          <div className="mt-4 flex items-center justify-end">
+            <button
+              onClick={() => setShowVoidKey(true)}
+              disabled={saving}
+              className="text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5"
+              title="Revierte el stock que movió y cancela la CxC/CxP que generó. Requiere clave de autorización."
+            >
+              {saving ? <Loader2 className="animate-spin" size={16} /> : <XCircle size={16} />}
+              Anular ajuste
+            </button>
+          </div>
         </>
       )}
 
-      {/* ═══ CANCELLED ═══ */}
-      {isCancelled && (
-        <div className="card p-8 text-center">
-          <XCircle size={48} className="mx-auto mb-3 text-red-400 opacity-40" />
-          <p className="text-slate-400 text-lg">Este ajuste fue cancelado</p>
-          <p className="text-slate-500 text-sm mt-1">{totalItems} producto(s) estaban en el ajuste</p>
-          <button
-            onClick={handleDelete}
-            disabled={saving}
-            className="mt-4 text-sm text-red-400 hover:text-red-300 transition-colors inline-flex items-center gap-1.5"
-          >
-            <Trash2 size={16} /> Eliminar ajuste
-          </button>
-        </div>
-      )}
+      {/* ═══ CANCELLED (anulado si fue procesado, o borrador cancelado) ═══ */}
+      {isCancelled && (() => {
+        const wasVoided = !!adjustment.processedAt; // procesado y luego anulado
+        return (
+          <>
+            <div className="card p-5 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <XCircle size={28} className="text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-white font-semibold">
+                    {wasVoided ? 'Este ajuste fue anulado' : 'Este ajuste fue cancelado'}
+                  </p>
+                  <p className="text-slate-400 text-sm mt-0.5">
+                    {wasVoided
+                      ? `Se revirtió el stock que había movido. Los ${totalItems} producto(s) que tenía se muestran abajo para referencia.`
+                      : `${totalItems} producto(s) estaban en el ajuste (nunca se procesó).`}
+                  </p>
+                </div>
+              </div>
+              {/* Solo se puede eliminar un borrador cancelado; un anulado conserva su registro. */}
+              {!wasVoided && (
+                <button
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="text-sm text-red-400 hover:text-red-300 transition-colors inline-flex items-center gap-1.5 self-start shrink-0"
+                >
+                  <Trash2 size={16} /> Eliminar ajuste
+                </button>
+              )}
+            </div>
+
+            {/* Artículos que tenía el ajuste (para saber cuáles fueron anulados) */}
+            {adjustment.items.length > 0 && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Codigo</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Categoria</th>
+                        <th className="text-right px-4 py-3 text-slate-400 font-medium">
+                          {wasVoided ? 'Cantidad (revertida)' : 'Cantidad'}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustment.items.map(item => (
+                        <tr key={item.id} className="border-b border-slate-700/30">
+                          <td className="px-4 py-2.5 font-mono text-xs text-green-400">{item.product.code}</td>
+                          <td className="px-4 py-2.5 text-white">{item.product.name}</td>
+                          <td className="px-4 py-2.5 text-slate-400 text-xs hidden md:table-cell">{item.product.category?.name || '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-slate-400 line-through">
+                            {adjustment.type === 'IN' ? '+' : '-'}{item.quantity}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ═══ Modal de proceso ═══ */}
       {showProcessModal && adjustment && (() => {
@@ -739,6 +833,19 @@ export default function InventoryAdjustmentDetailPage() {
           </div>
         );
       })()}
+
+      {/* ═══ Modal de clave dinamica para anular ═══ */}
+      <DynamicKeyModal
+        isOpen={showVoidKey}
+        onClose={() => setShowVoidKey(false)}
+        onAuthorized={handleVoid}
+        permission="MANUAL_STOCK_ADJUSTMENT"
+        title="Anular ajuste de inventario"
+        description="Ingresa la clave de autorización para revertir el stock y cancelar la cuenta generada."
+        entityType="InventoryAdjustment"
+        entityId={id}
+        action={`Anular ajuste ${adjustment.number || id}`}
+      />
     </div>
   );
 }

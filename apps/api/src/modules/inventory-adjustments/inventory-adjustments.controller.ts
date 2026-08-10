@@ -116,6 +116,15 @@ export class InventoryAdjustmentsController {
     return this.inventoryAdjustmentsService.cancel(id);
   }
 
+  @Patch(':id/void')
+  voidAdjustment(
+    @Param('id') id: string,
+    @Body('dynamicKey') dynamicKey: string | undefined,
+    @CurrentUser() user: { id: string; email: string; role: UserRole },
+  ) {
+    return this.inventoryAdjustmentsService.voidAdjustment(id, user.id, dynamicKey);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.inventoryAdjustmentsService.remove(id);
