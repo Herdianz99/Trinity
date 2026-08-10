@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-10 (cont.) — POS: aviso suave al vender sin/superando existencia
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo frontend, sin migración.** Verificado en local: typecheck Web limpio; `/sales/pos` compila sin errores.
+
+- **Feature (pedido del usuario):** un **modal de aviso suave** en el POS cuando el cajero (1) selecciona un artículo **sin existencia** o (2) pone una **cantidad que supera lo disponible** (ej.: hay 10, coloca 15). **No bloquea** — el usuario decide ("Sí, agregar igual" / "No, cancelar").
+- **Decisiones del usuario:** (1) aviso **suave**, solo avisa y deja continuar; (2) valida contra el **disponible = stock − reservado** (no el stock bruto); (3) **no aplica a servicios** (flete/mano de obra).
+- **Frontend (`sales/pos/page.tsx`, único archivo):** `addToCart` se dividió en `doAddToCart` (agrega de verdad, marca `isService` en la línea) + guarda con el aviso; `setQuantity`/`updateQuantity` se refactorizaron con `applyQuantity` + guarda (solo avisa al **aumentar**, no al bajar). Nuevo estado `stockWarn` + modal (icono `PackageX`, ámbar). El aviso corre **independiente del flag** `allowNegativeStock` (aparece aun en empresas que permiten negativo, que es el caso común donde antes no avisaba nada). No toca el flujo estricto existente (clave `SELL_NEGATIVE_STOCK`) ni la validación transaccional del backend al cobrar.
+- **Nota de diseño:** el aviso usa el **snapshot** de stock del momento en que se agregó el artículo (no hace consulta fresca al validar); el reservado se refresca cada 30s. La autoridad real sigue siendo el backend al cobrar (solo bloquea si `allowNegativeStock = false`). Decidido dejarlo así por ahora.
+- **Para desplegar (Diego):** las **6 empresas**, deploy **code-only** (sin migración).
+
 ## 🗓️ Sesión 2026-08-10 (cont.) — Fix PDF nota de entrega: P. Unit. no cuadraba con descuento
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Solo presentación de 1 PDF, **sin migración ni cambios de datos**. Verificado en local (`total_db`): typecheck API limpio; PDF real regenerado (NE-26-00000657) → ahora P. Unit. × Cant. = Total.

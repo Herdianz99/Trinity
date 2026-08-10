@@ -79,6 +79,7 @@ interface CartItem {
   priceOverridden: boolean;
   discountPct: number;
   authorizedNegative?: boolean; // línea sin stock autorizada por supervisor (clave dinámica)
+  isService?: boolean; // los servicios no manejan inventario (no se avisan por stock)
 }
 
 interface PaymentLine {
@@ -299,6 +300,8 @@ export default function POSPage() {
   const [pendingCount, setPendingCount] = useState(0);
   // Cantidad comprometida por producto en facturas en espera. "Disponible" = stock - reservado.
   const [reservedStock, setReservedStock] = useState<Record<string, number>>({});
+  // Aviso suave (no bloquea) cuando se agrega/pone más de lo disponible. onConfirm ejecuta la acción.
+  const [stockWarn, setStockWarn] = useState<null | { name: string; available: number; requested: number; onConfirm: () => void }>(null);
   const [confirmRetake, setConfirmRetake] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [pendingFilterMine, setPendingFilterMine] = useState(true);
@@ -838,24 +841,10 @@ export default function POSPage() {
     }
   }
 
-  function addToCart(product: any, authorizedNegative = false) {
-    // Bloqueado para la venta: se muestra en el POS pero no se puede facturar.
-    if (product.saleBlocked) {
-      setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
-      return;
-    }
-    // La maquina fiscal rechaza articulos en 0 -> no dejar agregarlos al carrito
-    if (product.priceDetal == null || product.priceDetal <= 0) {
-      setMessage({ type: 'error', text: `"${product.name}" no tiene precio (esta en 0). Configurale un precio antes de venderlo: la maquina fiscal rechaza articulos en 0.` });
-      return;
-    }
+  // Agrega de verdad al carrito (sin el aviso de stock). Lo llaman addToCart (tras pasar
+  // el aviso) y el onConfirm del modal de aviso.
+  function doAddToCart(product: any, authorizedNegative = false) {
     const stockQty = product.stock?.[0]?.quantity || 0;
-    // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
-    const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
-
-    // Bloquea sin stock SALVO que un supervisor lo haya autorizado (clave dinamica)
-    if (blockNoStock && stockQty <= 0 && !authorizedNegative) return;
-
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
@@ -875,11 +864,50 @@ export default function POSPage() {
         priceOverridden: false,
         discountPct: 0,
         authorizedNegative,
+        isService: !!product.isService,
       }, ...prev];
     });
     setSearchQuery('');
     setSearchResults([]);
     setSearchTotal(0);
+  }
+
+  function addToCart(product: any, authorizedNegative = false) {
+    // Bloqueado para la venta: se muestra en el POS pero no se puede facturar.
+    if (product.saleBlocked) {
+      setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
+      return;
+    }
+    // La maquina fiscal rechaza articulos en 0 -> no dejar agregarlos al carrito
+    if (product.priceDetal == null || product.priceDetal <= 0) {
+      setMessage({ type: 'error', text: `"${product.name}" no tiene precio (esta en 0). Configurale un precio antes de venderlo: la maquina fiscal rechaza articulos en 0.` });
+      return;
+    }
+    const stockQty = product.stock?.[0]?.quantity || 0;
+    // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
+    const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
+
+    // Bloquea sin stock SALVO que un supervisor lo haya autorizado (clave dinamica)
+    if (blockNoStock && stockQty <= 0 && !authorizedNegative) return;
+
+    // Aviso SUAVE (no bloquea) contra el disponible = stock - reservado. No aplica a
+    // servicios ni cuando ya se autorizo el negativo con clave. El usuario decide.
+    if (!product.isService && !authorizedNegative) {
+      const available = stockQty - (reservedStock[product.id] || 0);
+      const existing = cart.find(i => i.productId === product.id);
+      const resultQty = (existing?.quantity || 0) + 1;
+      if (resultQty > available) {
+        setStockWarn({
+          name: product.name,
+          available,
+          requested: resultQty,
+          onConfirm: () => { setStockWarn(null); doAddToCart(product, authorizedNegative); },
+        });
+        return;
+      }
+    }
+
+    doAddToCart(product, authorizedNegative);
   }
 
   // Selecciona un producto de los resultados (click o Enter): sin stock -> venta perdida,
@@ -919,20 +947,40 @@ export default function POSPage() {
     }
   }
 
+  function applyQuantity(productId: string, newQty: number) {
+    setCart(prev => prev.map(i => i.productId === productId ? { ...i, quantity: newQty } : i));
+  }
+
   function updateQuantity(productId: string, delta: number) {
-    setCart(prev => prev.map(i => {
-      if (i.productId !== productId) return i;
-      const newQty = Math.max(0.01, Math.round((i.quantity + delta) * 100) / 100);
-      return { ...i, quantity: newQty };
-    }));
+    const item = cart.find(i => i.productId === productId);
+    if (!item) return;
+    const newQty = Math.max(0.01, Math.round((item.quantity + delta) * 100) / 100);
+    // Aviso suave al SUBIR por encima del disponible (no en servicios ni al bajar).
+    if (delta > 0 && !item.isService) {
+      const available = item.stock - (reservedStock[productId] || 0);
+      if (newQty > available) {
+        setStockWarn({ name: item.name, available, requested: newQty,
+          onConfirm: () => { setStockWarn(null); applyQuantity(productId, newQty); } });
+        return;
+      }
+    }
+    applyQuantity(productId, newQty);
   }
 
   function setQuantity(productId: string, qty: number) {
-    setCart(prev => prev.map(i => {
-      if (i.productId !== productId) return i;
-      const newQty = Math.max(0.01, Math.round(qty * 100) / 100);
-      return { ...i, quantity: newQty };
-    }));
+    const item = cart.find(i => i.productId === productId);
+    if (!item) return;
+    const newQty = Math.max(0.01, Math.round(qty * 100) / 100);
+    // Aviso suave si excede el disponible y ademas AUMENTA (evita re-avisar al bajar).
+    if (!item.isService && newQty > item.quantity) {
+      const available = item.stock - (reservedStock[productId] || 0);
+      if (newQty > available) {
+        setStockWarn({ name: item.name, available, requested: newQty,
+          onConfirm: () => { setStockWarn(null); applyQuantity(productId, newQty); } });
+        return;
+      }
+    }
+    applyQuantity(productId, newQty);
   }
 
   function confirmPriceOverride(productId: string) {
@@ -3917,6 +3965,41 @@ export default function POSPage() {
                 className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50 transition-colors"
               >
                 {savingAdvance ? 'Guardando...' : 'Registrar Anticipo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Aviso suave de existencia (no bloquea; el usuario decide) ═══ */}
+      {stockWarn && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStockWarn(null)}>
+          <div className="bg-slate-800 border border-amber-500/30 rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                <PackageX className="text-amber-400" size={20} />
+              </div>
+              <h2 className="text-lg font-semibold text-white">
+                {stockWarn.available <= 0 ? 'Sin existencia' : 'Existencia insuficiente'}
+              </h2>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-200">
+                <strong>{stockWarn.name}</strong>{' '}
+                {stockWarn.available <= 0
+                  ? 'no tiene existencia disponible.'
+                  : <>tiene solo <strong className="text-amber-400">{stockWarn.available}</strong> disponible(s) y estás colocando <strong className="text-amber-400">{stockWarn.requested}</strong>.</>}
+              </p>
+              <p className="text-sm text-slate-400">¿Deseas agregarlo de todos modos?</p>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setStockWarn(null)} className="btn-secondary !py-2 text-sm">No, cancelar</button>
+              <button
+                type="button"
+                onClick={() => stockWarn.onConfirm()}
+                className="!py-2 px-4 text-sm rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 flex items-center gap-2 transition-colors"
+              >
+                <PackageX size={16} /> Sí, agregar igual
               </button>
             </div>
           </div>
