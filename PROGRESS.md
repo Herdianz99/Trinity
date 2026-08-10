@@ -1,7 +1,7 @@
 ﻿# Trinity ERP — Progreso
 
-> ### ⏳ PENDIENTE DE DEPLOY (2026-08-10) — 5 commits en `main`, en las 6 empresas
-> Van juntos en un solo `git pull` + `deploy.sh` por empresa. **Una sola migración** (la del enum `CANCELLED`), aplicada por `prisma migrate deploy`.
+> ### ✅ DESPLEGADO en las 6 empresas (2026-08-10) — 5 commits, HEAD `e4f1c81`
+> Verificado: las 6 instancias (total, totalturen, aceros, acerosmayor, grande, chica) en `e4f1c81`, PM2 online, la migración `CANCELLED` aplicada en todas las BD.
 > 1. `0ad1850` — Anular ajustes de inventario procesados (revierte stock + cancela CxC/CxP) — **CON migración** (`CANCELLED` en `ReceivableStatus`/`PayableStatus`).
 > 2. `565ca11` — Editar fondo de apertura de caja abierta (clave dinámica) — sin migración.
 > 3. `afc838f` — Permitir ganancia negativa (venta con pérdida) con confirmación — sin migración.
@@ -10,7 +10,7 @@
 
 ## 🗓️ Sesión 2026-08-10 (cont.) — POS: aviso suave al vender sin/superando existencia
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo frontend, sin migración.** Verificado en local: typecheck Web limpio; `/sales/pos` compila sin errores.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** **Solo frontend, sin migración.** Verificado en local: typecheck Web limpio; `/sales/pos` compila sin errores.
 
 - **Feature (pedido del usuario):** un **modal de aviso suave** en el POS cuando el cajero (1) selecciona un artículo **sin existencia** o (2) pone una **cantidad que supera lo disponible** (ej.: hay 10, coloca 15). **No bloquea** — el usuario decide ("Sí, agregar igual" / "No, cancelar").
 - **Decisiones del usuario:** (1) aviso **suave**, solo avisa y deja continuar; (2) valida contra el **disponible = stock − reservado** (no el stock bruto); (3) **no aplica a servicios** (flete/mano de obra).
@@ -20,7 +20,7 @@
 
 ## 🗓️ Sesión 2026-08-10 (cont.) — Fix PDF nota de entrega: P. Unit. no cuadraba con descuento
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Solo presentación de 1 PDF, **sin migración ni cambios de datos**. Verificado en local (`total_db`): typecheck API limpio; PDF real regenerado (NE-26-00000657) → ahora P. Unit. × Cant. = Total.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** Solo presentación de 1 PDF, **sin migración ni cambios de datos**. Verificado en local (`total_db`): typecheck API limpio; PDF real regenerado (NE-26-00000657) → ahora P. Unit. × Cant. = Total.
 
 - **Problema:** en el PDF de una **nota de entrega (serie no fiscal)** con **descuento de línea** (`InvoiceItem.discountPct`), la columna **P. Unit. × Cant. no cuadraba con el Total**. Caso reportado NE-26-00000657: mostraba P. Unit. $117.83 × 2 = $235.66 ≠ Total $215.06 (desfasado justo por el 10% de descuento = $20.60). Los totales del pie SIEMPRE estuvieron bien; era solo la columna de precio unitario.
 - **Causa raíz (`invoice-pdf.service.ts`):** para no-fiscales el P. Unit. se calculaba como `unitPrice + ivaAmount/qty` (precio de lista + IVA), **sin restar el descuento** de la línea → no multiplicaba al `item.totalUsd` (que sí trae descuento + IVA).
@@ -29,7 +29,7 @@
 
 ## 🗓️ Sesión 2026-08-10 (cont.) — Ganancia negativa: permitir vender con pérdida (con confirmación)
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración.** Verificado en local (`total_db`): typecheck API+Web limpio; probado que el backend acepta ganancia negativa (`PATCH` producto con `gananciaPct:-15` → HTTP 200, `priceDetal` recalcula bajo costo; antes daba 400).
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** **Solo código, SIN migración.** Verificado en local (`total_db`): typecheck API+Web limpio; probado que el backend acepta ganancia negativa (`PATCH` producto con `gananciaPct:-15` → HTTP 200, `priceDetal` recalcula bajo costo; antes daba 400).
 
 - **Problema:** al editar precios de un producto (`/catalog/products/[code]`) con **ganancia detal o mayor en negativo**, el backend lo rechazaba con `"gananciaPct must not be less than 0,gananciaMayorPct must not be less than 0"` (validación `@Min(0)`). El negocio a veces necesita vender **con pérdida** a propósito (liquidación, producto dañado, etc.).
 - **Backend (`create-product.dto.ts`, cubre crear y editar vía `PartialType`):** se quitó `@Min(0)` de `gananciaPct` y `gananciaMayorPct` (se mantiene `@IsNumber`). Ahora acepta márgenes negativos.
@@ -39,7 +39,7 @@
 
 ## 🗓️ Sesión 2026-08-10 (cont.) — Editar el fondo de apertura de una caja abierta (con clave dinámica)
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración** (reutiliza un permiso ya existente). Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** **Solo código, SIN migración** (reutiliza un permiso ya existente). Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.
 
 - **Feature:** ícono de lápiz junto al título **"Fondos de apertura"** en la sesión abierta de una caja (`/cash/[id]`). Al darle clic pide una **clave de autorización** y luego permite editar el **Fondo USD / Bs** de apertura (antes solo se podía por SQL). El arqueo de cierre recalcula el esperado sobre el fondo nuevo (el fondo vive solo en la sesión; sin fila de ledger de apertura).
 - **Permiso reutilizado:** `CANCEL_CASH_SESSION` **estaba sin uso** (solo lo otorgaba el seed de la Clave Maestra; nadie lo validaba, no existe "anular sesión"). Se **relabeló** en el frontend de `"Anular sesion caja"` → **"Editar fondo de caja"** (en `/settings/dynamic-keys` y en los logs). **Sin migración**: el valor interno del enum `DynamicKeyPerm` queda igual, solo cambia el nombre visible. La Clave Maestra de cada empresa ya trae ese permiso.
@@ -50,7 +50,7 @@
 
 ## 🗓️ Sesión 2026-08-10 — Anulación de ajustes de inventario procesados (revierte stock + cancela CxC/CxP)
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Trae **1 migración** (`20260810160000_receivable_payable_cancelled`, `ALTER TYPE ... ADD VALUE IF NOT EXISTS 'CANCELLED'` para `ReceivableStatus` y `PayableStatus`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** Trae **1 migración** (`20260810160000_receivable_payable_cancelled`, `ALTER TYPE ... ADD VALUE IF NOT EXISTS 'CANCELLED'` para `ReceivableStatus` y `PayableStatus`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.
 
 - **Feature:** poder **anular un ajuste de inventario YA PROCESADO** — revierte el stock que movió (entrada o salida), **cancela** la CxC/CxP que generó (conserva el número) y marca el ajuste `CANCELLED`. Gateado por **clave dinámica** reutilizando el permiso **"Ajuste inventario"** (`MANUAL_STOCK_ADJUSTMENT`, que estaba sin uso: solo lo otorgaba el seed de la Clave Maestra, nadie lo validaba).
 - **Decisiones de negocio (del usuario):** (1) el stock **puede quedar negativo** al revertir (si la mercancía ya se movió); (2) **bloquea** la anulación si la cuenta generada ya tiene pagos / está en un recibo o programación de pago; (3) la cuenta se **cancela** (status `CANCELLED`), no se borra → conserva el número para auditoría; (4) **reutiliza** el permiso existente (sin permiso nuevo).
@@ -89,7 +89,7 @@
 
 ## 🗓️ Sesión 2026-08-07 (cont.) — Movimiento manual de caja con método de pago
 
-> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** Cambio de caja, retrocompatible y aditivo. Verificado en local (BD `total_db`): typecheck API+Web limpio, sistema levantado (API :4000 / Web :3000 OK). Migración aplicada también al `total_db` local.
+> **✅ DESPLEGADO Y VERIFICADO en las 6 instancias (2026-08-10, HEAD `e4f1c81`): PM2 online.** Cambio de caja, retrocompatible y aditivo. Verificado en local (BD `total_db`): typecheck API+Web limpio, sistema levantado (API :4000 / Web :3000 OK). Migración aplicada también al `total_db` local.
 
 - **Problema:** el "Movimiento manual" de caja solo permitía efectivo (forzaba `isCash:true` y no guardaba método). El cliente necesita que el cajero **elija cualquier método de pago** (Pago Móvil, Zelle, Transferencia, Punto de Venta, etc.) y que ese movimiento **salga en el libro mayor** bajo su método real (no atado a documento).
 - **Modelo:** nueva columna **`methodId`** en `CashMovement` (migración `20260807140000` aditiva `IF NOT EXISTS` + red en `fix-schema.sql`). Compatible con movimientos viejos (`methodId` null = efectivo).
