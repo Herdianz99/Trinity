@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+> ### ⏳ PENDIENTE DE DEPLOY (2026-08-10) — 5 commits en `main`, en las 6 empresas
+> Van juntos en un solo `git pull` + `deploy.sh` por empresa. **Una sola migración** (la del enum `CANCELLED`), aplicada por `prisma migrate deploy`.
+> 1. `0ad1850` — Anular ajustes de inventario procesados (revierte stock + cancela CxC/CxP) — **CON migración** (`CANCELLED` en `ReceivableStatus`/`PayableStatus`).
+> 2. `565ca11` — Editar fondo de apertura de caja abierta (clave dinámica) — sin migración.
+> 3. `afc838f` — Permitir ganancia negativa (venta con pérdida) con confirmación — sin migración.
+> 4. `ee5e6d9` — Fix P. Unit. del PDF de nota de entrega (cuadra con descuento) — sin migración.
+> 5. `f498ad5` — POS: aviso suave al vender sin/superando existencia — sin migración.
+
 ## 🗓️ Sesión 2026-08-10 (cont.) — POS: aviso suave al vender sin/superando existencia
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo frontend, sin migración.** Verificado en local: typecheck Web limpio; `/sales/pos` compila sin errores.
