@@ -1,5 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-10 (cont.) — Ganancia negativa: permitir vender con pérdida (con confirmación)
+
+> **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración.** Verificado en local (`total_db`): typecheck API+Web limpio; probado que el backend acepta ganancia negativa (`PATCH` producto con `gananciaPct:-15` → HTTP 200, `priceDetal` recalcula bajo costo; antes daba 400).
+
+- **Problema:** al editar precios de un producto (`/catalog/products/[code]`) con **ganancia detal o mayor en negativo**, el backend lo rechazaba con `"gananciaPct must not be less than 0,gananciaMayorPct must not be less than 0"` (validación `@Min(0)`). El negocio a veces necesita vender **con pérdida** a propósito (liquidación, producto dañado, etc.).
+- **Backend (`create-product.dto.ts`, cubre crear y editar vía `PartialType`):** se quitó `@Min(0)` de `gananciaPct` y `gananciaMayorPct` (se mantiene `@IsNumber`). Ahora acepta márgenes negativos.
+- **Frontend (`catalog/products/[code]/page.tsx`):** al guardar precios, si `priceGananciaPct < 0` o `priceGananciaMayorPct < 0`, **no guarda directo** — abre un **modal de confirmación en español** ("Ganancia en negativo": explica que se vendería por debajo del costo, muestra los % negativos en rojo, botones "No, corregir" / "Sí, guardar con pérdida"). Cubre tanto editar la ganancia % como teclear un **precio manual** < costo (en ambos casos las ganancias quedan negativas y se envían). El guardado real se movió a `doSavePrices()`.
+- **Alcance:** la confirmación está en la página de edición de producto (donde se reportó). Los otros formularios (crear nuevo, modal rápido, ajuste masivo) ahora también aceptan negativos en el backend pero **sin** el modal (follow-up si se quiere el mismo aviso ahí).
+- **Para desplegar (Diego):** las **6 empresas**, deploy **code-only** (sin migración).
+
 ## 🗓️ Sesión 2026-08-10 (cont.) — Editar el fondo de apertura de una caja abierta (con clave dinámica)
 
 > **⏳ CÓDIGO COMPLETO Y PUSHEADO a `main`, PENDIENTE DE DEPLOY en las 6 empresas.** **Solo código, SIN migración** (reutiliza un permiso ya existente). Verificado en local (`total_db`): typecheck API+Web limpio; probado **end-to-end** contra el endpoint real con token forjado.

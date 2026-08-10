@@ -97,16 +97,15 @@ export class CreateProductDto {
   @Min(0)
   priceMayor?: number;
 
+  // Puede ser NEGATIVO a propósito (vender con pérdida): el frontend pide confirmación.
   @ApiProperty({ required: false, default: 0 })
   @IsOptional()
   @IsNumber()
-  @Min(0)
   gananciaPct?: number;
 
   @ApiProperty({ required: false, default: 0 })
   @IsOptional()
   @IsNumber()
-  @Min(0)
   gananciaMayorPct?: number;
 
   @ApiProperty({ required: false, default: 'GENERAL', enum: IvaType })

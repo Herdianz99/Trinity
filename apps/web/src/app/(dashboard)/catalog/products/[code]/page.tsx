@@ -144,6 +144,8 @@ export default function ProductDetailPage() {
   const [priceFinalMayor, setPriceFinalMayor] = useState(0);
   const [savingPrices, setSavingPrices] = useState(false);
   const [priceMsg, setPriceMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Confirmacion de guardar con margen negativo (venta con perdida)
+  const [showNegMarginConfirm, setShowNegMarginConfirm] = useState(false);
   // Borradores de texto para los inputs del panel de precios (evitan que el punto borre el campo)
   const [detalGananciaStr, setDetalGananciaStr] = useState('0');
   const [detalPriceStr, setDetalPriceStr] = useState('0');
@@ -477,8 +479,22 @@ export default function ProductDetailPage() {
     }
   }
 
-  async function handleSavePrices() {
+  // Guarda con guarda de margen negativo: si detal o mayor quedan en negativo,
+  // pide confirmacion (venta con perdida) antes de guardar.
+  function handleSavePrices() {
     if (!product) return;
+    // Aplica tanto si edita la ganancia % como si teclea un precio manual < costo
+    // (en ambos casos priceGananciaPct/priceGananciaMayorPct quedan en negativo).
+    if (priceGananciaPct < 0 || priceGananciaMayorPct < 0) {
+      setShowNegMarginConfirm(true);
+      return;
+    }
+    doSavePrices();
+  }
+
+  async function doSavePrices() {
+    if (!product) return;
+    setShowNegMarginConfirm(false);
     setSavingPrices(true);
     setPriceMsg(null);
     try {
@@ -1200,6 +1216,55 @@ export default function ProductDetailPage() {
         <div onClick={() => setLightbox(null)} className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
           <img src={lightbox} alt="" className="max-w-full max-h-full rounded-lg object-contain" />
           <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={28} /></button>
+        </div>
+      )}
+
+      {/* ═══ Confirmación: margen negativo (venta con pérdida) ═══ */}
+      {showNegMarginConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !savingPrices && setShowNegMarginConfirm(false)}>
+          <div className="bg-slate-800 border border-amber-500/30 rounded-xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                <AlertTriangle className="text-amber-400" size={20} />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Ganancia en negativo</h2>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-200">
+                Este producto quedará con una <strong className="text-amber-400">ganancia negativa</strong>, es decir, se
+                vendería <strong>por debajo del costo</strong> (con pérdida).
+              </p>
+              <div className="bg-slate-900/50 rounded-lg px-4 py-3 space-y-1.5">
+                {priceGananciaPct < 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Ganancia detal</span>
+                    <span className="font-mono font-semibold text-red-400">{priceGananciaPct.toFixed(2)}%</span>
+                  </div>
+                )}
+                {priceGananciaMayorPct < 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Ganancia mayor</span>
+                    <span className="font-mono font-semibold text-red-400">{priceGananciaMayorPct.toFixed(2)}%</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-slate-400">¿Estás seguro de guardarlo así, vendiendo con pérdida?</p>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setShowNegMarginConfirm(false)} disabled={savingPrices} className="btn-secondary !py-2 text-sm">
+                No, corregir
+              </button>
+              <button
+                type="button"
+                onClick={doSavePrices}
+                disabled={savingPrices}
+                className="!py-2 px-4 text-sm rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 flex items-center gap-2 transition-colors"
+              >
+                {savingPrices ? <Loader2 className="animate-spin" size={16} /> : <AlertTriangle size={16} />}
+                Sí, guardar con pérdida
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
