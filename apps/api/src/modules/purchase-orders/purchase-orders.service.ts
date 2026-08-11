@@ -8,6 +8,8 @@ import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { IvaType, PurchaseStatus } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
+import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -250,7 +252,7 @@ export class PurchaseOrdersService {
     items: {
       include: {
         product: {
-          select: { id: true, code: true, name: true, supplierRef: true, costUsd: true, priceDetal: true, priceMayor: true, isService: true, gananciaPct: true, gananciaMayorPct: true, ivaType: true, bregaApplies: true },
+          select: { id: true, code: true, name: true, supplierRef: true, costUsd: true, priceDetal: true, priceMayor: true, isService: true, gananciaPct: true, gananciaMayorPct: true, ivaType: true, bregaApplies: true, categoryId: true },
         },
       },
     },
@@ -707,6 +709,7 @@ export class PurchaseOrdersService {
 
     const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     const warehouseId = order.warehouseId;
     if (!warehouseId) {
@@ -773,11 +776,18 @@ export class PurchaseOrdersService {
           // Si el producto tiene costo manual, se congela: la compra NO le cambia el costUsd
           // (el StockMovement de abajo sí guarda el costo real de la factura para el histórico).
           const newCost = product.manualCost ? product.costUsd : (item.landedCostUsd || item.netCostUsd);
-          const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
-          const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
-
-          const priceDetal = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaPct / 100) * ivaMultiplier);
-          const priceMayor = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaMayorPct / 100) * ivaMultiplier);
+          const bregaPct = resolveBregaPct({
+            bregaApplies: product.bregaApplies,
+            categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+            bregaGlobalPct,
+          });
+          const { priceDetal, priceMayor } = computeSellingPrices({
+            costUsd: newCost,
+            gananciaPct: product.gananciaPct,
+            gananciaMayorPct: product.gananciaMayorPct,
+            ivaMultiplier: IVA_MULTIPLIERS[product.ivaType],
+            bregaPct,
+          });
 
           await tx.product.update({
             where: { id: item.productId },
@@ -808,10 +818,18 @@ export class PurchaseOrdersService {
         for (const pu of dto.priceUpdates) {
           const product = await tx.product.findUnique({ where: { id: pu.productId } });
           if (!product) continue;
-          const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
-          const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
-          const priceDetal = round2(product.costUsd * (1 + bregaPct / 100) * (1 + pu.gananciaPct / 100) * ivaMultiplier);
-          const priceMayor = round2(product.costUsd * (1 + bregaPct / 100) * (1 + pu.gananciaMayorPct / 100) * ivaMultiplier);
+          const bregaPct = resolveBregaPct({
+            bregaApplies: product.bregaApplies,
+            categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+            bregaGlobalPct,
+          });
+          const { priceDetal, priceMayor } = computeSellingPrices({
+            costUsd: product.costUsd,
+            gananciaPct: pu.gananciaPct,
+            gananciaMayorPct: pu.gananciaMayorPct,
+            ivaMultiplier: IVA_MULTIPLIERS[product.ivaType],
+            bregaPct,
+          });
           await tx.product.update({
             where: { id: pu.productId },
             data: { gananciaPct: pu.gananciaPct, gananciaMayorPct: pu.gananciaMayorPct, priceDetal, priceMayor },
@@ -936,18 +954,28 @@ export class PurchaseOrdersService {
     const order = await this.findOne(id);
     const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     return order.items
       .filter((item) => !item.product.isService)
       .map((item) => {
         const product = item.product;
-        const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
+        const bregaPct = resolveBregaPct({
+          bregaApplies: product.bregaApplies,
+          categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+          bregaGlobalPct,
+        });
         const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
         // Costo aterrizado (costo de factura + recargo repartido) — igual que en process()
         const newCost = item.landedCostUsd || item.netCostUsd;
 
-        const suggestedPriceDetal = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaPct / 100) * ivaMultiplier);
-        const suggestedPriceMayor = round2(newCost * (1 + bregaPct / 100) * (1 + product.gananciaMayorPct / 100) * ivaMultiplier);
+        const { priceDetal: suggestedPriceDetal, priceMayor: suggestedPriceMayor } = computeSellingPrices({
+          costUsd: newCost,
+          gananciaPct: product.gananciaPct,
+          gananciaMayorPct: product.gananciaMayorPct,
+          ivaMultiplier,
+          bregaPct,
+        });
 
         return {
           productId: product.id,
@@ -976,6 +1004,7 @@ export class PurchaseOrdersService {
 
     const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     return this.prisma.$transaction(async (tx) => {
       const results: any[] = [];
@@ -984,11 +1013,18 @@ export class PurchaseOrdersService {
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (!product) continue;
 
-        const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
-        const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
-
-        const priceDetal = round2(product.costUsd * (1 + bregaPct / 100) * (1 + item.gananciaPct / 100) * ivaMultiplier);
-        const priceMayor = round2(product.costUsd * (1 + bregaPct / 100) * (1 + item.gananciaMayorPct / 100) * ivaMultiplier);
+        const bregaPct = resolveBregaPct({
+          bregaApplies: product.bregaApplies,
+          categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+          bregaGlobalPct,
+        });
+        const { priceDetal, priceMayor } = computeSellingPrices({
+          costUsd: product.costUsd,
+          gananciaPct: item.gananciaPct,
+          gananciaMayorPct: item.gananciaMayorPct,
+          ivaMultiplier: IVA_MULTIPLIERS[product.ivaType],
+          bregaPct,
+        });
 
         const updated = await tx.product.update({
           where: { id: item.productId },
