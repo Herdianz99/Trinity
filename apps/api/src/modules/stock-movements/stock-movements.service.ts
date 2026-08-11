@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { resolveBregaPct, effectiveCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 @Injectable()
 export class StockMovementsService {
@@ -212,7 +214,7 @@ export class StockMovementsService {
     const movements = await this.prisma.stockMovement.findMany({
       where,
       include: {
-        product: { select: { code: true, name: true, costUsd: true, bregaApplies: true } },
+        product: { select: { code: true, name: true, costUsd: true, bregaApplies: true, categoryId: true } },
         warehouse: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -220,6 +222,7 @@ export class StockMovementsService {
 
     const config = await this.prisma.companyConfig.findFirst();
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     // Costo historico de ventas: viene del InvoiceItem (ya con brecha aplicada al facturar).
     const saleInvoiceIds = [
@@ -247,9 +250,14 @@ export class StockMovementsService {
       const unitCost =
         histKey && histCostByKey.has(histKey)
           ? histCostByKey.get(histKey)!
-          : m.product.bregaApplies
-            ? m.product.costUsd * (1 + bregaGlobalPct / 100)
-            : m.product.costUsd;
+          : effectiveCost(
+              m.product.costUsd,
+              resolveBregaPct({
+                bregaApplies: m.product.bregaApplies,
+                categoryBregaPct: m.product.categoryId ? (catBregaMap.get(m.product.categoryId) ?? 0) : 0,
+                bregaGlobalPct,
+              }),
+            );
       const qty = Math.abs(m.quantity);
       return {
         createdAt: m.createdAt,

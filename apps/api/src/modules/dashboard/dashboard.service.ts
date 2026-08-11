@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveBregaPct, effectiveCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import {
   caracasToday, caracasDayStart, caracasDayEnd, caracasDateKey, caracasParts,
 } from '../../common/timezone';
@@ -646,12 +648,18 @@ export class DashboardService {
     }
     const fallbackCost = new Map<string, number>();
     if (missing.size > 0) {
+      const catBregaMap = await buildCategoryBregaMap(this.prisma);
       const prods = await this.prisma.product.findMany({
         where: { id: { in: Array.from(missing) } },
-        select: { id: true, costUsd: true, bregaApplies: true },
+        select: { id: true, costUsd: true, bregaApplies: true, categoryId: true },
       });
       for (const p of prods) {
-        fallbackCost.set(p.id, p.bregaApplies ? p.costUsd * (1 + bregaPct / 100) : p.costUsd);
+        const effBrega = resolveBregaPct({
+          bregaApplies: p.bregaApplies,
+          categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+          bregaGlobalPct: bregaPct,
+        });
+        fallbackCost.set(p.id, effectiveCost(p.costUsd, effBrega));
       }
     }
 

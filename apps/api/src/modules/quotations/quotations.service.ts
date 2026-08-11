@@ -4,6 +4,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveBregaPct, effectiveCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { UserRole } from '@prisma/client';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
@@ -323,6 +325,7 @@ export class QuotationsService {
     // payment time to avoid gaps"). Asi un vendedor/supervisor/administrador puede convertir la
     // cotizacion y dejarla en espera sin necesidad de tener una caja abierta con serie configurada.
     // Create invoice in transaction
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
     const invoice = await this.prisma.$transaction(async (tx) => {
       const config = await tx.companyConfig.findFirst();
 
@@ -364,7 +367,14 @@ export class QuotationsService {
               const ivaMultiplier = 1 + ivaRate;
               const unitPriceWithoutIva = item.unitPriceUsd;
               const costUsd = product
-                ? (product.bregaApplies ? product.costUsd * (1 + bregaGlobalPct / 100) : product.costUsd)
+                ? effectiveCost(
+                    product.costUsd,
+                    resolveBregaPct({
+                      bregaApplies: product.bregaApplies,
+                      categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+                      bregaGlobalPct,
+                    }),
+                  )
                 : 0;
               return {
                 productId: item.productId,
