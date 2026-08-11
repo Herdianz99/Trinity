@@ -15,6 +15,7 @@ interface Receipt {
   number: string;
   type: string;
   customer: { id: string; name: string; rif: string | null } | null;
+  platformName: string | null;
   seller: { id: string; code: string; name: string } | null;
   status: string;
   totalUsd: number;
@@ -249,7 +250,14 @@ export default function ReceiptsCollectionPage() {
                     onClick={() => router.push(`/receipts/${r.id}`)}
                   >
                     <td className="px-4 py-3 text-white font-mono font-medium">{r.number}</td>
-                    <td className="px-4 py-3 text-slate-300">{r.customer?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {r.customer?.name || (r.platformName ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-cyan-400">{r.platformName}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Plataforma</span>
+                        </span>
+                      ) : '—')}
+                    </td>
                     <td className="px-4 py-3 text-slate-300 text-xs">{r.seller?.name || '—'}</td>
                     <td className="px-4 py-3 text-right text-white font-mono">${fmt(r.totalUsd)}</td>
                     <td className="px-4 py-3 text-right text-slate-300 font-mono">{fmt(r.totalBsHistoric)} Bs</td>

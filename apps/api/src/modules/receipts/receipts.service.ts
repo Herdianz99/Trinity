@@ -48,6 +48,8 @@ export class ReceiptsService {
         { number: { contains: search, mode: 'insensitive' } },
         { customer: { name: { contains: search, mode: 'insensitive' } } },
         { supplier: { name: { contains: search, mode: 'insensitive' } } },
+        // cobros a plataformas (Cashea, Crediagro...): no tienen cliente, se identifican por la CxC que pagan
+        { items: { some: { receivable: { platformName: { contains: search, mode: 'insensitive' } } } } },
       ];
     }
     if (query.from || query.to) {
@@ -76,26 +78,38 @@ export class ReceiptsService {
           customer: { select: { id: true, name: true, rif: true } },
           supplier: { select: { id: true, name: true, rif: true } },
           seller: { select: { id: true, code: true, name: true } },
-          items: true,
+          items: { include: { receivable: { select: { platformName: true } } } },
         },
       }),
       this.prisma.receipt.count({ where }),
     ]);
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    // Cobros a plataformas (Cashea, Crediagro...) no tienen cliente: el nombre viene de la CxC que pagan.
+    const withPlatform = data.map((r) => ({
+      ...r,
+      platformName: r.customerId ? null : (r.items.find((it) => it.receivable?.platformName)?.receivable?.platformName ?? null),
+    }));
+
+    return { data: withPlatform, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   // Todos los recibos que cumplen los filtros (sin paginar), para el reporte PDF.
   async reportList(query: QueryReceiptsDto) {
     const where = this.buildWhere(query);
-    return this.prisma.receipt.findMany({
+    const rows = await this.prisma.receipt.findMany({
       where,
       orderBy: [{ documentDate: 'asc' }, { createdAt: 'asc' }],
       include: {
         customer: { select: { name: true, rif: true } },
         supplier: { select: { name: true, rif: true } },
+        items: { include: { receivable: { select: { platformName: true } } } },
       },
     });
+    // Cobros a plataformas (Cashea, Crediagro...) sin cliente: el nombre viene de la CxC que pagan.
+    return rows.map((r) => ({
+      ...r,
+      platformName: r.customerId ? null : (r.items.find((it) => it.receivable?.platformName)?.receivable?.platformName ?? null),
+    }));
   }
 
   // Igual que reportList pero incluye los ITEMS de cada recibo (documentos cobrados/pagados),
@@ -128,7 +142,7 @@ export class ReceiptsService {
         items: {
           include: {
             receivable: {
-              select: { id: true, invoice: { select: { id: true, number: true } }, amountUsd: true, amountBs: true, exchangeRate: true, status: true },
+              select: { id: true, platformName: true, invoice: { select: { id: true, number: true } }, amountUsd: true, amountBs: true, exchangeRate: true, status: true },
             },
             payable: {
               select: { id: true, purchaseOrder: { select: { id: true, number: true } }, netPayableUsd: true, netPayableBs: true, exchangeRate: true, status: true },
@@ -151,7 +165,11 @@ export class ReceiptsService {
       where: { id: receipt.createdById },
       select: { id: true, name: true },
     });
-    return { ...receipt, createdBy: creator };
+    // Cobro a plataforma (Cashea, Crediagro...): sin cliente, el nombre viene de la CxC que paga.
+    const platformName = receipt.customerId
+      ? null
+      : (receipt.items.find((it) => it.receivable?.platformName)?.receivable?.platformName ?? null);
+    return { ...receipt, platformName, createdBy: creator };
   }
 
   async create(dto: CreateReceiptDto, userId: string) {

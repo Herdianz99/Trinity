@@ -39,6 +39,7 @@ interface Receipt {
   number: string;
   type: string;
   customer: { id: string; name: string; rif: string | null } | null;
+  platformName: string | null;
   supplier: { id: string; name: string; rif: string | null } | null;
   status: string;
   totalUsd: number;
@@ -396,8 +397,8 @@ export default function ReceiptDetailPage() {
                   <span className="text-white font-mono font-medium">{receipt.number}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">{isCollection ? 'Cliente' : 'Proveedor'}</span>
-                  <span className="text-white">{entity?.name || '—'}</span>
+                  <span className="text-slate-500 block">{isCollection ? (receipt.platformName && !receipt.customer ? 'Plataforma' : 'Cliente') : 'Proveedor'}</span>
+                  <span className="text-white">{entity?.name || receipt.platformName || '—'}</span>
                   {entity?.rif && <span className="text-slate-400 text-xs block">{entity.rif}</span>}
                 </div>
                 <div>

@@ -18,7 +18,7 @@ export class ReceiptPdfService {
         supplier: true,
         items: {
           include: {
-            receivable: { select: { invoice: { select: { number: true, createdAt: true } } } },
+            receivable: { select: { platformName: true, invoice: { select: { number: true, createdAt: true } } } },
             payable: { select: { purchaseOrder: { select: { number: true, createdAt: true } } } },
           },
         },
@@ -31,7 +31,13 @@ export class ReceiptPdfService {
 
     const config = await this.prisma.companyConfig.findFirst();
     const isCollection = receipt.type === 'COLLECTION';
-    const entity = isCollection ? receipt.customer : receipt.supplier;
+    // Para cobros a plataformas (Cashea, Crediagro...) no hay cliente: el nombre viene de la CxC que paga.
+    const platformName = receipt.customerId
+      ? null
+      : (receipt.items.find((it) => it.receivable?.platformName)?.receivable?.platformName ?? null);
+    const entity: { name: string; rif: string | null } | null = isCollection
+      ? (receipt.customer ?? (platformName ? { name: platformName, rif: null } : null))
+      : (receipt.supplier ?? null);
     const typeLabel = isCollection ? 'RECIBO DE COBRO' : 'RECIBO DE PAGO';
 
     return new Promise((resolve, reject) => {

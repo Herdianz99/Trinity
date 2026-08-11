@@ -169,7 +169,7 @@ export class ReceiptsReportPdfService {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#0f172a');
       doc.text(this.receiptDate(r), 40, y, { width: 56, lineBreak: false });
       doc.text(r.number, 98, y, { width: 48, lineBreak: false });
-      doc.text(entity?.name || '—', cTipo.x, y, { width: 206, height: LINE_H, lineBreak: false, ellipsis: true });
+      doc.text(entity?.name || r.platformName || '—', cTipo.x, y, { width: 206, height: LINE_H, lineBreak: false, ellipsis: true });
       const rif = entity?.rif ? `${entity.documentType ? entity.documentType + '-' : ''}${entity.rif}` : '';
       if (rif) doc.fontSize(7.5).font('Helvetica').fillColor('#475569').text(rif, 360, y + 0.5, { width: 130, lineBreak: false });
       const stColor = r.status === 'POSTED' ? '#16a34a' : r.status === 'CANCELLED' ? '#dc2626' : '#d97706';
@@ -334,7 +334,7 @@ export class ReceiptsReportPdfService {
       const entity = (isPayment ? r.supplier : r.customer) || r.customer || r.supplier;
       const values = [
         r.number,
-        entity?.name || '—',
+        entity?.name || r.platformName || '—',
         this.fmtDate(r.createdAt),
         STATUS_LABELS[r.status] || r.status,
         this.fmtRate(r.exchangeRate),
