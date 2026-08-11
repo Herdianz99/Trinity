@@ -12,6 +12,7 @@ interface Category {
   name: string;
   code: string | null;
   commissionPct: number;
+  bregaPct: number;
   lastProductNumber: number;
   parentId: string | null;
   printAreaId: string | null;
@@ -70,6 +71,7 @@ export default function CategoryDetailPage() {
         code: data.code || '',
         printAreaId: data.printAreaId || '',
         commissionPct: String(data.commissionPct || 0),
+        bregaPct: String(data.bregaPct || 0),
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -114,12 +116,13 @@ export default function CategoryDetailPage() {
         body.code = form.code?.toUpperCase();
         body.printAreaId = form.printAreaId || null;
         body.commissionPct = parseFloat(form.commissionPct) || 0;
+        body.bregaPct = parseFloat(form.bregaPct) || 0;
       }
       const res = await fetch(`/api/proxy/categories/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       if (res.ok) {
-        setSaveMsg({ type: 'success', text: 'Categoria actualizada' });
+        setSaveMsg({ type: 'success', text: isRoot ? 'Categoria actualizada (precios recalculados si cambio la brecha)' : 'Categoria actualizada' });
         fetchCategory();
         return true;
       } else {
@@ -250,6 +253,19 @@ export default function CategoryDetailPage() {
                     className="input-field !py-2 text-sm"
                     min="0" max="100" step="0.1"
                   />
+                </div>
+              )}
+              {isRoot && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Brecha %</label>
+                  <input
+                    type="number"
+                    value={form.bregaPct ?? '0'}
+                    onChange={e => setForm((f: any) => ({ ...f, bregaPct: e.target.value }))}
+                    className="input-field !py-2 text-sm"
+                    min="0" max="100" step="0.1"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">0 = usar la brecha global. Al cambiarla se recalculan los precios de esta categoria.</p>
                 </div>
               )}
             </div>
