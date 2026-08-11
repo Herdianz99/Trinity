@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CompanyConfigService } from '../company-config/company-config.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private companyConfig: CompanyConfigService,
+  ) {}
 
   async create(dto: CreateCategoryDto) {
     if (dto.parentId) {
@@ -28,6 +32,11 @@ export class CategoriesService {
     } else {
       // Subcategories don't have codes
       delete dto.code;
+      // La brecha solo aplica a categorias raiz; las subcategorias la heredan de su raiz.
+      if (dto.bregaPct !== undefined && dto.bregaPct !== 0) {
+        throw new BadRequestException('La brecha solo se define en categorias raiz; las subcategorias la heredan.');
+      }
+      delete dto.bregaPct;
     }
 
     return this.prisma.category.create({
@@ -77,11 +86,26 @@ export class CategoriesService {
       dto.code = code;
     }
 
-    return this.prisma.category.update({
+    // La brecha solo aplica a categorias raiz. Si cambia, se recalculan los precios de la raiz + subcategorias.
+    let bregaChanged = false;
+    if (dto.bregaPct !== undefined) {
+      if (existing.parentId) {
+        throw new BadRequestException('La brecha solo se define en categorias raiz; las subcategorias la heredan.');
+      }
+      bregaChanged = dto.bregaPct !== existing.bregaPct;
+    }
+
+    const updated = await this.prisma.category.update({
       where: { id },
       data: dto,
       include: { parent: true, children: true, printArea: true },
     });
+
+    if (bregaChanged) {
+      await this.companyConfig.recalculateCategoryPrices(id);
+    }
+
+    return updated;
   }
 
   async remove(id: string) {

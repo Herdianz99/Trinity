@@ -21,6 +21,12 @@ export class CreateCategoryDto {
   @Min(0)
   commissionPct?: number;
 
+  @ApiProperty({ required: false, description: 'Brecha propia % (solo categorias raiz; 0 = usar la global)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  bregaPct?: number;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
