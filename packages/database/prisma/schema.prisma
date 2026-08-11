@@ -1806,6 +1806,8 @@ model Incident {
   involvedName String?                             // persona involucrada (opcional)
   severity     String       @default("MEDIUM")     // LOW | MEDIUM | HIGH
   occurredAt   DateTime                            // fecha+hora del suceso (default hoy Caracas)
+  photoThumbKey  String?                           // foto (opcional) en Spaces: miniatura 150px webp
+  photoMediumKey String?                           // foto (opcional) en Spaces: 800px webp (lightbox)
   createdById  String
   createdBy    User         @relation("IncidentCreator", fields: [createdById], references: [id])
   createdAt    DateTime     @default(now())

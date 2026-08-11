@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Shield, AlertTriangle, Loader2, Plus, X, Search, ChevronLeft, ChevronRight,
-  FileText, FileSpreadsheet, ChevronDown,
+  FileText, FileSpreadsheet, ChevronDown, ImagePlus, ImageIcon,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
@@ -20,6 +20,8 @@ interface Incident {
   severity: string;
   occurredAt: string;
   createdBy: { name: string } | null;
+  photoThumbUrl: string | null;
+  photoMediumUrl: string | null;
 }
 interface Summary {
   total: number;
@@ -60,6 +62,9 @@ export default function IncidentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ typeId: '', severity: 'MEDIUM', involvedName: '', occurredAt: '', description: '' });
+  const [photo, setPhoto] = useState<string | null>(null); // data URI de la foto a subir
+  const [photoErr, setPhotoErr] = useState('');
+  const [lightbox, setLightbox] = useState<string | null>(null); // URL medium en el lightbox
 
   useEffect(() => { document.title = 'Incidencias | Trinity ERP'; }, []);
 
@@ -121,7 +126,22 @@ export default function IncidentsPage() {
 
   function openCreate() {
     setForm({ typeId: types[0]?.id || '', severity: 'MEDIUM', involvedName: '', occurredAt: nowLocalDatetime(), description: '' });
+    setPhoto(null);
+    setPhotoErr('');
     setModalOpen(true);
+  }
+
+  function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-seleccionar el mismo archivo
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setPhotoErr('El archivo debe ser una imagen'); return; }
+    if (file.size > 12 * 1024 * 1024) { setPhotoErr('La imagen no debe superar 12 MB'); return; }
+    setPhotoErr('');
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(reader.result as string);
+    reader.onerror = () => setPhotoErr('No se pudo leer la imagen');
+    reader.readAsDataURL(file);
   }
 
   async function submit() {
@@ -141,6 +161,7 @@ export default function IncidentsPage() {
           severity: form.severity,
           // datetime-local es hora Caracas -> le agrego el offset -04:00 para el instante correcto
           occurredAt: form.occurredAt ? `${form.occurredAt}:00-04:00` : undefined,
+          photo: photo || undefined,
         }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error al registrar'); }
@@ -283,6 +304,12 @@ export default function IncidentsPage() {
                   <div className="text-sm text-slate-200"><span className="text-slate-500">Tipo:</span> {i.type?.name || '—'}</div>
                   {i.involvedName && <div className="text-sm text-slate-300"><span className="text-slate-500">Involucrado:</span> {i.involvedName}</div>}
                   <div className="text-sm text-slate-300 whitespace-pre-wrap break-words">{i.description}</div>
+                  {i.photoThumbUrl && (
+                    <button type="button" onClick={() => setLightbox(i.photoMediumUrl)} className="mt-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={i.photoThumbUrl} alt={`Foto ${i.number}`} className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
+                    </button>
+                  )}
                   <div className="text-[11px] text-slate-500">Registró: {i.createdBy?.name || '—'}</div>
                 </div>
               ))}
@@ -298,6 +325,7 @@ export default function IncidentsPage() {
                     <th className="text-center px-4 py-3 text-slate-400 font-medium">Gravedad</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Involucrado</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Observación</th>
+                    <th className="text-center px-4 py-3 text-slate-400 font-medium">Foto</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Registró</th>
                   </tr>
                 </thead>
@@ -312,6 +340,16 @@ export default function IncidentsPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-300">{i.involvedName || '—'}</td>
                       <td className="px-4 py-3 text-slate-300 max-w-[360px]">{i.description}</td>
+                      <td className="px-4 py-3 text-center">
+                        {i.photoThumbUrl ? (
+                          <button type="button" onClick={() => setLightbox(i.photoMediumUrl)} className="inline-block align-middle" title="Ver foto">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={i.photoThumbUrl} alt={`Foto ${i.number}`} className="h-11 w-11 object-cover rounded-md border border-slate-700 hover:border-red-400 transition-colors" />
+                          </button>
+                        ) : (
+                          <ImageIcon size={16} className="text-slate-600 inline-block" />
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{i.createdBy?.name || '—'}</td>
                     </tr>
                   ))}
@@ -378,12 +416,44 @@ export default function IncidentsPage() {
                   className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm"
                   placeholder="Describe lo ocurrido…" />
               </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Foto (opcional)</label>
+                {photo ? (
+                  <div className="relative inline-block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt="Vista previa" className="h-32 w-32 object-cover rounded-lg border border-slate-700" />
+                    <button type="button" onClick={() => setPhoto(null)}
+                      className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg" title="Quitar foto">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 h-24 rounded-lg border border-dashed border-slate-700 bg-slate-800/50 text-slate-400 text-sm cursor-pointer hover:border-slate-600 hover:text-slate-300 transition-colors">
+                    <ImagePlus size={18} /> Agregar foto
+                    <input type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
+                  </label>
+                )}
+                {photoErr && <p className="text-xs text-red-400 mt-1">{photoErr}</p>}
+              </div>
               <button onClick={submit} disabled={saving || !form.typeId || !form.description.trim()}
                 className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving && <Loader2 size={16} className="animate-spin" />} Registrar
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Lightbox de la foto */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 z-10 p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200" title="Cerrar">
+            <X size={20} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightbox} alt="Foto de la incidencia" onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl" />
         </div>
       )}
     </div>

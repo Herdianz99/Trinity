@@ -22,4 +22,10 @@ export class CreateIncidentDto {
   @IsOptional()
   @IsDateString()
   occurredAt?: string;
+
+  // Foto opcional (una sola) como data URI base64 ("data:image/jpeg;base64,...").
+  // Se procesa a thumb+medium webp y se sube a Spaces al crear.
+  @IsOptional()
+  @IsString()
+  photo?: string;
 }

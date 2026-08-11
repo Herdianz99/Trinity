@@ -1,13 +1,27 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { SpacesService } from '../product-images/spaces.service';
+import { processProductImage, dataUriToBuffer } from '../product-images/image-processing';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { CreateIncidentTypeDto } from './dto/create-incident-type.dto';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
 
 @Injectable()
 export class IncidentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly spaces: SpacesService,
+  ) {}
+
+  // Agrega las URLs de CDN de la foto (si tiene) a una incidencia.
+  private withPhotoUrls<T extends { photoThumbKey?: string | null; photoMediumKey?: string | null }>(inc: T) {
+    return {
+      ...inc,
+      photoThumbUrl: inc.photoThumbKey ? this.spaces.cdnUrl(inc.photoThumbKey) : null,
+      photoMediumUrl: inc.photoMediumKey ? this.spaces.cdnUrl(inc.photoMediumKey) : null,
+    };
+  }
 
   // ============ TIPOS (abiertos a cualquiera con el módulo 'incidents', NO solo ADMIN) ============
 
@@ -75,7 +89,7 @@ export class IncidentsService {
       }),
       this.prisma.incident.count({ where }),
     ]);
-    return { data, total, page, limit };
+    return { data: data.map((i) => this.withPhotoUrls(i)), total, page, limit };
   }
 
   // Resumen para KPIs + gráfica (respeta los mismos filtros del listado).
@@ -102,24 +116,55 @@ export class IncidentsService {
     if (!type) throw new BadRequestException('Tipo de incidencia no encontrado');
     const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      // Correlativo INC-XXXX (los números vienen zero-padded → orden desc por número sirve).
-      const last = await tx.incident.findFirst({ orderBy: { number: 'desc' }, select: { number: true } });
-      const lastNum = last ? parseInt(last.number.replace(/\D/g, ''), 10) || 0 : 0;
-      const number = `INC-${String(lastNum + 1).padStart(4, '0')}`;
+    // Foto opcional: se valida y sube a Spaces ANTES de crear la fila (mismo patrón que
+    // product-images). Si la creación falla después, se compensan los objetos huérfanos.
+    let photoThumbKey: string | null = null;
+    let photoMediumKey: string | null = null;
+    if (dto.photo) {
+      let processed;
+      try {
+        processed = await processProductImage(dataUriToBuffer(dto.photo));
+      } catch {
+        throw new BadRequestException('La foto no es una imagen válida');
+      }
+      const stamp = Date.now().toString(36);
+      const rand = Math.random().toString(36).slice(2, 8);
+      photoThumbKey = `incidents/${stamp}-${rand}-thumb.webp`;
+      photoMediumKey = `incidents/${stamp}-${rand}-medium.webp`;
+      await Promise.all([
+        this.spaces.uploadPublic(photoThumbKey, processed.thumb, 'image/webp'),
+        this.spaces.uploadPublic(photoMediumKey, processed.medium, 'image/webp'),
+      ]);
+    }
 
-      return tx.incident.create({
-        data: {
-          number,
-          typeId: dto.typeId,
-          description: dto.description,
-          involvedName: dto.involvedName?.trim() || null,
-          severity: dto.severity || 'MEDIUM',
-          occurredAt,
-          createdById: userId,
-        },
-        include: { type: { select: { name: true } }, createdBy: { select: { name: true } } },
+    try {
+      const incident = await this.prisma.$transaction(async (tx) => {
+        // Correlativo INC-XXXX (los números vienen zero-padded → orden desc por número sirve).
+        const last = await tx.incident.findFirst({ orderBy: { number: 'desc' }, select: { number: true } });
+        const lastNum = last ? parseInt(last.number.replace(/\D/g, ''), 10) || 0 : 0;
+        const number = `INC-${String(lastNum + 1).padStart(4, '0')}`;
+
+        return tx.incident.create({
+          data: {
+            number,
+            typeId: dto.typeId,
+            description: dto.description,
+            involvedName: dto.involvedName?.trim() || null,
+            severity: dto.severity || 'MEDIUM',
+            occurredAt,
+            photoThumbKey,
+            photoMediumKey,
+            createdById: userId,
+          },
+          include: { type: { select: { name: true } }, createdBy: { select: { name: true } } },
+        });
       });
-    });
+      return this.withPhotoUrls(incident);
+    } catch (e) {
+      if (photoThumbKey && photoMediumKey) {
+        await Promise.all([this.spaces.delete(photoThumbKey), this.spaces.delete(photoMediumKey)]);
+      }
+      throw e;
+    }
   }
 }

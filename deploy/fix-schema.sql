@@ -2576,6 +2576,8 @@ CREATE TABLE IF NOT EXISTS "Incident" (
 CREATE UNIQUE INDEX IF NOT EXISTS "Incident_number_key" ON "Incident"("number");
 CREATE INDEX IF NOT EXISTS "Incident_typeId_idx" ON "Incident"("typeId");
 CREATE INDEX IF NOT EXISTS "Incident_occurredAt_idx" ON "Incident"("occurredAt");
+ALTER TABLE "Incident" ADD COLUMN IF NOT EXISTS "photoThumbKey" TEXT;
+ALTER TABLE "Incident" ADD COLUMN IF NOT EXISTS "photoMediumKey" TEXT;
 
 DO $$ BEGIN
   ALTER TABLE "Incident" ADD CONSTRAINT "Incident_typeId_fkey"

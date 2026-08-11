@@ -1,5 +1,17 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-11 — Incidencias: foto (una sola) con miniatura en lista + lightbox
+
+> **⏳ PENDIENTE DE DEPLOY (solo empresa `grande`).** Trae **1 migración** (`20260811120000_incident_photo`, dos `ADD COLUMN IF NOT EXISTS` en `Incident`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local: typecheck API + Web limpio.
+
+- **Feature (pedido del usuario):** poder adjuntar **una foto opcional** a la incidencia al registrarla, y verla desde el **listado** (miniatura → **lightbox** al hacer click). **Sin página de detalle** (la lista ya muestra toda la info).
+- **Decisiones del usuario:** (1) **una sola** foto; (2) solo en **grande**; (3) **NO** página aparte → miniatura en la lista + lightbox.
+- **Schema:** 2 columnas nuevas en `Incident` (`photoThumbKey`, `photoMediumKey`) — sin tabla nueva. Reutiliza toda la infra de fotos de producto.
+- **Backend (`incidents`):** el módulo importa `ProductImagesModule` para reusar `SpacesService`; `IncidentsService.create` procesa la foto con `processProductImage` (thumb 150px + medium 800px webp) y la sube a Spaces con key `incidents/...` **antes** de crear la fila (compensa borrando si la BD falla, igual patrón que product-images). `findAll` mapea las keys → URLs de CDN (`photoThumbUrl`/`photoMediumUrl`). DTO: campo `photo?` (data URI, opcional).
+- **Frontend (`incidents/page.tsx`, único archivo):** en el modal "Nueva incidencia" un selector "Agregar foto" con vista previa y quitar; miniatura en la tabla (col. "Foto") y en la tarjeta móvil; **lightbox** a pantalla (medium) al hacer click. Límite 12 MB / solo imágenes en el cliente (el body del API admite 15 MB).
+- **Requisito:** `grande` ya sube fotos de producto → sus env vars de Spaces ya están configuradas (no hay que tocar nada). Otras empresas no se afectan (la foto es opcional; sin ella, todo igual que antes).
+- **Para desplegar (Diego):** empresa **grande**, deploy normal (`git pull` + `deploy.sh`); la migración corre sola (o la respalda `fix-schema.sql`).
+
 > ### ✅ DESPLEGADO en las 6 empresas (2026-08-10) — 5 commits, HEAD `e4f1c81`
 > Verificado: las 6 instancias (total, totalturen, aceros, acerosmayor, grande, chica) en `e4f1c81`, PM2 online, la migración `CANCELLED` aplicada en todas las BD.
 > 1. `0ad1850` — Anular ajustes de inventario procesados (revierte stock + cancela CxC/CxP) — **CON migración** (`CANCELLED` en `ReceivableStatus`/`PayableStatus`).
