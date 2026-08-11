@@ -49,7 +49,7 @@ interface Product {
   supplier: { id: string; name: string } | null;
   stock: { quantity: number; warehouse: { id: string; name: string } }[];
 }
-interface Category { id: string; name: string; children: { id: string; name: string }[]; }
+interface Category { id: string; name: string; bregaPct?: number; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
 interface Supplier { id: string; name: string; }
 interface Movement {
@@ -377,6 +377,19 @@ export default function ProductDetailPage() {
   }
 
   // ── Price editing handlers ──
+  // Brecha efectiva del producto: la de su categoria RAIZ si tiene (>0); si no, la global.
+  // (Mismo criterio que el backend: resolveBregaPct.) Se usa en toda la vista previa de precios.
+  const rootBregaPct = (() => {
+    const cid = form.categoryId;
+    if (!cid) return 0;
+    for (const root of categories) {
+      if (root.id === cid) return root.bregaPct || 0;
+      if (root.children?.some((c) => c.id === cid)) return root.bregaPct || 0;
+    }
+    return 0;
+  })();
+  const effectiveBregaPct = rootBregaPct > 0 ? rootBregaPct : bregaGlobalPct;
+
   // Reciben texto crudo: se guarda el borrador tal cual y se calcula con parseNum (acepta . y ,)
   function handleDetalGananciaChange(raw: string) {
     setDetalGananciaStr(sanitizeDecimal(raw));
@@ -384,7 +397,7 @@ export default function ProductDetailPage() {
     setPriceGananciaPct(value);
     if (!product) return;
     const cost = parseNum(form.costUsd);
-    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const brechaM = form.bregaApplies ? (1 + effectiveBregaPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const price = cost * brechaM * (1 + value / 100) * ivaM;
     setPriceFinalDetal(price);
@@ -397,7 +410,7 @@ export default function ProductDetailPage() {
     setPriceFinalDetal(value);
     if (!product) return;
     const cost = parseNum(form.costUsd);
-    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const brechaM = form.bregaApplies ? (1 + effectiveBregaPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
@@ -413,7 +426,7 @@ export default function ProductDetailPage() {
     setPriceGananciaMayorPct(value);
     if (!product) return;
     const cost = parseNum(form.costUsd);
-    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const brechaM = form.bregaApplies ? (1 + effectiveBregaPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const price = cost * brechaM * (1 + value / 100) * ivaM;
     setPriceFinalMayor(price);
@@ -426,7 +439,7 @@ export default function ProductDetailPage() {
     setPriceFinalMayor(value);
     if (!product) return;
     const cost = parseNum(form.costUsd);
-    const brechaM = form.bregaApplies ? (1 + bregaGlobalPct / 100) : 1;
+    const brechaM = form.bregaApplies ? (1 + effectiveBregaPct / 100) : 1;
     const ivaM = IVA_MULTIPLIERS[form.ivaType] || 1.16;
     const base = cost * brechaM * ivaM;
     if (base > 0) {
@@ -439,7 +452,7 @@ export default function ProductDetailPage() {
   // Recalcula los precios finales a partir de la ganancia actual cuando cambia
   // la base (costo / brecha / IVA). La ganancia no se toca, solo el precio resultante.
   function recomputeFinalsFromGanancia(cost: number, brechaApplies: boolean, ivaType: string) {
-    const base = cost * (brechaApplies ? (1 + bregaGlobalPct / 100) : 1) * (IVA_MULTIPLIERS[ivaType] || 1.16);
+    const base = cost * (brechaApplies ? (1 + effectiveBregaPct / 100) : 1) * (IVA_MULTIPLIERS[ivaType] || 1.16);
     const pd = base * (1 + priceGananciaPct / 100);
     setPriceFinalDetal(pd);
     setDetalPriceStr(pd.toFixed(2));
@@ -553,7 +566,7 @@ export default function ProductDetailPage() {
   });
 
   function calcPrice(costUsd: number, gananciaPct: number, bregaApplies: boolean, ivaType: string) {
-    const brecha = bregaApplies ? bregaGlobalPct : 0;
+    const brecha = bregaApplies ? effectiveBregaPct : 0;
     return costUsd * (1 + brecha / 100) * (1 + gananciaPct / 100) * (IVA_MULTIPLIERS[ivaType] || 1.16);
   }
 
@@ -580,7 +593,7 @@ export default function ProductDetailPage() {
   const totalStock = product.stock?.reduce((s, st) => s + st.quantity, 0) || 0;
   const costUsd = parseNum(form.costUsd);
 
-  const brecha = form.bregaApplies ? bregaGlobalPct : 0;
+  const brecha = form.bregaApplies ? effectiveBregaPct : 0;
 
   return (
     <div>
@@ -1078,7 +1091,7 @@ export default function ProductDetailPage() {
                   </select>
                 </div>
                 <div className="flex items-end pb-1">
-                  <Toggle checked={form.bregaApplies ?? true} onChange={v => handlePriceBrechaToggle(v)} disabled={form.manualPrice} label={`Aplica brecha (${bregaGlobalPct}%)`} />
+                  <Toggle checked={form.bregaApplies ?? true} onChange={v => handlePriceBrechaToggle(v)} disabled={form.manualPrice} label={`Aplica brecha (${effectiveBregaPct}%${rootBregaPct > 0 ? ' · de la categoria' : ''})`} />
                 </div>
                 <div className="flex items-end pb-1">
                   <Toggle checked={form.manualPrice ?? false} onChange={v => handlePriceManualToggle(v)} color="amber" label="Precio manual" />
