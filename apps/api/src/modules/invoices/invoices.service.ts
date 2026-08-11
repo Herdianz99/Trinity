@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveBregaPct, effectiveCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { UpdatePaymentMethodsDto } from './dto/update-payment-methods.dto';
@@ -241,6 +243,7 @@ export class InvoicesService {
     // Get company config for brega calculation
     const config = await this.prisma.companyConfig.findFirst();
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     // Auto-assign default customer if none provided
     let customerId = dto.customerId || null;
@@ -352,10 +355,13 @@ export class InvoicesService {
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
       const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
 
-      // costUsd: if bregaApplies, apply brega; otherwise use raw cost
-      const costUsd = product.bregaApplies
-        ? product.costUsd * (1 + bregaGlobalPct / 100)
-        : product.costUsd;
+      // costUsd guardado en la factura = costo efectivo (con brecha si aplica). Clave para el margen.
+      const bregaPct = resolveBregaPct({
+        bregaApplies: product.bregaApplies,
+        categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      const costUsd = effectiveCost(product.costUsd, bregaPct);
       const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
@@ -1239,6 +1245,7 @@ export class InvoicesService {
     // Get company config for brega calculation
     const config = await this.prisma.companyConfig.findFirst();
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     // Get serie for VAT exempt check
     const invoiceSerie = await this.prisma.serie.findUnique({
@@ -1294,9 +1301,12 @@ export class InvoicesService {
 
       const unitPriceWithoutIva = priceWithIva / ivaMultiplier;
       const unitPriceWithoutIvaBs = Math.round(unitPriceWithoutIva * rate.rate * 100) / 100;
-      const costUsd = product.bregaApplies
-        ? product.costUsd * (1 + bregaGlobalPct / 100)
-        : product.costUsd;
+      const bregaPct = resolveBregaPct({
+        bregaApplies: product.bregaApplies,
+        categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      const costUsd = effectiveCost(product.costUsd, bregaPct);
       const costBs = Math.round(costUsd * rate.rate * 100) / 100;
 
       subtotalUsd += lineSubtotal;
