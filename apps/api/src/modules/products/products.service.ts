@@ -11,6 +11,8 @@ import { IvaType, Prisma } from '@prisma/client';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 import { StoreExportService } from '../store-export/store-export.service';
 import { IntegrationService } from '../integration/integration.service';
+import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -103,20 +105,23 @@ export class ProductsService {
     gananciaMayorPct: number,
     ivaType: IvaType,
     bregaApplies: boolean,
+    categoryBregaPct: number, // brecha de la categoría RAÍZ del producto (0 si no tiene)
   ) {
     const config = await this.prisma.companyConfig.findUnique({
       where: { id: 'singleton' },
     });
-    const bregaPct = bregaApplies ? (config?.bregaGlobalPct || 0) : 0;
-    const ivaMultiplier = IVA_MULTIPLIERS[ivaType];
-
-    const priceDetal = costUsd * (1 + bregaPct / 100) * (1 + gananciaPct / 100) * ivaMultiplier;
-    const priceMayor = costUsd * (1 + bregaPct / 100) * (1 + gananciaMayorPct / 100) * ivaMultiplier;
-
-    return {
-      priceDetal: Math.round(priceDetal * 100) / 100,
-      priceMayor: Math.round(priceMayor * 100) / 100,
-    };
+    const bregaPct = resolveBregaPct({
+      bregaApplies,
+      categoryBregaPct,
+      bregaGlobalPct: config?.bregaGlobalPct || 0,
+    });
+    return computeSellingPrices({
+      costUsd,
+      gananciaPct,
+      gananciaMayorPct,
+      ivaMultiplier: IVA_MULTIPLIERS[ivaType],
+      bregaPct,
+    });
   }
 
   private async generateCodeFromCategory(categoryId: string): Promise<string> {
@@ -163,12 +168,15 @@ export class ProductsService {
       priceDetal = dto.priceDetal ?? 0;
       priceMayor = dto.priceMayor ?? priceDetal;
     } else {
+      const catMap = await buildCategoryBregaMap(this.prisma);
+      const categoryBregaPct = dto.categoryId ? (catMap.get(dto.categoryId) ?? 0) : 0;
       const prices = await this.calculatePrices(
         dto.costUsd || 0,
         gananciaPct,
         gananciaMayorPct,
         dto.ivaType || IvaType.GENERAL,
         dto.bregaApplies !== false,
+        categoryBregaPct,
       );
       priceDetal = prices.priceDetal;
       priceMayor = prices.priceMayor;
@@ -531,7 +539,10 @@ export class ProductsService {
       const gananciaMayorPct = dto.gananciaMayorPct ?? existing.gananciaMayorPct;
       const ivaType = dto.ivaType ?? existing.ivaType;
       const bregaApplies = dto.bregaApplies ?? existing.bregaApplies;
-      const prices = await this.calculatePrices(costUsd, gananciaPct, gananciaMayorPct, ivaType, bregaApplies);
+      const catMap = await buildCategoryBregaMap(this.prisma);
+      const categoryId = dto.categoryId ?? existing.categoryId;
+      const categoryBregaPct = categoryId ? (catMap.get(categoryId) ?? 0) : 0;
+      const prices = await this.calculatePrices(costUsd, gananciaPct, gananciaMayorPct, ivaType, bregaApplies, categoryBregaPct);
       priceDetal = prices.priceDetal;
       priceMayor = prices.priceMayor;
     }
@@ -717,6 +728,8 @@ export class ProductsService {
         ? { id: { in: dto.productIds }, isActive: true }
         : this.buildPriceAdjustmentWhere(dto.filters);
 
+    const catMap = await buildCategoryBregaMap(this.prisma);
+
     const result = await this.prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where });
 
@@ -747,19 +760,26 @@ export class ProductsService {
         if (newGananciaPct < 0) newGananciaPct = 0;
         if (newGananciaMayorPct < 0) newGananciaMayorPct = 0;
 
-        const bregaPct = product.bregaApplies ? (config?.bregaGlobalPct || 0) : 0;
-        const ivaMultiplier = IVA_MULTIPLIERS[product.ivaType];
-
-        const priceDetal = product.costUsd * (1 + bregaPct / 100) * (1 + newGananciaPct / 100) * ivaMultiplier;
-        const priceMayor = product.costUsd * (1 + bregaPct / 100) * (1 + newGananciaMayorPct / 100) * ivaMultiplier;
+        const bregaPct = resolveBregaPct({
+          bregaApplies: product.bregaApplies,
+          categoryBregaPct: product.categoryId ? (catMap.get(product.categoryId) ?? 0) : 0,
+          bregaGlobalPct: config?.bregaGlobalPct || 0,
+        });
+        const { priceDetal, priceMayor } = computeSellingPrices({
+          costUsd: product.costUsd,
+          gananciaPct: newGananciaPct,
+          gananciaMayorPct: newGananciaMayorPct,
+          ivaMultiplier: IVA_MULTIPLIERS[product.ivaType],
+          bregaPct,
+        });
 
         await tx.product.update({
           where: { id: product.id },
           data: {
             gananciaPct: newGananciaPct,
             gananciaMayorPct: newGananciaMayorPct,
-            priceDetal: Math.round(priceDetal * 100) / 100,
-            priceMayor: Math.round(priceMayor * 100) / 100,
+            priceDetal,
+            priceMayor,
           },
         });
       }
