@@ -25,7 +25,8 @@ export class InventoryAdjustmentsPdfService {
               select: { code: true, name: true, supplierRef: true, costUsd: true, bregaApplies: true, categoryId: true },
             },
           },
-          orderBy: { product: { name: 'asc' } },
+          // Mismo orden que la pantalla: en el que se agregaron (id cuid cronológico), no alfabético.
+          orderBy: { id: 'asc' },
         },
       },
     });

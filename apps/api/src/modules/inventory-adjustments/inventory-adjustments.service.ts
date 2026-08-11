@@ -34,7 +34,9 @@ const INCLUDE_DETAIL = {
         },
       },
     },
-    orderBy: { product: { name: 'asc' } } as const,
+    // Orden en que se agregaron (el id cuid es cronológico), no alfabético: así los ítems
+    // quedan uno debajo del otro a medida que se agregan.
+    orderBy: { id: 'asc' } as const,
   },
   warehouse: true,
   customer: { select: { id: true, name: true } },
