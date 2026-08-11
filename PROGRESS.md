@@ -1,5 +1,18 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-11 — Brecha por categoría (raíz), con helper central de pricing
+
+> **⏳ PENDIENTE DE DEPLOY (todas las empresas).** Trae **1 migración** (`20260811183000_category_brega`, `ADD COLUMN IF NOT EXISTS "bregaPct"` en `Category`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. **Despliegue inofensivo:** todas las categorías quedan en `bregaPct=0` → nada cambia hasta que se le ponga una brecha a una categoría. Verificado en local (`total_db`): typecheck API + Web limpio; **prueba end-to-end real** (token forjado) de los 5 escenarios OK.
+
+- **Feature (pedido del usuario):** cada **categoría RAÍZ** puede tener su **brecha propia**; sus productos (y los de sus subcategorías) la usan en vez de la global. Regla fijada por Diego: `bregaEfectiva = bregaApplies ? (rootCat>0 ? rootCat : global) : 0`. Decisiones: **solo raíz** (subcategorías heredan, como `commissionPct`) + **auto-recálculo** al cambiar la brecha (scoped a esa raíz + subcategorías, `manualPrice:false`).
+- **Arquitectura — se centralizó la fórmula (antes duplicada en ~14 puntos):**
+  - `apps/api/src/common/pricing.ts` → `resolveBregaPct` / `effectiveCost` / `computeSellingPrices` / `round2`.
+  - `apps/api/src/common/category-brega.ts` → `buildCategoryBregaMap` (mapa `categoryId → brecha de la raíz`, camina `parentId`).
+  - Los ~14 call-sites enrutados por ahí (products calc/create/update/ajuste-masivo/utilidad, company-config recalc, invoices create+update, purchase-orders ×4, dashboard, stock-movements, quotations, inventory-adjustments +pdf, inventory-replacements, partner-transfers, import). **Con brecha 0 el resultado es idéntico al de hoy** → refactor seguro.
+- **Schema:** `Category.bregaPct Float @default(0)`. **Backend:** endpoint de categorías acepta `bregaPct` (solo raíz; **400** en subcategoría) y dispara `CompanyConfigService.recalculateCategoryPrices(rootId)` al cambiar. **Frontend:** input "%br" en alta/edición de categorías raíz + badge morado "X% brecha" en `/catalog/categories`.
+- **Pruebas end-to-end (local, token forjado):** subir "Herramientas Manuales" a 20% → sus productos recalculan exacto (ej. $3.49→$3.64), otra categoría intacta ✓; brecha en subcategoría → 400 (update y create) ✓; revert a 0 → precios vuelven a la global ✓; `bregaApplies=false` → 0 por el helper ✓.
+- **Plan:** `docs/superpowers/plans/2026-08-11-brecha-por-categoria.md`. **Para desplegar (Diego):** todas las empresas, deploy normal (la migración corre sola / la respalda `fix-schema.sql`). Inofensivo hasta que se configure una brecha.
+
 ## 🗓️ Sesión 2026-08-11 — Incidencias: foto (una sola) con miniatura en lista + lightbox
 
 > **⏳ PENDIENTE DE DEPLOY (solo empresa `grande`).** Trae **1 migración** (`20260811120000_incident_photo`, dos `ADD COLUMN IF NOT EXISTS` en `Incident`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local: typecheck API + Web limpio.
