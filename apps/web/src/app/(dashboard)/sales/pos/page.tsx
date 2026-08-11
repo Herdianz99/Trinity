@@ -3367,6 +3367,42 @@ export default function POSPage() {
         title="Autorizar excepcion de credito"
         description={customerName ? `El cliente "${customerName}" tiene facturas vencidas o excede su cupo. Clave de supervisor para autorizar.` : 'Clave de supervisor para autorizar la excepcion de credito'}
       />
+
+      {/* ═══ Aviso suave de existencia (no bloquea; el usuario decide) ═══
+          Va aca (modales compartidos) para que aparezca tanto en movil como en escritorio. */}
+      {stockWarn && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStockWarn(null)}>
+          <div className="bg-slate-800 border border-amber-500/30 rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                <PackageX className="text-amber-400" size={20} />
+              </div>
+              <h2 className="text-lg font-semibold text-white">
+                {stockWarn.available <= 0 ? 'Sin existencia' : 'Existencia insuficiente'}
+              </h2>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-200">
+                <strong>{stockWarn.name}</strong>{' '}
+                {stockWarn.available <= 0
+                  ? 'no tiene existencia disponible.'
+                  : <>tiene solo <strong className="text-amber-400">{stockWarn.available}</strong> disponible(s) y estás colocando <strong className="text-amber-400">{stockWarn.requested}</strong>.</>}
+              </p>
+              <p className="text-sm text-slate-400">¿Deseas agregarlo de todos modos?</p>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
+              <button type="button" onClick={() => setStockWarn(null)} className="btn-secondary !py-2 text-sm">No, cancelar</button>
+              <button
+                type="button"
+                onClick={() => stockWarn.onConfirm()}
+                className="!py-2 px-4 text-sm rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 flex items-center gap-2 transition-colors"
+              >
+                <PackageX size={16} /> Sí, agregar igual
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -3965,41 +4001,6 @@ export default function POSPage() {
                 className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50 transition-colors"
               >
                 {savingAdvance ? 'Guardando...' : 'Registrar Anticipo'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Aviso suave de existencia (no bloquea; el usuario decide) ═══ */}
-      {stockWarn && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStockWarn(null)}>
-          <div className="bg-slate-800 border border-amber-500/30 rounded-xl w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-slate-700 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
-                <PackageX className="text-amber-400" size={20} />
-              </div>
-              <h2 className="text-lg font-semibold text-white">
-                {stockWarn.available <= 0 ? 'Sin existencia' : 'Existencia insuficiente'}
-              </h2>
-            </div>
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-slate-200">
-                <strong>{stockWarn.name}</strong>{' '}
-                {stockWarn.available <= 0
-                  ? 'no tiene existencia disponible.'
-                  : <>tiene solo <strong className="text-amber-400">{stockWarn.available}</strong> disponible(s) y estás colocando <strong className="text-amber-400">{stockWarn.requested}</strong>.</>}
-              </p>
-              <p className="text-sm text-slate-400">¿Deseas agregarlo de todos modos?</p>
-            </div>
-            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-end gap-3">
-              <button type="button" onClick={() => setStockWarn(null)} className="btn-secondary !py-2 text-sm">No, cancelar</button>
-              <button
-                type="button"
-                onClick={() => stockWarn.onConfirm()}
-                className="!py-2 px-4 text-sm rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 flex items-center gap-2 transition-colors"
-              >
-                <PackageX size={16} /> Sí, agregar igual
               </button>
             </div>
           </div>
