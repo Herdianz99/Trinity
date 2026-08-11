@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  BoxesIcon, AlertTriangle, Loader2, X, ArrowUpDown, Activity,
+  BoxesIcon, AlertTriangle, Loader2, X, ArrowUpDown, Activity, Printer,
 } from 'lucide-react';
 
 interface StockItem {
@@ -203,6 +203,20 @@ export default function StockPage() {
             <p className="text-slate-400 text-sm">Inventario por almacen</p>
           </div>
         </div>
+        <button
+          onClick={() => {
+            if (selectedWarehouse === 'all') {
+              setMessage({ type: 'error', text: 'Selecciona un almacen especifico para imprimir su hoja de inventario' });
+              return;
+            }
+            window.open(`/api/proxy/stock/count-sheet/pdf?warehouseId=${selectedWarehouse}`, '_blank');
+          }}
+          disabled={selectedWarehouse === 'all'}
+          title={selectedWarehouse === 'all' ? 'Selecciona un almacen especifico' : 'Imprimir hoja de inventario fisico de este almacen'}
+          className="btn-secondary flex items-center gap-2 self-start sm:self-auto disabled:opacity-40"
+        >
+          <Printer size={18} /> Hoja de inventario (PDF)
+        </button>
       </div>
 
       {/* Low stock banner */}

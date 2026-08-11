@@ -4,8 +4,10 @@ import {
   Post,
   Body,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
@@ -13,6 +15,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleGuard } from '../../common/guards/module.guard';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { StockService } from './stock.service';
+import { StockCountPdfService } from './stock-count-pdf.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 
 @ApiTags('Stock')
@@ -20,7 +23,23 @@ import { AdjustStockDto } from './dto/adjust-stock.dto';
 @UseGuards(AuthGuard('jwt'))
 @Controller('stock')
 export class StockController {
-  constructor(private readonly stockService: StockService) {}
+  constructor(
+    private readonly stockService: StockService,
+    private readonly countPdfService: StockCountPdfService,
+  ) {}
+
+  // Hoja de inventario físico (PDF) de un almacén específico, para imprimir y contar a mano.
+  @Get('count-sheet/pdf')
+  @ApiQuery({ name: 'warehouseId', required: true })
+  async getCountSheetPdf(@Query('warehouseId') warehouseId: string, @Res() res: Response) {
+    const buffer = await this.countPdfService.generateCountSheet(warehouseId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="inventario-almacen.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 
   @Get()
   @ApiQuery({ name: 'warehouseId', required: false })
