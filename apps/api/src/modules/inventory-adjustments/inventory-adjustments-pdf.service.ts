@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
+import { resolveBregaPct, effectiveCost as effCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 @Injectable()
 export class InventoryAdjustmentsPdfService {
@@ -20,7 +22,7 @@ export class InventoryAdjustmentsPdfService {
         items: {
           include: {
             product: {
-              select: { code: true, name: true, supplierRef: true, costUsd: true, bregaApplies: true },
+              select: { code: true, name: true, supplierRef: true, costUsd: true, bregaApplies: true, categoryId: true },
             },
           },
           orderBy: { product: { name: 'asc' } },
@@ -38,18 +40,24 @@ export class InventoryAdjustmentsPdfService {
       select: { bregaGlobalPct: true },
     });
     const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
     // Costo efectivo por item: el editado a mano (unitCostUsd) manda; si no, costo (+ brecha).
     const effectiveCost = (it: {
       unitCostUsd: number | null;
-      product: { costUsd: number; bregaApplies: boolean };
+      product: { costUsd: number; bregaApplies: boolean; categoryId: string | null };
     }): number => {
       if (it.unitCostUsd != null) return it.unitCostUsd;
-      const bregaPct = useBrega && it.product.bregaApplies ? bregaGlobalPct : 0;
-      return it.product.costUsd * (1 + bregaPct / 100);
+      const bregaPct = useBrega
+        ? resolveBregaPct({
+            bregaApplies: it.product.bregaApplies,
+            categoryBregaPct: it.product.categoryId ? (catBregaMap.get(it.product.categoryId) ?? 0) : 0,
+            bregaGlobalPct,
+          })
+        : 0;
+      return effCost(it.product.costUsd, bregaPct);
     };
-    const costModeLabel = useBrega
-      ? `Costo + Brecha (${bregaGlobalPct}%)`
-      : 'Costo';
+    // La brecha ahora puede variar por categoría → no mostramos un % único en la etiqueta.
+    const costModeLabel = useBrega ? 'Costo + Brecha' : 'Costo';
 
     const typeLabel = adjustment.type === 'IN' ? 'Entrada' : 'Salida';
     const statusLabel =

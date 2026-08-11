@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { productSearchTsQuery } from '../../common/product-search';
+import { resolveBregaPct, effectiveCost as effCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import { CreateInventoryAdjustmentDto } from './dto/create-inventory-adjustment.dto';
 import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
@@ -325,15 +327,22 @@ export class InventoryAdjustmentsService {
       });
       const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
       const useBrega = adjustment.costMode !== 'COST';
+      const catBregaMap = await buildCategoryBregaMap(this.prisma);
       // Costo efectivo por item: el editado a mano manda; si no, costo (+ brecha) del producto.
       const effectiveCost = (it: {
         unitCostUsd: number | null;
-        product: { costUsd: number; bregaApplies: boolean };
-      }) =>
-        it.unitCostUsd != null
-          ? it.unitCostUsd
-          : it.product.costUsd *
-            (1 + (useBrega && it.product.bregaApplies ? bregaGlobalPct : 0) / 100);
+        product: { costUsd: number; bregaApplies: boolean; categoryId: string | null };
+      }) => {
+        if (it.unitCostUsd != null) return it.unitCostUsd;
+        const bregaPct = useBrega
+          ? resolveBregaPct({
+              bregaApplies: it.product.bregaApplies,
+              categoryBregaPct: it.product.categoryId ? (catBregaMap.get(it.product.categoryId) ?? 0) : 0,
+              bregaGlobalPct,
+            })
+          : 0;
+        return effCost(it.product.costUsd, bregaPct);
+      };
       const totalUsd =
         Math.round(
           adjustment.items.reduce(

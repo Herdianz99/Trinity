@@ -4,6 +4,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import { CreateReplacementDto } from './dto/create-replacement.dto';
 import { AddReplacementLineDto } from './dto/add-replacement-line.dto';
 import {
@@ -245,6 +247,7 @@ export class InventoryReplacementsService {
       where: { id: 'singleton' },
     });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     return this.prisma.$transaction(async (tx) => {
       for (const item of replacement.items) {
@@ -325,14 +328,18 @@ export class InventoryReplacementsService {
         if (!product) continue;
         // Costo manual: se congela, el reemplazo no le cambia el costUsd (ni el precio derivado).
         const inCost = product.manualCost ? product.costUsd : derivedCostOf(inProductId);
-        const bregaPct = product.bregaApplies ? bregaGlobalPct : 0;
-        const ivaMult = IVA_MULTIPLIERS[product.ivaType];
-        const priceDetal = round2(
-          inCost * (1 + bregaPct / 100) * (1 + product.gananciaPct / 100) * ivaMult,
-        );
-        const priceMayor = round2(
-          inCost * (1 + bregaPct / 100) * (1 + product.gananciaMayorPct / 100) * ivaMult,
-        );
+        const bregaPct = resolveBregaPct({
+          bregaApplies: product.bregaApplies,
+          categoryBregaPct: product.categoryId ? (catBregaMap.get(product.categoryId) ?? 0) : 0,
+          bregaGlobalPct,
+        });
+        const { priceDetal, priceMayor } = computeSellingPrices({
+          costUsd: inCost,
+          gananciaPct: product.gananciaPct,
+          gananciaMayorPct: product.gananciaMayorPct,
+          ivaMultiplier: IVA_MULTIPLIERS[product.ivaType],
+          bregaPct,
+        });
         await tx.product.update({
           where: { id: inProductId },
           data: { costUsd: inCost, priceDetal, priceMayor },
