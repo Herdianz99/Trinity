@@ -455,6 +455,7 @@ model Category {
   code              String?    @unique
   lastProductNumber Int        @default(0)
   commissionPct     Float      @default(0)
+  bregaPct          Float      @default(0)   // brecha propia (solo categorías RAÍZ; 0 = usar la global)
   printAreaId       String?
   printArea         PrintArea? @relation(fields: [printAreaId], references: [id])
   parentId          String?
