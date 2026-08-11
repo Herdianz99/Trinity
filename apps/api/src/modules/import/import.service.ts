@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IvaType } from '@prisma/client';
+import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 import {
   BulkImportDto,
   ImportCategoryDto,
@@ -362,6 +364,8 @@ export class ImportService {
           where: { id: 'singleton' },
         });
         const bregaGlobalPct = config?.bregaGlobalPct ?? 0;
+        // Brecha por categoría (raíz). Categorías nuevas creadas en este import quedan en 0 -> global.
+        const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
         if (dto.products?.length) {
           for (const prodDto of dto.products) {
@@ -519,16 +523,20 @@ export class ImportService {
                 priceDetal = prodDto.priceDetal ?? 0;
                 priceMayor = prodDto.priceMayor ?? priceDetal;
               } else {
-                const bregaPct = bregaApplies ? bregaGlobalPct : 0;
-                const ivaMultiplier = IVA_MULTIPLIERS[ivaType];
-                priceDetal =
-                  Math.round(
-                    costUsd * (1 + bregaPct / 100) * (1 + gananciaPct / 100) * ivaMultiplier * 100,
-                  ) / 100;
-                priceMayor =
-                  Math.round(
-                    costUsd * (1 + bregaPct / 100) * (1 + gananciaMayorPct / 100) * ivaMultiplier * 100,
-                  ) / 100;
+                const bregaPct = resolveBregaPct({
+                  bregaApplies,
+                  categoryBregaPct: categoryId ? (catBregaMap.get(categoryId) ?? 0) : 0,
+                  bregaGlobalPct,
+                });
+                const prices = computeSellingPrices({
+                  costUsd,
+                  gananciaPct,
+                  gananciaMayorPct,
+                  ivaMultiplier: IVA_MULTIPLIERS[ivaType],
+                  bregaPct,
+                });
+                priceDetal = prices.priceDetal;
+                priceMayor = prices.priceMayor;
               }
 
               // Create the product

@@ -689,6 +689,7 @@ export class ProductsService {
           priceMayor: true,
           ivaType: true,
           bregaApplies: true,
+          categoryId: true,
           category: { select: { name: true } },
           brand: { select: { name: true } },
           supplier: { select: { name: true } },
@@ -698,8 +699,13 @@ export class ProductsService {
     ]);
 
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
     const items = products.map((p) => {
-      const bregaPct = p.bregaApplies ? bregaGlobalPct : 0;
+      const bregaPct = resolveBregaPct({
+        bregaApplies: p.bregaApplies,
+        categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
       const costoBrecha = Math.round(p.costUsd * (1 + bregaPct / 100) * 100) / 100;
       const ivaMult = IVA_MULTIPLIERS[p.ivaType];
       const precioSinIva = Math.round((p.priceDetal / ivaMult) * 100) / 100;

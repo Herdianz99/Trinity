@@ -3,8 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PartnerClient } from './partner-client.service';
 import { getIntegrationConfig } from './integration.config';
 import { caracasDateKey } from '../../common/timezone';
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
+import { resolveBregaPct, effectiveCost, round2 } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 interface ItemInput {
   code: string;
@@ -110,22 +110,28 @@ export class PartnerTransfersService {
     costBasis: 'COST' | 'COST_BREGA' = 'COST',
   ): Promise<{ productId: string; snap: ItemSnapshot }[]> {
     if (!items?.length) throw new BadRequestException('El traslado no tiene items');
-    const bregaPct =
+    const bregaGlobalPct =
       costBasis === 'COST_BREGA'
         ? (await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } }))?.bregaGlobalPct || 0
         : 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
     const out: { productId: string; snap: ItemSnapshot }[] = [];
     for (const it of items) {
       const p = await this.prisma.product.findUnique({
         where: { code: it.code },
-        select: { id: true, code: true, name: true, costUsd: true, bregaApplies: true },
+        select: { id: true, code: true, name: true, costUsd: true, bregaApplies: true, categoryId: true },
       });
       if (!p) throw new BadRequestException(`Producto no encontrado: ${it.code}`);
       if (!it.quantity || it.quantity <= 0) throw new BadRequestException(`Cantidad invalida para ${it.code}`);
-      const unitCost =
-        costBasis === 'COST_BREGA' && p.bregaApplies
-          ? round2(p.costUsd * (1 + bregaPct / 100))
-          : p.costUsd;
+      const bregaPct =
+        costBasis === 'COST_BREGA'
+          ? resolveBregaPct({
+              bregaApplies: p.bregaApplies,
+              categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+              bregaGlobalPct,
+            })
+          : 0;
+      const unitCost = round2(effectiveCost(p.costUsd, bregaPct));
       out.push({ productId: p.id, snap: { code: p.code, name: p.name, quantity: it.quantity, unitCost } });
     }
     return out;
