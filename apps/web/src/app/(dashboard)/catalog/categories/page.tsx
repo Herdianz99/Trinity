@@ -11,6 +11,7 @@ interface Category {
   name: string;
   code: string | null;
   commissionPct: number;
+  bregaPct: number;
   parentId: string | null;
   printAreaId: string | null;
   printArea: { id: string; name: string } | null;
@@ -33,11 +34,13 @@ export default function CategoriesPage() {
   const [editCode, setEditCode] = useState('');
   const [editPrintAreaId, setEditPrintAreaId] = useState('');
   const [editCommissionPct, setEditCommissionPct] = useState('0');
+  const [editBregaPct, setEditBregaPct] = useState('0');
   const [addingParentId, setAddingParentId] = useState<string | null | 'root'>(null);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
   const [newPrintAreaId, setNewPrintAreaId] = useState('');
   const [newCommissionPct, setNewCommissionPct] = useState('0');
+  const [newBregaPct, setNewBregaPct] = useState('0');
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -95,6 +98,7 @@ export default function CategoriesPage() {
         body.code = newCode.toUpperCase();
         if (newPrintAreaId) body.printAreaId = newPrintAreaId;
         body.commissionPct = parseFloat(newCommissionPct) || 0;
+        body.bregaPct = parseFloat(newBregaPct) || 0;
       }
       const res = await fetch('/api/proxy/categories', {
         method: 'POST',
@@ -106,6 +110,7 @@ export default function CategoriesPage() {
         setNewCode('');
         setNewPrintAreaId('');
         setNewCommissionPct('0');
+        setNewBregaPct('0');
         setAddingParentId(null);
         fetchCategories();
         setMessage({ type: 'success', text: 'Categoria creada' });
@@ -133,6 +138,7 @@ export default function CategoriesPage() {
         body.code = editCode.toUpperCase();
         body.printAreaId = editPrintAreaId || null;
         body.commissionPct = parseFloat(editCommissionPct) || 0;
+        body.bregaPct = parseFloat(editBregaPct) || 0;
       }
       const res = await fetch(`/api/proxy/categories/${id}`, {
         method: 'PATCH',
@@ -142,6 +148,7 @@ export default function CategoriesPage() {
       if (res.ok) {
         setEditingId(null);
         fetchCategories();
+        setMessage({ type: 'success', text: isRoot ? 'Categoria actualizada (precios recalculados si cambio la brecha)' : 'Categoria actualizada' });
       } else {
         const err = await res.json().catch(() => ({}));
         setMessage({ type: 'error', text: err.message || 'Error al actualizar' });
@@ -271,6 +278,22 @@ export default function CategoriesPage() {
                   <span className="text-xs text-slate-500">%com</span>
                 </div>
               )}
+              {isRoot && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={editBregaPct}
+                    onChange={(e) => setEditBregaPct(e.target.value)}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="input-field !py-1 !px-2 text-sm w-16 text-center"
+                    placeholder="0"
+                    title="Brecha % de la categoria (0 = usar la global)"
+                  />
+                  <span className="text-xs text-slate-500">%br</span>
+                </div>
+              )}
               <button
                 onClick={() => handleUpdate(cat.id, isRoot)}
                 disabled={saving}
@@ -305,6 +328,11 @@ export default function CategoriesPage() {
                   {cat.commissionPct}% com
                 </span>
               )}
+              {isRoot && cat.bregaPct > 0 && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                  {cat.bregaPct}% brecha
+                </span>
+              )}
               <span className="text-xs text-slate-600 mr-2">
                 {hasChildren ? `${cat.children.length} sub` : ''}
               </span>
@@ -330,6 +358,7 @@ export default function CategoriesPage() {
                   setEditCode(cat.code || '');
                   setEditPrintAreaId(cat.printAreaId || '');
                   setEditCommissionPct(String(cat.commissionPct || 0));
+                  setEditBregaPct(String(cat.bregaPct || 0));
                 }}
                 className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-white transition-colors"
                 title="Editar"
@@ -399,7 +428,7 @@ export default function CategoriesPage() {
             Sincronizar correlativos
           </button>
           <button
-            onClick={() => { setAddingParentId('root'); setNewName(''); setNewCode(''); setNewPrintAreaId(''); }}
+            onClick={() => { setAddingParentId('root'); setNewName(''); setNewCode(''); setNewPrintAreaId(''); setNewCommissionPct('0'); setNewBregaPct('0'); }}
             className="btn-primary flex items-center gap-2"
           >
             <Plus size={18} /> Nueva categoria
@@ -455,8 +484,23 @@ export default function CategoriesPage() {
                 step="0.1"
                 className="input-field !py-1.5 !px-2 text-sm w-16 text-center"
                 placeholder="0"
+                title="Comision %"
               />
-              <span className="text-xs text-slate-500">%</span>
+              <span className="text-xs text-slate-500">%com</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={newBregaPct}
+                onChange={(e) => setNewBregaPct(e.target.value)}
+                min="0"
+                max="100"
+                step="0.1"
+                className="input-field !py-1.5 !px-2 text-sm w-16 text-center"
+                placeholder="0"
+                title="Brecha % de la categoria (0 = usar la global)"
+              />
+              <span className="text-xs text-slate-500">%br</span>
             </div>
             <button onClick={() => handleAdd(null)} disabled={saving} className="text-sm text-green-400 hover:text-green-300 font-medium">
               {saving ? <Loader2 className="animate-spin" size={14} /> : 'Crear'}
