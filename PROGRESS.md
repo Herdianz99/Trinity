@@ -1,8 +1,19 @@
 ﻿# Trinity ERP — Progreso
 
+> ### ✅ DESPLEGADO en las 6 empresas (2026-08-12) — HEAD `166fff2`
+> Desplegado y verificado en las 6 instancias (total, totalturen, aceros, acerosmayor, grande, eltrebol): PM2 online, API `/health` OK, ambas migraciones aplicadas. **Precios intactos**: comparé precio guardado vs fórmula nueva en las 6 → **0 diferencias** (>20.900 productos). Backup certificado antes del primer deploy (acerosmayor).
+> - **Brecha por categoría (raíz)** + refactor central de pricing (~14 call-sites) — CON migración `category_brega` (aditiva). Inofensivo (todas las categorías en 0).
+> - **Incidencias: foto opcional** (miniatura + lightbox) — CON migración `incident_photo` (aditiva).
+> - **POS: fix del aviso de stock en móvil** (el modal no salía) — `2018229`.
+> - **Recibos: cobros a plataformas (Cashea/Crediagro) ahora visibles** — derivado de la CxC, sin migración ni backfill — `5726d87`.
+> - **Inventario: hoja de inventario físico (PDF) por almacén** en `/inventory/stock` — `b7dd3ee`.
+> - **Ajustes de inventario: items en orden de inserción** (no alfabético) — `166fff2`.
+>
+> **Pendiente (a propósito, NO desplegado a las otras 5):** `9fd2636` — **compresión de foto de incidencias en el navegador** (redimensiona a 1600px + JPEG q0.82 → ~300-500 KB) + manejo de error robusto. **Solo desplegado en `grande`** porque es la única empresa que usa el módulo de incidencias. También en grande: ajuste de nginx web a `client_max_body_size 20M` (el bloque web usaba 1MB por defecto → 413 al subir fotos). Los otros servidores siguen en 1MB (solo importaría si subieran fotos de producto grandes desde la UI).
+
 ## 🗓️ Sesión 2026-08-11 — Brecha por categoría (raíz), con helper central de pricing
 
-> **⏳ PENDIENTE DE DEPLOY (todas las empresas).** Trae **1 migración** (`20260811183000_category_brega`, `ADD COLUMN IF NOT EXISTS "bregaPct"` en `Category`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. **Despliegue inofensivo:** todas las categorías quedan en `bregaPct=0` → nada cambia hasta que se le ponga una brecha a una categoría. Verificado en local (`total_db`): typecheck API + Web limpio; **prueba end-to-end real** (token forjado) de los 5 escenarios OK.
+> **✅ DESPLEGADO en las 6 empresas (2026-08-12, HEAD `166fff2`).** Trae **1 migración** (`20260811183000_category_brega`, `ADD COLUMN IF NOT EXISTS "bregaPct"` en `Category`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. **Despliegue inofensivo confirmado:** todas las categorías quedaron en `bregaPct=0` en las 6 → 0 precios cambiaron (verificado con checksum/comparación de fórmula). Verificado en local (`total_db` + copia de `grande`): typecheck limpio; **prueba end-to-end real** (token forjado) de los 5 escenarios OK.
 
 - **Feature (pedido del usuario):** cada **categoría RAÍZ** puede tener su **brecha propia**; sus productos (y los de sus subcategorías) la usan en vez de la global. Regla fijada por Diego: `bregaEfectiva = bregaApplies ? (rootCat>0 ? rootCat : global) : 0`. Decisiones: **solo raíz** (subcategorías heredan, como `commissionPct`) + **auto-recálculo** al cambiar la brecha (scoped a esa raíz + subcategorías, `manualPrice:false`).
 - **Arquitectura — se centralizó la fórmula (antes duplicada en ~14 puntos):**
@@ -15,7 +26,7 @@
 
 ## 🗓️ Sesión 2026-08-11 — Incidencias: foto (una sola) con miniatura en lista + lightbox
 
-> **⏳ PENDIENTE DE DEPLOY (solo empresa `grande`).** Trae **1 migración** (`20260811120000_incident_photo`, dos `ADD COLUMN IF NOT EXISTS` en `Incident`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. Verificado en local: typecheck API + Web limpio.
+> **✅ DESPLEGADO en las 6 empresas (2026-08-12, HEAD `166fff2`); la foto solo se usa en `grande`.** Trae **1 migración** (`20260811120000_incident_photo`, dos `ADD COLUMN IF NOT EXISTS` en `Incident`, aditiva e idempotente) + red en `deploy/fix-schema.sql`. **Follow-up (`9fd2636`, solo grande):** la foto ahora se **comprime en el navegador** antes de subir (~300-500 KB) — ver banner arriba. También se subió el `client_max_body_size` de nginx-web a 20M en grande (usaba 1MB → 413). Verificado end-to-end en grande (subida real OK).
 
 - **Feature (pedido del usuario):** poder adjuntar **una foto opcional** a la incidencia al registrarla, y verla desde el **listado** (miniatura → **lightbox** al hacer click). **Sin página de detalle** (la lista ya muestra toda la info).
 - **Decisiones del usuario:** (1) **una sola** foto; (2) solo en **grande**; (3) **NO** página aparte → miniatura en la lista + lightbox.
