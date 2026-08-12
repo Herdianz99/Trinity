@@ -131,17 +131,39 @@ export default function IncidentsPage() {
     setModalOpen(true);
   }
 
-  function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  // Comprime/redimensiona la imagen EN EL NAVEGADOR antes de subir: la foto de un celular
+  // pesa 3-8 MB, aca queda en ~300-500 KB. Sube rapido y no choca con limites de tamano.
+  // imageOrientation 'from-image' respeta la orientacion EXIF (si no, saldria rotada).
+  async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<string> {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    let { width, height } = bitmap;
+    if (width > maxDim || height > maxDim) {
+      const scale = Math.min(maxDim / width, maxDim / height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No se pudo procesar la imagen');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ''; // permite re-seleccionar el mismo archivo
     if (!file) return;
     if (!file.type.startsWith('image/')) { setPhotoErr('El archivo debe ser una imagen'); return; }
-    if (file.size > 12 * 1024 * 1024) { setPhotoErr('La imagen no debe superar 12 MB'); return; }
+    if (file.size > 25 * 1024 * 1024) { setPhotoErr('La imagen no debe superar 25 MB'); return; }
     setPhotoErr('');
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result as string);
-    reader.onerror = () => setPhotoErr('No se pudo leer la imagen');
-    reader.readAsDataURL(file);
+    try {
+      setPhoto(await compressImage(file));
+    } catch {
+      setPhotoErr('No se pudo procesar la imagen');
+    }
   }
 
   async function submit() {
@@ -164,7 +186,13 @@ export default function IncidentsPage() {
           photo: photo || undefined,
         }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error al registrar'); }
+      if (!res.ok) {
+        // El servidor puede devolver JSON (error de la app) o HTML (ej. 413 de nginx). No asumir JSON.
+        let msg = 'Error al registrar';
+        try { const err = await res.json(); msg = err.message || msg; }
+        catch { msg = res.status === 413 ? 'La imagen es demasiado pesada, intenta con otra' : `Error del servidor (${res.status})`; }
+        throw new Error(msg);
+      }
       setMessage({ type: 'success', text: 'Incidencia registrada' });
       setModalOpen(false);
       setPage(1);
