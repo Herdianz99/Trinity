@@ -77,26 +77,33 @@ export class QuotationPdfService {
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 10;
 
+      // Escribe una linea de detalle envolviendo el texto largo y avanzando y por
+      // la altura real ocupada (asi una direccion/nombre de 2 lineas no se encima).
+      const infoLine = (text: string) => {
+        doc.fontSize(9).font('Helvetica');
+        const h = doc.heightOfString(text, { width: pageWidth });
+        doc.text(text, 40, y, { width: pageWidth });
+        y += Math.max(12, h);
+      };
+
       // Customer info
       doc.fontSize(10).font('Helvetica-Bold').text('CLIENTE', 40, y);
       y += 14;
-      doc.fontSize(9).font('Helvetica');
       if (quotation.customer) {
-        doc.text(`Nombre: ${quotation.customer.name}`, 40, y); y += 12;
-        if (quotation.customer.rif) { doc.text(`RIF: ${quotation.customer.documentType}-${quotation.customer.rif}`, 40, y); y += 12; }
-        if (quotation.customer.phone) { doc.text(`Tel: ${quotation.customer.phone}`, 40, y); y += 12; }
-        if (quotation.customer.address) { doc.text(`Direccion: ${quotation.customer.address}`, 40, y); y += 12; }
+        infoLine(`Nombre: ${quotation.customer.name}`);
+        if (quotation.customer.rif) infoLine(`RIF: ${quotation.customer.documentType}-${quotation.customer.rif}`);
+        if (quotation.customer.phone) infoLine(`Tel: ${quotation.customer.phone}`);
+        if (quotation.customer.address) infoLine(`Direccion: ${quotation.customer.address}`);
       } else {
-        doc.text('Cliente: General / Consumidor Final', 40, y); y += 12;
+        infoLine('Cliente: General / Consumidor Final');
       }
 
       // Vendedor (con telefono, para que el cliente pueda comunicarse con el)
       if (quotation.seller) {
         y += 4;
         doc.fontSize(10).font('Helvetica-Bold').text('VENDEDOR', 40, y); y += 14;
-        doc.fontSize(9).font('Helvetica');
-        doc.text(`Nombre: ${quotation.seller.name}`, 40, y); y += 12;
-        if (quotation.seller.phone) { doc.text(`Tel: ${quotation.seller.phone}`, 40, y); y += 12; }
+        infoLine(`Nombre: ${quotation.seller.name}`);
+        if (quotation.seller.phone) infoLine(`Tel: ${quotation.seller.phone}`);
       }
 
       y += 10;

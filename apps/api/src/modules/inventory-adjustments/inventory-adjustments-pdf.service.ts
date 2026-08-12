@@ -101,35 +101,43 @@ export class InventoryAdjustmentsPdfService {
         }
 
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
-        doc.text(`Almacen: ${adjustment.warehouse.name}`, 40, y);
-        doc.text(
+        // Ancho de la columna izquierda: hasta antes de la columna derecha (x=350),
+        // asi un nombre de almacen/proveedor largo envuelve en vez de invadir la derecha.
+        const leftW = 300;
+        // Escribe una fila de 2 columnas y avanza y por la altura de la mas alta.
+        const twoCol = (left: string, right: string) => {
+          const lh = doc.heightOfString(left, { width: leftW });
+          const rh = doc.heightOfString(right, { width: pageWidth - 310 });
+          doc.text(left, 40, y, { width: leftW });
+          doc.text(right, 350, y, { width: pageWidth - 310 });
+          y += Math.max(14, lh, rh);
+        };
+        // Escribe una fila de 1 columna (ancho completo) con altura dinamica.
+        const fullRow = (text: string) => {
+          const h = doc.heightOfString(text, { width: pageWidth });
+          doc.text(text, 40, y, { width: pageWidth });
+          y += Math.max(14, h);
+        };
+        twoCol(
+          `Almacen: ${adjustment.warehouse.name}`,
           `Fecha: ${new Date(adjustment.createdAt).toLocaleDateString('es-VE')}`,
-          350,
-          y,
         );
-        y += 14;
-        doc.text(`Tipo: ${typeLabel}`, 40, y);
-        doc.text(`Estado: ${statusLabel}`, 350, y);
-        y += 14;
+        twoCol(`Tipo: ${typeLabel}`, `Estado: ${statusLabel}`);
         if (adjustment.supplier?.name || adjustment.customer?.name) {
-          doc.text(
+          fullRow(
             `${adjustment.supplier ? 'Proveedor' : 'Cliente'}: ${
               adjustment.supplier?.name || adjustment.customer?.name
             }`,
-            40,
-            y,
           );
-          y += 14;
         }
         if (adjustment.description) {
-          doc.text(`Descripcion: ${adjustment.description}`, 40, y, {
-            width: pageWidth,
-          });
-          y += 14;
+          fullRow(`Descripcion: ${adjustment.description}`);
         }
-        doc.text(`Total de productos: ${adjustment.items.length}`, 40, y);
-        doc.text(`Costo usado: ${costModeLabel}`, 350, y);
-        y += 18;
+        twoCol(
+          `Total de productos: ${adjustment.items.length}`,
+          `Costo usado: ${costModeLabel}`,
+        );
+        y += 4;
         doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#999999');
         y += 8;
         return y;
