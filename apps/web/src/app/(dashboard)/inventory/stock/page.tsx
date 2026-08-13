@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  BoxesIcon, AlertTriangle, Loader2, X, ArrowUpDown, Activity, Printer,
+  BoxesIcon, AlertTriangle, Loader2, X, ArrowUpDown, Activity, Printer, ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface StockItem {
   id: string;
@@ -203,20 +206,31 @@ export default function StockPage() {
             <p className="text-slate-400 text-sm">Inventario por almacen</p>
           </div>
         </div>
-        <button
-          onClick={() => {
-            if (selectedWarehouse === 'all') {
-              setMessage({ type: 'error', text: 'Selecciona un almacen especifico para imprimir su hoja de inventario' });
-              return;
-            }
-            window.open(`/api/proxy/stock/count-sheet/pdf?warehouseId=${selectedWarehouse}`, '_blank');
-          }}
-          disabled={selectedWarehouse === 'all'}
-          title={selectedWarehouse === 'all' ? 'Selecciona un almacen especifico' : 'Imprimir hoja de inventario fisico de este almacen'}
-          className="btn-secondary flex items-center gap-2 self-start sm:self-auto disabled:opacity-40"
-        >
-          <Printer size={18} /> Hoja de inventario (PDF)
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              disabled={selectedWarehouse === 'all'}
+              title={selectedWarehouse === 'all' ? 'Selecciona un almacen especifico' : 'Imprimir hoja de inventario fisico de este almacen'}
+              className="btn-secondary flex items-center gap-2 self-start sm:self-auto disabled:opacity-40"
+            >
+              <Printer size={18} /> Hoja de inventario (PDF) <ChevronDown size={16} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[240px]">
+            <DropdownMenuItem
+              onClick={() => window.open(`/api/proxy/stock/count-sheet/pdf?warehouseId=${selectedWarehouse}`, '_blank')}
+              className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+            >
+              <Printer size={14} /> Solo con existencia
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => window.open(`/api/proxy/stock/count-sheet/pdf?warehouseId=${selectedWarehouse}&includeZero=true`, '_blank')}
+              className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+            >
+              <Printer size={14} /> Incluir todos (con stock 0)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Low stock banner */}

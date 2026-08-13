@@ -9,11 +9,12 @@ export class StockCountPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Hoja de INVENTARIO FÍSICO de un almacén: lista todos los productos con existencia en ese
-   * almacén (incluye los que están en 0), agrupados por categoría, con la existencia del sistema
-   * y una columna en blanco para anotar el conteo físico.
+   * Hoja de INVENTARIO FÍSICO de un almacén: lista los productos del almacén agrupados por
+   * categoría, con la existencia del sistema y una columna en blanco para anotar el conteo físico.
+   * Por defecto solo incluye los que tienen existencia (quantity != 0); con includeZero=true
+   * se listan también los que están en 0.
    */
-  async generateCountSheet(warehouseId: string): Promise<Buffer> {
+  async generateCountSheet(warehouseId: string, includeZero = false): Promise<Buffer> {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException('Almacén no encontrado');
 
@@ -29,9 +30,10 @@ export class StockCountPdfService {
       },
     });
 
-    // Solo productos activos; ordenados por categoría y luego por nombre (para recorrer el almacén).
+    // Solo productos activos; por defecto solo con existencia (quantity != 0). Ordenados por
+    // categoría y luego por nombre (para recorrer el almacén).
     const items = rows
-      .filter((r) => r.product.isActive)
+      .filter((r) => r.product.isActive && (includeZero || r.quantity !== 0))
       .map((r) => ({
         code: r.product.code,
         name: r.product.name,
@@ -63,7 +65,8 @@ export class StockCountPdfService {
         doc.text('HOJA DE INVENTARIO FÍSICO', 40, y, { width: RIGHT - 40, align: 'center' });
         y += 18;
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
-        doc.text(`Almacén: ${warehouse.name}`, 40, y);
+        const scope = includeZero ? 'Todos los productos' : 'Solo con existencia';
+        doc.text(`Almacén: ${warehouse.name}  ·  ${scope}`, 40, y);
         doc.text(`Fecha: ____ / ____ / ______`, 360, y, { width: RIGHT - 360, align: 'right' });
         y += 13;
         doc.text('Contó: ______________________________', 40, y);

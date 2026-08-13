@@ -29,10 +29,17 @@ export class StockController {
   ) {}
 
   // Hoja de inventario físico (PDF) de un almacén específico, para imprimir y contar a mano.
+  // Por defecto solo incluye productos con existencia (quantity != 0); con includeZero=true
+  // se listan todos (incluidos los que están en 0).
   @Get('count-sheet/pdf')
   @ApiQuery({ name: 'warehouseId', required: true })
-  async getCountSheetPdf(@Query('warehouseId') warehouseId: string, @Res() res: Response) {
-    const buffer = await this.countPdfService.generateCountSheet(warehouseId);
+  @ApiQuery({ name: 'includeZero', required: false, type: Boolean })
+  async getCountSheetPdf(
+    @Query('warehouseId') warehouseId: string,
+    @Query('includeZero') includeZero: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.countPdfService.generateCountSheet(warehouseId, includeZero === 'true');
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="inventario-almacen.pdf"`,
