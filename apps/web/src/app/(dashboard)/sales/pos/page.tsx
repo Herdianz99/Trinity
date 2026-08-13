@@ -2554,6 +2554,15 @@ export default function POSPage() {
               <button onClick={() => setPayModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400"><X size={18} /></button>
             </div>
 
+            {/* Franja con el cliente: el RIF es lo que importa (va fijo, sin recortar) y el
+                nombre se trunca para que nunca ocupe 2 lineas en el modal. */}
+            {(customerRif || customerName) && (
+              <div className="px-4 md:px-6 py-2 bg-slate-900/60 border-b border-slate-700/50 flex items-center gap-1.5 text-sm">
+                <span className="font-mono font-semibold text-white shrink-0">{customerRif || 'Sin RIF'}</span>
+                {customerName && <span className="text-slate-400 truncate">- {customerName}</span>}
+              </div>
+            )}
+
             <div className="p-4 md:p-6 space-y-5">
               {intendedMethod && (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-violet-500/15 border border-violet-500/40 text-violet-200">
