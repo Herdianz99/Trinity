@@ -436,7 +436,7 @@ export class ProductsService {
              ELSE 1
         END,
         p.name ASC
-      LIMIT 20
+      LIMIT 100
     `;
 
     return results.map((r) => ({
