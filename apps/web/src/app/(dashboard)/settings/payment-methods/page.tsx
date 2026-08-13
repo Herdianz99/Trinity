@@ -21,6 +21,7 @@ interface PaymentMethod {
   name: string;
   isDivisa: boolean;
   createsReceivable: boolean;
+  checkDuplicateRef: boolean;
   isActive: boolean;
   sortOrder: number;
   fiscalCode: string | null;
@@ -41,6 +42,7 @@ export default function PaymentMethodsPage() {
   const [formName, setFormName] = useState('');
   const [formIsDivisa, setFormIsDivisa] = useState(false);
   const [formCreatesReceivable, setFormCreatesReceivable] = useState(false);
+  const [formCheckDuplicateRef, setFormCheckDuplicateRef] = useState(false);
   const [formSortOrder, setFormSortOrder] = useState(0);
   const [formFiscalCode, setFormFiscalCode] = useState('');
   const [formParentId, setFormParentId] = useState('');
@@ -74,6 +76,7 @@ export default function PaymentMethodsPage() {
     setFormName('');
     setFormIsDivisa(false);
     setFormCreatesReceivable(false);
+    setFormCheckDuplicateRef(false);
     setFormSortOrder(0);
     setFormFiscalCode('');
     setFormParentId(parentId || '');
@@ -85,6 +88,7 @@ export default function PaymentMethodsPage() {
     setFormName(method.name);
     setFormIsDivisa(method.isDivisa);
     setFormCreatesReceivable(method.createsReceivable);
+    setFormCheckDuplicateRef(method.checkDuplicateRef);
     setFormSortOrder(method.sortOrder);
     setFormFiscalCode(method.fiscalCode || '');
     setFormParentId(method.parentId || '');
@@ -100,6 +104,7 @@ export default function PaymentMethodsPage() {
         name: formName.trim(),
         isDivisa: formIsDivisa,
         createsReceivable: formCreatesReceivable,
+        checkDuplicateRef: formCheckDuplicateRef,
         sortOrder: formSortOrder,
         fiscalCode: formFiscalCode || undefined,
         parentId: formParentId || undefined,
@@ -228,6 +233,11 @@ export default function PaymentMethodsPage() {
                     {parent.createsReceivable && (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                         Genera CxC
+                      </span>
+                    )}
+                    {parent.checkDuplicateRef && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Alerta si la referencia ya fue registrada">
+                        Anti-doble ref
                       </span>
                     )}
                     {parent.fiscalCode && (
@@ -385,6 +395,20 @@ export default function PaymentMethodsPage() {
                   </div>
                 </>
               )}
+
+              {/* Aplica a padres e hijos: en el POS se cobra con el submetodo (ej. Pago Movil
+                  Banesco), asi que la marca debe poder ponerse en el metodo que realmente se usa. */}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formCheckDuplicateRef}
+                    onChange={e => setFormCheckDuplicateRef(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-500"
+                  />
+                  <span className="text-sm text-slate-300">Alertar si la referencia ya fue registrada (evita cobrar 2 veces)</span>
+                </label>
+              </div>
 
               <div>
                 <label className="text-sm text-slate-400">Codigo fiscal (para impresora)</label>

@@ -18,6 +18,11 @@ export class CreatePaymentMethodDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsBoolean()
+  checkDuplicateRef?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsInt()
   @Min(0)
   sortOrder?: number;

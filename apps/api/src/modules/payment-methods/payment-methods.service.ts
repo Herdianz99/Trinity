@@ -5,6 +5,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
+import { caracasDayStart } from '../../common/timezone';
+
+// Normaliza una referencia para comparar: sin espacios, en mayusculas. Asi "12 34" y
+// "1234", o "abc" y "ABC", cuentan como la misma referencia.
+function normalizeRef(s?: string | null): string {
+  return (s ?? '').replace(/\s+/g, '').toUpperCase();
+}
 
 @Injectable()
 export class PaymentMethodsService {
@@ -81,6 +88,7 @@ export class PaymentMethodsService {
         name: dto.name,
         isDivisa: dto.isDivisa ?? false,
         createsReceivable: dto.createsReceivable ?? false,
+        checkDuplicateRef: dto.checkDuplicateRef ?? false,
         sortOrder: dto.sortOrder ?? 0,
         fiscalCode: dto.fiscalCode || null,
         parentId: dto.parentId || null,
@@ -110,11 +118,73 @@ export class PaymentMethodsService {
         name: dto.name ?? method.name,
         isDivisa: dto.isDivisa ?? method.isDivisa,
         createsReceivable: dto.createsReceivable ?? method.createsReceivable,
+        checkDuplicateRef: dto.checkDuplicateRef ?? method.checkDuplicateRef,
         sortOrder: dto.sortOrder ?? method.sortOrder,
         fiscalCode: dto.fiscalCode !== undefined ? (dto.fiscalCode || null) : method.fiscalCode,
         parentId: dto.parentId !== undefined ? (dto.parentId || null) : method.parentId,
       },
     });
+  }
+
+  // Busca si una referencia ya fue registrada en un pago RECIENTE (ultimos 3 dias-calendario
+  // Caracas) con el MISMO metodo. Solo aplica a metodos marcados con checkDuplicateRef.
+  // Sirve para alertar al cajero de un posible cobro doble del mismo Pago Movil/transferencia.
+  // Busca en las 3 tablas donde vive una referencia: Payment (facturas), ReceiptPayment
+  // (recibos) y ReceivablePayment (abonos a CxC). Es informativo: NO bloquea.
+  async checkReference(methodId: string, reference: string) {
+    const norm = normalizeRef(reference);
+    if (!methodId || !norm) return { duplicate: false, matches: [] };
+
+    const method = await this.prisma.paymentMethod.findUnique({
+      where: { id: methodId },
+      select: { checkDuplicateRef: true, name: true },
+    });
+    if (!method?.checkDuplicateRef) return { duplicate: false, matches: [] };
+
+    // Ventana: hoy + 2 dias anteriores (3 dias-calendario Caracas).
+    const threeDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const from = caracasDayStart(threeDaysAgo);
+    const baseWhere = { methodId, reference: { not: null }, createdAt: { gte: from } };
+
+    const [invPays, recPays, cxcPays] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: baseWhere,
+        select: { reference: true, amountUsd: true, amountBs: true, createdAt: true, invoice: { select: { number: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.receiptPayment.findMany({
+        where: baseWhere,
+        select: { reference: true, amountUsd: true, amountBs: true, createdAt: true, receipt: { select: { number: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.receivablePayment.findMany({
+        where: baseWhere,
+        select: { reference: true, amountUsd: true, amountBs: true, createdAt: true, receipt: { select: { number: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const matches: {
+      source: string; docNumber: string | null; amountUsd: number; amountBs: number; createdAt: Date;
+    }[] = [];
+    for (const p of invPays) {
+      if (normalizeRef(p.reference) === norm) {
+        matches.push({ source: 'Factura', docNumber: p.invoice?.number ?? null, amountUsd: p.amountUsd, amountBs: p.amountBs, createdAt: p.createdAt });
+      }
+    }
+    for (const p of recPays) {
+      if (normalizeRef(p.reference) === norm) {
+        matches.push({ source: 'Recibo', docNumber: p.receipt?.number ?? null, amountUsd: p.amountUsd, amountBs: p.amountBs, createdAt: p.createdAt });
+      }
+    }
+    for (const p of cxcPays) {
+      if (normalizeRef(p.reference) === norm) {
+        matches.push({ source: 'Abono CxC', docNumber: p.receipt?.number ?? null, amountUsd: p.amountUsd, amountBs: p.amountBs, createdAt: p.createdAt });
+      }
+    }
+    matches.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return { duplicate: matches.length > 0, methodName: method.name, matches };
   }
 
   async toggleActive(id: string) {

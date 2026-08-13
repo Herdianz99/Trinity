@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X, Trash2,
+  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -62,6 +62,7 @@ interface PaymentMethodData {
   id: string;
   name: string;
   isDivisa: boolean;
+  checkDuplicateRef?: boolean;
   children?: PaymentMethodData[];
 }
 
@@ -72,6 +73,16 @@ interface PaymentLine {
   amountUsd: number;
   amountBs: number;
   reference: string;
+  checkDuplicateRef?: boolean;
+}
+
+// Un match de referencia duplicada devuelto por el backend.
+interface RefDupMatch {
+  source: string;
+  docNumber: string | null;
+  amountUsd: number;
+  amountBs: number;
+  createdAt: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -208,6 +219,30 @@ export default function ReceiptDetailPage() {
     m.children && m.children.length > 0 ? m.children.filter((c) => c.id) : [m]
   );
 
+  // --- Chequeo de referencia duplicada (Pago Movil/transferencia): alerta si esa referencia
+  // ya se cobro en los ultimos dias (posible cobro doble). Solo para metodos marcados. No bloquea.
+  const [refDupCache, setRefDupCache] = useState<Record<string, RefDupMatch[]>>({});
+  const [refDupChecking, setRefDupChecking] = useState<Record<string, boolean>>({});
+  const normRef = (s: string) => (s || '').replace(/\s+/g, '').toUpperCase();
+  const refDupKey = (methodId: string, reference: string) => `${methodId}|${normRef(reference)}`;
+
+  async function checkRefDuplicate(methodId: string, reference: string) {
+    const norm = normRef(reference);
+    if (!methodId || !norm) return;
+    const key = refDupKey(methodId, reference);
+    if (refDupChecking[key]) return;
+    setRefDupChecking((s) => ({ ...s, [key]: true }));
+    try {
+      const res = await fetch(`/api/proxy/payment-methods/check-reference?methodId=${encodeURIComponent(methodId)}&reference=${encodeURIComponent(reference)}`);
+      const data = res.ok ? await res.json() : { matches: [] };
+      setRefDupCache((s) => ({ ...s, [key]: data.matches || [] }));
+    } catch {
+      setRefDupCache((s) => ({ ...s, [key]: [] }));
+    } finally {
+      setRefDupChecking((s) => { const n = { ...s }; delete n[key]; return n; });
+    }
+  }
+
   const openPayModal = () => {
     if (!receipt) return;
     const netAbsUsd = Math.abs(receipt.totalUsd);
@@ -251,6 +286,7 @@ export default function ReceiptDetailPage() {
         if (method) {
           updated.methodName = method.name;
           updated.isDivisa = method.isDivisa;
+          updated.checkDuplicateRef = method.checkDuplicateRef;
         }
       }
       if (field === 'amountUsd') {
@@ -661,9 +697,28 @@ export default function ReceiptDetailPage() {
                     type="text"
                     value={line.reference}
                     onChange={(e) => updatePaymentLine(idx, 'reference', e.target.value)}
+                    onBlur={() => line.checkDuplicateRef && checkRefDuplicate(line.methodId, line.reference)}
                     placeholder="Referencia (opcional)"
                     className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
                   />
+                  {/* Alerta de referencia ya registrada (posible cobro doble). Informativa. */}
+                  {line.checkDuplicateRef && (() => {
+                    const matches = refDupCache[refDupKey(line.methodId, line.reference)];
+                    if (!matches || matches.length === 0) return null;
+                    return (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5">
+                        <p className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                          <AlertTriangle size={12} /> Referencia ya registrada{matches.length > 1 ? ` (${matches.length} veces)` : ''}
+                        </p>
+                        {matches.slice(0, 3).map((m, i) => (
+                          <p key={i} className="text-[11px] text-amber-300/90">
+                            {m.source}{m.docNumber ? ` ${m.docNumber}` : ''} · Bs {(m.amountBs || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {new Date(m.createdAt).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        ))}
+                        <p className="text-[10px] text-amber-300/70 mt-0.5">Verifica que no sea el mismo pago antes de continuar.</p>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
 

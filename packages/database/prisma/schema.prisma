@@ -1015,6 +1015,9 @@ model PaymentMethod {
   isDivisa           Boolean             @default(false)
   isCash             Boolean             @default(false)
   createsReceivable  Boolean             @default(false)
+  // Al cobrar con este metodo, alertar al cajero si la referencia ya se uso en un pago
+  // reciente (evita cobrar 2 veces el mismo Pago Movil/transferencia). Opt-in por metodo.
+  checkDuplicateRef  Boolean             @default(false)
   isActive           Boolean             @default(true)
   sortOrder          Int                 @default(0)
   fiscalCode         String?

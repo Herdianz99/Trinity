@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -31,6 +32,16 @@ export class PaymentMethodsController {
   @Get('payment-methods/flat')
   findFlat() {
     return this.service.findFlat();
+  }
+
+  // Chequeo de referencia duplicada al cobrar (POS/recibos). Lo usa cualquier cajero, por
+  // eso NO lleva @Roles. Devuelve los pagos recientes con la misma referencia y metodo.
+  @Get('payment-methods/check-reference')
+  checkReference(
+    @Query('methodId') methodId: string,
+    @Query('reference') reference: string,
+  ) {
+    return this.service.checkReference(methodId || '', reference || '');
   }
 
   @Roles(UserRole.ADMIN)

@@ -29,6 +29,7 @@ import {
   ChevronRight,
   PackageX,
   Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { useNavGuard } from '@/components/nav-guard';
 import SeniatModal from '@/components/seniat-modal';
@@ -54,6 +55,7 @@ interface PaymentMethodData {
   name: string;
   isDivisa: boolean;
   createsReceivable: boolean;
+  checkDuplicateRef?: boolean;
   isActive: boolean;
   sortOrder: number;
   fiscalCode: string | null;
@@ -90,6 +92,16 @@ interface PaymentLine {
   amountBs: number;
   reference: string;
   createsReceivable?: boolean;
+  checkDuplicateRef?: boolean;
+}
+
+// Un match de referencia duplicada devuelto por el backend.
+interface RefDupMatch {
+  source: string;
+  docNumber: string | null;
+  amountUsd: number;
+  amountBs: number;
+  createdAt: string;
 }
 
 // Input de cantidad que permite borrar, escribir decimales (0.25) y el punto en movil.
@@ -1069,6 +1081,32 @@ export default function POSPage() {
   const changeBsRemaining = Math.round((changeUsd - changeUsdCashApplied) * exchangeRate * 100) / 100;
   const needsBsChange = changeUsd - changeUsdCashApplied > 0.01;
 
+  // --- Chequeo de referencia duplicada (Pago Movil/transferencia): alerta si esa referencia
+  // ya se cobro en los ultimos dias (posible cobro doble). Solo para metodos marcados. No bloquea.
+  const [refDupCache, setRefDupCache] = useState<Record<string, RefDupMatch[]>>({});
+  const [refDupChecking, setRefDupChecking] = useState<Record<string, boolean>>({});
+  const normRef = (s: string) => (s || '').replace(/\s+/g, '').toUpperCase();
+  const refDupKey = (methodId: string, reference: string) => `${methodId}|${normRef(reference)}`;
+
+  async function checkRefDuplicate(methodId: string, reference: string) {
+    const norm = normRef(reference);
+    if (!methodId || !norm) return;
+    const key = refDupKey(methodId, reference);
+    // No se cachea "vacio": entre facturas la BD cambia (la factura previa ya se cobro con
+    // esta ref), asi que hay que reconsultar en cada blur. Solo se evita lanzar 2 en paralelo.
+    if (refDupChecking[key]) return;
+    setRefDupChecking(s => ({ ...s, [key]: true }));
+    try {
+      const res = await fetch(`/api/proxy/payment-methods/check-reference?methodId=${encodeURIComponent(methodId)}&reference=${encodeURIComponent(reference)}`);
+      const data = res.ok ? await res.json() : { matches: [] };
+      setRefDupCache(s => ({ ...s, [key]: data.matches || [] }));
+    } catch {
+      setRefDupCache(s => ({ ...s, [key]: [] }));
+    } finally {
+      setRefDupChecking(s => { const n = { ...s }; delete n[key]; return n; });
+    }
+  }
+
   function addPayment(pm: PaymentMethodData) {
     if (pm.isDivisa) {
       // USD method: fill with remaining USD, derive Bs
@@ -1081,6 +1119,7 @@ export default function POSPage() {
         amountBs: Math.round(amountUsd * exchangeRate * 100) / 100,
         reference: '',
         createsReceivable: pm.createsReceivable,
+        checkDuplicateRef: pm.checkDuplicateRef,
       }]);
     } else {
       // Bs method: fill with remaining Bs, use remaining USD directly to avoid rounding discrepancy
@@ -1094,6 +1133,7 @@ export default function POSPage() {
         amountBs,
         reference: '',
         createsReceivable: pm.createsReceivable,
+        checkDuplicateRef: pm.checkDuplicateRef,
       }]);
     }
     setExpandedGroup(null);
@@ -2623,12 +2663,31 @@ export default function POSPage() {
                             type="text"
                             value={p.reference}
                             onChange={e => updatePayment(idx, 'reference', e.target.value)}
+                            onBlur={() => p.checkDuplicateRef && checkRefDuplicate(p.methodId, p.reference)}
                             className={`input-field !py-2.5 md:!py-1.5 text-sm ${p.createsReceivable && !p.reference.trim() ? '!border-red-500/70 focus:!border-red-500' : ''}`}
                             placeholder={p.createsReceivable ? 'Obligatoria' : 'Opcional'}
                           />
                           {p.createsReceivable && !p.reference.trim() && (
                             <p className="text-[11px] text-red-400 mt-1">Referencia obligatoria para credito</p>
                           )}
+                          {/* Alerta de referencia ya registrada (posible cobro doble). Informativa. */}
+                          {p.checkDuplicateRef && (() => {
+                            const matches = refDupCache[refDupKey(p.methodId, p.reference)];
+                            if (!matches || matches.length === 0) return null;
+                            return (
+                              <div className="mt-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5">
+                                <p className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                                  <AlertTriangle size={12} /> Referencia ya registrada{matches.length > 1 ? ` (${matches.length} veces)` : ''}
+                                </p>
+                                {matches.slice(0, 3).map((m, i) => (
+                                  <p key={i} className="text-[11px] text-amber-300/90">
+                                    {m.source}{m.docNumber ? ` ${m.docNumber}` : ''} · Bs {fmtBs(m.amountBs)} · {new Date(m.createdAt).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                ))}
+                                <p className="text-[10px] text-amber-300/70 mt-0.5">Verifica que no sea el mismo pago antes de continuar.</p>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
