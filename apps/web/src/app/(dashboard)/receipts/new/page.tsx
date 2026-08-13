@@ -119,6 +119,9 @@ export default function NewReceiptPage() {
   // Ref con la seleccion actual, para excluirla al re-fetchear pendientes (ej. al filtrar)
   // sin borrar lo que el usuario ya paso a la derecha.
   const selectedDocsRef = useRef<SelectedDoc[]>([]);
+  // Guard sincronico contra doble-submit: el estado `saving` deshabilita el boton, pero un
+  // doble-clic rapido dispara el handler 2 veces ANTES del re-render -> 2 recibos iguales.
+  const submittingRef = useRef(false);
   useEffect(() => { selectedDocsRef.current = selectedDocs; }, [selectedDocs]);
 
   // Exchange rate
@@ -141,6 +144,7 @@ export default function NewReceiptPage() {
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
+  const [registerExcess, setRegisterExcess] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   // Cash session
@@ -471,6 +475,8 @@ export default function NewReceiptPage() {
   // Save draft
   const saveDraft = async () => {
     if (selectedDocs.length === 0) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
     setMessage(null);
     try {
@@ -514,11 +520,27 @@ export default function NewReceiptPage() {
       setMessage({ type: 'error', text: err.message });
     }
     setSaving(false);
+    submittingRef.current = false;
   };
 
   // Open payment modal
   const openPayModal = async () => {
     if (selectedDocs.length === 0) return;
+    if (submittingRef.current) return;
+    // Reusar el borrador ya creado para esta seleccion: si el cajero abre el modal, lo cierra
+    // y lo vuelve a abrir, NO se crea otro recibo (evita duplicados). El borrador se invalida
+    // solo si cambia la seleccion (ver efecto mas abajo).
+    if (draftId) {
+      const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
+      setPaymentLines([{
+        methodId: '', methodName: '', isDivisa: false,
+        amountUsd: netAbsUsd, amountBs: Math.round(netAbsUsd * rate * 100) / 100, reference: '',
+      }]);
+      setRegisterExcess(false);
+      setPayModalOpen(true);
+      return;
+    }
+    submittingRef.current = true;
     setSaving(true);
     setMessage(null);
     try {
@@ -587,22 +609,52 @@ export default function NewReceiptPage() {
         amountBs: Math.round(netAbsUsd * rate * 100) / 100,
         reference: '',
       }]);
+      setRegisterExcess(false);
       setPayModalOpen(true);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     }
     setSaving(false);
+    submittingRef.current = false;
   };
 
   const [draftId, setDraftId] = useState('');
   const [draftNumber, setDraftNumber] = useState('');
 
+  // Si cambia la seleccion/monto/tasa con el modal cerrado, se descarta el borrador reutilizable
+  // (draftId) para que al reabrir el modal se cree uno nuevo y correcto. Evita reusar un borrador
+  // desactualizado y evita duplicados por reabrir el modal sin cambios.
+  const draftKey = JSON.stringify({
+    t: type,
+    docs: selectedDocs.map((d) => [
+      d.receivableId, d.payableId, d.creditDebitNoteId, d.ivaRetentionId, d.customerIvaRetentionId,
+      d.retentionVoucherId, d.islrRetentionVoucherId, d.customerAdvanceId, d.supplierAdvanceId,
+      d.selectedAmountUsd, d.sign,
+    ]),
+    e: entityId, st: sourceTab, pl: selectedPlatform, sl: sellerId, n: notes, r: rate, rd: rateDate,
+  });
+  useEffect(() => {
+    if (!payModalOpen && draftId) { setDraftId(''); setDraftNumber(''); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
   // Process receipt
   const processReceipt = async () => {
     if (!draftId) return;
+    if (submittingRef.current) return; // evita doble posteo por doble-clic
     const validLines = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
     if (validLines.length === 0) return;
 
+    // Sobrepago: exige marcar el checkbox para dejar el excedente como anticipo.
+    const netAbsUsd = Math.abs(Math.round(totalUsd * 100) / 100);
+    const paidUsd = Math.round(validLines.reduce((s, l) => s + l.amountUsd, 0) * 100) / 100;
+    const excessUsd = Math.round((paidUsd - netAbsUsd) * 100) / 100;
+    if (excessUsd > 0.01 && !registerExcess) {
+      setMessage({ type: 'error', text: `Los pagos superan el saldo por $${excessUsd.toFixed(2)}. Marca "registrar excedente como anticipo" o corrige el monto.` });
+      return;
+    }
+
+    submittingRef.current = true;
     setProcessing(true);
     try {
       const res = await fetch(`/api/proxy/receipts/${draftId}/post`, {
@@ -616,6 +668,7 @@ export default function NewReceiptPage() {
             reference: l.reference || undefined,
           })),
           cashSessionId: selectedSessionId || undefined,
+          registerExcessAsAdvance: excessUsd > 0.01 ? registerExcess : undefined,
         }),
       });
       const json = await res.json();
@@ -625,6 +678,7 @@ export default function NewReceiptPage() {
       setTimeout(() => router.push(`/receipts/${draftId}`), 1500);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
+      submittingRef.current = false; // permite reintentar si fallo
     }
     setProcessing(false);
   };
@@ -1332,6 +1386,33 @@ export default function NewReceiptPage() {
                   <span className="text-white">${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}</span>
                 </div>
               </div>
+
+              {/* Sobrepago -> anticipo. Aparece solo si los pagos exceden el saldo. */}
+              {(() => {
+                const netAbs = Math.abs(Math.round(totalUsd * 100) / 100);
+                const paid = Math.round(paymentLines.reduce((s, l) => s + (l.amountUsd || 0), 0) * 100) / 100;
+                const excess = Math.round((paid - netAbs) * 100) / 100;
+                if (excess <= 0.01) return null;
+                return (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                    <div className="flex justify-between text-sm font-mono">
+                      <span className="text-amber-300">Excedente:</span>
+                      <span className="text-amber-300 font-bold">${fmt(excess)}</span>
+                    </div>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={registerExcess}
+                        onChange={(e) => setRegisterExcess(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-500"
+                      />
+                      <span className="text-xs text-amber-200">
+                        Registrar excedente como <b>anticipo {isCollection ? 'a favor del cliente' : 'al proveedor'}</b> (${fmt(excess)}). Quedara pendiente para aplicar mas adelante.
+                      </span>
+                    </label>
+                  </div>
+                );
+              })()}
 
               <button
                 onClick={processReceipt}

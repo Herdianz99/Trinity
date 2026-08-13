@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsArray, ValidateNested, IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ReceiptPaymentLineDto {
@@ -27,4 +27,10 @@ export class PostReceiptDto {
   @IsOptional()
   @IsString()
   cashSessionId?: string;
+
+  // Si los pagos exceden el saldo, registrar el excedente como anticipo (cliente si es cobro,
+  // proveedor si es pago). Debe venir en true para permitir el sobrepago; si no, se rechaza.
+  @IsOptional()
+  @IsBoolean()
+  registerExcessAsAdvance?: boolean;
 }

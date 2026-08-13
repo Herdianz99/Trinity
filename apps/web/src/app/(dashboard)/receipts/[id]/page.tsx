@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -118,7 +118,9 @@ export default function ReceiptDetailPage() {
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([]);
+  const [registerExcess, setRegisterExcess] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const submittingRef = useRef(false); // guard sincronico contra doble-posteo (doble-clic)
   const [todayRate, setTodayRate] = useState(0);
 
   const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -254,6 +256,7 @@ export default function ReceiptDetailPage() {
       amountBs: Math.round(netAbsUsd * todayRate * 100) / 100,
       reference: '',
     }]);
+    setRegisterExcess(false);
     setPayModalOpen(true);
   };
 
@@ -300,8 +303,20 @@ export default function ReceiptDetailPage() {
   };
 
   const processReceipt = async () => {
+    if (submittingRef.current) return; // evita doble posteo por doble-clic
     const validLines = paymentLines.filter((l) => l.methodId && l.amountUsd > 0);
     if (validLines.length === 0) return;
+
+    // Sobrepago: exige marcar el checkbox para dejar el excedente como anticipo.
+    const netAbsUsd = Math.abs(Math.round((receipt?.totalUsd || 0) * 100) / 100);
+    const paidUsd = Math.round(validLines.reduce((s, l) => s + l.amountUsd, 0) * 100) / 100;
+    const excessUsd = Math.round((paidUsd - netAbsUsd) * 100) / 100;
+    if (excessUsd > 0.01 && !registerExcess) {
+      setMessage({ type: 'error', text: `Los pagos superan el saldo por $${excessUsd.toFixed(2)}. Marca "registrar excedente como anticipo" o corrige el monto.` });
+      return;
+    }
+
+    submittingRef.current = true;
     setProcessing(true);
     try {
       const res = await fetch(`/api/proxy/receipts/${id}/post`, {
@@ -314,6 +329,7 @@ export default function ReceiptDetailPage() {
             amountBs: l.amountBs,
             reference: l.reference || undefined,
           })),
+          registerExcessAsAdvance: excessUsd > 0.01 ? registerExcess : undefined,
         }),
       });
       const json = await res.json();
@@ -323,6 +339,7 @@ export default function ReceiptDetailPage() {
       fetchReceipt();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
+      submittingRef.current = false; // permite reintentar si fallo
     }
     setProcessing(false);
   };
@@ -735,6 +752,33 @@ export default function ReceiptDetailPage() {
                   <span className="text-white">${fmt(paymentLines.reduce((s, l) => s + l.amountUsd, 0))}</span>
                 </div>
               </div>
+
+              {/* Sobrepago -> anticipo. Aparece solo si los pagos exceden el saldo. */}
+              {(() => {
+                const netAbs = Math.abs(Math.round((receipt?.totalUsd || 0) * 100) / 100);
+                const paid = Math.round(paymentLines.reduce((s, l) => s + (l.amountUsd || 0), 0) * 100) / 100;
+                const excess = Math.round((paid - netAbs) * 100) / 100;
+                if (excess <= 0.01) return null;
+                return (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                    <div className="flex justify-between text-sm font-mono">
+                      <span className="text-amber-300">Excedente:</span>
+                      <span className="text-amber-300 font-bold">${fmt(excess)}</span>
+                    </div>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={registerExcess}
+                        onChange={(e) => setRegisterExcess(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-500"
+                      />
+                      <span className="text-xs text-amber-200">
+                        Registrar excedente como <b>anticipo {isCollection ? 'a favor del cliente' : 'al proveedor'}</b> (${fmt(excess)}). Quedara pendiente para aplicar mas adelante.
+                      </span>
+                    </label>
+                  </div>
+                );
+              })()}
 
               <button
                 onClick={processReceipt}

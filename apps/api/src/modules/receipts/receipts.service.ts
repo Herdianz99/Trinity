@@ -243,7 +243,10 @@ export class ReceiptsService {
         items.push({
           itemType: 'RECEIVABLE',
           receivableId: item.receivableId,
-          description: receivable.invoice?.number || receivable.documentNumber || `CxC-${item.receivableId.slice(-6)}`,
+          // Prioridad: N° de factura -> N° de documento del usuario -> correlativo propio de la
+          // CxC (las manuales SIEMPRE tienen uno) -> ultimo recurso el id corto. Antes se saltaba
+          // receivable.number, por eso las CxC manuales sin documentNumber salian como "CxC-xxxx".
+          description: receivable.invoice?.number || receivable.documentNumber || receivable.number || `CxC-${item.receivableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -269,7 +272,7 @@ export class ReceiptsService {
           payableId: item.payableId,
           // N° de documento del PROVEEDOR primero; la "descripcion" (texto libre) solo como
           // ultimo recurso para CxP de gasto que no tienen documento de proveedor.
-          description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || payable.description || `CxP-${item.payableId.slice(-6)}`,
+          description: payable.documentNumber || payable.purchaseOrder?.supplierInvoiceNumber || payable.purchaseOrder?.number || payable.description || payable.number || `CxP-${item.payableId.slice(-6)}`,
           amountUsd,
           amountBsHistoric,
           amountBsToday,
@@ -555,7 +558,53 @@ export class ReceiptsService {
       );
     }
 
+    // Sobrepago: el cliente/proveedor paga MAS que el saldo. El excedente se registra como
+    // ANTICIPO (cliente en cobro, proveedor en pago), que queda AVAILABLE para aplicar despues.
+    // Requiere confirmacion explicita del cajero (registerExcessAsAdvance). No aplica a reintegros.
+    const excessUsd = this.round2(totalPaymentUsd - netAbsUsd);
+    const isReintegroPre = receipt.type === 'COLLECTION' && receipt.totalUsd < -0.01;
+    const makeAdvance = excessUsd > 0.01 && !isReintegroPre;
+    // Caja del anticipo: la que venga en el post o, si no, la sesion abierta del cajero
+    // (el flujo de procesar borrador no manda cashSessionId).
+    let advanceSessionId: string | undefined = dto.cashSessionId || undefined;
+    if (makeAdvance) {
+      if (!dto.registerExcessAsAdvance) {
+        throw new BadRequestException(
+          `Los pagos ($${this.round2(totalPaymentUsd).toFixed(2)}) superan el saldo ($${this.round2(netAbsUsd).toFixed(2)}) por $${excessUsd.toFixed(2)}. ` +
+            `Marca "registrar excedente como anticipo" para dejar ese saldo a favor, o corrige el monto.`,
+        );
+      }
+      if (receipt.type === 'COLLECTION' && !receipt.customerId) {
+        throw new BadRequestException('No se puede generar anticipo: el cobro no tiene un cliente asociado.');
+      }
+      if (receipt.type === 'PAYMENT' && !receipt.supplierId) {
+        throw new BadRequestException('No se puede generar anticipo: el pago no tiene un proveedor asociado.');
+      }
+      if (!advanceSessionId) {
+        const openSession = await this.prisma.cashSession.findFirst({
+          where: { openedById: userId, status: 'OPEN' },
+          select: { id: true },
+        });
+        if (!openSession) {
+          throw new BadRequestException('Para registrar el excedente como anticipo debe haber una caja abierta.');
+        }
+        advanceSessionId = openSession.id;
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
+      // Candado de fila: bloquea el recibo y RE-VALIDA el estado DENTRO de la transaccion.
+      // Sin esto, dos posteos concurrentes del mismo borrador (doble clic / doble pestana)
+      // leen ambos DRAFT afuera y lo procesan DOS veces (doble cobro). El FOR UPDATE serializa:
+      // el segundo espera, ve POSTED y se rechaza.
+      const locked = await tx.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "Receipt" WHERE id = ${id} FOR UPDATE
+      `;
+      if (!locked.length) throw new NotFoundException('Recibo no encontrado');
+      if (locked[0].status !== 'DRAFT') {
+        throw new BadRequestException('El recibo ya fue procesado (evitado doble cobro).');
+      }
+
       // Process each item
       for (const item of receipt.items) {
         if (item.itemType === 'RECEIVABLE' && item.receivableId && item.receivable) {
@@ -749,12 +798,73 @@ export class ReceiptsService {
         }
       }
 
+      // Sobrepago -> anticipo por el excedente. El dinero ya entro por los ReceiptPayment de
+      // arriba (ledger RECEIPT_COLLECTION/PAYMENT), asi que aqui NO se escribe ledger ni
+      // CashMovement: el anticipo es solo una reclasificacion contable (de cobro a saldo a
+      // favor del cliente / adelanto al proveedor), no dinero nuevo. Se agrega ademas una linea
+      // al recibo (itemType *_ADVANCE) para que el recibo quede cuadrado y documente el excedente.
+      let addTotalUsd = 0, addTotalBs = 0;
+      if (makeAdvance) {
+        // Metodo del anticipo = la linea de pago donde el acumulado CRUZA el saldo (la que
+        // sobrepasa). Ej.: $5 efectivo + $30 transferencia sobre $25 -> el excedente es de la
+        // transferencia, asi que el anticipo hereda ese metodo.
+        let acc = 0;
+        let advMethodId = dto.payments[dto.payments.length - 1]?.methodId || '';
+        for (const p of dto.payments) {
+          acc = this.round2(acc + p.amountUsd);
+          if (acc >= netAbsUsd - 0.01) { advMethodId = p.methodId; break; }
+        }
+        const excessBs = this.round2(excessUsd * postRate);
+        const docDate = receipt.documentDate ?? caracasDateKey();
+        const dir = receipt.totalUsd < 0 ? -1 : 1; // direccion del recibo (para cuadrar el total)
+        if (receipt.type === 'COLLECTION') {
+          const adv = await tx.customerAdvance.create({
+            data: {
+              customerId: receipt.customerId!, amountUsd: excessUsd, amountBs: excessBs,
+              exchangeRate: postRate, documentDate: docDate, methodId: advMethodId,
+              cashSessionId: advanceSessionId!, notes: `Excedente del recibo ${receipt.number}`,
+              createdById: userId,
+            },
+          });
+          await tx.receiptItem.create({
+            data: {
+              receiptId: receipt.id, itemType: 'CUSTOMER_ADVANCE', customerAdvanceId: adv.id,
+              description: 'Anticipo generado (excedente del pago)', amountUsd: excessUsd,
+              amountBsHistoric: excessBs, amountBsToday: excessBs, differentialBs: 0, sign: dir,
+            },
+          });
+        } else {
+          const adv = await tx.supplierAdvance.create({
+            data: {
+              supplierId: receipt.supplierId!, amountUsd: excessUsd, amountBs: excessBs,
+              exchangeRate: postRate, documentDate: docDate, methodId: advMethodId,
+              cashSessionId: advanceSessionId!, notes: `Excedente del recibo ${receipt.number}`,
+              createdById: userId,
+            },
+          });
+          await tx.receiptItem.create({
+            data: {
+              receiptId: receipt.id, itemType: 'SUPPLIER_ADVANCE', supplierAdvanceId: adv.id,
+              description: 'Anticipo generado (excedente del pago)', amountUsd: excessUsd,
+              amountBsHistoric: excessBs, amountBsToday: excessBs, differentialBs: 0, sign: dir,
+            },
+          });
+        }
+        addTotalUsd = this.round2(dir * excessUsd);
+        addTotalBs = this.round2(dir * excessBs);
+      }
+
       // Update receipt to POSTED
       const updated = await tx.receipt.update({
         where: { id },
         data: {
           status: 'POSTED',
           cashSessionId: dto.cashSessionId || null,
+          ...(makeAdvance ? {
+            totalUsd: this.round2(receipt.totalUsd + addTotalUsd),
+            totalBsHistoric: this.round2(receipt.totalBsHistoric + addTotalBs),
+            totalBsToday: this.round2(receipt.totalBsToday + addTotalBs),
+          } : {}),
         },
         include: {
           customer: true,
@@ -960,7 +1070,7 @@ export class ReceiptsService {
         // si no, es una CxP manual (gasto o CxP creada a mano).
         fromPurchase: !!p.purchaseOrder,
         payableId: p.id,
-        description: (p as any).documentNumber || p.purchaseOrder?.supplierInvoiceNumber || p.purchaseOrder?.number || (p as any).description || `CxP-${p.id.slice(-6)}`,
+        description: (p as any).documentNumber || p.purchaseOrder?.supplierInvoiceNumber || p.purchaseOrder?.number || (p as any).description || (p as any).number || `CxP-${p.id.slice(-6)}`,
         date: p.createdAt,
         dueDate: p.dueDate,
         amountUsd: p.netPayableUsd,
@@ -1147,7 +1257,7 @@ export class ReceiptsService {
         // Backward compat fields for existing frontend
         documentType: 'CxC',
         receivableId: r.id,
-        description: r.invoice?.number || (r as any).documentNumber || `CxC-${r.id.slice(-6)}`,
+        description: r.invoice?.number || (r as any).documentNumber || (r as any).number || `CxC-${r.id.slice(-6)}`,
         date: r.createdAt,
         amountBsHistoric: r.amountBs,
         exchangeRate: r.exchangeRate,

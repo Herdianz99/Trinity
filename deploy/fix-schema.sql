@@ -2631,3 +2631,17 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- Estado CANCELLED en CxC/CxP para la anulacion de ajustes de inventario. Ses. 2026-08-10.
 ALTER TYPE "ReceivableStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
 ALTER TYPE "PayableStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+
+-- Backfill idempotente: en el reporte/recibo, los items de CxC/CxP manuales sin factura ni
+-- "N° de documento" mostraban el id corto ("CxC-xxxxxx") en vez del correlativo propio de la
+-- CxC/CxP (el codigo de creacion se saltaba receivable.number/payable.number; ya corregido).
+-- Se reescribe la descripcion guardada al numero real. Solo toca filas con el fallback, asi que
+-- tras corregirlas no vuelve a afectar nada. Ses. 2026-08-13.
+UPDATE "ReceiptItem" ri SET description = rec."number"
+FROM "Receivable" rec
+WHERE ri."receivableId" = rec.id AND ri."itemType" = 'RECEIVABLE'
+  AND ri.description LIKE 'CxC-%' AND rec."number" IS NOT NULL;
+UPDATE "ReceiptItem" ri SET description = pay."number"
+FROM "Payable" pay
+WHERE ri."payableId" = pay.id AND ri."itemType" = 'PAYABLE'
+  AND ri.description LIKE 'CxP-%' AND pay."number" IS NOT NULL;
