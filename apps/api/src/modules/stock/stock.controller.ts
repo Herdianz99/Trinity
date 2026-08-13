@@ -64,9 +64,63 @@ export class StockController {
     });
   }
 
+  // Stock global agregado por producto, paginado + busqueda (para ~10k productos).
   @Get('global')
-  getGlobalStock() {
-    return this.stockService.getGlobalStock();
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'brega', required: false, enum: ['all', 'yes', 'no'] })
+  getGlobalStock(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('brega') brega?: 'all' | 'yes' | 'no',
+  ) {
+    return this.stockService.getGlobalStockPaged({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      search,
+      brega,
+    });
+  }
+
+  // Stock de un almacen especifico, paginado + busqueda.
+  @Get('by-warehouse')
+  @ApiQuery({ name: 'warehouseId', required: true })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'brega', required: false, enum: ['all', 'yes', 'no'] })
+  getStockByWarehouse(
+    @Query('warehouseId') warehouseId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('brega') brega?: 'all' | 'yes' | 'no',
+  ) {
+    return this.stockService.getStockByWarehousePaged({
+      warehouseId,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      search,
+      brega,
+    });
+  }
+
+  // Resumen valorizado (SUM en SQL) para los KPIs, sin traer todas las filas.
+  @Get('valuation-summary')
+  @ApiQuery({ name: 'brega', required: false, enum: ['all', 'yes', 'no'] })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  getValuationSummary(
+    @Query('brega') brega?: 'all' | 'yes' | 'no',
+    @Query('warehouseId') warehouseId?: string,
+  ) {
+    return this.stockService.getValuationSummary({ brega, warehouseId });
+  }
+
+  @Get('low-count')
+  getLowStockCount() {
+    return this.stockService.getLowStockCount();
   }
 
   @Get('low')

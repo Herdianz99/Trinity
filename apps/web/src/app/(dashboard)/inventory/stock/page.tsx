@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BoxesIcon, AlertTriangle, Loader2, X, ArrowUpDown, Activity, Printer, ChevronDown,
+  Search, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -55,6 +56,14 @@ export default function StockPage() {
   const [globalStock, setGlobalStock] = useState<GlobalStock[]>([]);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [exchangeRate, setExchangeRate] = useState(0);
+  // Paginacion + busqueda server-side (la grande tiene ~10k productos)
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  // KPIs valorizados: se calculan con SUM en SQL (todo el inventario), no fila por fila
+  const [valuation, setValuation] = useState({ products: 0, units: 0, sumCostUsd: 0, sumCostBregaBase: 0 });
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
   // Valorar el inventario con el costo solo, o con costo + brecha (en productos que llevan brecha).
   // Por defecto arranca en "brecha" (costo + brecha), que es la valuacion que el negocio mira.
@@ -78,31 +87,48 @@ export default function StockPage() {
   const fetchStock = useCallback(async () => {
     setLoading(true);
     try {
+      const qs = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+        brega: bregaFilter,
+      });
+      if (search) qs.set('search', search);
       if (selectedWarehouse === 'all') {
-        const res = await fetch('/api/proxy/stock/global');
+        const res = await fetch(`/api/proxy/stock/global?${qs}`);
         if (res.ok) {
           const data = await res.json();
-          setGlobalStock(data);
+          setGlobalStock(data.items || []);
           setStockItems([]);
+          setTotal(data.total || 0);
         }
       } else {
-        const res = await fetch(`/api/proxy/stock?warehouseId=${selectedWarehouse}`);
+        qs.set('warehouseId', selectedWarehouse);
+        const res = await fetch(`/api/proxy/stock/by-warehouse?${qs}`);
         if (res.ok) {
           const data = await res.json();
-          setStockItems(data);
+          setStockItems(data.items || []);
           setGlobalStock([]);
+          setTotal(data.total || 0);
         }
-      }
-      // Low stock count
-      const lowRes = await fetch('/api/proxy/stock/low');
-      if (lowRes.ok) {
-        const lowData = await lowRes.json();
-        setLowStockCount(lowData.length);
       }
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [selectedWarehouse]);
+  }, [selectedWarehouse, page, search, bregaFilter]);
+
+  // KPIs valorizados + banner de stock bajo: independientes de la paginacion/busqueda.
+  const fetchValuation = useCallback(async () => {
+    try {
+      const qs = new URLSearchParams({ brega: bregaFilter });
+      if (selectedWarehouse !== 'all') qs.set('warehouseId', selectedWarehouse);
+      const res = await fetch(`/api/proxy/stock/valuation-summary?${qs}`);
+      if (res.ok) setValuation(await res.json());
+    } catch { /* ignore */ }
+    try {
+      const lowRes = await fetch('/api/proxy/stock/low-count');
+      if (lowRes.ok) { const d = await lowRes.json(); setLowStockCount(d.count || 0); }
+    } catch { /* ignore */ }
+  }, [selectedWarehouse, bregaFilter]);
 
   const fetchConfig = useCallback(async () => {
     const res = await fetch('/api/proxy/exchange-rate/today');
@@ -119,6 +145,16 @@ export default function StockPage() {
   useEffect(() => { document.title = 'Inventario | Trinity ERP'; }, []);
   useEffect(() => { fetchWarehouses(); fetchConfig(); }, [fetchWarehouses, fetchConfig]);
   useEffect(() => { fetchStock(); }, [fetchStock]);
+  useEffect(() => { fetchValuation(); }, [fetchValuation]);
+  // Debounce de la busqueda (300ms) -> vuelve a la pagina 1
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  // Cambiar almacen o filtro de brecha reinicia a la pagina 1
+  useEffect(() => { setPage(1); }, [selectedWarehouse, bregaFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function openAdjust(productId: string, productName: string, currentStock: number) {
     setAdjustModal({ productId, productName, currentStock });
@@ -149,6 +185,7 @@ export default function StockPage() {
       if (res.ok) {
         setAdjustModal(null);
         fetchStock();
+        fetchValuation();
         setMessage({ type: 'success', text: 'Ajuste realizado correctamente' });
       } else {
         const err = await res.json().catch(() => ({}));
@@ -169,16 +206,16 @@ export default function StockPage() {
       : base;
   }
 
-  // Filtro por brecha aplicado a la lista mostrada (afecta tabla y KPIs valorizados)
-  const matchesBrega = (p: { bregaApplies?: boolean }) =>
-    bregaFilter === 'all' ? true : bregaFilter === 'yes' ? !!p.bregaApplies : !p.bregaApplies;
-  const displayGlobal = globalStock.filter(i => matchesBrega(i.product));
-  const displayItems = stockItems.filter(i => matchesBrega(i.product));
+  // El filtrado por brecha y la busqueda ya se hacen server-side; la lista mostrada
+  // es directamente lo que devolvio la pagina actual.
+  const displayGlobal = globalStock;
+  const displayItems = stockItems;
 
-  // Compute valuation
-  const totalValuationUsd = selectedWarehouse === 'all'
-    ? displayGlobal.reduce((sum, item) => sum + item.totalStock * effectiveCost(item.product), 0)
-    : displayItems.reduce((sum, item) => sum + item.quantity * effectiveCost(item.product), 0);
+  // Valorizacion TOTAL del inventario (todo, no solo la pagina): viene de un SUM en SQL.
+  // costBrega = suma de costos + la porcion con brecha multiplicada por el % global.
+  const totalValuationUsd = valuationMode === 'costBrega'
+    ? valuation.sumCostUsd + valuation.sumCostBregaBase * (bregaGlobalPct / 100)
+    : valuation.sumCostUsd;
   const totalValuationBs = totalValuationUsd * exchangeRate;
 
   function getStockStatus(qty: number, minStock: number) {
@@ -327,16 +364,13 @@ export default function StockPage() {
           <div>
             <p className="text-xs text-slate-500 uppercase">Productos</p>
             <p className="text-xl font-bold text-white font-mono">
-              {selectedWarehouse === 'all' ? displayGlobal.length : displayItems.length}
+              {valuation.products.toLocaleString()}
             </p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase">Unidades totales</p>
             <p className="text-xl font-bold text-white font-mono">
-              {selectedWarehouse === 'all'
-                ? displayGlobal.reduce((s, i) => s + i.totalStock, 0).toLocaleString()
-                : displayItems.reduce((s, i) => s + i.quantity, 0).toLocaleString()
-              }
+              {valuation.units.toLocaleString()}
             </p>
           </div>
           <div>
@@ -350,6 +384,31 @@ export default function StockPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Buscador */}
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Buscar por codigo o nombre..."
+            className="input-field !py-2.5 !pl-10 text-sm w-full"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 whitespace-nowrap">
+          {total.toLocaleString()} resultado{total === 1 ? '' : 's'}
+        </p>
       </div>
 
       {/* Stock table */}
@@ -458,6 +517,33 @@ export default function StockPage() {
             </tbody>
           </table>
         </div>
+        {/* Paginacion */}
+        {!loading && total > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-700/50">
+            <p className="text-xs text-slate-500">
+              Pagina {page} de {totalPages} · {total.toLocaleString()} productos
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="px-3 text-sm text-slate-300 font-mono">{page}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Adjust modal */}
