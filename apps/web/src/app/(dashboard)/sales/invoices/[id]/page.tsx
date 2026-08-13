@@ -71,6 +71,7 @@ interface Payment {
   igtfBs: number;
   changeAmountBs: number;
   changeMethod: { name: string } | null;
+  cashRegister: { id: string; name: string; code: string } | null;
   createdAt: string;
 }
 
@@ -967,6 +968,7 @@ export default function InvoiceDetailPage() {
                   <thead>
                     <tr className="border-b border-slate-700/50">
                       <th className="text-left px-4 py-3 text-slate-400 font-medium">Metodo</th>
+                      <th className="text-left px-4 py-3 text-slate-400 font-medium">Caja</th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto USD</th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium">Monto Bs</th>
                       <th className="text-right px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Tasa</th>
@@ -990,6 +992,9 @@ export default function InvoiceDetailPage() {
                               {paymentMethodOptions(p).map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
                           ) : (p.method?.name || 'Metodo')}
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {p.cashRegister ? p.cashRegister.name : <span className="text-slate-500" title="No afecto ninguna caja">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-white">${p.amountUsd?.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-300">Bs {p.amountBs?.toFixed(2)}</td>
@@ -1016,7 +1021,7 @@ export default function InvoiceDetailPage() {
                       <td className="px-4 py-3 text-slate-400 font-medium">Total cobrado</td>
                       <td className="px-4 py-3 text-right font-mono font-bold text-white">${totalPaymentsUsd.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right font-mono font-bold text-slate-300">Bs {totalPaymentsBs.toFixed(2)}</td>
-                      <td colSpan={4}></td>
+                      <td colSpan={invoice.payments.some(pp => pp.igtfUsd > 0) ? 5 : 4}></td>
                     </tr>
                   </tfoot>
                 </table>

@@ -213,8 +213,33 @@ export class InvoicesService {
     const codeMap = new Map(products.map(p => [p.id, p.code]));
     const priceMap = new Map(products.map(p => [p.id, p.priceDetal]));
 
+    // Caja de cada pago: el pago NO guarda cashSessionId, pero el libro mayor de caja
+    // (CashLedgerEntry) si — al cobrar se escribio una fila SALE_PAYMENT por metodo con la
+    // sesion abierta. Todas las lineas de una factura comparten la misma sesion/caja, y la
+    // correccion de metodos mueve el methodId de la fila del ledger en sitio, asi que el
+    // mapeo por methodId es fiable. Si no hay fila (factura vieja sin ledger) -> null (—).
+    const saleLedger = await this.prisma.cashLedgerEntry.findMany({
+      where: { sourceId: id, sourceType: 'SALE_PAYMENT' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        methodId: true,
+        cashSession: { select: { cashRegister: { select: { id: true, name: true, code: true } } } },
+      },
+    });
+    const regByMethod = new Map<string, { id: string; name: string; code: string }>();
+    for (const e of saleLedger) {
+      if (e.methodId && e.cashSession?.cashRegister && !regByMethod.has(e.methodId)) {
+        regByMethod.set(e.methodId, e.cashSession.cashRegister);
+      }
+    }
+    const fallbackReg = saleLedger[0]?.cashSession?.cashRegister ?? null;
+
     return {
       ...invoice,
+      payments: invoice.payments.map(p => ({
+        ...p,
+        cashRegister: (p.methodId && regByMethod.get(p.methodId)) || fallbackReg || null,
+      })),
       items: invoice.items.map(item => ({
         ...item,
         productCode: codeMap.get(item.productId) || null,

@@ -55,6 +55,7 @@ interface Receipt {
   createdAt: string;
   seller: { id: string; code: string; name: string } | null;
   createdBy: { id: string; name: string } | null;
+  cashRegister: { id: string; name: string; code: string } | null;
 }
 
 interface PaymentMethodData {
@@ -550,6 +551,7 @@ export default function ReceiptDetailPage() {
                 <thead>
                   <tr className="border-b border-slate-700/50">
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Metodo</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Caja</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">USD</th>
                     <th className="text-right px-4 py-3 text-slate-400 font-medium">Bs</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Referencia</th>
@@ -560,6 +562,9 @@ export default function ReceiptDetailPage() {
                   {receipt.payments.map((p) => (
                     <tr key={p.id} className="border-b border-slate-700/30">
                       <td className="px-4 py-3 text-white">{p.method?.name || '—'}</td>
+                      <td className="px-4 py-3 text-slate-300">
+                        {receipt.cashRegister ? receipt.cashRegister.name : <span className="text-slate-500" title="No afecto ninguna caja">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-right text-white font-mono">${fmt(p.amountUsd)}</td>
                       <td className="px-4 py-3 text-right text-slate-300 font-mono">{fmt(p.amountBs)} Bs</td>
                       <td className="px-4 py-3 text-slate-400">{p.reference || '—'}</td>

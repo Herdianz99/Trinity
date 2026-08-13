@@ -169,7 +169,17 @@ export class ReceiptsService {
     const platformName = receipt.customerId
       ? null
       : (receipt.items.find((it) => it.receivable?.platformName)?.receivable?.platformName ?? null);
-    return { ...receipt, platformName, createdBy: creator };
+    // Caja del recibo: cashSessionId es solo columna (sin relacion Prisma), se resuelve el
+    // registro a mano. Si el recibo no toco caja (cashSessionId null) -> cashRegister null (—).
+    let cashRegister: { id: string; name: string; code: string } | null = null;
+    if (receipt.cashSessionId) {
+      const cs = await this.prisma.cashSession.findUnique({
+        where: { id: receipt.cashSessionId },
+        select: { cashRegister: { select: { id: true, name: true, code: true } } },
+      });
+      cashRegister = cs?.cashRegister ?? null;
+    }
+    return { ...receipt, platformName, createdBy: creator, cashRegister };
   }
 
   async create(dto: CreateReceiptDto, userId: string) {
