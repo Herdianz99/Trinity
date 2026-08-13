@@ -933,6 +933,9 @@ export class ReceiptsService {
     await this.prisma.$transaction(async (tx) => {
       const receivableIds = new Set<string>();
       const payableIds = new Set<string>();
+      // Anticipos GENERADOS por este recibo (excedente): se borran al final, tras quitar los
+      // items que los referencian (si ya se aplicaron a otro doc, se bloquea la eliminacion).
+      const advancesToDelete = { customer: [] as string[], supplier: [] as string[] };
 
       // 1) Revertir cada item a su estado previo
       for (const item of receipt.items) {
@@ -957,16 +960,37 @@ export class ReceiptsService {
         } else if (item.itemType === 'CUSTOMER_ADVANCE' && item.customerAdvanceId) {
           const adv = await tx.customerAdvance.findUnique({ where: { id: item.customerAdvanceId } });
           if (adv) {
-            const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
-            const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
-            await tx.customerAdvance.update({ where: { id: item.customerAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+            if ((item.sign || 1) > 0) {
+              // El recibo GENERO este anticipo (excedente). Si ya se aplico a otro documento no
+              // se puede eliminar (romperia ese doc); si sigue intacto, se borra con el recibo.
+              if (adv.paidAmountUsd > 0.01) {
+                throw new BadRequestException(
+                  `No se puede eliminar: el anticipo generado por este recibo ($${this.round2(adv.amountUsd).toFixed(2)}) ya fue aplicado a otro documento. Revierte primero esa aplicacion.`,
+                );
+              }
+              advancesToDelete.customer.push(item.customerAdvanceId);
+            } else {
+              // El recibo CONSUMIO un anticipo existente -> devolver el credito.
+              const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
+              const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
+              await tx.customerAdvance.update({ where: { id: item.customerAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+            }
           }
         } else if (item.itemType === 'SUPPLIER_ADVANCE' && item.supplierAdvanceId) {
           const adv = await tx.supplierAdvance.findUnique({ where: { id: item.supplierAdvanceId } });
           if (adv) {
-            const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
-            const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
-            await tx.supplierAdvance.update({ where: { id: item.supplierAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+            if ((item.sign || 1) > 0) {
+              if (adv.paidAmountUsd > 0.01) {
+                throw new BadRequestException(
+                  `No se puede eliminar: el anticipo generado por este recibo ($${this.round2(adv.amountUsd).toFixed(2)}) ya fue aplicado a otro documento. Revierte primero esa aplicacion.`,
+                );
+              }
+              advancesToDelete.supplier.push(item.supplierAdvanceId);
+            } else {
+              const paidUsd = this.round2(Math.max(0, adv.paidAmountUsd - item.amountUsd));
+              const paidBs = this.round2(Math.max(0, adv.paidAmountBs - item.amountBsHistoric));
+              await tx.supplierAdvance.update({ where: { id: item.supplierAdvanceId }, data: { paidAmountUsd: paidUsd, paidAmountBs: paidBs, status: paidUsd < 0.01 ? 'AVAILABLE' : 'PARTIAL' } });
+            }
           }
         }
       }
@@ -1001,6 +1025,14 @@ export class ReceiptsService {
       // 6) Borrar el recibo
       await tx.receiptPayment.deleteMany({ where: { receiptId: id } });
       await tx.receiptItem.deleteMany({ where: { receiptId: id } });
+      // Anticipos generados por el excedente de ESTE recibo: se borran ahora que ya no hay
+      // items apuntandolos (solo llegan aqui los que seguian intactos, sin aplicar).
+      if (advancesToDelete.customer.length) {
+        await tx.customerAdvance.deleteMany({ where: { id: { in: advancesToDelete.customer } } });
+      }
+      if (advancesToDelete.supplier.length) {
+        await tx.supplierAdvance.deleteMany({ where: { id: { in: advancesToDelete.supplier } } });
+      }
       await tx.receipt.delete({ where: { id } });
     });
 
