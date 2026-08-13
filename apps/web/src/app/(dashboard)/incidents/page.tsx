@@ -20,8 +20,7 @@ interface Incident {
   severity: string;
   occurredAt: string;
   createdBy: { name: string } | null;
-  photoThumbUrl: string | null;
-  photoMediumUrl: string | null;
+  photos: { id: string; thumbUrl: string; mediumUrl: string }[];
 }
 interface Summary {
   total: number;
@@ -62,8 +61,9 @@ export default function IncidentsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ typeId: '', severity: 'MEDIUM', involvedName: '', occurredAt: '', description: '' });
-  const [photo, setPhoto] = useState<string | null>(null); // data URI de la foto a subir
+  const [photos, setPhotos] = useState<string[]>([]); // data URIs de las fotos a subir (varias)
   const [photoErr, setPhotoErr] = useState('');
+  const MAX_PHOTOS = 8;
   const [lightbox, setLightbox] = useState<string | null>(null); // URL medium en el lightbox
 
   useEffect(() => { document.title = 'Incidencias | Trinity ERP'; }, []);
@@ -126,7 +126,7 @@ export default function IncidentsPage() {
 
   function openCreate() {
     setForm({ typeId: types[0]?.id || '', severity: 'MEDIUM', involvedName: '', occurredAt: nowLocalDatetime(), description: '' });
-    setPhoto(null);
+    setPhotos([]);
     setPhotoErr('');
     setModalOpen(true);
   }
@@ -153,17 +153,25 @@ export default function IncidentsPage() {
   }
 
   async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = ''; // permite re-seleccionar el mismo archivo
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { setPhotoErr('El archivo debe ser una imagen'); return; }
-    if (file.size > 25 * 1024 * 1024) { setPhotoErr('La imagen no debe superar 25 MB'); return; }
+    if (!files.length) return;
     setPhotoErr('');
-    try {
-      setPhoto(await compressImage(file));
-    } catch {
-      setPhotoErr('No se pudo procesar la imagen');
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { setPhotoErr(`Máximo ${MAX_PHOTOS} fotos por incidencia`); return; }
+    const toAdd = files.slice(0, room);
+    if (files.length > room) setPhotoErr(`Solo se agregaron ${room}; el máximo es ${MAX_PHOTOS} fotos`);
+    const compressed: string[] = [];
+    for (const file of toAdd) {
+      if (!file.type.startsWith('image/')) { setPhotoErr('Todos los archivos deben ser imágenes'); continue; }
+      if (file.size > 25 * 1024 * 1024) { setPhotoErr('Cada imagen debe pesar menos de 25 MB'); continue; }
+      try {
+        compressed.push(await compressImage(file));
+      } catch {
+        setPhotoErr('No se pudo procesar una de las imágenes');
+      }
     }
+    if (compressed.length) setPhotos((prev) => [...prev, ...compressed]);
   }
 
   async function submit() {
@@ -183,7 +191,7 @@ export default function IncidentsPage() {
           severity: form.severity,
           // datetime-local es hora Caracas -> le agrego el offset -04:00 para el instante correcto
           occurredAt: form.occurredAt ? `${form.occurredAt}:00-04:00` : undefined,
-          photo: photo || undefined,
+          photos: photos.length ? photos : undefined,
         }),
       });
       if (!res.ok) {
@@ -332,11 +340,15 @@ export default function IncidentsPage() {
                   <div className="text-sm text-slate-200"><span className="text-slate-500">Tipo:</span> {i.type?.name || '—'}</div>
                   {i.involvedName && <div className="text-sm text-slate-300"><span className="text-slate-500">Involucrado:</span> {i.involvedName}</div>}
                   <div className="text-sm text-slate-300 whitespace-pre-wrap break-words">{i.description}</div>
-                  {i.photoThumbUrl && (
-                    <button type="button" onClick={() => setLightbox(i.photoMediumUrl)} className="mt-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={i.photoThumbUrl} alt={`Foto ${i.number}`} className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
-                    </button>
+                  {i.photos?.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {i.photos.map((p) => (
+                        <button key={p.id} type="button" onClick={() => setLightbox(p.mediumUrl)}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.thumbUrl} alt={`Foto ${i.number}`} className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
+                        </button>
+                      ))}
+                    </div>
                   )}
                   <div className="text-[11px] text-slate-500">Registró: {i.createdBy?.name || '—'}</div>
                 </div>
@@ -368,14 +380,18 @@ export default function IncidentsPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-300">{i.involvedName || '—'}</td>
                       <td className="px-4 py-3 text-slate-300 max-w-[360px]">{i.description}</td>
-                      <td className="px-4 py-3 text-center">
-                        {i.photoThumbUrl ? (
-                          <button type="button" onClick={() => setLightbox(i.photoMediumUrl)} className="inline-block align-middle" title="Ver foto">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={i.photoThumbUrl} alt={`Foto ${i.number}`} className="h-11 w-11 object-cover rounded-md border border-slate-700 hover:border-red-400 transition-colors" />
-                          </button>
+                      <td className="px-4 py-3">
+                        {i.photos?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 justify-center max-w-[120px] mx-auto">
+                            {i.photos.map((p) => (
+                              <button key={p.id} type="button" onClick={() => setLightbox(p.mediumUrl)} title="Ver foto">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={p.thumbUrl} alt={`Foto ${i.number}`} className="h-9 w-9 object-cover rounded-md border border-slate-700 hover:border-red-400 transition-colors" />
+                              </button>
+                            ))}
+                          </div>
                         ) : (
-                          <ImageIcon size={16} className="text-slate-600 inline-block" />
+                          <ImageIcon size={16} className="text-slate-600 inline-block mx-auto" />
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{i.createdBy?.name || '—'}</td>
@@ -445,22 +461,27 @@ export default function IncidentsPage() {
                   placeholder="Describe lo ocurrido…" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Foto (opcional)</label>
-                {photo ? (
-                  <div className="relative inline-block">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo} alt="Vista previa" className="h-32 w-32 object-cover rounded-lg border border-slate-700" />
-                    <button type="button" onClick={() => setPhoto(null)}
-                      className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg" title="Quitar foto">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex items-center justify-center gap-2 h-24 rounded-lg border border-dashed border-slate-700 bg-slate-800/50 text-slate-400 text-sm cursor-pointer hover:border-slate-600 hover:text-slate-300 transition-colors">
-                    <ImagePlus size={18} /> Agregar foto
-                    <input type="file" accept="image/*" onChange={onPickPhoto} className="hidden" />
-                  </label>
-                )}
+                <label className="block text-xs text-slate-400 mb-1">
+                  Fotos (opcional){photos.length > 0 && ` · ${photos.length}/${MAX_PHOTOS}`}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {photos.map((p, idx) => (
+                    <div key={idx} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p} alt={`Vista previa ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-slate-700" />
+                      <button type="button" onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== idx))}
+                        className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg" title="Quitar foto">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {photos.length < MAX_PHOTOS && (
+                    <label className="flex flex-col items-center justify-center gap-1 h-24 w-24 rounded-lg border border-dashed border-slate-700 bg-slate-800/50 text-slate-400 text-xs cursor-pointer hover:border-slate-600 hover:text-slate-300 transition-colors">
+                      <ImagePlus size={18} /> Agregar
+                      <input type="file" accept="image/*" multiple onChange={onPickPhoto} className="hidden" />
+                    </label>
+                  )}
+                </div>
                 {photoErr && <p className="text-xs text-red-400 mt-1">{photoErr}</p>}
               </div>
               <button onClick={submit} disabled={saving || !form.typeId || !form.description.trim()}

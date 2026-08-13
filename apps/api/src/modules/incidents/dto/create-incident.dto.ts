@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsIn, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsIn, IsDateString, MaxLength, IsArray, ArrayMaxSize } from 'class-validator';
 
 export class CreateIncidentDto {
   @IsString()
@@ -23,8 +23,15 @@ export class CreateIncidentDto {
   @IsDateString()
   occurredAt?: string;
 
-  // Foto opcional (una sola) como data URI base64 ("data:image/jpeg;base64,...").
-  // Se procesa a thumb+medium webp y se sube a Spaces al crear.
+  // Fotos opcionales (varias) como data URIs base64 ("data:image/jpeg;base64,...").
+  // Cada una se procesa a thumb+medium webp y se sube a Spaces al crear. Máximo 8.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsString({ each: true })
+  photos?: string[];
+
+  // LEGACY: foto única. Se mantiene por compatibilidad; si llega, se trata como 1 foto.
   @IsOptional()
   @IsString()
   photo?: string;

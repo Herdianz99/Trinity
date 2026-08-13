@@ -14,12 +14,19 @@ export class IncidentsService {
     private readonly spaces: SpacesService,
   ) {}
 
-  // Agrega las URLs de CDN de la foto (si tiene) a una incidencia.
-  private withPhotoUrls<T extends { photoThumbKey?: string | null; photoMediumKey?: string | null }>(inc: T) {
+  // Agrega el arreglo `photos` (con URLs de CDN) a una incidencia a partir de sus adjuntos.
+  private withPhotoUrls<
+    T extends { attachments?: { id: string; thumbKey: string; mediumKey: string }[] },
+  >(inc: T) {
+    const atts = inc.attachments || [];
+    const { attachments, ...rest } = inc as any;
     return {
-      ...inc,
-      photoThumbUrl: inc.photoThumbKey ? this.spaces.cdnUrl(inc.photoThumbKey) : null,
-      photoMediumUrl: inc.photoMediumKey ? this.spaces.cdnUrl(inc.photoMediumKey) : null,
+      ...rest,
+      photos: atts.map((a) => ({
+        id: a.id,
+        thumbUrl: this.spaces.cdnUrl(a.thumbKey),
+        mediumUrl: this.spaces.cdnUrl(a.mediumKey),
+      })),
     };
   }
 
@@ -82,7 +89,14 @@ export class IncidentsService {
     const [data, total] = await Promise.all([
       this.prisma.incident.findMany({
         where,
-        include: { type: { select: { id: true, name: true } }, createdBy: { select: { name: true } } },
+        include: {
+          type: { select: { id: true, name: true } },
+          createdBy: { select: { name: true } },
+          attachments: {
+            select: { id: true, thumbKey: true, mediumKey: true },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
         orderBy: { occurredAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -116,28 +130,34 @@ export class IncidentsService {
     if (!type) throw new BadRequestException('Tipo de incidencia no encontrado');
     const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
 
-    // Foto opcional: se valida y sube a Spaces ANTES de crear la fila (mismo patrón que
-    // product-images). Si la creación falla después, se compensan los objetos huérfanos.
-    let photoThumbKey: string | null = null;
-    let photoMediumKey: string | null = null;
-    if (dto.photo) {
-      let processed;
-      try {
-        processed = await processProductImage(dataUriToBuffer(dto.photo));
-      } catch {
-        throw new BadRequestException('La foto no es una imagen válida');
-      }
-      const stamp = Date.now().toString(36);
-      const rand = Math.random().toString(36).slice(2, 8);
-      photoThumbKey = `incidents/${stamp}-${rand}-thumb.webp`;
-      photoMediumKey = `incidents/${stamp}-${rand}-medium.webp`;
-      await Promise.all([
-        this.spaces.uploadPublic(photoThumbKey, processed.thumb, 'image/webp'),
-        this.spaces.uploadPublic(photoMediumKey, processed.medium, 'image/webp'),
-      ]);
+    // Fotos opcionales (varias): se validan y suben a Spaces ANTES de crear la fila (mismo
+    // patrón que product-images). Si la creación falla después, se compensan los objetos
+    // huérfanos. Se acepta `photos` (nuevo) o `photo` (legacy, una sola).
+    const rawPhotos = dto.photos?.length ? dto.photos : dto.photo ? [dto.photo] : [];
+    if (rawPhotos.length > 8) {
+      throw new BadRequestException('Máximo 8 fotos por incidencia');
     }
 
+    const uploaded: { thumbKey: string; mediumKey: string }[] = [];
     try {
+      for (const photo of rawPhotos) {
+        let processed;
+        try {
+          processed = await processProductImage(dataUriToBuffer(photo));
+        } catch {
+          throw new BadRequestException('Una de las fotos no es una imagen válida');
+        }
+        const stamp = Date.now().toString(36);
+        const rand = Math.random().toString(36).slice(2, 8);
+        const thumbKey = `incidents/${stamp}-${rand}-thumb.webp`;
+        const mediumKey = `incidents/${stamp}-${rand}-medium.webp`;
+        await Promise.all([
+          this.spaces.uploadPublic(thumbKey, processed.thumb, 'image/webp'),
+          this.spaces.uploadPublic(mediumKey, processed.medium, 'image/webp'),
+        ]);
+        uploaded.push({ thumbKey, mediumKey });
+      }
+
       const incident = await this.prisma.$transaction(async (tx) => {
         // Correlativo INC-XXXX (los números vienen zero-padded → orden desc por número sirve).
         const last = await tx.incident.findFirst({ orderBy: { number: 'desc' }, select: { number: true } });
@@ -152,18 +172,21 @@ export class IncidentsService {
             involvedName: dto.involvedName?.trim() || null,
             severity: dto.severity || 'MEDIUM',
             occurredAt,
-            photoThumbKey,
-            photoMediumKey,
             createdById: userId,
+            attachments: { create: uploaded },
           },
-          include: { type: { select: { name: true } }, createdBy: { select: { name: true } } },
+          include: {
+            type: { select: { name: true } },
+            createdBy: { select: { name: true } },
+            attachments: { select: { id: true, thumbKey: true, mediumKey: true }, orderBy: { createdAt: 'asc' } },
+          },
         });
       });
       return this.withPhotoUrls(incident);
     } catch (e) {
-      if (photoThumbKey && photoMediumKey) {
-        await Promise.all([this.spaces.delete(photoThumbKey), this.spaces.delete(photoMediumKey)]);
-      }
+      await Promise.all(
+        uploaded.flatMap((u) => [this.spaces.delete(u.thumbKey), this.spaces.delete(u.mediumKey)]),
+      );
       throw e;
     }
   }
