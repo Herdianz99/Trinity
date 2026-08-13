@@ -606,8 +606,9 @@ export class IslrRetentionVouchersService {
   // XML de retenciones de ISLR para el portal SENIAT (RelacionRetencionesISLR), declaracion mensual.
   // Una fila (DetalleRetencion) por cada factura del comprobante emitido en el rango.
   // Reproduce el formato de Wensoft: sin declaracion <?xml?>, saltos CRLF, indentado con tabs.
-  // OJO: <MontoOperacion> = monto retenido BRUTO (base x baseImpPct% x retPct%) SIN redondear,
-  // no la base imponible. Asi lo emite Wensoft (verificado contra comprobantes 24/25/26).
+  // OJO: <MontoOperacion> = monto retenido BRUTO (base x baseImpPct% x retPct%), no la base
+  // imponible. Asi lo emite Wensoft (verificado contra comprobantes 24/25/26). El portal
+  // SENIAT exige exactamente 2 decimales, asi que se formatea con toFixed(2).
   async generateIslrXml(
     from: string,
     to: string,
@@ -642,8 +643,9 @@ export class IslrRetentionVouchersService {
     const detalles: string[] = [];
     for (const v of vouchers) {
       const supplierRif = this.normalizeRif(v.supplier?.rif);
+      // SENIAT valida dd/mm/yyyy con dia y mes de 2 digitos (ceros delante): 04/08/2026.
       const fecha = v.issueDate
-        ? `${v.issueDate.getUTCDate()}/${v.issueDate.getUTCMonth() + 1}/${v.issueDate.getUTCFullYear()}`
+        ? `${String(v.issueDate.getUTCDate()).padStart(2, '0')}/${String(v.issueDate.getUTCMonth() + 1).padStart(2, '0')}/${v.issueDate.getUTCFullYear()}`
         : '';
       for (const line of v.lines) {
         // Monto retenido bruto (sin sustraendo, sin redondeo) = base x baseImpPct% x retPct%.
@@ -658,7 +660,7 @@ export class IslrRetentionVouchersService {
             `\t\t<NumeroControl>${this.escapeXml(v.number)}</NumeroControl>`,
             `\t\t<FechaOperacion>${fecha}</FechaOperacion>`,
             `\t\t<CodigoConcepto>${this.escapeXml(codigo)}</CodigoConcepto>`,
-            `\t\t<MontoOperacion>${this.trimNum(montoOperacion)}</MontoOperacion>`,
+            `\t\t<MontoOperacion>${montoOperacion.toFixed(2)}</MontoOperacion>`,
             `\t\t<PorcentajeRetencion>${this.trimNum(line.retentionPct)}</PorcentajeRetencion>`,
             '\t</DetalleRetencion>',
           ].join('\r\n'),
