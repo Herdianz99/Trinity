@@ -351,6 +351,7 @@ model User {
   dispatchesCreated   Dispatch[]          @relation("DispatchCreator")
   dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
   incidentsCreated    Incident[]          @relation("IncidentCreator")
+  purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -819,6 +820,7 @@ model PurchaseOrder {
   retentionVoucherLines     RetentionVoucherLine[]
   islrRetentionVoucherLines IslrRetentionVoucherLine[]
   purchaseBookEntries       PurchaseBookEntry[]
+  attachments               PurchaseAttachment[]
   createdById           String
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
@@ -867,6 +869,24 @@ model PurchaseOrderItem {
   netCostBs       Float         @default(0)
   landedCostUsd   Float         @default(0)
   landedCostBs    Float         @default(0)
+}
+
+// Imágenes adjuntas a una factura de compra (foto/escaneo de la factura física que
+// entregó el proveedor). Se procesan a thumb + versión legible (~1600px) en WebP y se
+// suben a Spaces, igual que la foto de incidencias. Se pueden cargar en cualquier
+// momento — incluso después de que la compra esté PROCESADA (para respaldar las viejas).
+model PurchaseAttachment {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  thumbKey        String        // miniatura ~320px webp en Spaces (galería)
+  fullKey         String        // versión ~1600px webp en Spaces (lightbox/lectura)
+  bytes           Int           @default(0) // tamaño de la versión grande
+  uploadedById    String
+  uploadedBy      User          @relation("PurchaseAttachmentUploader", fields: [uploadedById], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([purchaseOrderId])
 }
 
 // ============================================
@@ -1807,8 +1827,11 @@ model Incident {
   involvedName String?                             // persona involucrada (opcional)
   severity     String       @default("MEDIUM")     // LOW | MEDIUM | HIGH
   occurredAt   DateTime                            // fecha+hora del suceso (default hoy Caracas)
+  // LEGACY: foto única (se conserva por compatibilidad). Las fotos nuevas van en
+  // `attachments`; las viejas se migraron a esa tabla. Ya no se escriben.
   photoThumbKey  String?                           // foto (opcional) en Spaces: miniatura 150px webp
   photoMediumKey String?                           // foto (opcional) en Spaces: 800px webp (lightbox)
+  attachments  IncidentAttachment[]                // varias fotos por incidencia
   createdById  String
   createdBy    User         @relation("IncidentCreator", fields: [createdById], references: [id])
   createdAt    DateTime     @default(now())
@@ -1816,6 +1839,19 @@ model Incident {
 
   @@index([typeId])
   @@index([occurredAt])
+}
+
+// Fotos de una incidencia (varias). Cada foto se procesa a miniatura 150px + versión
+// 800px (lightbox) en WebP y se sube a Spaces, igual que antes pero ahora N por incidencia.
+model IncidentAttachment {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  thumbKey   String   // miniatura 150px webp en Spaces
+  mediumKey  String   // versión 800px webp en Spaces (lightbox)
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
 }
 
 // ============================================

@@ -18,6 +18,9 @@ import {
   Printer,
   FileX2,
   Trash2,
+  Paperclip,
+  Upload,
+  ImageIcon,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -853,6 +856,7 @@ export default function PurchaseBillDetailPage() {
           <TabsTrigger value="info">Informacion General</TabsTrigger>
           <TabsTrigger value="cxp">Cuenta por pagar</TabsTrigger>
           <TabsTrigger value="notas">Notas Cr/Db</TabsTrigger>
+          <TabsTrigger value="archivos">Archivos</TabsTrigger>
         </TabsList>
 
         {/* ═══════════════════════════════════════════════════════ */}
@@ -1382,6 +1386,13 @@ export default function PurchaseBillDetailPage() {
         <TabsContent value="notas">
           <NotesTab notes={notes} loading={notesLoading} />
         </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════ */}
+        {/* TAB 4: Archivos (foto/escaneo de la factura del proveedor) */}
+        {/* ═══════════════════════════════════════════════════════ */}
+        <TabsContent value="archivos">
+          <PurchaseAttachmentsTab purchaseId={id} />
+        </TabsContent>
       </Tabs>
 
       {/* ═══ Process Modal ═══ */}
@@ -1801,6 +1812,162 @@ function NotesTab({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Archivos: foto/escaneo de la factura física del proveedor
+// ---------------------------------------------------------------------------
+
+// Comprime la imagen en el navegador antes de subir (mismo enfoque que incidencias):
+// createImageBitmap respeta EXIF, se redimensiona a maxDim y se exporta como JPEG.
+// Esto ya baja mucho el peso; el servidor luego la re-comprime a WebP.
+async function compressPurchaseImage(file: File, maxDim = 2000, quality = 0.82): Promise<string> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  let { width, height } = bitmap;
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo procesar la imagen');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+interface PurchaseAttachment {
+  id: string;
+  thumbUrl: string;
+  fullUrl: string;
+  bytes: number;
+  createdAt: string;
+  uploadedBy?: { name: string } | null;
+}
+
+function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
+  const [items, setItems] = useState<PurchaseAttachment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/proxy/purchases/${purchaseId}/attachments`);
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [purchaseId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setErr('El archivo debe ser una imagen'); return; }
+    if (file.size > 25 * 1024 * 1024) { setErr('La imagen no debe superar 25 MB'); return; }
+    setErr('');
+    setUploading(true);
+    try {
+      const photo = await compressPurchaseImage(file);
+      const res = await fetch(`/api/proxy/purchases/${purchaseId}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.message || 'No se pudo subir la imagen');
+      }
+      await load();
+    } catch (e: any) {
+      setErr(e.message || 'No se pudo procesar la imagen');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onDelete = async (attId: string) => {
+    if (!confirm('¿Eliminar esta imagen? Esta acción no se puede deshacer.')) return;
+    try {
+      const res = await fetch(`/api/proxy/purchases/${purchaseId}/attachments/${attId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setItems(prev => prev.filter(i => i.id !== attId));
+    } catch {
+      setErr('No se pudo eliminar la imagen');
+    }
+  };
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <h3 className="text-white font-medium flex items-center gap-2">
+            <Paperclip size={16} className="text-green-400" /> Factura física del proveedor
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Sube una foto o escaneo de la factura física para no tener que buscar el papel.
+            {items.length > 0 && ` · ${items.length} ${items.length === 1 ? 'imagen' : 'imágenes'}`}
+          </p>
+        </div>
+        <label className={`btn-secondary text-sm flex items-center gap-1.5 cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploading ? 'Subiendo…' : 'Subir imagen'}
+          <input type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" disabled={uploading} />
+        </label>
+      </div>
+
+      {err && (
+        <div className="mb-4 p-3 rounded-lg border bg-red-500/10 border-red-500/20 text-red-400 text-sm">{err}</div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-green-500" size={24} /></div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-12 text-slate-500 flex flex-col items-center gap-2">
+          <ImageIcon size={32} className="text-slate-600" />
+          <span>No hay imágenes archivadas para esta factura de compra.</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {items.map(a => (
+            <div key={a.id} className="group relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/40">
+              <button onClick={() => setLightbox(a.fullUrl)} className="block w-full aspect-square" title="Ver en grande">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={a.thumbUrl} alt="Adjunto de factura de compra" className="w-full h-full object-cover" />
+              </button>
+              <button
+                onClick={() => onDelete(a.id)}
+                className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-red-300 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Eliminar"
+              >
+                <Trash2 size={14} />
+              </button>
+              <div className="px-2 py-1.5 text-[10px] text-slate-500">
+                {new Date(a.createdAt).toLocaleDateString('es-VE')}
+                {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setLightbox(null)}>
+          <button className="absolute top-4 right-4 text-white/80 hover:text-white" onClick={() => setLightbox(null)}><X size={28} /></button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightbox} alt="Factura de compra" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }

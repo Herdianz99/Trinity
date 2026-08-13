@@ -14,6 +14,7 @@ import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { PurchaseOrdersPdfService } from './purchase-orders-pdf.service';
+import { PurchaseAttachmentsService } from './purchase-attachments.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -25,6 +26,7 @@ export class PurchaseOrdersController {
   constructor(
     private readonly service: PurchaseOrdersService,
     private readonly pdfService: PurchaseOrdersPdfService,
+    private readonly attachments: PurchaseAttachmentsService,
   ) {}
 
   @Post()
@@ -119,5 +121,30 @@ export class PurchaseOrdersController {
     @Body('items') items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[],
   ) {
     return this.service.updatePrices(id, items);
+  }
+
+  // ---- Adjuntos (foto/escaneo de la factura física del proveedor) ----
+  // Se permite listar/subir/borrar en cualquier estado de la compra (incluso PROCESADA),
+  // para poder respaldar facturas que ya están cargadas en el sistema.
+  @Get(':id/attachments')
+  listAttachments(@Param('id') id: string) {
+    return this.attachments.list(id);
+  }
+
+  @Post(':id/attachments')
+  addAttachment(
+    @Param('id') id: string,
+    @Body('photo') photo: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.attachments.add(id, photo, user.id);
+  }
+
+  @Delete(':id/attachments/:attId')
+  removeAttachment(
+    @Param('id') id: string,
+    @Param('attId') attId: string,
+  ) {
+    return this.attachments.remove(id, attId);
   }
 }

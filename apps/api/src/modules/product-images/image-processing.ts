@@ -41,6 +41,42 @@ export async function processProductImage(input: Buffer): Promise<ProcessedImage
   };
 }
 
+export interface ProcessedDocument {
+  thumb: Buffer; // miniatura para la galería
+  full: Buffer; // versión grande legible (para leer el texto de un documento escaneado)
+  bytes: number; // tamaño de la versión grande
+}
+
+const DOC_THUMB_SIZE = 320;
+const DOC_FULL_SIZE = 1600;
+// El texto de una factura sigue legible a ~q72 en WebP, pero pesa la mitad que un JPEG
+// equivalente. Priorizamos peso bajo: una foto de celular de ~3 MB queda en ~120-250 KB.
+const DOC_THUMB_QUALITY = 68;
+const DOC_FULL_QUALITY = 72;
+
+/**
+ * Procesa la imagen de un documento archivado (ej. factura de compra física escaneada).
+ * A diferencia de `processProductImage`, la versión grande es de ~1600px para que el texto
+ * del documento quede legible al ampliarlo, y se re-comprime a WebP para pesar poco.
+ */
+export async function processDocumentImage(input: Buffer): Promise<ProcessedDocument> {
+  const base = sharp(input, { failOn: 'none' }).rotate(); // rotate() respeta EXIF orientation
+
+  const thumb = await base
+    .clone()
+    .resize(DOC_THUMB_SIZE, DOC_THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: DOC_THUMB_QUALITY })
+    .toBuffer();
+
+  const full = await base
+    .clone()
+    .resize(DOC_FULL_SIZE, DOC_FULL_SIZE, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: DOC_FULL_QUALITY })
+    .toBuffer();
+
+  return { thumb, full, bytes: full.length };
+}
+
 /** Decodifica un data URI ("data:image/jpeg;base64,....") a Buffer. Lanza si es inválido. */
 export function dataUriToBuffer(dataUri: string): Buffer {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUri);
