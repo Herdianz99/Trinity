@@ -1,5 +1,21 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-17 — Filtro de vendedor oculto al rol SELLER + pendiente en Bs en el POS
+
+> ### ⏳ EN GIT, PENDIENTE DE DEPLOY — HEAD `de2f475` (sobre `6783a7d`)
+> Dos cambios **solo de frontend** (sin migración, sin backend). Probados en local (web recompila limpio). **Falta desplegar a las 6 empresas.**
+
+- **`9607134` feat(sales-invoices): ocultar el filtro de vendedor al rol SELLER** — en `/sales/invoices` el selector "Todos los vendedores" permitía a un vendedor filtrar y ver cuánto vendieron sus compañeros. Ahora ese `<select>` **se le oculta al rol SELLER** (los demás roles lo siguen viendo). El SELLER **sigue viendo todas las facturas**, solo pierde la herramienta de filtrar por vendedor. **Blindado también contra `?sellerId=` forzado por URL** (`fetchInvoices` ignora el `sellerId` si el rol es SELLER; `userRole` agregado a las deps). El botón "Reporte por vendedor" ya estaba oculto para SELLER desde antes. Un solo archivo (`sales/invoices/page.tsx`). **Sin migración.**
+- **`de2f475` feat(pos): pendiente por cobrar en Bs además de USD** — en el modal de **Cobrar** del POS la línea "Pendiente por cobrar" mostraba solo dólares; ahora muestra **las dos monedas** (USD grande arriba, **Bs debajo**) para que el cajero sepa cuánto falta en ambas tasas. El Bs usa `remainingBs` (`totalBs − pagadoBs`), que es el pendiente **exacto** en bolívares con pagos mixtos, no `pendiente × tasa`. Color según estado (ámbar si falta, verde si completo). Un solo archivo (`sales/pos/page.tsx`). **Sin migración.**
+- **Operación puntual en producción (empresa `total`, no es código):** se cambió el **vendedor de la factura `NE-26-00001136`** de "Jonathan Stiguar Segovia Paredes" a **"Eylin Hernandez"** por BD (el `sellerId` referencia la tabla `Seller`, no `User`; no hay tabla de comisiones que guarde el vendedor por factura → cambio directo y seguro).
+
+## 🗓️ Sesión 2026-08-14 — Serie del proveedor en el N° Factura del comprobante de retención de IVA
+
+> ### ✅ DESPLEGADO y verificado en las 6 empresas (2026-08-14) — HEAD `6783a7d` (sobre `2c4d2cc`)
+> Las 6 instancias (eltrebol, inversiones, total, totalturen, aceros, acerosmayor) en `6783a7d`, `/health` **200**. **Sin migración** (deploy code-only, 1 archivo). Verificado: `git rev-parse HEAD` = `6783a7d` en los 4 servidores.
+
+- **`6783a7d` feat(retenciones-iva): serie del proveedor en la columna "Nº Factura"** del PDF del comprobante de retención de IVA de compras. La columna ahora **antepone la serie** de la factura del proveedor al número: `serieProveedor` de la **CxP** (`payable.serieProveedor`) o, si no hay, `supplierSerialNumber` de la **orden de compra**. Ej: serie `A` + `020643` → `A020643`. Si no hay serie, se muestra solo el número (comportamiento previo). Un solo archivo (`retention-vouchers-pdf.service.ts`): se agregan `supplierSerialNumber` y `payable.serieProveedor` al `select` y se concatena `${serieFactura}${supplierInvoiceNumber}`. **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-13 — Stock paginado, columna Caja, XML ISLR, anti-doble referencia, franja cliente POS, buscador compras, reporte gastos, recibos (anticipo por sobrepago + anti-duplicados + N° real de CxC)
 
 > ### ✅ DESPLEGADO y verificado en las 6 empresas (2026-08-13) — HEAD `2c4d2cc` (código hasta `44fe4e6`, sobre `166fff2`)
