@@ -124,7 +124,9 @@ export default function InvoicesPage() {
       if (status) params.set('status', status);
       if (paymentType) params.set('paymentType', paymentType);
       if (searchDebounced) params.set('search', searchDebounced);
-      if (sellerId) params.set('sellerId', sellerId);
+      // El rol SELLER no puede filtrar por vendedor (confidencialidad: no debe ver
+      // cuanto vendieron sus companeros). Se ignora aunque venga forzado por la URL.
+      if (sellerId && userRole !== 'SELLER') params.set('sellerId', sellerId);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       const res = await fetch(`/api/proxy/invoices?${params}`);
@@ -137,7 +139,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status, paymentType, searchDebounced, sellerId, from, to]);
+  }, [page, status, paymentType, searchDebounced, sellerId, from, to, userRole]);
 
   useEffect(() => {
     fetchInvoices();
@@ -259,12 +261,15 @@ export default function InvoicesPage() {
             <option value="CASH">Contado</option>
             <option value="CREDIT">Credito</option>
           </select>
-          <select value={sellerId} onChange={e => { setSellerId(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm">
-            <option value="">Todos los vendedores</option>
-            {sellers.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          {/* El selector de vendedor se le oculta al rol SELLER (confidencialidad entre companeros) */}
+          {userRole !== 'SELLER' && (
+            <select value={sellerId} onChange={e => { setSellerId(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm">
+              <option value="">Todos los vendedores</option>
+              {sellers.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
           <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Desde" />
           <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Hasta" />
           {(status || paymentType || from || to || search || sellerId) && (
