@@ -51,6 +51,7 @@ export class RetentionVouchersService {
   async findAll(query: {
     status?: string;
     supplierId?: string;
+    search?: string;
     from?: string;
     to?: string;
     page?: string;
@@ -64,6 +65,29 @@ export class RetentionVouchersService {
 
     if (query.status) where.status = query.status;
     if (query.supplierId) where.supplierId = query.supplierId;
+
+    // Busqueda libre: Nº de retencion, nombre del proveedor, o Nº de factura del proveedor
+    // (numero de la orden de compra, N° factura/control del proveedor, o documento de la CxP).
+    if (query.search && query.search.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: 'insensitive' } },
+        { supplier: { name: { contains: s, mode: 'insensitive' } } },
+        {
+          lines: {
+            some: {
+              OR: [
+                { supplierInvoiceNumber: { contains: s, mode: 'insensitive' } },
+                { supplierControlNumber: { contains: s, mode: 'insensitive' } },
+                { purchaseOrder: { number: { contains: s, mode: 'insensitive' } } },
+                { purchaseOrder: { supplierInvoiceNumber: { contains: s, mode: 'insensitive' } } },
+                { payable: { documentNumber: { contains: s, mode: 'insensitive' } } },
+              ],
+            },
+          },
+        },
+      ];
+    }
 
     if (query.from || query.to) {
       // Filtrar por fecha de EMISION (issueDate), igual que el libro de compras (que filtra por

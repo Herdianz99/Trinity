@@ -32,6 +32,7 @@ export class RetentionVouchersController {
     query: {
       status?: string;
       supplierId?: string;
+      search?: string;
       from?: string;
       to?: string;
       page?: string;

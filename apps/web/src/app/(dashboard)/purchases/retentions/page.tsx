@@ -106,6 +106,7 @@ export default function RetentionsPage() {
 
   // Filters
   const [status, setStatus] = useState('');
+  const [search, setSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
@@ -135,6 +136,7 @@ export default function RetentionsPage() {
     try {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
+      if (search.trim()) params.set('search', search.trim());
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
       params.set('page', String(p));
@@ -152,7 +154,7 @@ export default function RetentionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, fromDate, toDate]);
+  }, [status, search, fromDate, toDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -319,6 +321,20 @@ export default function RetentionsPage() {
       {/* Filters */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
         <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[240px]">
+            <label className="text-xs text-slate-400 mb-1 block">Buscar (Nº factura, Nº retención o proveedor)</label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 text-slate-500" size={14} />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') fetchData(1); }}
+                placeholder="Ej: FC-00123, 00047764 o nombre del proveedor..."
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-2 text-sm text-slate-200"
+              />
+            </div>
+          </div>
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Estado</label>
             <select value={status} onChange={e => setStatus(e.target.value)}
