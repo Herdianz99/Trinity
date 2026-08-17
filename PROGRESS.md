@@ -1,9 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
-## 🗓️ Sesión 2026-08-17 — Análisis de plataformas + filtro de vendedor SELLER + pendiente Bs POS + filtro retenciones + cotización en Bs
+## 🗓️ Sesión 2026-08-17 — Análisis de plataformas + filtro vendedor SELLER + pendiente Bs POS + filtro retenciones + cotización Bs + traslado→factura
 
-> ### ⏳ EN GIT, PENDIENTE DE DEPLOY — HEAD `5049892` (sobre `6783a7d`)
+> ### ⏳ EN GIT, PENDIENTE DE DEPLOY — HEAD `b238743` (sobre `6783a7d`)
 > Varios features frontend + backend, **sin migración**. Probados en local (typecheck API+Web limpio, páginas/endpoints 200, validado contra `grande_db`). **Falta desplegar a las 6 empresas.**
+
+- **`b238743` feat(traslados): convertir un traslado socio en factura de venta pendiente** — en el detalle de `/catalog/partner-transfers` un botón **"Convertir a factura pendiente"** crea una factura de venta **PENDING** con los artículos y cantidades del traslado, a **precio de venta de la empresa** (`priceDetal`), para retomarla en el POS y asignarle vendedor/caja. Cliente por defecto, **sin vendedor** preseleccionado (`sellerId` null). Reusa `invoices.create()` (sin `unitPrice` → precio vigente). Endpoint `POST /invoices/from-partner-transfer/:transferId` (método `createFromPartnerTransfer` en invoices.service): matchea items del JSON del traslado por `code`, omite y reporta los que no existan/estén inactivos/bloqueados/sin precio; error si ninguno matchea. Verificado local con traslado sintético: PENDING sin número, precios=priceDetal, cantidades correctas, skip de códigos inexistentes. **Sin migración.**
 
 - **`e6290ed` feat(retenciones): filtro de búsqueda en `/purchases/retentions`** — buscador libre que filtra por **Nº de retención**, **nombre del proveedor** o **Nº de factura del proveedor** (N° de la orden de compra, N° factura/control del proveedor, o `documentNumber` de la CxP). Backend: `OR` sobre `RetentionVoucher.number` + `supplier.name` + `lines.some` (supplierInvoiceNumber/controlNumber, purchaseOrder.number/supplierInvoiceNumber, payable.documentNumber). Verificado local: las 3 vías filtran. **Sin migración.**
 - **`5049892` feat(cotizaciones): reporte PDF en USD o Bs** — el modal de impresión de `/quotations` ahora pregunta la **moneda** (Dólares/Bolívares, **USD por defecto** como antes) además de con/sin IVA. En **Bs** el PDF convierte a la **tasa del día** (`ExchangeRate` por `caracasDateKey`, fallback a la tasa de la cotización), cambia encabezados/totales a Bs y la nota del pie pasa a "precios referenciados en divisas… pueden variar sin previo aviso según la tasa vigente al facturar". Verificado local: PDF USD/Bs (con y sin IVA) → 200. **Sin migración.**
