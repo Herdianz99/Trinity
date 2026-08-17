@@ -2742,9 +2742,14 @@ export default function POSPage() {
               {!hasChange ? (
                 <div className="card p-3 flex items-center justify-between">
                   <span className="text-sm text-slate-400">Pendiente por cobrar</span>
-                  <span className={`text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
-                    ${fmtBs(Math.max(0, remaining))}
-                  </span>
+                  <div className="text-right leading-tight">
+                    <span className={`block text-lg font-bold ${remaining <= 0.01 ? 'text-green-400' : 'text-amber-400'}`}>
+                      ${fmtBs(Math.max(0, remaining))}
+                    </span>
+                    <span className={`block text-sm font-semibold ${remaining <= 0.01 ? 'text-green-400/70' : 'text-amber-300'}`}>
+                      Bs {fmtBs(Math.max(0, remainingBs))}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
