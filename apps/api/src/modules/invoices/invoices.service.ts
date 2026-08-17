@@ -449,6 +449,64 @@ export class InvoicesService {
     return invoice;
   }
 
+  // Convierte un traslado socio en una factura de venta PENDIENTE (para retomar en el POS y
+  // asignarle vendedor/caja). Toma los articulos y cantidades del traslado y los factura a
+  // PRECIO DE VENTA de la empresa (priceDetal, via create() sin unitPrice). Cliente por defecto
+  // (create() cae al defaultCustomerId); sin vendedor preseleccionado. Los articulos que no
+  // existan / esten inactivos / bloqueados / sin precio se OMITEN y se reportan.
+  async createFromPartnerTransfer(
+    transferId: string,
+    user: { id: string; role: UserRole },
+  ) {
+    const transfer = await this.prisma.partnerTransfer.findUnique({
+      where: { id: transferId },
+    });
+    if (!transfer) throw new NotFoundException('Traslado no encontrado');
+
+    const rawItems: any[] = Array.isArray(transfer.items) ? (transfer.items as any[]) : [];
+    // Agrupar por codigo sumando cantidades (por si un codigo se repite en el traslado)
+    const qtyByCode = new Map<string, number>();
+    for (const it of rawItems) {
+      const code = String(it?.code || '').trim();
+      if (!code) continue;
+      const qty = Number(it?.quantity ?? it?.requestedQuantity ?? 0);
+      if (qty > 0) qtyByCode.set(code, (qtyByCode.get(code) || 0) + qty);
+    }
+    if (qtyByCode.size === 0) {
+      throw new BadRequestException('El traslado no tiene articulos con cantidad valida para facturar');
+    }
+
+    const codes = Array.from(qtyByCode.keys());
+    const products = await this.prisma.product.findMany({ where: { code: { in: codes } } });
+    const byCode = new Map(products.map((p) => [p.code, p]));
+
+    const items: { productId: string; quantity: number }[] = [];
+    const skipped: { code: string; reason: string }[] = [];
+    for (const [code, qty] of qtyByCode) {
+      const p = byCode.get(code);
+      if (!p) { skipped.push({ code, reason: 'no existe en el catalogo' }); continue; }
+      if (!p.isActive) { skipped.push({ code, reason: 'producto desactivado' }); continue; }
+      if (p.saleBlocked) { skipped.push({ code, reason: 'bloqueado para la venta' }); continue; }
+      if (!p.priceDetal || p.priceDetal <= 0) { skipped.push({ code, reason: 'sin precio de venta' }); continue; }
+      items.push({ productId: p.id, quantity: qty });
+    }
+
+    if (items.length === 0) {
+      throw new BadRequestException(
+        `Ningun articulo del traslado se pudo facturar: ${skipped.map((s) => `${s.code} (${s.reason})`).join(', ')}`,
+      );
+    }
+
+    // Reusa create(): sin unitPrice -> precio actual de la empresa; sin customerId -> cliente
+    // por defecto; el vendedor se asigna al retomar en el POS.
+    const invoice = await this.create(
+      { items, notes: `Convertida del traslado socio ${transfer.number}` } as any,
+      user,
+    );
+
+    return { invoice, skipped };
+  }
+
   // Duplica una factura como pre-factura NUEVA en estado PENDING: copia los articulos y sus
   // cantidades tal cual, pero los precios se toman de los ACTUALES (priceDetal) porque no se
   // pasa unitPrice (create() cae al precio vigente del producto). Queda seleccionable en el POS.

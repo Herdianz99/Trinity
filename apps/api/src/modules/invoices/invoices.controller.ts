@@ -115,6 +115,15 @@ export class InvoicesController {
     return this.service.duplicate(id, user);
   }
 
+  // Convierte un traslado socio en factura de venta PENDIENTE (precios actuales de la empresa)
+  @Post('from-partner-transfer/:transferId')
+  createFromPartnerTransfer(
+    @Param('transferId') transferId: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.createFromPartnerTransfer(transferId, user);
+  }
+
   @Patch(':id/pay')
   pay(
     @Param('id') id: string,

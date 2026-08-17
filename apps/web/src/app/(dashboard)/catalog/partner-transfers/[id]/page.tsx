@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowLeft, AlertTriangle, Check, X } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertTriangle, Check, X, Receipt } from 'lucide-react';
 
 interface TItem { code: string; name?: string; quantity: number; requestedQuantity?: number; unitCost?: number }
 interface Transfer {
@@ -37,6 +37,8 @@ export default function PartnerTransferDetailPage() {
   const [sendNote, setSendNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [createdOk, setCreatedOk] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -118,6 +120,24 @@ export default function PartnerTransferDetailPage() {
     finally { setBusy(false); }
   }
 
+  async function convertToInvoice() {
+    if (!t) return;
+    if (!confirm(`¿Convertir el traslado ${t.number} en una factura de venta PENDIENTE?\n\nSe usarán los precios de venta actuales de la empresa. Luego la retomas en el POS para asignarle el vendedor y la caja.`)) return;
+    setConverting(true); setMsg(null); setCreatedOk(false);
+    try {
+      const res = await fetch(`/api/proxy/invoices/from-partner-transfer/${t.id}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ type: 'error', text: data.message || 'No se pudo crear la factura.' }); return; }
+      const skipped = data.skipped || [];
+      const skippedTxt = skipped.length
+        ? ` Se omitieron ${skipped.length} artículo(s): ${skipped.map((s: any) => `${s.code} (${s.reason})`).join('; ')}.`
+        : '';
+      setMsg({ type: 'success', text: `Factura pendiente creada. Retómala en el POS para asignar el vendedor y la caja.${skippedTxt}` });
+      setCreatedOk(true);
+    } catch { setMsg({ type: 'error', text: 'Error de red.' }); }
+    finally { setConverting(false); }
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="animate-spin mr-2" size={20} /> Cargando…</div>;
 
   if (error || !t) {
@@ -146,7 +166,27 @@ export default function PartnerTransferDetailPage() {
       </div>
 
       {msg && (
-        <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${msg.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'}`}>{msg.text}</div>
+        <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${msg.type === 'success' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'}`}>
+          {msg.text}
+          {createdOk && msg.type === 'success' && (
+            <Link href="/sales/pos" className="ml-2 underline font-semibold hover:text-emerald-200">Ir al POS →</Link>
+          )}
+        </div>
+      )}
+
+      {/* Convertir a factura de venta (pendiente) */}
+      {(t.items || []).length > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Convertir a factura de venta</p>
+            <p className="text-xs text-slate-500 mt-0.5">Crea una factura <span className="text-slate-300">pendiente</span> con estos artículos y cantidades a <span className="text-slate-300">precio de venta de la empresa</span>, para retomarla en el POS y asignarle el vendedor y la caja.</p>
+          </div>
+          <button onClick={convertToInvoice} disabled={converting}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm inline-flex items-center gap-2 whitespace-nowrap">
+            {converting ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} />}
+            Convertir a factura pendiente
+          </button>
+        </div>
       )}
 
       {/* Acciones */}
