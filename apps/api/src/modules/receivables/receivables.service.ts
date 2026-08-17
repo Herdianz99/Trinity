@@ -544,16 +544,53 @@ export class ReceivablesService {
       GROUP BY ym, UPPER(r."platformName")
       ORDER BY ym`;
 
+    // F) Total de ventas de la empresa en el período (para el peso de las plataformas).
+    // Universo = ventas reales (procesadas/con devolución), excluye PENDING y canceladas.
+    const companyRows = await this.prisma.$queryRaw<any[]>`
+      SELECT COUNT(*)::int AS "totalInvoices",
+        COALESCE(SUM(i."totalUsd"), 0)::float8 AS "totalSalesUsd",
+        COALESCE(SUM(i."totalBs"), 0)::float8 AS "totalSalesBs"
+      FROM "Invoice" i
+      WHERE i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
+        AND i."createdAt" >= ${start} AND i."createdAt" <= ${end}`;
+
+    // G) Valor completo de las FACTURAS que usaron cada plataforma (no el financiado, sino
+    // la venta entera). DISTINCT por factura para no duplicar si tuviera 2 CxC de la plataforma.
+    const share = await this.prisma.$queryRaw<any[]>`
+      SELECT platform,
+        COUNT(*)::int AS "invoicesCount",
+        COALESCE(SUM("totalUsd"), 0)::float8 AS "invoiceValueUsd",
+        COALESCE(SUM("totalBs"), 0)::float8 AS "invoiceValueBs"
+      FROM (
+        SELECT DISTINCT UPPER(r."platformName") AS platform, i.id, i."totalUsd", i."totalBs"
+        FROM "Receivable" r
+        JOIN "Invoice" i ON i.id = r."invoiceId"
+        WHERE r.type = 'FINANCING_PLATFORM'
+          AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
+          AND i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
+          AND i."createdAt" >= ${start} AND i."createdAt" <= ${end}
+      ) t GROUP BY platform`;
+
+    const company = {
+      totalInvoices: companyRows[0]?.totalInvoices || 0,
+      totalSalesUsd: r2(companyRows[0]?.totalSalesUsd || 0),
+      totalSalesBs: r2(companyRows[0]?.totalSalesBs || 0),
+    };
+
     const aggMap = new Map(agg.map((x) => [x.platform, x]));
     const fullMap = new Map(full.map((x) => [x.platform, x]));
     const firstMap = new Map(first.map((x) => [x.platform, x]));
     const agingMap = new Map(aging.map((x) => [x.platform, x]));
+    const shareMap = new Map(share.map((x) => [x.platform, x]));
 
     const platforms = PLATFORMS.map((key) => {
       const a = aggMap.get(key);
       const f = fullMap.get(key);
       const fp = firstMap.get(key);
       const ag = agingMap.get(key);
+      const sh = shareMap.get(key);
+      const invoicesCount = sh ? sh.invoicesCount : 0;
+      const invoiceValueUsd = sh ? sh.invoiceValueUsd : 0;
       const salesUsd = a ? a.salesUsd : 0;
       const collectedUsd = a ? a.collectedUsd : 0;
       const invoiceBaseUsd = a ? a.invoiceBaseUsd : 0;
@@ -584,6 +621,12 @@ export class ReceivablesService {
           d61_90: r2(ag ? ag.b61_90 : 0),
           d90plus: r2(ag ? ag.b90 : 0),
         },
+        // Peso de la plataforma en las ventas de la empresa (valor completo de la factura)
+        invoicesCount,
+        invoiceValueUsd: r2(invoiceValueUsd),
+        invoiceValueBs: r2(sh ? sh.invoiceValueBs : 0),
+        shareByCount: company.totalInvoices > 0 ? r1((invoicesCount / company.totalInvoices) * 100) : 0,
+        shareByValue: company.totalSalesUsd > 0 ? r1((invoiceValueUsd / company.totalSalesUsd) * 100) : 0,
       };
     });
 
@@ -598,6 +641,7 @@ export class ReceivablesService {
     return {
       from: from || null,
       to: to || null,
+      company,
       platforms,
       monthly,
     };

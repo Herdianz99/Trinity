@@ -70,9 +70,12 @@ interface PlatformStat {
   avgDaysToFirst: number | null; withPaymentCount: number;
   avgDaysToFull: number | null; paidCount: number;
   aging: { d0_30: number; d31_60: number; d61_90: number; d90plus: number };
+  invoicesCount: number; invoiceValueUsd: number; invoiceValueBs: number;
+  shareByCount: number; shareByValue: number;
 }
 interface AnalyticsData {
   from: string | null; to: string | null;
+  company: { totalInvoices: number; totalSalesUsd: number; totalSalesBs: number };
   platforms: PlatformStat[];
   monthly: { ym: string; CASHEA: number; CREDIAGRO: number }[];
 }
@@ -89,6 +92,7 @@ function emptyStat(platform: string): PlatformStat {
     pendingUsd: 0, pendingBs: 0, collectionRatio: 0, avgFinancedPct: 0, weightedFinancedPct: 0,
     avgInitialPct: 0, avgDaysToFirst: null, withPaymentCount: 0, avgDaysToFull: null, paidCount: 0,
     aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 },
+    invoicesCount: 0, invoiceValueUsd: 0, invoiceValueBs: 0, shareByCount: 0, shareByValue: 0,
   };
 }
 
@@ -130,6 +134,7 @@ function PlatformAnalytics() {
   const statMap = new Map((data?.platforms || []).map(s => [s.platform, s]));
   const stats = PLAT_ORDER.map(k => statMap.get(k) || emptyStat(k));
   const monthly = data?.monthly || [];
+  const company = data?.company || { totalInvoices: 0, totalSalesUsd: 0, totalSalesBs: 0 };
   const rangeLabel = from || to ? `${from || '…'} → ${to || 'hoy'}` : 'Últimos 12 meses';
 
   return (
@@ -235,6 +240,47 @@ function PlatformAnalytics() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Peso en las ventas de la empresa */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+              <h3 className="font-semibold text-slate-100">Peso en las ventas de la empresa</h3>
+              <span className="text-xs text-slate-500">{company.totalInvoices} facturas · ${fmtNum(company.totalSalesUsd)} en el período</span>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">Qué parte de todas las ventas de la empresa pasó por cada plataforma</p>
+            <div className="space-y-5">
+              {stats.map(s => {
+                const st = PLAT_STYLE[s.platform];
+                return (
+                  <div key={s.platform}>
+                    <span className={`text-sm font-semibold ${st.accent}`}>{st.label}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-400">Por cantidad de facturas</span>
+                          <span className="text-slate-100 font-semibold">{s.shareByCount}%</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-700/50 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, s.shareByCount)}%`, background: st.bar }} />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">{s.invoicesCount} de {company.totalInvoices} facturas</p>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-400">Por monto vendido ($)</span>
+                          <span className="text-slate-100 font-semibold">{s.shareByValue}%</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-700/50 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, s.shareByValue)}%`, background: st.bar }} />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">${fmtNum(s.invoiceValueUsd)} de ${fmtNum(company.totalSalesUsd)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Aging de lo pendiente */}
