@@ -44,6 +44,8 @@ export class DashboardService {
       prevReturns,
       salesBySeller,
       topProducts,
+      salesByCategory,
+      salesByFiscalType,
       cashSummary,
       expenses,
       receivables,
@@ -62,6 +64,8 @@ export class DashboardService {
       this.getReturns(prevDateRange),
       this.getSalesBySeller(dateRange),
       this.getTopProducts(dateRange),
+      this.getSalesByCategory(dateRange),
+      this.getSalesByFiscalType(dateRange),
       this.getCashSummary(dateRange),
       this.getExpenses(dateRange),
       this.getReceivables(),
@@ -99,6 +103,8 @@ export class DashboardService {
       },
       salesBySeller,
       topProducts,
+      salesByCategory,
+      salesByFiscalType,
       cashSummary,
       expenses,
       receivables,
@@ -778,6 +784,107 @@ export class DashboardService {
       .sort((a, b) => b.totalUsd - a.totalUsd)
       .slice(0, 5)
       .map(p => ({ ...p, totalUsd: round2(p.totalUsd) }));
+  }
+
+  // ── Ventas por categoría (raíz del producto) ──────────────────────────────
+  // Suma InvoiceItem.totalUsd agrupado por la categoría del producto. Devuelve el top 8
+  // y agrupa el resto en "Otras" para que la gráfica quede legible. Incluye % del total.
+  private async getSalesByCategory(dateRange: { gte: Date; lte: Date }) {
+    const items = await this.prisma.invoiceItem.findMany({
+      where: {
+        invoice: {
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          paidAt: dateRange,
+        },
+      },
+      select: { productId: true, totalUsd: true },
+    });
+    if (items.length === 0) return [] as { categoryName: string; totalUsd: number; pct: number }[];
+
+    // Mapa productId -> nombre de categoría (una sola consulta para los productos vendidos).
+    const productIds = Array.from(new Set(items.map(i => i.productId)));
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, category: { select: { name: true } } },
+    });
+    const catByProduct = new Map<string, string>();
+    for (const p of products) {
+      catByProduct.set(p.id, p.category?.name || 'Sin categoría');
+    }
+
+    const map = new Map<string, number>();
+    for (const it of items) {
+      const cat = catByProduct.get(it.productId) || 'Sin categoría';
+      map.set(cat, (map.get(cat) || 0) + it.totalUsd);
+    }
+
+    const sorted = Array.from(map.entries())
+      .map(([categoryName, totalUsd]) => ({ categoryName, totalUsd }))
+      .sort((a, b) => b.totalUsd - a.totalUsd);
+
+    const grandTotal = sorted.reduce((s, x) => s + x.totalUsd, 0);
+    const toPct = (v: number) => (grandTotal > 0 ? round2((v / grandTotal) * 100) : 0);
+    const TOP = 8;
+    const top = sorted.slice(0, TOP);
+    const rest = sorted.slice(TOP);
+
+    type CatRow = { categoryName: string; totalUsd: number; pct: number };
+    const result: (CatRow & { breakdown?: CatRow[] })[] = top.map(c => ({
+      categoryName: c.categoryName,
+      totalUsd: round2(c.totalUsd),
+      pct: toPct(c.totalUsd),
+    }));
+
+    // "Otras" agrupa todo lo que quedó fuera del top 8; se adjunta el desglose para poder
+    // expandirlo en el frontend (gráfica clickeable).
+    if (rest.length > 0) {
+      const restTotal = rest.reduce((s, x) => s + x.totalUsd, 0);
+      result.push({
+        categoryName: 'Otras',
+        totalUsd: round2(restTotal),
+        pct: toPct(restTotal),
+        breakdown: rest.map(c => ({
+          categoryName: c.categoryName,
+          totalUsd: round2(c.totalUsd),
+          pct: toPct(c.totalUsd),
+        })),
+      });
+    }
+
+    return result;
+  }
+
+  // ── Ventas fiscales vs no fiscales ────────────────────────────────────────
+  // Clasifica cada factura cobrada por Invoice.serie.isFiscal (sin serie = no fiscal).
+  // Devuelve monto USD + Bs y porcentaje de cada grupo sobre el total facturado.
+  private async getSalesByFiscalType(dateRange: { gte: Date; lte: Date }) {
+    const invoices = await this.prisma.invoice.findMany({
+      where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+      select: { totalUsd: true, totalBs: true, serie: { select: { isFiscal: true } } },
+    });
+
+    let fiscalUsd = 0, fiscalBs = 0, fiscalCount = 0;
+    let nonFiscalUsd = 0, nonFiscalBs = 0, nonFiscalCount = 0;
+    for (const inv of invoices) {
+      if (inv.serie?.isFiscal) {
+        fiscalUsd += inv.totalUsd; fiscalBs += inv.totalBs; fiscalCount += 1;
+      } else {
+        nonFiscalUsd += inv.totalUsd; nonFiscalBs += inv.totalBs; nonFiscalCount += 1;
+      }
+    }
+    const totalUsd = fiscalUsd + nonFiscalUsd;
+
+    return {
+      fiscalUsd: round2(fiscalUsd),
+      fiscalBs: round2(fiscalBs),
+      fiscalCount,
+      fiscalPct: totalUsd > 0 ? round2((fiscalUsd / totalUsd) * 100) : 0,
+      nonFiscalUsd: round2(nonFiscalUsd),
+      nonFiscalBs: round2(nonFiscalBs),
+      nonFiscalCount,
+      nonFiscalPct: totalUsd > 0 ? round2((nonFiscalUsd / totalUsd) * 100) : 0,
+      totalUsd: round2(totalUsd),
+    };
   }
 
   // ── Facturado por plataformas de financiamiento (Cashea / Crediagro) ────────

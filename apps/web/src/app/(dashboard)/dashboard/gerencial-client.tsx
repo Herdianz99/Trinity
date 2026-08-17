@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Cell,
+  Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie,
 } from 'recharts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -47,6 +47,23 @@ interface DashboardData {
     totalUsd: number;
     category: string;
   }[];
+  salesByCategory: {
+    categoryName: string;
+    totalUsd: number;
+    pct: number;
+    breakdown?: { categoryName: string; totalUsd: number; pct: number }[];
+  }[];
+  salesByFiscalType: {
+    fiscalUsd: number;
+    fiscalBs: number;
+    fiscalCount: number;
+    fiscalPct: number;
+    nonFiscalUsd: number;
+    nonFiscalBs: number;
+    nonFiscalCount: number;
+    nonFiscalPct: number;
+    totalUsd: number;
+  };
   cashSummary: {
     totalIncomeUsd: number;
     totalIncomeBs: number;
@@ -131,6 +148,10 @@ function periodLabel(from: string, to: string): string {
 }
 
 const PRODUCT_BAR_COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444'];
+const CATEGORY_BAR_COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#eab308', '#64748b'];
+// Fiscal = azul (SENIAT), No fiscal = ámbar.
+const FISCAL_COLOR = '#3b82f6';
+const NON_FISCAL_COLOR = '#f59e0b';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -148,6 +169,8 @@ export default function DashboardGerencialClient() {
   const [error, setError] = useState('');
   // Series ocultas en la grafica de ventas (toggle al hacer clic en la leyenda)
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+  // Desglose de "Otras" categorías (modal): null = cerrado.
+  const [othersDetail, setOthersDetail] = useState<{ categoryName: string; totalUsd: number; pct: number }[] | null>(null);
   // Contexto de la instancia: nombre de la empresa (usuarios con varias empresas se
   // pierden en cual estan) y tasa BCV del dia (para tenerla siempre a la vista).
   const [companyName, setCompanyName] = useState('');
@@ -599,7 +622,122 @@ export default function DashboardGerencialClient() {
             </div>
           </div>
 
-          {/* ═══ Row 5: Expenses ═══ */}
+          {/* ═══ Row 5: Ventas por Categoría + Fiscal vs No Fiscal ═══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Ventas por categoría */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                <Package size={14} className="text-slate-500" />
+                Ventas por Categoría
+              </h3>
+              {data.salesByCategory.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={Math.max(200, data.salesByCategory.length * 32)}>
+                    <BarChart data={data.salesByCategory} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${fmtCompact(Number(v))}`} />
+                      <YAxis dataKey="categoryName" type="category" width={120} tick={{ fill: '#cbd5e1', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        cursor={{ fill: '#334155', fillOpacity: 0.3 }}
+                        contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 12 }}
+                        labelStyle={{ color: '#ffffff', fontWeight: 600 }}
+                        itemStyle={{ color: '#ffffff' }}
+                        formatter={(v: any, _: any, props: any) => [`$${fmt(Number(v) || 0)} (${props.payload?.pct ?? 0}%)`, 'Ventas']}
+                      />
+                      <Bar
+                        dataKey="totalUsd"
+                        radius={[0, 4, 4, 0]}
+                        barSize={20}
+                        onClick={(d: any) => { if (d?.breakdown) setOthersDetail(d.breakdown); }}
+                      >
+                        {data.salesByCategory.map((c, i) => (
+                          <Cell
+                            key={i}
+                            fill={c.categoryName === 'Otras' ? '#64748b' : CATEGORY_BAR_COLORS[i % CATEGORY_BAR_COLORS.length]}
+                            cursor={c.breakdown ? 'pointer' : 'default'}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {data.salesByCategory.some(c => c.breakdown) && (
+                    <p className="text-[10px] text-slate-500 mt-2 text-center">
+                      Haz clic en la barra <span className="text-slate-400 font-medium">«Otras»</span> para ver el detalle
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
+                  Sin ventas en este período
+                </div>
+              )}
+            </div>
+
+            {/* Fiscal vs No Fiscal */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                <Landmark size={14} className="text-slate-500" />
+                Ventas Fiscales vs No Fiscales
+              </h3>
+              {data.salesByFiscalType.totalUsd > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Fiscal', value: data.salesByFiscalType.fiscalUsd, pct: data.salesByFiscalType.fiscalPct },
+                          { name: 'No Fiscal', value: data.salesByFiscalType.nonFiscalUsd, pct: data.salesByFiscalType.nonFiscalPct },
+                        ]}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        <Cell fill={FISCAL_COLOR} />
+                        <Cell fill={NON_FISCAL_COLOR} />
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 12 }}
+                        labelStyle={{ color: '#ffffff', fontWeight: 600 }}
+                        itemStyle={{ color: '#ffffff' }}
+                        formatter={(v: any, _: any, props: any) => [`$${fmt(Number(v) || 0)} (${props.payload?.pct ?? 0}%)`, props.payload?.name]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-3">
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: FISCAL_COLOR }} />
+                        <span className="text-xs text-slate-300 font-medium">Fiscal</span>
+                        <span className="text-xs text-blue-400 font-semibold ml-auto">{data.salesByFiscalType.fiscalPct}%</span>
+                      </div>
+                      <p className="text-lg font-bold text-white tabular-nums">${fmt(data.salesByFiscalType.fiscalUsd)}</p>
+                      <p className="text-[10px] text-slate-500 tabular-nums">Bs {fmt(data.salesByFiscalType.fiscalBs)} · {data.salesByFiscalType.fiscalCount} fact.</p>
+                    </div>
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: NON_FISCAL_COLOR }} />
+                        <span className="text-xs text-slate-300 font-medium">No Fiscal</span>
+                        <span className="text-xs text-amber-400 font-semibold ml-auto">{data.salesByFiscalType.nonFiscalPct}%</span>
+                      </div>
+                      <p className="text-lg font-bold text-white tabular-nums">${fmt(data.salesByFiscalType.nonFiscalUsd)}</p>
+                      <p className="text-[10px] text-slate-500 tabular-nums">Bs {fmt(data.salesByFiscalType.nonFiscalBs)} · {data.salesByFiscalType.nonFiscalCount} fact.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
+                  Sin ventas en este período
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ═══ Row 6: Expenses ═══ */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-slate-300 mb-4">Gastos del Período</h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -656,6 +794,50 @@ export default function DashboardGerencialClient() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Modal: desglose de "Otras" categorías */}
+      {othersDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setOthersDetail(null)}
+        >
+          <div
+            className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Package size={15} className="text-slate-400" />
+                Detalle de «Otras» categorías
+              </h3>
+              <button
+                onClick={() => setOthersDetail(null)}
+                className="text-slate-400 hover:text-white text-lg leading-none px-1"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-2">
+              {othersDetail.map((c) => {
+                const maxUsd = othersDetail[0]?.totalUsd || 1;
+                const barPct = maxUsd > 0 ? (c.totalUsd / maxUsd) * 100 : 0;
+                return (
+                  <div key={c.categoryName}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs text-slate-300">{c.categoryName}</span>
+                      <span className="text-xs text-white font-mono tabular-nums">${fmt(c.totalUsd)} <span className="text-slate-500">({c.pct}%)</span></span>
+                    </div>
+                    <div className="h-1 bg-slate-700/60 rounded-full overflow-hidden">
+                      <div className="h-full bg-slate-400/70 rounded-full" style={{ width: `${Math.max(barPct, 1)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
