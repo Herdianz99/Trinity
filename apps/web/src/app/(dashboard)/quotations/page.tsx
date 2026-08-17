@@ -57,6 +57,7 @@ export default function QuotationsPage() {
   const [converting, setConverting] = useState<string | null>(null);
   // Cotizacion pendiente de elegir como imprimir el PDF (con o sin IVA)
   const [printChoiceId, setPrintChoiceId] = useState<string | null>(null);
+  const [printCurrency, setPrintCurrency] = useState<'USD' | 'BS'>('USD');
   const router = useRouter();
 
   const fetchQuotations = useCallback(async () => {
@@ -91,9 +92,13 @@ export default function QuotationsPage() {
     router.push(`/quotations/${id}`);
   }
 
-  async function handlePrint(id: string, hideIva = false) {
+  async function handlePrint(id: string, hideIva = false, currency: 'USD' | 'BS' = 'USD') {
     setPrintChoiceId(null);
-    const url = `/api/proxy/quotations/${id}/pdf${hideIva ? '?hideIva=true' : ''}`;
+    const qp = new URLSearchParams();
+    if (hideIva) qp.set('hideIva', 'true');
+    if (currency === 'BS') qp.set('currency', 'BS');
+    const qs = qp.toString();
+    const url = `/api/proxy/quotations/${id}/pdf${qs ? `?${qs}` : ''}`;
     const number = quotations.find(q => q.id === id)?.number || 'cotizacion';
     const filename = `Cotizacion-${number}.pdf`;
 
@@ -262,7 +267,7 @@ export default function QuotationsPage() {
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-slate-500">{q._count.items} items</p>
               <button
-                onClick={(e) => { e.stopPropagation(); setPrintChoiceId(q.id); }}
+                onClick={(e) => { e.stopPropagation(); setPrintCurrency('USD'); setPrintChoiceId(q.id); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700/50 text-slate-300 hover:text-green-400 active:scale-95 transition-transform"
               >
                 <Printer size={14} /> Imprimir
@@ -326,7 +331,7 @@ export default function QuotationsPage() {
                       <button onClick={(e) => { e.stopPropagation(); openDetail(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-blue-400" title="Ver detalle">
                         <Eye size={15} />
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); setPrintChoiceId(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
+                      <button onClick={(e) => { e.stopPropagation(); setPrintCurrency('USD'); setPrintChoiceId(q.id); }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-green-400" title="Imprimir PDF">
                         <Printer size={15} />
                       </button>
                       {['DRAFT', 'APPROVED'].includes(q.status) && (
@@ -488,16 +493,40 @@ export default function QuotationsPage() {
                 <p className="text-sm text-slate-400">Elige el formato del PDF</p>
               </div>
             </div>
-            <div className="mt-5 space-y-2">
+            {/* Moneda del reporte */}
+            <div className="mt-5">
+              <p className="text-xs text-slate-400 mb-2">Moneda del reporte</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPrintCurrency('USD')}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${printCurrency === 'USD' ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+                >
+                  Dólares (USD)
+                </button>
+                <button
+                  onClick={() => setPrintCurrency('BS')}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${printCurrency === 'BS' ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+                >
+                  Bolívares (Bs)
+                </button>
+              </div>
+              {printCurrency === 'BS' && (
+                <p className="text-[11px] text-amber-400/80 mt-2">Los precios se calculan a la tasa del día; pueden variar sin previo aviso.</p>
+              )}
+            </div>
+
+            {/* Formato: con o sin IVA (genera el PDF) */}
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-slate-400 mb-1">Formato del PDF</p>
               <button
-                onClick={() => { handlePrint(printChoiceId, false); setPrintChoiceId(null); }}
+                onClick={() => { handlePrint(printChoiceId, false, printCurrency); setPrintChoiceId(null); }}
                 className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors"
               >
                 <p className="text-sm font-medium text-white">Con IVA</p>
                 <p className="text-xs text-slate-500">Muestra el desglose del IVA y el subtotal.</p>
               </button>
               <button
-                onClick={() => { handlePrint(printChoiceId, true); setPrintChoiceId(null); }}
+                onClick={() => { handlePrint(printChoiceId, true, printCurrency); setPrintChoiceId(null); }}
                 className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors"
               >
                 <p className="text-sm font-medium text-white">Sin IVA</p>

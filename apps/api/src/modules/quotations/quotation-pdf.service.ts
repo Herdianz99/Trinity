@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { caracasDateKey } from '../../common/timezone';
 import * as PDFDocument from 'pdfkit';
 
 const IVA_LABELS: Record<string, string> = {
@@ -13,7 +14,11 @@ const IVA_LABELS: Record<string, string> = {
 export class QuotationPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generatePdf(quotationId: string, hideIva = false): Promise<Buffer> {
+  async generatePdf(
+    quotationId: string,
+    hideIva = false,
+    currency: 'USD' | 'BS' = 'USD',
+  ): Promise<Buffer> {
     const quotation = await this.prisma.quotation.findUnique({
       where: { id: quotationId },
       include: {
@@ -26,6 +31,23 @@ export class QuotationPdfService {
     if (!quotation) throw new NotFoundException('Cotizacion no encontrada');
 
     const config = await this.prisma.companyConfig.findFirst();
+
+    // Moneda del reporte. En Bs se convierte a la TASA DEL DIA (no la de la cotizacion),
+    // porque el precio real esta en divisas y puede variar; fallback a la tasa guardada.
+    const isBs = currency === 'BS';
+    let rate = 0;
+    if (isBs) {
+      const today = caracasDateKey();
+      const er = await this.prisma.exchangeRate.findUnique({ where: { date: today } });
+      rate = er?.rate || quotation.exchangeRate || 0;
+    }
+    const curLabel = isBs ? 'Bs' : 'USD';
+    // Formatea un monto en USD a la moneda elegida. USD conserva el formato actual ($X.XX);
+    // Bs usa separador de miles es-VE (los montos en Bs son grandes).
+    const money = (usd: number) =>
+      isBs
+        ? `Bs ${(usd * rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : `$${usd.toFixed(2)}`;
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
@@ -116,9 +138,9 @@ export class QuotationPdfService {
       doc.text('Codigo', colX.code, y);
       doc.text('Descripcion', colX.desc, y);
       doc.text('Cant.', colX.qty, y, { width: 40, align: 'right' });
-      doc.text('P. Unit. USD', colX.price, y, { width: 55, align: 'right' });
+      doc.text(`P. Unit. ${curLabel}`, colX.price, y, { width: 55, align: 'right' });
       if (!hideIva) doc.text('% IVA', colX.iva, y, { width: 50, align: 'right' });
-      doc.text('Total USD', colX.total, y, { width: 80, align: 'right' });
+      doc.text(`Total ${curLabel}`, colX.total, y, { width: 80, align: 'right' });
       y += 14;
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 5;
@@ -140,9 +162,9 @@ export class QuotationPdfService {
         // En modo "sin IVA" el precio unitario se muestra con IVA incluido (totalUsd/cant),
         // asi cant x unitario = total y todo el reporte queda consistente, sin mostrar el impuesto.
         const unitToShow = hideIva && item.quantity ? item.totalUsd / item.quantity : item.unitPriceUsd;
-        doc.text(`$${unitToShow.toFixed(2)}`, colX.price, y, { width: 55, align: 'right', lineBreak: false });
+        doc.text(money(unitToShow), colX.price, y, { width: 55, align: 'right', lineBreak: false });
         if (!hideIva) doc.text(IVA_LABELS[item.ivaType] || item.ivaType, colX.iva, y, { width: 50, align: 'right', lineBreak: false });
-        doc.text(`$${item.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right', lineBreak: false });
+        doc.text(money(item.totalUsd), colX.total, y, { width: 80, align: 'right', lineBreak: false });
         y += rowH;
       }
 
@@ -172,11 +194,11 @@ export class QuotationPdfService {
       doc.fontSize(9).font('Helvetica');
       // En modo "sin IVA" no se muestran ni el subtotal neto ni el desglose de IVA: solo el TOTAL.
       if (!hideIva) {
-        doc.text('Subtotal:', totalsX, y); doc.text(`$${quotation.subtotalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
+        doc.text('Subtotal:', totalsX, y); doc.text(money(quotation.subtotalUsd), colX.total, y, { width: 80, align: 'right' }); y += 14;
 
         for (const [type, amount] of Object.entries(ivaByType)) {
           if (amount > 0) {
-            doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(`$${amount.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 14;
+            doc.text(`IVA ${IVA_LABELS[type] || type}:`, totalsX, y); doc.text(money(amount), colX.total, y, { width: 80, align: 'right' }); y += 14;
           }
         }
       }
@@ -185,7 +207,7 @@ export class QuotationPdfService {
       doc.moveTo(totalsX, y).lineTo(40 + pageWidth, y).stroke('#333333');
       y += 5;
       doc.fontSize(11).font('Helvetica-Bold');
-      doc.text('TOTAL USD:', totalsX, y); doc.text(`$${quotation.totalUsd.toFixed(2)}`, colX.total, y, { width: 80, align: 'right' }); y += 20;
+      doc.text(`TOTAL ${curLabel}:`, totalsX, y); doc.text(money(quotation.totalUsd), colX.total, y, { width: 80, align: 'right' }); y += 20;
 
       // Si el sello quedo mas abajo que los totales, bajar el cursor para no encimar la nota
       if (config?.stampImage) y = Math.max(y, totalsTopY + 95);
@@ -193,10 +215,10 @@ export class QuotationPdfService {
       // Note
       y += 10;
       doc.fontSize(8).font('Helvetica').fillColor('#555555');
-      doc.text(
-        'Precios en USD. Al momento de facturar se calculara el equivalente en Bs segun tasa BCV vigente.',
-        40, y, { width: pageWidth, align: 'center' },
-      );
+      const noteText = isBs
+        ? `Precios referenciados en divisas y expresados en Bs a la tasa del dia (Bs ${rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por USD). Los montos en Bs pueden variar sin previo aviso segun la tasa vigente al momento de facturar.`
+        : 'Precios en USD. Al momento de facturar se calculara el equivalente en Bs segun tasa BCV vigente.';
+      doc.text(noteText, 40, y, { width: pageWidth, align: 'center' });
       y += 20;
 
       if (quotation.notes) {

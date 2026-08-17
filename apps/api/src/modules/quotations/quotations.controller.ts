@@ -83,8 +83,9 @@ export class QuotationsController {
     @Param('id') id: string,
     @Res() res: Response,
     @Query('hideIva') hideIva?: string,
+    @Query('currency') currency?: string,
   ) {
-    const buffer = await this.pdfService.generatePdf(id, hideIva === 'true');
+    const buffer = await this.pdfService.generatePdf(id, hideIva === 'true', currency === 'BS' ? 'BS' : 'USD');
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="cotizacion-${id}.pdf"`,
