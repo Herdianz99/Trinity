@@ -454,6 +454,155 @@ export class ReceivablesService {
     };
   }
 
+  // Análisis de las plataformas de financiamiento (Cashea/Crediagro). Todo se deriva de
+  // las CxC type=FINANCING_PLATFORM (monto financiado = monto de la CxC) y su factura de
+  // origen (para el % financiado vs cuota inicial). Solo lectura, sin datos nuevos.
+  // El rango [from,to] filtra por createdAt (Caracas); si no viene, últimos 12 meses.
+  async platformAnalytics(from?: string, to?: string) {
+    const PLATFORMS = ['CASHEA', 'CREDIAGRO'];
+    const start = from
+      ? caracasDayStart(from)
+      : caracasDayStart(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
+    const end = to ? caracasDayEnd(to) : caracasDayEnd();
+    const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    const r1 = (n: number) => Math.round((Number(n) || 0) * 10) / 10;
+
+    // A) Agregados del período + % financiado (necesita la factura de origen)
+    const agg = await this.prisma.$queryRaw<any[]>`
+      SELECT UPPER(r."platformName") AS platform,
+        COUNT(*)::int AS "salesCount",
+        COALESCE(SUM(r."amountUsd"), 0)::float8 AS "salesUsd",
+        COALESCE(SUM(r."amountBs"), 0)::float8 AS "salesBs",
+        COALESCE(SUM(r."paidAmountUsd"), 0)::float8 AS "collectedUsd",
+        COALESCE(SUM(r."paidAmountBs"), 0)::float8 AS "collectedBs",
+        COALESCE(SUM(r."amountUsd" - r."paidAmountUsd"), 0)::float8 AS "pendingUsd",
+        COALESCE(SUM(r."amountBs" - r."paidAmountBs"), 0)::float8 AS "pendingBs",
+        COALESCE(AVG(CASE WHEN i."totalUsd" > 0 THEN r."amountUsd" / i."totalUsd" * 100 END), 0)::float8 AS "avgFinancedPct",
+        COALESCE(SUM(CASE WHEN i."totalUsd" > 0 THEN r."amountUsd" ELSE 0 END), 0)::float8 AS "financedBaseUsd",
+        COALESCE(SUM(CASE WHEN i."totalUsd" > 0 THEN i."totalUsd" ELSE 0 END), 0)::float8 AS "invoiceBaseUsd"
+      FROM "Receivable" r
+      LEFT JOIN "Invoice" i ON i.id = r."invoiceId"
+      WHERE r.type = 'FINANCING_PLATFORM'
+        AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
+        AND r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+      GROUP BY UPPER(r."platformName")`;
+
+    // B) Días hasta saldar completa (CxC ya pagadas en el período)
+    const full = await this.prisma.$queryRaw<any[]>`
+      SELECT UPPER(r."platformName") AS platform,
+        AVG(EXTRACT(EPOCH FROM (r."paidAt" - r."createdAt")) / 86400)::float8 AS "avgDaysToFull",
+        COUNT(*)::int AS "paidCount"
+      FROM "Receivable" r
+      WHERE r.type = 'FINANCING_PLATFORM'
+        AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
+        AND r."paidAt" IS NOT NULL
+        AND r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+      GROUP BY UPPER(r."platformName")`;
+
+    // C) Días hasta el primer abono (CxC con al menos un pago en el período)
+    const first = await this.prisma.$queryRaw<any[]>`
+      SELECT UPPER(r."platformName") AS platform,
+        AVG(EXTRACT(EPOCH FROM (fp.first_pay - r."createdAt")) / 86400)::float8 AS "avgDaysToFirst",
+        COUNT(*)::int AS "withPaymentCount"
+      FROM "Receivable" r
+      JOIN (
+        SELECT "receivableId", MIN("createdAt") AS first_pay
+        FROM "ReceivablePayment" GROUP BY "receivableId"
+      ) fp ON fp."receivableId" = r.id
+      WHERE r.type = 'FINANCING_PLATFORM'
+        AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
+        AND r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+      GROUP BY UPPER(r."platformName")`;
+
+    // D) Aging de lo pendiente HOY (snapshot actual, no filtrado por período): estas CxC
+    // no tienen dueDate, así que se mide la antigüedad desde la creación.
+    const aging = await this.prisma.$queryRaw<any[]>`
+      SELECT platform,
+        SUM(CASE WHEN age <= 30 THEN bal ELSE 0 END)::float8 AS "b0_30",
+        SUM(CASE WHEN age > 30 AND age <= 60 THEN bal ELSE 0 END)::float8 AS "b31_60",
+        SUM(CASE WHEN age > 60 AND age <= 90 THEN bal ELSE 0 END)::float8 AS "b61_90",
+        SUM(CASE WHEN age > 90 THEN bal ELSE 0 END)::float8 AS "b90"
+      FROM (
+        SELECT UPPER("platformName") AS platform,
+          ("amountUsd" - "paidAmountUsd") AS bal,
+          EXTRACT(EPOCH FROM (NOW() - "createdAt")) / 86400 AS age
+        FROM "Receivable"
+        WHERE type = 'FINANCING_PLATFORM'
+          AND UPPER("platformName") IN ('CASHEA', 'CREDIAGRO')
+          AND ("amountUsd" - "paidAmountUsd") > 0.01
+      ) s GROUP BY platform`;
+
+    // E) Tendencia mensual de ventas (agrupada por mes-calendario Caracas)
+    const monthlyRows = await this.prisma.$queryRaw<any[]>`
+      SELECT to_char(r."createdAt" AT TIME ZONE 'America/Caracas', 'YYYY-MM') AS ym,
+        UPPER(r."platformName") AS platform,
+        SUM(r."amountUsd")::float8 AS "salesUsd"
+      FROM "Receivable" r
+      WHERE r.type = 'FINANCING_PLATFORM'
+        AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
+        AND r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+      GROUP BY ym, UPPER(r."platformName")
+      ORDER BY ym`;
+
+    const aggMap = new Map(agg.map((x) => [x.platform, x]));
+    const fullMap = new Map(full.map((x) => [x.platform, x]));
+    const firstMap = new Map(first.map((x) => [x.platform, x]));
+    const agingMap = new Map(aging.map((x) => [x.platform, x]));
+
+    const platforms = PLATFORMS.map((key) => {
+      const a = aggMap.get(key);
+      const f = fullMap.get(key);
+      const fp = firstMap.get(key);
+      const ag = agingMap.get(key);
+      const salesUsd = a ? a.salesUsd : 0;
+      const collectedUsd = a ? a.collectedUsd : 0;
+      const invoiceBaseUsd = a ? a.invoiceBaseUsd : 0;
+      const financedBaseUsd = a ? a.financedBaseUsd : 0;
+      const avgFinancedPct = a ? a.avgFinancedPct : 0;
+      const weightedFinancedPct =
+        invoiceBaseUsd > 0 ? (financedBaseUsd / invoiceBaseUsd) * 100 : 0;
+      return {
+        platform: key,
+        salesCount: a ? a.salesCount : 0,
+        salesUsd: r2(salesUsd),
+        salesBs: r2(a ? a.salesBs : 0),
+        collectedUsd: r2(collectedUsd),
+        collectedBs: r2(a ? a.collectedBs : 0),
+        pendingUsd: r2(a ? a.pendingUsd : 0),
+        pendingBs: r2(a ? a.pendingBs : 0),
+        collectionRatio: salesUsd > 0 ? r1((collectedUsd / salesUsd) * 100) : 0,
+        avgFinancedPct: r1(avgFinancedPct),
+        weightedFinancedPct: r1(weightedFinancedPct),
+        avgInitialPct: r1(100 - avgFinancedPct),
+        avgDaysToFirst: fp && fp.avgDaysToFirst != null ? r1(fp.avgDaysToFirst) : null,
+        withPaymentCount: fp ? fp.withPaymentCount : 0,
+        avgDaysToFull: f && f.avgDaysToFull != null ? r1(f.avgDaysToFull) : null,
+        paidCount: f ? f.paidCount : 0,
+        aging: {
+          d0_30: r2(ag ? ag.b0_30 : 0),
+          d31_60: r2(ag ? ag.b31_60 : 0),
+          d61_90: r2(ag ? ag.b61_90 : 0),
+          d90plus: r2(ag ? ag.b90 : 0),
+        },
+      };
+    });
+
+    // Serie mensual: un objeto por mes con el monto de cada plataforma
+    const monthMap = new Map<string, any>();
+    for (const row of monthlyRows) {
+      if (!monthMap.has(row.ym)) monthMap.set(row.ym, { ym: row.ym, CASHEA: 0, CREDIAGRO: 0 });
+      monthMap.get(row.ym)[row.platform] = r2(row.salesUsd);
+    }
+    const monthly = Array.from(monthMap.values()).sort((x, y) => x.ym.localeCompare(y.ym));
+
+    return {
+      from: from || null,
+      to: to || null,
+      platforms,
+      monthly,
+    };
+  }
+
   async findByCustomer(customerId: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },

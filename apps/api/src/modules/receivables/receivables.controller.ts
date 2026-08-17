@@ -84,6 +84,12 @@ export class ReceivablesController {
     return this.receivablesService.summary();
   }
 
+  // Análisis de plataformas de financiamiento (Cashea/Crediagro). Rango opcional from/to.
+  @Get('platforms/analytics')
+  platformAnalytics(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.receivablesService.platformAnalytics(from, to);
+  }
+
   @Get('customer/:customerId')
   findByCustomer(@Param('customerId') customerId: string) {
     return this.receivablesService.findByCustomer(customerId);
