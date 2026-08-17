@@ -545,17 +545,19 @@ export class ReceivablesService {
       ORDER BY ym`;
 
     // F) Total de ventas de la empresa en el período (para el peso de las plataformas).
-    // Universo = ventas reales (procesadas/con devolución), excluye PENDING y canceladas.
+    // MISMA definición que el dashboard (`getSales`): status PAID/PARTIAL_RETURN (excluye
+    // devueltas y aparcadas) por `paidAt` → el denominador cuadra con "Ventas" del dashboard.
     const companyRows = await this.prisma.$queryRaw<any[]>`
       SELECT COUNT(*)::int AS "totalInvoices",
         COALESCE(SUM(i."totalUsd"), 0)::float8 AS "totalSalesUsd",
         COALESCE(SUM(i."totalBs"), 0)::float8 AS "totalSalesBs"
       FROM "Invoice" i
-      WHERE i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
-        AND i."createdAt" >= ${start} AND i."createdAt" <= ${end}`;
+      WHERE i.status IN ('PAID', 'PARTIAL_RETURN')
+        AND i."paidAt" >= ${start} AND i."paidAt" <= ${end}`;
 
     // G) Valor completo de las FACTURAS que usaron cada plataforma (no el financiado, sino
-    // la venta entera). DISTINCT por factura para no duplicar si tuviera 2 CxC de la plataforma.
+    // la venta entera). Misma definición que F (paidAt, PAID/PARTIAL_RETURN) para que el share
+    // sea consistente. DISTINCT por factura para no duplicar si tuviera 2 CxC de la plataforma.
     const share = await this.prisma.$queryRaw<any[]>`
       SELECT platform,
         COUNT(*)::int AS "invoicesCount",
@@ -567,8 +569,8 @@ export class ReceivablesService {
         JOIN "Invoice" i ON i.id = r."invoiceId"
         WHERE r.type = 'FINANCING_PLATFORM'
           AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
-          AND i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
-          AND i."createdAt" >= ${start} AND i."createdAt" <= ${end}
+          AND i.status IN ('PAID', 'PARTIAL_RETURN')
+          AND i."paidAt" >= ${start} AND i."paidAt" <= ${end}
       ) t GROUP BY platform`;
 
     const company = {
