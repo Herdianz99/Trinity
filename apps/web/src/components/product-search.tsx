@@ -54,7 +54,7 @@ export default function ProductSearch({
   busy = false,
   placeholder = 'Buscar producto...',
   accent = 'green',
-  limit = 15,
+  limit = 100,
   minChars = 2,
   className = '',
 }: Props) {
