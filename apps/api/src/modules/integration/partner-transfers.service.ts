@@ -119,9 +119,10 @@ export class PartnerTransfersService {
     for (const it of items) {
       const p = await this.prisma.product.findUnique({
         where: { code: it.code },
-        select: { id: true, code: true, name: true, costUsd: true, bregaApplies: true, categoryId: true },
+        select: { id: true, code: true, name: true, costUsd: true, bregaApplies: true, categoryId: true, isActive: true },
       });
       if (!p) throw new BadRequestException(`Producto no encontrado: ${it.code}`);
+      if (!p.isActive) throw new BadRequestException(`El producto "${p.name}" (${p.code}) esta desactivado y no se puede trasladar`);
       if (!it.quantity || it.quantity <= 0) throw new BadRequestException(`Cantidad invalida para ${it.code}`);
       const bregaPct =
         costBasis === 'COST_BREGA'
