@@ -8,10 +8,10 @@ export class CreateProductDto {
   @IsString()
   code?: string;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsString()
-  barcode?: string;
+  barcode?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
