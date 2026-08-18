@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowLeft, AlertTriangle, Check, X, Receipt } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertTriangle, Check, X, Receipt, FileText } from 'lucide-react';
 
 interface TItem { code: string; name?: string; quantity: number; requestedQuantity?: number; unitCost?: number }
 interface Transfer {
@@ -162,7 +162,15 @@ export default function PartnerTransferDetailPage() {
 
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-white font-mono">{t.number}</h1>
-        <span className={`text-sm font-semibold ${STATUS_COLOR[t.status] || 'text-slate-300'}`}>{STATUS_LABEL[t.status] || t.status}</span>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => window.open(`/api/proxy/integration/transfers/${encodeURIComponent(t.id)}/pdf`, '_blank')}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-teal-300"
+          >
+            <FileText size={15} /> Imprimir reporte
+          </button>
+          <span className={`text-sm font-semibold ${STATUS_COLOR[t.status] || 'text-slate-300'}`}>{STATUS_LABEL[t.status] || t.status}</span>
+        </div>
       </div>
 
       {msg && (

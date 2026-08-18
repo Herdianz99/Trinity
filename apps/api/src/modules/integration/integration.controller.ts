@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
@@ -8,6 +9,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { IntegrationTokenGuard } from './integration-token.guard';
 import { IntegrationService } from './integration.service';
 import { PartnerTransfersService } from './partner-transfers.service';
+import { PartnerTransferPdfService } from './partner-transfer-pdf.service';
 import { getIntegrationConfig } from './integration.config';
 
 @ApiTags('Integration')
@@ -16,6 +18,7 @@ export class IntegrationController {
   constructor(
     private readonly service: IntegrationService,
     private readonly transfers: PartnerTransfersService,
+    private readonly transfersPdf: PartnerTransferPdfService,
   ) {}
 
   // ── ENTRANTES (los llama el SOCIO, protegidos por X-Integration-Token) ──
@@ -107,6 +110,18 @@ export class IntegrationController {
   @UseGuards(AuthGuard('jwt'))
   transferAvailability(@Param('id') id: string, @Query('warehouseId') warehouseId: string) {
     return this.transfers.availability(id, warehouseId);
+  }
+
+  @Get('transfers/:key/pdf')
+  @UseGuards(AuthGuard('jwt'))
+  async transferPdf(@Param('key') key: string, @Res() res: Response) {
+    const { buffer, number } = await this.transfersPdf.generate(key);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="traslado-${number}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Post('transfers/send')
