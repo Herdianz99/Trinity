@@ -1,5 +1,14 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-18 — Reporte PDF de traslado socio + bloqueo de productos desactivados en traslados
+
+> ### ⏳ EN GIT, PENDIENTE DE DEPLOY — HEAD `be65722` (sobre `ff0301a`)
+> Dos features backend + un ajuste frontend, **sin migración**. Probados en local (typecheck API limpio, endpoint PDF **200**, bloqueo verificado con **400** contra `grande_db`). **Falta desplegar a las 6 empresas.** (En el mismo lote entra también `62cfdea` fix de barcode nullable de una sesión previa.)
+
+- **`bcc9219` feat(traslados): reporte PDF de traslado entre empresas** — en el detalle de `/catalog/partner-transfers/[id]` un botón **"Imprimir reporte"** abre un PDF con lo que se trasladó. Endpoint `GET /integration/transfers/:key/pdf` (JWT; acepta **id o número**) genera con **PDFKit** (mismo estilo que los reportes de CxC): encabezado con nombre de la empresa + Nº del traslado, ficha (**tipo**, **estado**, **empresa socia**, **almacén origen/destino**, **fecha**, **notas** y **nota del envío**), tabla de ítems (**código, artículo, solicitado, enviado, costo unit. $, subtotal $**) y fila de **TOTALES** (cantidades solicitada/enviada + total USD **a costo** = misma base que la CxC/CxP que genera el traslado). Archivos nuevos/tocados: `partner-transfer-pdf.service.ts` (nuevo), `integration.controller.ts` (+ruta), `integration.module.ts` (+provider), `partner-transfers/[id]/page.tsx` (botón). Verificado local end-to-end (token forjado): **HTTP 200**, `application/pdf`, 1 página. **Sin migración.**
+
+- **`d08b9f6` fix(traslados): bloquear traslado de productos desactivados** — `resolveItems` (punto común de **enviar** / **aprobar solicitud** / **solicitar**) ahora rechaza con **400** los productos con `isActive=false`, con mensaje *"El producto … está desactivado y no se puede trasladar"* (mismo patrón que la facturación). Cierra la brecha por la que un producto desactivado podía moverse a la empresa socia y quedar como stock invendible del otro lado. **No** se tocó `receive()` a propósito: si el socio ya envió la mercancía (su stock ya descontado + CxC creada), debe poder recibirse aunque el producto esté inactivo localmente. Verificado local: envío de producto desactivado → **400**; reactivado tras la prueba. **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-17 — Gráficas dashboard (categoría + fiscal) + análisis de plataformas + filtro vendedor SELLER + pendiente Bs POS + filtro retenciones + cotización Bs + traslado→factura
 
 > ### ✅ DESPLEGADO y verificado en las 6 empresas (2026-08-17) — HEAD `ff0301a` (sobre `6783a7d`)
