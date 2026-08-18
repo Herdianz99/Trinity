@@ -252,7 +252,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
     try {
       const body: any = {
         name: form.name,
-        barcode: form.barcode || undefined,
+        barcode: (form.barcode || '').trim() || null,
         supplierRef: form.supplierRef || undefined,
         otherCode: form.otherCode || undefined,
         description: form.description || undefined,

@@ -331,7 +331,7 @@ export default function ProductDetailPage() {
       // Aqui solo se guardan datos no relacionados al precio.
       const body: any = {
         name: form.name,
-        barcode: form.barcode || undefined,
+        barcode: (form.barcode || '').trim() || null,
         supplierRef: form.supplierRef || undefined,
         otherCode: form.otherCode || undefined,
         description: form.description || undefined,

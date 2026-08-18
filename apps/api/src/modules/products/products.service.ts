@@ -526,6 +526,12 @@ export class ProductsService {
     const isManual = dto.manualPrice ?? existing.manualPrice;
     const { code, ...updateData } = dto;
 
+    // Barcode vacio ("" o solo espacios) => null. El campo es @unique: guardar "" haria
+    // chocar a un segundo producto "sin codigo" contra el "" ya existente. null permite N sin codigo.
+    if (updateData.barcode !== undefined) {
+      updateData.barcode = (updateData.barcode || '').trim() || null;
+    }
+
     let priceDetal: number;
     let priceMayor: number;
 
