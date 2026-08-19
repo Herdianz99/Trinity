@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-19 — Visor con zoom para la foto de la factura de compra
+
+> ### ⏳ Pendiente de deploy — typecheck Web limpio
+> Solo frontend (+ una constante de imagen en el API), **sin migración**. Commits `d379faa` · `24705bc` · `e15334b`.
+
+- **fix/feat(compras): la foto de la factura física se ve a pantalla completa CON ZOOM** — en `/purchases/[id]` (pestaña **Archivos**) el clic en la foto abría un lightbox que se veía pequeño por dos motivos que se corrigieron: **(1)** el `position:fixed` quedaba **atrapado** dentro del rectángulo de la galería porque un padre tiene `transform`/`backdrop-blur` (containing block) → ahora el modal se renderiza con **`createPortal` a `document.body`** y ocupa la pantalla completa de verdad; **(2)** solo tenía un tope de tamaño y no crecía → nuevo **componente reutilizable `components/image-zoom-lightbox.tsx`** (`ImageZoomLightbox`) con **zoom real**: rueda del mouse (hacia el cursor), botones **+/−** con **%** y restablecer, **arrastrar** para moverse, **doble clic** y **pellizco (pinch)** en táctil, cierre con ESC/fondo. Además la versión "grande" del documento subió de **1600→2000px** en `image-processing.ts` (`processDocumentImage`, que solo usa la factura de compra) para que se lea nítida al máximo zoom (solo subidas nuevas). **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-19 — Facturar pedido de tienda online + banner al cajero
 
 > ### ⏳ Pendiente de deploy — typecheck API+Web limpio + probado e2e en local (revertido)
