@@ -23,6 +23,7 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ImageZoomLightbox } from '@/components/image-zoom-lightbox';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
@@ -1960,13 +1961,9 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
         </div>
       )}
 
-      {/* Lightbox — la imagen llena la pantalla (object-contain conserva la proporción) */}
+      {/* Lightbox con zoom (rueda, botones +/-, arrastrar, doble clic, pellizco) */}
       {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 sm:p-6" onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70" onClick={() => setLightbox(null)}><X size={28} /></button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Factura de compra" className="w-full h-full object-contain select-none" onClick={e => e.stopPropagation()} />
-        </div>
+        <ImageZoomLightbox url={lightbox} alt="Factura de compra" onClose={() => setLightbox(null)} />
       )}
     </div>
   );
