@@ -1960,12 +1960,12 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
         </div>
       )}
 
-      {/* Lightbox */}
+      {/* Lightbox — la imagen llena la pantalla (object-contain conserva la proporción) */}
       {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 text-white/80 hover:text-white" onClick={() => setLightbox(null)}><X size={28} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 sm:p-6" onClick={() => setLightbox(null)}>
+          <button className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70" onClick={() => setLightbox(null)}><X size={28} /></button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Factura de compra" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+          <img src={lightbox} alt="Factura de compra" className="w-full h-full object-contain select-none" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>

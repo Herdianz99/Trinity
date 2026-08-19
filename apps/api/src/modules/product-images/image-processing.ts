@@ -48,7 +48,9 @@ export interface ProcessedDocument {
 }
 
 const DOC_THUMB_SIZE = 320;
-const DOC_FULL_SIZE = 1600;
+// 2000px: el navegador ya comprime la subida a 2000px, así que conservamos ese detalle
+// para que la factura se lea nítida al ampliarla a pantalla completa.
+const DOC_FULL_SIZE = 2000;
 // El texto de una factura sigue legible a ~q72 en WebP, pero pesa la mitad que un JPEG
 // equivalente. Priorizamos peso bajo: una foto de celular de ~3 MB queda en ~120-250 KB.
 const DOC_THUMB_QUALITY = 68;
