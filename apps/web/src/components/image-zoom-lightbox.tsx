@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 // Visor de imagen a pantalla completa CON ZOOM real (rueda del mouse, botones +/-,
@@ -21,11 +22,16 @@ export function ImageZoomLightbox({
 }) {
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
 
   const reset = useCallback(() => { setZoom(1); setPos({ x: 0, y: 0 }); }, []);
+
+  // Portal a document.body: evita que un padre con transform/filter/backdrop-blur
+  // "atrape" el position:fixed y recorte el modal dentro de su rectángulo.
+  useEffect(() => { setMounted(true); }, []);
 
   // Reset al cambiar de imagen y cerrar con ESC.
   useEffect(() => { reset(); }, [url, reset]);
@@ -108,10 +114,12 @@ export function ImageZoomLightbox({
     else zoomAt(e.clientX, e.clientY, 2.5);
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm overflow-hidden touch-none"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm overflow-hidden touch-none"
       onClick={(e) => { if (e.target === e.currentTarget && zoom <= 1) onClose(); }}
       onWheel={onWheel}
       onMouseMove={onMouseMove}
@@ -141,6 +149,7 @@ export function ImageZoomLightbox({
       </div>
 
       <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70" title="Cerrar" aria-label="Cerrar"><X size={26} /></button>
-    </div>
+    </div>,
+    document.body,
   );
 }
