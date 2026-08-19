@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-19 — Reporte PDF de artículos sin foto (sesión de fotos)
+
+> ### ⏳ Pendiente de deploy — typecheck API+Web limpio en local
+> Feature nueva (backend PDFKit + frontend), **sin migración**. Falta commit/push + deploy a las 6 empresas.
+
+- **feat(sesión-fotos): botón "Imprimir reporte" de artículos sin foto** — en `/catalog/photo-session` un botón **"Imprimir reporte"** en el encabezado abre un **modal** que pregunta la **marca** (dropdown cargado de `GET /brands`, opción **"Todas las marcas"** por defecto). Al imprimir abre un **PDF carta vertical** en pestaña nueva. El reporte lista los artículos **sin foto** (sin ninguna fila en `ProductImage` — fuente de verdad, no el cache `primaryImageThumbUrl`), **solo activos**, **agrupado por marca** (barra de encabezado por marca con su conteo, se repite al saltar de página) y **ordenado por existencia de mayor a menor** dentro de cada marca (a un artículo sin stock no se le pueden tomar fotos). Columnas: **Código, Ref. Proveedor, Nombre, Existencias**. Filtro opcional por marca. Archivos: `products-no-photo-report-pdf.service.ts` (nuevo, mimetiza `products-report-pdf.service.ts`), `products.service.ts` (+`noPhotoReportList`), `products.controller.ts` (+`GET /products/report/no-photo/pdf?brandId=`), `products.module.ts` (+provider), `photo-session/page.tsx` (botón + modal + fetch de marcas). **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-18 — Reporte PDF de traslado socio + bloqueo de productos desactivados en traslados
 
 > ### ✅ DESPLEGADO y verificado en las 6 empresas (2026-08-18) — HEAD `daff7b4` (sobre `ff0301a`)

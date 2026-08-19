@@ -15,6 +15,7 @@ import { QueryProductsDto } from './dto/query-products.dto';
 import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
 import { ProductsReportPdfService } from './products-report-pdf.service';
+import { ProductsNoPhotoReportPdfService } from './products-no-photo-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
@@ -30,6 +31,7 @@ export class ProductsController {
     private productsService: ProductsService,
     private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
     private productsReportPdf: ProductsReportPdfService,
+    private noPhotoReportPdf: ProductsNoPhotoReportPdfService,
     private catalogReport: ProductsCatalogReportService,
     private utilidadReport: ProductsUtilidadReportService,
   ) {}
@@ -71,6 +73,19 @@ export class ProductsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="existencias-articulos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Reporte de articulos sin foto, agrupado por marca y ordenado por existencia desc.
+  // brandId opcional: si viene, solo esa marca; si no, todas.
+  @Get('report/no-photo/pdf')
+  async noPhotoReportPdfReport(@Query('brandId') brandId: string | undefined, @Res() res: Response) {
+    const buffer = await this.noPhotoReportPdf.generate(brandId || undefined);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="articulos-sin-foto.pdf"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

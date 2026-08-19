@@ -363,6 +363,42 @@ export class ProductsService {
     }));
   }
 
+  // Lista de articulos SIN foto para el reporte de la sesion de fotos. Filtro opcional por
+  // marca. Sin foto = no tiene ninguna fila en ProductImage (fuente de verdad). Se ordena
+  // agrupado por marca (alfabetico) y dentro de cada marca por existencia de mayor a menor,
+  // ya que a un articulo sin existencia no se le pueden tomar fotos.
+  async noPhotoReportList(brandId?: string) {
+    const where: Prisma.ProductWhereInput = {
+      isActive: true,
+      images: { none: {} },
+    };
+    if (brandId) where.brandId = brandId;
+
+    const products = await this.prisma.product.findMany({
+      where,
+      select: {
+        code: true,
+        supplierRef: true,
+        name: true,
+        brand: { select: { name: true } },
+        stock: { select: { quantity: true } },
+      },
+    });
+
+    return products
+      .map((p) => ({
+        code: p.code,
+        supplierRef: p.supplierRef,
+        name: p.name,
+        brand: p.brand?.name || 'Sin marca',
+        stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+      }))
+      .sort((a, b) => {
+        if (a.brand !== b.brand) return a.brand.localeCompare(b.brand, 'es');
+        return b.stock - a.stock;
+      });
+  }
+
   // Lista completa (sin paginar) para el reporte del catalogo (Excel/PDF). Aplica los mismos
   // filtros que la pantalla /catalog/products (search, categoria, marca, proveedor, stock bajo,
   // solo desactivados, solo bloqueados para venta) e incluye precio, estado y tasa del dia.

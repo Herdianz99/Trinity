@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Loader2, X, Image as ImageIcon, Trash2, Star, ScanLine } from 'lucide-react';
+import { Camera, Search, Loader2, X, Image as ImageIcon, Trash2, Star, ScanLine, Printer } from 'lucide-react';
+
+interface Brand {
+  id: string;
+  name: string;
+  _count?: { products: number };
+}
 
 interface FoundProduct {
   id: string;
@@ -57,6 +63,9 @@ export default function PhotoSessionPage() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [reportBrandId, setReportBrandId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -77,6 +86,24 @@ export default function PhotoSessionPage() {
   useEffect(() => {
     if (selected) loadImages(selected.id); else setImages([]);
   }, [selected, loadImages]);
+
+  // Abre el modal del reporte de articulos sin foto y carga las marcas (una sola vez).
+  async function openReport() {
+    setReportOpen(true);
+    if (brands.length === 0) {
+      try {
+        const res = await fetch('/api/proxy/brands');
+        if (res.ok) setBrands(await res.json());
+      } catch { /* ignore */ }
+    }
+  }
+
+  // Abre el PDF en una pestaña nueva. brandId vacio = todas las marcas.
+  function printReport() {
+    const qs = reportBrandId ? `?brandId=${encodeURIComponent(reportBrandId)}` : '';
+    window.open(`/api/proxy/products/report/no-photo/pdf${qs}`, '_blank');
+    setReportOpen(false);
+  }
 
   const doSearch = useCallback((q: string) => {
     setQuery(q);
@@ -258,10 +285,18 @@ export default function PhotoSessionPage() {
         <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
           <Camera className="text-purple-400" size={22} />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">Sesión de fotos</h1>
           <p className="text-slate-400 text-sm">Busca o escanea un producto y tómale la foto</p>
         </div>
+        <button
+          onClick={openReport}
+          title="Imprimir reporte de artículos sin foto"
+          aria-label="Imprimir reporte de artículos sin foto"
+          className="btn-secondary flex items-center justify-center shrink-0 !px-2.5"
+        >
+          <Printer size={18} />
+        </button>
       </div>
 
       {msg && (
@@ -368,6 +403,42 @@ export default function PhotoSessionPage() {
           <button onClick={() => { setSelected(null); setMsg(null); }} className="btn-secondary w-full mt-2">
             Siguiente producto
           </button>
+        </div>
+      )}
+
+      {reportOpen && (
+        <div onClick={() => setReportOpen(false)} className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div onClick={(e) => e.stopPropagation()} className="card p-5 w-full max-w-sm">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Printer size={18} className="text-purple-400" />
+                <h2 className="text-lg font-semibold text-white">Reporte de artículos sin foto</h2>
+              </div>
+              <button onClick={() => setReportOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+
+            <label className="block text-sm text-slate-300 mb-1.5">Marca</label>
+            <select
+              value={reportBrandId}
+              onChange={(e) => setReportBrandId(e.target.value)}
+              className="input-field w-full mb-1"
+            >
+              <option value="">Todas las marcas</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}{b._count ? ` (${b._count.products})` : ''}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mb-4">
+              El reporte agrupa por marca y ordena por existencia (mayor a menor). Elige una marca o déjalo en «Todas».
+            </p>
+
+            <div className="flex gap-2">
+              <button onClick={() => setReportOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={printReport} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                <Printer size={18} /> Imprimir
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
