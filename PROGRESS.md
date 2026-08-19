@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-19 — Facturar pedido de tienda online + banner al cajero
+
+> ### ⏳ Pendiente de deploy — typecheck API+Web limpio + probado e2e en local (revertido)
+> Feature nueva (backend + frontend), **sin migración** (reusa `OnlineOrder.invoiceId`). Falta deploy a las 6 empresas.
+
+- **feat(tienda): facturar un pedido online + aviso al cajero en el POS** — en el detalle del pedido (`/store/orders/[id]`) un botón **"Facturar pedido"** (solo cuando el pedido está **CONFIRMADO**) crea una **factura de venta PENDIENTE** con los artículos del pedido al **precio que pagó el cliente**, **creando el cliente si no existe** (dedup por cédula/RIF normalizado; la cédula de la tienda llega como `V-12345678` y se separa tipo+número) o reusando el existente. Enlaza `OnlineOrder.invoiceId` y marca el pedido **FACTURADO**; los artículos inexistentes/inactivos/bloqueados se **omiten y se reportan**. Cuando el cajero **retoma** esa factura en el POS aparece un **banner cian** en el modal de cobro: *"Esta factura viene de la tienda online (WEB-XXXX)"* con la **Ref. Pago Móvil** y la **foto del comprobante** (clic = lightbox), al estilo del banner de Cashea/Crediagro (`intendedPaymentMethod`). El cajón de "facturas en espera" muestra un **badge "Tienda online · WEB-XXXX"**. Archivos: `invoices.service.ts` (`createFromOnlineOrder` + `resolveOnlineOrderCustomer`; `retake` y `findPending` enriquecidos con el pedido online), `invoices.controller.ts` (`POST /invoices/from-online-order/:orderId`), `store/orders/[id]/page.tsx` (botón + resultado), `sales/pos/page.tsx` (banner + lightbox + badge + reset del estado en cada venta/cobro). Probado e2e local con WEB-0003 (factura PENDING $46.96 = total del pedido, dedup de cliente por cédula, `pending`/`retake` alimentan el banner) y **revertido**. **Sin migración.**
+
 ## 🗓️ Sesión 2026-08-19 — Reporte PDF de artículos sin foto (sesión de fotos)
 
 > ### ⏳ Pendiente de deploy — typecheck API+Web limpio en local

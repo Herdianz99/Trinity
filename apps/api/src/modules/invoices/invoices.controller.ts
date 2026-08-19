@@ -124,6 +124,16 @@ export class InvoicesController {
     return this.service.createFromPartnerTransfer(transferId, user);
   }
 
+  // Convierte un pedido de la tienda online (CONFIRMADO) en factura de venta PENDIENTE,
+  // al precio del pedido, creando el cliente si hace falta.
+  @Post('from-online-order/:orderId')
+  createFromOnlineOrder(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    return this.service.createFromOnlineOrder(orderId, user);
+  }
+
   @Patch(':id/pay')
   pay(
     @Param('id') id: string,

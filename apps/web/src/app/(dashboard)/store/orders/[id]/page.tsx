@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin, Receipt, Loader2 } from 'lucide-react';
 
 interface OnlineOrderItem {
   id: string;
@@ -30,6 +30,7 @@ interface OnlineOrder {
   exchangeRate: number;
   status: 'POR_VERIFICAR' | 'CONFIRMADO' | 'FACTURADO' | 'CANCELADO';
   verifiedAt: string | null;
+  invoiceId: string | null;
   createdAt: string;
   items: OnlineOrderItem[];
 }
@@ -51,6 +52,8 @@ export default function StoreOrderDetailPage() {
   const [ref, setRef] = useState('');
   const [savedRef, setSavedRef] = useState(false);
   const [proofOpen, setProofOpen] = useState(false);
+  const [billing, setBilling] = useState(false);
+  const [billMsg, setBillMsg] = useState<{ text: string; skipped: { code: string; reason: string }[] } | null>(null);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -112,6 +115,28 @@ export default function StoreOrderDetailPage() {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setActing(false);
+    }
+  }
+
+  async function createInvoice() {
+    if (!order) return;
+    if (!confirm(`¿Crear una factura de venta PENDIENTE del pedido ${order.number}? Luego se retoma en el POS para cobrarla.`)) return;
+    setBilling(true);
+    setError(null);
+    setBillMsg(null);
+    try {
+      const res = await fetch(`/api/proxy/invoices/from-online-order/${id}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'No se pudo facturar el pedido');
+      setBillMsg({
+        text: 'Factura pendiente creada. Retómala en el POS (facturas en espera) para cobrarla.',
+        skipped: Array.isArray(data?.skipped) ? data.skipped : [],
+      });
+      fetchOrder(); // el pedido pasa a FACTURADO
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBilling(false);
     }
   }
 
@@ -285,8 +310,61 @@ export default function StoreOrderDetailPage() {
         </div>
       )}
       {order.status === 'CONFIRMADO' && (
-        <div className="flex items-center gap-2 text-green-400 text-sm">
-          <CheckCircle size={16} /> Pago verificado{order.verifiedAt ? ` el ${new Date(order.verifiedAt).toLocaleString('es-VE')}` : ''}. Listo para facturar/despachar.
+        <>
+          <div className="flex items-center gap-2 text-green-400 text-sm mb-4">
+            <CheckCircle size={16} /> Pago verificado{order.verifiedAt ? ` el ${new Date(order.verifiedAt).toLocaleString('es-VE')}` : ''}. Listo para facturar/despachar.
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Facturar pedido</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Crea una factura <span className="text-slate-300">pendiente</span> con los artículos del pedido
+                al <span className="text-slate-300">precio que pagó el cliente</span>. Si el cliente no existe se crea
+                con sus datos. Luego se retoma en el <span className="text-slate-300">POS</span> para cobrarla.
+              </p>
+            </div>
+            <button
+              onClick={createInvoice}
+              disabled={billing}
+              className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm inline-flex items-center gap-2 whitespace-nowrap"
+            >
+              {billing ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} />}
+              Facturar pedido
+            </button>
+          </div>
+        </>
+      )}
+
+      {order.status === 'FACTURADO' && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-green-300 flex items-center gap-2">
+            <Receipt size={16} /> Pedido facturado. Retómalo en el POS (facturas en espera) para cobrarlo.
+          </p>
+          <Link href="/sales/pos" className="text-sm text-blue-400 hover:text-blue-300 font-medium whitespace-nowrap">
+            Ir al POS →
+          </Link>
+        </div>
+      )}
+
+      {/* Resultado de facturar */}
+      {billMsg && (
+        <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+          <p className="text-sm text-green-300 flex items-center gap-2">
+            <CheckCircle size={16} /> {billMsg.text}
+          </p>
+          <Link href="/sales/pos" className="inline-block mt-2 text-sm text-blue-400 hover:text-blue-300 font-medium">
+            Ir al POS →
+          </Link>
+          {billMsg.skipped.length > 0 && (
+            <div className="mt-3 text-xs text-amber-400">
+              <p className="font-medium">Artículos omitidos:</p>
+              <ul className="list-disc list-inside">
+                {billMsg.skipped.map((s) => (
+                  <li key={s.code}><span className="font-mono">{s.code}</span> — {s.reason}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

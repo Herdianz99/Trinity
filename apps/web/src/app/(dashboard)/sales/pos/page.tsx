@@ -30,6 +30,7 @@ import {
   PackageX,
   Image as ImageIcon,
   AlertTriangle,
+  Store,
 } from 'lucide-react';
 import { useNavGuard } from '@/components/nav-guard';
 import SeniatModal from '@/components/seniat-modal';
@@ -327,6 +328,9 @@ export default function POSPage() {
 
   // Pago previsto (Cashea/Crediagro): el vendedor lo marca en la pre-factura para avisar al cajero.
   const [intendedMethod, setIntendedMethod] = useState<{ id: string; name: string } | null>(null);
+  // Pedido de la tienda online del que proviene la factura retomada (aviso al cajero + comprobante).
+  const [onlineOrderInfo, setOnlineOrderInfo] = useState<{ number: string; paymentRef: string | null; paymentProofUrl: string | null } | null>(null);
+  const [onlineProofOpen, setOnlineProofOpen] = useState(false);
 
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<{ hasBalance: boolean; totalUsd: number; totalBs: number } | null>(null);
@@ -1248,6 +1252,7 @@ export default function POSPage() {
       // sellerId quedo "pegado" en la sesion; sin este reset se colaria a la proxima venta.
       setSelectedSellerId(mySellerId);
       setIntendedMethod(null);
+      setOnlineOrderInfo(null);
       setMobileView('search'); // volver a la pantalla de busqueda para la siguiente factura
       setMessage({ type: 'success', text: 'Factura guardada en espera' });
       fetchPending();
@@ -1291,6 +1296,7 @@ export default function POSPage() {
         setCustomerName('');
         setExistingInvoiceId(null);
         setSelectedSellerId(mySellerId);
+        setOnlineOrderInfo(null);
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -1450,6 +1456,7 @@ export default function POSPage() {
       setCreditModalOpen(false);
       setExistingInvoiceId(null);
       setSelectedSellerId(mySellerId);
+      setOnlineOrderInfo(null);
       setMessage({ type: 'success', text: `Factura ${result.number} registrada a credito` });
       fetchPending();
     } catch (err: any) {
@@ -1654,6 +1661,7 @@ export default function POSPage() {
       setPayModalOpen(false);
       setExistingInvoiceId(null);
       setSelectedSellerId(mySellerId);
+      setOnlineOrderInfo(null);
       setMessage({ type: 'success', text: `Factura ${result.number} cobrada exitosamente` });
       fetchPending();
     } catch (err: any) {
@@ -1785,6 +1793,8 @@ export default function POSPage() {
       setSelectedSellerId(fullInvoice.seller?.id ?? null);
       // Traer el pago previsto que marcó el vendedor (aviso al cajero)
       setIntendedMethod(fullInvoice.intendedPaymentMethod ? { id: fullInvoice.intendedPaymentMethod.id, name: fullInvoice.intendedPaymentMethod.name } : null);
+      // Si la factura viene de la tienda online, traer el pedido (Ref. Pago Móvil + comprobante)
+      setOnlineOrderInfo(fullInvoice.onlineOrder ?? null);
       setExistingInvoiceId(inv.id);
       setPendingDrawerOpen(false);
       setConfirmRetake(null);
@@ -2570,6 +2580,55 @@ export default function POSPage() {
                   <span className="text-sm font-medium">El cliente indicó que pagará con <span className="font-bold">{intendedMethod.name}</span></span>
                 </div>
               )}
+              {onlineOrderInfo && (
+                <div className="px-4 py-3 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-100">
+                  <div className="flex items-center gap-2">
+                    <Store size={18} className="shrink-0 text-cyan-300" />
+                    <span className="text-sm font-medium">
+                      Esta factura viene de la <span className="font-bold">tienda online</span>
+                      <span className="text-cyan-300/80 font-mono ml-1">({onlineOrderInfo.number})</span>
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-start gap-3">
+                    <div className="flex-1 text-sm">
+                      <span className="text-cyan-300/80">Ref. Pago Móvil:</span>{' '}
+                      <span className="font-mono font-semibold text-white">{onlineOrderInfo.paymentRef || '—'}</span>
+                    </div>
+                    {onlineOrderInfo.paymentProofUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setOnlineProofOpen(true)}
+                        className="flex items-center gap-1.5 shrink-0 rounded-lg overflow-hidden border border-cyan-500/40 hover:border-cyan-400 transition-colors"
+                        title="Ver comprobante del pago"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={onlineOrderInfo.paymentProofUrl} alt="Comprobante" className="h-14 w-20 object-cover" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {onlineProofOpen && onlineOrderInfo?.paymentProofUrl && (
+                <div
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+                  onClick={() => setOnlineProofOpen(false)}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={onlineOrderInfo.paymentProofUrl}
+                    alt="Comprobante del pago"
+                    className="max-h-[90vh] max-w-full rounded-lg shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button
+                    onClick={() => setOnlineProofOpen(false)}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 text-slate-200 hover:bg-slate-700"
+                    aria-label="Cerrar"
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
+              )}
               <div>
                 <h3 className="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Metodos de Pago</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -3334,6 +3393,12 @@ export default function POSPage() {
                     <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-violet-500/10 text-violet-300 border border-violet-500/20 w-fit font-medium">
                       <CreditCard size={11} />
                       Pagará con {inv.intendedPaymentMethod.name}
+                    </div>
+                  )}
+                  {inv.onlineOrderNumber && (
+                    <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 w-fit font-medium">
+                      <Store size={11} />
+                      Tienda online · {inv.onlineOrderNumber}
                     </div>
                   )}
                   <div className="text-xs text-slate-500">

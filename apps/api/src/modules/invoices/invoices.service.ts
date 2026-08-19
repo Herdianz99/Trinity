@@ -160,6 +160,15 @@ export class InvoicesService {
       : [];
     const lockerMap = new Map(lockers.map((u) => [u.id, u.name]));
 
+    // Marcar cuales facturas vienen de la tienda online (para el badge del cajon de "en espera").
+    const onlineOrders = invoiceIds.length > 0
+      ? await this.prisma.onlineOrder.findMany({
+          where: { invoiceId: { in: invoiceIds } },
+          select: { invoiceId: true, number: true },
+        })
+      : [];
+    const onlineOrderMap = new Map(onlineOrders.map((o) => [o.invoiceId!, o.number]));
+
     const now = Date.now();
     return invoices.map((inv) => {
       // Auto-expire locks older than 10 minutes
@@ -169,6 +178,7 @@ export class InvoicesService {
       return {
         ...inv,
         totalItems: countMap.get(inv.id) || 0,
+        onlineOrderNumber: onlineOrderMap.get(inv.id) || null,
         lockedById: isLocked ? inv.lockedById : null,
         lockedAt: isLocked ? inv.lockedAt : null,
         lockedByName: isLocked ? lockerMap.get(inv.lockedById!) || null : null,
@@ -505,6 +515,122 @@ export class InvoicesService {
     );
 
     return { invoice, skipped };
+  }
+
+  // Convierte un pedido de la tienda online en una factura de venta PENDIENTE (para retomar en
+  // el POS y cobrarla). Requiere el pedido en estado CONFIRMADO (pago ya verificado). Crea el
+  // cliente si no existe usando los datos del pedido (dedup por cedula/RIF normalizado), factura
+  // los articulos al PRECIO DEL PEDIDO (lo que el cliente pago), y deja rastro en notes + enlaza
+  // OnlineOrder.invoiceId y lo marca FACTURADO. Articulos inexistentes/inactivos/bloqueados se OMITEN.
+  async createFromOnlineOrder(
+    orderId: string,
+    user: { id: string; role: UserRole },
+  ) {
+    const order = await this.prisma.onlineOrder.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException('Pedido no encontrado');
+    if (order.invoiceId) {
+      throw new BadRequestException('Este pedido ya fue facturado');
+    }
+    if (order.status !== 'CONFIRMADO') {
+      throw new BadRequestException(
+        'El pedido debe estar CONFIRMADO (pago verificado) para poder facturarlo',
+      );
+    }
+
+    // Cliente: buscar por cedula/RIF normalizado; si no existe, crearlo con los datos del pedido.
+    const customerId = await this.resolveOnlineOrderCustomer(order);
+
+    // Articulos del pedido al precio que pago el cliente (unitPrice = priceUsd del pedido).
+    const codes = order.items.map((it) => it.code).filter(Boolean);
+    const products = await this.prisma.product.findMany({ where: { code: { in: codes } } });
+    const byCode = new Map(products.map((p) => [p.code, p]));
+
+    const items: { productId: string; quantity: number; unitPrice: number }[] = [];
+    const skipped: { code: string; reason: string }[] = [];
+    for (const it of order.items) {
+      const p = byCode.get(it.code);
+      if (!p) { skipped.push({ code: it.code, reason: 'no existe en el catalogo' }); continue; }
+      if (!p.isActive) { skipped.push({ code: it.code, reason: 'producto desactivado' }); continue; }
+      if (p.saleBlocked) { skipped.push({ code: it.code, reason: 'bloqueado para la venta' }); continue; }
+      if (!it.quantity || it.quantity <= 0) { skipped.push({ code: it.code, reason: 'cantidad invalida' }); continue; }
+      items.push({ productId: p.id, quantity: it.quantity, unitPrice: it.priceUsd });
+    }
+
+    if (items.length === 0) {
+      throw new BadRequestException(
+        `Ningun articulo del pedido se pudo facturar: ${skipped.map((s) => `${s.code} (${s.reason})`).join(', ')}`,
+      );
+    }
+
+    const notaPago = order.paymentRef ? ` · Pago Movil: ${order.paymentRef}` : '';
+    const invoice = await this.create(
+      {
+        customerId,
+        items,
+        notes: `Pedido tienda online ${order.number}${notaPago}`,
+      } as any,
+      user,
+    );
+
+    // Enlazar el pedido con la factura y marcarlo FACTURADO.
+    await this.prisma.onlineOrder.update({
+      where: { id: order.id },
+      data: { invoiceId: invoice.id, status: 'FACTURADO' },
+    });
+
+    return { invoice, skipped };
+  }
+
+  // Busca un cliente por la cedula/RIF del pedido (normalizado, sin guiones/espacios). Si no lo
+  // encuentra lo crea con los datos del pedido. La cedula de la tienda llega como "V-12345678";
+  // se separa el tipo de documento del numero. Sin cedula: crea cliente con RIF nulo.
+  private async resolveOnlineOrderCustomer(order: {
+    customerName: string;
+    phone: string | null;
+    cedula: string | null;
+    email: string | null;
+    address: string | null;
+  }): Promise<string> {
+    const raw = (order.cedula || '').trim();
+    let documentType = 'V';
+    let rif: string | null = null;
+    if (raw) {
+      const m = raw.match(/^\s*([VEJGCP])\s*-?\s*(.+)$/i);
+      if (m) {
+        documentType = m[1].toUpperCase();
+        rif = m[2].replace(/[-\s]/g, '');
+      } else {
+        rif = raw.replace(/[-\s]/g, '');
+      }
+    }
+
+    // Dedup por RIF normalizado + tipo (misma logica que customers.checkDuplicateRif).
+    if (rif) {
+      const normalized = rif.toUpperCase();
+      const candidates = await this.prisma.customer.findMany({
+        where: { isActive: true, rif: { not: null } },
+        select: { id: true, rif: true, documentType: true },
+      });
+      const match = candidates.find(
+        (c) => c.rif!.replace(/[-\s]/g, '').toUpperCase() === normalized && c.documentType === documentType,
+      );
+      if (match) return match.id;
+    }
+
+    const created = await this.prisma.customer.create({
+      data: {
+        name: order.customerName,
+        documentType,
+        rif,
+        phone: order.phone || null,
+        email: order.email || null,
+        address: order.address || null,
+      },
+    });
+    return created.id;
   }
 
   // Duplica una factura como pre-factura NUEVA en estado PENDING: copia los articulos y sus
@@ -1298,8 +1424,16 @@ export class InvoicesService {
     });
     const priceMap = new Map(products.map((p) => [p.id, p.priceDetal]));
 
+    // Si la factura proviene de un pedido de la tienda online, adjuntar sus datos para el
+    // banner del cajero (Ref. Pago Movil + captura del comprobante).
+    const onlineOrder = await this.prisma.onlineOrder.findFirst({
+      where: { invoiceId: id },
+      select: { number: true, paymentRef: true, paymentProofUrl: true },
+    });
+
     return {
       ...invoice,
+      onlineOrder: onlineOrder ?? null,
       items: invoice.items.map((item) => ({
         ...item,
         priceDetal: priceMap.get(item.productId) ?? null,
