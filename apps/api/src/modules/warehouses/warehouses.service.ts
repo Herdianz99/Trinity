@@ -21,6 +21,7 @@ export class WarehousesService {
           name: dto.name,
           location: dto.location,
           isDefault: dto.isDefault ?? false,
+          countsForSale: dto.countsForSale ?? true,
         },
       });
     });

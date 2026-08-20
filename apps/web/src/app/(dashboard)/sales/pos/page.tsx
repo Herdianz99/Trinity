@@ -51,6 +51,18 @@ const IVA_LABELS: Record<string, string> = {
   SPECIAL: 'Especial 31%',
 };
 
+// Existencia disponible para la venta = suma del stock de TODOS los almacenes del producto,
+// EXCLUYENDO los marcados countsForSale=false (ej: "Articulos dañados"). El producto trae
+// su stock como array (un registro por almacen); antes se leia solo stock[0], lo que mostraba
+// el almacen equivocado cuando habia stock repartido en varios almacenes.
+function sellableStock(product: any): number {
+  const rows = Array.isArray(product?.stock) ? product.stock : [];
+  return rows.reduce(
+    (sum: number, s: any) => sum + (s?.warehouse?.countsForSale === false ? 0 : (s?.quantity || 0)),
+    0,
+  );
+}
+
 interface PaymentMethodData {
   id: string;
   name: string;
@@ -860,7 +872,7 @@ export default function POSPage() {
   // Agrega de verdad al carrito (sin el aviso de stock). Lo llaman addToCart (tras pasar
   // el aviso) y el onConfirm del modal de aviso.
   function doAddToCart(product: any, authorizedNegative = false) {
-    const stockQty = product.stock?.[0]?.quantity || 0;
+    const stockQty = sellableStock(product);
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
@@ -899,7 +911,7 @@ export default function POSPage() {
       setMessage({ type: 'error', text: `"${product.name}" no tiene precio (esta en 0). Configurale un precio antes de venderlo: la maquina fiscal rechaza articulos en 0.` });
       return;
     }
-    const stockQty = product.stock?.[0]?.quantity || 0;
+    const stockQty = sellableStock(product);
     // Los servicios (flete, mano de obra...) no manejan inventario: nunca se bloquean por stock.
     const blockNoStock = companyConfig?.allowNegativeStock === false && !product.isService;
 
@@ -933,7 +945,7 @@ export default function POSPage() {
       setMessage({ type: 'error', text: `"${product.name}" esta bloqueado para la venta` });
       return;
     }
-    const prodStock = product.stock?.[0]?.quantity || 0;
+    const prodStock = sellableStock(product);
     const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
     if (blockNoStock) {
       setLostSalePreset({ id: product.id, code: product.code, name: product.name });
@@ -2142,7 +2154,7 @@ export default function POSPage() {
             {searchResults.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {searchResults.map(product => {
-                  const prodStock = product.stock?.[0]?.quantity || 0;
+                  const prodStock = sellableStock(product);
                   const reserved = reservedStock[product.id] || 0;
                   const available = prodStock - reserved;
                   const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;
@@ -3647,7 +3659,7 @@ export default function POSPage() {
         {searchResults.length > 0 && (
           <div className="card mb-3 max-h-80 overflow-y-auto">
             {searchResults.map((product, pIdx) => {
-              const prodStock = product.stock?.[0]?.quantity || 0;
+              const prodStock = sellableStock(product);
               const reserved = reservedStock[product.id] || 0;
               const available = prodStock - reserved;
               const blockNoStock = companyConfig?.allowNegativeStock === false && prodStock <= 0 && !product.isService;

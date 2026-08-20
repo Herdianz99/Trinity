@@ -9,6 +9,7 @@ interface Warehouse {
   location: string | null;
   isDefault: boolean;
   isActive: boolean;
+  countsForSale: boolean;
   _count?: { stock: number };
 }
 
@@ -17,7 +18,7 @@ export default function WarehousesPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', location: '', isDefault: false });
+  const [form, setForm] = useState({ name: '', location: '', isDefault: false, countsForSale: true });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -37,13 +38,13 @@ export default function WarehousesPage() {
 
   function openCreate() {
     setEditingId(null);
-    setForm({ name: '', location: '', isDefault: false });
+    setForm({ name: '', location: '', isDefault: false, countsForSale: true });
     setModalOpen(true);
   }
 
   function openEdit(w: Warehouse) {
     setEditingId(w.id);
-    setForm({ name: w.name, location: w.location || '', isDefault: w.isDefault });
+    setForm({ name: w.name, location: w.location || '', isDefault: w.isDefault, countsForSale: w.countsForSale ?? true });
     setModalOpen(true);
   }
 
@@ -61,6 +62,7 @@ export default function WarehousesPage() {
           name: form.name,
           location: form.location || undefined,
           isDefault: form.isDefault,
+          countsForSale: form.countsForSale,
         }),
       });
       if (res.ok) {
@@ -138,7 +140,16 @@ export default function WarehousesPage() {
                 <tr><td colSpan={5} className="text-center py-12 text-slate-500">No hay almacenes</td></tr>
               ) : warehouses.map(w => (
                 <tr key={w.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
-                  <td className="px-4 py-3 text-white font-medium">{w.name}</td>
+                  <td className="px-4 py-3 text-white font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>{w.name}</span>
+                      {w.countsForSale === false && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20" title="El POS no cuenta este almacen como existencia disponible">
+                          No vendible
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-400">{w.location || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     {w.isDefault ? (
@@ -218,6 +229,21 @@ export default function WarehousesPage() {
                 />
                 Almacen por defecto
               </label>
+              <div>
+                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.countsForSale}
+                    onChange={(e) => setForm(f => ({ ...f, countsForSale: e.target.checked }))}
+                    className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                  />
+                  Cuenta como disponible para la venta
+                </label>
+                <p className="text-[11px] text-slate-500 mt-1 ml-6">
+                  Desmarca esto para almacenes de mercancia no vendible (ej: articulos dañados, merma).
+                  Su stock seguira contando en el inventario, pero el POS no lo mostrara como existencia.
+                </p>
+              </div>
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
                 <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button type="submit" disabled={saving} className="btn-primary !py-2.5 text-sm flex items-center gap-2">

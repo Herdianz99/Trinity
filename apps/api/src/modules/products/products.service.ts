@@ -323,7 +323,7 @@ export class ProductsService {
           category: { include: { printArea: { select: { id: true, name: true } } } },
           brand: true,
           supplier: { select: { id: true, name: true } },
-          stock: { include: { warehouse: { select: { id: true, name: true } } } },
+          stock: { include: { warehouse: { select: { id: true, name: true, countsForSale: true } } } },
         },
       }),
       this.prisma.product.count({ where }),

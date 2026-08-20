@@ -582,6 +582,10 @@ model Warehouse {
   location        String?
   isDefault       Boolean          @default(false)
   isActive        Boolean          @default(true)
+  // Si es false, el stock de este almacen NO cuenta como disponible para la venta
+  // (ej: "Articulos dañados", "Merma"). El POS lo excluye al mostrar existencia,
+  // pero sigue contando en inventario fisico / kardex / reportes de existencia.
+  countsForSale   Boolean          @default(true)
   stock           Stock[]
   movements       StockMovement[]
   transfersFrom   Transfer[]       @relation("TransferFrom")
