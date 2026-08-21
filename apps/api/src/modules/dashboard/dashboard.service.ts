@@ -169,19 +169,24 @@ export class DashboardService {
     const prevDateRange = { gte: prevFrom, lte: prevTo };
     const sellerId = seller.id;
 
-    const [sales, prevSales, returns, topProducts, salesTimeline] = await Promise.all([
+    const [sales, prevSales, returns, prevReturns, topProducts, salesTimeline] = await Promise.all([
       this.getSellerSales(sellerId, dateRange),
       this.getSellerSales(sellerId, prevDateRange),
       this.getSellerReturns(sellerId, dateRange),
+      this.getSellerReturns(sellerId, prevDateRange),
       this.getSellerTopProducts(sellerId, dateRange),
       this.getSellerTimeline(sellerId, from, to),
     ]);
 
     // ── Solo PORCENTAJES (el vendedor no ve montos en $; ver requisito Sesion 69) ──
+    // Ventas NETAS = brutas − devoluciones (notas de credito NCV). El avance de la meta
+    // debe medirse sobre lo neto: una factura devuelta no cuenta para la meta del vendedor.
+    const netSalesUsd = round2(Math.max(0, sales.totalUsd - returns.totalUsd));
+    const prevNetSalesUsd = round2(Math.max(0, prevSales.totalUsd - prevReturns.totalUsd));
     // Meta mensual prorrateada al periodo: dia = 1/30, semana = 7/30, mes = 30/30 (mes nominal de 30 dias).
     const nominalDays = period === 'today' ? 1 : period === 'week' ? 7 : 30;
     const periodGoalUsd = (seller.monthlyGoalUsd || 0) * (nominalDays / 30);
-    const goalPct = periodGoalUsd > 0 ? Math.round((sales.totalUsd / periodGoalUsd) * 100) : null;
+    const goalPct = periodGoalUsd > 0 ? Math.round((netSalesUsd / periodGoalUsd) * 100) : null;
     const totalSalesUsd = sales.totalUsd;
 
     return {
@@ -190,8 +195,8 @@ export class DashboardService {
       goal: {
         monthlyGoalUsd: round2(seller.monthlyGoalUsd || 0),
         isSet: (seller.monthlyGoalUsd || 0) > 0,
-        pct: goalPct, // % de la meta del periodo, entero (null si no hay meta)
-        vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd), // ya es %
+        pct: goalPct, // % de la meta del periodo, entero (null si no hay meta) — sobre ventas NETAS
+        vsLastPeriod: pctChange(netSalesUsd, prevNetSalesUsd), // ya es %, neto vs neto
         invoiceCount: sales.count, // conteo, no es monto
       },
       returns: {
@@ -333,14 +338,27 @@ export class DashboardService {
     const diffDays = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
     const isSingleDay = diffDays <= 1;
 
-    const invoices = await this.prisma.invoice.findMany({
-      where: {
-        sellerId,
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
-        paidAt: { gte: from, lte: to },
-      },
-      select: { paidAt: true, totalUsd: true },
-    });
+    // Ventas brutas por bucket. Las devoluciones (NCV) se restan luego, en su
+    // propio bucket por documentDate, para que el timeline muestre lo NETO.
+    const [invoices, returns] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: {
+          sellerId,
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          paidAt: { gte: from, lte: to },
+        },
+        select: { paidAt: true, totalUsd: true },
+      }),
+      this.prisma.creditDebitNote.findMany({
+        where: {
+          type: 'NCV',
+          status: 'POSTED',
+          documentDate: { gte: from, lte: to },
+          invoice: { sellerId },
+        },
+        select: { documentDate: true, totalUsd: true },
+      }),
+    ]);
 
     if (isSingleDay) {
       const hours = Array.from({ length: 24 }, (_, i) => ({
@@ -354,7 +372,13 @@ export class DashboardService {
         hours[h].totalUsd += inv.totalUsd;
         hours[h].count += 1;
       }
-      return hours.slice(7, 22).map(h => ({ ...h, totalUsd: round2(h.totalUsd) }));
+      for (const ret of returns) {
+        if (!ret.documentDate) continue;
+        const h = caracasParts(new Date(ret.documentDate)).hour;
+        hours[h].totalUsd -= ret.totalUsd;
+      }
+      // Piso en 0: el timeline es una barra de avance, no mostramos horas negativas.
+      return hours.slice(7, 22).map(h => ({ ...h, totalUsd: round2(Math.max(0, h.totalUsd)) }));
     } else {
       const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       const dayMap = new Map<string, { label: string; totalUsd: number; count: number }>();
@@ -374,7 +398,14 @@ export class DashboardService {
           entry.count += 1;
         }
       }
-      return Array.from(dayMap.values()).map(d => ({ ...d, totalUsd: round2(d.totalUsd) }));
+      for (const ret of returns) {
+        if (!ret.documentDate) continue;
+        const { ymd } = caracasParts(new Date(ret.documentDate));
+        const entry = dayMap.get(ymd);
+        if (entry) entry.totalUsd -= ret.totalUsd;
+      }
+      // Piso en 0: el timeline es una barra de avance, no mostramos dias negativos.
+      return Array.from(dayMap.values()).map(d => ({ ...d, totalUsd: round2(Math.max(0, d.totalUsd)) }));
     }
   }
 
