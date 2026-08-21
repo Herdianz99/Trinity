@@ -81,9 +81,12 @@ export default function CustomerDetailPage() {
 
   // Permiso para editar el credito (MANAGE_CUSTOMER_CREDIT o ADMIN)
   const [canEditCredit, setCanEditCredit] = useState(false);
+  // Solo ADMIN puede editar el cliente por defecto (contado).
+  const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     fetch('/api/proxy/auth/me').then(r => r.json()).then(u => {
       setCanEditCredit(u.role === 'ADMIN' || (u.permissions || []).includes('MANAGE_CUSTOMER_CREDIT'));
+      setIsAdmin(u.role === 'ADMIN');
     }).catch(() => {});
   }, []);
 
@@ -273,6 +276,14 @@ export default function CustomerDetailPage() {
         {/* ═══ TAB: Info ═══ */}
         <TabsContent value="info">
           <form onSubmit={handleSave} className="card p-6 space-y-4">
+            {(customer as any).isDefaultCustomer && !isAdmin && (
+              <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
+                <strong>Cliente por defecto (contado).</strong> No se puede editar ni eliminar para que no se
+                dañe la configuración de ventas. Si necesitas facturar a otro cliente, crea uno nuevo. (Solo un
+                administrador puede editarlo.)
+              </div>
+            )}
+            <fieldset disabled={(customer as any).isDefaultCustomer && !isAdmin} className="space-y-4 disabled:opacity-60">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Nombre *</label>
               <input type="text" value={form.name || ''} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
@@ -382,6 +393,7 @@ export default function CustomerDetailPage() {
                 Guardar cambios
               </button>
             </div>
+            </fieldset>
           </form>
         </TabsContent>
 

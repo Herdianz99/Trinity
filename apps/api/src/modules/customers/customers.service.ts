@@ -130,7 +130,7 @@ export class CustomersService {
     const pendingDebt = customer.receivables.reduce((sum, r) => sum + r.amountUsd, 0);
     const availableCredit = customer.creditLimit - pendingDebt;
 
-    return { ...customer, pendingDebt, availableCredit };
+    return { ...customer, pendingDebt, availableCredit, isDefaultCustomer: await this.isDefaultCustomer(customer) };
   }
 
   private normalizeRif(rif: string): string {
@@ -204,9 +204,27 @@ export class CustomersService {
     });
   }
 
+  /** Un cliente es "por defecto" si tiene el flag isDefault o es el defaultCustomerId de la config. */
+  private async isDefaultCustomer(customer: { id: string; isDefault: boolean }): Promise<boolean> {
+    if (customer.isDefault) return true;
+    const cfg = await this.prisma.companyConfig.findFirst({ select: { defaultCustomerId: true } });
+    return !!cfg?.defaultCustomerId && cfg.defaultCustomerId === customer.id;
+  }
+
+  /** Solo ADMIN puede editar/eliminar el cliente por defecto (evita que los vendedores lo pisen). */
+  private async assertCanTouchDefaultCustomer(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'El cliente por defecto (contado) no se puede editar ni eliminar. Si necesitas facturar a otro cliente, crea uno nuevo.',
+      );
+    }
+  }
+
   async update(id: string, dto: UpdateCustomerDto, userId: string) {
     const exists = await this.prisma.customer.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Cliente no encontrado');
+    if (await this.isDefaultCustomer(exists)) await this.assertCanTouchDefaultCustomer(userId);
     await this.checkDuplicateRif(dto.rif ?? exists.rif, dto.documentType ?? exists.documentType, id);
 
     const nextLimit = dto.creditLimit ?? exists.creditLimit;
@@ -463,7 +481,7 @@ export class CustomersService {
     };
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
@@ -479,6 +497,7 @@ export class CustomersService {
     });
 
     if (!customer) throw new NotFoundException('Cliente no encontrado');
+    if (await this.isDefaultCustomer(customer)) await this.assertCanTouchDefaultCustomer(userId);
 
     const totalDocs = customer._count.invoices + customer._count.quotations
       + customer._count.receivables + customer._count.receipts;
