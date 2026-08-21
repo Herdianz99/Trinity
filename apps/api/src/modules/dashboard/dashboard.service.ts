@@ -720,19 +720,33 @@ export class DashboardService {
   // ── Sales by seller ───────────────────────────────────────────────────────
 
   private async getSalesBySeller(dateRange: { gte: Date; lte: Date }) {
-    const invoices = await this.prisma.invoice.findMany({
-      where: {
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
-        paidAt: dateRange,
-        sellerId: { not: null },
-      },
-      select: {
-        totalUsd: true,
-        seller: { select: { id: true, name: true, code: true } },
-      },
-    });
+    // Ventas NETAS por vendedor = brutas (incluye RETURNED por su total original)
+    // menos las devoluciones (notas de credito NCV). Una devolucion total o parcial
+    // NO cuenta como venta. Mismo criterio que el dashboard del vendedor (getVendedor).
+    const [invoices, returns] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: {
+          status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
+          paidAt: dateRange,
+          sellerId: { not: null },
+        },
+        select: {
+          totalUsd: true,
+          seller: { select: { id: true, name: true, code: true } },
+        },
+      }),
+      this.prisma.creditDebitNote.findMany({
+        where: {
+          type: 'NCV',
+          status: 'POSTED',
+          documentDate: dateRange,
+          invoice: { sellerId: { not: null } },
+        },
+        select: { totalUsd: true, invoice: { select: { sellerId: true } } },
+      }),
+    ]);
 
-    // Group by seller
+    // Group by seller (ventas brutas + conteo de facturas)
     const map = new Map<string, { sellerId: string; sellerName: string; sellerCode: string; totalUsd: number; invoiceCount: number }>();
     for (const inv of invoices) {
       if (!inv.seller) continue;
@@ -752,7 +766,17 @@ export class DashboardService {
       }
     }
 
-    const sellers = Array.from(map.values()).sort((a, b) => b.totalUsd - a.totalUsd);
+    // Restar las devoluciones a cada vendedor (piso en 0).
+    for (const ret of returns) {
+      const sid = ret.invoice?.sellerId;
+      if (!sid) continue;
+      const entry = map.get(sid);
+      if (entry) entry.totalUsd -= ret.totalUsd;
+    }
+
+    const sellers = Array.from(map.values())
+      .map(s => ({ ...s, totalUsd: Math.max(0, s.totalUsd) }))
+      .sort((a, b) => b.totalUsd - a.totalUsd);
     const grandTotal = sellers.reduce((s, x) => s + x.totalUsd, 0);
     return sellers.map(s => ({
       ...s,

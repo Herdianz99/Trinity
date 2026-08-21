@@ -137,13 +137,14 @@ export class ReportsPdfService {
     let y = this.drawHeader(doc, 'Ventas por Vendedor', company, `${from} al ${to}`);
 
     const cols = [
-      { label: 'Codigo', x: 40, width: 70 },
-      { label: 'Vendedor', x: 110, width: 160 },
-      { label: 'Facturas', x: 280, width: 60, align: 'right' },
-      { label: 'Total USD', x: 350, width: 100, align: 'right' },
-      { label: 'Ticket Prom', x: 460, width: 90, align: 'right' },
-      { label: 'Devol.', x: 560, width: 50, align: 'right' },
-      { label: 'Devol. USD', x: 620, width: 90, align: 'right' },
+      { label: 'Codigo', x: 40, width: 55 },
+      { label: 'Vendedor', x: 95, width: 135 },
+      { label: 'Facturas', x: 230, width: 48, align: 'right' },
+      { label: 'Bruto USD', x: 282, width: 82, align: 'right' },
+      { label: 'Devol.', x: 368, width: 40, align: 'right' },
+      { label: 'Devol. USD', x: 410, width: 82, align: 'right' },
+      { label: 'Neto USD', x: 496, width: 88, align: 'right' },
+      { label: 'Ticket Prom', x: 588, width: 88, align: 'right' },
     ];
 
     y = this.drawTableHeader(doc, y, cols);
@@ -152,8 +153,9 @@ export class ReportsPdfService {
       y = this.checkPage(doc, y);
       y = this.drawTableRow(doc, y, cols, [
         row.sellerCode, row.sellerName, String(row.invoiceCount),
-        `$${this.fmt(row.totalUsd)}`, `$${this.fmt(row.avgTicketUsd)}`,
-        String(row.returnCount), `$${this.fmt(row.returnAmountUsd)}`,
+        `$${this.fmt(row.totalUsd)}`, String(row.returnCount),
+        `$${this.fmt(row.returnAmountUsd)}`, `$${this.fmt(row.netUsd)}`,
+        `$${this.fmt(row.avgTicketUsd)}`,
       ]);
     }
 

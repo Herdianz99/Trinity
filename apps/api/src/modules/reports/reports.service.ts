@@ -212,6 +212,9 @@ export class ReportsService {
         .slice(0, 5)
         .map(p => ({ name: p.name, units: round2(p.units), totalUsd: round2(p.totalUsd) }));
 
+      // Neto = bruto − devoluciones (parciales y completas), piso en 0. Es la venta real.
+      const netUsd = Math.max(0, s.totalUsd - ret.amountUsd);
+
       return {
         sellerCode: s.sellerCode,
         sellerName: s.sellerName,
@@ -221,12 +224,15 @@ export class ReportsService {
         avgTicketUsd: s.invoiceCount > 0 ? round2(s.totalUsd / s.invoiceCount) : 0,
         returnCount: ret.count,
         returnAmountUsd: round2(ret.amountUsd),
+        netUsd: round2(netUsd),
         topProducts,
       };
-    }).sort((a, b) => b.totalUsd - a.totalUsd);
+    }).sort((a, b) => b.netUsd - a.netUsd);
 
     const totals = {
       totalUsd: round2(rows.reduce((s, r) => s + r.totalUsd, 0)),
+      returnAmountUsd: round2(rows.reduce((s, r) => s + r.returnAmountUsd, 0)),
+      netUsd: round2(rows.reduce((s, r) => s + r.netUsd, 0)),
       invoiceCount: rows.reduce((s, r) => s + r.invoiceCount, 0),
       avgTicketUsd: 0,
     };

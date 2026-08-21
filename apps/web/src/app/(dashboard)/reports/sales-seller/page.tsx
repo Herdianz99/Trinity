@@ -21,6 +21,7 @@ interface SellerRow {
   avgTicket: number;
   returnCount: number;
   returnAmountUsd: number;
+  netUsd: number;
 }
 
 interface TopProduct {
@@ -33,6 +34,8 @@ interface TopProduct {
 
 interface SellerTotals {
   totalUsd: number;
+  returnAmountUsd: number;
+  netUsd: number;
   invoiceCount: number;
   avgTicket: number;
 }
@@ -206,9 +209,12 @@ export default function SalesBySellerPage() {
             <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-t-2 border-emerald-500 border-x border-b border-slate-700/40 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="text-emerald-400" size={18} />
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total USD</span>
+                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Venta Neta USD</span>
               </div>
-              <p className="text-2xl font-bold text-emerald-400 tabular-nums">${fmt(data.totals.totalUsd)}</p>
+              <p className="text-2xl font-bold text-emerald-400 tabular-nums">${fmt(data.totals.netUsd)}</p>
+              <p className="text-[11px] text-slate-500 mt-1 tabular-nums">
+                Bruto ${fmt(data.totals.totalUsd)} − Devol. ${fmt(data.totals.returnAmountUsd)}
+              </p>
             </div>
             <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-t-2 border-blue-500 border-x border-b border-slate-700/40 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -253,9 +259,9 @@ export default function SalesBySellerPage() {
                   <Tooltip
                     contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
                     labelStyle={{ color: '#e2e8f0' }}
-                    formatter={(value: any) => [`$${fmt(Number(value))}`, 'Total USD']}
+                    formatter={(value: any) => [`$${fmt(Number(value))}`, 'Venta Neta']}
                   />
-                  <Bar dataKey="totalUsd" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="netUsd" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -270,16 +276,17 @@ export default function SalesBySellerPage() {
                     <th className="text-left text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Codigo</th>
                     <th className="text-left text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Vendedor</th>
                     <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Facturas</th>
-                    <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Total USD</th>
-                    <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Ticket Prom</th>
+                    <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Bruto USD</th>
                     <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Devoluciones</th>
                     <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Monto Devol.</th>
+                    <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Neto USD</th>
+                    <th className="text-right text-xs text-slate-400 font-medium uppercase tracking-wider px-4 py-3">Ticket Prom</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500 text-sm">
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500 text-sm">
                         Sin datos para el periodo seleccionado
                       </td>
                     </tr>
@@ -289,12 +296,13 @@ export default function SalesBySellerPage() {
                         <td className="px-4 py-3 text-sm text-slate-400 font-mono">{row.sellerCode}</td>
                         <td className="px-4 py-3 text-sm text-slate-300 font-medium">{row.sellerName}</td>
                         <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">{row.invoiceCount}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums font-medium">${fmt(row.totalUsd)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">${fmt(row.avgTicket)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">${fmt(row.totalUsd)}</td>
                         <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">{row.returnCount}</td>
                         <td className="px-4 py-3 text-sm text-red-400 text-right tabular-nums">
                           {row.returnAmountUsd > 0 ? `-$${fmt(row.returnAmountUsd)}` : '$0,00'}
                         </td>
+                        <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums font-semibold">${fmt(row.netUsd)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">${fmt(row.avgTicket)}</td>
                       </tr>
                     ))
                   )}
