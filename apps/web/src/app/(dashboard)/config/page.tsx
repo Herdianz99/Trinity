@@ -23,6 +23,7 @@ interface CompanyConfig {
   igtfPct: number;
   allowNegativeStock: boolean;
   requireCustomerAddress: boolean;
+  useScanDispatch: boolean;
   defaultCustomerId: string;
   retentionProvidencia: string;
   retentionNextNumber: number;
@@ -57,6 +58,7 @@ export default function ConfigPage() {
     igtfPct: 3,
     allowNegativeStock: true,
     requireCustomerAddress: false,
+    useScanDispatch: false,
     defaultCustomerId: '',
     retentionProvidencia: 'SNAT/2025/000054',
     retentionNextNumber: 1,
@@ -197,6 +199,7 @@ export default function ConfigPage() {
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
           requireCustomerAddress: data.requireCustomerAddress ?? false,
+          useScanDispatch: data.useScanDispatch ?? false,
           defaultCustomerId: data.defaultCustomerId || '',
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
           retentionNextNumber: data.retentionNextNumber ?? 1,
@@ -270,6 +273,7 @@ export default function ConfigPage() {
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
           requireCustomerAddress: config.requireCustomerAddress,
+          useScanDispatch: config.useScanDispatch,
           defaultCustomerId: config.defaultCustomerId || null,
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
@@ -862,6 +866,31 @@ export default function ConfigPage() {
                   <p className="text-xs text-slate-500 mt-1">Actualmente 3% por ley venezolana</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Despacho config */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Despacho</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Opciones del modulo de despacho y comandas.
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.useScanDispatch}
+                  onChange={(e) => handleChange('useScanDispatch', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Despacho verificado por escaneo</span>
+                  <p className="text-xs text-slate-500">
+                    Activa la pantalla &quot;Despacho verificado&quot; (Despacho → Despacho verificado): se escanea el
+                    N° de factura y luego cada producto por codigo de barras para confirmar que la carga salga completa.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 
