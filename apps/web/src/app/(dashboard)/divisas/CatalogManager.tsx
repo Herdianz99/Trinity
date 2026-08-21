@@ -1,25 +1,40 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Check, X, Pencil, Power } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Check, X, Pencil, Power, ChevronRight } from 'lucide-react';
 
-interface CatalogItem {
+interface CatalogRow {
   id: string;
   name: string;
   isActive: boolean;
+  balanceUsd: number;
+  inUsd: number;
+  outUsd: number;
 }
 
-/** Administrador reutilizable de catálogos del módulo de divisas (Empresas / Bancos). */
+const fmt = (n: number) =>
+  (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Lista de un catálogo del módulo de divisas (Empresas o Bancos) con su saldo.
+ * Cada fila es clicable para ENTRAR a ver sus movimientos; además se pueden
+ * crear, renombrar y activar/desactivar.
+ */
 export default function CatalogManager({
   endpoint,
+  dimensionParam,
   titleSingular,
   titlePlural,
+  subtitle,
 }: {
   endpoint: 'companies' | 'banks';
+  dimensionParam: 'companyId' | 'bankId';
   titleSingular: string;
   titlePlural: string;
+  subtitle: string;
 }) {
-  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [items, setItems] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,9 +48,10 @@ export default function CatalogManager({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/proxy/divisas/${endpoint}?all=true`);
+      // El summary ya trae cada empresa/banco con su saldo (activos e inactivos).
+      const res = await fetch('/api/proxy/divisas/summary');
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
+      setItems(Array.isArray(data?.[endpoint]) ? data[endpoint] : []);
     } finally {
       setLoading(false);
     }
@@ -86,7 +102,7 @@ export default function CatalogManager({
     }
   };
 
-  const toggleActive = async (item: CatalogItem) => {
+  const toggleActive = async (item: CatalogRow) => {
     await fetch(`/api/proxy/divisas/${endpoint}/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -95,12 +111,15 @@ export default function CatalogManager({
     load();
   };
 
+  const stop = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-100 mb-1">{titlePlural}</h1>
-      <p className="text-sm text-slate-400 mb-6">
-        Catálogo del módulo de compra de divisas. Solo afecta este módulo.
-      </p>
+      <p className="text-sm text-slate-400 mb-6">{subtitle}</p>
 
       {message && (
         <div
@@ -129,75 +148,91 @@ export default function CatalogManager({
         </button>
       </div>
 
-      {/* Lista */}
+      {/* Lista clicable */}
       <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-6 text-center text-slate-500 text-sm">Cargando…</div>
         ) : items.length === 0 ? (
           <div className="p-6 text-center text-slate-500 text-sm">Sin registros. Agrega el primero arriba.</div>
         ) : (
-          <table className="w-full">
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-slate-700/30 last:border-0 hover:bg-slate-800/40">
-                  <td className="px-4 py-3">
-                    {editingId === item.id ? (
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && saveEdit(item.id)}
-                        autoFocus
-                        className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-                      />
-                    ) : (
-                      <span className={`text-sm ${item.isActive ? 'text-slate-200' : 'text-slate-500 line-through'}`}>
-                        {item.name}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 w-24 text-right">
-                    {!item.isActive && (
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">inactivo</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 w-32 text-right whitespace-nowrap">
-                    {editingId === item.id ? (
-                      <>
-                        <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-emerald-300 p-1">
-                          <Check size={16} />
-                        </button>
-                        <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-slate-300 p-1">
-                          <X size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditingId(item.id);
-                            setEditName(item.name);
-                          }}
-                          className="text-slate-400 hover:text-blue-300 p-1"
-                          title="Renombrar"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => toggleActive(item)}
-                          className={`p-1 ${item.isActive ? 'text-slate-400 hover:text-red-300' : 'text-slate-400 hover:text-emerald-300'}`}
-                          title={item.isActive ? 'Desactivar' : 'Activar'}
-                        >
-                          <Power size={16} />
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="divide-y divide-slate-700/30">
+            {items.map((item) =>
+              editingId === item.id ? (
+                <div key={item.id} className="flex items-center gap-2 px-4 py-3">
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEdit(item.id)}
+                    autoFocus
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                  />
+                  <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-emerald-300 p-1">
+                    <Check size={16} />
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="text-slate-400 hover:text-slate-300 p-1">
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  key={item.id}
+                  href={`/divisas/movimientos?${dimensionParam}=${item.id}`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/50 group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm ${item.isActive ? 'text-slate-100' : 'text-slate-500'}`}>
+                      {item.name}
+                      {!item.isActive && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-600">inactivo</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Entradas ${fmt(item.inUsd)} · Salidas ${fmt(item.outUsd)}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-sm font-mono font-semibold tabular-nums ${
+                      item.balanceUsd < 0 ? 'text-red-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    ${fmt(item.balanceUsd)}
+                  </span>
+                  {/* Acciones (no navegan) */}
+                  <span className="flex items-center">
+                    <button
+                      onClick={(e) => {
+                        stop(e);
+                        setEditingId(item.id);
+                        setEditName(item.name);
+                      }}
+                      className="text-slate-500 hover:text-blue-300 p-1"
+                      title="Renombrar"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        stop(e);
+                        toggleActive(item);
+                      }}
+                      className={`p-1 ${item.isActive ? 'text-slate-500 hover:text-red-300' : 'text-slate-500 hover:text-emerald-300'}`}
+                      title={item.isActive ? 'Desactivar' : 'Activar'}
+                    >
+                      <Power size={15} />
+                    </button>
+                    <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 ml-1" />
+                  </span>
+                </Link>
+              ),
+            )}
+          </div>
         )}
       </div>
+
+      <p className="text-xs text-slate-500 mt-3">
+        Toca una fila para entrar y ver sus movimientos. Los íconos de la derecha son para renombrar o
+        activar/desactivar.
+      </p>
     </div>
   );
 }

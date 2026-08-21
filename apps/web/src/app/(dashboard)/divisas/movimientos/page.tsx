@@ -186,6 +186,16 @@ function MovimientosInner() {
   const activeBanks = banks.filter((b) => b.isActive);
   const colSpan = hasRunning ? 8 : 7;
 
+  // Contexto cuando se "entra" a una sola empresa o banco (vista con saldo corriente).
+  const singleDimName = fCompany
+    ? companies.find((c) => c.id === fCompany)?.name
+    : fBank
+      ? banks.find((b) => b.id === fBank)?.name
+      : null;
+  const singleDimLabel = fCompany ? 'Empresa' : 'Banco / Ubicación';
+  // El movimiento más reciente (movements[0], orden desc) trae el saldo corriente = saldo actual.
+  const currentBalance = hasRunning && movements.length ? movements[0].runningBalanceUsd || 0 : 0;
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
@@ -276,10 +286,23 @@ function MovimientosInner() {
         )}
       </div>
 
-      {hasRunning && (
-        <p className="text-xs text-slate-500 mb-2">
-          Mostrando saldo corriente de {fCompany ? 'la empresa' : 'el banco'} seleccionado (tras cada movimiento).
-        </p>
+      {hasRunning && singleDimName && (
+        <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4 mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">{singleDimLabel}</div>
+            <div className="text-lg font-semibold text-slate-100">{singleDimName}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Saldo actual</div>
+            <div
+              className={`text-2xl font-bold tabular-nums ${
+                currentBalance < 0 ? 'text-red-400' : 'text-emerald-400'
+              }`}
+            >
+              ${fmt(currentBalance)}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Tabla */}
