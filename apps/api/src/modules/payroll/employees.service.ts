@@ -13,6 +13,11 @@ const EMPLOYEE_INCLUDE = {
 export class EmployeesService {
   constructor(private prisma: PrismaService) {}
 
+  /** Normaliza la cédula/RIF igual que CustomersService: sin separadores, mayúsculas. */
+  private normalizeRif(rif?: string | null): string {
+    return (rif || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  }
+
   private async generateCode(): Promise<string> {
     const last = await this.prisma.employee.findFirst({
       where: { code: { not: null } },
@@ -63,16 +68,46 @@ export class EmployeesService {
         if (!dto.newCustomer?.name) {
           throw new BadRequestException('Debe enlazar un cliente existente o ingresar los datos de uno nuevo');
         }
-        const created = await tx.customer.create({
-          data: {
-            name: dto.newCustomer.name,
-            documentType: dto.newCustomer.documentType || 'V',
-            rif: dto.newCustomer.rif || null,
-            phone: dto.newCustomer.phone || null,
-            isEmployee: true,
-          },
-        });
-        customerId = created.id;
+        const nc = dto.newCustomer;
+        const docType = nc.documentType || 'V';
+
+        // Dedupe por cédula: si ya existe una ficha con ese documento (activa o inactiva),
+        // REUTILIZARLA en vez de crear una duplicada. Este hueco causaba dos fichas por
+        // persona (una de nómina + la de cliente). Ver también CustomersService.checkDuplicateRif.
+        const normalized = this.normalizeRif(nc.rif);
+        if (normalized) {
+          const candidates = await tx.customer.findMany({
+            where: { rif: { not: null } },
+            select: { id: true, name: true, rif: true, documentType: true },
+          });
+          const match = candidates.find(
+            (c) => c.rif && this.normalizeRif(c.rif) === normalized && c.documentType === docType,
+          );
+          if (match) {
+            const existingEmp = await tx.employee.findUnique({ where: { customerId: match.id } });
+            if (existingEmp) {
+              throw new BadRequestException(
+                `Ya existe un cliente con esa cédula que está registrado como empleado: ${match.name} (${existingEmp.code || existingEmp.id})`,
+              );
+            }
+            await tx.customer.update({ where: { id: match.id }, data: { isEmployee: true } });
+            customerId = match.id;
+          }
+        }
+
+        // No había ficha con esa cédula → crear una nueva.
+        if (!customerId) {
+          const created = await tx.customer.create({
+            data: {
+              name: nc.name,
+              documentType: docType,
+              rif: nc.rif || null,
+              phone: nc.phone || null,
+              isEmployee: true,
+            },
+          });
+          customerId = created.id;
+        }
       } else {
         const customer = await tx.customer.findUnique({ where: { id: customerId } });
         if (!customer) throw new BadRequestException('El cliente seleccionado no existe');

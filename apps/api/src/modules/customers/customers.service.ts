@@ -134,7 +134,9 @@ export class CustomersService {
   }
 
   private normalizeRif(rif: string): string {
-    return rif.replace(/[-\s]/g, '').toUpperCase();
+    // Quita TODO separador (guiones, espacios, puntos, etc.) para comparar cédulas/RIF
+    // sin importar cómo se tipearon. Debe coincidir con EmployeesService.normalizeRif.
+    return rif.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   }
 
   private async checkDuplicateRif(rif: string | undefined | null, documentType: string | undefined, excludeId?: string) {
