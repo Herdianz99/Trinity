@@ -352,6 +352,7 @@ model User {
   dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
   incidentsCreated    Incident[]          @relation("IncidentCreator")
   purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
+  treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -2394,4 +2395,53 @@ model PayrollRunLine {
   receiptSentAt      DateTime?              // último envío del recibo por correo (para mostrar estado)
 
   @@unique([payrollRunId, employeeId])
+}
+
+// ============================================
+// COMPRA DE DIVISAS / TESORERIA (modulo aislado — permiso 'divisas')
+// Ledger simple en USD cruzado por Empresa logica + Banco/Ubicacion.
+// Los saldos se CALCULAN al vuelo (no se almacenan). Ver spec:
+// docs/superpowers/specs/2026-08-21-modulo-divisas-design.md
+// ============================================
+
+model TreasuryCompany {
+  id        String             @id @default(cuid())
+  name      String             @unique
+  isActive  Boolean            @default(true)
+  movements TreasuryMovement[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model TreasuryBank {
+  id        String             @id @default(cuid())
+  name      String             @unique
+  isActive  Boolean            @default(true)
+  movements TreasuryMovement[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model TreasuryMovement {
+  id           String          @id @default(cuid())
+  date         DateTime                              // fecha del movimiento
+  companyId    String
+  company      TreasuryCompany @relation(fields: [companyId], references: [id])
+  bankId       String
+  bank         TreasuryBank    @relation(fields: [bankId], references: [id])
+  type         String                                // 'ENTRADA' | 'SALIDA'
+  amountUsd    Float                                 // monto en USD (modulo USD-nativo, sin Bs)
+  modalidad    String?                               // 'ELECTRONICO' | 'EFECTIVO'
+  counterparty String?                               // de quien / a quien (ENVIADO A)
+  reference    String?                               // referencia libre
+  description  String?                               // observaciones
+  status       String          @default("CONFIRMADO") // 'CONFIRMADO' | 'PENDIENTE'
+  createdById  String
+  createdBy    User            @relation("TreasuryMovementCreator", fields: [createdById], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([companyId, date])
+  @@index([bankId, date])
+  @@index([date])
 }

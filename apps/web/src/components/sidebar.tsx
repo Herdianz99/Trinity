@@ -233,6 +233,18 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    key: 'divisas',
+    label: 'DIVISAS',
+    icon: <Banknote size={20} />,
+    permission: 'divisas',
+    items: [
+      { label: 'Resumen', href: '/divisas', icon: <BarChart3 size={18} /> },
+      { label: 'Movimientos', href: '/divisas/movimientos', icon: <ArrowLeftRight size={18} /> },
+      { label: 'Empresas', href: '/divisas/empresas', icon: <Building2 size={18} /> },
+      { label: 'Bancos / Ubicaciones', href: '/divisas/bancos', icon: <Wallet size={18} /> },
+    ],
+  },
+  {
     key: 'fiscal',
     label: 'FISCAL',
     icon: <BookOpen size={20} />,

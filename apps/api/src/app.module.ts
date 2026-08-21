@@ -67,6 +67,7 @@ import { PayrollModule } from './modules/payroll/payroll.module';
 import { PurchaseAiModule } from './modules/purchase-ai/purchase-ai.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
+import { DivisasModule } from './modules/divisas/divisas.module';
 
 @Module({
   imports: [
@@ -138,6 +139,7 @@ import { IncidentsModule } from './modules/incidents/incidents.module';
     PurchaseAiModule,
     IntegrationModule,
     IncidentsModule,
+    DivisasModule,
   ],
 })
 export class AppModule {}

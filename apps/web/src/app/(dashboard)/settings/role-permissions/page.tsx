@@ -54,6 +54,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'expenses', label: 'Gastos' },
       { key: 'payroll', label: 'Nómina' },
       { key: 'incidents', label: 'Incidencias (seguridad)' },
+      { key: 'divisas', label: 'Compra de divisas (finanzas)' },
       { key: 'payment-schedules', label: 'Programación de Pagos' },
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
