@@ -16,12 +16,17 @@ interface ReplacementItem {
   outProduct: ProductLite; outQuantity: number; outCostUsd: number;
   inProduct: ProductLite; inQuantity: number; inCostUsd: number;
 }
+interface DamageOrigin {
+  id: string; number: string;
+  items: { id: string; productId: string; productCode: string | null; productName: string; quantity: number }[];
+}
 interface ReplacementDetail {
   id: string; number: string;
   warehouse: { id: string; name: string };
   date: string; notes: string | null;
   status: 'DRAFT' | 'PROCESSED' | 'CANCELLED';
   items: ReplacementItem[];
+  damageReport?: DamageOrigin | null;
   processedAt: string | null; createdAt: string;
 }
 
@@ -294,6 +299,34 @@ export default function InventoryReplacementDetailPage() {
           {message.text}
         </div>
       )}
+
+      {/* Precarga desde el reporte de daños de origen: chips que llenan el lado "Salida" */}
+      {isDraft && replacement.damageReport && (() => {
+        const usedOut = new Set(replacement.items.map((it) => it.outProduct.id));
+        const pending = replacement.damageReport.items.filter((di) => !usedOut.has(di.productId));
+        if (pending.length === 0) return null;
+        return (
+          <div className="card p-4 mb-4 border border-sky-500/30 bg-sky-500/5">
+            <p className="text-xs font-medium text-sky-300 mb-2">
+              Artículos del reporte de daños {replacement.damageReport.number} — toca uno para cargarlo en la salida
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {pending.map((di) => (
+                <button
+                  key={di.id}
+                  type="button"
+                  onClick={() => { setOutProduct({ id: di.productId, code: di.productCode || '', name: di.productName }); setOutQty(String(di.quantity)); }}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-slate-600 bg-slate-800 hover:border-sky-400 hover:bg-slate-700/60 text-left"
+                >
+                  <span className="font-mono text-red-400">{di.productCode || '—'}</span>
+                  <span className="text-white ml-1.5">{di.productName}</span>
+                  <span className="text-slate-400 ml-1.5">×{di.quantity}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ═══ DRAFT: add line ═══ */}
       {isDraft && (

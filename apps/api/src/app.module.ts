@@ -68,6 +68,8 @@ import { PurchaseAiModule } from './modules/purchase-ai/purchase-ai.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { DivisasModule } from './modules/divisas/divisas.module';
+import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
+import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
 
 @Module({
   imports: [
@@ -140,6 +142,8 @@ import { DivisasModule } from './modules/divisas/divisas.module';
     IntegrationModule,
     IncidentsModule,
     DivisasModule,
+    Audit5SModule,
+    DamageReportsModule,
   ],
 })
 export class AppModule {}

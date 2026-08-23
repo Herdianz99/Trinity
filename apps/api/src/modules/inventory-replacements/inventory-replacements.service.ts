@@ -38,6 +38,18 @@ const INCLUDE_DETAIL = {
     include: { outProduct: PRODUCT_SELECT, inProduct: PRODUCT_SELECT },
     orderBy: { id: 'asc' } as const,
   },
+  // Si el reemplazo nació de un reporte de daños, se exponen sus ítems para precargar el lado
+  // "que sale" en el editor.
+  damageReport: {
+    select: {
+      id: true,
+      number: true,
+      items: {
+        select: { id: true, productId: true, productCode: true, productName: true, quantity: true },
+        orderBy: { id: 'asc' } as const,
+      },
+    },
+  },
 } as const;
 
 @Injectable()
@@ -346,7 +358,7 @@ export class InventoryReplacementsService {
         });
       }
 
-      return tx.inventoryReplacement.update({
+      const updated = await tx.inventoryReplacement.update({
         where: { id },
         data: {
           status: 'PROCESSED',
@@ -355,15 +367,35 @@ export class InventoryReplacementsService {
         },
         include: INCLUDE_DETAIL,
       });
+
+      // Si nació de un reporte de daños, ahora sí queda PROCESADO (el reemplazo movió stock).
+      await tx.damageReport.updateMany({
+        where: { replacementId: id, status: { not: 'PROCESADO' } },
+        data: {
+          status: 'PROCESADO',
+          resolution: 'REEMPLAZO',
+          processedById: userId,
+          processedAt: new Date(),
+        },
+      });
+
+      return updated;
     });
   }
 
   async cancel(id: string) {
     await this.assertDraft(id);
-    return this.prisma.inventoryReplacement.update({
-      where: { id },
-      data: { status: 'CANCELLED' },
-      include: INCLUDE_LIST,
+    return this.prisma.$transaction(async (tx) => {
+      // Devolver el reporte de daños de origen (si lo hay) a PENDIENTE para que se pueda re-resolver.
+      await tx.damageReport.updateMany({
+        where: { replacementId: id },
+        data: { status: 'PENDIENTE', resolution: null, replacementId: null },
+      });
+      return tx.inventoryReplacement.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+        include: INCLUDE_LIST,
+      });
     });
   }
 
@@ -381,6 +413,12 @@ export class InventoryReplacementsService {
       );
     }
     await this.prisma.$transaction([
+      // Devolver el reporte de daños de origen a PENDIENTE (el FK pondría replacementId en null al
+      // borrar, pero el estatus hay que revertirlo a mano).
+      this.prisma.damageReport.updateMany({
+        where: { replacementId: id },
+        data: { status: 'PENDIENTE', resolution: null },
+      }),
       this.prisma.inventoryReplacementItem.deleteMany({
         where: { replacementId: id },
       }),

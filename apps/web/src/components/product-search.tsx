@@ -106,7 +106,7 @@ export default function ProductSearch({
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-80 overflow-y-auto">
           {results.map((p) => {
             const added = isAdded ? isAdded(p) : false;
             const ex = stockFor(p, warehouseId);
@@ -116,13 +116,23 @@ export default function ProductSearch({
                 type="button"
                 onClick={() => !added && !busy && pick(p)}
                 disabled={added || busy}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm border-b border-slate-700/30 last:border-0 ${added ? 'opacity-40 cursor-default' : 'hover:bg-slate-700/50 cursor-pointer'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-700/30 last:border-0 ${added ? 'opacity-40 cursor-default' : 'hover:bg-slate-700/50 cursor-pointer'}`}
               >
-                <span className={`font-mono text-xs ${codeColor} w-20 flex-shrink-0 truncate`}>{p.code}</span>
-                <span className="font-mono text-[11px] text-sky-400/80 w-24 flex-shrink-0 truncate" title="Ref. proveedor">{p.supplierRef || '—'}</span>
-                <span className="text-white flex-1 truncate">{p.name}</span>
-                <span className={`text-xs flex-shrink-0 ${ex > 0 ? 'text-slate-400' : 'text-red-400'}`}>Exist: {ex}</span>
-                {added && <span className="text-xs text-green-500 flex-shrink-0">Agregado</span>}
+                {/* Estilo POS: código · ref arriba (mono), nombre completo abajo, badge de existencia a la derecha */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-mono text-xs ${codeColor} whitespace-nowrap`}>
+                      {p.code}{p.supplierRef ? ` · ${p.supplierRef}` : ''}
+                    </span>
+                    {added && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full text-green-500 bg-green-500/10 border border-green-500/20 whitespace-nowrap">Agregado</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-white break-words mt-0.5">{p.name}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${ex > 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                  Exist: {ex}
+                </span>
               </button>
             );
           })}

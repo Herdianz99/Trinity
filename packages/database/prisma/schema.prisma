@@ -293,6 +293,9 @@ model CompanyConfig {
   // Opt-in por empresa: habilita la pantalla nueva de "Despacho verificado por escaneo"
   // (/dispatch/scan). Default false = las demás empresas no la ven ni cambia nada.
   useScanDispatch         Boolean  @default(false)
+  // Opt-in por empresa: habilita el Módulo de Almacén (Auditoría 5S + Reporte de daños).
+  // Default false = solo aceros/acerosmayor lo encienden; las demás no ven nada.
+  useAlmacenOps           Boolean  @default(false)
   updatedAt               DateTime @updatedAt
 }
 
@@ -353,6 +356,9 @@ model User {
   incidentsCreated    Incident[]          @relation("IncidentCreator")
   purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
   treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
+  audits5s            Audit5S[]           @relation("Audit5SCreator")
+  damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
+  damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -548,6 +554,7 @@ model Product {
   adjustmentItems  InventoryAdjustmentItem[]
   replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
+  damageReportItems   DamageReportItem[]
   lostSales        LostSale[]
   images                ProductImage[]
   primaryImageThumbUrl  String?
@@ -594,6 +601,7 @@ model Warehouse {
   inventoryCounts      InventoryCount[]
   inventoryAdjustments InventoryAdjustment[]
   inventoryReplacements InventoryReplacement[]
+  damageReports         DamageReport[]
   purchaseBills        PurchaseOrder[]  @relation("PurchaseBillWarehouse")
   createdAt       DateTime         @default(now())
 }
@@ -765,6 +773,7 @@ model InventoryReplacement {
   notes         String? // observacion
   status        ReplacementStatus          @default(DRAFT)
   items         InventoryReplacementItem[]
+  damageReport  DamageReport?              // si nacio de un reporte de daños
   createdById   String
   processedById String?
   processedAt   DateTime?
@@ -786,6 +795,86 @@ model InventoryReplacementItem {
   inProduct     Product              @relation("ReplacementIn", fields: [inProductId], references: [id])
   inQuantity    Float                @default(0)
   inCostUsd     Float                @default(0) // costo congelado al procesar
+}
+
+// ============================================
+// MODULO DE ALMACEN (aislado, permiso 'almacen', opt-in useAlmacenOps)
+// Auditoria 5S de cierre de turno + Reporte de daños de inventario.
+// ============================================
+
+// Checklist rapido (<2 min) de cierre de turno por zona. Solo informativo, NO toca inventario.
+// El indice 5S se calcula al vuelo: (limpieza+orden+seguridad)/15*100.
+model Audit5S {
+  id               String   @id @default(cuid())
+  number           String   @unique // AUD-0001
+  date             DateTime // fecha-calendario (medianoche UTC, date-only)
+  zone             String   // zona del patio (texto libre / combobox)
+  scoreCleanliness Int      // 1-5
+  scoreOrder       Int      // 1-5
+  scoreSafety      Int      // 1-5
+  observations     String?
+  createdById      String
+  createdBy        User     @relation("Audit5SCreator", fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+}
+
+// Reporte de mercancia dañada (lo llena despacho, lo resuelve el auditor). NO mueve stock por si
+// mismo: el kardex se mueve al "Procesar como merma" (ADJUSTMENT_OUT) o al "Generar reemplazo"
+// (InventoryReplacement enlazado). Estatus: PENDIENTE -> PROCESADO (terminal) | ANULADO.
+model DamageReport {
+  id            String             @id @default(cuid())
+  number        String             @unique // DMG-0001
+  date          DateTime // fecha-calendario (medianoche UTC, date-only)
+  zone          String
+  warehouseId   String // donde vive el stock (default = config.defaultWarehouseId)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  notes         String?
+  status        String             @default("PENDIENTE") // PENDIENTE | PROCESADO | ANULADO
+  resolution    String? // REEMPLAZO | MERMA (como lo resolvio el auditor)
+  replacementId String?            @unique // enlace cuando resolution=REEMPLAZO
+  replacement   InventoryReplacement? @relation(fields: [replacementId], references: [id])
+  items         DamageReportItem[]
+  createdById   String
+  createdBy     User               @relation("DamageReportCreator", fields: [createdById], references: [id])
+  processedById String?
+  processedBy   User?              @relation("DamageReportProcessor", fields: [processedById], references: [id])
+  processedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status])
+  @@index([date])
+}
+
+model DamageReportItem {
+  id          String              @id @default(cuid())
+  reportId    String
+  report      DamageReport        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product             @relation(fields: [productId], references: [id])
+  productName String // snapshot
+  productCode String? // snapshot
+  quantity    Float
+  note        String? // el porqué del daño
+  photos      DamageReportPhoto[]
+
+  @@index([reportId])
+}
+
+// Foto(s) de evidencia por articulo dañado. Miniatura 150px + version 800px webp en Spaces
+// (mismo procesamiento que las fotos de incidencias).
+model DamageReportPhoto {
+  id        String           @id @default(cuid())
+  itemId    String
+  item      DamageReportItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  thumbKey  String
+  mediumKey String
+  createdAt DateTime         @default(now())
+
+  @@index([itemId])
 }
 
 // ============================================

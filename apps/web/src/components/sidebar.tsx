@@ -69,6 +69,8 @@ interface MenuItem {
   integrationOnly?: boolean;
   // Solo visible si la empresa activó el flag useScanDispatch (opt-in por empresa).
   scanDispatchOnly?: boolean;
+  // Solo visible si la empresa activó el flag useAlmacenOps (opt-in por empresa).
+  almacenOpsOnly?: boolean;
 }
 
 interface MenuSection {
@@ -245,6 +247,16 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    key: 'almacen',
+    label: 'ALMACEN',
+    icon: <Warehouse size={20} />,
+    permission: 'almacen',
+    items: [
+      { label: 'Auditoría 5S', href: '/audit-5s', icon: <ClipboardCheck size={18} />, almacenOpsOnly: true },
+      { label: 'Reporte de daños', href: '/inventory/damage-reports', icon: <AlertTriangle size={18} />, almacenOpsOnly: true },
+    ],
+  },
+  {
     key: 'fiscal',
     label: 'FISCAL',
     icon: <BookOpen size={20} />,
@@ -327,6 +339,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [integrationOn, setIntegrationOn] = useState(false);
   const [scanDispatchOn, setScanDispatchOn] = useState(false);
+  const [almacenOpsOn, setAlmacenOpsOn] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const pathname = usePathname();
   const router = useRouter();
@@ -344,7 +357,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   useEffect(() => {
     fetch('/api/proxy/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); })
+      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); })
       .catch(() => {});
   }, []);
 
@@ -406,7 +419,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   // ve todos; si no, solo los items que tengan su propio permiso y el usuario lo tenga.
   const visibleItemsFor = (section: MenuSection): MenuItem[] => {
     const gate = (items: MenuItem[]) =>
-      items.filter((it) => (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn));
+      items.filter((it) => (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
     if (hasPermission(permissions, section.permission)) return gate(section.items);
     return gate(section.items.filter((it) => it.permission && hasPermission(permissions, it.permission)));

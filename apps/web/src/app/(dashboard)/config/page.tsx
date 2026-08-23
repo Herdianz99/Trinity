@@ -24,6 +24,7 @@ interface CompanyConfig {
   allowNegativeStock: boolean;
   requireCustomerAddress: boolean;
   useScanDispatch: boolean;
+  useAlmacenOps: boolean;
   defaultCustomerId: string;
   retentionProvidencia: string;
   retentionNextNumber: number;
@@ -59,6 +60,7 @@ export default function ConfigPage() {
     allowNegativeStock: true,
     requireCustomerAddress: false,
     useScanDispatch: false,
+    useAlmacenOps: false,
     defaultCustomerId: '',
     retentionProvidencia: 'SNAT/2025/000054',
     retentionNextNumber: 1,
@@ -200,6 +202,7 @@ export default function ConfigPage() {
           allowNegativeStock: data.allowNegativeStock ?? true,
           requireCustomerAddress: data.requireCustomerAddress ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
+          useAlmacenOps: data.useAlmacenOps ?? false,
           defaultCustomerId: data.defaultCustomerId || '',
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
           retentionNextNumber: data.retentionNextNumber ?? 1,
@@ -274,6 +277,7 @@ export default function ConfigPage() {
           allowNegativeStock: config.allowNegativeStock,
           requireCustomerAddress: config.requireCustomerAddress,
           useScanDispatch: config.useScanDispatch,
+          useAlmacenOps: config.useAlmacenOps,
           defaultCustomerId: config.defaultCustomerId || null,
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
@@ -888,6 +892,21 @@ export default function ConfigPage() {
                   <p className="text-xs text-slate-500">
                     Activa la pantalla &quot;Despacho verificado&quot; (Despacho → Despacho verificado): se escanea el
                     N° de factura y luego cada producto por codigo de barras para confirmar que la carga salga completa.
+                  </p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.useAlmacenOps}
+                  onChange={(e) => handleChange('useAlmacenOps', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Módulo de Almacén (5S + reporte de daños)</span>
+                  <p className="text-xs text-slate-500">
+                    Habilita en el menú la &quot;Auditoría 5S&quot; de cierre de turno y el &quot;Reporte de daños&quot;
+                    de inventario (despacho reporta la mercancía dañada; el auditor la resuelve por reemplazo o merma).
                   </p>
                 </div>
               </label>

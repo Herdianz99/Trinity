@@ -105,6 +105,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   useScanDispatch?: boolean;
 
+  // Opt-in: habilita el Módulo de Almacén (Auditoría 5S + Reporte de daños). Solo aceros/acerosmayor.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  useAlmacenOps?: boolean;
+
   @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
