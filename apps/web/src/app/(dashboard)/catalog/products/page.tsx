@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Package, Plus, Search, ChevronLeft, ChevronRight,
-  Edit2, Trash2, Loader2, AlertTriangle, PowerOff, Ban,
+  Edit2, Trash2, Loader2, AlertTriangle, PowerOff, Ban, Tag,
   FileSpreadsheet, FileText,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ interface Product {
   otherCode: string | null;
   supplierRef: string | null;
   saleBlocked?: boolean;
+  isOnSale?: boolean;
   name: string;
   categoryId: string | null;
   brandId: string | null;
@@ -53,6 +54,7 @@ export default function ProductsPage() {
   const [lowStock, setLowStock] = useState(false);
   const [onlyInactive, setOnlyInactive] = useState(false);
   const [onlySaleBlocked, setOnlySaleBlocked] = useState(false);
+  const [onlyOnSale, setOnlyOnSale] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchProducts = useCallback(async () => {
@@ -70,6 +72,7 @@ export default function ProductsPage() {
       if (lowStock) params.set('lowStock', 'true');
       if (onlyInactive) params.set('isActive', 'false');
       if (onlySaleBlocked) params.set('saleBlocked', 'true');
+      if (onlyOnSale) params.set('isOnSale', 'true');
 
       const res = await fetch(`/api/proxy/products?${params}`);
       if (res.ok) {
@@ -81,7 +84,7 @@ export default function ProductsPage() {
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock, onlyInactive, onlySaleBlocked]);
+  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock, onlyInactive, onlySaleBlocked, onlyOnSale]);
 
   const fetchMeta = useCallback(async () => {
     const [catRes, brandRes, supRes, rateRes] = await Promise.all([
@@ -120,6 +123,7 @@ export default function ProductsPage() {
     if (lowStock) params.set('lowStock', 'true');
     if (onlyInactive) params.set('isActive', 'false');
     if (onlySaleBlocked) params.set('saleBlocked', 'true');
+    if (onlyOnSale) params.set('isOnSale', 'true');
     window.open(`/api/proxy/products/report/catalog/${format}?${params}`, '_blank');
   }
 
@@ -252,6 +256,16 @@ export default function ProductsPage() {
             <Ban size={14} className="text-orange-400" />
             Solo desactivados para la venta
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={onlyOnSale}
+              onChange={(e) => { setOnlyOnSale(e.target.checked); setPage(1); }}
+              className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+            />
+            <Tag size={14} className="text-amber-400" />
+            Solo en oferta
+          </label>
         </div>
       </div>
 
@@ -336,6 +350,9 @@ export default function ProductsPage() {
                         )}
                         {product.saleBlocked && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">Bloq. venta</span>
+                        )}
+                        {product.isOnSale && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-400 text-amber-950">🏷️ Oferta</span>
                         )}
                       </div>
                     </td>

@@ -59,6 +59,18 @@ export class QueryProductsDto {
   @IsBoolean()
   saleBlocked?: boolean;
 
+  @ApiProperty({ required: false, description: 'Solo productos en oferta (isOnSale=true).' })
+  @IsOptional()
+  @Transform(toBool)
+  @IsBoolean()
+  isOnSale?: boolean;
+
+  @ApiProperty({ required: false, description: 'Ordenar productos en oferta de primero (solo el POS lo usa).' })
+  @IsOptional()
+  @Transform(toBool)
+  @IsBoolean()
+  onSaleFirst?: boolean;
+
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
   @Transform(({ value }) => parseInt(value))

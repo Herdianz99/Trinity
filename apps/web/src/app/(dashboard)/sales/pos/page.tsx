@@ -730,7 +730,7 @@ export default function POSPage() {
       try {
         // Tope alto (no 10): el cajero scrollea todos los resultados de su busqueda.
         // 500 = "todos" para cualquier busqueda real; protege de pintar miles si el termino es muy generico.
-        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(query)}&limit=500`);
+        const res = await fetch(`/api/proxy/products?search=${encodeURIComponent(query)}&limit=500&onSaleFirst=true`);
         const data = await res.json();
         setSearchResults(data.data || []);
         setSearchTotal(data.total || 0);
@@ -2162,7 +2162,7 @@ export default function POSPage() {
                     <button
                       key={product.id}
                       onClick={() => (blockNoStock && !product.saleBlocked) ? setNegKeyProduct(product) : addToCart(product)}
-                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${product.saleBlocked ? 'border-red-500/40 bg-red-500/5' : blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
+                      className={`text-left p-3 rounded-xl border transition-all active:scale-95 ${product.saleBlocked ? 'border-red-500/40 bg-red-500/5' : blockNoStock ? 'border-amber-500/30 bg-amber-500/5' : product.isOnSale ? 'border-amber-400/60 bg-amber-400/10 ring-1 ring-amber-400/40 hover:border-amber-400' : 'border-slate-700/50 bg-slate-800/50 hover:border-green-500/30'}`}
                     >
                       {product.primaryImageThumbUrl ? (
                         <img
@@ -2178,6 +2178,7 @@ export default function POSPage() {
                       )}
                       <p className="text-sm text-white font-medium line-clamp-2 leading-tight">{product.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</p>
+                      {product.isOnSale && <span className="text-[10px] mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-semibold text-amber-950 bg-amber-400">🏷️ Oferta</span>}
                       {product.saleBlocked && <p className="text-[10px] text-red-400 mt-0.5 inline-flex items-center gap-1"><Lock size={10} /> Bloqueado para venta</p>}
                       <div className="flex items-center justify-between mt-1">
                         <div className="min-w-0">
@@ -3670,7 +3671,7 @@ export default function POSPage() {
                 onMouseEnter={() => setProductHighlight(pIdx)}
                 onClick={() => pickProduct(product)}
                 title={blockNoStock ? 'Sin stock — clic para registrar venta perdida' : undefined}
-                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${pIdx === productHighlight ? (blockNoStock ? 'bg-amber-500/5' : 'bg-slate-700/40') : ''}`}
+                className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-700/30 last:border-0 text-left transition-colors ${pIdx === productHighlight ? (blockNoStock ? 'bg-amber-500/5' : 'bg-slate-700/40') : product.isOnSale ? 'bg-amber-400/10' : ''}`}
               >
                 {product.primaryImageThumbUrl ? (
                   <img
@@ -3688,6 +3689,7 @@ export default function POSPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-slate-500">{product.code}{product.supplierRef ? ` - ${product.supplierRef}` : ''}</span>
                     <span className="text-sm text-white font-medium truncate">{product.name}</span>
+                    {product.isOnSale && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold text-amber-950 bg-amber-400 whitespace-nowrap shrink-0">🏷️ Oferta</span>}
                     {product.saleBlocked && <span className="text-[10px] px-1.5 py-0.5 rounded-full text-red-400 bg-red-500/10 border border-red-500/20 whitespace-nowrap shrink-0">Bloqueado</span>}
                   </div>
                   {product.barcode && <span className="text-xs text-slate-600">CB: {product.barcode}</span>}

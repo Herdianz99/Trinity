@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
+import { resolveBregaPct, effectiveCost, round2 } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 // Umbrales de clasificación de alertas de inventario (fijos en código).
 // Para cambiarlos: ajustar aquí y actualizar el texto en apps/web/src/lib/metrics-help.ts
@@ -537,12 +539,20 @@ export class InventoryAnalysisService {
         minStock: true,
         createdAt: true,
         supplierId: true,
+        categoryId: true,
+        bregaApplies: true,
         supplier: { select: { name: true } },
         category: { select: { name: true } },
         stock: { select: { quantity: true } },
       },
     });
     const productIds = products.map((p) => p.id);
+
+    // Brecha: para valorar el exceso/stock muerto al costo real (costo + brecha).
+    // Misma fórmula centralizada que precios (bregaApplies + brecha de categoría raíz o global).
+    const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
     // 2. Última compra por producto (StockMovement tipo PURCHASE)
     const lastPurchases = await this.prisma.stockMovement.groupBy({
@@ -617,6 +627,16 @@ export class InventoryAnalysisService {
       const bajoMinimo = currentStock > 0 && currentStock <= p.minStock;
       const exceso = currentStock > 0 && periodSales > 0 && daysOfInventory > DIAS_EXCESO;
 
+      // Costo real con brecha (brecha se suma al costo, regla de negocio) y valor del stock
+      // parado a ese costo — útil para dimensionar el dinero atado en exceso / stock muerto.
+      const bregaPct = resolveBregaPct({
+        bregaApplies: p.bregaApplies,
+        categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      const costoConBrechaUsd = round2(effectiveCost(p.costUsd, bregaPct));
+      const inventoryValueBregaUsd = round2(Math.max(currentStock, 0) * costoConBrechaUsd);
+
       return {
         productId: p.id,
         productCode: p.code,
@@ -628,6 +648,9 @@ export class InventoryAnalysisService {
         currentStock,
         minStock: p.minStock,
         costUsd: p.costUsd,
+        bregaPct,
+        costoConBrechaUsd,
+        inventoryValueBregaUsd,
         inventoryValueUsd: Math.round(Math.max(currentStock, 0) * p.costUsd * 100) / 100,
         lastEntryDate: entryDate.toISOString(),
         lastEntrySource,

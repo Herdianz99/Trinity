@@ -206,7 +206,7 @@ export class ProductsService {
   // Construye el `where` compartido por findAll y el reporte PDF de existencias.
   // Devuelve null cuando el filtro garantiza 0 resultados (search / inStock sin coincidencias).
   private async buildListWhere(query: QueryProductsDto): Promise<Prisma.ProductWhereInput | null> {
-    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive, saleBlocked } = query;
+    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive, saleBlocked, isOnSale } = query;
 
     const where: Prisma.ProductWhereInput = {};
 
@@ -219,6 +219,8 @@ export class ProductsService {
     else if (!includeInactive) where.isActive = true;
     // Filtro del catalogo: solo productos bloqueados para la venta.
     if (saleBlocked) where.saleBlocked = true;
+    // Filtro del catalogo: solo productos en oferta.
+    if (isOnSale) where.isOnSale = true;
 
     if (lowStock) {
       where.stock = {
@@ -318,7 +320,8 @@ export class ProductsService {
         where,
         skip,
         take: limit,
-        orderBy: { name: 'asc' },
+        // Solo el POS pide ofertas de primero (onSaleFirst); el resto (catálogo, etc.) va alfabético.
+        orderBy: query.onSaleFirst ? [{ isOnSale: 'desc' }, { name: 'asc' }] : { name: 'asc' },
         include: {
           category: { include: { printArea: { select: { id: true, name: true } } } },
           brand: true,
@@ -455,7 +458,7 @@ export class ProductsService {
     const like = `%${q}%`;
     const results = await this.prisma.$queryRaw<any[]>`
       SELECT p.id, p.code, p.name, p."priceDetal", p."priceMayor", p."isService",
-        p."primaryImageThumbUrl",
+        p."primaryImageThumbUrl", p."isOnSale",
         COALESCE((SELECT SUM(s.quantity) FROM "Stock" s WHERE s."productId" = p.id), 0) as "totalStock"
       FROM "Product" p
       WHERE p."isActive" = true
@@ -467,6 +470,7 @@ export class ProductsService {
         OR p."otherCode" ILIKE ${like}
       )
       ORDER BY
+        p."isOnSale" DESC,
         CASE WHEN p.code ILIKE ${like} THEN 0
              WHEN p.barcode = ${q} THEN 0
              ELSE 1
@@ -483,6 +487,7 @@ export class ProductsService {
       priceMayor: Number(r.priceMayor),
       totalStock: Number(r.totalStock),
       isService: r.isService,
+      isOnSale: r.isOnSale ?? false,
       primaryImageThumbUrl: r.primaryImageThumbUrl ?? null,
     }));
   }

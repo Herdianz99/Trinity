@@ -40,6 +40,7 @@ interface Product {
   minStock: number;
   isActive: boolean;
   saleBlocked?: boolean;
+  isOnSale?: boolean;
   showInStore?: boolean;
   storeFeatured?: boolean;
   primaryImageThumbUrl?: string | null;
@@ -197,6 +198,7 @@ export default function ProductDetailPage() {
         weight: String(data.weight ?? 0),
         isActive: data.isActive,
         saleBlocked: data.saleBlocked ?? false,
+        isOnSale: data.isOnSale ?? false,
         showInStore: data.showInStore ?? false,
         storeFeatured: data.storeFeatured ?? false,
       });
@@ -346,6 +348,7 @@ export default function ProductDetailPage() {
         weight: parseNum(form.weight),
         isActive: form.isActive,
         saleBlocked: form.saleBlocked,
+        isOnSale: form.isOnSale,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
       };
@@ -750,6 +753,10 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-2 pb-1">
                   <Toggle checked={!form.saleBlocked} onChange={v => setForm((f: any) => ({ ...f, saleBlocked: !v }))} label="Activo para la venta" />
                   {form.saleBlocked && <span className="text-xs text-red-400/90">Bloqueado: no se puede facturar</span>}
+                </div>
+                <div className="flex items-center gap-2 pb-1">
+                  <Toggle checked={form.isOnSale ?? false} onChange={v => setForm((f: any) => ({ ...f, isOnSale: v }))} label="Oferta" color="amber" />
+                  {form.isOnSale && <span className="text-xs text-amber-400/90">Sale de primero y resaltado en el POS</span>}
                 </div>
                 <div className="flex items-end pb-1">
                   <Toggle checked={form.showInStore ?? false} onChange={v => setForm((f: any) => ({ ...f, showInStore: v }))} label="Mostrar en tienda online" color="blue" />

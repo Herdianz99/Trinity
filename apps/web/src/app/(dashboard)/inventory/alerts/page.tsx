@@ -10,6 +10,7 @@ interface AlertItem {
   productId: string; productCode: string; productName: string; category: string;
   supplierId: string | null; supplierName: string;
   currentStock: number; minStock: number; costUsd: number; inventoryValueUsd: number;
+  bregaPct: number; costoConBrechaUsd: number; inventoryValueBregaUsd: number;
   lastEntryDate: string; lastEntrySource: 'PURCHASE' | 'CREATED';
   daysSinceEntry: number; soldSinceEntry: boolean; periodSales: number; daysOfInventory: number;
   alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: Nivel | null; exceso: boolean };
@@ -90,18 +91,33 @@ export default function InventoryAlertsPage() {
     return '';
   }
 
+  // El valor del stock parado (costo + brecha) solo aplica a Exceso y Sin rotación (stock muerto).
+  const showValor = report === 'exceso' || report === 'sin-rotacion';
+
   const filtered = items
     .filter((it) => matchesReport(it, report))
-    .filter((it) => !search || it.productCode.toLowerCase().includes(search.toLowerCase()) || it.productName.toLowerCase().includes(search.toLowerCase()));
+    .filter((it) => !search || it.productCode.toLowerCase().includes(search.toLowerCase()) || it.productName.toLowerCase().includes(search.toLowerCase()))
+    // En Exceso / Sin rotación: mayor dinero detenido primero, para ubicar rápido lo más costoso.
+    .sort((a, b) => (showValor ? b.inventoryValueBregaUsd - a.inventoryValueBregaUsd : 0));
+
+  const totalValorBrecha = showValor ? filtered.reduce((s, it) => s + (it.inventoryValueBregaUsd || 0), 0) : 0;
+  const fmtUsd = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function exportExcel() {
+    const header = ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'];
+    if (showValor) header.push('Costo+brecha (USD)', 'Valor stock (USD)');
     const aoa: (string | number)[][] = [
-      ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'],
-      ...filtered.map((it) => [
-        it.productCode, it.productName, it.supplierName, it.currentStock, it.minStock,
-        it.periodSales, fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
-      ]),
+      header,
+      ...filtered.map((it) => {
+        const row: (string | number)[] = [
+          it.productCode, it.productName, it.supplierName, it.currentStock, it.minStock,
+          it.periodSales, fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
+        ];
+        if (showValor) row.push(it.costoConBrechaUsd, it.inventoryValueBregaUsd);
+        return row;
+      }),
     ];
+    if (showValor) aoa.push(['', '', '', '', '', '', '', '', 'TOTAL', '', Math.round(totalValorBrecha * 100) / 100]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Alertas');
@@ -179,6 +195,21 @@ export default function InventoryAlertsPage() {
         </button>
       </div>
 
+      {/* Valor del stock parado (costo + brecha) — solo Exceso y Sin rotación */}
+      {showValor && !loading && filtered.length > 0 && (
+        <div className="card p-4 mb-3 flex items-center justify-between bg-amber-500/5 border-amber-500/20">
+          <div>
+            <p className="text-xs text-slate-400 uppercase tracking-wider">
+              Valor {report === 'exceso' ? 'del exceso' : 'sin rotación'} parado (costo + brecha)
+            </p>
+            <p className="text-2xl font-bold text-amber-400">${fmtUsd(totalValorBrecha)}</p>
+          </div>
+          <p className="text-xs text-slate-500 text-right max-w-[240px]">
+            Suma del stock × (costo + brecha) de los {filtered.length} artículos de este reporte
+          </p>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-hidden">
         {loading ? (
@@ -198,12 +229,14 @@ export default function InventoryAlertsPage() {
                   <th className="text-right px-3 py-3 text-slate-400 font-medium" title={`Unidades vendidas en los últimos ${period} días`}>Ventas ({period}d)</th>
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Últ. entrada</th>
                   <th className="text-right px-3 py-3 text-slate-400 font-medium">Días</th>
+                  {showValor && <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Costo unitario + brecha (USD)">Costo+brecha</th>}
+                  {showValor && <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Stock × (costo + brecha)">Valor stock</th>}
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
+                  <tr><td colSpan={showValor ? 11 : 9} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
                 ) : filtered.map((it) => (
                   <tr key={it.productId} className="border-b border-slate-700/30 hover:bg-slate-800/40">
                     <td className="px-3 py-2.5 font-mono text-xs text-emerald-400">{it.productCode}</td>
@@ -216,6 +249,8 @@ export default function InventoryAlertsPage() {
                       {fmtDate(it.lastEntryDate)}{it.lastEntrySource === 'CREATED' && <span className="text-slate-600"> (creado)</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-slate-300">{it.daysSinceEntry}</td>
+                    {showValor && <td className="px-3 py-2.5 text-right font-mono text-slate-400">${fmtUsd(it.costoConBrechaUsd)}</td>}
+                    {showValor && <td className="px-3 py-2.5 text-right font-mono text-amber-400 font-semibold">${fmtUsd(it.inventoryValueBregaUsd)}</td>}
                     <td className="px-3 py-2.5">
                       {it.alerts.negativo && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-600/20 text-red-300 border-red-600/40 font-semibold">Negativo</span>}
                       {it.alerts.agotado && !it.alerts.negativo && <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-500/10 text-red-400 border-red-500/20">Agotado</span>}

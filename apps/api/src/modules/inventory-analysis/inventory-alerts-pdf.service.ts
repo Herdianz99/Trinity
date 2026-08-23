@@ -12,6 +12,8 @@ type AlertItem = {
   daysSinceEntry: number;
   daysOfInventory: number;
   lastEntryDate: string;
+  costoConBrechaUsd: number;
+  inventoryValueBregaUsd: number;
   alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: string | null; exceso: boolean };
 };
 
@@ -43,6 +45,10 @@ export class InventoryAlertsPdfService {
     return new Date(iso).toLocaleDateString('es-VE');
   }
 
+  private fmtUsd(n: number): string {
+    return (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   async generate(report: string, items: AlertItem[], period: string): Promise<Buffer> {
     const company = await this.getCompanyName();
     const title = REPORT_TITLES[report] || 'Alertas de Inventario';
@@ -55,18 +61,34 @@ export class InventoryAlertsPdfService {
     doc.text(`Generado: ${new Date().toLocaleDateString('es-VE')}  |  ${items.length} articulos`, 40, 88);
     doc.moveTo(40, 104).lineTo(doc.page.width - 40, 104).stroke('#94a3b8');
 
+    // El valor del stock parado (costo + brecha) solo aplica a Exceso y Sin rotacion.
+    const showValor = report === 'exceso' || report === 'sin-rotacion';
+
     // Carta vertical: ancho util ~532 (x de 40 a 572). Sin columna Proveedor;
     // el codigo del articulo + Ref. Proveedor van juntos en la primera columna.
-    const columns = [
-      { label: 'Codigo / Ref.', x: 40, width: 90 },
-      { label: 'Producto', x: 132, width: 146 },
-      { label: 'Stock', x: 280, width: 36, align: 'right' as const },
-      { label: 'Min', x: 318, width: 30, align: 'right' as const },
-      { label: 'Ventas', x: 350, width: 40, align: 'right' as const },
-      { label: 'Ult. entrada', x: 392, width: 66 },
-      { label: 'Dias', x: 460, width: 26, align: 'right' as const },
-      { label: 'Estado', x: 488, width: 84 },
-    ];
+    const columns = showValor
+      ? [
+          { label: 'Codigo / Ref.', x: 40, width: 84 },
+          { label: 'Producto', x: 126, width: 118 },
+          { label: 'Stock', x: 246, width: 30, align: 'right' as const },
+          { label: 'Min', x: 278, width: 26, align: 'right' as const },
+          { label: 'Ventas', x: 306, width: 32, align: 'right' as const },
+          { label: 'Ult. entrada', x: 340, width: 58 },
+          { label: 'Dias', x: 400, width: 22, align: 'right' as const },
+          { label: 'Costo+br.', x: 424, width: 44, align: 'right' as const },
+          { label: 'Valor', x: 470, width: 50, align: 'right' as const },
+          { label: 'Estado', x: 522, width: 50 },
+        ]
+      : [
+          { label: 'Codigo / Ref.', x: 40, width: 90 },
+          { label: 'Producto', x: 132, width: 146 },
+          { label: 'Stock', x: 280, width: 36, align: 'right' as const },
+          { label: 'Min', x: 318, width: 30, align: 'right' as const },
+          { label: 'Ventas', x: 350, width: 40, align: 'right' as const },
+          { label: 'Ult. entrada', x: 392, width: 66 },
+          { label: 'Dias', x: 460, width: 26, align: 'right' as const },
+          { label: 'Estado', x: 488, width: 84 },
+        ];
 
     let y = 114;
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
@@ -86,16 +108,29 @@ export class InventoryAlertsPdfService {
       else if (it.alerts.bajoMinimo) estado = 'Bajo minimo';
 
       const codigoCell = it.supplierRef ? `${it.productCode}\nRef: ${it.supplierRef}` : it.productCode;
-      const values = [
-        codigoCell,
-        it.productName,
-        String(it.currentStock),
-        String(it.minStock),
-        String(it.periodSales),
-        this.fmtDate(it.lastEntryDate),
-        String(it.daysSinceEntry),
-        estado,
-      ];
+      const values = showValor
+        ? [
+            codigoCell,
+            it.productName,
+            String(it.currentStock),
+            String(it.minStock),
+            String(it.periodSales),
+            this.fmtDate(it.lastEntryDate),
+            String(it.daysSinceEntry),
+            this.fmtUsd(it.costoConBrechaUsd),
+            this.fmtUsd(it.inventoryValueBregaUsd),
+            estado,
+          ]
+        : [
+            codigoCell,
+            it.productName,
+            String(it.currentStock),
+            String(it.minStock),
+            String(it.periodSales),
+            this.fmtDate(it.lastEntryDate),
+            String(it.daysSinceEntry),
+            estado,
+          ];
 
       // Altura real de la fila = la celda mas alta (el nombre/proveedor pueden ocupar 2+ lineas)
       let rowHeight = 12;
@@ -116,6 +151,23 @@ export class InventoryAlertsPdfService {
       }
       doc.fillColor('#000');
       y += rowHeight;
+    }
+
+    // Total del valor parado (costo + brecha) para Exceso / Sin rotacion.
+    if (showValor) {
+      const total = items.reduce((s, it) => s + (it.inventoryValueBregaUsd || 0), 0);
+      if (y + 24 > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        y = 40;
+      }
+      y += 4;
+      doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#94a3b8');
+      y += 6;
+      const valorCol = columns[columns.length - 2]; // columna "Valor"
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#b45309');
+      doc.text('Valor total (con brecha):', 40, y, { width: valorCol.x - 40 - 6, align: 'right' });
+      doc.text(`$${this.fmtUsd(total)}`, valorCol.x, y, { width: valorCol.width, align: 'right' });
+      doc.fillColor('#000');
     }
 
     // Paginacion: "Pagina X de Y" centrada al pie de cada pagina.

@@ -140,6 +140,11 @@ export class CreateProductDto {
   @IsBoolean()
   saleBlocked?: boolean;
 
+  @ApiProperty({ required: false, default: false, description: 'Oferta: marcador visual; en el POS sale de primero y resaltado' })
+  @IsOptional()
+  @IsBoolean()
+  isOnSale?: boolean;
+
   @ApiProperty({ required: false, default: false, description: 'Mostrar en la tienda online' })
   @IsOptional()
   @IsBoolean()
