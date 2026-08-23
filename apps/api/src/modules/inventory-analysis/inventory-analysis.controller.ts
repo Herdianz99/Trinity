@@ -43,6 +43,13 @@ export class InventoryAnalysisController {
     return this.service.getSummary(from, to);
   }
 
+  @Get('manager-summary')
+  @ApiQuery({ name: 'from', required: true })
+  @ApiQuery({ name: 'to', required: true })
+  getManagerSummary(@Query('from') from: string, @Query('to') to: string) {
+    return this.service.getManagerSummary(from, to);
+  }
+
   @Get('purchase-suggestions')
   @ApiQuery({ name: 'from', required: true })
   @ApiQuery({ name: 'to', required: true })

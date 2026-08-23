@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 
 // Umbrales de clasificación de alertas de inventario (fijos en código).
 // Para cambiarlos: ajustar aquí y actualizar el texto en apps/web/src/lib/metrics-help.ts
@@ -302,6 +302,116 @@ export class InventoryAnalysisService {
       excessStockProducts,
       topProduct,
       mostProfitable,
+    };
+  }
+
+  /**
+   * Resumen gerencial de inventario (una sola llamada). 3 bloques:
+   *  - salud: Índice 5S (promedio + por zona) y daños/merma del período (módulo de almacén)
+   *  - alertasRotacion: valor de inventario, bajo mínimo y stock muerto (top listas)
+   *  - exactitud: diferencias del último conteo físico aprobado (unidades y $)
+   * Gateado solo por AuthGuard (como el resto de analysis); mezcla datos de módulos con
+   * permisos distintos, por eso se resuelve server-side en un endpoint gerencial.
+   */
+  async getManagerSummary(from: string, to: string) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const fromKey = caracasDateKey(from);
+    const toKey = caracasDateKey(to);
+
+    // ── Salud: Auditoría 5S ──
+    const audits = await this.prisma.audit5S.findMany({
+      where: { date: { gte: fromKey, lte: toKey } },
+      select: { zone: true, scoreCleanliness: true, scoreOrder: true, scoreSafety: true },
+    });
+    const idxOf = (a: { scoreCleanliness: number; scoreOrder: number; scoreSafety: number }) =>
+      Math.round(((a.scoreCleanliness + a.scoreOrder + a.scoreSafety) / 15) * 100);
+    const audit5sAvg = audits.length ? Math.round(audits.reduce((s, a) => s + idxOf(a), 0) / audits.length) : null;
+    const zoneMap: Record<string, { sum: number; n: number }> = {};
+    for (const a of audits) {
+      const z = zoneMap[a.zone] || { sum: 0, n: 0 };
+      z.sum += idxOf(a); z.n += 1; zoneMap[a.zone] = z;
+    }
+    const audit5sByZone = Object.entries(zoneMap)
+      .map(([zone, { sum, n }]) => ({ zone, avgIndex: Math.round(sum / n), count: n }))
+      .sort((a, b) => a.avgIndex - b.avgIndex);
+
+    // ── Salud: Reportes de daño / merma ──
+    const reports = await this.prisma.damageReport.findMany({
+      where: { date: { gte: fromKey, lte: toKey } },
+      select: {
+        status: true, resolution: true,
+        items: { select: { quantity: true, product: { select: { costUsd: true } } } },
+      },
+    });
+    const byStatus: Record<string, number> = {};
+    let damagedUnits = 0, mermaUnits = 0, mermaCostUsd = 0, mermaCount = 0, reemplazoCount = 0;
+    for (const rep of reports) {
+      byStatus[rep.status] = (byStatus[rep.status] || 0) + 1;
+      const units = rep.items.reduce((s, i) => s + i.quantity, 0);
+      damagedUnits += units;
+      if (rep.status === 'PROCESADO' && rep.resolution === 'MERMA') {
+        mermaCount += 1; mermaUnits += units;
+        mermaCostUsd += rep.items.reduce((s, i) => s + i.quantity * (i.product?.costUsd || 0), 0);
+      }
+      if (rep.status === 'PROCESADO' && rep.resolution === 'REEMPLAZO') reemplazoCount += 1;
+    }
+
+    // ── Alertas y rotación (reusa getRotation) ──
+    const rotation = await this.getRotation(from, to);
+    const totalInventoryValueUsd = r2(rotation.reduce((s, p) => s + p.inventoryValueUsd, 0));
+    const lowStock = rotation.filter((p) => p.reorderAlert);
+    const deadStock = rotation.filter((p) => p.deadStockAlert);
+    const topDeadStock = [...deadStock]
+      .sort((a, b) => b.inventoryValueUsd - a.inventoryValueUsd)
+      .slice(0, 5)
+      .map((p) => ({ code: p.productCode, name: p.productName, stock: p.currentStock, valueUsd: p.inventoryValueUsd }));
+    const topLowStock = lowStock
+      .slice(0, 5)
+      .map((p) => ({ code: p.productCode, name: p.productName, stock: p.currentStock, minStock: p.minStock }));
+
+    // ── Exactitud: último conteo físico aprobado ──
+    const lastCount = await this.prisma.inventoryCount.findFirst({
+      where: { status: 'APPROVED' },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        updatedAt: true,
+        warehouse: { select: { name: true } },
+        items: { select: { systemQuantity: true, countedQuantity: true, product: { select: { costUsd: true } } } },
+      },
+    });
+    let exactitud: any = null;
+    if (lastCount) {
+      let itemsCounted = 0, withDiff = 0, faltUnits = 0, sobrUnits = 0, faltUsd = 0, sobrUsd = 0;
+      for (const it of lastCount.items) {
+        if (it.countedQuantity == null) continue;
+        itemsCounted += 1;
+        const diff = it.countedQuantity - it.systemQuantity;
+        const cost = it.product?.costUsd || 0;
+        if (diff < 0) { faltUnits += -diff; faltUsd += -diff * cost; withDiff += 1; }
+        else if (diff > 0) { sobrUnits += diff; sobrUsd += diff * cost; withDiff += 1; }
+      }
+      exactitud = {
+        date: lastCount.updatedAt,
+        warehouse: lastCount.warehouse?.name || null,
+        itemsCounted, withDiff,
+        faltUnits: r2(faltUnits), sobrUnits: r2(sobrUnits),
+        faltUsd: r2(faltUsd), sobrUsd: r2(sobrUsd), netUsd: r2(sobrUsd - faltUsd),
+      };
+    }
+
+    return {
+      period: { from, to },
+      salud: {
+        audit5sAvg, audit5sCount: audits.length, audit5sByZone,
+        damage: {
+          totalReports: reports.length, byStatus,
+          damagedUnits: r2(damagedUnits),
+          mermaCount, mermaUnits: r2(mermaUnits), mermaCostUsd: r2(mermaCostUsd),
+          reemplazoCount,
+        },
+      },
+      alertasRotacion: { totalInventoryValueUsd, lowStockCount: lowStock.length, deadStockCount: deadStock.length, topLowStock, topDeadStock },
+      exactitud,
     };
   }
 

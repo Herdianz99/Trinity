@@ -16,6 +16,9 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/inventory/articulos', ['inventory', 'inventory-consult']],
   ['/inventory/etiquetas', ['inventory', 'inventory-consult']],
   ['/inventory/replacements', ['inventory', 'inventory-consult']],
+  // Resumen gerencial y alertas: tambien accesibles desde el modulo de Almacen ('almacen')
+  ['/inventory/summary', ['inventory', 'almacen']],
+  ['/inventory/alerts', ['inventory', 'almacen']],
   ['/inventory', ['inventory']],
   ['/purchases', ['purchases']],
   ['/cash', ['cash']],
