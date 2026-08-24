@@ -38,6 +38,7 @@ export class CreditDebitNotesService {
     else if (query.scope === 'sale') where.type = { in: ['NCV', 'NDV'] };
     else if (query.scope === 'purchase') where.type = { in: ['NCC', 'NDC'] };
     if (query.status) where.status = query.status;
+    if (query.motivo) where.motivo = query.motivo;
     if (query.invoiceId) where.invoiceId = query.invoiceId;
     if (query.purchaseOrderId) where.purchaseOrderId = query.purchaseOrderId;
 

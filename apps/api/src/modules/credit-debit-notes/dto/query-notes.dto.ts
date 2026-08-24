@@ -15,6 +15,11 @@ export class QueryNotesDto {
   @IsIn(['DRAFT', 'POSTED', 'CANCELLED'])
   status?: string;
 
+  // Motivo de la devolución de ventas (solo NCV)
+  @IsOptional()
+  @IsIn(['ASESORIA', 'CLIENTE', 'FALTANTE_ALMACEN', 'PRODUCTO_DEFECTUOSO'])
+  motivo?: string;
+
   @IsOptional()
   @IsString()
   invoiceId?: string;

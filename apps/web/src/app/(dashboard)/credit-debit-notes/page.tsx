@@ -51,6 +51,14 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Anulada',
 };
 
+// Motivos de devolución de ventas (solo NCV)
+const MOTIVO_OPTIONS: { value: string; label: string }[] = [
+  { value: 'ASESORIA', label: 'Asesoría' },
+  { value: 'CLIENTE', label: 'Cliente' },
+  { value: 'FALTANTE_ALMACEN', label: 'Faltante en almacén' },
+  { value: 'PRODUCTO_DEFECTUOSO', label: 'Producto defectuoso' },
+];
+
 export default function CreditDebitNotesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,6 +72,7 @@ export default function CreditDebitNotesPage() {
   // Filtros iniciales desde la URL (deep-link, ej. KPI "Devoluciones" del dashboard).
   const [type, setType] = useState(searchParams.get('type') || '');
   const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [motivo, setMotivo] = useState(searchParams.get('motivo') || '');
   const [from, setFrom] = useState(searchParams.get('from') || '');
   const [to, setTo] = useState(searchParams.get('to') || '');
   const [search, setSearch] = useState('');
@@ -76,11 +85,12 @@ export default function CreditDebitNotesPage() {
     if (type) params.set('type', type);
     else if (scope) params.set('scope', scope);
     if (status) params.set('status', status);
+    if (motivo) params.set('motivo', motivo);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (search) params.set('search', search);
     return params;
-  }, [type, scope, status, from, to, search]);
+  }, [type, scope, status, motivo, from, to, search]);
 
   const fetchNotes = useCallback(async () => {
     setLoading(true);
@@ -139,7 +149,7 @@ export default function CreditDebitNotesPage() {
 
       {/* Filters */}
       <div className="card p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input
@@ -163,6 +173,12 @@ export default function CreditDebitNotesPage() {
             <option value="POSTED">Confirmada</option>
             <option value="CANCELLED">Anulada</option>
           </select>
+          {scope !== 'purchase' && (
+            <select value={motivo} onChange={(e) => { setMotivo(e.target.value); setPage(1); }} className="input-field" title="Motivo (solo devoluciones de venta)">
+              <option value="">Todos los motivos</option>
+              {MOTIVO_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          )}
           <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="input-field" />
           <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="input-field" />
         </div>

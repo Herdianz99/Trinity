@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (f) — Notas Cr/Db: filtro por motivo + motivo en detalle + fix back con scope
+
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+
+- **feat(notas Cr/Db): filtro por "Motivo"** — en `/credit-debit-notes` nuevo select de motivo (Asesoría / Cliente / Faltante en almacén / Producto defectuoso), visible cuando el scope no es compra (el motivo solo aplica a devoluciones de venta NCV). DTO `query-notes.dto.ts` (+`motivo` validado contra `SalesReturnReason`) y `buildNotesWhere` (filtra `where.motivo`) → aplica igual a la tabla y al reporte PDF por vendedor. Deep-link por URL `?motivo=`.
+- **feat(notas Cr/Db): motivo en el detalle** — se muestra el "Motivo" arriba, junto a "Serie", en la grilla de datos (solo aparece cuando la nota tiene motivo, o sea NCV). El detalle y el listado ya devolvían `motivo` (usan `include`).
+- **fix(notas Cr/Db): la flecha de volver perdía el scope** — el back del detalle hacía `router.push('/credit-debit-notes')` sin scope, así que el botón "PDF Devoluciones por vendedor" (solo con `scope=sale`) desaparecía. Ahora vuelve con `?scope=sale` (NCV/NDV) o `?scope=purchase` (NCC/NDC) según el tipo.
+
 ## 🗓️ Sesión 2026-08-24 (e) — Columna Existencia al aprobar una solicitud de traslado entre socios
 
 > ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).

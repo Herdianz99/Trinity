@@ -33,6 +33,7 @@ interface NoteDetail {
   manualAmountUsd: number | null;
   manualPct: number | null;
   supplierDocNumber: string | null;
+  motivo: string | null;
   notes: string | null;
   createdAt: string;
   invoice: {
@@ -86,6 +87,14 @@ const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Borrador',
   POSTED: 'Confirmada',
   CANCELLED: 'Anulada',
+};
+
+// Motivo de la devolución de ventas (solo NCV)
+const MOTIVO_LABELS: Record<string, string> = {
+  ASESORIA: 'Asesoría',
+  CLIENTE: 'Cliente',
+  FALTANTE_ALMACEN: 'Faltante en almacén',
+  PRODUCTO_DEFECTUOSO: 'Producto defectuoso',
 };
 
 const IVA_LABELS: Record<string, string> = {
@@ -399,7 +408,7 @@ export default function CreditDebitNoteDetailPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/credit-debit-notes')} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+          <button onClick={() => router.push(`/credit-debit-notes?scope=${isSale ? 'sale' : 'purchase'}`)} className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
             <ArrowLeft size={20} />
           </button>
           <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
@@ -503,6 +512,12 @@ export default function CreditDebitNoteDetailPage() {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/20">No Fiscal</span>
                     )}
                   </p>
+                </div>
+              )}
+              {note.motivo && (
+                <div>
+                  <p className="text-xs text-slate-500 uppercase">Motivo</p>
+                  <p className="text-white">{MOTIVO_LABELS[note.motivo] || note.motivo}</p>
                 </div>
               )}
             </div>
