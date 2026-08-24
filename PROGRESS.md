@@ -1,8 +1,15 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 — Fix serie en Nº factura del comprobante de retención ISLR + fix permiso `almacen` no persistía
+
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API).
+
+- **fix(retención ISLR): concatenar la serie del proveedor al "Nº factura" del PDF** — el comprobante de retención de ISLR imprimía solo `supplierInvoiceNumber` en la columna "Nº factura", a diferencia del de IVA que ya anteponía la serie. Se replicó la misma lógica en `islr-retention-vouchers-pdf.service.ts`: el query incluye `payable.serieProveedor` y `purchaseOrder.supplierSerialNumber`, y la celda ahora imprime `` `${serieFactura}${supplierInvoiceNumber}` `` (misma prioridad payable→purchaseOrder que IVA).
+- **fix(permisos): `almacen` no estaba en `VALID_MODULES`** — al guardar permisos de un rol desde la UI, `role-permissions.service.ts` filtraba `almacen` (no estaba en la lista blanca) y lo descartaba en silencio, por lo que no se podía (re)activar el módulo de Almacén a ningún rol. Se agregó `'almacen'` a `VALID_MODULES`. Además se reactivó por BD el permiso `almacen` en el rol **WAREHOUSE** de la grande (que había quedado sin él) y se invalidó el cache de Redis del rol.
+
 ## 🗓️ Sesión 2026-08-23 — Valor del stock parado (Alertas) + campo "Oferta" en productos
 
-> ### ⏳ Pendiente de deploy — typecheck API+Web limpio, probado en local (grande). **CON migración** (aditiva e idempotente: `Product.isOnSale`).
+> ### ✅ DESPLEGADO y verificado en las 6 empresas (2026-08-24) — HEAD `2cd8207`. **CON migración** (aditiva e idempotente: `Product.isOnSale`). Las 6 en `2cd8207`, PM2 `online`, `/health` 200 `database:ok`.
 
 - **feat(inventario): valor del stock parado (costo + brecha) en `/inventory/alerts`** — en los reportes **Exceso** y **Sin rotación** se agregó el valor del inventario detenido usando el **costo real (costo + brecha)** con la fórmula centralizada (`resolveBregaPct` + `effectiveCost` + `buildCategoryBregaMap`). El API (`getInventoryAlerts`) devuelve `bregaPct`, `costoConBrechaUsd` e `inventoryValueBregaUsd` por ítem. En la pantalla: banner con el **total en $** del dinero parado + columnas **Costo+brecha** y **Valor stock**; la lista se **ordena por Valor stock desc** (dónde hay más dinero detenido). Excel y **PDF** incluyen columnas + total. Sin cambios en otros reportes.
 - **feat(catalogo/pos): campo "Oferta" (`Product.isOnSale`)** — marcador visual (no afecta precio). (1) **Producto**: toggle "Oferta" en alta y edición. (2) **POS**: las ofertas salen **de primero** (solo el POS, vía parámetro `onSaleFirst=true` en `findAll`; el catálogo sigue alfabético) y se muestran **resaltadas** (borde/fondo ámbar + badge 🏷️ Oferta) en los dos renderizadores. (3) **Catálogo `/catalog/products`**: filtro **"Solo en oferta"** (`isOnSale` en el query DTO) + badge de oferta en la columna Estado.
@@ -10,7 +17,7 @@
 
 ## 🗓️ Sesión 2026-08-22 — Módulo de Almacén: Auditoría 5S + Reporte de Daños de inventario (aislado, opt-in aceros/acerosmayor)
 
-> ### ⏳ Pendiente de deploy — **commiteado y pusheado a `main`** (`a677753` módulo + `fffce07` resumen gerencial). Typecheck API+Web limpio + e2e local (grande) verificado y revertido. **CON migración** (aditiva e idempotente). Solo se enciende en **aceros/acerosmayor** (flag `useAlmacenOps`).
+> ### ✅ DESPLEGADO en las 6 empresas (2026-08-24) — HEAD `2cd8207` (`a677753` módulo + `fffce07` resumen gerencial). **CON migración** (aditiva e idempotente). Solo se enciende en **aceros/acerosmayor** (flag `useAlmacenOps`).
 > Spec `docs/superpowers/specs/2026-08-22-modulo-almacen-5s-danos-design.md` · Plan `docs/superpowers/plans/2026-08-22-modulo-almacen-5s-danos.md`. Origen: `Especificacion_App_Despacho_Almacen.pdf` (app de control operativo de almacén de acero). De las 3 funciones del PDF se implementaron **2**; la validación de despachos/OTIF se difirió (ya existe `dispatch` + `useScanDispatch`).
 
 - **feat(almacen): Auditoría 5S de cierre de turno** — mini-módulo aislado (permiso propio `almacen`, `@RequireModule('almacen')`) para que el líder de zona haga un checklist rápido (<2 min) al cerrar turno: 3 puntajes de estrellas 1–5 (limpieza / orden / seguridad de apilamiento) + observación + zona (combobox con las zonas del PDF: Cantiléver-Perfiles, Tubos-PVC, Mantas, Cemento, Tanques, o texto libre). Calcula el **Índice 5S %** = (suma/15)×100 con semáforo (>90 verde · 75–89 amarillo · <75 rojo). Backend `modules/audit-5s` (service+controller+dtos, correlativo `AUD-XXXX` con SELECT FOR UPDATE, fecha date-only Caracas). Frontend `/audit-5s` (estrellas + historial con fecha, fila clicable, página de **detalle** `/audit-5s/[id]` con la observación; responsive: tabla en desktop / tarjetas en móvil). Solo informativo, **no toca inventario**.
@@ -21,7 +28,7 @@
 
 ## 🗓️ Sesión 2026-08-21 — Módulo aislado de Compra de Divisas (Tesorería) + fixes de ventas netas y fusión de fichas empleado/cliente
 
-> ### ⏳ Pendiente de deploy — typecheck API+Web limpio, probado en local (grande). **CON migración** (aditiva y segura). Solo aplica a la empresa **grande**.
+> ### ✅ DESPLEGADO en las 6 empresas (2026-08-24) — HEAD `2cd8207`. **CON migración** (aditiva y segura). Solo aplica a la empresa **grande**.
 > Spec en `docs/superpowers/specs/2026-08-21-modulo-divisas-design.md`. La migración crea 3 tablas nuevas y habilita el permiso `divisas` a ADMIN (idempotente). Aislado como Incidencias: no toca ventas/inventario/fiscal.
 
 - **feat(divisas): módulo aislado de Compra de Divisas / Tesorería** — mini-módulo para Finanzas (permiso propio `divisas`, gateado con `@RequireModule('divisas')` igual que Incidencias) que lleva un **ledger simple en USD** de entradas/salidas de dólares cruzado por **Empresa lógica** (etiquetas del módulo: Inversiones, Aceros Portuguesa, Ferreconstrucciones, Total…) y **Banco/Ubicación** (Banesco Panamá, Bank of America, efectivo…). Los **saldos por empresa y por banco** y el **saldo corriente** (según la vista: banco o empresa) se **calculan al vuelo**. **3 tablas nuevas** `TreasuryCompany` / `TreasuryBank` / `TreasuryMovement` (migración `20260821140000_divisas_module`, `IF NOT EXISTS`). Backend NestJS `modules/divisas` (service+controller+dtos, CRUD catálogos + movimientos + `summary`). Frontend `/divisas` (Resumen con saldos clicables), `/divisas/movimientos` (ledger con filtros + saldo corriente + modal alta/edición), `/divisas/empresas` y `/divisas/bancos` (catálogos, `CatalogManager` reutilizable). Ítem de sidebar "DIVISAS" + registrado en role-permissions. **Moneda:** solo USD (excepción consciente a la regla Bs, es USD-nativo). Probado e2e en local (grande): saldos y saldo corriente correctos en ambas vistas. **CON migración.**

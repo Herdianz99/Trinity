@@ -48,6 +48,8 @@ export class IslrRetentionVouchersPdfService {
         lines: {
           include: {
             islrRetentionType: { select: { codigo: true, descripcion: true } },
+            purchaseOrder: { select: { supplierSerialNumber: true } },
+            payable: { select: { serieProveedor: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -213,7 +215,8 @@ export class IslrRetentionVouchersPdfService {
         const cy = y + 3.5;
         doc.fillColor('#000000').fontSize(6.5).font('Helvetica');
         doc.text(fmtDate(line.invoiceDate), cols.fecha.x + 2, cy, { width: cols.fecha.w - 4, align: 'center', lineBreak: false });
-        doc.text(line.supplierInvoiceNumber || '', cols.factura.x + 2, cy, { width: cols.factura.w - 4, align: 'center', lineBreak: false });
+        const serieFactura = line.payable?.serieProveedor || line.purchaseOrder?.supplierSerialNumber || '';
+        doc.text(`${serieFactura}${line.supplierInvoiceNumber || ''}`, cols.factura.x + 2, cy, { width: cols.factura.w - 4, align: 'center', lineBreak: false });
         doc.text(line.supplierControlNumber || '', cols.control.x + 2, cy, { width: cols.control.w - 4, align: 'center', lineBreak: false });
         doc.text(fmtBs(line.invoiceTotalBs), cols.monto.x + 2, cy, { width: cols.monto.w - 4, align: 'right', lineBreak: false });
         doc.text(concepto, cols.concepto.x + 2, cy, { width: cols.concepto.w - 4, align: 'left' });
