@@ -1127,7 +1127,12 @@ export default function NewReceiptPage() {
                             <ArrowLeft size={14} />
                           </button>
                         </td>
-                        <td className="px-3 py-2 text-slate-300 font-mono">{doc.description}</td>
+                        <td className="px-3 py-2 text-slate-300 font-mono">
+                          {doc.description}
+                          {doc.reference && (
+                            <span className="block text-[10px] text-slate-500">Ref: {doc.reference}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           <MoneyInput
                             value={doc.selectedAmountUsd}

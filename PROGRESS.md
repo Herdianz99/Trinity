@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (g) — Recibo de cobro: número de orden (Ref) en "Documentos a cancelar"
+
+> ### ⏳ Pendiente de deploy — solo frontend, probado en local (grande). **SIN migración**.
+
+- **feat(recibos): mostrar el número de orden (Ref) en "Documentos a cancelar"** — en `/receipts/new` (recibo de cobro plataforma financiera), la lista de documentos seleccionados ahora muestra `Ref: {reference}` bajo el documento, igual que ya se veía en "Documentos pendientes". El dato ya venía en `SelectedDoc` (extends `PendingDoc`, y `addDoc` hace `{...doc}`); solo faltaba renderizarlo.
+
 ## 🗓️ Sesión 2026-08-24 (f) — Notas Cr/Db: filtro por motivo + motivo en detalle + fix back con scope
 
 > ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
