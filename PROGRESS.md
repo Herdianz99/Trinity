@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (c) — Filtros en Ajustes de inventario (búsqueda + fechas + estatus)
+
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+
+- **feat(inventario/ajustes): filtros en `/inventory/adjustments`** — barra de filtros con: **búsqueda única** por correlativo o destinatario (`OR` con `contains` insensitive sobre `number`, `customer.name` y `supplier.name`), **rango de fechas Desde/Hasta** sobre `createdAt` (límites del día-calendario Caracas con `caracasDayStart`/`caracasDayEnd`), y los botones de **estatus** ya existentes reubicados en la barra. Botón "Limpiar filtros". `inventory-adjustments.controller.ts` + `.service.ts` (`findAll` acepta `search`, `from`, `to`); UI en `adjustments/page.tsx` con debounce de 350 ms en el texto. Todo server-side.
+
 ## 🗓️ Sesión 2026-08-24 (b) — Filtro por artículo en Análisis de compra + fecha de agotamiento en Alertas
 
 > ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).

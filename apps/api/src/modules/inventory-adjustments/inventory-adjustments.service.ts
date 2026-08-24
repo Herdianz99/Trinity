@@ -12,7 +12,7 @@ import { UpdateAdjustmentItemsDto } from './dto/update-adjustment-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
 import { RemoveItemsDto } from './dto/remove-items.dto';
 import { ProcessAdjustmentDto } from './dto/process-adjustment.dto';
-import { caracasDateKey } from '../../common/timezone';
+import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 const INCLUDE_LIST = {
@@ -85,6 +85,9 @@ export class InventoryAdjustmentsService {
     status?: string;
     warehouseId?: string;
     type?: string;
+    search?: string;
+    from?: string;
+    to?: string;
   }) {
     const where: any = {};
 
@@ -96,6 +99,24 @@ export class InventoryAdjustmentsService {
     }
     if (filters?.type) {
       where.type = filters.type;
+    }
+
+    // Rango de fechas sobre createdAt (TIMESTAMP): límites del día-calendario Caracas.
+    if (filters?.from || filters?.to) {
+      where.createdAt = {};
+      if (filters.from) where.createdAt.gte = caracasDayStart(filters.from);
+      if (filters.to) where.createdAt.lte = caracasDayEnd(filters.to);
+    }
+
+    // Búsqueda única: correlativo (ADJ-0001) o destinatario (cliente/proveedor), coincidencia
+    // parcial insensible a mayúsculas en cualquiera de los tres.
+    const search = filters?.search?.trim();
+    if (search) {
+      where.OR = [
+        { number: { contains: search, mode: 'insensitive' } },
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+      ];
     }
 
     return this.prisma.inventoryAdjustment.findMany({

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { PackagePlus, Plus, Loader2 } from 'lucide-react';
+import { PackagePlus, Plus, Loader2, Search, X } from 'lucide-react';
 
 interface InventoryAdjustment {
   id: string;
@@ -51,21 +51,40 @@ export default function InventoryAdjustmentsPage() {
   const [adjustments, setAdjustments] = useState<InventoryAdjustment[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const hasFilters = !!(statusFilter || search || from || to);
 
   const fetchAdjustments = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
       const res = await fetch(`/api/proxy/inventory-adjustments?${params}`);
       if (res.ok) setAdjustments(await res.json());
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, search, from, to]);
+
+  function clearFilters() {
+    setStatusFilter('');
+    setSearch('');
+    setFrom('');
+    setTo('');
+  }
 
   useEffect(() => { document.title = 'Ajustes de Inventario | Trinity ERP'; }, []);
-  useEffect(() => { fetchAdjustments(); }, [fetchAdjustments]);
+  // Debounce para no disparar una petición por cada tecla en los campos de texto.
+  useEffect(() => {
+    const t = setTimeout(() => { fetchAdjustments(); }, 350);
+    return () => clearTimeout(t);
+  }, [fetchAdjustments]);
 
   return (
     <div>
@@ -87,26 +106,61 @@ export default function InventoryAdjustmentsPage() {
         </button>
       </div>
 
-      {/* Filtro por estado */}
-      <div className="mb-4 flex items-center gap-2">
-        {[
-          { value: '', label: 'Todos' },
-          { value: 'DRAFT', label: 'Borrador' },
-          { value: 'PROCESSED', label: 'Procesado' },
-          { value: 'CANCELLED', label: 'Cancelado' },
-        ].map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setStatusFilter(opt.value)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              statusFilter === opt.value
-                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* Filtros: correlativo, fechas, destinatario */}
+      <div className="card p-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Correlativo o destinatario</label>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ADJ-0001 o cliente / proveedor"
+                className="input-field !pl-9 w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Desde</label>
+            <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className="input-field w-full" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Hasta</label>
+            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="input-field w-full" />
+          </div>
+        </div>
+
+        {/* Estatus + limpiar */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-400 mr-1">Estatus:</span>
+          {[
+            { value: '', label: 'Todos' },
+            { value: 'DRAFT', label: 'Borrador' },
+            { value: 'PROCESSED', label: 'Procesado' },
+            { value: 'CANCELLED', label: 'Cancelado' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === opt.value
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors"
+            >
+              <X size={14} /> Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card overflow-hidden">

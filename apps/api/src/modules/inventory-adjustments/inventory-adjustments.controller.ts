@@ -48,15 +48,24 @@ export class InventoryAdjustmentsController {
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'search', required: false, description: 'Correlativo (ADJ-…) o destinatario (cliente/proveedor)' })
+  @ApiQuery({ name: 'from', required: false, description: 'Desde (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'to', required: false, description: 'Hasta (YYYY-MM-DD)' })
   findAll(
     @Query('status') status?: string,
     @Query('warehouseId') warehouseId?: string,
     @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     return this.inventoryAdjustmentsService.findAll({
       status,
       warehouseId,
       type,
+      search,
+      from,
+      to,
     });
   }
 
