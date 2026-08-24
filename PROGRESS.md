@@ -2,10 +2,11 @@
 
 ## 🗓️ Sesión 2026-08-24 — Fix serie en Nº factura del comprobante de retención ISLR + fix permiso `almacen` no persistía
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API).
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (código API + Web).
 
 - **fix(retención ISLR): concatenar la serie del proveedor al "Nº factura" del PDF** — el comprobante de retención de ISLR imprimía solo `supplierInvoiceNumber` en la columna "Nº factura", a diferencia del de IVA que ya anteponía la serie. Se replicó la misma lógica en `islr-retention-vouchers-pdf.service.ts`: el query incluye `payable.serieProveedor` y `purchaseOrder.supplierSerialNumber`, y la celda ahora imprime `` `${serieFactura}${supplierInvoiceNumber}` `` (misma prioridad payable→purchaseOrder que IVA).
 - **fix(permisos): `almacen` no estaba en `VALID_MODULES`** — al guardar permisos de un rol desde la UI, `role-permissions.service.ts` filtraba `almacen` (no estaba en la lista blanca) y lo descartaba en silencio, por lo que no se podía (re)activar el módulo de Almacén a ningún rol. Se agregó `'almacen'` a `VALID_MODULES`. Además se reactivó por BD el permiso `almacen` en el rol **WAREHOUSE** de la grande (que había quedado sin él) y se invalidó el cache de Redis del rol.
+- **fix(web/almacen): 403 al entrar a Reporte de daños con rol WAREHOUSE** — el `middleware.ts` mapea rutas→permisos por prefijo y `/inventory/damage-reports` no tenía entrada propia, así que caía en la regla genérica `['/inventory', ['inventory']]` y exigía el permiso `inventory` (que WAREHOUSE no tiene, solo `inventory-consult` + `almacen`) → redirigía a `/403` antes de llamar al API (el API respondía 200). Se agregó `['/inventory/damage-reports', ['inventory', 'almacen']]` antes de la regla genérica, igual que `summary` y `alerts`. Auditoría 5S (`/audit-5s`) no estaba afectada (fuera de `/inventory`).
 
 ## 🗓️ Sesión 2026-08-23 — Valor del stock parado (Alertas) + campo "Oferta" en productos
 
