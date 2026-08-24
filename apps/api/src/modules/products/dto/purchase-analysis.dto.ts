@@ -19,6 +19,11 @@ export class PurchaseAnalysisDto {
   @IsString()
   supplierId?: string;
 
+  @ApiProperty({ required: false, description: 'Buscar por código, nombre, ref. proveedor o código de barras' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @ApiProperty({ description: 'Desde (YYYY-MM-DD)' })
   @IsString()
   from: string;

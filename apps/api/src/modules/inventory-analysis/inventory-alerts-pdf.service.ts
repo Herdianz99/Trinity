@@ -12,6 +12,8 @@ type AlertItem = {
   daysSinceEntry: number;
   daysOfInventory: number;
   lastEntryDate: string;
+  outOfStockDate: string | null;
+  daysOutOfStock: number | null;
   costoConBrechaUsd: number;
   inventoryValueBregaUsd: number;
   alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: string | null; exceso: boolean };
@@ -63,6 +65,8 @@ export class InventoryAlertsPdfService {
 
     // El valor del stock parado (costo + brecha) solo aplica a Exceso y Sin rotacion.
     const showValor = report === 'exceso' || report === 'sin-rotacion';
+    // En Agotados/Negativos, las columnas de fecha muestran "cuando quedo agotado".
+    const showOutOfStock = report === 'agotados' || report === 'negativos';
 
     // Carta vertical: ancho util ~532 (x de 40 a 572). Sin columna Proveedor;
     // el codigo del articulo + Ref. Proveedor van juntos en la primera columna.
@@ -85,8 +89,8 @@ export class InventoryAlertsPdfService {
           { label: 'Stock', x: 280, width: 36, align: 'right' as const },
           { label: 'Min', x: 318, width: 30, align: 'right' as const },
           { label: 'Ventas', x: 350, width: 40, align: 'right' as const },
-          { label: 'Ult. entrada', x: 392, width: 66 },
-          { label: 'Dias', x: 460, width: 26, align: 'right' as const },
+          { label: showOutOfStock ? 'Agotado' : 'Ult. entrada', x: 392, width: 66 },
+          { label: showOutOfStock ? 'D. agot.' : 'Dias', x: 460, width: 26, align: 'right' as const },
           { label: 'Estado', x: 488, width: 84 },
         ];
 
@@ -127,8 +131,8 @@ export class InventoryAlertsPdfService {
             String(it.currentStock),
             String(it.minStock),
             String(it.periodSales),
-            this.fmtDate(it.lastEntryDate),
-            String(it.daysSinceEntry),
+            showOutOfStock ? (it.outOfStockDate ? this.fmtDate(it.outOfStockDate) : '-') : this.fmtDate(it.lastEntryDate),
+            showOutOfStock ? (it.daysOutOfStock != null ? String(it.daysOutOfStock) : '-') : String(it.daysSinceEntry),
             estado,
           ];
 

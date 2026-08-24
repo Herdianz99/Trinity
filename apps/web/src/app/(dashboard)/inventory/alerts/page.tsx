@@ -12,6 +12,7 @@ interface AlertItem {
   currentStock: number; minStock: number; costUsd: number; inventoryValueUsd: number;
   bregaPct: number; costoConBrechaUsd: number; inventoryValueBregaUsd: number;
   lastEntryDate: string; lastEntrySource: 'PURCHASE' | 'CREATED';
+  outOfStockDate: string | null; daysOutOfStock: number | null;
   daysSinceEntry: number; soldSinceEntry: boolean; periodSales: number; daysOfInventory: number;
   alerts: { agotado: boolean; negativo: boolean; bajoMinimo: boolean; sinRotacion: Nivel | null; exceso: boolean };
 }
@@ -93,6 +94,8 @@ export default function InventoryAlertsPage() {
 
   // El valor del stock parado (costo + brecha) solo aplica a Exceso y Sin rotación (stock muerto).
   const showValor = report === 'exceso' || report === 'sin-rotacion';
+  // La fecha de agotamiento solo aplica a Agotados y Negativos.
+  const showAgotado = report === 'agotados' || report === 'negativos';
 
   const filtered = items
     .filter((it) => matchesReport(it, report))
@@ -105,6 +108,7 @@ export default function InventoryAlertsPage() {
 
   function exportExcel() {
     const header = ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'];
+    if (showAgotado) header.push('Agotado desde', 'Días agotado');
     if (showValor) header.push('Costo+brecha (USD)', 'Valor stock (USD)');
     const aoa: (string | number)[][] = [
       header,
@@ -113,6 +117,7 @@ export default function InventoryAlertsPage() {
           it.productCode, it.productName, it.supplierName, it.currentStock, it.minStock,
           it.periodSales, fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
         ];
+        if (showAgotado) row.push(it.outOfStockDate ? fmtDate(it.outOfStockDate) : '—', it.daysOutOfStock ?? '—');
         if (showValor) row.push(it.costoConBrechaUsd, it.inventoryValueBregaUsd);
         return row;
       }),
@@ -229,6 +234,7 @@ export default function InventoryAlertsPage() {
                   <th className="text-right px-3 py-3 text-slate-400 font-medium" title={`Unidades vendidas en los últimos ${period} días`}>Ventas ({period}d)</th>
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Últ. entrada</th>
                   <th className="text-right px-3 py-3 text-slate-400 font-medium">Días</th>
+                  {showAgotado && <th className="text-left px-3 py-3 text-slate-400 font-medium" title="Fecha en que quedó agotado (último movimiento de stock)">Agotado desde</th>}
                   {showValor && <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Costo unitario + brecha (USD)">Costo+brecha</th>}
                   {showValor && <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Stock × (costo + brecha)">Valor stock</th>}
                   <th className="text-left px-3 py-3 text-slate-400 font-medium">Estado</th>
@@ -236,7 +242,7 @@ export default function InventoryAlertsPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={showValor ? 11 : 9} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
+                  <tr><td colSpan={showValor ? 11 : showAgotado ? 10 : 9} className="text-center py-10 text-slate-500">Sin artículos en este reporte</td></tr>
                 ) : filtered.map((it) => (
                   <tr key={it.productId} className="border-b border-slate-700/30 hover:bg-slate-800/40">
                     <td className="px-3 py-2.5 font-mono text-xs text-emerald-400">{it.productCode}</td>
@@ -249,6 +255,16 @@ export default function InventoryAlertsPage() {
                       {fmtDate(it.lastEntryDate)}{it.lastEntrySource === 'CREATED' && <span className="text-slate-600"> (creado)</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-slate-300">{it.daysSinceEntry}</td>
+                    {showAgotado && (
+                      <td className="px-3 py-2.5 text-slate-300 text-xs whitespace-nowrap">
+                        {it.outOfStockDate ? (
+                          <>
+                            {fmtDate(it.outOfStockDate)}
+                            {it.daysOutOfStock != null && <span className="text-slate-600"> (hace {it.daysOutOfStock} d)</span>}
+                          </>
+                        ) : <span className="text-slate-600">—</span>}
+                      </td>
+                    )}
                     {showValor && <td className="px-3 py-2.5 text-right font-mono text-slate-400">${fmtUsd(it.costoConBrechaUsd)}</td>}
                     {showValor && <td className="px-3 py-2.5 text-right font-mono text-amber-400 font-semibold">${fmtUsd(it.inventoryValueBregaUsd)}</td>}
                     <td className="px-3 py-2.5">

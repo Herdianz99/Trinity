@@ -47,6 +47,7 @@ export default function PurchaseAnalysisPage() {
   const [categoryId, setCategoryId] = useState('');
   const [brandId, setBrandId] = useState('');
   const [supplierId, setSupplierId] = useState('');
+  const [search, setSearch] = useState('');
 
   const [preset, setPreset] = useState<number | 'custom'>(30);
   const [from, setFrom] = useState(daysAgo(30));
@@ -89,6 +90,7 @@ export default function PurchaseAnalysisPage() {
       if (categoryId) params.set('categoryId', categoryId);
       if (brandId) params.set('brandId', brandId);
       if (supplierId) params.set('supplierId', supplierId);
+      if (search.trim()) params.set('search', search.trim());
       if (onlyWithSales) params.set('onlyWithSales', 'true');
       const res = await fetch(`/api/proxy/products/purchase-analysis?${params}`);
       if (!res.ok) {
@@ -99,7 +101,7 @@ export default function PurchaseAnalysisPage() {
       setAppliedQuery(params.toString());
     } catch (e: any) { setError(e.message); setData(null); setAppliedQuery(''); }
     finally { setLoading(false); }
-  }, [from, to, categoryId, brandId, supplierId, onlyWithSales]);
+  }, [from, to, categoryId, brandId, supplierId, search, onlyWithSales]);
 
   // Exporta a Excel los resultados actuales (respetan el filtro que los genero).
   function exportExcel() {
@@ -136,6 +138,20 @@ export default function PurchaseAnalysisPage() {
 
       {/* Filtros */}
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 mb-4 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">Artículo (código, nombre, ref. proveedor o cód. de barras)</label>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') analyze(); }}
+              placeholder="Buscar un artículo específico…"
+              className={`${inputCls} pl-9`}
+            />
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">Categoría</label>

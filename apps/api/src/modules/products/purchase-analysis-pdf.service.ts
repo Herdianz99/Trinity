@@ -63,6 +63,7 @@ export class PurchaseAnalysisPdfService {
     filtros.push(`Categoría: ${cat?.name || 'Todas'}`);
     filtros.push(`Marca: ${brand?.name || 'Todas'}`);
     filtros.push(`Proveedor: ${sup?.name || 'Todos'}`);
+    if (dto.search?.trim()) filtros.push(`Búsqueda: "${dto.search.trim()}"`);
 
     const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, bottom: 40, left: 40, right: 40 }, bufferPages: true });
 

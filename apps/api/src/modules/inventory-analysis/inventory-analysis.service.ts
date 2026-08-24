@@ -576,6 +576,19 @@ export class InventoryAnalysisService {
       if (ls._max.createdAt) lastSaleMap.set(ls.productId, ls._max.createdAt);
     }
 
+    // 3b. Último movimiento de stock de cualquier tipo (para la "fecha de agotamiento"):
+    // en un producto agotado (stock <= 0), el movimiento más reciente es justo el que lo
+    // dejó en ese nivel, así que su fecha es cuándo quedó (y sigue) agotado.
+    const lastMovements = await this.prisma.stockMovement.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds } },
+      _max: { createdAt: true },
+    });
+    const lastMovementMap = new Map<string, Date>();
+    for (const lm of lastMovements) {
+      if (lm._max.createdAt) lastMovementMap.set(lm.productId, lm._max.createdAt);
+    }
+
     // 4. Ventas del período seleccionado (para rotación => Exceso)
     const periodItems = await this.prisma.invoiceItem.findMany({
       where: {
@@ -624,6 +637,13 @@ export class InventoryAnalysisService {
 
       const agotado = currentStock <= 0;
       const negativo = currentStock < 0; // sobrevendido: existencia por debajo de 0 (subconjunto de agotado)
+
+      // Fecha de agotamiento: solo para agotados, = fecha del último movimiento de stock.
+      const lastMovement = lastMovementMap.get(p.id) || null;
+      const outOfStockDate = agotado && lastMovement ? lastMovement.toISOString() : null;
+      const daysOutOfStock = agotado && lastMovement
+        ? Math.floor((now.getTime() - lastMovement.getTime()) / MS_DAY)
+        : null;
       const bajoMinimo = currentStock > 0 && currentStock <= p.minStock;
       const exceso = currentStock > 0 && periodSales > 0 && daysOfInventory > DIAS_EXCESO;
 
@@ -654,6 +674,8 @@ export class InventoryAnalysisService {
         inventoryValueUsd: Math.round(Math.max(currentStock, 0) * p.costUsd * 100) / 100,
         lastEntryDate: entryDate.toISOString(),
         lastEntrySource,
+        outOfStockDate,
+        daysOutOfStock,
         daysSinceEntry,
         soldSinceEntry,
         periodSales: Math.round(periodSales * 100) / 100,

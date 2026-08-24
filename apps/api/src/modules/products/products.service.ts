@@ -40,6 +40,17 @@ export class ProductsService {
     if (dto.brandId) where.brandId = dto.brandId;
     if (dto.supplierId) where.supplierId = dto.supplierId;
 
+    // Búsqueda por artículo específico: código, nombre, ref. proveedor o código de barras.
+    const search = dto.search?.trim();
+    if (search) {
+      where.OR = [
+        { code: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { supplierRef: { contains: search, mode: 'insensitive' } },
+        { barcode: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const from = caracasDayStart(dto.from);
     const to = caracasDayEnd(dto.to);
 
