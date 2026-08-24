@@ -1,5 +1,11 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (e) — Columna Existencia al aprobar una solicitud de traslado entre socios
+
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+
+- **feat(traslados socios): columna "Existencia" al aprobar una solicitud recibida** — en el detalle del traslado (`/catalog/partner-transfers/[id]`), cuando llega una solicitud (`REQUEST`/`INCOMING`/`REQUESTED`) el que va a enviar ya no está a ciegas: nueva columna **Existencia** con lo que tiene en su inventario (suma de **todos los almacenes**), cargada de inmediato sin depender del almacén origen, y coloreada (rojo=0, ámbar=menos de lo pedido, verde=alcanza). Se mantiene el "disponible: X" del almacén origen elegido como tope al enviar. Backend: `availability(id, warehouseId?)` ahora acepta `warehouseId` opcional y devuelve `{ code, available, totalStock }` (`totalStock` = suma de todos los almacenes; `available` = null si no se eligió almacén).
+
 ## 🗓️ Sesión 2026-08-24 (d) — Método de pago del proveedor (texto libre) + en reporte CxP PDF
 
 > ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **CON migración** (aditiva e idempotente: `Supplier.paymentMethod`; también en `deploy/fix-schema.sql`).

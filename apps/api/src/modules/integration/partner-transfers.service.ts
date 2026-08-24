@@ -159,23 +159,37 @@ export class PartnerTransfersService {
     return rec;
   }
 
-  // Stock disponible de los items de un traslado en un almacén dado (para la UI de aprobar).
-  async availability(id: string, warehouseId: string): Promise<{ code: string; available: number }[]> {
-    if (!warehouseId) throw new BadRequestException('Falta el almacen');
+  // Stock de los items de un traslado (para la UI de aprobar). `totalStock` = existencia
+  // total del producto en TODOS mis almacenes (para que el que envía sepa cuánto tiene,
+  // aunque no haya elegido almacén origen todavía). `available` = existencia en el almacén
+  // origen elegido (el tope al enviar); es null si aún no se eligió almacén.
+  async availability(
+    id: string,
+    warehouseId?: string,
+  ): Promise<{ code: string; available: number | null; totalStock: number }[]> {
     const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
     if (!rec) throw new NotFoundException('Traslado no encontrado');
     const items = rec.items as unknown as { code: string }[];
-    const out: { code: string; available: number }[] = [];
+    const out: { code: string; available: number | null; totalStock: number }[] = [];
     for (const it of items) {
       const p = await this.prisma.product.findUnique({ where: { code: it.code }, select: { id: true } });
-      let available = 0;
+      let available: number | null = warehouseId ? 0 : null;
+      let totalStock = 0;
       if (p) {
-        const st = await this.prisma.stock.findUnique({
-          where: { productId_warehouseId: { productId: p.id, warehouseId } },
+        // Existencia total (suma de todos los almacenes).
+        const agg = await this.prisma.stock.aggregate({
+          where: { productId: p.id },
+          _sum: { quantity: true },
         });
-        available = st?.quantity ?? 0;
+        totalStock = agg._sum.quantity ?? 0;
+        if (warehouseId) {
+          const st = await this.prisma.stock.findUnique({
+            where: { productId_warehouseId: { productId: p.id, warehouseId } },
+          });
+          available = st?.quantity ?? 0;
+        }
       }
-      out.push({ code: it.code, available });
+      out.push({ code: it.code, available, totalStock });
     }
     return out;
   }

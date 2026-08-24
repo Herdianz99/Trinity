@@ -34,6 +34,9 @@ export default function PartnerTransferDetailPage() {
   const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
   const [sendQty, setSendQty] = useState<Record<string, number>>({});
   const [avail, setAvail] = useState<Record<string, number> | null>(null);
+  // Existencia TOTAL (todos los almacenes) por código: lo que tengo en inventario, para que
+  // el que envía no quede a ciegas aunque todavía no haya elegido el almacén origen.
+  const [stockTotals, setStockTotals] = useState<Record<string, number> | null>(null);
   const [sendNote, setSendNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -70,17 +73,36 @@ export default function PartnerTransferDetailPage() {
     }
   }, [canApproveNow, t]);
 
-  // Cuando el usuario elige almacén origen, consultar disponibilidad por línea.
+  // Al abrir una solicitud aprobable, cargar de una la EXISTENCIA TOTAL (todos los almacenes)
+  // de cada artículo pedido, sin depender del almacén origen.
+  useEffect(() => {
+    if (!canApproveNow) { setStockTotals(null); return; }
+    let cancel = false;
+    fetch(`/api/proxy/integration/transfers/${id}/availability`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { code: string; totalStock: number }[]) => {
+        if (cancel) return;
+        const m: Record<string, number> = {};
+        rows.forEach((x) => { m[x.code] = x.totalStock; });
+        setStockTotals(m);
+      })
+      .catch(() => { if (!cancel) setStockTotals(null); });
+    return () => { cancel = true; };
+  }, [canApproveNow, id]);
+
+  // Cuando el usuario elige almacén origen, consultar disponibilidad por línea (tope al enviar).
   useEffect(() => {
     if (!canApproveNow || !wh) { setAvail(null); return; }
     let cancel = false;
     fetch(`/api/proxy/integration/transfers/${id}/availability?warehouseId=${encodeURIComponent(wh)}`)
       .then((r) => (r.ok ? r.json() : []))
-      .then((rows: { code: string; available: number }[]) => {
+      .then((rows: { code: string; available: number | null; totalStock: number }[]) => {
         if (cancel) return;
         const m: Record<string, number> = {};
-        rows.forEach((x) => { m[x.code] = x.available; });
+        const tot: Record<string, number> = {};
+        rows.forEach((x) => { m[x.code] = x.available ?? 0; tot[x.code] = x.totalStock; });
         setAvail(m);
+        setStockTotals(tot);
       })
       .catch(() => { if (!cancel) setAvail(null); });
     return () => { cancel = true; };
@@ -261,6 +283,7 @@ export default function PartnerTransferDetailPage() {
               <th className="px-4 py-2 text-left">Código</th>
               <th className="px-4 py-2 text-left">Artículo</th>
               <th className="px-4 py-2 text-right">Solicitado</th>
+              {canApprove && <th className="px-4 py-2 text-right" title="Lo que tengo en mi inventario (todos los almacenes)">Existencia</th>}
               <th className="px-4 py-2 text-right">{canApprove ? 'Enviar' : 'Enviado'}</th>
               <th className="px-4 py-2 text-right">Costo unit. $</th>
               <th className="px-4 py-2 text-right">Subtotal $</th>
@@ -276,6 +299,17 @@ export default function PartnerTransferDetailPage() {
                   <td className="px-4 py-2 font-mono text-green-400">{i.code}</td>
                   <td className="px-4 py-2 text-slate-200">{i.name || '—'}</td>
                   <td className="px-4 py-2 text-right text-slate-300">{requested}</td>
+                  {canApprove && (
+                    <td className="px-4 py-2 text-right font-semibold">
+                      {stockTotals == null ? (
+                        <span className="text-slate-500">…</span>
+                      ) : (
+                        <span className={(stockTotals[i.code] ?? 0) <= 0 ? 'text-red-400' : (stockTotals[i.code] ?? 0) < requested ? 'text-amber-300' : 'text-emerald-300'}>
+                          {stockTotals[i.code] ?? 0}
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td className={`px-4 py-2 text-right ${diff ? 'text-amber-300 font-semibold' : 'text-slate-200'}`}>
                     {canApprove ? (
                       <div className="flex flex-col items-end">
@@ -305,6 +339,7 @@ export default function PartnerTransferDetailPage() {
             <tr className="border-t border-slate-700/50 bg-slate-800/30">
               <td colSpan={2} className="px-4 py-2 text-slate-300 font-semibold">Totales</td>
               <td className="px-4 py-2 text-right text-slate-300 font-semibold">{(t.items || []).reduce((s, i) => s + (i.requestedQuantity ?? i.quantity), 0)}</td>
+              {canApprove && <td className="px-4 py-2 text-right text-slate-300 font-semibold">{stockTotals ? (t.items || []).reduce((s, i) => s + (stockTotals[i.code] ?? 0), 0) : ''}</td>}
               <td className="px-4 py-2 text-right text-slate-200 font-semibold">{canApprove ? (t.items || []).reduce((s, i) => s + Number(sendQty[i.code] ?? 0), 0) : (t.items || []).reduce((s, i) => s + i.quantity, 0)}</td>
               <td className="px-4 py-2"></td>
               <td className="px-4 py-2 text-right text-slate-200 font-semibold">${totalUsd.toFixed(2)}</td>
