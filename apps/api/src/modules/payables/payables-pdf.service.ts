@@ -56,36 +56,48 @@ export class PayablesPdfService {
 
   // Escribe "Saldo $X     Vencido $Y" alineado a la derecha, en el color base de la
   // barra. El "Vencido" se pinta en rojo si hay monto vencido, para que salte a la vista.
+  // Bloque compacto y pegado a la derecha (los montos van alineados a la derecha) para
+  // dejarle el mayor ancho posible al nombre + RIF de la izquierda.
   private drawSaldoVencido(doc: any, y: number, saldo: number, vencido: number, baseColor: string) {
+    doc.fontSize(8.5).font('Helvetica-Bold');
     doc.fillColor(baseColor);
-    doc.text(`Saldo $${this.fmt(saldo)}`, RIGHT - 246, y, { width: 130, align: 'right', lineBreak: false });
+    doc.text(`Saldo $${this.fmt(saldo)}`, RIGHT - 194, y, { width: 80, align: 'right', lineBreak: false });
     doc.fillColor(vencido > 0 ? '#dc2626' : baseColor);
-    doc.text(`Vencido $${this.fmt(vencido)}`, RIGHT - 116, y, { width: 116, align: 'right', lineBreak: false });
+    doc.text(`Vencido $${this.fmt(vencido)}`, RIGHT - 114, y, { width: 114, align: 'right', lineBreak: false });
   }
 
-  // Barra de encabezado de un proveedor: nombre + RIF + (N docs) a la izquierda y
-  // Saldo/Vencido a la derecha (subtotal del proveedor). El nombre puede ocupar hasta
-  // 2 lineas: la barra crece en alto para que la 2da linea no se monte sobre la fila
-  // de abajo (encabezado de columnas). saldo = total que se debe; vencido = parte vencida.
+  // Barra de encabezado de un proveedor: NOMBRE + RIF + (N docs) en la linea principal y
+  // Saldo/Vencido a la derecha (subtotal del proveedor). El nombre+RIF puede ocupar hasta
+  // 2 lineas; se le da el mayor ancho posible (el bloque Saldo/Vencido se compacto a la
+  // derecha) para que el RIF entre. Si hay metodo de pago, va en una linea pequena debajo.
   private drawSupplierBar(
     doc: any, y: number, name: string, rif: string | null,
-    count: number, saldo: number, vencido: number, cont = false,
+    count: number, saldo: number, vencido: number, paymentMethod: string | null, cont = false,
   ): number {
     doc.fontSize(8.5).font('Helvetica-Bold');
-    // Ancho disponible para el nombre a la izquierda (antes del bloque Saldo/Vencido).
-    const titleW = RIGHT - 46 - 258;
+    // Ancho disponible para el nombre+RIF a la izquierda (antes del bloque Saldo/Vencido).
+    const titleW = 330;
     const tag = cont ? '  — cont.' : '';
     const title = `${name}${rif ? '  ·  ' + rif : ''}  (${count})${tag}`;
     const lineH = doc.currentLineHeight();
     // 1 linea si entra; si no, 2 lineas (con "…" si aun se pasa).
     const twoLines = doc.widthOfString(title) > titleW;
-    const barH = twoLines ? Math.ceil(lineH * 2) + 5 : 15;
+    const titleH = twoLines ? Math.ceil(lineH * 2) : Math.ceil(lineH);
+    // Linea de metodo de pago (una sola linea pequena, con "…" si es muy largo).
+    const pm = paymentMethod?.trim();
+    const pmH = pm ? 9 : 0;
+    const barH = Math.max(15, titleH + pmH + 4);
     doc.rect(40, y - 2, RIGHT - 40, barH).fill('#e2e8f0');
     doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold');
     doc.text(title, 46, y + 1, { width: titleW, height: Math.ceil(lineH * 2) + 2, ellipsis: true });
+    // "Pago: ..." debajo del nombre; ocupa casi todo el ancho (la 2da linea no lleva Saldo/Vencido).
+    if (pm) {
+      doc.fillColor('#475569').fontSize(7).font('Helvetica');
+      doc.text(`Pago: ${pm}`, 46, y + 1 + titleH, { width: RIGHT - 46 - 6, lineBreak: false, ellipsis: true });
+    }
     // Saldo/Vencido siempre en la 1ra linea de la barra.
     this.drawSaldoVencido(doc, y + 1, saldo, vencido, '#0f172a');
-    doc.fillColor('#000');
+    doc.fillColor('#000').font('Helvetica');
     return y + barH + 3;
   }
 
@@ -151,11 +163,11 @@ export class PayablesPdfService {
 
     // Agrupar por proveedor. Los grupos se ordenan alfabeticamente por nombre; dentro de
     // cada proveedor, por vencimiento (ya viene ordenado por dueDate asc).
-    const groups = new Map<string, { name: string; rif: string | null; rows: any[] }>();
+    const groups = new Map<string, { name: string; rif: string | null; paymentMethod: string | null; rows: any[] }>();
     for (const p of rows as any[]) {
       const name = p.supplier?.name || 'Sin proveedor';
       const key = p.supplier?.id ? `s:${p.supplier.id}` : `n:${name}`;
-      if (!groups.has(key)) groups.set(key, { name, rif: p.supplier?.rif || null, rows: [] });
+      if (!groups.has(key)) groups.set(key, { name, rif: p.supplier?.rif || null, paymentMethod: p.supplier?.paymentMethod || null, rows: [] });
       groups.get(key)!.rows.push(p);
     }
     const ordered = Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -171,12 +183,12 @@ export class PayablesPdfService {
       let gSaldo = 0, gVencido = 0;
       for (const p of g.rows) { gSaldo += p.balanceUsd || 0; if (isOverdue(p)) gVencido += p.balanceUsd || 0; }
 
-      // Espacio para la barra del proveedor (hasta 2 lineas) + encabezado de columnas + 1 fila.
-      if (y > doc.page.height - doc.page.margins.bottom - 75) {
+      // Espacio para la barra del proveedor (hasta 2 lineas + metodo de pago) + encabezado de columnas + 1 fila.
+      if (y > doc.page.height - doc.page.margins.bottom - 85) {
         doc.addPage();
         y = 40;
       }
-      y = this.drawSupplierBar(doc, y, g.name, g.rif, g.rows.length, gSaldo, gVencido);
+      y = this.drawSupplierBar(doc, y, g.name, g.rif, g.rows.length, gSaldo, gVencido, g.paymentMethod);
       y = this.drawHeaderRow(doc, y);
 
       doc.fontSize(8).font('Helvetica');
@@ -184,7 +196,7 @@ export class PayablesPdfService {
         if (y > doc.page.height - doc.page.margins.bottom - 24) {
           doc.addPage();
           y = 40;
-          y = this.drawSupplierBar(doc, y, g.name, g.rif, g.rows.length, gSaldo, gVencido, true);
+          y = this.drawSupplierBar(doc, y, g.name, g.rif, g.rows.length, gSaldo, gVencido, g.paymentMethod, true);
           y = this.drawHeaderRow(doc, y);
           doc.fontSize(8).font('Helvetica');
         }

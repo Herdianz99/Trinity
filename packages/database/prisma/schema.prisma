@@ -488,6 +488,8 @@ model Supplier {
   email             String?
   address           String?
   contactName       String?
+  // Texto libre: cómo se le paga a este proveedor (ej. "Zelle a X", "Pago móvil 0414...", "Efectivo").
+  paymentMethod     String?
   creditDays        Int                @default(0)
   isRetentionAgent  Boolean            @default(false)
   supplierType      SupplierType?

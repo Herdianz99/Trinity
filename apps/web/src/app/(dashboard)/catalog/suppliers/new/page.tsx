@@ -7,6 +7,7 @@ import SeniatModal from '@/components/seniat-modal';
 
 const defaultForm = {
   name: '', rif: '', phone: '', email: '', address: '', contactName: '',
+  paymentMethod: '',
   creditDays: 0, isRetentionAgent: false, isActive: true,
 };
 
@@ -55,6 +56,7 @@ export default function NewSupplierPage() {
         name: form.name, rif: form.rif || undefined, phone: form.phone || undefined,
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
+        paymentMethod: form.paymentMethod || undefined,
         creditDays: Number(form.creditDays) || 0,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
       };
@@ -138,6 +140,11 @@ export default function NewSupplierPage() {
           <div className="md:col-span-2">
             <label className="block text-xs font-medium text-slate-400 mb-1">Direccion</label>
             <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="input-field !py-2 text-sm" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-slate-400 mb-1">Metodo de pago</label>
+            <input type="text" value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} className="input-field !py-2 text-sm" placeholder="Ej: Zelle a correo@x.com, Pago movil 0414..., Efectivo" />
+            <p className="text-[10px] text-slate-500 mt-1">Texto libre. Aparece junto al proveedor en el reporte de Cuentas por Pagar.</p>
           </div>
         </div>
         <div className="flex items-center gap-6">

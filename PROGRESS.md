@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (d) — Método de pago del proveedor (texto libre) + en reporte CxP PDF
+
+> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **CON migración** (aditiva e idempotente: `Supplier.paymentMethod`; también en `deploy/fix-schema.sql`).
+
+- **feat(proveedores): campo "Método de pago" (texto libre)** — nuevo `Supplier.paymentMethod String?` para anotar cómo se le paga a cada proveedor. Migración `20260824170000_supplier_payment_method` (`ADD COLUMN IF NOT EXISTS`) + red de seguridad en `fix-schema.sql`. `create-supplier.dto.ts` (+`paymentMethod`); el servicio ya guarda con `data: dto`. UI en `/catalog/suppliers/new` y `/catalog/suppliers/[id]` (input + nota de que sale en el reporte de CxP).
+- **feat(CxP/reporte PDF): método de pago junto al proveedor** — en `payables/report/pdf`, el query incluye `supplier.paymentMethod` y la barra de encabezado de cada proveedor muestra una **2da línea pequeña** `Pago: …` bajo el nombre. Además se **ensanchó a 330px** la línea nombre+RIF (antes ~268) compactando el bloque Saldo/Vencido hacia la derecha, para que el RIF no se corte con nombres largos; y se corrigió el tamaño del Saldo/Vencido (8.5pt).
+
 ## 🗓️ Sesión 2026-08-24 (c) — Filtros en Ajustes de inventario (búsqueda + fechas + estatus)
 
 > ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).

@@ -33,6 +33,11 @@ export class CreateSupplierDto {
   @IsString()
   contactName?: string;
 
+  @ApiProperty({ required: false, description: 'Metodo de pago (texto libre): como se le paga al proveedor' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
   @ApiProperty({ required: false, default: 0, description: 'Dias de credito por defecto del proveedor' })
   @IsOptional()
   @IsInt()

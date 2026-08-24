@@ -2751,3 +2751,6 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 UPDATE "RolePermission" SET modules = array_append(modules,'almacen')
 WHERE role IN ('WAREHOUSE','AUDITOR') AND NOT ('almacen' = ANY(modules));
+
+-- Metodo de pago del proveedor (texto libre)
+ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT;

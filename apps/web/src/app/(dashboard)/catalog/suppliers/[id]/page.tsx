@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 interface Supplier {
   id: string; name: string; rif: string | null; phone: string | null;
   email: string | null; address: string | null; contactName: string | null;
+  paymentMethod: string | null;
   creditDays: number;
   isRetentionAgent: boolean; isActive: boolean; supplierType: string | null;
   islrConceptId: string | null;
@@ -86,6 +87,7 @@ export default function SupplierDetailPage() {
         name: data.name, rif: data.rif || '', phone: data.phone || '',
         email: data.email || '', address: data.address || '',
         contactName: data.contactName || '',
+        paymentMethod: data.paymentMethod || '',
         creditDays: data.creditDays ?? 0,
         isRetentionAgent: data.isRetentionAgent, isActive: data.isActive,
         supplierType: data.supplierType || '',
@@ -144,6 +146,7 @@ export default function SupplierDetailPage() {
         name: form.name, rif: form.rif || undefined, phone: form.phone || undefined,
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
+        paymentMethod: form.paymentMethod || undefined,
         creditDays: Number(form.creditDays) || 0,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
         supplierType: form.supplierType || null,
@@ -246,6 +249,11 @@ export default function SupplierDetailPage() {
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-slate-400 mb-1">Direccion</label>
                 <input type="text" value={form.address || ''} onChange={e => setForm((f: any) => ({ ...f, address: e.target.value }))} className="input-field !py-2 text-sm" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-slate-400 mb-1">Metodo de pago</label>
+                <input type="text" value={form.paymentMethod || ''} onChange={e => setForm((f: any) => ({ ...f, paymentMethod: e.target.value }))} className="input-field !py-2 text-sm" placeholder="Ej: Zelle a correo@x.com, Pago movil 0414..., Efectivo" />
+                <p className="text-[10px] text-slate-500 mt-1">Texto libre. Aparece junto al proveedor en el reporte de Cuentas por Pagar.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de proveedor (ISLR)</label>
