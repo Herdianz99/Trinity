@@ -21,6 +21,7 @@ import {
   Paperclip,
   Upload,
   ImageIcon,
+  FileText,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ImageZoomLightbox } from '@/components/image-zoom-lightbox';
@@ -1846,9 +1847,20 @@ interface PurchaseAttachment {
   id: string;
   thumbUrl: string;
   fullUrl: string;
+  mimeType?: string;
   bytes: number;
   createdAt: string;
   uploadedBy?: { name: string } | null;
+}
+
+// Lee un archivo (ej. PDF) como data URI base64 sin procesarlo.
+function fileToDataUri(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
@@ -1873,12 +1885,17 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) { setErr('El archivo debe ser una imagen'); return; }
-    if (file.size > 25 * 1024 * 1024) { setErr('La imagen no debe superar 25 MB'); return; }
+    const isPdf = file.type === 'application/pdf';
+    const isImage = file.type.startsWith('image/');
+    if (!isPdf && !isImage) { setErr('El archivo debe ser una imagen o un PDF'); return; }
+    // El PDF viaja sin comprimir (límite del API); la imagen se re-comprime en el navegador.
+    if (isPdf && file.size > 10 * 1024 * 1024) { setErr('El PDF no debe superar 10 MB'); return; }
+    if (isImage && file.size > 25 * 1024 * 1024) { setErr('La imagen no debe superar 25 MB'); return; }
     setErr('');
     setUploading(true);
     try {
-      const photo = await compressPurchaseImage(file);
+      // Las imágenes se comprimen en el navegador; los PDF se envían tal cual.
+      const photo = isPdf ? await fileToDataUri(file) : await compressPurchaseImage(file);
       const res = await fetch(`/api/proxy/purchases/${purchaseId}/attachments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1886,24 +1903,24 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.message || 'No se pudo subir la imagen');
+        throw new Error(j.message || 'No se pudo subir el archivo');
       }
       await load();
     } catch (e: any) {
-      setErr(e.message || 'No se pudo procesar la imagen');
+      setErr(e.message || 'No se pudo procesar el archivo');
     } finally {
       setUploading(false);
     }
   };
 
   const onDelete = async (attId: string) => {
-    if (!confirm('¿Eliminar esta imagen? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Eliminar este archivo? Esta acción no se puede deshacer.')) return;
     try {
       const res = await fetch(`/api/proxy/purchases/${purchaseId}/attachments/${attId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       setItems(prev => prev.filter(i => i.id !== attId));
     } catch {
-      setErr('No se pudo eliminar la imagen');
+      setErr('No se pudo eliminar el archivo');
     }
   };
 
@@ -1915,14 +1932,14 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
             <Paperclip size={16} className="text-green-400" /> Factura física del proveedor
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Sube una foto o escaneo de la factura física para no tener que buscar el papel.
-            {items.length > 0 && ` · ${items.length} ${items.length === 1 ? 'imagen' : 'imágenes'}`}
+            Sube una foto, escaneo o PDF de la factura para no tener que buscar el papel.
+            {items.length > 0 && ` · ${items.length} ${items.length === 1 ? 'archivo' : 'archivos'}`}
           </p>
         </div>
         <label className={`btn-secondary text-sm flex items-center gap-1.5 cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-          {uploading ? 'Subiendo…' : 'Subir imagen'}
-          <input type="file" accept="image/*" capture="environment" onChange={onPick} className="hidden" disabled={uploading} />
+          {uploading ? 'Subiendo…' : 'Subir archivo'}
+          <input type="file" accept="image/*,application/pdf" onChange={onPick} className="hidden" disabled={uploading} />
         </label>
       </div>
 
@@ -1935,29 +1952,39 @@ function PurchaseAttachmentsTab({ purchaseId }: { purchaseId: string }) {
       ) : items.length === 0 ? (
         <div className="text-center py-12 text-slate-500 flex flex-col items-center gap-2">
           <ImageIcon size={32} className="text-slate-600" />
-          <span>No hay imágenes archivadas para esta factura de compra.</span>
+          <span>No hay archivos guardados para esta factura de compra.</span>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {items.map(a => (
-            <div key={a.id} className="group relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/40">
-              <button onClick={() => setLightbox(a.fullUrl)} className="block w-full aspect-square" title="Ver en grande">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.thumbUrl} alt="Adjunto de factura de compra" className="w-full h-full object-cover" />
-              </button>
-              <button
-                onClick={() => onDelete(a.id)}
-                className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-red-300 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Eliminar"
-              >
-                <Trash2 size={14} />
-              </button>
-              <div className="px-2 py-1.5 text-[10px] text-slate-500">
-                {new Date(a.createdAt).toLocaleDateString('es-VE')}
-                {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+          {items.map(a => {
+            const isPdf = a.mimeType === 'application/pdf' || a.fullUrl.toLowerCase().endsWith('.pdf');
+            return (
+              <div key={a.id} className="group relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/40">
+                {isPdf ? (
+                  <a href={a.fullUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-2 w-full aspect-square bg-slate-900/60 hover:bg-slate-800/60 transition-colors" title="Abrir PDF en pestaña nueva">
+                    <FileText size={40} className="text-red-400" />
+                    <span className="text-[11px] text-slate-400 font-medium">PDF</span>
+                  </a>
+                ) : (
+                  <button onClick={() => setLightbox(a.fullUrl)} className="block w-full aspect-square" title="Ver en grande">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.thumbUrl} alt="Adjunto de factura de compra" className="w-full h-full object-cover" />
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(a.id)}
+                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-red-300 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Eliminar"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <div className="px-2 py-1.5 text-[10px] text-slate-500">
+                  {new Date(a.createdAt).toLocaleDateString('es-VE')}
+                  {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

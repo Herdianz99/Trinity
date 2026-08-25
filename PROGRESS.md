@@ -1,8 +1,30 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-25 (ii) — Adjuntos PDF en facturas de compra + op prod: borrado retención 20260800000532 (chica)
+
+> ### ⏳ Pendiente de deploy — typecheck API + Web limpio, **probado end-to-end en local (grande)**. **CON migración** (aditiva/idempotente: `PurchaseAttachment.mimeType`).
+
+- **feat(compras): el tab "Archivos" ahora acepta PDF además de imágenes** — para respaldar facturas que algunos proveedores mandan digitalizadas en PDF. Nueva columna `PurchaseAttachment.mimeType` (default `image/webp`; las filas viejas quedan como imagen). Migración `20260825140000_purchase_attachment_mimetype` (aditiva, `ADD COLUMN IF NOT EXISTS`). **Backend:** `parseDataUri()` genérico (cualquier mime) en `image-processing.ts`; `add()` bifurca por mime → si es `application/pdf` sube el archivo **tal cual** a Spaces (sin `sharp`) y guarda `mimeType`, si es imagen conserva el flujo actual (thumb+full WebP), rechaza otros tipos. **Frontend** (`purchases/[id]`): input `accept="image/*,application/pdf"`, el PDF se lee sin comprimir; en la galería un PDF se muestra como tarjeta con **ícono** que **abre en pestaña nueva**, las imágenes siguen con miniatura + lightbox. Límite PDF 10 MB (body del API = 15 MB), imagen 25 MB. Verificado e2e contra el API: POST PDF (201) / imagen (201) / txt (400), list, CDN sirve `Content-Type: application/pdf`, delete limpia Spaces.
+- **Op prod (chica): borrado de la retención `20260800000532`** — comprobante (`RetentionVoucher`) que quedó tras que el usuario borró su recibo de pago (RPG-0067). Backup previo (`/opt/Trinity/backup-ret532-*.sql.gz`). En una transacción: borrado de la línea de retención del libro de compras (`PurchaseBookEntry`), del voucher (cascada su `RetentionVoucherLine`) y `CompanyConfig.retentionNextNumber = 532`. La línea normal de la factura 00025214 y la CxP (PENDING) quedan intactas. Resultado: el próximo comprobante emitido será `20260800000532` (helper auto-sanable: `max(532, 531+1)=532`).
+
+## 🗓️ Sesión 2026-08-25 — Menú Reportes en Notas Cr/Db + saldo/vencido en buscador de recibos + fix fecha reporte cobros
+
+> ### ⏳ Pendiente de deploy — typecheck API + Web limpio, **probado end-to-end en local (grande)**. **SIN migración** (solo código API + Web). Commits `f9e1b5d` + `39bcd99` + `1cc6135` en `main` (HEAD `1cc6135`).
+
+- **feat(reportes): menú "Reportes" en `/credit-debit-notes?scope=sale` + nuevo PDF "Artículos devueltos"** — el botón único "PDF Devoluciones por vendedor" se volvió un menú desplegable (`DropdownMenu`) con dos opciones: la existente (por vendedor) y una nueva **"Artículos devueltos"**. Nuevo endpoint `GET credit-debit-notes/report/items/pdf` (fuerza `type=NCV`, respeta los filtros del listado: **motivo**/estado/fechas/búsqueda) → `reportItemsDetailed()` en el service + `generateItemsReport()` (PDFKit) con **consolidado por artículo** (código, nombre, cantidad, total $) + **detalle por nota**. Pensado para "artículos devueltos por motivo **Faltante en almacén**" (basta seleccionar ese motivo en el filtro), pero sirve para cualquier motivo. Verificado: 200 + PDF válido, conteos exactos vs BD.
+- **feat(recibos): saldo + vencido del cliente/proveedor en el buscador al crear un recibo** — en `/receipts/new` (cobro y pago), el dropdown de resultados ahora muestra, además de nombre y RIF, el **Saldo** (ámbar) y, si aplica, **Vencido** (rojo) de esa entidad. Endpoints batch `GET receivables/balances?ids=` y `GET payables/balances?ids=` (2 `groupBy` eficientes; ids por coma). **Mismo criterio que CxC/CxP**: saldo = Σ(monto − pagado) de docs PENDING/PARTIAL/OVERDUE; vencido = igual con `dueDate < hoy` (Caracas, `caracasDateKey`). El frontend trae los balances de los resultados mostrados en una sola llamada tras la búsqueda. Verificado: 6/6 exactos vs cálculo directo.
+- **fix(recibos): la fecha del reporte PDF de cobros no coincidía con la lista** — `receipts/report/pdf` (summary) mostraba `createdAt` formateado en la zona del servidor (**UTC en prod**), mientras que la lista `/receipts/collection` muestra `documentDate` (la fecha que eligió el usuario) en UTC. Recibos procesados de noche o con fecha elegida distinta al día de captura salían con fecha corrida. Ahora el PDF usa `documentDate ?? createdAt` formateado en UTC → misma fecha de negocio que la lista y el reporte detallado (que ya estaba bien). Bug de timezone Caracas (Sesión 65). Verificado: de 272 recibos, 25 fallaban y **25/25 ahora cuadran** con la pantalla.
+
+## 🗓️ Sesión 2026-08-24 (i) — Deploy del día a las 6 empresas + borrado de DMG-0001 (grande)
+
+> ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `eb13521`.
+
+- **Deploy 2026-08-24 a las 6 empresas** (`eltrebol/ferre`, `inversiones`, `total`, `totalturen`, `aceros`, `acerosmayor`) → todas en **HEAD `eb13521`**, PM2 `online`, `/health` 200 `database:ok`. **2 migraciones** aplicadas y verificadas en BD (una por cada tipo de script de deploy): `Supplier.paymentMethod`, y `TreasuryOriginBank` + `TreasuryBsLoad` + `TreasuryMovement.amountBs/originBankId` (divisas). Cubre todos los bloques (b)–(h) de hoy más el fix 403/ISLR/`almacen`.
+- **Op prod (grande): borrado físico de `DMG-0001`** — reporte de daños en estado **PENDIENTE** (2 ítems, 0 fotos, **sin `StockMovement`** y **sin reemplazo** enlazado → sin efectos que revertir). Se respaldaron las filas antes de borrar (`/root/dmg0001-report-*.tsv` + `-items-*.tsv` en `inversiones`) y se borró en transacción (fotos/ítems en cascada + reporte). Verificado: `count(DMG-0001)=0`. **Ojo:** borrado físico (no "Anular"); el correlativo `DMG-0001` queda como hueco (el próximo no lo reutiliza).
+
 ## 🗓️ Sesión 2026-08-24 (h) — Divisas: Bs por empresa + banco de origen + Tránsito/Disponible + separador de miles + Confirmar/refresh
 
-> ### ⏳ Pendiente de deploy — typecheck API + Web limpio, probado en local (grande). **CON migración** (aditiva/idempotente: `TreasuryOriginBank`, `TreasuryBsLoad`, `TreasuryMovement.amountBs/originBankId`; también en `deploy/fix-schema.sql`).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API + Web limpio, probado en local (grande). **CON migración** (aditiva/idempotente: `TreasuryOriginBank`, `TreasuryBsLoad`, `TreasuryMovement.amountBs/originBankId`; también en `deploy/fix-schema.sql`).
 
 Correcciones al módulo de divisas (antes USD-nativo):
 - **Bs por empresa (cargas que se acumulan):** nuevo modelo `TreasuryBsLoad`. En Empresas cada una muestra su saldo Bs y un ícono para **cargar Bs** (monto + nota). Saldo Bs = Σ cargas − Σ Bs gastados en movimientos.
@@ -15,13 +37,13 @@ Correcciones al módulo de divisas (antes USD-nativo):
 
 ## 🗓️ Sesión 2026-08-24 (g) — Recibo de cobro: número de orden (Ref) en "Documentos a cancelar"
 
-> ### ⏳ Pendiente de deploy — solo frontend, probado en local (grande). **SIN migración**.
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — solo frontend, probado en local (grande). **SIN migración**.
 
 - **feat(recibos): mostrar el número de orden (Ref) en "Documentos a cancelar"** — en `/receipts/new` (recibo de cobro plataforma financiera), la lista de documentos seleccionados ahora muestra `Ref: {reference}` bajo el documento, igual que ya se veía en "Documentos pendientes". El dato ya venía en `SelectedDoc` (extends `PendingDoc`, y `addDoc` hace `{...doc}`); solo faltaba renderizarlo.
 
 ## 🗓️ Sesión 2026-08-24 (f) — Notas Cr/Db: filtro por motivo + motivo en detalle + fix back con scope
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
 
 - **feat(notas Cr/Db): filtro por "Motivo"** — en `/credit-debit-notes` nuevo select de motivo (Asesoría / Cliente / Faltante en almacén / Producto defectuoso), visible cuando el scope no es compra (el motivo solo aplica a devoluciones de venta NCV). DTO `query-notes.dto.ts` (+`motivo` validado contra `SalesReturnReason`) y `buildNotesWhere` (filtra `where.motivo`) → aplica igual a la tabla y al reporte PDF por vendedor. Deep-link por URL `?motivo=`.
 - **feat(notas Cr/Db): motivo en el detalle** — se muestra el "Motivo" arriba, junto a "Serie", en la grilla de datos (solo aparece cuando la nota tiene motivo, o sea NCV). El detalle y el listado ya devolvían `motivo` (usan `include`).
@@ -29,33 +51,33 @@ Correcciones al módulo de divisas (antes USD-nativo):
 
 ## 🗓️ Sesión 2026-08-24 (e) — Columna Existencia al aprobar una solicitud de traslado entre socios
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
 
 - **feat(traslados socios): columna "Existencia" al aprobar una solicitud recibida** — en el detalle del traslado (`/catalog/partner-transfers/[id]`), cuando llega una solicitud (`REQUEST`/`INCOMING`/`REQUESTED`) el que va a enviar ya no está a ciegas: nueva columna **Existencia** con lo que tiene en su inventario (suma de **todos los almacenes**), cargada de inmediato sin depender del almacén origen, y coloreada (rojo=0, ámbar=menos de lo pedido, verde=alcanza). Se mantiene el "disponible: X" del almacén origen elegido como tope al enviar. Backend: `availability(id, warehouseId?)` ahora acepta `warehouseId` opcional y devuelve `{ code, available, totalStock }` (`totalStock` = suma de todos los almacenes; `available` = null si no se eligió almacén).
 
 ## 🗓️ Sesión 2026-08-24 (d) — Método de pago del proveedor (texto libre) + en reporte CxP PDF
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **CON migración** (aditiva e idempotente: `Supplier.paymentMethod`; también en `deploy/fix-schema.sql`).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **CON migración** (aditiva e idempotente: `Supplier.paymentMethod`; también en `deploy/fix-schema.sql`).
 
 - **feat(proveedores): campo "Método de pago" (texto libre)** — nuevo `Supplier.paymentMethod String?` para anotar cómo se le paga a cada proveedor. Migración `20260824170000_supplier_payment_method` (`ADD COLUMN IF NOT EXISTS`) + red de seguridad en `fix-schema.sql`. `create-supplier.dto.ts` (+`paymentMethod`); el servicio ya guarda con `data: dto`. UI en `/catalog/suppliers/new` y `/catalog/suppliers/[id]` (input + nota de que sale en el reporte de CxP).
 - **feat(CxP/reporte PDF): método de pago junto al proveedor** — en `payables/report/pdf`, el query incluye `supplier.paymentMethod` y la barra de encabezado de cada proveedor muestra una **2da línea pequeña** `Pago: …` bajo el nombre. Además se **ensanchó a 330px** la línea nombre+RIF (antes ~268) compactando el bloque Saldo/Vencido hacia la derecha, para que el RIF no se corte con nombres largos; y se corrigió el tamaño del Saldo/Vencido (8.5pt).
 
 ## 🗓️ Sesión 2026-08-24 (c) — Filtros en Ajustes de inventario (búsqueda + fechas + estatus)
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
 
 - **feat(inventario/ajustes): filtros en `/inventory/adjustments`** — barra de filtros con: **búsqueda única** por correlativo o destinatario (`OR` con `contains` insensitive sobre `number`, `customer.name` y `supplier.name`), **rango de fechas Desde/Hasta** sobre `createdAt` (límites del día-calendario Caracas con `caracasDayStart`/`caracasDayEnd`), y los botones de **estatus** ya existentes reubicados en la barra. Botón "Limpiar filtros". `inventory-adjustments.controller.ts` + `.service.ts` (`findAll` acepta `search`, `from`, `to`); UI en `adjustments/page.tsx` con debounce de 350 ms en el texto. Todo server-side.
 
 ## 🗓️ Sesión 2026-08-24 (b) — Filtro por artículo en Análisis de compra + fecha de agotamiento en Alertas
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **SIN migración** (solo código API + Web).
 
 - **feat(compras/análisis): filtro "Artículo" (código, nombre, ref. proveedor o cód. de barras)** — en `/purchases/purchase-analysis` se agregó un buscador de un solo campo que hace `OR` con `contains` insensitive sobre `code / name / supplierRef / barcode`. DTO `purchase-analysis.dto.ts` (+`search`), `products.service.ts` (arma el `where.OR`), UI en `page.tsx` (input con lupa, Enter para analizar) y el buscador se combina (AND) con categoría/marca/proveedor/período. Aplica también al export Excel (usa las filas ya filtradas) y al PDF (encabezado muestra `Búsqueda: "…"`).
 - **feat(inventario/alertas): fecha de "Agotado desde" en Agotados y Negativos** — en `/inventory/alerts`, reportes Agotados/Negativos, nueva columna con la fecha en que el artículo quedó agotado + días transcurridos. Se calcula como la fecha del **último movimiento de stock** del producto (en un artículo con stock ≤ 0, ese movimiento es justo el que lo dejó agotado). `inventory-analysis.service.ts`: nuevo `groupBy` del último `StockMovement` por producto → campos `outOfStockDate` + `daysOutOfStock`. UI (`alerts/page.tsx`) + Excel + PDF (en Agotados/Negativos las columnas de fecha pasan a "Agotado / D. agot.", misma geometría).
 
 ## 🗓️ Sesión 2026-08-24 — Fix 403 en Reporte de daños (WAREHOUSE) + serie en Nº factura del ISLR + permiso `almacen` no persistía
 
-> ### ⏳ Pendiente de deploy — typecheck API limpio, probado en local (grande). **SIN migración** (código API + Web). Commits `f3ad07d` (API) + `fea6ae1` (Web) en `main`. El deploy debe reconstruir **API + Web** (el fix del 403 es frontend).
+> ### ✅ DESPLEGADO 2026-08-24 en las 6 empresas (HEAD `eb13521`) — typecheck API limpio, probado en local (grande). **SIN migración** (código API + Web). Commits `f3ad07d` (API) + `fea6ae1` (Web) en `main`. El deploy debe reconstruir **API + Web** (el fix del 403 es frontend).
 
 - **fix(web/almacen): 403 al entrar a "Reporte de daños" con rol WAREHOUSE** *(el bloqueo real que reportó el usuario)* — el `middleware.ts` mapea rutas→permisos por prefijo y corta en la primera coincidencia; `/inventory/damage-reports` no tenía entrada propia, así que caía en la regla genérica `['/inventory', ['inventory']]` y exigía el permiso `inventory` (que WAREHOUSE no tiene, solo `inventory-consult` + `almacen`) → redirigía a `/403` **antes de llamar al API** (el API respondía 200; por eso confundía). Al crear el módulo se actualizaron `summary` y `alerts` en el middleware pero se olvidó `damage-reports`. Se agregó `['/inventory/damage-reports', ['inventory', 'almacen']]` antes de la regla genérica. Auditoría 5S (`/audit-5s`) no estaba afectada (fuera de `/inventory`). Verificado en local (login `almacen@gmail.com`).
 - **fix(retención ISLR): concatenar la serie del proveedor al "Nº factura" del PDF** — el comprobante de retención de ISLR imprimía solo `supplierInvoiceNumber` en la columna "Nº factura", a diferencia del de IVA que ya anteponía la serie. Se replicó la misma lógica en `islr-retention-vouchers-pdf.service.ts`: el query incluye `payable.serieProveedor` y `purchaseOrder.supplierSerialNumber`, y la celda ahora imprime `` `${serieFactura}${supplierInvoiceNumber}` `` (misma prioridad payable→purchaseOrder que IVA).

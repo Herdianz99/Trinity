@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
-import { processDocumentImage, dataUriToBuffer } from '../product-images/image-processing';
+import { processDocumentImage, parseDataUri } from '../product-images/image-processing';
 
 @Injectable()
 export class PurchaseAttachmentsService {
@@ -29,29 +29,65 @@ export class PurchaseAttachmentsService {
     return items.map((a) => this.withUrls(a));
   }
 
-  // Sube una imagen (data URI) como adjunto de la compra. Se permite en CUALQUIER estado
+  // Sube un adjunto (imagen o PDF, como data URI) a la compra. Se permite en CUALQUIER estado
   // de la compra (incluso PROCESADA) para poder respaldar facturas ya cargadas.
-  // Procesa a thumb+grande WebP y sube a Spaces ANTES de crear la fila; si la fila falla,
-  // compensa los objetos huérfanos.
+  // Sube a Spaces ANTES de crear la fila; si la fila falla, compensa los objetos huérfanos.
   async add(purchaseOrderId: string, photo: string | undefined, userId: string) {
     const purchase = await this.prisma.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       select: { id: true },
     });
     if (!purchase) throw new NotFoundException('Factura de compra no encontrada');
-    if (!photo) throw new BadRequestException('No se recibió ninguna imagen');
+    if (!photo) throw new BadRequestException('No se recibió ningún archivo');
 
-    let processed;
+    let parsed;
     try {
-      processed = await processDocumentImage(dataUriToBuffer(photo));
+      parsed = parseDataUri(photo);
     } catch {
-      throw new BadRequestException('El archivo no es una imagen válida');
+      throw new BadRequestException('El archivo no es válido');
     }
 
     const stamp = Date.now().toString(36);
     const rand = Math.random().toString(36).slice(2, 8);
-    const thumbKey = `purchases/${purchaseOrderId}/${stamp}-${rand}-thumb.webp`;
-    const fullKey = `purchases/${purchaseOrderId}/${stamp}-${rand}-full.webp`;
+    const base = `purchases/${purchaseOrderId}/${stamp}-${rand}`;
+
+    // --- PDF: se guarda tal cual (sin procesar con sharp) ---
+    if (parsed.mime === 'application/pdf') {
+      const pdfKey = `${base}.pdf`;
+      await this.spaces.uploadPublic(pdfKey, parsed.buffer, 'application/pdf');
+      try {
+        const att = await this.prisma.purchaseAttachment.create({
+          data: {
+            purchaseOrderId,
+            thumbKey: pdfKey, // el PDF no tiene miniatura; el front muestra un ícono
+            fullKey: pdfKey,
+            mimeType: 'application/pdf',
+            bytes: parsed.buffer.length,
+            uploadedById: userId,
+          },
+          include: { uploadedBy: { select: { name: true } } },
+        });
+        return this.withUrls(att);
+      } catch (e) {
+        await this.spaces.delete(pdfKey);
+        throw e;
+      }
+    }
+
+    // --- Imagen: se procesa a thumb + grande WebP ---
+    if (!parsed.mime.startsWith('image/')) {
+      throw new BadRequestException('El archivo debe ser una imagen o un PDF');
+    }
+
+    let processed;
+    try {
+      processed = await processDocumentImage(parsed.buffer);
+    } catch {
+      throw new BadRequestException('El archivo no es una imagen válida');
+    }
+
+    const thumbKey = `${base}-thumb.webp`;
+    const fullKey = `${base}-full.webp`;
 
     await Promise.all([
       this.spaces.uploadPublic(thumbKey, processed.thumb, 'image/webp'),
@@ -64,6 +100,7 @@ export class PurchaseAttachmentsService {
           purchaseOrderId,
           thumbKey,
           fullKey,
+          mimeType: 'image/webp',
           bytes: processed.bytes,
           uploadedById: userId,
         },

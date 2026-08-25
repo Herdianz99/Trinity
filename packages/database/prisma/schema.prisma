@@ -976,8 +976,9 @@ model PurchaseAttachment {
   id              String        @id @default(cuid())
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  thumbKey        String        // miniatura ~320px webp en Spaces (galería)
-  fullKey         String        // versión ~1600px webp en Spaces (lightbox/lectura)
+  thumbKey        String        // miniatura ~320px webp en Spaces (galería). En PDF = mismo key del PDF.
+  fullKey         String        // versión ~1600px webp en Spaces (lightbox/lectura). En PDF = key del PDF.
+  mimeType        String        @default("image/webp") // "image/webp" o "application/pdf"
   bytes           Int           @default(0) // tamaño de la versión grande
   uploadedById    String
   uploadedBy      User          @relation("PurchaseAttachmentUploader", fields: [uploadedById], references: [id])

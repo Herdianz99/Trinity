@@ -85,3 +85,13 @@ export function dataUriToBuffer(dataUri: string): Buffer {
   if (!match) throw new Error('Formato de imagen inválido (se esperaba data URI base64)');
   return Buffer.from(match[2], 'base64');
 }
+
+/**
+ * Decodifica un data URI de CUALQUIER tipo ("data:<mime>;base64,....") a Buffer + su mime.
+ * Lanza si no es un data URI base64 válido.
+ */
+export function parseDataUri(dataUri: string): { buffer: Buffer; mime: string } {
+  const match = /^data:([a-zA-Z0-9.+/-]+);base64,(.+)$/.exec(dataUri);
+  if (!match) throw new Error('Formato de archivo inválido (se esperaba data URI base64)');
+  return { mime: match[1].toLowerCase(), buffer: Buffer.from(match[2], 'base64') };
+}
