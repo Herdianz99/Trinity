@@ -581,6 +581,43 @@ export class PayablesService {
     };
   }
 
+  // Saldo y vencido por proveedor para un conjunto de ids (usado por el buscador de
+  // proveedores al crear un recibo de pago). Mismo criterio que summary()/findBySupplier:
+  //   saldo   = Σ(netPayableUsd − paidAmountUsd) de CxP en PENDING/PARTIAL/OVERDUE
+  //   vencido = igual pero solo las que ya vencieron (dueDate < hoy en Caracas)
+  async balancesBySuppliers(ids: string[]) {
+    const clean = Array.from(new Set((ids || []).filter(Boolean)));
+    if (clean.length === 0) return {} as Record<string, { saldo: number; vencido: number }>;
+
+    const pendingStatuses: any = ['PENDING', 'PARTIAL', 'OVERDUE'];
+    const todayKey = caracasDateKey();
+
+    const [saldoRows, vencidoRows] = await Promise.all([
+      this.prisma.payable.groupBy({
+        by: ['supplierId'],
+        where: { supplierId: { in: clean }, status: { in: pendingStatuses } },
+        _sum: { netPayableUsd: true, paidAmountUsd: true },
+      }),
+      this.prisma.payable.groupBy({
+        by: ['supplierId'],
+        where: { supplierId: { in: clean }, status: { in: pendingStatuses }, dueDate: { lt: todayKey } },
+        _sum: { netPayableUsd: true, paidAmountUsd: true },
+      }),
+    ]);
+
+    const result: Record<string, { saldo: number; vencido: number }> = {};
+    for (const id of clean) result[id] = { saldo: 0, vencido: 0 };
+    for (const r of saldoRows) {
+      if (!r.supplierId) continue;
+      result[r.supplierId].saldo = Math.round(((r._sum?.netPayableUsd || 0) - (r._sum?.paidAmountUsd || 0)) * 100) / 100;
+    }
+    for (const r of vencidoRows) {
+      if (!r.supplierId) continue;
+      result[r.supplierId].vencido = Math.round(((r._sum?.netPayableUsd || 0) - (r._sum?.paidAmountUsd || 0)) * 100) / 100;
+    }
+    return result;
+  }
+
   async summary() {
     const pending = await this.prisma.payable.findMany({
       where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },

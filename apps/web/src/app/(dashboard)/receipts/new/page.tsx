@@ -109,6 +109,8 @@ export default function NewReceiptPage() {
   const [comboResults, setComboResults] = useState<(Customer | Supplier)[]>([]);
   const [comboOpen, setComboOpen] = useState(false);
   const [comboLoading, setComboLoading] = useState(false);
+  // Saldo (por cobrar/pagar) + vencido por entidad, para mostrarlo en el dropdown del buscador.
+  const [entityBalances, setEntityBalances] = useState<Record<string, { saldo: number; vencido: number }>>({});
   const comboRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -214,20 +216,31 @@ export default function NewReceiptPage() {
     debounceRef.current = setTimeout(async () => {
       setComboLoading(true);
       try {
+        let results: (Customer | Supplier)[] = [];
         if (isCollection) {
           const res = await fetch(`/api/proxy/customers?search=${encodeURIComponent(comboQuery)}&limit=15`);
           const json = await res.json();
-          setComboResults(json.data || []);
+          results = json.data || [];
         } else {
           const res = await fetch('/api/proxy/suppliers?limit=500');
           const json = await res.json();
           const list: Supplier[] = json.data || json || [];
           const q = comboQuery.toLowerCase();
-          setComboResults(list.filter((s) =>
+          results = list.filter((s) =>
             s.name.toLowerCase().includes(q) || (s.rif && s.rif.toLowerCase().includes(q))
-          ));
+          ).slice(0, 15);
         }
+        setComboResults(results);
         setComboOpen(true);
+        // Traer saldo + vencido de las entidades mostradas (batch, no bloquea el listado).
+        const ids = results.map((r) => r.id).filter(Boolean);
+        if (ids.length > 0) {
+          const endpoint = isCollection ? 'receivables' : 'payables';
+          fetch(`/api/proxy/${endpoint}/balances?ids=${encodeURIComponent(ids.join(','))}`)
+            .then((r) => (r.ok ? r.json() : {}))
+            .then((map) => setEntityBalances((prev) => ({ ...prev, ...map })))
+            .catch(() => {});
+        }
       } catch { /* ignore */ }
       setComboLoading(false);
     }, 300);
@@ -934,6 +947,7 @@ export default function NewReceiptPage() {
                 <div className="absolute z-20 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                   {comboResults.map((entity) => {
                     const doc = 'documentType' in entity ? (entity as Customer).documentType : null;
+                    const bal = entityBalances[entity.id];
                     return (
                       <button
                         key={entity.id}
@@ -946,6 +960,16 @@ export default function NewReceiptPage() {
                             {doc ? `${doc} ` : ''}{entity.rif || ''}
                           </p>
                         </div>
+                        {bal && (
+                          <div className="flex-shrink-0 text-right font-mono">
+                            <p className={`text-xs font-medium ${bal.saldo > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                              Saldo: ${fmt(bal.saldo)}
+                            </p>
+                            {bal.vencido > 0 && (
+                              <p className="text-[11px] text-red-400">Vencido: ${fmt(bal.vencido)}</p>
+                            )}
+                          </div>
+                        )}
                       </button>
                     );
                   })}

@@ -48,6 +48,13 @@ export class PayablesController {
     return this.service.summary();
   }
 
+  // Saldo + vencido de varios proveedores (ids separados por coma). Para el buscador de
+  // proveedores al crear un recibo de pago.
+  @Get('balances')
+  balancesBySuppliers(@Query('ids') ids?: string) {
+    return this.service.balancesBySuppliers((ids || '').split(',').map((s) => s.trim()).filter(Boolean));
+  }
+
   @Get('supplier/:supplierId')
   findBySupplier(@Param('supplierId') supplierId: string) {
     return this.service.findBySupplier(supplierId);

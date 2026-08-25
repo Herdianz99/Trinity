@@ -84,6 +84,13 @@ export class ReceivablesController {
     return this.receivablesService.summary();
   }
 
+  // Saldo + vencido de varios clientes (ids separados por coma). Para el buscador de
+  // clientes al crear un recibo de cobro.
+  @Get('balances')
+  balancesByCustomers(@Query('ids') ids?: string) {
+    return this.receivablesService.balancesByCustomers((ids || '').split(',').map((s) => s.trim()).filter(Boolean));
+  }
+
   // Análisis de plataformas de financiamiento (Cashea/Crediagro). Rango opcional from/to.
   @Get('platforms/analytics')
   platformAnalytics(@Query('from') from?: string, @Query('to') to?: string) {
