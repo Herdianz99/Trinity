@@ -2779,3 +2779,23 @@ DO $$ BEGIN
   ALTER TABLE "TreasuryMovement" ADD CONSTRAINT "TreasuryMovement_originBankId_fkey"
     FOREIGN KEY ("originBankId") REFERENCES "TreasuryOriginBank"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- =============================================================================
+-- SECTION: Stock.quantity redondeo a 2 decimales (evita ruido de punto flotante)
+-- Trigger BEFORE INSERT/UPDATE — cubre todos los caminos de escritura. Idempotente.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION trg_round_stock_quantity()
+RETURNS trigger AS $BODY$
+BEGIN
+  IF NEW.quantity IS NOT NULL THEN
+    NEW.quantity := round(NEW.quantity::numeric, 2)::double precision;
+  END IF;
+  RETURN NEW;
+END;
+$BODY$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS stock_round_quantity ON "Stock";
+CREATE TRIGGER stock_round_quantity
+  BEFORE INSERT OR UPDATE OF quantity ON "Stock"
+  FOR EACH ROW
+  EXECUTE FUNCTION trg_round_stock_quantity();
