@@ -7,6 +7,7 @@ import { RequireModule } from '../../common/decorators/require-module.decorator'
 import { DivisasService } from './divisas.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
+import { CreateBsLoadDto } from './dto/create-bs-load.dto';
 import { QueryMovementsDto } from './dto/query-movements.dto';
 
 @ApiTags('divisas')
@@ -47,6 +48,38 @@ export class DivisasController {
   @Patch('banks/:id')
   updateBank(@Param('id') id: string, @Body() dto: Partial<CreateCatalogDto>) {
     return this.service.updateBank(id, dto);
+  }
+
+  // ── Bancos de origen (Bs) ──
+  @Get('origin-banks')
+  findOriginBanks(@Query('all') all?: string) {
+    return this.service.findOriginBanks(all === 'true');
+  }
+
+  @Post('origin-banks')
+  createOriginBank(@Body() dto: CreateCatalogDto) {
+    return this.service.createOriginBank(dto);
+  }
+
+  @Patch('origin-banks/:id')
+  updateOriginBank(@Param('id') id: string, @Body() dto: Partial<CreateCatalogDto>) {
+    return this.service.updateOriginBank(id, dto);
+  }
+
+  // ── Cargas de Bs por empresa ──
+  @Get('bs-loads')
+  findBsLoads(@Query('companyId') companyId: string) {
+    return this.service.findBsLoads(companyId);
+  }
+
+  @Post('bs-loads')
+  createBsLoad(@Body() dto: CreateBsLoadDto, @CurrentUser() user: { id: string }) {
+    return this.service.createBsLoad(dto, user.id);
+  }
+
+  @Delete('bs-loads/:id')
+  deleteBsLoad(@Param('id') id: string) {
+    return this.service.deleteBsLoad(id);
   }
 
   // ── Saldos ──

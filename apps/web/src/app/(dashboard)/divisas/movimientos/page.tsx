@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Pencil, Trash2, X, ArrowDownCircle, ArrowUpCircle, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
+import MoneyInput from '@/components/money-input';
 
 interface Catalog {
   id: string;
@@ -14,6 +15,7 @@ interface Movement {
   date: string;
   type: string;
   amountUsd: number;
+  amountBs: number | null;
   modalidad: string | null;
   counterparty: string | null;
   reference: string | null;
@@ -21,6 +23,7 @@ interface Movement {
   status: string;
   company: { id: string; name: string };
   bank: { id: string; name: string };
+  originBank: { id: string; name: string } | null;
   createdBy?: { name: string };
   runningBalanceUsd?: number;
 }
@@ -41,8 +44,10 @@ const emptyForm = () => ({
   date: todayStr(),
   companyId: '',
   bankId: '',
+  originBankId: '',
   type: 'ENTRADA',
   amountUsd: '',
+  amountBs: '',
   modalidad: '',
   counterparty: '',
   reference: '',
@@ -54,6 +59,7 @@ function MovimientosInner() {
   const search = useSearchParams();
   const [companies, setCompanies] = useState<Catalog[]>([]);
   const [banks, setBanks] = useState<Catalog[]>([]);
+  const [originBanks, setOriginBanks] = useState<Catalog[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [hasRunning, setHasRunning] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -77,12 +83,14 @@ function MovimientosInner() {
   };
 
   const loadCatalogs = useCallback(async () => {
-    const [c, b] = await Promise.all([
+    const [c, b, ob] = await Promise.all([
       fetch('/api/proxy/divisas/companies?all=true').then((r) => r.json()),
       fetch('/api/proxy/divisas/banks?all=true').then((r) => r.json()),
+      fetch('/api/proxy/divisas/origin-banks?all=true').then((r) => r.json()),
     ]);
     setCompanies(Array.isArray(c) ? c : []);
     setBanks(Array.isArray(b) ? b : []);
+    setOriginBanks(Array.isArray(ob) ? ob : []);
   }, []);
 
   const loadMovements = useCallback(async () => {
@@ -120,8 +128,10 @@ function MovimientosInner() {
       date: m.date.slice(0, 10),
       companyId: m.company.id,
       bankId: m.bank.id,
+      originBankId: m.originBank?.id || '',
       type: m.type,
       amountUsd: String(m.amountUsd),
+      amountBs: m.amountBs != null ? String(m.amountBs) : '',
       modalidad: m.modalidad || '',
       counterparty: m.counterparty || '',
       reference: m.reference || '',
@@ -142,8 +152,10 @@ function MovimientosInner() {
         date: form.date,
         companyId: form.companyId,
         bankId: form.bankId,
+        originBankId: form.originBankId || undefined,
         type: form.type,
         amountUsd: Number(form.amountUsd),
+        amountBs: form.amountBs !== '' ? Number(form.amountBs) : undefined,
         modalidad: form.modalidad || undefined,
         counterparty: form.counterparty.trim() || undefined,
         reference: form.reference.trim() || undefined,
@@ -171,6 +183,21 @@ function MovimientosInner() {
     }
   };
 
+  const confirmMovement = async (m: Movement) => {
+    if (!confirm(`¿Confirmar el movimiento de $${fmt(m.amountUsd)} (${m.company.name} / ${m.bank.name})?\n\nPasará de "Tránsito" a "Disponible".`)) return;
+    const res = await fetch(`/api/proxy/divisas/movements/${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'CONFIRMADO' }),
+    });
+    if (res.ok) {
+      toast('Movimiento confirmado');
+      loadMovements();
+    } else {
+      toast('Error al confirmar', false);
+    }
+  };
+
   const remove = async (m: Movement) => {
     if (!confirm(`¿Eliminar el movimiento de $${fmt(m.amountUsd)} (${m.company.name} / ${m.bank.name})?`)) return;
     const res = await fetch(`/api/proxy/divisas/movements/${m.id}`, { method: 'DELETE' });
@@ -184,6 +211,7 @@ function MovimientosInner() {
 
   const activeCompanies = companies.filter((c) => c.isActive);
   const activeBanks = banks.filter((b) => b.isActive);
+  const activeOriginBanks = originBanks.filter((b) => b.isActive);
   const colSpan = hasRunning ? 8 : 7;
 
   // Contexto cuando se "entra" a una sola empresa o banco (vista con saldo corriente).
@@ -203,12 +231,22 @@ function MovimientosInner() {
           <h1 className="text-2xl font-bold text-slate-100">Movimientos de divisas</h1>
           <p className="text-sm text-slate-400">Entradas y salidas de dólares por empresa y banco/ubicación.</p>
         </div>
-        <button
-          onClick={openNew}
-          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
-        >
-          <Plus size={16} /> Registrar movimiento
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { loadCatalogs(); loadMovements(); }}
+            disabled={loading}
+            title="Refrescar"
+            className="p-2 rounded-lg bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+          </button>
+          <button
+            onClick={openNew}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Plus size={16} /> Registrar movimiento
+          </button>
+        </div>
       </div>
 
       {message && (
@@ -352,6 +390,12 @@ function MovimientosInner() {
                           {m.counterparty && <span className="text-slate-300">{m.counterparty}</span>}
                           {m.reference && <span className="text-slate-500">#{m.reference}</span>}
                         </div>
+                        {(m.amountBs != null || m.originBank) && (
+                          <div className="text-[11px] text-amber-300/80 mt-0.5">
+                            {m.amountBs != null && <span>Bs {fmt(m.amountBs)}</span>}
+                            {m.originBank && <span className="text-slate-500"> · {m.originBank.name}</span>}
+                          </div>
+                        )}
                         {m.description && <div className="text-slate-500 mt-0.5">{m.description}</div>}
                       </td>
                       <td className="px-3 py-3 text-right whitespace-nowrap">
@@ -381,6 +425,15 @@ function MovimientosInner() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-right whitespace-nowrap">
+                        {m.status === 'PENDIENTE' && (
+                          <button
+                            onClick={() => confirmMovement(m)}
+                            className="text-emerald-400 hover:text-emerald-300 p-1"
+                            title="Confirmar (pasar a Disponible)"
+                          >
+                            <CheckCircle size={15} />
+                          </button>
+                        )}
                         <button onClick={() => openEdit(m)} className="text-slate-400 hover:text-blue-300 p-1" title="Editar">
                           <Pencil size={15} />
                         </button>
@@ -449,13 +502,11 @@ function MovimientosInner() {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Monto USD</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.amountUsd}
-                    onChange={(e) => setForm({ ...form, amountUsd: e.target.value })}
-                    placeholder="0.00"
+                  <MoneyInput
+                    thousands
+                    value={form.amountUsd === '' ? 0 : Number(form.amountUsd)}
+                    onValueChange={(n) => setForm({ ...form, amountUsd: n ? String(n) : '' })}
+                    placeholder="0,00"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
                   />
                 </div>
@@ -478,7 +529,7 @@ function MovimientosInner() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Banco / Ubicación</label>
+                  <label className="block text-xs text-slate-400 mb-1">Banco / Ubicación (destino USD)</label>
                   <select
                     value={form.bankId}
                     onChange={(e) => setForm({ ...form, bankId: e.target.value })}
@@ -491,6 +542,35 @@ function MovimientosInner() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Bs: banco de origen + monto (descuenta del saldo Bs de la empresa) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Banco de origen (Bs)</label>
+                  <select
+                    value={form.originBankId}
+                    onChange={(e) => setForm({ ...form, originBankId: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
+                  >
+                    <option value="">— (opcional)</option>
+                    {activeOriginBanks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Monto Bs (descuenta de la empresa)</label>
+                  <MoneyInput
+                    thousands
+                    value={form.amountBs === '' ? 0 : Number(form.amountBs)}
+                    onValueChange={(n) => setForm({ ...form, amountBs: n ? String(n) : '' })}
+                    placeholder="0,00"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
+                  />
                 </div>
               </div>
 

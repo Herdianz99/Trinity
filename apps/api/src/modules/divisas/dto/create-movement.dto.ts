@@ -25,6 +25,16 @@ export class CreateMovementDto {
   @IsPositive()
   amountUsd: number;
 
+  // Bs gastados (descuenta del saldo Bs de la empresa). Opcional.
+  @IsOptional()
+  @IsNumber()
+  amountBs?: number;
+
+  // Banco de origen de los Bs (maestro TreasuryOriginBank). Opcional.
+  @IsOptional()
+  @IsString()
+  originBankId?: string;
+
   @IsOptional()
   @IsIn(['ELECTRONICO', 'EFECTIVO'])
   modalidad?: string;

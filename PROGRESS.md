@@ -1,5 +1,18 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-24 (h) — Divisas: Bs por empresa + banco de origen + Tránsito/Disponible + separador de miles + Confirmar/refresh
+
+> ### ⏳ Pendiente de deploy — typecheck API + Web limpio, probado en local (grande). **CON migración** (aditiva/idempotente: `TreasuryOriginBank`, `TreasuryBsLoad`, `TreasuryMovement.amountBs/originBankId`; también en `deploy/fix-schema.sql`).
+
+Correcciones al módulo de divisas (antes USD-nativo):
+- **Bs por empresa (cargas que se acumulan):** nuevo modelo `TreasuryBsLoad`. En Empresas cada una muestra su saldo Bs y un ícono para **cargar Bs** (monto + nota). Saldo Bs = Σ cargas − Σ Bs gastados en movimientos.
+- **"Pendiente" ya no suma:** `summary()` separa **Confirmado = Disponible** vs **Pendiente = Tránsito** (por empresa y por banco). El saldo corriente del detalle acumula solo confirmados.
+- **Formulario de movimientos, 2 campos nuevos:** `Monto Bs` (descuenta del saldo Bs de la empresa) y `Banco de origen (Bs)` — nuevo maestro `TreasuryOriginBank` con su página `/divisas/bancos-origen` (en el menú).
+- **Separador de miles en vivo:** `MoneyInput` ganó flag opcional `thousands` (es-VE "1.234,56"), apagado por defecto (POS/nómina/recibos sin cambio); prendido en los montos USD/Bs de divisas.
+- **Botón Confirmar:** en Movimientos, acción "Confirmar" (✓) solo en pendientes → pasa a CONFIRMADO/Disponible.
+- **Botón refresh** en `/divisas` (Resumen) y en Movimientos.
+- Endpoints nuevos: `origin-banks` (CRUD) y `bs-loads` (crear/listar/borrar). `create-movement.dto` acepta `amountBs`/`originBankId`.
+
 ## 🗓️ Sesión 2026-08-24 (g) — Recibo de cobro: número de orden (Ref) en "Documentos a cancelar"
 
 > ### ⏳ Pendiente de deploy — solo frontend, probado en local (grande). **SIN migración**.

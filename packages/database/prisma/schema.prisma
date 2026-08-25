@@ -2501,6 +2501,7 @@ model TreasuryCompany {
   name      String             @unique
   isActive  Boolean            @default(true)
   movements TreasuryMovement[]
+  bsLoads   TreasuryBsLoad[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 }
@@ -2514,6 +2515,33 @@ model TreasuryBank {
   updatedAt DateTime           @updatedAt
 }
 
+// Banco de ORIGEN de los Bs (de donde sale el pago en bolivares al comprar divisas).
+// Maestro propio, separado de TreasuryBank (que es la ubicacion donde caen los USD).
+model TreasuryOriginBank {
+  id        String             @id @default(cuid())
+  name      String             @unique
+  isActive  Boolean            @default(true)
+  movements TreasuryMovement[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+// Carga de Bs a una empresa (recarga). El saldo Bs de la empresa = suma de cargas
+// menos la suma de Bs gastados en los movimientos.
+model TreasuryBsLoad {
+  id          String          @id @default(cuid())
+  date        DateTime        @default(now())
+  companyId   String
+  company     TreasuryCompany @relation(fields: [companyId], references: [id])
+  amountBs    Float
+  note        String?
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([companyId, date])
+}
+
 model TreasuryMovement {
   id           String          @id @default(cuid())
   date         DateTime                              // fecha del movimiento
@@ -2521,8 +2549,11 @@ model TreasuryMovement {
   company      TreasuryCompany @relation(fields: [companyId], references: [id])
   bankId       String
   bank         TreasuryBank    @relation(fields: [bankId], references: [id])
+  originBankId String?                               // banco de origen de los Bs (opcional)
+  originBank   TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
   type         String                                // 'ENTRADA' | 'SALIDA'
-  amountUsd    Float                                 // monto en USD (modulo USD-nativo, sin Bs)
+  amountUsd    Float                                 // monto en USD
+  amountBs     Float?                                // Bs gastados (descuenta del saldo Bs de la empresa)
   modalidad    String?                               // 'ELECTRONICO' | 'EFECTIVO'
   counterparty String?                               // de quien / a quien (ENVIADO A)
   reference    String?                               // referencia libre

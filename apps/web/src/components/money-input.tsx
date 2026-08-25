@@ -8,6 +8,20 @@ interface Props {
   className?: string;
   placeholder?: string;
   disabled?: boolean;
+  // Si true, muestra separador de miles en vivo (es-VE: "1.234,56"). El decimal se
+  // escribe con coma y los miles se agrupan con punto. Por defecto false (compat).
+  thousands?: boolean;
+}
+
+// Agrupa la parte entera con "." de miles: "1234567" -> "1.234.567".
+const groupInt = (intPart: string) => intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+// Muestra el número crudo ("." decimal) en formato es-VE ("," decimal, "." miles).
+function toDisplay(raw: string): string {
+  if (raw === '') return '';
+  const [i, d] = raw.split('.');
+  const gi = groupInt(i || '');
+  return d !== undefined ? `${gi},${d}` : gi;
 }
 
 /**
@@ -15,8 +29,9 @@ interface Props {
  * Un `<input type="number">` controlado con estado numérico pierde el "1." mientras se
  * escribe (y en locale es-VE el separador esperado puede ser la coma), así que acá se
  * mantiene el TEXTO crudo mientras se edita y se devuelve el número parseado.
+ * Con `thousands` además muestra el separador de miles mientras se escribe.
  */
-export default function MoneyInput({ value, onValueChange, className, placeholder, disabled }: Props) {
+export default function MoneyInput({ value, onValueChange, className, placeholder, disabled, thousands }: Props) {
   const [raw, setRaw] = useState<string>(value ? String(value) : '');
 
   // Sincroniza el texto cuando el valor externo cambia por código (ej. recálculo por tasa)
@@ -33,12 +48,16 @@ export default function MoneyInput({ value, onValueChange, className, placeholde
     <input
       type="text"
       inputMode="decimal"
-      value={raw}
+      value={thousands ? toDisplay(raw) : raw}
       placeholder={placeholder}
       disabled={disabled}
       className={className}
       onChange={(e) => {
-        const v = e.target.value.replace(',', '.');
+        // En modo miles quitamos los "." (miles) y pasamos la "," (decimal) a "."; en modo
+        // normal solo convertimos la "," a "." (comportamiento original).
+        const v = thousands
+          ? e.target.value.replace(/\./g, '').replace(/,/g, '.')
+          : e.target.value.replace(',', '.');
         // permitir vacío, un punto suelto, y dígitos con un solo punto decimal
         if (v !== '' && !/^\d*\.?\d*$/.test(v)) return;
         setRaw(v);
