@@ -46,6 +46,18 @@ export class CreditDebitNotesController {
     res.end(buffer);
   }
 
+  @Get('report/items/pdf')
+  async reportItemsPdf(@Query() query: QueryNotesDto, @Res() res: Response) {
+    const data = await this.service.reportItemsDetailed(query);
+    const buffer = await this.pdfService.generateItemsReport(data);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="articulos-devueltos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('invoice-return-summary/:invoiceId')
   invoiceReturnSummary(@Param('invoiceId') invoiceId: string) {
     return this.service.getInvoiceReturnSummary(invoiceId);

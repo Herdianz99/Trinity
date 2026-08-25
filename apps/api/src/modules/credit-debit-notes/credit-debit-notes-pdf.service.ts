@@ -45,6 +45,26 @@ interface SellerReportData {
   grandTotal: { count: number; totalUsd: number; totalBs: number };
 }
 
+// Estructura que produce CreditDebitNotesService.reportItemsDetailed
+interface ItemsReportData {
+  filters: { from: string | null; to: string | null; status: string | null; motivo: string | null };
+  rows: {
+    number: string;
+    date: Date;
+    invoiceNumber: string | null;
+    customerName: string;
+    motivo: string | null;
+    status: string;
+    productCode: string;
+    productName: string;
+    quantity: number;
+    unitPriceUsd: number;
+    totalUsd: number;
+  }[];
+  products: { productCode: string; productName: string; quantity: number; totalUsd: number }[];
+  grandTotal: { notesCount: number; itemsCount: number; productsCount: number; totalUsd: number };
+}
+
 @Injectable()
 export class CreditDebitNotesPdfService {
   constructor(private readonly prisma: PrismaService) {}
@@ -195,6 +215,186 @@ export class CreditDebitNotesPdfService {
       doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000');
       doc.text(`TOTAL GENERAL  (${data.grandTotal.count} devoluciones)`, left, y, { width: COL.motivo.x + COL.motivo.w - left, align: 'right' });
       doc.text(this.fmt(data.grandTotal.totalUsd), COL.usd.x, y, { width: COL.usd.w, align: 'right', lineBreak: false });
+
+      doc.end();
+    });
+  }
+
+  private fmtQty(n: number): string {
+    return Number.isInteger(n)
+      ? String(n)
+      : n.toLocaleString('es-VE', { maximumFractionDigits: 3 });
+  }
+
+  // Reporte PDF de ARTICULOS DEVUELTOS (renglones de notas de crédito de venta / NCV).
+  // Dos bloques: (1) consolidado por producto ordenado por monto, (2) detalle por nota.
+  // Respeta los filtros del listado (motivo, estado, fechas); pensado para "Faltante en
+  // almacén" pero válido para cualquier motivo.
+  async generateItemsReport(data: ItemsReportData): Promise<Buffer> {
+    const config = await this.prisma.companyConfig.findFirst();
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+      const buffers: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const left = 40;
+      const pageWidth = doc.page.width - 80; // 532
+      const bottom = 740;
+      let y = 40;
+
+      const ensureSpace = (needed: number) => {
+        if (y + needed > bottom) {
+          doc.addPage();
+          y = 40;
+        }
+      };
+
+      // Encabezado de empresa
+      doc.fontSize(14).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', left, y);
+      y += 18;
+      if (config?.rif) {
+        doc.fontSize(9).font('Helvetica').text(`RIF: ${config.rif}`, left, y);
+        y += 12;
+      }
+
+      // Título
+      y += 6;
+      doc.fontSize(13).font('Helvetica-Bold')
+        .text('ARTICULOS DEVUELTOS', left, y, { align: 'center', width: pageWidth });
+      y += 18;
+
+      // Subtítulo: período, estado, motivo
+      const periodo = data.filters.from || data.filters.to
+        ? `Periodo: ${data.filters.from ? this.fmtDate(new Date(data.filters.from)) : '...'} al ${data.filters.to ? this.fmtDate(new Date(data.filters.to)) : '...'}`
+        : 'Periodo: todas las fechas';
+      const estado = data.filters.status
+        ? `Estado: ${STATUS_LABELS[data.filters.status] || data.filters.status}`
+        : 'Estado: todas';
+      const motivoF = data.filters.motivo
+        ? `Motivo: ${MOTIVO_LABELS[data.filters.motivo] || data.filters.motivo}`
+        : 'Motivo: todos';
+      doc.fontSize(8).font('Helvetica').fillColor('#555')
+        .text(`${periodo}   ·   ${estado}   ·   ${motivoF}`, left, y, { align: 'center', width: pageWidth });
+      doc.fillColor('#000');
+      y += 12;
+      doc.fontSize(8).font('Helvetica').fillColor('#555')
+        .text(`${data.grandTotal.productsCount} articulos distintos   ·   ${data.grandTotal.itemsCount} renglones en ${data.grandTotal.notesCount} notas   ·   Total: $ ${this.fmt(data.grandTotal.totalUsd)}`, left, y, { align: 'center', width: pageWidth });
+      doc.fillColor('#000');
+      y += 20;
+
+      if (data.rows.length === 0) {
+        doc.fontSize(10).font('Helvetica').text('No hay articulos devueltos para los filtros seleccionados.', left, y);
+        doc.end();
+        return;
+      }
+
+      // ============ BLOQUE 1: Consolidado por producto ============
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor('#1e293b')
+        .text('Consolidado por articulo', left, y);
+      doc.fillColor('#000');
+      y += 16;
+
+      const CC = {
+        code: { x: 40, w: 84 },
+        name: { x: 126, w: 320 },
+        qty: { x: 448, w: 44 },
+        usd: { x: 494, w: 78 },
+      };
+      const drawConsHeader = () => {
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
+        doc.text('Codigo', CC.code.x, y, { width: CC.code.w });
+        doc.text('Articulo', CC.name.x, y, { width: CC.name.w });
+        doc.text('Cant.', CC.qty.x, y, { width: CC.qty.w, align: 'right' });
+        doc.text('Total $', CC.usd.x, y, { width: CC.usd.w, align: 'right' });
+        y += 11;
+        doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#ccc').lineWidth(0.3).stroke();
+        y += 4;
+      };
+      drawConsHeader();
+
+      doc.font('Helvetica').fontSize(8);
+      for (const p of data.products) {
+        const nameH = doc.heightOfString(p.productName, { width: CC.name.w });
+        const rowH = Math.max(12, nameH) + 3;
+        if (y + rowH > bottom) { doc.addPage(); y = 40; drawConsHeader(); doc.font('Helvetica').fontSize(8); }
+        doc.fillColor('#000');
+        doc.text(p.productCode || '—', CC.code.x, y, { width: CC.code.w, lineBreak: false });
+        doc.text(p.productName, CC.name.x, y, { width: CC.name.w });
+        doc.text(this.fmtQty(p.quantity), CC.qty.x, y, { width: CC.qty.w, align: 'right', lineBreak: false });
+        doc.text(this.fmt(p.totalUsd), CC.usd.x, y, { width: CC.usd.w, align: 'right', lineBreak: false });
+        y += rowH;
+      }
+      // Total del consolidado
+      y += 2;
+      doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#000').lineWidth(0.8).stroke();
+      y += 4;
+      doc.font('Helvetica-Bold').fontSize(8.5);
+      doc.text('TOTAL', CC.code.x, y, { width: CC.qty.x + CC.qty.w - CC.code.x, align: 'right' });
+      doc.text(this.fmt(data.grandTotal.totalUsd), CC.usd.x, y, { width: CC.usd.w, align: 'right', lineBreak: false });
+      y += 24;
+
+      // ============ BLOQUE 2: Detalle por nota ============
+      ensureSpace(60);
+      doc.fontSize(10.5).font('Helvetica-Bold').fillColor('#1e293b')
+        .text('Detalle por nota', left, y);
+      doc.fillColor('#000');
+      y += 16;
+
+      const DC = {
+        nota: { x: 40, w: 96 },
+        fecha: { x: 138, w: 48 },
+        code: { x: 188, w: 72 },
+        name: { x: 262, w: 190 },
+        qty: { x: 454, w: 34 },
+        usd: { x: 490, w: 82 },
+      };
+      const drawDetHeader = () => {
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000');
+        doc.text('N Nota', DC.nota.x, y, { width: DC.nota.w });
+        doc.text('Fecha', DC.fecha.x, y, { width: DC.fecha.w });
+        doc.text('Codigo', DC.code.x, y, { width: DC.code.w });
+        doc.text('Articulo', DC.name.x, y, { width: DC.name.w });
+        doc.text('Cant.', DC.qty.x, y, { width: DC.qty.w, align: 'right' });
+        doc.text('Total $', DC.usd.x, y, { width: DC.usd.w, align: 'right' });
+        y += 11;
+        doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#ccc').lineWidth(0.3).stroke();
+        y += 4;
+      };
+      drawDetHeader();
+
+      doc.font('Helvetica').fontSize(8);
+      let lastNote: string | null = null;
+      for (const r of data.rows) {
+        const nameH = doc.heightOfString(r.productName, { width: DC.name.w });
+        const rowH = Math.max(12, nameH) + 3;
+        if (y + rowH > bottom) { doc.addPage(); y = 40; drawDetHeader(); doc.font('Helvetica').fontSize(8); lastNote = null; }
+        doc.fillColor('#000').font('Helvetica').fontSize(8);
+        // Solo repetir número de nota/fecha en el primer renglón de cada nota (agrupa visual).
+        if (r.number !== lastNote) {
+          const noteTxt = r.status !== 'POSTED' ? `${r.number} (${STATUS_LABELS[r.status] || r.status})` : r.number;
+          doc.fillColor(r.status !== 'POSTED' ? '#b45309' : '#000');
+          doc.text(noteTxt, DC.nota.x, y, { width: DC.nota.w });
+          doc.fillColor('#000').text(this.fmtDate(r.date), DC.fecha.x, y, { width: DC.fecha.w, lineBreak: false });
+          lastNote = r.number;
+        }
+        doc.fillColor('#000');
+        doc.text(r.productCode || '—', DC.code.x, y, { width: DC.code.w, lineBreak: false });
+        doc.text(r.productName, DC.name.x, y, { width: DC.name.w });
+        doc.text(this.fmtQty(r.quantity), DC.qty.x, y, { width: DC.qty.w, align: 'right', lineBreak: false });
+        doc.text(this.fmt(r.totalUsd), DC.usd.x, y, { width: DC.usd.w, align: 'right', lineBreak: false });
+        y += rowH;
+      }
+
+      // Gran total del detalle
+      y += 2;
+      doc.moveTo(left, y).lineTo(left + pageWidth, y).strokeColor('#000').lineWidth(1).stroke();
+      y += 6;
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
+      doc.text(`TOTAL GENERAL  (${data.grandTotal.itemsCount} renglones)`, DC.nota.x, y, { width: DC.qty.x + DC.qty.w - DC.nota.x, align: 'right' });
+      doc.text(this.fmt(data.grandTotal.totalUsd), DC.usd.x, y, { width: DC.usd.w, align: 'right', lineBreak: false });
 
       doc.end();
     });

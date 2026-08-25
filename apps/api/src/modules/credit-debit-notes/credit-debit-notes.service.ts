@@ -207,6 +207,119 @@ export class CreditDebitNotesService {
     };
   }
 
+  // Datos para el reporte PDF de ARTICULOS DEVUELTOS. Solo notas de crédito de venta
+  // (NCV = devoluciones); respeta los demás filtros del listado (estado, motivo, rango de
+  // fechas, búsqueda) igual que reportBySellerDetailed. Devuelve el detalle por renglón
+  // (cada artículo dentro de cada nota) + un consolidado por producto. Pensado para el
+  // caso "artículos devueltos por motivo Faltante en almacén", pero sirve para cualquier
+  // motivo (o todos) según el filtro activo en la pantalla.
+  async reportItemsDetailed(query: QueryNotesDto) {
+    const where = this.buildNotesWhere(query);
+    // Forzar solo devoluciones (NCV), sin importar el filtro de tipo/scope entrante.
+    where.type = 'NCV';
+
+    const notes = await this.prisma.creditDebitNote.findMany({
+      where,
+      orderBy: [{ number: 'asc' }],
+      select: {
+        number: true,
+        documentDate: true,
+        createdAt: true,
+        motivo: true,
+        status: true,
+        invoice: {
+          select: {
+            number: true,
+            customer: { select: { name: true } },
+            seller: { select: { code: true, name: true } },
+          },
+        },
+        items: {
+          select: {
+            productCode: true,
+            productName: true,
+            quantity: true,
+            unitPriceUsd: true,
+            totalUsd: true,
+          },
+        },
+      },
+    });
+
+    // Detalle: un renglón por artículo dentro de cada nota (aplana las notas).
+    const rows: {
+      number: string;
+      date: Date;
+      invoiceNumber: string | null;
+      customerName: string;
+      sellerName: string | null;
+      motivo: string | null;
+      status: string;
+      productCode: string;
+      productName: string;
+      quantity: number;
+      unitPriceUsd: number;
+      totalUsd: number;
+    }[] = [];
+
+    // Consolidado por producto (código): suma cantidades y montos.
+    type Prod = { productCode: string; productName: string; quantity: number; totalUsd: number };
+    const prodMap = new Map<string, Prod>();
+
+    let notesWithItems = 0;
+    for (const n of notes) {
+      if (n.items.length > 0) notesWithItems += 1;
+      for (const it of n.items) {
+        rows.push({
+          number: n.number,
+          date: n.documentDate || n.createdAt,
+          invoiceNumber: n.invoice?.number || null,
+          customerName: n.invoice?.customer?.name || 'Cliente General',
+          sellerName: n.invoice?.seller?.name || null,
+          motivo: n.motivo || null,
+          status: n.status,
+          productCode: it.productCode,
+          productName: it.productName,
+          quantity: it.quantity || 0,
+          unitPriceUsd: it.unitPriceUsd || 0,
+          totalUsd: it.totalUsd || 0,
+        });
+
+        const key = it.productCode || it.productName;
+        let p = prodMap.get(key);
+        if (!p) {
+          p = { productCode: it.productCode, productName: it.productName, quantity: 0, totalUsd: 0 };
+          prodMap.set(key, p);
+        }
+        p.quantity += it.quantity || 0;
+        p.totalUsd += it.totalUsd || 0;
+      }
+    }
+
+    const products = Array.from(prodMap.values())
+      .map((p) => ({ ...p, quantity: this.round2(p.quantity), totalUsd: this.round2(p.totalUsd) }))
+      .sort((a, b) => b.totalUsd - a.totalUsd);
+
+    const grandTotal = {
+      notesCount: notesWithItems,
+      itemsCount: rows.length,
+      productsCount: products.length,
+      totalUsd: this.round2(rows.reduce((acc, r) => acc + r.totalUsd, 0)),
+    };
+
+    return {
+      filters: {
+        from: query.from || null,
+        to: query.to || null,
+        status: query.status || null,
+        motivo: query.motivo || null,
+      },
+      rows,
+      products,
+      grandTotal,
+    };
+  }
+
   async findOne(id: string) {
     const note = await this.prisma.creditDebitNote.findUnique({
       where: { id },

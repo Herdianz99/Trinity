@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileX2, Search, Loader2, ChevronLeft, ChevronRight, Eye, AlertTriangle,
-  FileText,
+  FileText, ChevronDown, Users, PackageX,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface Note {
   id: string;
@@ -114,6 +117,13 @@ export default function CreditDebitNotesPage() {
     window.open(`/api/proxy/credit-debit-notes/report/by-seller/pdf?${params}`, '_blank');
   }, [buildFilterParams]);
 
+  // Abre el PDF de artículos devueltos (renglones de las NCV), con los filtros activos
+  // (incluye el filtro de motivo → ej. "Faltante en almacén").
+  const openItemsReportPdf = useCallback(() => {
+    const params = buildFilterParams();
+    window.open(`/api/proxy/credit-debit-notes/report/items/pdf?${params}`, '_blank');
+  }, [buildFilterParams]);
+
   useEffect(() => {
     document.title = `Notas Cr/Db ${scopeTitle} | Trinity ERP`.replace('  ', ' ');
   }, [scopeTitle]);
@@ -140,10 +150,29 @@ export default function CreditDebitNotesPage() {
           </p>
         </div>
         {scope === 'sale' && (
-          <button onClick={openSellerReportPdf} className="btn-secondary flex items-center gap-2">
-            <FileText size={16} />
-            PDF Devoluciones por vendedor
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="btn-secondary flex items-center gap-2">
+                <FileText size={16} />
+                Reportes
+                <ChevronDown size={16} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700 text-slate-200 min-w-[280px]">
+              <DropdownMenuItem
+                onClick={openSellerReportPdf}
+                className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+              >
+                <Users size={14} /> Devoluciones por vendedor (PDF)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={openItemsReportPdf}
+                className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2"
+              >
+                <PackageX size={14} /> Artículos devueltos (PDF)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
