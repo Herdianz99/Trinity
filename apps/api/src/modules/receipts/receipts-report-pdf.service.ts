@@ -30,7 +30,9 @@ export class ReceiptsReportPdfService {
 
   private fmtDate(iso: Date | string | null): string {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('es-VE');
+    // documentDate es date-only a medianoche UTC de la fecha-Caracas → formatear en UTC
+    // (igual que la lista /receipts/collection), o la fecha se corre un día.
+    return new Date(iso).toLocaleDateString('es-VE', { timeZone: 'UTC' });
   }
 
   // Fecha del recibo en YYYY-MM-DD. documentDate es date-only (medianoche UTC de la
@@ -335,7 +337,7 @@ export class ReceiptsReportPdfService {
       const values = [
         r.number,
         entity?.name || r.platformName || '—',
-        this.fmtDate(r.createdAt),
+        this.fmtDate(r.documentDate ?? r.createdAt),
         STATUS_LABELS[r.status] || r.status,
         this.fmtRate(r.exchangeRate),
         `$${this.fmt(r.totalUsd)}`,
