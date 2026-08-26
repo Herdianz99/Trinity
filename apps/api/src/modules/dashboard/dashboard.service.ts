@@ -746,8 +746,11 @@ export class DashboardService {
       }),
     ]);
 
-    // Group by seller (ventas brutas + conteo de facturas)
-    const map = new Map<string, { sellerId: string; sellerName: string; sellerCode: string; totalUsd: number; invoiceCount: number }>();
+    // Group by seller: ventas BRUTAS + conteo de facturas.
+    const map = new Map<string, {
+      sellerId: string; sellerName: string; sellerCode: string;
+      totalUsd: number; invoiceCount: number; returnsUsd: number; returnCount: number;
+    }>();
     for (const inv of invoices) {
       if (!inv.seller) continue;
       const key = inv.seller.id;
@@ -762,25 +765,36 @@ export class DashboardService {
           sellerCode: inv.seller.code,
           totalUsd: inv.totalUsd,
           invoiceCount: 1,
+          returnsUsd: 0,
+          returnCount: 0,
         });
       }
     }
 
-    // Restar las devoluciones a cada vendedor (piso en 0).
+    // Devoluciones (NCV) POR SEPARADO — NO se restan del bruto. Una devolucion procesada
+    // hoy puede ser de una venta de OTRO dia; netearla contra las ventas de hoy borraba el
+    // dia del vendedor (caso real: vendio ~$2.7k pero una NC de $2.8k de una venta de hace
+    // 16 dias lo dejaba en $0 en el dashboard). Ahora el bruto y las devoluciones se
+    // muestran aparte; `netUsd` queda disponible por si se quiere.
     for (const ret of returns) {
       const sid = ret.invoice?.sellerId;
       if (!sid) continue;
       const entry = map.get(sid);
-      if (entry) entry.totalUsd -= ret.totalUsd;
+      if (entry) { entry.returnsUsd += ret.totalUsd; entry.returnCount += 1; }
     }
 
-    const sellers = Array.from(map.values())
-      .map(s => ({ ...s, totalUsd: Math.max(0, s.totalUsd) }))
-      .sort((a, b) => b.totalUsd - a.totalUsd);
+    // Orden por lo VENDIDO (bruto). pct = participacion sobre el bruto total.
+    const sellers = Array.from(map.values()).sort((a, b) => b.totalUsd - a.totalUsd);
     const grandTotal = sellers.reduce((s, x) => s + x.totalUsd, 0);
     return sellers.map(s => ({
-      ...s,
+      sellerId: s.sellerId,
+      sellerName: s.sellerName,
+      sellerCode: s.sellerCode,
       totalUsd: round2(s.totalUsd),
+      returnsUsd: round2(s.returnsUsd),
+      netUsd: round2(Math.max(0, s.totalUsd - s.returnsUsd)),
+      invoiceCount: s.invoiceCount,
+      returnCount: s.returnCount,
       pct: grandTotal > 0 ? round2((s.totalUsd / grandTotal) * 100) : 0,
     }));
   }

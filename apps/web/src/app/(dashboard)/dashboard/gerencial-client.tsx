@@ -36,7 +36,10 @@ interface DashboardData {
     sellerName: string;
     sellerCode: string;
     totalUsd: number;
+    returnsUsd: number;
+    netUsd: number;
     invoiceCount: number;
+    returnCount: number;
     pct: number;
   }[];
   topProducts: {
@@ -521,7 +524,14 @@ export default function DashboardGerencialClient() {
                           <span className="text-xs text-slate-300 font-medium truncate max-w-[120px]">{s.sellerName}</span>
                           <span className="text-[10px] text-slate-500">{s.invoiceCount} fact.</span>
                         </div>
-                        <span className="text-xs text-white font-mono font-semibold tabular-nums">${fmt(s.totalUsd)}</span>
+                        <div className="text-right leading-tight">
+                          <span className="text-xs text-white font-mono font-semibold tabular-nums">${fmt(s.totalUsd)}</span>
+                          {s.returnsUsd > 0 && (
+                            <span className="block text-[10px] text-orange-400 font-mono tabular-nums">
+                              − ${fmt(s.returnsUsd)} devol.{s.returnCount > 0 ? ` (${s.returnCount})` : ''}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
                         <div
