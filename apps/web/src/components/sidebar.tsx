@@ -223,6 +223,8 @@ const menuSections: MenuSection[] = [
       { label: 'Cargos', href: '/payroll/positions', icon: <Layers size={18} /> },
       { label: 'Corridas', href: '/payroll/runs', icon: <ClipboardList size={18} /> },
       { label: 'Parametros', href: '/payroll/parameters', icon: <SlidersHorizontal size={18} /> },
+      { label: 'Amonestaciones', href: '/payroll/disciplinary', icon: <AlertTriangle size={18} /> },
+      { label: 'Tipos de falta', href: '/payroll/fault-types', icon: <Layers size={18} /> },
     ],
   },
   {
