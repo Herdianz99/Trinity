@@ -359,6 +359,7 @@ model User {
   audits5s            Audit5S[]           @relation("Audit5SCreator")
   damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
   damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
+  disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -2425,6 +2426,7 @@ model Employee {
   frequency     String   @default("WEEKLY") // WEEKLY | BIWEEKLY
   isActive      Boolean  @default(true)
   lines         PayrollRunLine[]
+  disciplinaryActions DisciplinaryAction[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -2488,6 +2490,54 @@ model PayrollRunLine {
   receiptSentAt      DateTime?              // último envío del recibo por correo (para mostrar estado)
 
   @@unique([payrollRunId, employeeId])
+}
+
+// ============================================
+// AMONESTACIONES / LLAMADOS DE ATENCION (NOMINA)
+// Escalado por TIPO DE FALTA (hilo independiente por empleado+falta):
+// 1º=Llamado, 2º=Notificacion, 3º+=Amonestacion (topa). Ver spec:
+// docs/superpowers/specs/2026-08-26-amonestaciones-nomina-design.md
+// ============================================
+
+model FaultType {
+  id        String               @id @default(cuid())
+  name      String               @unique
+  isActive  Boolean              @default(true)
+  actions   DisciplinaryAction[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model DisciplinaryAction {
+  id          String                   @id @default(cuid())
+  number      String                   @unique // correlativo LA-0001
+  employeeId  String
+  employee    Employee                 @relation(fields: [employeeId], references: [id])
+  faultTypeId String
+  faultType   FaultType                @relation(fields: [faultTypeId], references: [id])
+  sequence    Int // ordinal dentro del hilo (empleado+falta): 1,2,3,4...
+  level       String // LLAMADO | NOTIFICACION | AMONESTACION (se calcula del sequence y se persiste)
+  occurredAt  DateTime // fecha del suceso
+  reason      String // motivo / descripción
+  attachments DisciplinaryAttachment[]
+  createdById String
+  createdBy   User                     @relation("DisciplinaryActionCreator", fields: [createdById], references: [id])
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([employeeId, faultTypeId])
+  @@index([occurredAt])
+}
+
+model DisciplinaryAttachment {
+  id        String             @id @default(cuid())
+  actionId  String
+  action    DisciplinaryAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  thumbKey  String // miniatura 150px webp en Spaces
+  mediumKey String // versión 800px webp en Spaces (lightbox)
+  createdAt DateTime           @default(now())
+
+  @@index([actionId])
 }
 
 // ============================================
