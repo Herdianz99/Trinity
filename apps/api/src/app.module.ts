@@ -67,6 +67,7 @@ import { PayrollModule } from './modules/payroll/payroll.module';
 import { PurchaseAiModule } from './modules/purchase-ai/purchase-ai.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
+import { DisciplinaryModule } from './modules/disciplinary/disciplinary.module';
 import { DivisasModule } from './modules/divisas/divisas.module';
 import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
 import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
@@ -138,6 +139,7 @@ import { DamageReportsModule } from './modules/damage-reports/damage-reports.mod
     OnlineOrdersModule,
     DispatchModule,
     PayrollModule,
+    DisciplinaryModule,
     PurchaseAiModule,
     IntegrationModule,
     IncidentsModule,
