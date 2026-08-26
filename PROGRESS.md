@@ -1,5 +1,20 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-26 — Nómina: Amonestaciones / llamados de atención (3 niveles por tipo de falta)
+
+> ### ⏳ Pendiente de deploy — typecheck API + Web limpio, **verificado end-to-end en local (grande): 13/13 checks contra el API en vivo**. **CON migración** (aditiva/idempotente: `FaultType`, `DisciplinaryAction`, `DisciplinaryAttachment`; también en `deploy/fix-schema.sql`). Mergeado a `main` (HEAD `1d81c25`). Diseño+plan en `docs/superpowers/{specs,plans}/2026-08-26-amonestaciones-nomina*`.
+
+Nuevo módulo `disciplinary` dentro de **Nómina** (permiso `payroll`) para llevar el control disciplinario del personal:
+- **Escalado POR TIPO DE FALTA (no global):** cada tipo de falta es un hilo independiente por empleado. El nivel lo decide el conteo del hilo (empleado+falta): **1º = Llamado de atención, 2º = Notificación, 3º en adelante = Amonestación** (topa ahí, no reinicia). Un mismo empleado puede tener a la vez, p.ej., un Llamado en "Puntualidad" y una Amonestación en "Procedimiento".
+- **Modelo:** `FaultType` (catálogo administrable por cualquiera con módulo Nómina, no requiere ADMIN) + `DisciplinaryAction` (correlativo `LA-0001`, `sequence`/`level` persistidos, `occurredAt`, `reason`) + `DisciplinaryAttachment` (fotos del acta firmada, reusa Spaces/`processProductImage` como `incidents`). Migración `20260826160000_disciplinary_module`.
+- **Regla de borrado:** solo se puede eliminar el **último** de cada hilo (mayor `sequence`) → baja un escalón de forma coherente sin recálculos. Sin edición/anulación en medio, sin override manual de nivel (decisiones del brainstorming).
+- **Acta PDF** imprimible (datos empresa/empleado/cargo/departamento, nivel, motivo, fecha, `LA-XXXX` + espacios de firma) vía `disciplinary-pdf.service` (patrón `payroll-pdf`).
+- **Frontend (bajo `/payroll`):** lista con filtros (empleado/tipo/nivel/fecha) + modal de registro con **preview del nivel en vivo** ("este será el 2º → Notificación"); **vista por empleado tipo stepper** (`/payroll/disciplinary/employee/[id]`) con un semáforo de 3 pasos por tipo de falta y botón de eliminar solo en el último; catálogo `/payroll/fault-types`. 2 ítems nuevos en el sidebar de NOMINA.
+- **No afecta el cálculo/pago de nómina** (es puramente registro disciplinario). Endpoints todos con `@RequireModule('payroll')`.
+- **Verificación e2e (JWT real, `localhost:4000`):** escalado LA-0001→LA-0004 (Llamado/Notif/Amonest/Amonest), hilo independiente arranca en Llamado, `by-employee` con maxLevel/count correctos, acta PDF 200 `application/pdf`, borrar no-último → 400 y borrar último → 200. Datos de prueba limpiados.
+
+**Op prod (total): corrección de cliente en factura `VF-26-00000111`** — la factura fiscal quedó sin cliente (`customerId` NULL, libro de ventas con "Cliente General"). Se enlazó al cliente **Harry Zapata** (`V-12251925`, guardado sin prefijo + `documentType='V'`) y se actualizó el `SalesBookEntry` (`customerName`/`customerRif='V-12251925'`, formato del libro) en una transacción. Backup previo en el server total (`/root/backup-VF111-fix-*.sql.gz`).
+
 ## 🗓️ Sesión 2026-08-25 (iii) — Deploy del día a las 6 empresas
 
 > ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `7603c26`.
