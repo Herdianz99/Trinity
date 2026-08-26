@@ -1,5 +1,12 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-25 (iii) — Deploy del día a las 6 empresas
+
+> ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `7603c26`.
+
+- **Deploy 2026-08-25 a las 6 empresas** (`eltrebol/ferre`, `inversiones`, `total`, `totalturen`, `aceros`, `acerosmayor`) → todas responden `/health` **HTTP 200** con `status:ok` y `database:ok`, y los frontends web devuelven 307 (redirect a login) → API + BD + Web arriba en las 6 instancias. Uptime bajo tras el deploy confirma que reiniciaron con el código nuevo.
+- **Cubre los commits** `5df2e60` (fix trigger redondeo `Stock.quantity`), `f9e1b5d` + `39bcd99` + `1cc6135` (menú Reportes NCV / saldo-vencido en buscador de recibos / fix fecha PDF de cobros) y `5d54726` (adjuntos PDF en facturas de compra, **con migración** aditiva `PurchaseAttachment.mimeType`). Migración idempotente aplicada y verificada por el `/health` `database:ok`.
+
 ## 🗓️ Sesión 2026-08-25 (ii) — Adjuntos PDF en facturas de compra + op prod: borrado retención 20260800000532 (chica)
 
 > ### ⏳ Pendiente de deploy — typecheck API + Web limpio, **probado end-to-end en local (grande)**. **CON migración** (aditiva/idempotente: `PurchaseAttachment.mimeType`). Commit `5d54726` en `main` (HEAD `5d54726`).
