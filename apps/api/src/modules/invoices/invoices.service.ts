@@ -1464,6 +1464,25 @@ export class InvoicesService {
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
     const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
+    // Cliente: MISMO criterio que create() — si no llega customerId, cae al cliente por
+    // defecto de la empresa (NO a null). Sin esto, retomar/editar una venta a "Cliente Final"
+    // (el POS manda customerId undefined) borraba el cliente y dejaba la factura SIN cliente.
+    let customerId = dto.customerId || null;
+    if (!customerId && config?.defaultCustomerId) {
+      customerId = config.defaultCustomerId;
+    }
+    if (customerId) {
+      const customerExists = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true },
+      });
+      if (!customerExists) {
+        throw new BadRequestException(
+          `Cliente con ID ${customerId} no existe. Verifique que el cliente no haya sido eliminado.`,
+        );
+      }
+    }
+
     // Get serie for VAT exempt check
     const invoiceSerie = await this.prisma.serie.findUnique({
       where: { cashRegisterId: invoice.cashRegisterId },
@@ -1561,7 +1580,7 @@ export class InvoicesService {
       return tx.invoice.update({
         where: { id },
         data: {
-          customerId: dto.customerId || null,
+          customerId,
           sellerId: dto.sellerId || invoice.sellerId,
           subtotalUsd: Math.round(subtotalUsd * 100) / 100,
           ivaUsd: Math.round(totalIva * 100) / 100,
