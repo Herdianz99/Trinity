@@ -1,5 +1,13 @@
 ﻿# Trinity ERP — Progreso
 
+## 🗓️ Sesión 2026-08-26 (iii) — Deploy del día a las 6 empresas
+
+> ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `57bc122`.
+
+- **Deploy 2026-08-26 a las 6 empresas** (`eltrebol/ferre`, `inversiones`, `total`, `totalturen`, `aceros`, `acerosmayor`) → todas en **HEAD `57bc122`**, `/health` **HTTP 200** con `status:ok` y `database:ok`, uptime bajo tras el deploy (reiniciaron con el código nuevo). Cubre los 3 bloques de hoy: **Amonestaciones** (feature), **fix facturas sin cliente** y **fix dashboard ventas por vendedor**.
+- **Migración `20260826160000_disciplinary_module` aplicada y verificada en las 6 BD** (tablas `FaultType` + `DisciplinaryAction` presentes vía `to_regclass`). Aditiva/idempotente, sin incidencias.
+- **Fix dashboard verificado en vivo (grande):** el endpoint real `dashboard/gerencial` devuelve a David Villafañe con **bruto $3.369,59 (48 fact.)** + **`returnsUsd` $3.109,67 (4)** por separado y `netUsd` $259,92 — ya NO $0. Confirmado el comportamiento nuevo en producción.
+
 ## 🗓️ Sesión 2026-08-26 (ii) — Fixes: facturas sin cliente (updateItems) + dashboard "ventas por vendedor"
 
 > ### ⏳ Pendiente de deploy — typecheck API + Web limpio, **causa raíz reproducida y verificada** (facturas: repro local antes/después; dashboard: contra el endpoint real en prod). **SIN migración** (solo código). Commits `c82986e` (facturas) + `eab0f99` (dashboard) en `main` (HEAD `eab0f99`).
