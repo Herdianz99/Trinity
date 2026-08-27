@@ -815,7 +815,7 @@ export class CreditDebitNotesService {
         if (note.invoiceId) {
           const invoice = await tx.invoice.findUnique({
             where: { id: note.invoiceId },
-            include: { items: true },
+            include: { items: true, customer: { select: { isGroupCompany: true } } },
           });
           if (invoice) {
             const allPostedNotes = await tx.creditDebitNote.findMany({
@@ -852,6 +852,36 @@ export class CreditDebitNotesService {
                   where: { id: invItem.id },
                   data: { returnedQty: returned },
                 });
+              }
+            }
+
+            // Autoconsumo empresa del grupo: si la factura generó un gasto de autoconsumo
+            // (al costo), al devolver mercancía hay que recalcularlo sobre la cantidad que
+            // el grupo REALMENTE se quedó (cantidad facturada − devuelta). Idempotente ante
+            // devoluciones parciales sucesivas. Si ya no queda nada, se elimina el gasto.
+            if (invoice.customer?.isGroupCompany) {
+              const autoExpense = await tx.expense.findFirst({
+                where: { invoiceId: note.invoiceId },
+              });
+              if (autoExpense) {
+                let keptCostUsd = 0;
+                let keptCostBs = 0;
+                for (const invItem of invoice.items) {
+                  const returned = totalReturnedByProduct[invItem.productId] || 0;
+                  const kept = Math.max(0, invItem.quantity - returned);
+                  keptCostUsd += invItem.costUsd * kept;
+                  keptCostBs += invItem.costBs * kept;
+                }
+                keptCostUsd = this.round2(keptCostUsd);
+                keptCostBs = this.round2(keptCostBs);
+                if (keptCostUsd <= 0.01) {
+                  await tx.expense.delete({ where: { id: autoExpense.id } });
+                } else {
+                  await tx.expense.update({
+                    where: { id: autoExpense.id },
+                    data: { amountUsd: keptCostUsd, amountBs: keptCostBs },
+                  });
+                }
               }
             }
           }

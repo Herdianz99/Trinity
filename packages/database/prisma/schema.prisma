@@ -1319,6 +1319,8 @@ model Invoice {
   payments            Payment[]
   receivables         Receivable[]
   printJobs           PrintJob[]
+  // Gasto(s) de autoconsumo generados al facturar a una empresa del grupo (isGroupCompany).
+  autoConsumoExpenses Expense[]          @relation("InvoiceAutoConsumo")
   creditDebitNotes    CreditDebitNote[]
   salesBookEntries    SalesBookEntry[]
   customerIvaRetentions CustomerIvaRetention[]
@@ -1901,6 +1903,10 @@ model Expense {
   methodId      String?
   method        PaymentMethod?  @relation(fields: [methodId], references: [id])
   cashMovement  CashMovement?
+  // Autoconsumo: gasto generado automaticamente al facturar a una empresa del grupo.
+  // Enlaza la factura de origen para poder reversar/recalcular el gasto si se devuelve.
+  invoiceId     String?
+  invoice       Invoice?        @relation("InvoiceAutoConsumo", fields: [invoiceId], references: [id])
   createdById   String
   createdBy     User            @relation(fields: [createdById], references: [id])
   createdAt     DateTime        @default(now())

@@ -46,8 +46,9 @@ export class InvoicesController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('fiscalPrinted') fiscalPrinted?: string,
+    @Query('groupOnly') groupOnly?: string,
   ) {
-    return this.service.findAll({ status, paymentType, customerId, sellerId, cashRegisterId, search, from, to, page, limit, fiscalPrinted });
+    return this.service.findAll({ status, paymentType, customerId, sellerId, cashRegisterId, search, from, to, page, limit, fiscalPrinted, groupOnly });
   }
 
   @Get('pending')

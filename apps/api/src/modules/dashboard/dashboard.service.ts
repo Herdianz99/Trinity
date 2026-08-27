@@ -57,6 +57,8 @@ export class DashboardService {
       prevSalesByType,
       profit,
       prevProfit,
+      groupSales,
+      prevGroupSales,
     ] = await Promise.all([
       this.getSales(dateRange),
       this.getSales(prevDateRange),
@@ -77,6 +79,8 @@ export class DashboardService {
       this.getSalesByPaymentType(prevDateRange),
       this.getProfit(dateRange),
       this.getProfit(prevDateRange),
+      this.getGroupSales(dateRange),
+      this.getGroupSales(prevDateRange),
     ]);
 
     return {
@@ -138,6 +142,12 @@ export class DashboardService {
         totalUsd: profit.profitUsd,
         marginPct: profit.marginPct,
         vsLastPeriod: pctChange(profit.profitUsd, prevProfit.profitUsd),
+      },
+      groupSales: {
+        totalUsd: groupSales.totalUsd,
+        totalBs: groupSales.totalBs,
+        count: groupSales.count,
+        vsLastPeriod: pctChange(groupSales.totalUsd, prevGroupSales.totalUsd),
       },
     };
   }
@@ -579,6 +589,25 @@ export class DashboardService {
       _count: { id: true },
     });
 
+    return {
+      totalUsd: round2(result._sum.totalUsd || 0),
+      totalBs: round2(result._sum.totalBs || 0),
+      count: result._count.id || 0,
+    };
+  }
+
+  // ── Ventas del grupo: facturas a clientes marcados como empresa del grupo ──
+  // (isGroupCompany). Mismo criterio de estado/rango que getSales para ser consistente.
+  private async getGroupSales(dateRange: { gte: Date; lte: Date }) {
+    const result = await this.prisma.invoice.aggregate({
+      where: {
+        status: { in: ['PAID', 'PARTIAL_RETURN'] },
+        paidAt: dateRange,
+        customer: { isGroupCompany: true },
+      },
+      _sum: { totalUsd: true, totalBs: true },
+      _count: { id: true },
+    });
     return {
       totalUsd: round2(result._sum.totalUsd || 0),
       totalBs: round2(result._sum.totalBs || 0),

@@ -83,6 +83,8 @@ export default function InvoicesPage() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [from, setFrom] = useState(searchParams.get('from') || '');
   const [to, setTo] = useState(searchParams.get('to') || '');
+  // Solo facturas de empresas del grupo (viene del KPI "Ventas del grupo" del dashboard).
+  const [groupOnly, setGroupOnly] = useState(searchParams.get('groupOnly') === 'true');
   const [loading, setLoading] = useState(true);
   const [ticketBusyId, setTicketBusyId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -129,6 +131,7 @@ export default function InvoicesPage() {
       if (sellerId && userRole !== 'SELLER') params.set('sellerId', sellerId);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
+      if (groupOnly) params.set('groupOnly', 'true');
       const res = await fetch(`/api/proxy/invoices?${params}`);
       const data = await res.json();
       setInvoices(data.data || []);
@@ -139,7 +142,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status, paymentType, searchDebounced, sellerId, from, to, userRole]);
+  }, [page, status, paymentType, searchDebounced, sellerId, from, to, userRole, groupOnly]);
 
   useEffect(() => {
     fetchInvoices();
@@ -202,6 +205,7 @@ export default function InvoicesPage() {
     if (sellerId) params.set('sellerId', sellerId);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (groupOnly) params.set('groupOnly', 'true');
     window.open(`/api/proxy/invoices/report/by-seller?${params}`, '_blank');
   }
 
@@ -272,12 +276,20 @@ export default function InvoicesPage() {
           )}
           <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Desde" />
           <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} className="input-field !py-2.5 text-sm" placeholder="Hasta" />
-          {(status || paymentType || from || to || search || sellerId) && (
-            <button onClick={() => { setStatus(''); setPaymentType(''); setFrom(''); setTo(''); setSearch(''); setSellerId(''); setPage(1); }} className="btn-secondary !py-2.5 text-sm">
+          {(status || paymentType || from || to || search || sellerId || groupOnly) && (
+            <button onClick={() => { setStatus(''); setPaymentType(''); setFrom(''); setTo(''); setSearch(''); setSellerId(''); setGroupOnly(false); setPage(1); }} className="btn-secondary !py-2.5 text-sm">
               Limpiar filtros
             </button>
           )}
         </div>
+        {groupOnly && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+              Solo empresas del grupo
+              <button onClick={() => { setGroupOnly(false); setPage(1); }} className="hover:text-white" title="Quitar filtro">✕</button>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Mobile card list */}

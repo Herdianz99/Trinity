@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  DollarSign, RotateCcw, Target, TrendingUp, TrendingDown,
+  DollarSign, RotateCcw, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package,
   Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
   Building2, PiggyBank,
@@ -115,6 +115,12 @@ interface DashboardData {
   profit: {
     totalUsd: number;
     marginPct: number;
+    vsLastPeriod: number | null;
+  };
+  groupSales: {
+    totalUsd: number;
+    totalBs: number;
+    count: number;
     vsLastPeriod: number | null;
   };
 }
@@ -354,7 +360,7 @@ export default function DashboardGerencialClient() {
               iconBg="bg-lime-500/15 text-lime-400"
               label="Ganancia"
               value={`$${fmt(data.profit.totalUsd)}`}
-              sub={`Margen ${fmt(data.profit.marginPct)}%`}
+              sub={<>Margen {fmt(data.profit.marginPct)}% · <span className="text-purple-300 font-semibold">Prom. ${fmt(data.sales.avgTicketUsd)}</span></>}
               change={data.profit.vsLastPeriod}
               positiveIsGood
               href={`/reports/profit-margin?from=${fromDate}&to=${toDate}`}
@@ -390,13 +396,14 @@ export default function DashboardGerencialClient() {
               href={`/credit-debit-notes?scope=sale&type=NCV&from=${fromDate}&to=${toDate}`}
             />
             <KpiCard
-              icon={<Target size={20} />}
-              iconBg="bg-purple-500/15 text-purple-400"
-              label="Ticket Promedio"
-              value={`$${fmt(data.sales.avgTicketUsd)}`}
-              sub="por factura"
-              change={data.sales.vsLastPeriodAvgTicket}
+              icon={<Building2 size={20} />}
+              iconBg="bg-indigo-500/15 text-indigo-400"
+              label="Ventas del grupo"
+              value={`$${fmt(data.groupSales.totalUsd)}`}
+              sub={<>Bs {fmt(data.groupSales.totalBs)} · <span className="text-indigo-300 font-semibold">{data.groupSales.count} fact.</span></>}
+              change={data.groupSales.vsLastPeriod}
               positiveIsGood
+              href={`/sales/invoices?groupOnly=true&from=${fromDate}&to=${toDate}`}
             />
             <KpiCard
               icon={<CreditCard size={20} />}

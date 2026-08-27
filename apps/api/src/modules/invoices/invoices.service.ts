@@ -41,6 +41,7 @@ export class InvoicesService {
     page?: number;
     limit?: number;
     fiscalPrinted?: string;
+    groupOnly?: string;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -53,6 +54,8 @@ export class InvoicesService {
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.sellerId) where.sellerId = filters.sellerId;
     if (filters.cashRegisterId) where.cashRegisterId = filters.cashRegisterId;
+    // Solo facturas a empresas del grupo (usado por el KPI "Ventas del grupo" del dashboard).
+    if (filters.groupOnly === 'true') where.customer = { isGroupCompany: true };
 
     // Unified search: invoice number, fiscal number, customer name, or customer rif
     if (filters.search) {
@@ -657,6 +660,22 @@ export class InvoicesService {
     };
 
     return this.create(dto, user);
+  }
+
+  // Categoría de gasto dedicada al autoconsumo del grupo. Se crea la primera vez
+  // (nombre @unique) y se reutiliza. Corre dentro de la transacción del cobro.
+  private async getAutoConsumoCategoryId(tx: any): Promise<string> {
+    const cat = await tx.expenseCategory.upsert({
+      where: { name: 'Autoconsumo Grupo' },
+      update: {},
+      create: {
+        name: 'Autoconsumo Grupo',
+        description: 'Ventas a empresas del grupo, registradas al costo del inventario.',
+        expenseType: 'EXTRAORDINARY',
+      },
+      select: { id: true },
+    });
+    return cat.id;
   }
 
   async pay(
@@ -1309,6 +1328,36 @@ export class InvoicesService {
           serie: { select: { id: true, name: true, prefix: true, isFiscal: true, comPort: true } },
         },
       });
+
+      // Autoconsumo empresa del grupo: si el cliente tiene isGroupCompany, la venta no es
+      // ingreso real sino consumo interno. Se registra un GASTO al COSTO efectivo del
+      // inventario (costo + brecha, ya guardado en item.costUsd/costBs), NO al monto de la
+      // factura. No mueve caja (es solo reconocimiento contable del inventario consumido).
+      if (invoice.customer?.isGroupCompany) {
+        const costTotalUsd = Math.round(
+          invoice.items.reduce((s, it) => s + it.costUsd * it.quantity, 0) * 100,
+        ) / 100;
+        const costTotalBs = Math.round(
+          invoice.items.reduce((s, it) => s + it.costBs * it.quantity, 0) * 100,
+        ) / 100;
+        if (costTotalUsd > 0) {
+          const categoryId = await this.getAutoConsumoCategoryId(tx);
+          await tx.expense.create({
+            data: {
+              categoryId,
+              description: `Autoconsumo ${invoiceNumber} - ${invoice.customer.name}`,
+              reference: invoiceNumber,
+              amountUsd: costTotalUsd,
+              amountBs: costTotalBs,
+              exchangeRate: invoice.exchangeRate,
+              date: caracasDayStart(),
+              notes: 'Generado automáticamente: venta a empresa del grupo (al costo).',
+              createdById: user.id,
+              invoiceId: id,
+            },
+          });
+        }
+      }
 
       // Create PrintJobs grouped by print area (con fallback al área por defecto)
       const printGroups = await buildPrintAreaGroups(
