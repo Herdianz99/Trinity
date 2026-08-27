@@ -254,7 +254,10 @@ export class ReceivablesService {
     const where: any = {};
 
     if (query.type) {
-      where.type = query.type;
+      // Acepta uno o varios tipos separados por coma (ej. "CUSTOMER_CREDIT,MANUAL" para la
+      // vista unificada "Clientes"). Con uno solo se filtra directo; con varios, IN.
+      const types = query.type.split(',').map((t) => t.trim()).filter(Boolean);
+      where.type = types.length > 1 ? { in: types } : types[0];
     }
     if (query.status) {
       where.status = query.status;

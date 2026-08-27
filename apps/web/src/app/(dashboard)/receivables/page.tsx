@@ -544,9 +544,10 @@ export default function ReceivablesPage() {
             <select value={type} onChange={e => { setType(e.target.value); setPage(1); }}
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
               <option value="">Todos</option>
-              <option value="CUSTOMER_CREDIT">Credito cliente</option>
-              <option value="FINANCING_PLATFORM">Plataforma</option>
-              <option value="MANUAL">Manual</option>
+              {/* "Clientes" une CxC de crédito (de facturas) + manuales (cargadas a mano):
+                  al buscar un cliente se ven TODAS sus deudas juntas y no se cobra de menos. */}
+              <option value="CUSTOMER_CREDIT,MANUAL">Clientes</option>
+              <option value="FINANCING_PLATFORM">Plataformas</option>
             </select>
           </div>
           <div>
