@@ -1646,6 +1646,8 @@ export class InvoicesService {
       // Filas del libro mayor ya reasignadas en esta transaccion (para no mover dos veces
       // la misma cuando hay pagos identicos del mismo metodo en la factura).
       const claimedLedgerIds: string[] = [];
+      // Idem para las cuentas por cobrar (Receivable) de plataformas de financiamiento.
+      const claimedReceivableIds: string[] = [];
       for (const edit of dto.payments) {
         const payment = invoice.payments.find((p) => p.id === edit.paymentId);
         if (!payment) {
@@ -1699,6 +1701,40 @@ export class InvoicesService {
               data: { methodId: edit.methodId },
             });
             claimedLedgerIds.push(ledgerRow.id);
+          }
+
+          // La cuenta por cobrar (Receivable) de una plataforma de financiamiento
+          // (Cashea/Crediagro) congelo el nombre del metodo con que se cobro en
+          // platformName. sameType garantiza que createsReceivable NO cambia, asi que
+          // si el metodo viejo generaba CxC el nuevo tambien -> hay que renombrar la
+          // plataforma o la CxC queda bajo el metodo viejo (aparece en la cobranza
+          // equivocada). Se hace match como en el ledger: por invoice, plataforma vieja
+          // y montos, excluyendo las ya reasignadas en esta transaccion.
+          if (newMethod.createsReceivable) {
+            const receivable = await tx.receivable.findFirst({
+              where: {
+                type: 'FINANCING_PLATFORM',
+                invoiceId: id,
+                platformName: cur.name,
+                amountUsd: payment.amountUsd,
+                amountBs: payment.amountBs,
+                ...(claimedReceivableIds.length
+                  ? { id: { notIn: claimedReceivableIds } }
+                  : {}),
+              },
+            });
+            if (receivable) {
+              await tx.receivable.update({
+                where: { id: receivable.id },
+                data: {
+                  platformName: newMethod.name,
+                  ...(edit.reference !== undefined
+                    ? { reference: edit.reference || null }
+                    : {}),
+                },
+              });
+              claimedReceivableIds.push(receivable.id);
+            }
           }
         }
       }
