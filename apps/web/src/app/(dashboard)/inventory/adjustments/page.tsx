@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { PackagePlus, Plus, Loader2, Search, X } from 'lucide-react';
+import { PackagePlus, Plus, Loader2, Search, X, FileDown } from 'lucide-react';
 
 interface InventoryAdjustment {
   id: string;
@@ -79,6 +79,16 @@ export default function InventoryAdjustmentsPage() {
     setTo('');
   }
 
+  // Exporta el PDF agrupado por destinataria respetando los MISMOS filtros de la interfaz.
+  function exportReport() {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status', statusFilter);
+    if (search.trim()) params.set('search', search.trim());
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    window.open(`/api/proxy/inventory-adjustments/report/grouped?${params}`);
+  }
+
   useEffect(() => { document.title = 'Ajustes de Inventario | Trinity ERP'; }, []);
   // Debounce para no disparar una petición por cada tecla en los campos de texto.
   useEffect(() => {
@@ -98,12 +108,21 @@ export default function InventoryAdjustmentsPage() {
             <p className="text-slate-400 text-sm">Entradas y salidas de stock por ajuste</p>
           </div>
         </div>
-        <button
-          onClick={() => router.push('/inventory/adjustments/new')}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} /> Nuevo ajuste
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportReport}
+            className="btn-secondary flex items-center gap-2"
+            title="Exportar a PDF agrupado por destinataria (respeta los filtros actuales)"
+          >
+            <FileDown size={18} /> Exportar PDF
+          </button>
+          <button
+            onClick={() => router.push('/inventory/adjustments/new')}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} /> Nuevo ajuste
+          </button>
+        </div>
       </div>
 
       {/* Filtros: correlativo, fechas, destinatario */}

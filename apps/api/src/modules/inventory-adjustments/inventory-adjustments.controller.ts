@@ -69,6 +69,31 @@ export class InventoryAdjustmentsController {
     });
   }
 
+  @Get('report/grouped')
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  async getGroupedReport(
+    @Res() res: Response,
+    @Query('status') status?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const buffer = await this.pdfService.generateGroupedReport({ status, warehouseId, type, search, from, to });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="reporte-ajustes-por-destinataria.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryAdjustmentsService.findOne(id);
