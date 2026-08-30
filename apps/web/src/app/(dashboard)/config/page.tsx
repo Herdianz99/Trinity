@@ -1,7 +1,90 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, Save, Loader2, Printer, Upload, Trash2, ImageIcon, Search, UserCheck, X, Stamp } from 'lucide-react';
+import { Settings, Save, Loader2, Printer, Upload, Trash2, ImageIcon, Search, UserCheck, X, Stamp, ArrowLeftRight } from 'lucide-react';
+
+// Buscador reutilizable de cliente o proveedor (por nombre/RIF). Maneja su propio debounce
+// y dropdown; el padre solo guarda el id/nombre elegido. `kind` decide el endpoint.
+function EntitySearchPicker({
+  kind, selectedName, onSelect, onClear, placeholder,
+}: {
+  kind: 'customers' | 'suppliers';
+  selectedName: string;
+  onSelect: (id: string, name: string) => void;
+  onClear: () => void;
+  placeholder?: string;
+}) {
+  const [search, setSearch] = useState('');
+  const [options, setOptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!search || search.length < 2) { setOptions([]); return; }
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/proxy/${kind}?search=${encodeURIComponent(search)}&limit=8`);
+        if (res.ok) {
+          const json = await res.json();
+          setOptions(Array.isArray(json) ? json : json.data || []);
+          setOpen(true);
+        }
+      } catch { /* ignore */ } finally { setLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, kind]);
+
+  return (
+    <div className="w-full md:w-80 relative" ref={boxRef}>
+      {selectedName && (
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+            <UserCheck size={16} className="text-green-400" />
+            <span className="text-sm text-green-300 font-medium">{selectedName}</span>
+          </div>
+          <button type="button" onClick={onClear}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Quitar">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onFocus={() => options.length > 0 && setOpen(true)}
+          className="input-field pl-9"
+          placeholder={placeholder || 'Buscar por nombre o RIF...'}
+        />
+        {loading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />}
+      </div>
+      {open && options.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+          {options.map((o) => (
+            <button key={o.id} type="button"
+              onClick={() => { onSelect(o.id, o.name); setSearch(''); setOpen(false); setOptions([]); }}
+              className="w-full text-left px-3 py-2 hover:bg-slate-700/50 transition-colors flex items-center justify-between">
+              <span className="text-sm text-white">{o.name}</span>
+              {o.rif && <span className="text-xs text-slate-400">{o.documentType ? `${o.documentType}-` : ''}{o.rif}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface CompanyConfig {
   companyName: string;
@@ -29,6 +112,9 @@ interface CompanyConfig {
   retentionProvidencia: string;
   retentionNextNumber: number;
   islrRetentionNextNumber: number;
+  partnerTransferCreatesAccounts: boolean;
+  partnerTransferCustomerId: string;
+  partnerTransferSupplierId: string;
 }
 
 interface CustomerOption {
@@ -65,6 +151,9 @@ export default function ConfigPage() {
     retentionProvidencia: 'SNAT/2025/000054',
     retentionNextNumber: 1,
     islrRetentionNextNumber: 1,
+    partnerTransferCreatesAccounts: true,
+    partnerTransferCustomerId: '',
+    partnerTransferSupplierId: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +183,11 @@ export default function ConfigPage() {
   const [printAreas, setPrintAreas] = useState<{ id: string; name: string }[]>([]);
   const [selectedPrintAreaId, setSelectedPrintAreaId] = useState('');
 
+  // Integracion con empresa socia (para mostrar la seccion de traslados) + nombres elegidos
+  const [integrationOn, setIntegrationOn] = useState(false);
+  const [partnerCustomerName, setPartnerCustomerName] = useState('');
+  const [partnerSupplierName, setPartnerSupplierName] = useState('');
+
   // Default customer state
   const [defaultCustomerName, setDefaultCustomerName] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -109,6 +203,11 @@ export default function ConfigPage() {
     fetchExchangeRate();
     fetchPrintAreas();
     setSelectedPrintAreaId(localStorage.getItem('printAreaId') || '');
+    // Solo se muestra la seccion de traslados socios si la integracion esta activa.
+    fetch('/api/proxy/integration/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setIntegrationOn(!!d?.enabled))
+      .catch(() => setIntegrationOn(false));
   }, []);
 
   async function fetchPrintAreas() {
@@ -207,7 +306,22 @@ export default function ConfigPage() {
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
           retentionNextNumber: data.retentionNextNumber ?? 1,
           islrRetentionNextNumber: data.islrRetentionNextNumber ?? 1,
+          partnerTransferCreatesAccounts: data.partnerTransferCreatesAccounts ?? true,
+          partnerTransferCustomerId: data.partnerTransferCustomerId || '',
+          partnerTransferSupplierId: data.partnerTransferSupplierId || '',
         });
+        if (data.partnerTransferCustomerId) {
+          fetch(`/api/proxy/customers/${data.partnerTransferCustomerId}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((c) => c && setPartnerCustomerName(c.name))
+            .catch(() => {});
+        }
+        if (data.partnerTransferSupplierId) {
+          fetch(`/api/proxy/suppliers/${data.partnerTransferSupplierId}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((s) => s && setPartnerSupplierName(s.name))
+            .catch(() => {});
+        }
         if (data.defaultCustomerId) {
           try {
             const custRes = await fetch(`/api/proxy/customers/${data.defaultCustomerId}`);
@@ -282,6 +396,9 @@ export default function ConfigPage() {
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
           islrRetentionNextNumber: Number(config.islrRetentionNextNumber),
+          partnerTransferCreatesAccounts: config.partnerTransferCreatesAccounts,
+          partnerTransferCustomerId: config.partnerTransferCustomerId || null,
+          partnerTransferSupplierId: config.partnerTransferSupplierId || null,
           ...(logoChanged ? { logo } : {}),
           ...(stampChanged ? { stampImage } : {}),
         }),
@@ -912,6 +1029,72 @@ export default function ConfigPage() {
               </label>
             </div>
           </div>
+
+          {/* Traslados entre empresas socias (solo si la integracion esta activa) */}
+          {integrationOn && (
+            <div className="card p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <ArrowLeftRight size={20} className="text-green-400" />
+                <h2 className="text-lg font-semibold text-white">Traslados entre empresas socias</h2>
+              </div>
+              <p className="text-sm text-slate-400 mb-4">
+                Controla si los traslados con la empresa socia generan cuentas por cobrar/pagar,
+                y a qué cliente/proveedor se les asigna.
+              </p>
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.partnerTransferCreatesAccounts}
+                    onChange={(e) => handleChange('partnerTransferCreatesAccounts', e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                  />
+                  <div>
+                    <span className="text-sm text-white">Generar cuentas por cobrar / pagar en los traslados</span>
+                    <p className="text-xs text-slate-500">
+                      Si está desactivado, los traslados solo mueven la mercancía (no se crea CxC al enviar
+                      ni CxP al recibir). Úsalo cuando las empresas solo se pasan inventario, sin deuda entre ellas.
+                    </p>
+                  </div>
+                </label>
+
+                {config.partnerTransferCreatesAccounts && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-700/50">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                        Cliente para la CxC (al enviar)
+                      </label>
+                      <p className="text-xs text-slate-500 mb-2">
+                        Cliente al que se le carga la cuenta por cobrar cuando esta empresa envía mercancía.
+                        Si lo dejas vacío, se usa el nombre de la empresa socia.
+                      </p>
+                      <EntitySearchPicker
+                        kind="customers"
+                        selectedName={partnerCustomerName}
+                        onSelect={(id, name) => { handleChange('partnerTransferCustomerId', id); setPartnerCustomerName(name); }}
+                        onClear={() => { handleChange('partnerTransferCustomerId', ''); setPartnerCustomerName(''); }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                        Proveedor para la CxP (al recibir)
+                      </label>
+                      <p className="text-xs text-slate-500 mb-2">
+                        Proveedor al que se le carga la cuenta por pagar cuando esta empresa recibe mercancía.
+                        Si lo dejas vacío, se usa el nombre de la empresa socia.
+                      </p>
+                      <EntitySearchPicker
+                        kind="suppliers"
+                        selectedName={partnerSupplierName}
+                        onSelect={(id, name) => { handleChange('partnerTransferSupplierId', id); setPartnerSupplierName(name); }}
+                        onClear={() => { handleChange('partnerTransferSupplierId', ''); setPartnerSupplierName(''); }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Sales config */}
           <div className="card p-6">

@@ -296,6 +296,13 @@ model CompanyConfig {
   // Opt-in por empresa: habilita el Módulo de Almacén (Auditoría 5S + Reporte de daños).
   // Default false = solo aceros/acerosmayor lo encienden; las demás no ven nada.
   useAlmacenOps           Boolean  @default(false)
+  // Traslados entre empresas socias (integration): si false, los traslados NO generan CxC
+  // (empresa que envia) ni CxP (empresa que recibe) — solo mueven mercancia. Default true =
+  // comportamiento actual. El cliente/proveedor de esas cuentas se elige aqui; si no se elige,
+  // se cae al socio por nombre (busca/crea por partnerName, como antes).
+  partnerTransferCreatesAccounts Boolean @default(true)
+  partnerTransferCustomerId      String?
+  partnerTransferSupplierId      String?
   updatedAt               DateTime @updatedAt
 }
 

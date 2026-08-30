@@ -55,12 +55,22 @@ export class PartnerTransfersService {
   }
 
   // CxC en la empresa que ENVIA: el socio (cliente del grupo) le debe la mercancia (a costo).
+  // Configurable en /config: si partnerTransferCreatesAccounts=false NO se genera CxC (solo se
+  // mueve mercancia). El cliente es el partnerTransferCustomerId elegido; si no, se cae al socio
+  // por nombre (busca/crea por partnerName), como antes.
   private async createReceivable(tx: any, opts: { partnerName: string; number: string; amountUsd: number; userId: string }) {
     if (opts.amountUsd <= 0) return;
+    const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+    if (config && config.partnerTransferCreatesAccounts === false) return;
     const rate = await this.currentRate(tx);
-    const customer =
-      (await tx.customer.findFirst({ where: { name: opts.partnerName } })) ??
-      (await tx.customer.create({ data: { name: opts.partnerName, isGroupCompany: true } }));
+    let customer = config?.partnerTransferCustomerId
+      ? await tx.customer.findUnique({ where: { id: config.partnerTransferCustomerId } })
+      : null;
+    if (!customer) {
+      customer =
+        (await tx.customer.findFirst({ where: { name: opts.partnerName } })) ??
+        (await tx.customer.create({ data: { name: opts.partnerName, isGroupCompany: true } }));
+    }
     await tx.receivable.create({
       data: {
         type: 'MANUAL',
@@ -78,12 +88,22 @@ export class PartnerTransfersService {
   }
 
   // CxP en la empresa que RECIBE: le debe al socio (proveedor) la mercancia (a costo).
+  // Configurable en /config: si partnerTransferCreatesAccounts=false NO se genera CxP (solo se
+  // mueve mercancia). El proveedor es el partnerTransferSupplierId elegido; si no, se cae al
+  // socio por nombre (busca/crea por partnerName), como antes.
   private async createPayable(tx: any, opts: { partnerName: string; number: string; amountUsd: number; userId: string }) {
     if (opts.amountUsd <= 0) return;
+    const config = await tx.companyConfig.findUnique({ where: { id: 'singleton' } });
+    if (config && config.partnerTransferCreatesAccounts === false) return;
     const rate = await this.currentRate(tx);
-    const supplier =
-      (await tx.supplier.findFirst({ where: { name: opts.partnerName } })) ??
-      (await tx.supplier.create({ data: { name: opts.partnerName } }));
+    let supplier = config?.partnerTransferSupplierId
+      ? await tx.supplier.findUnique({ where: { id: config.partnerTransferSupplierId } })
+      : null;
+    if (!supplier) {
+      supplier =
+        (await tx.supplier.findFirst({ where: { name: opts.partnerName } })) ??
+        (await tx.supplier.create({ data: { name: opts.partnerName } }));
+    }
     const usd = round2(opts.amountUsd);
     const bs = round2(opts.amountUsd * rate);
     await tx.payable.create({

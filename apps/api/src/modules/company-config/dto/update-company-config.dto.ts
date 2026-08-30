@@ -152,4 +152,24 @@ export class UpdateCompanyConfigDto {
   @IsOptional()
   @IsNumber()
   unidadTributaria?: number;
+
+  // Traslados entre empresas socias: si false, no se generan CxC/CxP (solo se mueve mercancia).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  partnerTransferCreatesAccounts?: boolean;
+
+  // Cliente al que se le genera la CxC (empresa que envia). null = caer al socio por nombre.
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  partnerTransferCustomerId?: string | null;
+
+  // Proveedor al que se le genera la CxP (empresa que recibe). null = caer al socio por nombre.
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  partnerTransferSupplierId?: string | null;
 }
