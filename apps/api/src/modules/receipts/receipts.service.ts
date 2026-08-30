@@ -102,6 +102,7 @@ export class ReceiptsService {
       include: {
         customer: { select: { name: true, rif: true } },
         supplier: { select: { name: true, rif: true } },
+        seller: { select: { code: true, name: true } },
         items: { include: { receivable: { select: { platformName: true } } } },
       },
     });

@@ -17,6 +17,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReceiptsService } from './receipts.service';
 import { ReceiptPdfService } from './receipt-pdf.service';
 import { ReceiptsReportPdfService } from './receipts-report-pdf.service';
+import { ReceiptsReportExcelService } from './receipts-report-excel.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
 import { QueryReceiptsDto } from './dto/query-receipts.dto';
@@ -31,6 +32,7 @@ export class ReceiptsController {
     private readonly receiptsService: ReceiptsService,
     private readonly pdfService: ReceiptPdfService,
     private readonly reportPdfService: ReceiptsReportPdfService,
+    private readonly reportExcelService: ReceiptsReportExcelService,
   ) {}
 
   @Get()
@@ -66,6 +68,20 @@ export class ReceiptsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="reporte-recibos-${kind}-detallado.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Reporte EXCEL (resumen): una fila por recibo, mismos filtros de la pantalla. Debe ir
+  // ANTES de las rutas con :id para que 'report' no se interprete como un id de recibo.
+  @Get('report/excel')
+  async getReportExcel(@Query() query: QueryReceiptsDto, @Res() res: Response) {
+    const buffer = await this.reportExcelService.generate(query);
+    const kind = query.type === 'PAYMENT' ? 'pago' : 'cobro';
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="reporte-recibos-${kind}.xlsx"`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);

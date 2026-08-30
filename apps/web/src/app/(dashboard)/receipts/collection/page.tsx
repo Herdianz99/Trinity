@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronDown, Plus, Eye, Trash2, X, ListTree,
+  FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronDown, Plus, Eye, Trash2, X, ListTree, FileSpreadsheet,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -116,6 +116,17 @@ export default function ReceiptsCollectionPage() {
     window.open(`/api/proxy/receipts/report/detailed/pdf?${reportParams()}`, '_blank');
   }
 
+  // Exporta el reporte resumen a Excel (una fila por recibo). Como el endpoint responde con
+  // attachment, se dispara con un <a download> temporal (no deja pestaña en blanco).
+  function exportExcel() {
+    const a = document.createElement('a');
+    a.href = `/api/proxy/receipts/report/excel?${reportParams()}`;
+    a.download = 'reporte-recibos-cobro.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -145,6 +156,9 @@ export default function ReceiptsCollectionPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={openDetailedReport} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
                 <ListTree size={14} /> Reporte detallado (documentos)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportExcel} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileSpreadsheet size={14} /> Exportar a Excel (resumen)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
