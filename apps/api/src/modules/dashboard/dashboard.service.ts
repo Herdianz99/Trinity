@@ -616,10 +616,18 @@ export class DashboardService {
   }
 
   // ── Ventas de contado vs credito (por paymentType de la factura) ───────────
+  // Las ventas a empresas del grupo (isGroupCompany) se EXCLUYEN aqui: se reportan
+  // aparte en el KPI "Ventas del grupo", asi que se restan del bucket que les toca
+  // (CASH -> contado, CREDIT -> credito) para no contarlas doble. El NOT conserva las
+  // ventas sin cliente (mostrador), que no tienen customer relacionado.
   private async getSalesByPaymentType(dateRange: { gte: Date; lte: Date }) {
     const grouped = await this.prisma.invoice.groupBy({
       by: ['paymentType'],
-      where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+      where: {
+        status: { in: ['PAID', 'PARTIAL_RETURN'] },
+        paidAt: dateRange,
+        NOT: { customer: { isGroupCompany: true } },
+      },
       _sum: { totalUsd: true, totalBs: true },
       _count: { id: true },
     });
