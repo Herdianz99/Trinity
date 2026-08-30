@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, Loader2, Trash2, ImagePlus, X, ArrowLeft, Save } from 'lucide-react';
 import ProductSearch, { ProductSearchResult } from '@/components/product-search';
+import { WAREHOUSE_ZONES as ZONES } from '@/lib/warehouse-zones';
 
-const ZONES = ['Cantiléver - Perfiles', 'Tubos - PVC', 'Mantas', 'Cemento', 'Tanques'];
 const MAX_PHOTOS_PER_ITEM = 6;
 
 interface Item {

@@ -3,14 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Star, Loader2, ClipboardCheck, CheckCircle2, MessageSquare, ChevronRight } from 'lucide-react';
+import { WAREHOUSE_ZONES as ZONES } from '@/lib/warehouse-zones';
 
 function fmtDate(d: string) {
   const dt = new Date(d);
   return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
-
-// Zonas del patio sugeridas (del PDF de despacho). El campo permite escribir otra.
-const ZONES = ['Cantiléver - Perfiles', 'Tubos - PVC', 'Mantas', 'Cemento', 'Tanques'];
 
 interface Audit {
   id: string;
