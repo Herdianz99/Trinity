@@ -201,7 +201,9 @@ export class InvoicesController {
   }
 
   // Corregir metodo de pago (y referencia) de los pagos — solo ADMIN/SUPERVISOR.
-  // Solo intercambia por metodos del mismo tipo (validado en el service); no toca IGTF/CxC.
+  // Permite cambiar entre financiamiento (Cashea/Crediagro) y metodos normales creando o
+  // eliminando la cuenta por cobrar (validado en el service). NO permite cambiar isDivisa
+  // (IGTF) ni isCash (arqueo): eso requiere una nota de credito.
   @Patch(':id/payments')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)

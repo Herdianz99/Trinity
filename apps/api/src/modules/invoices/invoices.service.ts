@@ -1705,18 +1705,20 @@ export class InvoicesService {
         const newMethod = methodMap.get(edit.methodId);
         if (!newMethod) throw new BadRequestException('Metodo de pago no encontrado');
         const cur = payment.method;
-        // Mismo tipo = mismos flags que afectan IGTF (isDivisa), arqueo de efectivo
-        // (isCash) y cuenta por cobrar (createsReceivable). Si cambian, se bloquea.
-        const sameType =
-          newMethod.id === cur.id ||
-          (newMethod.isDivisa === cur.isDivisa &&
-            newMethod.isCash === cur.isCash &&
-            newMethod.createsReceivable === cur.createsReceivable);
-        if (!sameType) {
+        // Se permite corregir el metodo aunque cambie createsReceivable (financiamiento
+        // Cashea/Crediagro <-> metodo normal): mas abajo se crea o elimina la cuenta por
+        // cobrar segun corresponda. Lo que NO se puede alterar por aqui es isDivisa
+        // (cambiaria el IGTF 3%) ni isCash (cambiaria el arqueo de caja): eso exige
+        // recalcular impuestos/caja y tocar el libro fiscal, y debe hacerse con una nota
+        // de credito.
+        if (
+          newMethod.id !== cur.id &&
+          (newMethod.isDivisa !== cur.isDivisa || newMethod.isCash !== cur.isCash)
+        ) {
           throw new BadRequestException(
-            `No se puede cambiar "${cur.name}" por "${newMethod.name}": son de distinto tipo ` +
-              `(divisa / efectivo / credito). Eso afectaria el IGTF o la cuenta por cobrar. ` +
-              `Solo se permite corregir entre metodos del mismo tipo.`,
+            `No se puede cambiar "${cur.name}" por "${newMethod.name}": cambiar entre ` +
+              `divisa/bolivares o efectivo/no-efectivo alteraria el IGTF o el arqueo de caja. ` +
+              `Para ese caso emite una nota de credito.`,
           );
         }
         await tx.payment.update({
@@ -1728,6 +1730,24 @@ export class InvoicesService {
               : {}),
           },
         });
+
+        // Localiza la CxC de financiamiento (Cashea/Crediagro) de este pago si existe.
+        // Se reusa para sincronizar su referencia y para renombrar/crear/eliminar la CxC.
+        // Match como el del ledger: por invoice, plataforma vieja y montos, excluyendo las
+        // ya reasignadas en esta transaccion.
+        const findCurReceivable = () =>
+          tx.receivable.findFirst({
+            where: {
+              type: 'FINANCING_PLATFORM',
+              invoiceId: id,
+              platformName: cur.name,
+              amountUsd: payment.amountUsd,
+              amountBs: payment.amountBs,
+              ...(claimedReceivableIds.length
+                ? { id: { notIn: claimedReceivableIds } }
+                : {}),
+            },
+          });
 
         // El libro mayor de caja (CashLedgerEntry) congelo el metodo con que se cobro.
         // Si aqui se corrige el metodo del pago, hay que mover tambien su fila del ledger
@@ -1752,26 +1772,15 @@ export class InvoicesService {
             claimedLedgerIds.push(ledgerRow.id);
           }
 
-          // La cuenta por cobrar (Receivable) de una plataforma de financiamiento
-          // (Cashea/Crediagro) congelo el nombre del metodo con que se cobro en
-          // platformName. sameType garantiza que createsReceivable NO cambia, asi que
-          // si el metodo viejo generaba CxC el nuevo tambien -> hay que renombrar la
-          // plataforma o la CxC queda bajo el metodo viejo (aparece en la cobranza
-          // equivocada). Se hace match como en el ledger: por invoice, plataforma vieja
-          // y montos, excluyendo las ya reasignadas en esta transaccion.
-          if (newMethod.createsReceivable) {
-            const receivable = await tx.receivable.findFirst({
-              where: {
-                type: 'FINANCING_PLATFORM',
-                invoiceId: id,
-                platformName: cur.name,
-                amountUsd: payment.amountUsd,
-                amountBs: payment.amountBs,
-                ...(claimedReceivableIds.length
-                  ? { id: { notIn: claimedReceivableIds } }
-                  : {}),
-              },
-            });
+          // Cuenta por cobrar (Receivable) de una plataforma de financiamiento
+          // (Cashea/Crediagro): platformName congela el metodo con que se cobro. Segun
+          // como cambie createsReceivable entre el metodo viejo y el nuevo:
+          //   - ambos generan CxC        -> renombrar la plataforma (o la CxC queda bajo
+          //                                 el metodo viejo, en la cobranza equivocada);
+          //   - financiamiento -> normal -> el dinero entro de una vez: se ELIMINA la CxC;
+          //   - normal -> financiamiento -> se CREA la CxC.
+          if (cur.createsReceivable && newMethod.createsReceivable) {
+            const receivable = await findCurReceivable();
             if (receivable) {
               await tx.receivable.update({
                 where: { id: receivable.id },
@@ -1784,6 +1793,48 @@ export class InvoicesService {
               });
               claimedReceivableIds.push(receivable.id);
             }
+          } else if (cur.createsReceivable && !newMethod.createsReceivable) {
+            // Cashea/Crediagro -> metodo normal: ya no hay financiamiento, se borra la CxC.
+            const receivable = await findCurReceivable();
+            if (receivable) {
+              if (Number(receivable.paidAmountUsd) > 0) {
+                throw new BadRequestException(
+                  `La cuenta por cobrar de "${cur.name}" (Bs ${payment.amountBs}) ya tiene ` +
+                    `cobros registrados; no se puede cambiar el metodo. Reversa el cobro primero.`,
+                );
+              }
+              await tx.receivable.delete({ where: { id: receivable.id } });
+              claimedReceivableIds.push(receivable.id);
+            }
+          } else if (!cur.createsReceivable && newMethod.createsReceivable) {
+            // Metodo normal -> Cashea/Crediagro: nace la CxC del financiamiento.
+            const created = await tx.receivable.create({
+              data: {
+                type: 'FINANCING_PLATFORM',
+                platformName: newMethod.name,
+                reference:
+                  edit.reference !== undefined
+                    ? edit.reference || null
+                    : payment.reference || null,
+                invoiceId: id,
+                amountUsd: payment.amountUsd,
+                amountBs: payment.amountBs,
+                exchangeRate: invoice.exchangeRate,
+              },
+            });
+            claimedReceivableIds.push(created.id);
+          }
+        } else if (cur.createsReceivable && edit.reference !== undefined) {
+          // No cambio el metodo pero es una plataforma de financiamiento y se corrigio la
+          // referencia: hay que sincronizarla en la CxC (que la congelo al cobrar), o la
+          // cobranza sigue mostrando la referencia vieja.
+          const receivable = await findCurReceivable();
+          if (receivable) {
+            await tx.receivable.update({
+              where: { id: receivable.id },
+              data: { reference: edit.reference || null },
+            });
+            claimedReceivableIds.push(receivable.id);
           }
         }
       }

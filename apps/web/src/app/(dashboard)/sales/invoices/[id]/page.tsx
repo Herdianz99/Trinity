@@ -469,15 +469,33 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  // Opciones de metodo para un pago: solo metodos del MISMO tipo (mismos flags), para
-  // no alterar IGTF/CxC. Se asegura de incluir el metodo actual aunque este desactivado.
+  // Opciones de metodo para un pago: mismo isDivisa (IGTF) y mismo isCash (arqueo) — eso
+  // NO se puede cambiar por aqui. Si se permite que difiera createsReceivable: cambiar
+  // Cashea/Crediagro <-> metodo normal crea o elimina la cuenta por cobrar en el backend.
+  // Se asegura de incluir el metodo actual aunque este desactivado.
   const paymentMethodOptions = (p: Payment) => {
     const cur = p.method;
     const opts = payMethods.filter(
-      (m: any) => cur && m.isDivisa === cur.isDivisa && m.isCash === cur.isCash && m.createsReceivable === cur.createsReceivable,
+      (m: any) => cur && m.isDivisa === cur.isDivisa && m.isCash === cur.isCash,
     );
     if (cur && !opts.find((m: any) => m.id === cur.id)) opts.unshift(cur);
     return opts;
+  };
+
+  // Advertencia cuando el metodo elegido cambia el estado de cuenta por cobrar respecto
+  // al original (crea o elimina una CxC de financiamiento tipo Cashea/Crediagro).
+  const receivableChangeNote = (p: Payment): string | null => {
+    const cur = p.method;
+    const selId = paymentEdits[p.id]?.methodId ?? p.methodId;
+    const sel = payMethods.find((m: any) => m.id === selId) || (cur?.id === selId ? cur : null);
+    if (!cur || !sel || sel.id === cur.id) return null;
+    if (cur.createsReceivable && !sel.createsReceivable) {
+      return `Se eliminara la cuenta por cobrar de ${cur.name} (Bs ${p.amountBs?.toFixed(2)}).`;
+    }
+    if (!cur.createsReceivable && sel.createsReceivable) {
+      return `Se creara una cuenta por cobrar de ${sel.name} (Bs ${p.amountBs?.toFixed(2)}).`;
+    }
+    return null;
   };
 
   const startEditPayments = () => {
@@ -984,13 +1002,18 @@ export default function InvoiceDetailPage() {
                       <tr key={p.id} className="border-b border-slate-700/30">
                         <td className="px-4 py-3 text-slate-300">
                           {editingPayments ? (
-                            <select
-                              value={paymentEdits[p.id]?.methodId ?? p.methodId}
-                              onChange={e => setPaymentEdits(s => ({ ...s, [p.id]: { methodId: e.target.value, reference: s[p.id]?.reference ?? (p.reference || '') } }))}
-                              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm focus:border-green-500 focus:outline-none"
-                            >
-                              {paymentMethodOptions(p).map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                            </select>
+                            <div className="space-y-1">
+                              <select
+                                value={paymentEdits[p.id]?.methodId ?? p.methodId}
+                                onChange={e => setPaymentEdits(s => ({ ...s, [p.id]: { methodId: e.target.value, reference: s[p.id]?.reference ?? (p.reference || '') } }))}
+                                className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm focus:border-green-500 focus:outline-none"
+                              >
+                                {paymentMethodOptions(p).map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                              </select>
+                              {receivableChangeNote(p) && (
+                                <p className="text-[11px] text-amber-400 max-w-[200px] leading-tight">{receivableChangeNote(p)}</p>
+                              )}
+                            </div>
                           ) : (p.method?.name || 'Metodo')}
                         </td>
                         <td className="px-4 py-3 text-slate-300">
