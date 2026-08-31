@@ -20,6 +20,8 @@ interface DashboardData {
   sales: {
     totalUsd: number;
     totalBs: number;
+    grossUsd: number;
+    grossBs: number;
     invoiceCount: number;
     avgTicketUsd: number;
     vsLastPeriod: number | null;
@@ -348,9 +350,9 @@ export default function DashboardGerencialClient() {
             <KpiCard
               icon={<DollarSign size={20} />}
               iconBg="bg-emerald-500/15 text-emerald-400"
-              label="Ventas"
+              label="Ventas (neto)"
               value={`$${fmt(data.sales.totalUsd)}`}
-              sub={<>Bs {fmt(data.sales.totalBs)} · <span className="text-emerald-400 font-semibold">{data.sales.invoiceCount} fact.</span></>}
+              sub={<>Bs {fmt(data.sales.totalBs)} · <span className="text-emerald-400 font-semibold">{data.sales.invoiceCount} fact.</span>{data.sales.grossUsd > data.sales.totalUsd && <> · <span className="text-slate-500">bruto ${fmt(data.sales.grossUsd)}</span></>}</>}
               change={data.sales.vsLastPeriod}
               positiveIsGood
               href={`/sales/invoices?from=${fromDate}&to=${toDate}`}

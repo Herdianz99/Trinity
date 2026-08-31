@@ -16,6 +16,18 @@ function pctChange(current: number, previous: number): number | null {
   return round2(((current - previous) / previous) * 100);
 }
 
+// Venta REAL (neta) de una factura del periodo: monto original y monto neto de devoluciones,
+// mas los flags para clasificarla en los distintos KPI de ventas. Ver getNetInvoiceRows.
+interface NetInvoiceRow {
+  grossUsd: number;
+  grossBs: number;
+  netUsd: number;
+  netBs: number;
+  isGroupCompany: boolean;
+  isFiscal: boolean;
+  paymentType: string;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -36,16 +48,17 @@ export class DashboardService {
     const dateRange = { gte: from, lte: to };
     const prevDateRange = { gte: prevFrom, lte: prevTo };
 
-    // Run all queries in parallel
+    // Run all queries in parallel. Las ventas (KPI, contado/credito, grupo, fiscal) se derivan
+    // TODAS de las mismas "filas netas por factura" (getNetInvoiceRows) para que reconcilien
+    // entre si: contado+credito+grupo = KPI Ventas, y fiscal+no-fiscal = KPI Ventas.
     const [
-      sales,
-      prevSales,
+      netRows,
+      prevNetRows,
       returns,
       prevReturns,
       salesBySeller,
       topProducts,
       salesByCategory,
-      salesByFiscalType,
       cashSummary,
       expenses,
       receivables,
@@ -53,21 +66,16 @@ export class DashboardService {
       salesByHourOrDay,
       financing,
       prevFinancing,
-      salesByType,
-      prevSalesByType,
       profit,
       prevProfit,
-      groupSales,
-      prevGroupSales,
     ] = await Promise.all([
-      this.getSales(dateRange),
-      this.getSales(prevDateRange),
+      this.getNetInvoiceRows(dateRange),
+      this.getNetInvoiceRows(prevDateRange),
       this.getReturns(dateRange),
       this.getReturns(prevDateRange),
       this.getSalesBySeller(dateRange),
       this.getTopProducts(dateRange),
       this.getSalesByCategory(dateRange),
-      this.getSalesByFiscalType(dateRange),
       this.getCashSummary(dateRange),
       this.getExpenses(dateRange),
       this.getReceivables(),
@@ -75,13 +83,18 @@ export class DashboardService {
       this.getSalesTimeline(from, to),
       this.getFinancingSales(dateRange),
       this.getFinancingSales(prevDateRange),
-      this.getSalesByPaymentType(dateRange),
-      this.getSalesByPaymentType(prevDateRange),
       this.getProfit(dateRange),
       this.getProfit(prevDateRange),
-      this.getGroupSales(dateRange),
-      this.getGroupSales(prevDateRange),
     ]);
+
+    // Derivados sincronos de las filas netas por factura (sin mas consultas).
+    const sales = this.summarizeSales(netRows);
+    const prevSales = this.summarizeSales(prevNetRows);
+    const salesByFiscalType = this.summarizeByFiscalType(netRows);
+    const salesByType = this.summarizeByPaymentType(netRows);
+    const prevSalesByType = this.summarizeByPaymentType(prevNetRows);
+    const groupSales = this.summarizeGroupSales(netRows);
+    const prevGroupSales = this.summarizeGroupSales(prevNetRows);
 
     return {
       period: {
@@ -89,8 +102,13 @@ export class DashboardService {
         to: to.toISOString(),
       },
       sales: {
+        // Ventas REALES = por cada factura del periodo, su monto menos lo devuelto de ESA factura
+        // (parcial: cuenta lo no devuelto; total: cuenta 0). Ya viene neto de summarizeSales.
+        // grossUsd = lo facturado antes de devoluciones (para mostrar la diferencia en la tarjeta).
         totalUsd: sales.totalUsd,
         totalBs: sales.totalBs,
+        grossUsd: sales.grossUsd,
+        grossBs: sales.grossBs,
         invoiceCount: sales.count,
         avgTicketUsd: sales.count > 0 ? round2(sales.totalUsd / sales.count) : 0,
         vsLastPeriod: pctChange(sales.totalUsd, prevSales.totalUsd),
@@ -577,69 +595,91 @@ export class DashboardService {
     return result;
   }
 
-  // ── Sales (Invoices PAID in period) ───────────────────────────────────────
+  // ── Filas netas por factura (base de TODOS los KPI de ventas) ──────────────
+  // Para cada factura cobrada en el periodo (PAID/PARTIAL_RETURN/RETURNED) calcula su venta
+  // REAL = monto original − lo devuelto de ESA factura (suma de sus NCV POSTED). Devolucion
+  // parcial => queda lo no devuelto; devolucion total => queda 0. Piso en 0 (una devolucion no
+  // puede volver la venta negativa). Las devoluciones se anclan a la factura (no a la fecha en
+  // que se proceso la NC), asi una devolucion de una venta vieja NO afecta a este periodo.
+  private async getNetInvoiceRows(dateRange: { gte: Date; lte: Date }): Promise<NetInvoiceRow[]> {
+    const estados: ('PAID' | 'PARTIAL_RETURN' | 'RETURNED')[] = ['PAID', 'PARTIAL_RETURN', 'RETURNED'];
+    const [invoices, returns] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { status: { in: estados }, paidAt: dateRange },
+        select: {
+          id: true, totalUsd: true, totalBs: true, paymentType: true,
+          customer: { select: { isGroupCompany: true } },
+          serie: { select: { isFiscal: true } },
+        },
+      }),
+      this.prisma.creditDebitNote.groupBy({
+        by: ['invoiceId'],
+        where: {
+          type: 'NCV', status: 'POSTED',
+          invoice: { status: { in: estados }, paidAt: dateRange },
+        },
+        _sum: { totalUsd: true, totalBs: true },
+      }),
+    ]);
 
-  private async getSales(dateRange: { gte: Date; lte: Date }) {
-    const result = await this.prisma.invoice.aggregate({
-      where: {
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
-        paidAt: dateRange,
-      },
-      _sum: { totalUsd: true, totalBs: true },
-      _count: { id: true },
+    const retMap = new Map<string, { usd: number; bs: number }>();
+    for (const r of returns) {
+      if (r.invoiceId) retMap.set(r.invoiceId, { usd: r._sum.totalUsd || 0, bs: r._sum.totalBs || 0 });
+    }
+
+    return invoices.map((inv) => {
+      const ret = retMap.get(inv.id) || { usd: 0, bs: 0 };
+      const netUsd = Math.max(0, inv.totalUsd - ret.usd);
+      const netBs = Math.max(0, inv.totalBs - ret.bs);
+      return {
+        grossUsd: inv.totalUsd,
+        grossBs: inv.totalBs,
+        netUsd,
+        netBs,
+        isGroupCompany: !!inv.customer?.isGroupCompany,
+        isFiscal: !!inv.serie?.isFiscal,
+        paymentType: inv.paymentType,
+      };
     });
-
-    return {
-      totalUsd: round2(result._sum.totalUsd || 0),
-      totalBs: round2(result._sum.totalBs || 0),
-      count: result._count.id || 0,
-    };
   }
 
-  // ── Ventas del grupo: facturas a clientes marcados como empresa del grupo ──
-  // (isGroupCompany). Mismo criterio de estado/rango que getSales para ser consistente.
-  private async getGroupSales(dateRange: { gte: Date; lte: Date }) {
-    const result = await this.prisma.invoice.aggregate({
-      where: {
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
-        paidAt: dateRange,
-        customer: { isGroupCompany: true },
-      },
-      _sum: { totalUsd: true, totalBs: true },
-      _count: { id: true },
-    });
-    return {
-      totalUsd: round2(result._sum.totalUsd || 0),
-      totalBs: round2(result._sum.totalBs || 0),
-      count: result._count.id || 0,
-    };
+  // ── KPI "Ventas" = venta real (neta por factura) de todas las facturas del periodo ────
+  private summarizeSales(rows: NetInvoiceRow[]) {
+    let totalUsd = 0, totalBs = 0, grossUsd = 0, grossBs = 0, count = 0;
+    for (const r of rows) {
+      totalUsd += r.netUsd; totalBs += r.netBs;
+      grossUsd += r.grossUsd; grossBs += r.grossBs;
+      if (r.netUsd > 0) count += 1; // solo facturas con venta real (las devueltas completas no cuentan)
+    }
+    return { totalUsd: round2(totalUsd), totalBs: round2(totalBs), grossUsd: round2(grossUsd), grossBs: round2(grossBs), count };
   }
 
-  // ── Ventas de contado vs credito (por paymentType de la factura) ───────────
-  // Las ventas a empresas del grupo (isGroupCompany) se EXCLUYEN aqui: se reportan
-  // aparte en el KPI "Ventas del grupo", asi que se restan del bucket que les toca
-  // (CASH -> contado, CREDIT -> credito) para no contarlas doble. El NOT conserva las
-  // ventas sin cliente (mostrador), que no tienen customer relacionado.
-  private async getSalesByPaymentType(dateRange: { gte: Date; lte: Date }) {
-    const grouped = await this.prisma.invoice.groupBy({
-      by: ['paymentType'],
-      where: {
-        status: { in: ['PAID', 'PARTIAL_RETURN'] },
-        paidAt: dateRange,
-        NOT: { customer: { isGroupCompany: true } },
-      },
-      _sum: { totalUsd: true, totalBs: true },
-      _count: { id: true },
-    });
-    const cash = grouped.find((g) => g.paymentType === 'CASH');
-    const credit = grouped.find((g) => g.paymentType === 'CREDIT');
+  // ── Ventas del grupo: venta real de las facturas a empresas del grupo (isGroupCompany) ─
+  private summarizeGroupSales(rows: NetInvoiceRow[]) {
+    let totalUsd = 0, totalBs = 0, count = 0;
+    for (const r of rows) {
+      if (!r.isGroupCompany) continue;
+      totalUsd += r.netUsd; totalBs += r.netBs;
+      if (r.netUsd > 0) count += 1;
+    }
+    return { totalUsd: round2(totalUsd), totalBs: round2(totalBs), count };
+  }
+
+  // ── Contado vs credito: venta real por paymentType, EXCLUYE empresas del grupo ─────────
+  // (el grupo se reporta aparte en "Ventas del grupo"). CREDIT => credito; el resto => contado.
+  private summarizeByPaymentType(rows: NetInvoiceRow[]) {
+    let contadoUsd = 0, contadoBs = 0, contadoCount = 0, creditoUsd = 0, creditoBs = 0, creditoCount = 0;
+    for (const r of rows) {
+      if (r.isGroupCompany) continue;
+      if (r.paymentType === 'CREDIT') {
+        creditoUsd += r.netUsd; creditoBs += r.netBs; if (r.netUsd > 0) creditoCount += 1;
+      } else {
+        contadoUsd += r.netUsd; contadoBs += r.netBs; if (r.netUsd > 0) contadoCount += 1;
+      }
+    }
     return {
-      contadoUsd: round2(cash?._sum.totalUsd || 0),
-      contadoBs: round2(cash?._sum.totalBs || 0),
-      contadoCount: cash?._count.id || 0,
-      creditoUsd: round2(credit?._sum.totalUsd || 0),
-      creditoBs: round2(credit?._sum.totalBs || 0),
-      creditoCount: credit?._count.id || 0,
+      contadoUsd: round2(contadoUsd), contadoBs: round2(contadoBs), contadoCount,
+      creditoUsd: round2(creditoUsd), creditoBs: round2(creditoBs), creditoCount,
     };
   }
 
@@ -654,12 +694,13 @@ export class DashboardService {
         // only fills when the note is later cruzada en un recibo.
         documentDate: dateRange,
       },
-      _sum: { totalUsd: true },
+      _sum: { totalUsd: true, totalBs: true },
       _count: { id: true },
     });
 
     return {
       totalUsd: round2(result._sum.totalUsd || 0),
+      totalBs: round2(result._sum.totalBs || 0),
       count: result._count.id || 0,
     };
   }
@@ -765,7 +806,8 @@ export class DashboardService {
         where: {
           status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] },
           paidAt: dateRange,
-          sellerId: { not: null },
+          // SIN filtro de sellerId: incluimos tambien las facturas de mostrador
+          // (sin vendedor) para mostrarlas como una fila aparte "Sin vendedor".
         },
         select: {
           totalUsd: true,
@@ -777,7 +819,8 @@ export class DashboardService {
           type: 'NCV',
           status: 'POSTED',
           documentDate: dateRange,
-          invoice: { sellerId: { not: null } },
+          // SIN filtro de sellerId: las devoluciones de mostrador (o notas sin factura)
+          // caen en el bucket "Sin vendedor".
         },
         select: { totalUsd: true, invoice: { select: { sellerId: true } } },
       }),
@@ -788,8 +831,10 @@ export class DashboardService {
       sellerId: string; sellerName: string; sellerCode: string;
       totalUsd: number; invoiceCount: number; returnsUsd: number; returnCount: number;
     }>();
+    // Bucket "Sin vendedor" (mostrador): facturas y devoluciones sin vendedor asignado.
+    const noSeller = { totalUsd: 0, invoiceCount: 0, returnsUsd: 0, returnCount: 0 };
     for (const inv of invoices) {
-      if (!inv.seller) continue;
+      if (!inv.seller) { noSeller.totalUsd += inv.totalUsd; noSeller.invoiceCount += 1; continue; }
       const key = inv.seller.id;
       const existing = map.get(key);
       if (existing) {
@@ -815,15 +860,16 @@ export class DashboardService {
     // muestran aparte; `netUsd` queda disponible por si se quiere.
     for (const ret of returns) {
       const sid = ret.invoice?.sellerId;
-      if (!sid) continue;
+      if (!sid) { noSeller.returnsUsd += ret.totalUsd; noSeller.returnCount += 1; continue; }
       const entry = map.get(sid);
       if (entry) { entry.returnsUsd += ret.totalUsd; entry.returnCount += 1; }
     }
 
     // Orden por lo VENDIDO (bruto). pct = participacion sobre el bruto total.
+    // El bruto total INCLUYE el mostrador (noSeller) para que los % sumen ~100%.
     const sellers = Array.from(map.values()).sort((a, b) => b.totalUsd - a.totalUsd);
-    const grandTotal = sellers.reduce((s, x) => s + x.totalUsd, 0);
-    return sellers.map(s => ({
+    const grandTotal = sellers.reduce((s, x) => s + x.totalUsd, 0) + noSeller.totalUsd;
+    const rows = sellers.map(s => ({
       sellerId: s.sellerId,
       sellerName: s.sellerName,
       sellerCode: s.sellerCode,
@@ -834,6 +880,23 @@ export class DashboardService {
       returnCount: s.returnCount,
       pct: grandTotal > 0 ? round2((s.totalUsd / grandTotal) * 100) : 0,
     }));
+
+    // Fila "Sin vendedor" (mostrador), siempre al final, solo si hubo actividad.
+    if (noSeller.invoiceCount > 0 || noSeller.returnCount > 0) {
+      rows.push({
+        sellerId: '__no_seller__',
+        sellerName: 'Sin vendedor',
+        sellerCode: '—',
+        totalUsd: round2(noSeller.totalUsd),
+        returnsUsd: round2(noSeller.returnsUsd),
+        netUsd: round2(Math.max(0, noSeller.totalUsd - noSeller.returnsUsd)),
+        invoiceCount: noSeller.invoiceCount,
+        returnCount: noSeller.returnCount,
+        pct: grandTotal > 0 ? round2((noSeller.totalUsd / grandTotal) * 100) : 0,
+      });
+    }
+
+    return rows;
   }
 
   // ── Top 5 products by USD ─────────────────────────────────────────────────
@@ -961,21 +1024,16 @@ export class DashboardService {
   }
 
   // ── Ventas fiscales vs no fiscales ────────────────────────────────────────
-  // Clasifica cada factura cobrada por Invoice.serie.isFiscal (sin serie = no fiscal).
-  // Devuelve monto USD + Bs y porcentaje de cada grupo sobre el total facturado.
-  private async getSalesByFiscalType(dateRange: { gte: Date; lte: Date }) {
-    const invoices = await this.prisma.invoice.findMany({
-      where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
-      select: { totalUsd: true, totalBs: true, serie: { select: { isFiscal: true } } },
-    });
-
+  // Clasifica cada factura por Invoice.serie.isFiscal (sin serie = no fiscal) usando su venta
+  // REAL (neta por factura). INCLUYE al grupo, asi que fiscal+no-fiscal = KPI "Ventas".
+  private summarizeByFiscalType(rows: NetInvoiceRow[]) {
     let fiscalUsd = 0, fiscalBs = 0, fiscalCount = 0;
     let nonFiscalUsd = 0, nonFiscalBs = 0, nonFiscalCount = 0;
-    for (const inv of invoices) {
-      if (inv.serie?.isFiscal) {
-        fiscalUsd += inv.totalUsd; fiscalBs += inv.totalBs; fiscalCount += 1;
+    for (const r of rows) {
+      if (r.isFiscal) {
+        fiscalUsd += r.netUsd; fiscalBs += r.netBs; if (r.netUsd > 0) fiscalCount += 1;
       } else {
-        nonFiscalUsd += inv.totalUsd; nonFiscalBs += inv.totalBs; nonFiscalCount += 1;
+        nonFiscalUsd += r.netUsd; nonFiscalBs += r.netBs; if (r.netUsd > 0) nonFiscalCount += 1;
       }
     }
     const totalUsd = fiscalUsd + nonFiscalUsd;
