@@ -16,6 +16,12 @@ Regla de negocio confirmada en el brainstorming: **un solo saldo Bs por empresa*
 de Bs maneja las entradas/salidas manuales, y **comprar/vender divisas afecta ese mismo saldo**
 automáticamente. Las tablas se ven aparte, pero el saldo cuadra.
 
+**Contexto (actualizado 2026-09-01):** Finanzas aún **no tiene movimientos reales** — arrancan
+el módulo **este mes desde cero**. Los movimientos/cargas que existan hoy son de **prueba** y
+pueden borrarse. Por tanto **no hay que preservar ni reconciliar datos existentes**: la migración
+de datos de "Cargas de Bs" deja de ser necesaria y el riesgo de alterar saldos en producción
+desaparece.
+
 ## Decisiones (del brainstorming)
 
 - **Un solo saldo Bs por empresa** (opción elegida). No dos nociones independientes de Bs.
@@ -114,10 +120,12 @@ controller sin enlace, o eliminar en la limpieza — decisión menor de implemen
 
 1. **Schema:** `CREATE TABLE IF NOT EXISTS "TreasuryBsMovement" (...)` + índices. Migración Prisma
    aditiva, con `IF NOT EXISTS` (regla del CLAUDE.md).
-2. **Datos:** copiar `TreasuryBsLoad` → `TreasuryBsMovement` (ENTRADA). Ejecutar una sola vez;
-   condicionar a que la tabla destino esté vacía de filas migradas para ser idempotente.
-3. Verificar en local (BD de la grande) que el saldo Bs por empresa **antes** (cargas − amountBs)
-   coincide con el **después** (fórmula nueva) para no alterar saldos existentes.
+2. **Datos:** **no se migran** las `TreasuryBsLoad` — son de prueba y arrancan de cero. La tabla
+   `TreasuryBsLoad` queda obsoleta y sin uso en la UI.
+3. **Limpieza opcional de datos de prueba:** como Finanzas empieza el módulo este mes, se puede
+   vaciar lo de prueba (`TreasuryBsLoad` y, si lo piden, los `TreasuryMovement` de divisas de
+   prueba) antes del arranque. Es un paso manual/aparte del deploy, a confirmar con Diego; el
+   código no borra datos por su cuenta.
 
 ## Fuera de alcance (v1)
 
@@ -128,9 +136,10 @@ controller sin enlace, o eliminar en la limpieza — decisión menor de implemen
 
 ## Riesgos / notas
 
-- **Reconciliación de saldo:** el riesgo principal es que la fórmula nueva altere el saldo Bs que
-  hoy ven en producción. Se mitiga con la verificación del paso 3 de Migración (comparar antes/después).
-- **Signo de divisas:** hoy `summary()` resta el `amountBs` sin importar ENTRADA/SALIDA. Si en
-  producción existen divisas SALIDA con `amountBs`, la corrección de signo **cambiará** su saldo
-  (para bien). Revisar cuántas hay antes de desplegar y avisar a Finanzas si el número se mueve.
+- **Sin reconciliación:** Finanzas arranca de cero este mes, así que no hay saldos reales que
+  alterar. El riesgo de descuadre en producción desaparece (los datos actuales son de prueba y
+  se pueden borrar).
+- **Signo de divisas:** hoy `summary()` resta el `amountBs` sin importar ENTRADA/SALIDA; el diseño
+  lo corrige (ENTRADA divisa → salida Bs; SALIDA divisa → entrada Bs). Como no hay datos reales,
+  la corrección no mueve ningún saldo existente.
 - Módulo aislado y aditivo → despliegue seguro (no afecta ventas/inventario/fiscal). Vive en la grande.
