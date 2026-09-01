@@ -53,11 +53,28 @@ export default function MoneyInput({ value, onValueChange, className, placeholde
       disabled={disabled}
       className={className}
       onChange={(e) => {
-        // En modo miles quitamos los "." (miles) y pasamos la "," (decimal) a "."; en modo
-        // normal solo convertimos la "," a "." (comportamiento original).
-        const v = thousands
-          ? e.target.value.replace(/\./g, '').replace(/,/g, '.')
-          : e.target.value.replace(',', '.');
+        const text = e.target.value;
+        let v: string;
+        if (thousands) {
+          // El display agrupa miles con "." y muestra el decimal con ",". Un "." entrante suele
+          // ser separador de miles; PERO si el usuario AGREGÓ un separador (subió la cuenta de
+          // "."/","), ese último es el decimal — así se puede escribir el decimal con punto O
+          // con coma (antes el punto se tragaba como miles). Si no subió, los "." son miles y la
+          // "," es el decimal (comportamiento es-VE de siempre).
+          const prevSeps = (toDisplay(raw).match(/[.,]/g) || []).length;
+          const newSeps = (text.match(/[.,]/g) || []).length;
+          if (newSeps > prevSeps) {
+            const idx = Math.max(text.lastIndexOf('.'), text.lastIndexOf(','));
+            const intp = text.slice(0, idx).replace(/[^\d]/g, '');
+            const decp = text.slice(idx + 1).replace(/[^\d]/g, '');
+            v = `${intp}.${decp}`;
+          } else {
+            v = text.replace(/\./g, '').replace(/,/g, '.');
+          }
+        } else {
+          // Modo normal: solo convertimos la "," a "." (el punto ya pasa como decimal).
+          v = text.replace(',', '.');
+        }
         // permitir vacío, un punto suelto, y dígitos con un solo punto decimal
         if (v !== '' && !/^\d*\.?\d*$/.test(v)) return;
         setRaw(v);
