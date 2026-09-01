@@ -2617,9 +2617,10 @@ model TreasuryMovement {
   bank         TreasuryBank    @relation(fields: [bankId], references: [id])
   originBankId String?                               // banco de origen de los Bs (opcional)
   originBank   TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
+  kind         String          @default("MOVIMIENTO") // 'MOVIMIENTO' (transferencia USD) | 'COMPRA' (compra de divisas con Bs)
   type         String                                // 'ENTRADA' | 'SALIDA'
   amountUsd    Float                                 // monto en USD
-  amountBs     Float?                                // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa
+  amountBs     Float?                                // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa. Solo en COMPRA
   exchangeRate Float?                                // tasa Bs/USD usada (4 decimales); auto de la tasa del dia, editable
   commissionPct Float?                               // % de comision (0.5 por defecto); auto, editable
   modalidad    String?                               // 'ELECTRONICO' | 'EFECTIVO'

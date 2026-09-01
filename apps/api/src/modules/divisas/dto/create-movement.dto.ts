@@ -18,6 +18,11 @@ export class CreateMovementDto {
   @IsString()
   bankId: string;
 
+  // 'MOVIMIENTO' (transferencia simple de USD) | 'COMPRA' (compra de divisas con Bs/tasa/comision).
+  @IsOptional()
+  @IsIn(['MOVIMIENTO', 'COMPRA'])
+  kind?: string;
+
   @IsIn(['ENTRADA', 'SALIDA'])
   type: string;
 

@@ -14,6 +14,10 @@ export class QueryMovementsDto {
   type?: string;
 
   @IsOptional()
+  @IsIn(['MOVIMIENTO', 'COMPRA'])
+  kind?: string;
+
+  @IsOptional()
   @IsDateString()
   from?: string;
 

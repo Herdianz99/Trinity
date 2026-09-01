@@ -222,7 +222,7 @@ export class DivisasService {
     const to = q.to ? new Date(q.to) : undefined;
     const dimCompany = !!q.companyId && !q.bankId;
     const dimBank = !!q.bankId && !q.companyId;
-    const withRunning = (dimCompany || dimBank) && !q.type;
+    const withRunning = (dimCompany || dimBank) && !q.type && !q.kind;
 
     if (withRunning) {
       const dimWhere = dimCompany ? { companyId: q.companyId } : { bankId: q.bankId };
@@ -249,6 +249,7 @@ export class DivisasService {
     if (q.companyId) where.companyId = q.companyId;
     if (q.bankId) where.bankId = q.bankId;
     if (q.type) where.type = q.type;
+    if (q.kind) where.kind = q.kind;
     if (from || to) where.date = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
 
     const movements = await this.prisma.treasuryMovement.findMany({
@@ -271,17 +272,20 @@ export class DivisasService {
       if (!ob) throw new BadRequestException('Banco de origen no válido');
     }
 
+    // Los campos de Bs/tasa/comision/banco-origen SOLO aplican a la compra de divisas.
+    const isCompra = dto.kind === 'COMPRA';
     return this.prisma.treasuryMovement.create({
       data: {
         date: new Date(dto.date),
         companyId: dto.companyId,
         bankId: dto.bankId,
-        originBankId: dto.originBankId || null,
+        kind: isCompra ? 'COMPRA' : 'MOVIMIENTO',
+        originBankId: isCompra ? dto.originBankId || null : null,
         type: dto.type,
         amountUsd: round2(dto.amountUsd),
-        amountBs: dto.amountBs != null ? round2(dto.amountBs) : null,
-        exchangeRate: dto.exchangeRate != null ? Math.round(dto.exchangeRate * 10000) / 10000 : null,
-        commissionPct: dto.commissionPct != null ? dto.commissionPct : null,
+        amountBs: isCompra && dto.amountBs != null ? round2(dto.amountBs) : null,
+        exchangeRate: isCompra && dto.exchangeRate != null ? Math.round(dto.exchangeRate * 10000) / 10000 : null,
+        commissionPct: isCompra && dto.commissionPct != null ? dto.commissionPct : null,
         modalidad: dto.modalidad || null,
         counterparty: dto.counterparty?.trim() || null,
         reference: dto.reference?.trim() || null,
@@ -297,6 +301,8 @@ export class DivisasService {
     const existing = await this.prisma.treasuryMovement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Movimiento no encontrado');
     const data: any = {};
+    const finalKind = dto.kind !== undefined ? dto.kind : (existing as any).kind;
+    if (dto.kind !== undefined) data.kind = dto.kind === 'COMPRA' ? 'COMPRA' : 'MOVIMIENTO';
     if (dto.date !== undefined) data.date = new Date(dto.date);
     if (dto.companyId !== undefined) data.companyId = dto.companyId;
     if (dto.bankId !== undefined) data.bankId = dto.bankId;
@@ -312,6 +318,13 @@ export class DivisasService {
     if (dto.reference !== undefined) data.reference = dto.reference?.trim() || null;
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
     if (dto.status !== undefined) data.status = dto.status;
+    // Un movimiento simple (transferencia USD) no lleva Bs/tasa/comision/banco-origen.
+    if (finalKind !== 'COMPRA') {
+      data.amountBs = null;
+      data.exchangeRate = null;
+      data.commissionPct = null;
+      data.originBankId = null;
+    }
     return this.prisma.treasuryMovement.update({ where: { id }, data, include: MOVEMENT_INCLUDE });
   }
 
