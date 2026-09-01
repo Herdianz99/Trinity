@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Building2, Wallet, ArrowLeftRight, Plus, ChevronRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
+import { Building2, ArrowLeftRight, Plus, ChevronRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 
 interface Row {
   id: string;
@@ -15,7 +15,6 @@ interface Row {
 }
 interface Summary {
   companies: Row[];
-  banks: Row[];
   totalDisponibleUsd: number;
   totalTransitoUsd: number;
   totalBs: number;
@@ -182,7 +181,7 @@ export default function DivisasResumenPage() {
       {loading ? (
         <div className="p-10 text-center text-slate-500 text-sm">Cargando…</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="max-w-2xl">
           <BalancePanel
             title="Saldo por empresa"
             icon={<Building2 size={16} className="text-blue-400" />}
@@ -191,14 +190,6 @@ export default function DivisasResumenPage() {
             emptyHref="/divisas/empresas"
             emptyLabel="Crear empresa"
             showBs
-          />
-          <BalancePanel
-            title="Saldo por banco / ubicación"
-            icon={<Wallet size={16} className="text-purple-400" />}
-            rows={data?.banks || []}
-            hrefKey="bankId"
-            emptyHref="/divisas/bancos"
-            emptyLabel="Crear banco"
           />
         </div>
       )}

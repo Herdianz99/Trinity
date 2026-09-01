@@ -247,7 +247,6 @@ const menuSections: MenuSection[] = [
       { label: 'Movimientos', href: '/divisas/movimientos', icon: <ArrowLeftRight size={18} /> },
       { label: 'Movimientos Bs', href: '/divisas/movimientos-bs', icon: <Coins size={18} /> },
       { label: 'Empresas', href: '/divisas/empresas', icon: <Building2 size={18} /> },
-      { label: 'Bancos / Ubicaciones', href: '/divisas/bancos', icon: <Wallet size={18} /> },
       { label: 'Bancos de origen (Bs)', href: '/divisas/bancos-origen', icon: <Coins size={18} /> },
     ],
   },

@@ -25,7 +25,6 @@ interface Movement {
   description: string | null;
   status: string;
   company: { id: string; name: string };
-  bank: { id: string; name: string };
   originBank: { id: string; name: string } | null;
   createdBy?: { name: string };
   runningBalanceUsd?: number;
@@ -50,7 +49,6 @@ const emptyForm = () => ({
   date: todayStr(),
   kind: 'MOVIMIENTO',
   companyId: '',
-  bankId: '',
   originBankId: '',
   type: 'ENTRADA',
   amountUsd: '',
@@ -67,7 +65,6 @@ const emptyForm = () => ({
 function MovimientosInner() {
   const search = useSearchParams();
   const [companies, setCompanies] = useState<Catalog[]>([]);
-  const [banks, setBanks] = useState<Catalog[]>([]);
   const [originBanks, setOriginBanks] = useState<Catalog[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [hasRunning, setHasRunning] = useState(false);
@@ -76,7 +73,6 @@ function MovimientosInner() {
 
   // Filtros
   const [fCompany, setFCompany] = useState(search.get('companyId') || '');
-  const [fBank, setFBank] = useState(search.get('bankId') || '');
   const [fType, setFType] = useState('');
   const [fKind, setFKind] = useState('');
   const [fFrom, setFFrom] = useState('');
@@ -93,13 +89,11 @@ function MovimientosInner() {
   };
 
   const loadCatalogs = useCallback(async () => {
-    const [c, b, ob] = await Promise.all([
+    const [c, ob] = await Promise.all([
       fetch('/api/proxy/divisas/companies?all=true').then((r) => r.json()),
-      fetch('/api/proxy/divisas/banks?all=true').then((r) => r.json()),
       fetch('/api/proxy/divisas/origin-banks?all=true').then((r) => r.json()),
     ]);
     setCompanies(Array.isArray(c) ? c : []);
-    setBanks(Array.isArray(b) ? b : []);
     setOriginBanks(Array.isArray(ob) ? ob : []);
   }, []);
 
@@ -108,7 +102,6 @@ function MovimientosInner() {
     try {
       const p = new URLSearchParams();
       if (fCompany) p.set('companyId', fCompany);
-      if (fBank) p.set('bankId', fBank);
       if (fType) p.set('type', fType);
       if (fKind) p.set('kind', fKind);
       if (fFrom) p.set('from', fFrom);
@@ -120,7 +113,7 @@ function MovimientosInner() {
     } finally {
       setLoading(false);
     }
-  }, [fCompany, fBank, fType, fKind, fFrom, fTo]);
+  }, [fCompany, fType, fKind, fFrom, fTo]);
 
   useEffect(() => {
     loadCatalogs();
@@ -162,7 +155,6 @@ function MovimientosInner() {
       date: m.date.slice(0, 10),
       kind: m.kind || 'MOVIMIENTO',
       companyId: m.company.id,
-      bankId: m.bank.id,
       originBankId: m.originBank?.id || '',
       type: m.type,
       amountUsd: String(m.amountUsd),
@@ -191,8 +183,8 @@ function MovimientosInner() {
   const totalBs = Math.round((baseBs + commissionBs) * 100) / 100;
 
   const save = async () => {
-    if (!form.companyId || !form.bankId || !form.amountUsd || Number(form.amountUsd) <= 0) {
-      toast('Completa empresa, banco y monto (> 0)', false);
+    if (!form.companyId || !form.amountUsd || Number(form.amountUsd) <= 0) {
+      toast('Completa empresa y monto (> 0)', false);
       return;
     }
     setSaving(true);
@@ -202,7 +194,6 @@ function MovimientosInner() {
         date: form.date,
         kind: form.kind,
         companyId: form.companyId,
-        bankId: form.bankId,
         originBankId: isCompra ? form.originBankId || undefined : undefined,
         type: isCompra ? 'ENTRADA' : form.type,
         amountUsd: Number(form.amountUsd),
@@ -237,7 +228,7 @@ function MovimientosInner() {
   };
 
   const confirmMovement = async (m: Movement) => {
-    if (!confirm(`¿Confirmar el movimiento de $${fmt(m.amountUsd)} (${m.company.name} / ${m.bank.name})?\n\nPasará de "Tránsito" a "Disponible".`)) return;
+    if (!confirm(`¿Confirmar el movimiento de $${fmt(m.amountUsd)} (${m.company.name})?\n\nPasará de "Tránsito" a "Disponible".`)) return;
     const res = await fetch(`/api/proxy/divisas/movements/${m.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -252,7 +243,7 @@ function MovimientosInner() {
   };
 
   const remove = async (m: Movement) => {
-    if (!confirm(`¿Eliminar el movimiento de $${fmt(m.amountUsd)} (${m.company.name} / ${m.bank.name})?`)) return;
+    if (!confirm(`¿Eliminar el movimiento de $${fmt(m.amountUsd)} (${m.company.name})?`)) return;
     const res = await fetch(`/api/proxy/divisas/movements/${m.id}`, { method: 'DELETE' });
     if (res.ok) {
       toast('Movimiento eliminado');
@@ -263,17 +254,12 @@ function MovimientosInner() {
   };
 
   const activeCompanies = companies.filter((c) => c.isActive);
-  const activeBanks = banks.filter((b) => b.isActive);
   const activeOriginBanks = originBanks.filter((b) => b.isActive);
-  const colSpan = hasRunning ? 8 : 7;
+  const colSpan = hasRunning ? 7 : 6;
 
-  // Contexto cuando se "entra" a una sola empresa o banco (vista con saldo corriente).
-  const singleDimName = fCompany
-    ? companies.find((c) => c.id === fCompany)?.name
-    : fBank
-      ? banks.find((b) => b.id === fBank)?.name
-      : null;
-  const singleDimLabel = fCompany ? 'Empresa' : 'Banco / Ubicación';
+  // Contexto cuando se "entra" a una sola empresa (vista con saldo corriente).
+  const singleDimName = fCompany ? companies.find((c) => c.id === fCompany)?.name : null;
+  const singleDimLabel = 'Empresa';
   // El movimiento más reciente (movements[0], orden desc) trae el saldo corriente = saldo actual.
   const currentBalance = hasRunning && movements.length ? movements[0].runningBalanceUsd || 0 : 0;
 
@@ -340,18 +326,6 @@ function MovimientosInner() {
           ))}
         </select>
         <select
-          value={fBank}
-          onChange={(e) => setFBank(e.target.value)}
-          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 text-sm"
-        >
-          <option value="">Todos los bancos</option>
-          {banks.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-        <select
           value={fType}
           onChange={(e) => setFType(e.target.value)}
           className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 text-sm"
@@ -382,11 +356,10 @@ function MovimientosInner() {
           onChange={(e) => setFTo(e.target.value)}
           className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-sm"
         />
-        {(fCompany || fBank || fType || fKind || fFrom || fTo) && (
+        {(fCompany || fType || fKind || fFrom || fTo) && (
           <button
             onClick={() => {
               setFCompany('');
-              setFBank('');
               setFType('');
               setFKind('');
               setFFrom('');
@@ -426,7 +399,6 @@ function MovimientosInner() {
               <tr className="border-b border-slate-700/50 text-left">
                 <th className="px-3 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider">Fecha</th>
                 <th className="px-3 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider">Empresa</th>
-                <th className="px-3 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider">Banco / Ubicación</th>
                 <th className="px-3 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider">Detalle</th>
                 <th className="px-3 py-3 text-xs text-slate-400 font-medium uppercase tracking-wider text-right">Monto</th>
                 {hasRunning && (
@@ -456,7 +428,6 @@ function MovimientosInner() {
                     <tr key={m.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 align-top">
                       <td className="px-3 py-3 text-sm text-slate-300 whitespace-nowrap">{fmtDate(m.date)}</td>
                       <td className="px-3 py-3 text-sm text-slate-200">{m.company.name}</td>
-                      <td className="px-3 py-3 text-sm text-slate-200">{m.bank.name}</td>
                       <td className="px-3 py-3 text-xs text-slate-400 max-w-[220px]">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           {m.kind === 'COMPRA' && (
@@ -607,37 +578,20 @@ function MovimientosInner() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Empresa</label>
-                  <select
-                    value={form.companyId}
-                    onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
-                  >
-                    <option value="">Seleccionar…</option>
-                    {activeCompanies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Banco / Ubicación (destino USD)</label>
-                  <select
-                    value={form.bankId}
-                    onChange={(e) => setForm({ ...form, bankId: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
-                  >
-                    <option value="">Seleccionar…</option>
-                    {activeBanks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Empresa</label>
+                <select
+                  value={form.companyId}
+                  onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
+                >
+                  <option value="">Seleccionar…</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {form.kind === 'COMPRA' && (
