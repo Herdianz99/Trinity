@@ -936,7 +936,20 @@ export class InvoicesService {
     const totalPaidDivisaUsd = dto.payments
       .filter(p => methodMap.get(p.methodId)?.isDivisa)
       .reduce((s, p) => s + p.amountUsd, 0);
-    const hasOverpayment = totalPaidDivisaUsd > newTotalUsd + 0.01;
+    const totalPaidAllUsd = dto.payments.reduce((s, p) => s + p.amountUsd, 0);
+    const nonDivisaPaidUsdAll = dto.payments
+      .filter(p => !methodMap.get(p.methodId)?.isDivisa)
+      .reduce((s, p) => s + p.amountUsd, 0);
+    // Hay vuelto cuando lo pagado en total supera el total de la factura Y el excedente
+    // proviene de la divisa (los metodos no-divisa por si solos no superan el total). Esto
+    // cubre pagos MIXTOS: p.ej. Cashea/Crediagro financian el resto (no-divisa) y el cliente
+    // paga la inicial en efectivo dando de mas. El sobrepago se mide contra lo que queda por
+    // cobrar (total - lo cubierto por otros metodos), NO contra el total completo; de lo
+    // contrario el excedente de la inicial en divisa nunca se detectaba como vuelto.
+    const hasOverpayment =
+      totalPaidAllUsd > newTotalUsd + 0.01 &&
+      nonDivisaPaidUsdAll <= newTotalUsd + 0.01 &&
+      totalPaidDivisaUsd > 0.01;
 
     // Adjust last payment so USD and Bs sums match invoice totals exactly
     // Skip adjustment when there's an overpayment (change scenario)
@@ -956,7 +969,9 @@ export class InvoicesService {
     let changeUsd = 0;
     let changeBs = 0;
     if (hasOverpayment) {
-      changeUsd = Math.round((totalPaidDivisaUsd - newTotalUsd) * 100) / 100;
+      // El excedente = todo lo pagado - total. Como los no-divisa no superan el total,
+      // este excedente proviene integramente de la divisa (queda topado a totalPaidDivisaUsd).
+      changeUsd = Math.round((totalPaidAllUsd - newTotalUsd) * 100) / 100;
       changeBs = Math.round(changeUsd * invoice.exchangeRate * 100) / 100;
       if (!dto.changeMethodId) {
         throw new BadRequestException('Debe seleccionar un metodo de vuelto cuando el pago en USD excede el total');

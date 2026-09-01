@@ -1,6 +1,45 @@
 ﻿# Trinity ERP — Progreso
 
-## 🗓️ Sesión 2026-08-30 — Corrección método de pago (CxC), ventas del grupo netas, Excel de recibos, config CxC/CxP en traslados socios, 7 áreas de almacén
+## 📋 PROPUESTA — POR HACER (⏳ esperando luz verde del jefe, NO iniciado)
+
+### 🔒 Restringir fuga de precios de venta + stock a la competencia (IP-lock por usuario + bloqueo de exportación masiva)
+
+> **Estado: POR HACER.** Idea acordada con Diego 2026-08-31, pendiente de que el dueño dé luz verde. Sin código aún, sin diseño detallado. Antes de estimar hay que revisar en el repo (a) el guard de login/JWT y cómo llega la IP real (nginx `X-Forwarded-For`), y (b) dónde están los endpoints/botones de exportar catálogo e inventario a Excel/PDF.
+
+**Problema del negocio:** el dueño teme que un empleado molesto (u otra causa) le pase a la competencia la **lista de precios de venta y el stock**. Esos datos **NO se pueden ocultar por rol** porque los vendedores están **obligados a verlos** para trabajar. Hoy los ven sin restricción de lugar/hora.
+
+**Enfoque acordado (2 candados que se complementan):**
+1. **IP-lock por usuario (lo que pidió el jefe).** Marcar ciertos usuarios como "solo en sitio": solo pueden entrar cuando su IP pública coincide con la del local (WiFi del negocio). Fuera del local, acceso denegado. Idea de implementación: lista blanca de IP/CIDR en `CompanyConfig` + flag por `User` (ej. `restrictToOnSiteIp`) + guard en el API que compara la IP real (de `X-Forwarded-For`) contra la lista. **Per-usuario / opt-in** (no bloquear a dueño/contador/admin, que sí necesitan acceso remoto).
+2. **Bloquear la exportación masiva** (Excel/PDF de catálogo/inventario completo) para esos roles. La fuga fácil es el botón de "exportar todo" (roba la lista completa en un clic). Consultar producto por producto en pantalla sigue permitido (lo necesitan); bajar la lista entera de golpe, no.
+
+**Caveats a advertirle al jefe (NO prometer sin esto):**
+- **IP dinámica:** si el internet del local tiene IP dinámica, cambia sola y tumba el acceso a todos → hay que pedir **IP fija** al proveedor, o usar **DDNS** y resolver periódicamente. **Falta confirmar con Diego si el local tiene IP fija.**
+- **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
+- **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
+
+## 🗓️ Sesión 2026-09-01 — POS: vuelto en pagos MIXTOS (Cashea/Crediagro + inicial en divisa)
+
+> ### ⚠️ SIN DESPLEGAR (HEAD previo `715a300`). Solo código (API + Web), **sin migración**. Probado en local contra copia fresca de la BD de la grande. Pendiente que Diego despliegue.
+
+Origen: el jefe reportó que a veces cobran con **Cashea/Crediagro** (financiamiento) + la **inicial en efectivo/divisa** y el cliente paga de más (ej: faltaban $23,50 y dio $25), pero **el vuelto NO aparecía** en el POS.
+
+- **Causa raíz:** el vuelto solo se activaba si la **suma de la divisa superaba el total COMPLETO** de la factura (`totalPaidDivisaUsd > total`). En un pago mixto la divisa cubre solo la inicial, nunca supera el total entero → `hasOverpayment = false` → sin vuelto. Peor: al no detectar sobrepago, el bloque de "ajustar último pago" del backend (`invoices.service.ts`) **reescribía silenciosamente el efectivo a la baja** (los $25 → $23,50), borrando el rastro del sobrepago.
+- **fix(pos): medir el sobrepago contra lo que FALTA por cobrar, no contra el total completo** — `invoices.service.ts` (`pay()`) + `pos/page.tsx` (modal de cobro), cálculo equivalente en ambos lados. Ahora `hasOverpayment` = (total pagado por TODOS los métodos > total factura) **Y** (lo pagado con métodos no-divisa por sí solo ≤ total) **Y** (hay algo en divisa). El monto del vuelto = `totalPagado − total` (queda topado a la divisa porque los no-divisa no superan el total). Así el excedente de la inicial en divisa de un pago mixto sí se detecta como vuelto. El caso 100% efectivo divisa que ya funcionaba queda idéntico (backward-compatible); la base del IGTF sigue topada para no gravar el vuelto.
+- **Ejemplo verificado:** factura $47, Cashea financia $23,50 (no-divisa), cliente da $25 de inicial cuando faltaban $23,50 → antes `$25 > $47` falso, sin vuelto y efectivo guardado como $23,50; ahora pagado $48,50 > $47, Cashea $23,50 ≤ $47 → **vuelto $1,50** (en Bs a la tasa, o el cajero lo da en billetes USD). Typecheck API/Web limpio.
+
+## 🗓️ Sesión 2026-08-31 — Dashboard: ventas REALES netas por factura + fila "Sin vendedor"
+
+> ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `715a300`. Las 6 (`eltrebol/ferre`, `inversiones`, `total`, `totalturen`, `aceros`, `acerosmayor`) en HEAD `715a300`, `/health` **HTTP 200** (`status:ok`, `database:ok`), uptime bajo tras el deploy. **SIN migración** (solo código API + Web). Probado en local contra copia fresca de la BD de la grande (mes de agosto, reconciliación al centavo).
+
+Origen: el jefe reportó que el KPI "Ventas" no cuadraba al sumar "Ventas por Vendedor". Investigando salieron 3 causas (mostrador sin vendedor, estado `RETURNED`, bruto vs neto) y de ahí se reescribió toda la parte de ventas del dashboard para que sea **venta real y reconcilie**.
+
+- **feat(dashboard): ventas reales netas por factura + fila "Sin vendedor"** — commit `715a300` (`dashboard.service.ts` + `gerencial-client.tsx`). Los KPI **Ventas**, **Contado/Crédito**, **Ventas del grupo** y **Fiscal vs No Fiscal** ahora usan la **venta REAL por factura** = monto original − lo devuelto de ESA factura (parcial: cuenta lo no devuelto; total: cuenta 0; piso en 0). Todos se derivan de **un helper único** `getNetInvoiceRows(dateRange)` (fetch facturas `PAID/PARTIAL_RETURN/RETURNED` + `groupBy` de NCV POSTED por `invoiceId`, restadas por factura) y resumidores síncronos (`summarizeSales`/`summarizeGroupSales`/`summarizeByPaymentType`/`summarizeByFiscalType`). Resultado: **Contado + Crédito + Grupo = Fiscal + No Fiscal = KPI Ventas** (reconcilia al centavo). `getGerencial` trae las filas netas **una sola vez por rango** (actual + anterior) en vez de repetir consultas.
+- **Ventaja clave — devolución anclada a la FACTURA, no a la fecha de la nota.** Antes el neto restaba las devoluciones por su `documentDate`, así una NC de una venta vieja descuadraba el periodo actual (la "trampa" que se venía advirtiendo). Ahora la devolución se descuenta de su propia factura, así una devolución de otro mes **no afecta** el mes en curso. (Verif. agosto grande: neto por-factura $527.210,43 vs $526.356,04 del cálculo por fecha-de-nota; la diferencia ~$854 son justamente devoluciones cruzadas de mes).
+- **fila "Sin vendedor" (mostrador) en "Ventas por Vendedor"** — `getSalesBySeller` ahora incluye un bucket de facturas/devoluciones **sin vendedor** como fila al final (siempre visible si hubo actividad), y el `grandTotal`/% incluye el mostrador (los % suman ~100%). Sirve para que el usuario reconcilie a mano: suma de barras (vendedores + Sin vendedor) en bruto = bruto del KPI. (Agosto grande: mostrador 12 fact / $7.698 bruto, casi todo una sola factura grande `VF-26-00001157` $6.770).
+- **"Ventas por Vendedor" queda en BRUTO** con devoluciones aparte (línea naranja), como se decidió en la Sesión 2026-08-26 (ii); NO se pasó a neto. **Top Productos** y **Ventas por Categoría** siguen en bruto sin `RETURNED` (van a nivel de renglón `InvoiceItem`) → NO entran en la reconciliación de arriba.
+- **Nota de proceso:** durante la sesión el KPI pasó por 3 iteraciones antes de la definitiva: (1) neto por fecha-de-nota, (2) incluir `RETURNED` en el bruto, (3) **neto real por factura** (la que quedó). Verificado e2e en local + typecheck API/Web limpio antes de que Diego desplegara.
+
+ Corrección método de pago (CxC), ventas del grupo netas, Excel de recibos, config CxC/CxP en traslados socios, 7 áreas de almacén
 
 > ### ✅ DESPLEGADO y verificado en las 6 empresas — HEAD `b42a68a`. Todas `/health` **HTTP 200** (`status:ok`, `database:ok`) y la migración `20260830170000_partner_transfer_accounts_config` aplicada en las 6 BD (las 3 columnas `partnerTransfer*`, `ADD COLUMN IF NOT EXISTS`; default `true` = sin cambio de comportamiento para aceros/acerosmayor). Probado antes en local con copia fresca de la BD de la grande (dump plano pg16→pg15 sobre `grande_db`).
 

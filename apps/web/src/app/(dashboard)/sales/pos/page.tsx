@@ -1082,12 +1082,22 @@ export default function POSPage() {
   const totalPaidBs = payments.reduce((s, p) => s + p.amountBs, 0);
   const remainingBs = Math.round((grandTotalBs - totalPaidBs) * 100) / 100;
 
-  // Change (vuelto) calculation: only when USD payments exceed total
+  // Change (vuelto) calculation: hay vuelto cuando lo pagado supera el total Y el excedente
+  // viene de la divisa. Cubre pagos MIXTOS (Cashea/Crediagro financian el resto + el cliente
+  // paga la inicial en efectivo y da de mas): el sobrepago se mide contra lo que falta por
+  // cobrar (total - lo cubierto por otros metodos), no contra el total completo.
   const totalPaidDivisaUsd = payments
     .filter(p => p.isDivisa)
     .reduce((s, p) => s + p.amountUsd, 0);
-  const changeUsd = totalPaidDivisaUsd > grandTotalUsd + 0.01
-    ? Math.round((totalPaidDivisaUsd - grandTotalUsd) * 100) / 100
+  const nonDivisaPaidUsdForChange = payments
+    .filter(p => !p.isDivisa)
+    .reduce((s, p) => s + Number(p.amountUsd || 0), 0);
+  const hasOverpay =
+    totalPaidUsd > grandTotalUsd + 0.01 &&
+    nonDivisaPaidUsdForChange <= grandTotalUsd + 0.01 &&
+    totalPaidDivisaUsd > 0.01;
+  const changeUsd = hasOverpay
+    ? Math.round((totalPaidUsd - grandTotalUsd) * 100) / 100
     : 0;
   const changeBsCalc = Math.round(changeUsd * exchangeRate * 100) / 100;
   const hasChange = changeUsd > 0.01;
