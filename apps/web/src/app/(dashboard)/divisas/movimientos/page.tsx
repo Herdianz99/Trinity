@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Pencil, Trash2, X, ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle, RefreshCw, Loader2, Coins } from 'lucide-react';
 import MoneyInput from '@/components/money-input';
 
 interface Catalog {
@@ -13,6 +13,7 @@ interface Catalog {
 interface Movement {
   id: string;
   date: string;
+  kind: string;
   type: string;
   amountUsd: number;
   amountBs: number | null;
@@ -47,6 +48,7 @@ const todayStr = () => {
 const emptyForm = () => ({
   id: '',
   date: todayStr(),
+  kind: 'MOVIMIENTO',
   companyId: '',
   bankId: '',
   originBankId: '',
@@ -76,6 +78,7 @@ function MovimientosInner() {
   const [fCompany, setFCompany] = useState(search.get('companyId') || '');
   const [fBank, setFBank] = useState(search.get('bankId') || '');
   const [fType, setFType] = useState('');
+  const [fKind, setFKind] = useState('');
   const [fFrom, setFFrom] = useState('');
   const [fTo, setFTo] = useState('');
 
@@ -107,6 +110,7 @@ function MovimientosInner() {
       if (fCompany) p.set('companyId', fCompany);
       if (fBank) p.set('bankId', fBank);
       if (fType) p.set('type', fType);
+      if (fKind) p.set('kind', fKind);
       if (fFrom) p.set('from', fFrom);
       if (fTo) p.set('to', fTo);
       const res = await fetch(`/api/proxy/divisas/movements?${p.toString()}`);
@@ -116,7 +120,7 @@ function MovimientosInner() {
     } finally {
       setLoading(false);
     }
-  }, [fCompany, fBank, fType, fFrom, fTo]);
+  }, [fCompany, fBank, fType, fKind, fFrom, fTo]);
 
   useEffect(() => {
     loadCatalogs();
@@ -124,16 +128,6 @@ function MovimientosInner() {
   useEffect(() => {
     loadMovements();
   }, [loadMovements]);
-
-  // Deep-link ?new=1: el modal abre en el montaje; autocompletar la tasa de hoy.
-  useEffect(() => {
-    if (search.get('new') === '1') {
-      fetchRateFor(todayStr()).then((r) => {
-        if (r) setForm((f) => ({ ...f, exchangeRate: f.exchangeRate || r }));
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Trae la tasa Bs/USD del día indicado (4 decimales) para autocompletar el movimiento.
   const fetchRateFor = async (dateStr: string): Promise<string> => {
@@ -149,8 +143,14 @@ function MovimientosInner() {
     }
   };
 
-  const openNew = async () => {
-    const base = emptyForm();
+  // Movimiento simple: transferencia de USD entre empresa/banco (sin Bs/tasa/comisión).
+  const openNew = () => {
+    setForm({ ...emptyForm(), kind: 'MOVIMIENTO' });
+    setModalOpen(true);
+  };
+  // Compra de divisas: incluye tasa (auto por fecha), comisión y el total Bs que descuenta.
+  const openNewCompra = async () => {
+    const base = { ...emptyForm(), kind: 'COMPRA' };
     setForm(base);
     setModalOpen(true);
     const rate = await fetchRateFor(base.date);
@@ -160,6 +160,7 @@ function MovimientosInner() {
     setForm({
       id: m.id,
       date: m.date.slice(0, 10),
+      kind: m.kind || 'MOVIMIENTO',
       companyId: m.company.id,
       bankId: m.bank.id,
       originBankId: m.originBank?.id || '',
@@ -175,7 +176,7 @@ function MovimientosInner() {
       status: m.status,
     });
     setModalOpen(true);
-    if (m.exchangeRate == null) {
+    if (m.kind === 'COMPRA' && m.exchangeRate == null) {
       const rate = await fetchRateFor(m.date.slice(0, 10));
       if (rate) setForm((f) => (f.id === m.id ? { ...f, exchangeRate: rate } : f));
     }
@@ -196,16 +197,18 @@ function MovimientosInner() {
     }
     setSaving(true);
     try {
+      const isCompra = form.kind === 'COMPRA';
       const payload = {
         date: form.date,
+        kind: form.kind,
         companyId: form.companyId,
         bankId: form.bankId,
-        originBankId: form.originBankId || undefined,
+        originBankId: isCompra ? form.originBankId || undefined : undefined,
         type: form.type,
         amountUsd: Number(form.amountUsd),
-        amountBs: totalBs > 0 ? totalBs : form.amountBs !== '' ? Number(form.amountBs) : undefined,
-        exchangeRate: rateNum > 0 ? rateNum : undefined,
-        commissionPct: form.commissionPct !== '' ? commNum : undefined,
+        amountBs: isCompra ? (totalBs > 0 ? totalBs : form.amountBs !== '' ? Number(form.amountBs) : undefined) : undefined,
+        exchangeRate: isCompra && rateNum > 0 ? rateNum : undefined,
+        commissionPct: isCompra && form.commissionPct !== '' ? commNum : undefined,
         modalidad: form.modalidad || undefined,
         counterparty: form.counterparty.trim() || undefined,
         reference: form.reference.trim() || undefined,
@@ -302,6 +305,12 @@ function MovimientosInner() {
           >
             <Plus size={16} /> Registrar movimiento
           </button>
+          <button
+            onClick={openNewCompra}
+            className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Coins size={16} /> Compra de divisas
+          </button>
         </div>
       </div>
 
@@ -351,6 +360,15 @@ function MovimientosInner() {
           <option value="ENTRADA">Solo entradas</option>
           <option value="SALIDA">Solo salidas</option>
         </select>
+        <select
+          value={fKind}
+          onChange={(e) => setFKind(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100 text-sm"
+        >
+          <option value="">Movimientos y compras</option>
+          <option value="MOVIMIENTO">Solo movimientos</option>
+          <option value="COMPRA">Solo compras</option>
+        </select>
         <input
           type="date"
           value={fFrom}
@@ -364,12 +382,13 @@ function MovimientosInner() {
           onChange={(e) => setFTo(e.target.value)}
           className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-sm"
         />
-        {(fCompany || fBank || fType || fFrom || fTo) && (
+        {(fCompany || fBank || fType || fKind || fFrom || fTo) && (
           <button
             onClick={() => {
               setFCompany('');
               setFBank('');
               setFType('');
+              setFKind('');
               setFFrom('');
               setFTo('');
             }}
@@ -439,7 +458,10 @@ function MovimientosInner() {
                       <td className="px-3 py-3 text-sm text-slate-200">{m.company.name}</td>
                       <td className="px-3 py-3 text-sm text-slate-200">{m.bank.name}</td>
                       <td className="px-3 py-3 text-xs text-slate-400 max-w-[220px]">
-                        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          {m.kind === 'COMPRA' && (
+                            <span className="uppercase text-[10px] tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/90">Compra</span>
+                          )}
                           {m.modalidad && (
                             <span className="uppercase text-[10px] tracking-wide text-slate-500">{m.modalidad}</span>
                           )}
@@ -517,7 +539,9 @@ function MovimientosInner() {
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/60 sticky top-0 bg-slate-800">
               <h2 className="text-lg font-semibold text-slate-100">
-                {form.id ? 'Editar movimiento' : 'Registrar movimiento'}
+                {form.kind === 'COMPRA'
+                  ? form.id ? 'Editar compra de divisas' : 'Compra de divisas'
+                  : form.id ? 'Editar movimiento' : 'Registrar movimiento'}
               </h2>
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-200">
                 <X size={20} />
@@ -557,8 +581,10 @@ function MovimientosInner() {
                     onChange={async (e) => {
                       const date = e.target.value;
                       setForm((f) => ({ ...f, date }));
-                      const rate = await fetchRateFor(date);
-                      if (rate) setForm((f) => ({ ...f, exchangeRate: rate }));
+                      if (form.kind === 'COMPRA') {
+                        const rate = await fetchRateFor(date);
+                        if (rate) setForm((f) => ({ ...f, exchangeRate: rate }));
+                      }
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
                   />
@@ -608,6 +634,8 @@ function MovimientosInner() {
                 </div>
               </div>
 
+              {form.kind === 'COMPRA' && (
+                <>
               {/* Bs: banco de origen + tasa + comisión → total que descuenta del saldo Bs */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -667,6 +695,8 @@ function MovimientosInner() {
                   </div>
                 </div>
               </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
