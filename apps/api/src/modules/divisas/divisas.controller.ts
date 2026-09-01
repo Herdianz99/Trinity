@@ -9,6 +9,8 @@ import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { CreateBsLoadDto } from './dto/create-bs-load.dto';
 import { QueryMovementsDto } from './dto/query-movements.dto';
+import { CreateBsMovementDto } from './dto/create-bs-movement.dto';
+import { QueryBsMovementsDto } from './dto/query-bs-movements.dto';
 
 @ApiTags('divisas')
 @ApiBearerAuth()
@@ -107,5 +109,26 @@ export class DivisasController {
   @Delete('movements/:id')
   deleteMovement(@Param('id') id: string) {
     return this.service.deleteMovement(id);
+  }
+
+  // ── Movimientos Bs ──
+  @Get('bs-movements')
+  findBsMovements(@Query() query: QueryBsMovementsDto) {
+    return this.service.findBsMovements(query);
+  }
+
+  @Post('bs-movements')
+  createBsMovement(@Body() dto: CreateBsMovementDto, @CurrentUser() user: { id: string }) {
+    return this.service.createBsMovement(dto, user.id);
+  }
+
+  @Patch('bs-movements/:id')
+  updateBsMovement(@Param('id') id: string, @Body() dto: Partial<CreateBsMovementDto>) {
+    return this.service.updateBsMovement(id, dto);
+  }
+
+  @Delete('bs-movements/:id')
+  deleteBsMovement(@Param('id') id: string) {
+    return this.service.deleteBsMovement(id);
   }
 }
