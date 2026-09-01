@@ -363,6 +363,7 @@ model User {
   incidentsCreated    Incident[]          @relation("IncidentCreator")
   purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
   treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
+  treasuryBsMovements TreasuryBsMovement[] @relation("TreasuryBsMovementCreator")
   audits5s            Audit5S[]           @relation("Audit5SCreator")
   damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
   damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
@@ -2566,6 +2567,7 @@ model TreasuryCompany {
   isActive  Boolean            @default(true)
   movements TreasuryMovement[]
   bsLoads   TreasuryBsLoad[]
+  bsMovements TreasuryBsMovement[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 }
@@ -2630,5 +2632,28 @@ model TreasuryMovement {
 
   @@index([companyId, date])
   @@index([bankId, date])
+  @@index([date])
+}
+
+// Movimiento en Bs de una empresa del modulo de divisas (ledger propio, entradas/salidas).
+// El saldo Bs por empresa = estos movimientos + el amountBs de los movimientos de divisas
+// (signo corregido). Ver spec: docs/superpowers/specs/2026-09-01-movimientos-bs-empresa-design.md
+model TreasuryBsMovement {
+  id           String          @id @default(cuid())
+  date         DateTime                              // fecha del movimiento
+  companyId    String
+  company      TreasuryCompany @relation(fields: [companyId], references: [id])
+  type         String                                // 'ENTRADA' | 'SALIDA'
+  amountBs     Float                                 // monto en Bs
+  counterparty String?                               // de quien / a quien
+  reference    String?                               // referencia libre
+  description  String?                               // observaciones
+  status       String          @default("CONFIRMADO") // 'CONFIRMADO' | 'PENDIENTE'
+  createdById  String
+  createdBy    User            @relation("TreasuryBsMovementCreator", fields: [createdById], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([companyId, date])
   @@index([date])
 }
