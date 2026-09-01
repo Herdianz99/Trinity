@@ -4,6 +4,8 @@ import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { CreateBsLoadDto } from './dto/create-bs-load.dto';
 import { QueryMovementsDto } from './dto/query-movements.dto';
+import { CreateBsMovementDto } from './dto/create-bs-movement.dto';
+import { QueryBsMovementsDto } from './dto/query-bs-movements.dto';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const signed = (type: string, amt: number) => (type === 'ENTRADA' ? amt : -amt);
@@ -138,33 +140,41 @@ export class DivisasService {
   // USD: "Disponible" = movimientos CONFIRMADOS; "Tránsito" = PENDIENTES (no suman al
   // disponible). Bs: saldo por empresa = cargas − Bs gastados en movimientos.
   async summary() {
-    const [companies, banks, movements, bsLoadsAgg] = await Promise.all([
+    const [companies, banks, movements, bsMovements] = await Promise.all([
       this.prisma.treasuryCompany.findMany({ orderBy: { name: 'asc' } }),
       this.prisma.treasuryBank.findMany({ orderBy: { name: 'asc' } }),
       this.prisma.treasuryMovement.findMany({
         select: { companyId: true, bankId: true, type: true, amountUsd: true, amountBs: true, status: true },
       }),
-      this.prisma.treasuryBsLoad.groupBy({ by: ['companyId'], _sum: { amountBs: true } }),
+      this.prisma.treasuryBsMovement.findMany({
+        select: { companyId: true, type: true, amountBs: true, status: true },
+      }),
     ]);
 
     type Agg = { disp: number; trans: number };
     const byCompany = new Map<string, Agg>();
     const byBank = new Map<string, Agg>();
-    const bsSpentByCompany = new Map<string, number>();
+    const bsByCompany = new Map<string, number>(); // saldo Bs disponible (solo CONFIRMADO)
     const bump = (m: Map<string, Agg>, key: string, status: string, delta: number) => {
       const e = m.get(key) || { disp: 0, trans: 0 };
       if (status === 'PENDIENTE') e.trans += delta;
       else e.disp += delta;
       m.set(key, e);
     };
+    const bumpBs = (companyId: string, delta: number) =>
+      bsByCompany.set(companyId, (bsByCompany.get(companyId) || 0) + delta);
+
     for (const mv of movements) {
       const delta = signed(mv.type, mv.amountUsd);
       bump(byCompany, mv.companyId, mv.status, delta);
       bump(byBank, mv.bankId, mv.status, delta);
-      if (mv.amountBs) bsSpentByCompany.set(mv.companyId, (bsSpentByCompany.get(mv.companyId) || 0) + mv.amountBs);
+      // Bs: comprar divisas (ENTRADA) GASTA Bs; vender (SALIDA) RECIBE Bs. Solo CONFIRMADO.
+      // signed(ENTRADA)=+amt => queremos -amt (salida); signed(SALIDA)=-amt => queremos +amt.
+      if (mv.amountBs && mv.status !== 'PENDIENTE') bumpBs(mv.companyId, -signed(mv.type, mv.amountBs));
     }
-    const bsLoadedByCompany = new Map<string, number>();
-    for (const g of bsLoadsAgg) bsLoadedByCompany.set(g.companyId, g._sum.amountBs || 0);
+    for (const bm of bsMovements) {
+      if (bm.status !== 'PENDIENTE') bumpBs(bm.companyId, signed(bm.type, bm.amountBs));
+    }
 
     const mapRow = (id: string, name: string, isActive: boolean, agg?: Agg) => {
       const disp = agg?.disp || 0;
@@ -181,7 +191,7 @@ export class DivisasService {
 
     const companyRows = companies.map((c) => {
       const row = mapRow(c.id, c.name, c.isActive, byCompany.get(c.id));
-      const bsBalance = round2((bsLoadedByCompany.get(c.id) || 0) - (bsSpentByCompany.get(c.id) || 0));
+      const bsBalance = round2(bsByCompany.get(c.id) || 0);
       return { ...row, bsBalance };
     });
     const bankRows = banks.map((b) => mapRow(b.id, b.name, b.isActive, byBank.get(b.id)));
@@ -304,6 +314,127 @@ export class DivisasService {
     const existing = await this.prisma.treasuryMovement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Movimiento no encontrado');
     await this.prisma.treasuryMovement.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── Movimientos Bs (ledger propio + fusión con Bs de divisas) ────────────
+  private readonly BS_MOVEMENT_INCLUDE = {
+    company: { select: { id: true, name: true } },
+    createdBy: { select: { name: true } },
+  };
+
+  /**
+   * Ledger Bs por empresa: fusiona los TreasuryBsMovement propios (source 'BS',
+   * editables) con el amountBs de los TreasuryMovement de divisas (source 'DIVISA',
+   * solo lectura, con signo corregido: divisa ENTRADA = salida de Bs, divisa SALIDA
+   * = entrada de Bs). Devuelve saldo corriente cuando se filtra por UNA empresa sin tipo.
+   */
+  async findBsMovements(q: QueryBsMovementsDto) {
+    const from = q.from ? new Date(q.from) : undefined;
+    const to = q.to ? new Date(q.to) : undefined;
+    const withRunning = !!q.companyId && !q.type;
+
+    const bsWhere: any = {};
+    if (q.companyId) bsWhere.companyId = q.companyId;
+    const divWhere: any = { amountBs: { not: null } };
+    if (q.companyId) divWhere.companyId = q.companyId;
+
+    const [bsRows, divRows] = await Promise.all([
+      this.prisma.treasuryBsMovement.findMany({ where: bsWhere, include: this.BS_MOVEMENT_INCLUDE }),
+      this.prisma.treasuryMovement.findMany({ where: divWhere, include: this.BS_MOVEMENT_INCLUDE }),
+    ]);
+
+    const normBs = bsRows.map((m) => ({
+      id: m.id,
+      date: m.date,
+      type: m.type,
+      amountBs: m.amountBs,
+      status: m.status,
+      counterparty: m.counterparty,
+      reference: m.reference,
+      description: m.description,
+      company: (m as any).company,
+      createdBy: (m as any).createdBy,
+      source: 'BS' as const,
+      refMovementId: null as string | null,
+      createdAt: m.createdAt,
+    }));
+    const normDiv = divRows.map((m) => ({
+      id: m.id,
+      date: m.date,
+      // divisa ENTRADA (compra USD, paga Bs) => SALIDA de Bs; divisa SALIDA => ENTRADA de Bs
+      type: m.type === 'ENTRADA' ? 'SALIDA' : 'ENTRADA',
+      amountBs: m.amountBs as number,
+      status: m.status,
+      counterparty: m.counterparty,
+      reference: m.reference,
+      description: m.description,
+      company: (m as any).company,
+      createdBy: (m as any).createdBy,
+      source: 'DIVISA' as const,
+      refMovementId: m.id,
+      createdAt: m.createdAt,
+    }));
+
+    let all = [...normBs, ...normDiv];
+    if (q.type) all = all.filter((r) => r.type === q.type);
+    all.sort(
+      (a, b) => a.date.getTime() - b.date.getTime() || a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+
+    if (withRunning) {
+      let bal = 0;
+      all = all.map((r) => {
+        if (r.status !== 'PENDIENTE') bal += signed(r.type, r.amountBs);
+        return { ...r, runningBalanceBs: round2(bal) } as any;
+      });
+    }
+
+    let rows = all;
+    if (from) rows = rows.filter((r) => r.date >= from);
+    if (to) rows = rows.filter((r) => r.date <= to);
+    rows = rows.slice().reverse(); // más recientes primero
+    return { movements: rows, hasRunningBalance: withRunning };
+  }
+
+  async createBsMovement(dto: CreateBsMovementDto, userId: string) {
+    const company = await this.prisma.treasuryCompany.findUnique({ where: { id: dto.companyId } });
+    if (!company) throw new BadRequestException('Empresa no válida');
+    return this.prisma.treasuryBsMovement.create({
+      data: {
+        date: new Date(dto.date),
+        companyId: dto.companyId,
+        type: dto.type,
+        amountBs: round2(dto.amountBs),
+        counterparty: dto.counterparty?.trim() || null,
+        reference: dto.reference?.trim() || null,
+        description: dto.description?.trim() || null,
+        status: dto.status || 'CONFIRMADO',
+        createdById: userId,
+      },
+      include: this.BS_MOVEMENT_INCLUDE,
+    });
+  }
+
+  async updateBsMovement(id: string, dto: Partial<CreateBsMovementDto>) {
+    const existing = await this.prisma.treasuryBsMovement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Movimiento Bs no encontrado');
+    const data: any = {};
+    if (dto.date !== undefined) data.date = new Date(dto.date);
+    if (dto.companyId !== undefined) data.companyId = dto.companyId;
+    if (dto.type !== undefined) data.type = dto.type;
+    if (dto.amountBs !== undefined) data.amountBs = round2(dto.amountBs);
+    if (dto.counterparty !== undefined) data.counterparty = dto.counterparty?.trim() || null;
+    if (dto.reference !== undefined) data.reference = dto.reference?.trim() || null;
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.status !== undefined) data.status = dto.status;
+    return this.prisma.treasuryBsMovement.update({ where: { id }, data, include: this.BS_MOVEMENT_INCLUDE });
+  }
+
+  async deleteBsMovement(id: string) {
+    const existing = await this.prisma.treasuryBsMovement.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Movimiento Bs no encontrado');
+    await this.prisma.treasuryBsMovement.delete({ where: { id } });
     return { ok: true };
   }
 }
