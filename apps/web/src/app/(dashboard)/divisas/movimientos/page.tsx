@@ -16,6 +16,8 @@ interface Movement {
   type: string;
   amountUsd: number;
   amountBs: number | null;
+  exchangeRate: number | null;
+  commissionPct: number | null;
   modalidad: string | null;
   counterparty: string | null;
   reference: string | null;
@@ -30,6 +32,9 @@ interface Movement {
 
 const fmt = (n: number) =>
   (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt4 = (n: number) =>
+  (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const DEFAULT_COMMISSION_PCT = '0.5';
 const fmtDate = (iso: string) => {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
@@ -48,6 +53,8 @@ const emptyForm = () => ({
   type: 'ENTRADA',
   amountUsd: '',
   amountBs: '',
+  exchangeRate: '',
+  commissionPct: DEFAULT_COMMISSION_PCT,
   modalidad: '',
   counterparty: '',
   reference: '',
@@ -118,11 +125,38 @@ function MovimientosInner() {
     loadMovements();
   }, [loadMovements]);
 
-  const openNew = () => {
-    setForm(emptyForm());
-    setModalOpen(true);
+  // Deep-link ?new=1: el modal abre en el montaje; autocompletar la tasa de hoy.
+  useEffect(() => {
+    if (search.get('new') === '1') {
+      fetchRateFor(todayStr()).then((r) => {
+        if (r) setForm((f) => ({ ...f, exchangeRate: f.exchangeRate || r }));
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Trae la tasa Bs/USD del día indicado (4 decimales) para autocompletar el movimiento.
+  const fetchRateFor = async (dateStr: string): Promise<string> => {
+    try {
+      const res = await fetch(`/api/proxy/exchange-rate/by-date?date=${dateStr}`);
+      if (!res.ok) return '';
+      const txt = await res.text();
+      if (!txt) return '';
+      const data = JSON.parse(txt);
+      return data?.rate != null ? String(data.rate) : '';
+    } catch {
+      return '';
+    }
   };
-  const openEdit = (m: Movement) => {
+
+  const openNew = async () => {
+    const base = emptyForm();
+    setForm(base);
+    setModalOpen(true);
+    const rate = await fetchRateFor(base.date);
+    if (rate) setForm((f) => (f.id === '' ? { ...f, exchangeRate: rate } : f));
+  };
+  const openEdit = async (m: Movement) => {
     setForm({
       id: m.id,
       date: m.date.slice(0, 10),
@@ -132,6 +166,8 @@ function MovimientosInner() {
       type: m.type,
       amountUsd: String(m.amountUsd),
       amountBs: m.amountBs != null ? String(m.amountBs) : '',
+      exchangeRate: m.exchangeRate != null ? String(m.exchangeRate) : '',
+      commissionPct: m.commissionPct != null ? String(m.commissionPct) : DEFAULT_COMMISSION_PCT,
       modalidad: m.modalidad || '',
       counterparty: m.counterparty || '',
       reference: m.reference || '',
@@ -139,7 +175,19 @@ function MovimientosInner() {
       status: m.status,
     });
     setModalOpen(true);
+    if (m.exchangeRate == null) {
+      const rate = await fetchRateFor(m.date.slice(0, 10));
+      if (rate) setForm((f) => (f.id === m.id ? { ...f, exchangeRate: rate } : f));
+    }
   };
+
+  // Desglose Bs de la compra/venta de divisas: equivalente + comisión = total (lo que descuenta).
+  const usdNum = Number(form.amountUsd) || 0;
+  const rateNum = Number(form.exchangeRate) || 0;
+  const commNum = Number(form.commissionPct) || 0;
+  const baseBs = Math.round(usdNum * rateNum * 100) / 100;
+  const commissionBs = Math.round(((baseBs * commNum) / 100) * 100) / 100;
+  const totalBs = Math.round((baseBs + commissionBs) * 100) / 100;
 
   const save = async () => {
     if (!form.companyId || !form.bankId || !form.amountUsd || Number(form.amountUsd) <= 0) {
@@ -155,7 +203,9 @@ function MovimientosInner() {
         originBankId: form.originBankId || undefined,
         type: form.type,
         amountUsd: Number(form.amountUsd),
-        amountBs: form.amountBs !== '' ? Number(form.amountBs) : undefined,
+        amountBs: totalBs > 0 ? totalBs : form.amountBs !== '' ? Number(form.amountBs) : undefined,
+        exchangeRate: rateNum > 0 ? rateNum : undefined,
+        commissionPct: form.commissionPct !== '' ? commNum : undefined,
         modalidad: form.modalidad || undefined,
         counterparty: form.counterparty.trim() || undefined,
         reference: form.reference.trim() || undefined,
@@ -399,6 +449,8 @@ function MovimientosInner() {
                         {(m.amountBs != null || m.originBank) && (
                           <div className="text-[11px] text-amber-300/80 mt-0.5">
                             {m.amountBs != null && <span>Bs {fmt(m.amountBs)}</span>}
+                            {m.exchangeRate != null && <span className="text-slate-500"> · tasa {fmt4(m.exchangeRate)}</span>}
+                            {m.commissionPct != null && <span className="text-slate-500"> · com {fmt(m.commissionPct)}%</span>}
                             {m.originBank && <span className="text-slate-500"> · {m.originBank.name}</span>}
                           </div>
                         )}
@@ -502,7 +554,12 @@ function MovimientosInner() {
                   <input
                     type="date"
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={async (e) => {
+                      const date = e.target.value;
+                      setForm((f) => ({ ...f, date }));
+                      const rate = await fetchRateFor(date);
+                      if (rate) setForm((f) => ({ ...f, exchangeRate: rate }));
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
                   />
                 </div>
@@ -551,7 +608,7 @@ function MovimientosInner() {
                 </div>
               </div>
 
-              {/* Bs: banco de origen + monto (descuenta del saldo Bs de la empresa) */}
+              {/* Bs: banco de origen + tasa + comisión → total que descuenta del saldo Bs */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Banco de origen (Bs)</label>
@@ -569,14 +626,45 @@ function MovimientosInner() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Monto Bs (descuenta de la empresa)</label>
+                  <label className="block text-xs text-slate-400 mb-1">Tasa del día (Bs/USD)</label>
                   <MoneyInput
                     thousands
-                    value={form.amountBs === '' ? 0 : Number(form.amountBs)}
-                    onValueChange={(n) => setForm({ ...form, amountBs: n ? String(n) : '' })}
-                    placeholder="0,00"
+                    value={form.exchangeRate === '' ? 0 : Number(form.exchangeRate)}
+                    onValueChange={(n) => setForm({ ...form, exchangeRate: n ? String(n) : '' })}
+                    placeholder="0,0000"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
                   />
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Auto por la fecha; editable{rateNum > 0 ? ` · ${fmt4(rateNum)}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Comisión %</label>
+                  <MoneyInput
+                    thousands
+                    value={form.commissionPct === '' ? 0 : Number(form.commissionPct)}
+                    onValueChange={(n) => setForm({ ...form, commissionPct: String(n) })}
+                    placeholder="0,5"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">Por defecto 0,5%; editable.</p>
+                </div>
+                <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-2 self-end">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Equivalente Bs</span>
+                    <span className="font-mono tabular-nums text-slate-300">Bs {fmt(baseBs)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Comisión ({form.commissionPct || '0'}%)</span>
+                    <span className="font-mono tabular-nums text-slate-300">Bs {fmt(commissionBs)}</span>
+                  </div>
+                  <div className="mt-1 pt-1 border-t border-slate-700/40 flex items-center justify-between text-xs">
+                    <span className="text-sky-300 font-medium">Total Bs (descuenta)</span>
+                    <span className="font-mono tabular-nums font-bold text-sky-300">Bs {fmt(totalBs)}</span>
+                  </div>
                 </div>
               </div>
 
