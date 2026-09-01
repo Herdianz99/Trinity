@@ -280,6 +280,8 @@ export class DivisasService {
         type: dto.type,
         amountUsd: round2(dto.amountUsd),
         amountBs: dto.amountBs != null ? round2(dto.amountBs) : null,
+        exchangeRate: dto.exchangeRate != null ? Math.round(dto.exchangeRate * 10000) / 10000 : null,
+        commissionPct: dto.commissionPct != null ? dto.commissionPct : null,
         modalidad: dto.modalidad || null,
         counterparty: dto.counterparty?.trim() || null,
         reference: dto.reference?.trim() || null,
@@ -302,6 +304,9 @@ export class DivisasService {
     if (dto.type !== undefined) data.type = dto.type;
     if (dto.amountUsd !== undefined) data.amountUsd = round2(dto.amountUsd);
     if (dto.amountBs !== undefined) data.amountBs = dto.amountBs != null ? round2(dto.amountBs) : null;
+    if (dto.exchangeRate !== undefined)
+      data.exchangeRate = dto.exchangeRate != null ? Math.round(dto.exchangeRate * 10000) / 10000 : null;
+    if (dto.commissionPct !== undefined) data.commissionPct = dto.commissionPct != null ? dto.commissionPct : null;
     if (dto.modalidad !== undefined) data.modalidad = dto.modalidad || null;
     if (dto.counterparty !== undefined) data.counterparty = dto.counterparty?.trim() || null;
     if (dto.reference !== undefined) data.reference = dto.reference?.trim() || null;

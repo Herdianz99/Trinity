@@ -2619,7 +2619,9 @@ model TreasuryMovement {
   originBank   TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
   type         String                                // 'ENTRADA' | 'SALIDA'
   amountUsd    Float                                 // monto en USD
-  amountBs     Float?                                // Bs gastados (descuenta del saldo Bs de la empresa)
+  amountBs     Float?                                // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa
+  exchangeRate Float?                                // tasa Bs/USD usada (4 decimales); auto de la tasa del dia, editable
+  commissionPct Float?                               // % de comision (0.5 por defecto); auto, editable
   modalidad    String?                               // 'ELECTRONICO' | 'EFECTIVO'
   counterparty String?                               // de quien / a quien (ENVIADO A)
   reference    String?                               // referencia libre

@@ -25,10 +25,20 @@ export class CreateMovementDto {
   @IsPositive()
   amountUsd: number;
 
-  // Bs gastados (descuenta del saldo Bs de la empresa). Opcional.
+  // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa. Opcional.
   @IsOptional()
   @IsNumber()
   amountBs?: number;
+
+  // Tasa Bs/USD usada (4 decimales). Auto de la tasa del dia, editable. Opcional.
+  @IsOptional()
+  @IsNumber()
+  exchangeRate?: number;
+
+  // % de comision (0.5 por defecto). Auto, editable. Opcional.
+  @IsOptional()
+  @IsNumber()
+  commissionPct?: number;
 
   // Banco de origen de los Bs (maestro TreasuryOriginBank). Opcional.
   @IsOptional()
