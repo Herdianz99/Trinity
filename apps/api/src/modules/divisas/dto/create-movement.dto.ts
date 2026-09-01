@@ -15,8 +15,10 @@ export class CreateMovementDto {
   @IsString()
   companyId: string;
 
+  // (obsoleto) dimension banco retirada del modulo; se acepta opcional por compatibilidad.
+  @IsOptional()
   @IsString()
-  bankId: string;
+  bankId?: string;
 
   // 'MOVIMIENTO' (transferencia simple de USD) | 'COMPRA' (compra de divisas con Bs/tasa/comision).
   @IsOptional()

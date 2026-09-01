@@ -6,10 +6,6 @@ export class QueryMovementsDto {
   companyId?: string;
 
   @IsOptional()
-  @IsString()
-  bankId?: string;
-
-  @IsOptional()
   @IsIn(['ENTRADA', 'SALIDA'])
   type?: string;
 

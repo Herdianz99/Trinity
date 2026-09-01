@@ -12,7 +12,6 @@ const signed = (type: string, amt: number) => (type === 'ENTRADA' ? amt : -amt);
 
 const MOVEMENT_INCLUDE = {
   company: { select: { id: true, name: true } },
-  bank: { select: { id: true, name: true } },
   originBank: { select: { id: true, name: true } },
   createdBy: { select: { name: true } },
 };
@@ -140,11 +139,10 @@ export class DivisasService {
   // USD: "Disponible" = movimientos CONFIRMADOS; "Tránsito" = PENDIENTES (no suman al
   // disponible). Bs: saldo por empresa = cargas − Bs gastados en movimientos.
   async summary() {
-    const [companies, banks, movements, bsMovements] = await Promise.all([
+    const [companies, movements, bsMovements] = await Promise.all([
       this.prisma.treasuryCompany.findMany({ orderBy: { name: 'asc' } }),
-      this.prisma.treasuryBank.findMany({ orderBy: { name: 'asc' } }),
       this.prisma.treasuryMovement.findMany({
-        select: { companyId: true, bankId: true, type: true, amountUsd: true, amountBs: true, status: true },
+        select: { companyId: true, type: true, amountUsd: true, amountBs: true, status: true },
       }),
       this.prisma.treasuryBsMovement.findMany({
         select: { companyId: true, type: true, amountBs: true, status: true },
@@ -153,7 +151,6 @@ export class DivisasService {
 
     type Agg = { disp: number; trans: number };
     const byCompany = new Map<string, Agg>();
-    const byBank = new Map<string, Agg>();
     const bsByCompany = new Map<string, number>(); // saldo Bs disponible (solo CONFIRMADO)
     const bump = (m: Map<string, Agg>, key: string, status: string, delta: number) => {
       const e = m.get(key) || { disp: 0, trans: 0 };
@@ -167,7 +164,6 @@ export class DivisasService {
     for (const mv of movements) {
       const delta = signed(mv.type, mv.amountUsd);
       bump(byCompany, mv.companyId, mv.status, delta);
-      bump(byBank, mv.bankId, mv.status, delta);
       // Bs: comprar divisas (ENTRADA) GASTA Bs; vender (SALIDA) RECIBE Bs. Solo CONFIRMADO.
       // signed(ENTRADA)=+amt => queremos -amt (salida); signed(SALIDA)=-amt => queremos +amt.
       if (mv.amountBs && mv.status !== 'PENDIENTE') bumpBs(mv.companyId, -signed(mv.type, mv.amountBs));
@@ -194,7 +190,6 @@ export class DivisasService {
       const bsBalance = round2(bsByCompany.get(c.id) || 0);
       return { ...row, bsBalance };
     });
-    const bankRows = banks.map((b) => mapRow(b.id, b.name, b.isActive, byBank.get(b.id)));
 
     const totalDisponibleUsd = round2(companyRows.reduce((s, r) => s + r.disponibleUsd, 0));
     const totalTransitoUsd = round2(companyRows.reduce((s, r) => s + r.transitoUsd, 0));
@@ -202,7 +197,6 @@ export class DivisasService {
 
     return {
       companies: companyRows,
-      banks: bankRows,
       totalDisponibleUsd,
       totalTransitoUsd,
       totalBs,
@@ -220,14 +214,12 @@ export class DivisasService {
   async findMovements(q: QueryMovementsDto) {
     const from = q.from ? new Date(q.from) : undefined;
     const to = q.to ? new Date(q.to) : undefined;
-    const dimCompany = !!q.companyId && !q.bankId;
-    const dimBank = !!q.bankId && !q.companyId;
-    const withRunning = (dimCompany || dimBank) && !q.type && !q.kind;
+    // Saldo corriente solo cuando se filtra por UNA empresa, sin filtro de tipo ni kind.
+    const withRunning = !!q.companyId && !q.type && !q.kind;
 
     if (withRunning) {
-      const dimWhere = dimCompany ? { companyId: q.companyId } : { bankId: q.bankId };
       const all = await this.prisma.treasuryMovement.findMany({
-        where: dimWhere,
+        where: { companyId: q.companyId },
         include: MOVEMENT_INCLUDE,
         orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
       });
@@ -247,7 +239,6 @@ export class DivisasService {
 
     const where: any = {};
     if (q.companyId) where.companyId = q.companyId;
-    if (q.bankId) where.bankId = q.bankId;
     if (q.type) where.type = q.type;
     if (q.kind) where.kind = q.kind;
     if (from || to) where.date = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
@@ -261,12 +252,8 @@ export class DivisasService {
   }
 
   async createMovement(dto: CreateMovementDto, userId: string) {
-    const [company, bank] = await Promise.all([
-      this.prisma.treasuryCompany.findUnique({ where: { id: dto.companyId } }),
-      this.prisma.treasuryBank.findUnique({ where: { id: dto.bankId } }),
-    ]);
+    const company = await this.prisma.treasuryCompany.findUnique({ where: { id: dto.companyId } });
     if (!company) throw new BadRequestException('Empresa no válida');
-    if (!bank) throw new BadRequestException('Banco/ubicación no válido');
     if (dto.originBankId) {
       const ob = await this.prisma.treasuryOriginBank.findUnique({ where: { id: dto.originBankId } });
       if (!ob) throw new BadRequestException('Banco de origen no válido');
@@ -278,7 +265,7 @@ export class DivisasService {
       data: {
         date: new Date(dto.date),
         companyId: dto.companyId,
-        bankId: dto.bankId,
+        bankId: dto.bankId || null, // (obsoleto) dimension banco retirada
         kind: isCompra ? 'COMPRA' : 'MOVIMIENTO',
         originBankId: isCompra ? dto.originBankId || null : null,
         // La compra de divisas es siempre ENTRADA de dólares.
@@ -306,7 +293,7 @@ export class DivisasService {
     if (dto.kind !== undefined) data.kind = dto.kind === 'COMPRA' ? 'COMPRA' : 'MOVIMIENTO';
     if (dto.date !== undefined) data.date = new Date(dto.date);
     if (dto.companyId !== undefined) data.companyId = dto.companyId;
-    if (dto.bankId !== undefined) data.bankId = dto.bankId;
+    if (dto.bankId !== undefined) data.bankId = dto.bankId || null;
     if (dto.originBankId !== undefined) data.originBankId = dto.originBankId || null;
     if (dto.type !== undefined) data.type = dto.type;
     if (dto.amountUsd !== undefined) data.amountUsd = round2(dto.amountUsd);

@@ -2613,8 +2613,8 @@ model TreasuryMovement {
   date         DateTime                              // fecha del movimiento
   companyId    String
   company      TreasuryCompany @relation(fields: [companyId], references: [id])
-  bankId       String
-  bank         TreasuryBank    @relation(fields: [bankId], references: [id])
+  bankId       String?                               // (obsoleto) dimension banco retirada del modulo
+  bank         TreasuryBank?   @relation(fields: [bankId], references: [id])
   originBankId String?                               // banco de origen de los Bs (opcional)
   originBank   TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
   kind         String          @default("MOVIMIENTO") // 'MOVIMIENTO' (transferencia USD) | 'COMPRA' (compra de divisas con Bs)
