@@ -17,6 +17,17 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 2026-09-01 — Divisas: sección de Movimientos en Bs por empresa
+
+> ### ⚠️ SIN DESPLEGAR. Módulo aislado (`divisas`), aditivo, **con migración** `20260901120000_treasury_bs_movement` (`CREATE TABLE IF NOT EXISTS`). Finanzas arranca el módulo de cero este mes (sin datos reales). Probado e2e en local (API :4000 / Web :3000, BD `grande_db`), incluida prueba de humo del signo por API.
+
+Origen: el módulo de divisas ya llevaba Bs por empresa (cargas + `amountBs` en el movimiento), pero de forma "de segunda". Finanzas pidió una **sección de Movimientos en Bs propia** (entradas/salidas por empresa, con saldo corriente) **hermana pero separada** de la de dólares. Diseño en `docs/superpowers/specs/2026-09-01-movimientos-bs-empresa-design.md`, plan en `docs/superpowers/plans/2026-09-01-movimientos-bs-empresa.md`.
+
+- **feat(divisas): ledger de Movimientos en Bs por empresa** — nueva tabla `TreasuryBsMovement` (entradas/salidas de Bs por empresa, **sin banco**). El ledger Bs se arma por **fusión virtual** en el service: movimientos Bs propios (editables) + el `amountBs` de los movimientos de divisas como **filas espejo de solo lectura** con **signo corregido** (divisa ENTRADA = salida de Bs; divisa SALIDA = entrada de Bs). **Un solo saldo Bs por empresa**. `summary()` recalculado (reemplaza el viejo `cargas − amountBs`, que sumaba sin signo y solo contaba cargas). Solo `CONFIRMADO` cuenta al disponible (los `PENDIENTE` son tránsito), igual que el USD.
+- **Backend** — `TreasuryBsMovement` (schema + migración idempotente), DTOs `CreateBsMovementDto`/`QueryBsMovementsDto`, service (`findBsMovements` con fusión + saldo corriente, CRUD, `summary` recalculado), 4 endpoints REST `/divisas/bs-movements` bajo el guard `@RequireModule('divisas')`. Verificado por API: entrada Bs 1.000 → compra de divisas de Bs 400 aparece como SALIDA Bs (solo lectura) → saldo 600, `summary.bsBalance` = 600.
+- **Frontend** — pantalla nueva `/divisas/movimientos-bs` (espeja la de USD, sin banco; saldo corriente al filtrar una empresa; filas "Divisa" en solo lectura con enlace al movimiento original) + accesos cruzados desde el resumen (`/divisas`) y la pantalla USD. Las "Cargas de Bs" (`TreasuryBsLoad`) quedan obsoletas (no se migran; eran de prueba). `document.title` = 'Movimientos Bs | Trinity ERP'.
+- **Pendiente:** e2e final en navegador por Diego + deploy a la grande (aplica la migración).
+
 ## 🗓️ Sesión 2026-09-01 — POS: vuelto en pagos MIXTOS (Cashea/Crediagro + inicial en divisa)
 
 > ### ⚠️ SIN DESPLEGAR (HEAD previo `715a300`). Solo código (API + Web), **sin migración**. Probado en local contra copia fresca de la BD de la grande. Pendiente que Diego despliegue.
