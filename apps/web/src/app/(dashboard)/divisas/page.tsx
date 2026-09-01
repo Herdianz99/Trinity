@@ -145,6 +145,12 @@ export default function DivisasResumenPage() {
           >
             <ArrowLeftRight size={16} /> Ver movimientos
           </Link>
+          <Link
+            href="/divisas/movimientos-bs"
+            className="inline-flex items-center gap-1.5 bg-sky-700 hover:bg-sky-600 text-slate-100 px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <ArrowLeftRight size={16} /> Movimientos Bs
+          </Link>
         </div>
       </div>
 
