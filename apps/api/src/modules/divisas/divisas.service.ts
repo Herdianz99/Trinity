@@ -281,7 +281,8 @@ export class DivisasService {
         bankId: dto.bankId,
         kind: isCompra ? 'COMPRA' : 'MOVIMIENTO',
         originBankId: isCompra ? dto.originBankId || null : null,
-        type: dto.type,
+        // La compra de divisas es siempre ENTRADA de dólares.
+        type: isCompra ? 'ENTRADA' : dto.type,
         amountUsd: round2(dto.amountUsd),
         amountBs: isCompra && dto.amountBs != null ? round2(dto.amountBs) : null,
         exchangeRate: isCompra && dto.exchangeRate != null ? Math.round(dto.exchangeRate * 10000) / 10000 : null,
@@ -324,6 +325,9 @@ export class DivisasService {
       data.exchangeRate = null;
       data.commissionPct = null;
       data.originBankId = null;
+    } else {
+      // La compra de divisas es siempre ENTRADA de dólares.
+      data.type = 'ENTRADA';
     }
     return this.prisma.treasuryMovement.update({ where: { id }, data, include: MOVEMENT_INCLUDE });
   }

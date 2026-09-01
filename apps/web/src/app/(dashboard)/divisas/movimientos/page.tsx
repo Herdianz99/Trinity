@@ -204,7 +204,7 @@ function MovimientosInner() {
         companyId: form.companyId,
         bankId: form.bankId,
         originBankId: isCompra ? form.originBankId || undefined : undefined,
-        type: form.type,
+        type: isCompra ? 'ENTRADA' : form.type,
         amountUsd: Number(form.amountUsd),
         amountBs: isCompra ? (totalBs > 0 ? totalBs : form.amountBs !== '' ? Number(form.amountBs) : undefined) : undefined,
         exchangeRate: isCompra && rateNum > 0 ? rateNum : undefined,
@@ -548,29 +548,35 @@ function MovimientosInner() {
               </button>
             </div>
             <div className="p-5 space-y-4">
-              {/* Tipo */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setForm({ ...form, type: 'ENTRADA' })}
-                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border ${
-                    form.type === 'ENTRADA'
-                      ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
-                      : 'border-slate-600 text-slate-400 hover:bg-slate-700/40'
-                  }`}
-                >
-                  <ArrowDownCircle size={16} /> Entrada
-                </button>
-                <button
-                  onClick={() => setForm({ ...form, type: 'SALIDA' })}
-                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border ${
-                    form.type === 'SALIDA'
-                      ? 'bg-red-600/20 border-red-500 text-red-300'
-                      : 'border-slate-600 text-slate-400 hover:bg-slate-700/40'
-                  }`}
-                >
-                  <ArrowUpCircle size={16} /> Salida
-                </button>
-              </div>
+              {/* Tipo — la compra de divisas es siempre ENTRADA de dólares */}
+              {form.kind === 'COMPRA' ? (
+                <div className="flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium border border-emerald-500/40 bg-emerald-600/10 text-emerald-300">
+                  <ArrowDownCircle size={16} /> Entrada de divisas (compra)
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setForm({ ...form, type: 'ENTRADA' })}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border ${
+                      form.type === 'ENTRADA'
+                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
+                        : 'border-slate-600 text-slate-400 hover:bg-slate-700/40'
+                    }`}
+                  >
+                    <ArrowDownCircle size={16} /> Entrada
+                  </button>
+                  <button
+                    onClick={() => setForm({ ...form, type: 'SALIDA' })}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border ${
+                      form.type === 'SALIDA'
+                        ? 'bg-red-600/20 border-red-500 text-red-300'
+                        : 'border-slate-600 text-slate-400 hover:bg-slate-700/40'
+                    }`}
+                  >
+                    <ArrowUpCircle size={16} /> Salida
+                  </button>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
