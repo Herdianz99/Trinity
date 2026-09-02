@@ -68,6 +68,11 @@ export class PayablesService {
 
       await tx.purchaseBookEntry.deleteMany({ where: { payableId: id } });
       await tx.payable.delete({ where: { id } });
+      // Si esta CxP genero un gasto enlazado, borrarlo tambien (evita gasto huerfano que
+      // volveria a contar en el reporte de gastos). El gasto no tiene movimiento de caja.
+      if (p.expenseId) {
+        await tx.expense.delete({ where: { id: p.expenseId } });
+      }
     });
     return { message: 'Cuenta por pagar eliminada' };
   }
@@ -96,6 +101,16 @@ export class PayablesService {
   async create(dto: CreatePayableDto, userId?: string) {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
+
+    // Validar el "generar gasto" antes de abrir la transaccion (error limpio).
+    if (dto.generateExpense) {
+      if (!dto.expenseCategoryId) {
+        throw new BadRequestException('Para generar el gasto debe indicar la categoria de gasto');
+      }
+      const cat = await this.prisma.expenseCategory.findUnique({ where: { id: dto.expenseCategoryId } });
+      if (!cat) throw new BadRequestException('Categoria de gasto no encontrada');
+      if (!userId) throw new BadRequestException('No se pudo identificar el usuario para crear el gasto');
+    }
 
     // Evitar cargar dos veces la misma CxP del mismo proveedor (solo contra CxP).
     const dupDoc = await this.findDuplicatePayable(dto.supplierId, dto.documentNumber);
@@ -434,6 +449,30 @@ export class PayablesService {
             createdById: userId,
           },
         });
+      }
+
+      // Generar el Gasto enlazado (si se pidio). Hereda el TOTAL con IVA de la CxP y queda
+      // atado por Payable.expenseId. No pasa por expenses.service (no crea otra CxP ni mueve
+      // caja): es un registro de gasto puro cuyo pago se maneja por esta CxP.
+      if (dto.generateExpense && dto.expenseCategoryId && userId) {
+        const expense = await tx.expense.create({
+          data: {
+            categoryId: dto.expenseCategoryId,
+            description: dto.description || `CxP ${number}`,
+            reference: dto.documentNumber || null,
+            amountUsd,
+            amountBs,
+            exchangeRate: r,
+            // Medianoche Caracas (como el resto de gastos) para que dashboard/reportes lo
+            // cuenten en el dia correcto. Se usa la fecha de la factura del proveedor.
+            date: caracasDayStart(dto.originalDate || dto.receptionDate || undefined),
+            notes: dto.notes || null,
+            isCredit: true,
+            supplierId: dto.supplierId,
+            createdById: userId,
+          },
+        });
+        await tx.payable.update({ where: { id: payable.id }, data: { expenseId: expense.id } });
       }
 
       return payable;

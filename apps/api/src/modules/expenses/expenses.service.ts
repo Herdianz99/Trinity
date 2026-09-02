@@ -103,6 +103,9 @@ export class ExpensesService {
         include: {
           category: { select: { name: true } },
           createdBy: { select: { name: true } },
+          // Enlace a CxP: si existe, el gasto "viene de una CxP" (lleva retencion) y no debe
+          // sumarse aparte de las Cuentas por Pagar. El front lo marca con un badge.
+          payable: { select: { id: true, number: true } },
         },
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
@@ -145,17 +148,21 @@ export class ExpensesService {
 
     const expenses = await this.prisma.expense.findMany({
       where,
-      include: { category: { select: { name: true } } },
+      include: { category: { select: { name: true } }, payable: { select: { id: true } } },
     });
 
     let totalUsd = 0;
     let totalBs = 0;
+    // "Vienen de CxP" (con Payable enlazado): se separan para no duplicar al combinar Gastos + CxP.
+    let fromPayableUsd = 0;
+    let fromPayableBs = 0;
     const byCategoryMap: Record<string, { categoryName: string; totalUsd: number; totalBs: number; count: number }> = {};
     const byMonthMap: Record<string, { month: string; totalUsd: number; totalBs: number }> = {};
 
     for (const exp of expenses) {
       totalUsd += exp.amountUsd;
       totalBs += exp.amountBs;
+      if (exp.payable) { fromPayableUsd += exp.amountUsd; fromPayableBs += exp.amountBs; }
 
       // By category
       if (!byCategoryMap[exp.categoryId]) {
@@ -177,6 +184,11 @@ export class ExpensesService {
     return {
       totalUsd: Math.round(totalUsd * 100) / 100,
       totalBs: Math.round(totalBs * 100) / 100,
+      // Total de gastos que vienen de una CxP (con retencion) y el neto "propio" sin ellos.
+      fromPayableUsd: Math.round(fromPayableUsd * 100) / 100,
+      fromPayableBs: Math.round(fromPayableBs * 100) / 100,
+      ownUsd: Math.round((totalUsd - fromPayableUsd) * 100) / 100,
+      ownBs: Math.round((totalBs - fromPayableBs) * 100) / 100,
       byCategory: Object.values(byCategoryMap).map(c => ({
         ...c,
         totalUsd: Math.round(c.totalUsd * 100) / 100,

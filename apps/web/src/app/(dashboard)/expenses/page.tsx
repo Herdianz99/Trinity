@@ -38,6 +38,7 @@ interface Expense {
   isCredit?: boolean;
   creditDays?: number | null;
   supplierId?: string | null;
+  payable?: { id: string; number: string | null } | null;
   createdById: string;
   createdBy: { name: string };
   createdAt: string;
@@ -569,7 +570,12 @@ export default function ExpensesPage() {
                   <td className="px-4 py-3 text-slate-200 max-w-[220px]">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate">{exp.description}</span>
-                      {exp.isCredit && (
+                      {exp.payable ? (
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                          title="Este gasto viene de una CxP (con retencion). Ya esta contado en Cuentas por Pagar.">
+                          {exp.payable.number || 'CxP'}
+                        </span>
+                      ) : exp.isCredit && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30" title="Gasto a credito (CxP)">
                           CRÉDITO
                         </span>

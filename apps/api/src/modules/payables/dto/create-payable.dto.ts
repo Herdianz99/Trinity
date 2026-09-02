@@ -103,4 +103,16 @@ export class CreatePayableDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Generar un Gasto enlazado a esta CxP (para gastos que llevan retencion IVA/ISLR
+  // y por eso se cargan como CxP). El gasto hereda el TOTAL con IVA de la CxP y queda
+  // enlazado (Payable.expenseId) para NO duplicar en reportes: se cuenta como CxP, y
+  // el reporte de gastos lo muestra como "viene de CxP" para restarlo del total propio.
+  @IsOptional()
+  @IsBoolean()
+  generateExpense?: boolean;
+
+  @IsOptional()
+  @IsString()
+  expenseCategoryId?: string;
 }

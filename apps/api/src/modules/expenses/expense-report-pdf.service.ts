@@ -30,7 +30,7 @@ export class ExpenseReportPdfService {
 
     const expenses = await this.prisma.expense.findMany({
       where,
-      include: { category: { select: { name: true, expenseType: true } } },
+      include: { category: { select: { name: true, expenseType: true } }, payable: { select: { id: true } } },
       orderBy: { date: 'asc' },
     });
     const config = await this.prisma.companyConfig.findFirst();
@@ -41,6 +41,8 @@ export class ExpenseReportPdfService {
     type Group = { type: string; cats: Map<string, Cat>; count: number; totalUsd: number; totalBs: number };
     const groups = new Map<string, Group>();
     let grandUsd = 0, grandBs = 0;
+    // "Vienen de CxP" (con Payable enlazado): se separan para no duplicar al sumar Gastos + CxP.
+    let cxpUsd = 0, cxpBs = 0;
     for (const exp of expenses) {
       const type = exp.category?.expenseType === 'FIXED' ? 'FIXED' : 'EXTRAORDINARY';
       if (!groups.has(type)) groups.set(type, { type, cats: new Map(), count: 0, totalUsd: 0, totalBs: 0 });
@@ -50,7 +52,10 @@ export class ExpenseReportPdfService {
       c.count += 1; c.totalUsd += exp.amountUsd; c.totalBs += exp.amountBs;
       g.count += 1; g.totalUsd += exp.amountUsd; g.totalBs += exp.amountBs;
       grandUsd += exp.amountUsd; grandBs += exp.amountBs;
+      if (exp.payable) { cxpUsd += exp.amountUsd; cxpBs += exp.amountBs; }
     }
+    const propioUsd = Math.round((grandUsd - cxpUsd) * 100) / 100;
+    const propioBs = Math.round((grandBs - cxpBs) * 100) / 100;
     // Fijos primero, luego extraordinarios.
     const ordered = Array.from(groups.values()).sort((a, b) => (a.type === 'FIXED' ? -1 : 1) - (b.type === 'FIXED' ? -1 : 1));
 
@@ -66,9 +71,19 @@ export class ExpenseReportPdfService {
     doc.fontSize(9).font('Helvetica').fillColor('#334155');
     doc.text(`Periodo: ${fromLabel}  a  ${toLabel}`, 40, 80);
     doc.text(`Generado: ${new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })}   |   ${expenses.length} gasto${expenses.length !== 1 ? 's' : ''}`, 40, 94);
+    // Desglose para no duplicar al sumar Gastos + CxP.
+    let headerY = 108;
+    if (cxpUsd > 0) {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a');
+      doc.text(`Gastos propios (sin CxP): $${this.fmt(propioUsd)}  ·  Bs ${this.fmt(propioBs)}`, 40, headerY);
+      headerY += 13;
+      doc.font('Helvetica').fillColor('#b45309');
+      doc.text(`Vienen de CxP (ya contados en Cuentas por Pagar): $${this.fmt(cxpUsd)}  ·  Bs ${this.fmt(cxpBs)}`, 40, headerY);
+      headerY += 15;
+    }
     doc.fillColor('#000');
-    doc.moveTo(40, 110).lineTo(RIGHT, 110).stroke('#94a3b8');
-    let y = 118;
+    doc.moveTo(40, headerY).lineTo(RIGHT, headerY).stroke('#94a3b8');
+    let y = headerY + 8;
 
     // Columnas
     const cName = { x: 48, w: 250 };
@@ -184,7 +199,7 @@ export class ExpenseReportPdfService {
 
     const expenses = await this.prisma.expense.findMany({
       where,
-      include: { category: { select: { name: true } } },
+      include: { category: { select: { name: true } }, payable: { select: { id: true, number: true } } },
       orderBy: { date: 'asc' },
     });
     const config = await this.prisma.companyConfig.findFirst();
@@ -195,6 +210,9 @@ export class ExpenseReportPdfService {
     type Cat = { name: string; count: number; totalUsd: number; totalBs: number; items: ExpRow[] };
     const catMap = new Map<string, Cat>();
     let grandUsd = 0, grandBs = 0;
+    // "Vienen de CxP": gastos con Payable enlazado (llevan retencion, ya estan contados en CxP).
+    // Se muestran en el reporte pero se separan para NO duplicar al sumar Gastos + CxP.
+    let cxpUsd = 0, cxpBs = 0;
     for (const exp of expenses) {
       if (!catMap.has(exp.categoryId)) {
         catMap.set(exp.categoryId, { name: exp.category.name, count: 0, totalUsd: 0, totalBs: 0, items: [] });
@@ -202,7 +220,10 @@ export class ExpenseReportPdfService {
       const c = catMap.get(exp.categoryId)!;
       c.count += 1; c.totalUsd += exp.amountUsd; c.totalBs += exp.amountBs; c.items.push(exp);
       grandUsd += exp.amountUsd; grandBs += exp.amountBs;
+      if (exp.payable) { cxpUsd += exp.amountUsd; cxpBs += exp.amountBs; }
     }
+    const propioUsd = Math.round((grandUsd - cxpUsd) * 100) / 100;
+    const propioBs = Math.round((grandBs - cxpBs) * 100) / 100;
     const cats = Array.from(catMap.values()).sort((a, b) => b.totalUsd - a.totalUsd);
 
     const fromLabel = filters.from ? new Date(caracasDayStart(filters.from)).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' }) : '—';
@@ -225,9 +246,20 @@ export class ExpenseReportPdfService {
     doc.fontSize(9).font('Helvetica').fillColor('#334155');
     doc.text(`Periodo: ${fromLabel}  a  ${toLabel}`, 40, 80);
     doc.text(`Generado: ${new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' })}   |   ${expenses.length} gasto${expenses.length !== 1 ? 's' : ''} · ${cats.length} categoria${cats.length !== 1 ? 's' : ''}`, 40, 94);
+    // Desglose para no duplicar al sumar Gastos + CxP: total propio (sin CxP) vs los que
+    // ya estan en Cuentas por Pagar (gastos con retencion cargados como CxP).
+    let headerY = 108;
+    if (cxpUsd > 0) {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a');
+      doc.text(`Gastos propios (sin CxP): $${this.fmt(propioUsd)}  ·  Bs ${this.fmt(propioBs)}`, 40, headerY);
+      headerY += 13;
+      doc.font('Helvetica').fillColor('#b45309');
+      doc.text(`Vienen de CxP (ya contados en Cuentas por Pagar): $${this.fmt(cxpUsd)}  ·  Bs ${this.fmt(cxpBs)}`, 40, headerY);
+      headerY += 15;
+    }
     doc.fillColor('#000');
-    doc.moveTo(40, 110).lineTo(RIGHT, 110).stroke('#94a3b8');
-    let y = 118;
+    doc.moveTo(40, headerY).lineTo(RIGHT, headerY).stroke('#94a3b8');
+    let y = headerY + 8;
 
     const drawColHeader = () => {
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
@@ -266,7 +298,7 @@ export class ExpenseReportPdfService {
       doc.fontSize(8).font('Helvetica');
       let stripe = false;
       for (const exp of c.items) {
-        const descText = exp.description || '';
+        const descText = (exp.description || '') + (exp.payable ? '  [viene de CxP]' : '');
         const descH = doc.heightOfString(descText, { width: cDesc.w });
         const rowH = Math.max(13, descH) + 2;
         if (y + rowH > bottom()) { doc.addPage(); y = 40; drawColHeader(); doc.fontSize(8).font('Helvetica'); stripe = false; }

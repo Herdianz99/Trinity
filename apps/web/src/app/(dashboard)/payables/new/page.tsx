@@ -62,6 +62,17 @@ export default function NewPayablePage() {
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Generar un gasto enlazado (para gastos que llevan retencion y por eso se cargan como CxP).
+  const [generateExpense, setGenerateExpense] = useState(false);
+  const [expenseCategoryId, setExpenseCategoryId] = useState('');
+  const [expenseCategories, setExpenseCategories] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/proxy/expense-categories/active')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setExpenseCategories(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -173,6 +184,7 @@ export default function NewPayablePage() {
     if (!description.trim()) { setError('La descripcion es obligatoria'); return; }
     if (totalDoc <= 0) { setError('El total del documento debe ser mayor a 0'); return; }
     if (!exchangeRate || exchangeRate <= 0) { setError('La tasa del dia debe ser mayor a 0'); return; }
+    if (generateExpense && !expenseCategoryId) { setError('Selecciona la categoria del gasto a generar'); return; }
 
     setSaving(true); setError('');
     try {
@@ -195,6 +207,7 @@ export default function NewPayablePage() {
       if (createIslr && isFiscal && islrTypeId) { body.createIslrRetention = true; body.islrRetentionTypeId = islrTypeId; }
       if (description.trim()) body.description = description.trim();
       if (notes.trim()) body.notes = notes.trim();
+      if (generateExpense && expenseCategoryId) { body.generateExpense = true; body.expenseCategoryId = expenseCategoryId; }
 
       const res = await fetch('/api/proxy/payables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error al crear'); }
@@ -375,6 +388,29 @@ export default function NewPayablePage() {
                 <input type="number" step="0.01" min="0" value={exchangeRate || ''} onChange={e => setExchangeRate(parseFloat(e.target.value) || 0)}
                   placeholder="0.00" className="input-field !py-1 text-sm font-mono" />
               </div>
+            </div>
+
+            {/* Generar gasto enlazado (para gastos con retencion cargados como CxP) */}
+            <div className="mt-3 pt-3 border-t border-slate-700/50">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={generateExpense} onChange={e => setGenerateExpense(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 text-red-500 focus:ring-red-500" />
+                <span className="text-xs font-medium text-slate-300">Generar gasto enlazado</span>
+              </label>
+              {generateExpense && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-slate-400 shrink-0">Categoria de gasto <span className="text-red-400">*</span></span>
+                  <select value={expenseCategoryId} onChange={e => setExpenseCategoryId(e.target.value)}
+                    className="input-field !py-1 text-sm !w-auto min-w-[220px]">
+                    <option value="">Selecciona categoria…</option>
+                    {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Crea un gasto por el <b>total (con IVA)</b> enlazado a esta CxP. Aparece en el reporte de gastos
+                marcado como &quot;viene de CxP&quot; y se resta del total propio para no duplicar.
+              </p>
             </div>
           </div>
         </div>
