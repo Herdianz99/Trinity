@@ -290,6 +290,7 @@ const menuSections: MenuSection[] = [
       { label: 'Horas pico', href: '/reports/peak-hours', icon: <BarChart3 size={18} /> },
       { label: 'Ventas por caja', href: '/reports/sales-cash', icon: <BarChart3 size={18} /> },
       { label: 'Ventas perdidas', href: '/reports/ventas-perdidas', icon: <PackageX size={18} /> },
+      { label: 'Stock a la fecha', href: '/reports/stock-at-date', icon: <PackageSearch size={18} /> },
     ],
   },
   {

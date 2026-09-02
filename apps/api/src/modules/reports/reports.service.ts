@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { InvoiceStatus } from '@prisma/client';
+import { InvoiceStatus, Prisma } from '@prisma/client';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 
 function round2(n: number): number {
@@ -18,6 +18,75 @@ const PAID_STATUSES: InvoiceStatus[] = ['PAID', 'PARTIAL_RETURN', 'RETURNED'];
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ──────────────────────────────────────────────────────
+  // Stock a la fecha (stock historico / as-of)
+  // ──────────────────────────────────────────────────────
+  // No guardamos una foto del stock por dia; lo reconstruimos partiendo del
+  // stock ACTUAL (autoritativo) y revirtiendo los movimientos posteriores a la
+  // fecha de corte: stockEnFecha = stockActual - SUM(movimientos con createdAt > corte).
+  // Es mas seguro que sumar desde 0 porque algunos productos viejos no tienen el
+  // movimiento de "carga inicial", pero su Stock.quantity si es exacto. Los traslados
+  // entre almacenes netean a 0, asi que el total por producto queda correcto.
+  // El corte es el FIN del dia-calendario Caracas (incluye todo lo del dia elegido).
+  // La valorizacion usa el costo ACTUAL del producto (no el historico).
+  async stockAtDate(dateStr: string, search?: string) {
+    const cutoff = caracasDayEnd(dateStr || undefined);
+    const s = (search || '').trim();
+    const searchCond = s
+      ? Prisma.sql`AND (p."code" ILIKE ${'%' + s + '%'} OR p."name" ILIKE ${'%' + s + '%'})`
+      : Prisma.empty;
+
+    const rows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
+      SELECT p.id, p.code, p.name, p."costUsd",
+             cs.qty::float8 AS "currentQty",
+             (cs.qty - COALESCE(mv.delta_after, 0))::float8 AS "qtyAsOf"
+      FROM "Product" p
+      JOIN (
+        SELECT "productId", SUM(quantity) AS qty
+        FROM "Stock"
+        GROUP BY "productId"
+      ) cs ON cs."productId" = p.id
+      LEFT JOIN (
+        SELECT "productId", SUM(quantity) AS delta_after
+        FROM "StockMovement"
+        WHERE "createdAt" > ${cutoff}
+        GROUP BY "productId"
+      ) mv ON mv."productId" = p.id
+      WHERE 1=1 ${searchCond}
+      ORDER BY p.name ASC
+    `);
+
+    const items = rows
+      .map((r) => {
+        const quantity = Number(r.qtyAsOf) || 0;
+        const costUsd = Number(r.costUsd) || 0;
+        return {
+          productId: r.id as string,
+          code: r.code as string,
+          name: r.name as string,
+          costUsd,
+          currentQty: Number(r.currentQty) || 0,
+          quantity: round2(quantity),
+          valueUsd: round2(quantity * costUsd),
+        };
+      })
+      .filter((r) => Math.abs(r.quantity) > 0.0001);
+
+    const totals = items.reduce(
+      (acc, r) => {
+        acc.products += 1;
+        acc.units += r.quantity;
+        acc.valueUsd += r.valueUsd;
+        return acc;
+      },
+      { products: 0, units: 0, valueUsd: 0 },
+    );
+    totals.units = round2(totals.units);
+    totals.valueUsd = round2(totals.valueUsd);
+
+    return { date: dateStr || null, items, totals };
+  }
 
   // ──────────────────────────────────────────────────────
   // 1. Sales by Period

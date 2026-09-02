@@ -4,6 +4,8 @@ import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
 import { InventoryAnalysisService } from './inventory-analysis.service';
 import { InventoryAlertsPdfService } from './inventory-alerts-pdf.service';
+import { InventoryAnalysisExportExcelService } from './inventory-analysis-export-excel.service';
+import { InventoryAnalysisExportPdfService } from './inventory-analysis-export-pdf.service';
 
 @ApiTags('Inventory Analysis')
 @ApiBearerAuth()
@@ -13,7 +15,57 @@ export class InventoryAnalysisController {
   constructor(
     private readonly service: InventoryAnalysisService,
     private readonly alertsPdf: InventoryAlertsPdfService,
+    private readonly exportExcel: InventoryAnalysisExportExcelService,
+    private readonly exportPdf: InventoryAnalysisExportPdfService,
   ) {}
+
+  // Junta las 5 secciones del analisis (mismas fuentes que la pantalla).
+  private async gatherAnalysis(from: string, to: string) {
+    const [summary, abc, rotation, profitability, suggestions] = await Promise.all([
+      this.service.getSummary(from, to),
+      this.service.getAbcClassification(from, to),
+      this.service.getRotation(from, to),
+      this.service.getProfitability(from, to),
+      this.service.getPurchaseSuggestions(from, to),
+    ]);
+    return { summary, abc, rotation, profitability, suggestions };
+  }
+
+  @Get('export/excel')
+  @ApiQuery({ name: 'from', required: true })
+  @ApiQuery({ name: 'to', required: true })
+  async exportExcelFile(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.gatherAnalysis(from, to);
+    const buffer = await this.exportExcel.generate(from, to, data);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="analisis-inventario-${from}_${to}.xlsx"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('export/pdf')
+  @ApiQuery({ name: 'from', required: true })
+  @ApiQuery({ name: 'to', required: true })
+  async exportPdfFile(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: Response,
+  ) {
+    const data = await this.gatherAnalysis(from, to);
+    const buffer = await this.exportPdf.generate(from, to, data);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="analisis-inventario-${from}_${to}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 
   @Get('abc')
   @ApiQuery({ name: 'from', required: true, description: 'Start date YYYY-MM-DD' })

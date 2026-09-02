@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BarChart3, Loader2, Package, AlertTriangle, TrendingUp,
-  ShoppingCart, Search, Filter, ArrowUpDown,
+  ShoppingCart, Search, Filter, ArrowUpDown, FileText, FileSpreadsheet,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MetricsHelpButton } from '@/components/metrics-help-modal';
@@ -123,6 +123,12 @@ export default function InventoryAnalysisPage() {
   // Auto-analyze on mount
   useEffect(() => { analyze(); }, [analyze]);
 
+  function exportFile(kind: 'excel' | 'pdf') {
+    const { from, to } = getDateRange();
+    if (!from || !to) return;
+    window.open(`/api/proxy/inventory-analysis/export/${kind}?from=${from}&to=${to}`, '_blank');
+  }
+
   // ── Filtered data ──
   const filteredAbc = abcFilter === 'ALL' ? abcData : abcData.filter(p => p.classification === abcFilter);
   const filteredRotation = rotationAlertsOnly
@@ -151,7 +157,27 @@ export default function InventoryAnalysisPage() {
             <p className="text-slate-400 text-sm">Clasificacion ABC, rotacion y rentabilidad</p>
           </div>
         </div>
-        <MetricsHelpButton metricKeys={['abc', 'rotacion', 'diasInventario', 'rentabilidad', 'margen', 'valorInventario', 'sugerenciaCompra']} />
+        <div className="flex items-center gap-2">
+          {analyzed && summary && (
+            <>
+              <button
+                onClick={() => exportFile('excel')}
+                className="btn-secondary !py-1.5 text-sm flex items-center gap-2"
+                title="Exportar el analisis completo a Excel"
+              >
+                <FileSpreadsheet size={16} /> Excel
+              </button>
+              <button
+                onClick={() => exportFile('pdf')}
+                className="btn-secondary !py-1.5 text-sm flex items-center gap-2"
+                title="Exportar el analisis completo a PDF"
+              >
+                <FileText size={16} /> PDF
+              </button>
+            </>
+          )}
+          <MetricsHelpButton metricKeys={['abc', 'rotacion', 'diasInventario', 'rentabilidad', 'margen', 'valorInventario', 'sugerenciaCompra']} />
+        </div>
       </div>
 
       {/* Period selector */}

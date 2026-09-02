@@ -176,4 +176,28 @@ export class ReportsController {
   ) {
     return this.service.salesByCashRegister(from, to);
   }
+
+  @Get('stock-at-date')
+  stockAtDate(
+    @Query('date') date: string,
+    @Query('search') search?: string,
+  ) {
+    return this.service.stockAtDate(date, search);
+  }
+
+  @Get('stock-at-date/pdf')
+  async stockAtDatePdf(
+    @Query('date') date: string,
+    @Query('search') search: string | undefined,
+    @Res() res: Response,
+  ) {
+    const data = await this.service.stockAtDate(date, search);
+    const buffer = await this.pdfService.generateStockAtDatePdf(data);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="stock-al-${date || 'hoy'}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
 }

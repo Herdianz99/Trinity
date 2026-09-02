@@ -261,6 +261,51 @@ export class ReportsPdfService {
     return this.toBuffer(doc);
   }
 
+  // ── Stock a la fecha PDF ──────────────────────────────
+  async generateStockAtDatePdf(data: any): Promise<Buffer> {
+    const company = await this.getCompanyName();
+    const doc = this.createDoc(false); // vertical (portrait)
+    let y = this.drawHeader(doc, 'Stock a la fecha (al cierre)', company, data.date || '—');
+
+    // KPIs
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text(`Productos con stock: ${data.totals.products}`, 40, y);
+    doc.text(`Unidades: ${this.fmt(data.totals.units)}`, 240, y);
+    doc.text(`Valor inventario: $${this.fmt(data.totals.valueUsd)}`, 400, y);
+    y += 20;
+
+    // Columnas ajustadas al ancho portrait (usable 40 -> 555 pt).
+    const cols = [
+      { label: 'Codigo', x: 40, width: 70 },
+      { label: 'Producto', x: 110, width: 250 },
+      { label: 'Cantidad', x: 360, width: 60, align: 'right' },
+      { label: 'Costo USD', x: 420, width: 65, align: 'right' },
+      { label: 'Valor USD', x: 485, width: 70, align: 'right' },
+    ];
+
+    y = this.drawTableHeader(doc, y, cols);
+
+    for (const row of data.items) {
+      y = this.checkPage(doc, y);
+      y = this.drawTableRow(doc, y, cols, [
+        row.code, row.name, this.fmt(row.quantity),
+        `$${this.fmt(row.costUsd)}`, `$${this.fmt(row.valueUsd)}`,
+      ]);
+    }
+
+    // Totals
+    y = this.checkPage(doc, y);
+    y += 4;
+    doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke('#94a3b8');
+    y += 6;
+    y = this.drawTableRow(doc, y, cols, [
+      'TOTAL', `${data.totals.products} productos`, this.fmt(data.totals.units),
+      '', `$${this.fmt(data.totals.valueUsd)}`,
+    ], true);
+
+    return this.toBuffer(doc);
+  }
+
   // ── Comisiones por Vendedor PDF ───────────────────────
   async generateCommissionPdf(data: any, sellerName: string, from: string, to: string): Promise<Buffer> {
     const company = await this.getCompanyName();
