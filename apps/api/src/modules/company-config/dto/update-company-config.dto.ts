@@ -7,6 +7,12 @@ export class UpdateCompanyConfigDto {
   @IsString()
   companyName?: string;
 
+  // Lista blanca de IP/CIDR del local para el IP-lock ("acceso solo en sitio").
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  allowedIps?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

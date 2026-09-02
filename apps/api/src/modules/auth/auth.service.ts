@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolePermissionsService } from '../role-permissions/role-permissions.service';
 import { normalizeEmail } from '../../common/email';
+import { IpAccessService } from '../../common/ip-access.service';
 
 @Injectable()
 export class AuthService {
@@ -13,9 +14,10 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private rolePermissionsService: RolePermissionsService,
+    private ipAccess: IpAccessService,
   ) {}
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, ip?: string) {
     // Busqueda case-insensitive: el casing del email no debe impedir entrar.
     const user = await this.prisma.user.findFirst({
       where: { email: { equals: normalizeEmail(email), mode: 'insensitive' } },
@@ -33,6 +35,15 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
+    // IP-lock ("acceso solo en sitio"): bloquea solo si el usuario esta restringido, no es
+    // ADMIN, hay whitelist configurada y la IP no esta permitida. Inerte por defecto.
+    if (await this.ipAccess.shouldBlock(ip || '', { restrict: user.restrictToOnSiteIp, role: user.role })) {
+      throw new ForbiddenException({
+        code: 'OFFSITE_BLOCKED',
+        message: 'Acceso permitido solo desde el local.',
+      });
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -46,6 +57,7 @@ export class AuthService {
       role: user.role,
       permissions,
       mustChangePassword: user.mustChangePassword,
+      restrictToOnSiteIp: user.restrictToOnSiteIp,
     };
 
     return {

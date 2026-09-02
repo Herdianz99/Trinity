@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Patch, UseGuards, Ip } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -13,8 +13,8 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
+    return this.authService.login(dto.email, dto.password, ip);
   }
 
   @Post('refresh')
@@ -27,6 +27,14 @@ export class AuthController {
   @Get('me')
   getProfile(@CurrentUser('id') userId: string) {
     return this.authService.getProfile(userId);
+  }
+
+  // IP publica actual del que consulta (para configurar la whitelist en /config).
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-ip')
+  myIp(@Ip() ip: string) {
+    return { ip };
   }
 
   @ApiBearerAuth()

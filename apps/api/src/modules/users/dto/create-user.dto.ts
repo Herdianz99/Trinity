@@ -25,4 +25,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  restrictToOnSiteIp?: boolean;
 }

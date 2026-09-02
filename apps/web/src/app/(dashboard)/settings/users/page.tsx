@@ -21,6 +21,7 @@ interface User {
   email: string;
   role: string;
   isActive: boolean;
+  restrictToOnSiteIp?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -85,6 +86,7 @@ export default function UsersPage() {
   const [formRole, setFormRole] = useState('SELLER');
   const [formPassword, setFormPassword] = useState('');
   const [formActive, setFormActive] = useState(true);
+  const [formRestrictIp, setFormRestrictIp] = useState(false);
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
@@ -157,6 +159,7 @@ export default function UsersPage() {
           email: formEmail,
           role: formRole,
           isActive: formActive,
+          restrictToOnSiteIp: formRole === 'ADMIN' ? false : formRestrictIp,
         }),
       });
       const data = await res.json();
@@ -230,6 +233,7 @@ export default function UsersPage() {
     setFormEmail(user.email);
     setFormRole(user.role);
     setFormActive(user.isActive);
+    setFormRestrictIp(!!user.restrictToOnSiteIp);
     setFormError('');
     setShowEdit(true);
   }
@@ -492,6 +496,24 @@ export default function UsersPage() {
                 {formActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                 {formActive ? 'Activo' : 'Inactivo'}
               </button>
+            </div>
+            <div className="pt-1">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={formRole === 'ADMIN' ? false : formRestrictIp}
+                  disabled={formRole === 'ADMIN'}
+                  onChange={(e) => setFormRestrictIp(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40 disabled:opacity-40"
+                />
+                Solo en sitio (bloquear fuera de las IPs del local)
+                {formRole === 'ADMIN' && (
+                  <span className="text-[11px] text-slate-500">— los ADMIN no se restringen</span>
+                )}
+              </label>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Requiere cargar las IPs del local en Configuracion. Aplica en el proximo inicio de sesion del usuario.
+              </p>
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => setShowEdit(false)} className="btn-secondary">

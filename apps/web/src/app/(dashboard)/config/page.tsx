@@ -115,6 +115,7 @@ interface CompanyConfig {
   partnerTransferCreatesAccounts: boolean;
   partnerTransferCustomerId: string;
   partnerTransferSupplierId: string;
+  allowedIps: string;
 }
 
 interface CustomerOption {
@@ -154,10 +155,20 @@ export default function ConfigPage() {
     partnerTransferCreatesAccounts: true,
     partnerTransferCustomerId: '',
     partnerTransferSupplierId: '',
+    allowedIps: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // IP publica actual del que configura (para el IP-lock "acceso solo en sitio").
+  const [myIp, setMyIp] = useState('');
+  useEffect(() => {
+    fetch('/api/proxy/auth/my-ip')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ip) setMyIp(d.ip); })
+      .catch(() => {});
+  }, []);
 
   // Exchange rate state
   const [todayRate, setTodayRate] = useState<{ rate: number; source: string } | null>(null);
@@ -309,6 +320,7 @@ export default function ConfigPage() {
           partnerTransferCreatesAccounts: data.partnerTransferCreatesAccounts ?? true,
           partnerTransferCustomerId: data.partnerTransferCustomerId || '',
           partnerTransferSupplierId: data.partnerTransferSupplierId || '',
+          allowedIps: data.allowedIps || '',
         });
         if (data.partnerTransferCustomerId) {
           fetch(`/api/proxy/customers/${data.partnerTransferCustomerId}`)
@@ -399,6 +411,7 @@ export default function ConfigPage() {
           partnerTransferCreatesAccounts: config.partnerTransferCreatesAccounts,
           partnerTransferCustomerId: config.partnerTransferCustomerId || null,
           partnerTransferSupplierId: config.partnerTransferSupplierId || null,
+          allowedIps: config.allowedIps || '',
           ...(logoChanged ? { logo } : {}),
           ...(stampChanged ? { stampImage } : {}),
         }),
@@ -1128,6 +1141,39 @@ export default function ConfigPage() {
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Acceso solo en sitio (IP-lock) */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Acceso solo en sitio (IP-lock)</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              IPs o rangos (CIDR) del local, separados por coma o salto de linea. Los usuarios marcados
+              como &quot;Solo en sitio&quot; (en Usuarios) unicamente podran entrar desde estas IPs.
+              <strong className="text-slate-300"> Vacio = desactivado</strong> (nadie se bloquea). Los ADMIN nunca se restringen.
+            </p>
+            {myIp && (
+              <div className="flex items-center gap-2 text-sm mb-2">
+                <span className="text-slate-400">Tu IP publica actual:</span>
+                <span className="font-mono text-emerald-300">{myIp}</span>
+                <button
+                  type="button"
+                  onClick={() => handleChange('allowedIps', config.allowedIps ? `${config.allowedIps}\n${myIp}` : myIp)}
+                  className="text-sky-400 hover:text-sky-300 underline"
+                >
+                  Agregar
+                </button>
+              </div>
+            )}
+            <textarea
+              value={config.allowedIps || ''}
+              onChange={(e) => handleChange('allowedIps', e.target.value)}
+              rows={3}
+              placeholder="190.10.20.30, 190.10.20.0/24"
+              className="input-field w-full font-mono text-sm"
+            />
+            <p className="text-xs text-amber-300/80 mt-2">
+              Ojo: requiere que el local tenga IP fija. Solo aplica en el WiFi del local (con datos moviles la IP no coincide).
+            </p>
           </div>
 
           {/* Default customer */}

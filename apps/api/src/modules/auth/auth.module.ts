@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RolePermissionsModule } from '../role-permissions/role-permissions.module';
+import { IpAccessService } from '../../common/ip-access.service';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { RolePermissionsModule } from '../role-permissions/role-permissions.modu
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, IpAccessService],
   exports: [AuthService],
 })
 export class AuthModule {}

@@ -262,6 +262,7 @@ model CompanyConfig {
   phone                   String?
   email                   String?
   bregaGlobalPct          Float    @default(0)
+  allowedIps              String   @default("")
   defaultGananciaPct      Float    @default(0)
   defaultGananciaMayorPct Float    @default(0)
   defaultWarehouseId      String?
@@ -336,6 +337,7 @@ model User {
   role                UserRole
   isActive            Boolean             @default(true)
   mustChangePassword  Boolean             @default(true)
+  restrictToOnSiteIp  Boolean             @default(false)
   lastLoginAt         DateTime?
   permissions         UserPermission[]
   sessionsOpened      CashSession[]       @relation("SessionOpenedBy")

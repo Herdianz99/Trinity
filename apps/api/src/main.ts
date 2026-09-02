@@ -10,6 +10,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Detras de nginx (1 salto). Necesario para que req.ip sea la IP REAL del cliente
+  // (via X-Forwarded-For). Configurable por si hay otra capa (ej. Cloudflare = 2).
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
   app.useBodyParser('json', { limit: '15mb' });
   app.useBodyParser('urlencoded', { limit: '15mb', extended: true });
 

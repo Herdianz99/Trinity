@@ -4,7 +4,7 @@
 
 ### 🔒 Restringir fuga de precios de venta + stock a la competencia (IP-lock por usuario + bloqueo de exportación masiva)
 
-> **Estado: DISEÑO+PLAN LISTOS (candado 1), sin código aún.** Idea acordada con Diego 2026-08-31. El **candado 1 (IP-lock)** ya tiene **diseño y plan** escritos (2026-09-01): spec `docs/superpowers/specs/2026-09-01-ip-lock-onsite-design.md` + plan `docs/superpowers/plans/2026-09-01-ip-lock-onsite.md` (10 tareas). Diseño clave: **inerte por defecto** (flag `User.restrictToOnSiteIp` opt-in + `CompanyConfig.allowedIps`; bloquea solo si flag + whitelist + IP fuera; **ADMIN exento**); `trust proxy` para la IP real; `IpAccessService` (regla fail-safe + caché + CIDR) aplicado en login y por-request (`jwt.strategy`). **Estimado ~1 sesión.** Bloqueante operacional: **confirmar que el local tenga IP fija**. El **candado 2 (bloquear exportación masiva Excel/PDF)** sigue sin diseñar — plan aparte.
+> **Estado: candado 1 (IP-lock) ✅ IMPLEMENTADO 2026-09-02 (ver Sesión 110 abajo), pendiente deploy. Candado 2 (bloquear exportación masiva) aún sin diseñar.** Idea acordada con Diego 2026-08-31. El **candado 1 (IP-lock)** se implementó siguiendo spec `docs/superpowers/specs/2026-09-01-ip-lock-onsite-design.md` + plan `docs/superpowers/plans/2026-09-01-ip-lock-onsite.md`: **inerte por defecto** (flag `User.restrictToOnSiteIp` opt-in + `CompanyConfig.allowedIps`; bloquea solo si flag + whitelist + IP fuera; **ADMIN exento**); `trust proxy` para la IP real; `IpAccessService` (regla fail-safe + caché + CIDR) aplicado en login y por-request (`jwt.strategy`). Bloqueante operacional para ACTIVAR: **confirmar que el local tenga IP fija**. El **candado 2 (bloquear exportación masiva Excel/PDF)** sigue sin diseñar — plan aparte.
 
 **Problema del negocio:** el dueño teme que un empleado molesto (u otra causa) le pase a la competencia la **lista de precios de venta y el stock**. Esos datos **NO se pueden ocultar por rol** porque los vendedores están **obligados a verlos** para trabajar. Hoy los ven sin restricción de lugar/hora.
 
@@ -16,6 +16,21 @@
 - **IP dinámica:** si el internet del local tiene IP dinámica, cambia sola y tumba el acceso a todos → hay que pedir **IP fija** al proveedor, o usar **DDNS** y resolver periódicamente. **Falta confirmar con Diego si el local tiene IP fija.**
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
+
+## 🗓️ Sesión 110 (2026-09-02) — IP-lock por usuario ("acceso solo en sitio")
+
+> ### ⏳ IMPLEMENTADO Y PROBADO EN LOCAL, PENDIENTE COMMIT/DEPLOY — candado 1 de la propuesta anti-fuga. **Inerte por defecto:** desplegar NO afecta a nadie; se activa POR EMPRESA cargando IPs. Migración **aditiva** `20260901220000_ip_lock_onsite` (`ADD COLUMN IF NOT EXISTS`). Smoke test e2e local OK: (1) inerte→201, (2) restringido+IP fuera→403 `OFFSITE_BLOCKED`, (3) ADMIN marcado→201 (exento), (4) `/auth/my-ip`→`{ip}`, (5) IP en whitelist→201. Typecheck API/Web limpio.
+
+Origen: el jefe quiere evitar que un empleado saque precios/stock desde fuera del local. Se implementó el **candado 1** del diseño (spec+plan de 2026-09-01). Diego lo activará **solo en una empresa** primero.
+
+- **Regla fail-safe (único punto de verdad, `common/ip-access.service.ts`):** bloquea SOLO si (a) el usuario tiene `restrictToOnSiteIp=true`, (b) NO es ADMIN, (c) hay ≥1 IP/CIDR en `CompanyConfig.allowedIps`, y (d) la IP real no está en la lista. Falta cualquiera → deja pasar. Caché 30s de la whitelist; matcher CIDR IPv4 propio (sin dependencia nueva); normaliza `::ffff:` .
+- **IP real:** `main.ts` ahora `app.set('trust proxy', TRUST_PROXY_HOPS ?? 1)` (1 salto = nginx; configurable por env por si hay Cloudflare). Sin esto `req.ip` sería 127.0.0.1.
+- **Enforcement en 2 puntos:** (1) **login** (`auth.service.login` recibe `@Ip()`; si `shouldBlock`→403 `OFFSITE_BLOCKED`; embebe `restrictToOnSiteIp` en el JWT), (2) **cada request** (`jwt.strategy` con `passReqToCallback`; whitelist **live**, flag desde el token). Como todo usa `AuthGuard('jwt')`, protege todos los endpoints sin tocar controllers.
+- **Modelo (aditivo):** `User.restrictToOnSiteIp Boolean @default(false)` + `CompanyConfig.allowedIps String @default("")`. DTOs (`CreateUserDto`, `UpdateCompanyConfigDto`) + `users.service` (select/update del flag).
+- **API:** `GET /auth/my-ip` (autenticado) devuelve la IP pública actual (para saber cuál cargar).
+- **Frontend:** `/config` sección "Acceso solo en sitio" (textarea IPs/CIDR + "Tu IP pública actual" con botón Agregar + caveat IP fija/WiFi); `/settings/users` toggle "Solo en sitio" en el modal de edición (**deshabilitado para ADMIN**).
+- **Límite conocido:** marcar el flag a alguien ya logueado aplica en su **próximo login** (el flag viaja en el token); la whitelist sí es live. **ADMIN nunca se bloquea** (rescate anti-lockout, junto a "mostrar tu IP" y regla fail-safe).
+- **Activación (operacional, DESPUÉS del deploy):** confirmar **IP fija** del local → en `/config` (estando en el local) cargar la IP y verificarla → marcar usuarios "Solo en sitio" de a uno probando cada uno. Rescate si alguien se encierra: por BD `UPDATE "User" SET "restrictToOnSiteIp"=false ...` o corregir `allowedIps`.
 
 ## 🗓️ Sesión 108 (2026-09-02) — Reportes: "Stock a la fecha" + exportar Análisis de Inventario a PDF/Excel
 

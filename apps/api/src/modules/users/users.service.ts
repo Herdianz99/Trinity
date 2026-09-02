@@ -51,6 +51,7 @@ export class UsersService {
         name: true,
         role: true,
         isActive: true,
+        restrictToOnSiteIp: true,
         lastLoginAt: true,
         createdAt: true,
       },
@@ -92,6 +93,7 @@ export class UsersService {
     if (dto.email !== undefined) data.email = normalizeEmail(dto.email);
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.restrictToOnSiteIp !== undefined) data.restrictToOnSiteIp = dto.restrictToOnSiteIp;
     const user = await this.prisma.user.update({ where: { id }, data });
     const { password, ...result } = user;
     return result;
