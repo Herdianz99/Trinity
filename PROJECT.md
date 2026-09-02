@@ -991,6 +991,9 @@ model QuotationItem {
 #### Sesión 16 — Lazy Loading Tabs + Montos Bs estandarizados ✅
 #### Sesión 26 — Recibos de Cobro/Pago con Diferencial Cambiario ✅
 #### Sesión 35 — Manejo de vuelto en pagos USD ✅
+#### Sesión 108 — Reporte "Stock a la fecha" + exportar Análisis de Inventario a PDF/Excel ✅
+- Reporte **Stock a la fecha** (`/reports/stock-at-date`): stock histórico reconstruido al cierre de una fecha (stock actual − movimientos posteriores), con exportación **CSV y PDF**.
+- **Análisis de Inventario** (`/purchases/analysis`): botones **Exportar Excel** (libro de 5 hojas: Resumen, ABC, Rotación, Rentabilidad, Sugerencias) y **Exportar PDF** (reporte completo landscape). Endpoints `inventory-analysis/export/(excel|pdf)`.
 
 ---
 
