@@ -13,6 +13,8 @@ import {
   Check,
   X,
   Search,
+  MapPin,
+  MapPinOff,
 } from 'lucide-react';
 
 interface User {
@@ -202,6 +204,19 @@ export default function UsersPage() {
     } catch {}
   }
 
+  async function handleToggleRestrictIp(user: User) {
+    // Los ADMIN nunca se restringen por IP (misma regla que el formulario de edicion).
+    if (user.role === 'ADMIN') return;
+    try {
+      const res = await fetch(`/api/proxy/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restrictToOnSiteIp: !user.restrictToOnSiteIp }),
+      });
+      if (res.ok) fetchUsers();
+    } catch {}
+  }
+
   async function handleDelete() {
     if (!selectedUser) return;
     setFormLoading(true);
@@ -366,6 +381,26 @@ export default function UsersPage() {
                           title={user.isActive ? 'Desactivar' : 'Activar'}
                         >
                           {user.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                        </button>
+                        <button
+                          onClick={() => handleToggleRestrictIp(user)}
+                          disabled={user.role === 'ADMIN'}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            user.role === 'ADMIN'
+                              ? 'text-slate-600 cursor-not-allowed'
+                              : user.restrictToOnSiteIp
+                                ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                                : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10'
+                          }`}
+                          title={
+                            user.role === 'ADMIN'
+                              ? 'Los ADMIN no se restringen por IP'
+                              : user.restrictToOnSiteIp
+                                ? 'Solo en sitio: ACTIVADO — clic para permitir desde cualquier IP'
+                                : 'Solo en sitio: desactivado — clic para bloquear fuera de las IPs del local'
+                          }
+                        >
+                          {user.restrictToOnSiteIp ? <MapPin size={16} /> : <MapPinOff size={16} />}
                         </button>
                         <button
                           onClick={() => openDelete(user)}
