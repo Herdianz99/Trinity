@@ -7,7 +7,7 @@ import {
   Monitor, FileText, Landmark, Wallet, Package, ArrowLeftRight,
   RefreshCw, ClipboardList, ShoppingCart, CreditCard, CalendarClock,
   Factory, BookOpen, BarChart3, AlertTriangle, Loader2, AlertCircle,
-  ChevronRight, ArrowDownRight, Clock,
+  ChevronRight, ArrowDownRight, Clock, PackageX, ClipboardCheck,
 } from 'lucide-react';
 
 // ── Role config ──────────────────────────────────────────────────────────────
@@ -82,6 +82,8 @@ export default function HomeDashboardPage() {
   const [user, setUser] = useState<{ name: string; role: string } | null>(null);
   const [homeData, setHomeData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // Ventana del KPI de precisión de conteo (auditor): 15 o 30 días.
+  const [accWindow, setAccWindow] = useState<'d15' | 'd30'>('d30');
 
   useEffect(() => { document.title = 'Inicio | Trinity ERP'; }, []);
 
@@ -252,6 +254,27 @@ export default function HomeDashboardPage() {
           {/* BUYER: Overdue + Upcoming payables */}
           {role === 'BUYER' && (
             <>
+              {homeData.stockout && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <PackageX size={14} className="text-amber-400" />
+                        <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Quiebre de inventario</span>
+                      </div>
+                      <p className={`text-2xl font-bold ${
+                        homeData.stockout.pct >= 30 ? 'text-red-400' : homeData.stockout.pct >= 15 ? 'text-amber-400' : 'text-emerald-400'
+                      }`}>{homeData.stockout.pct}%</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {homeData.stockout.agotados.toLocaleString()} agotados de {homeData.stockout.total.toLocaleString()} artículos
+                      </p>
+                    </div>
+                    <button onClick={() => router.push('/inventory/alerts')} className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5">
+                      Ver <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
               {homeData.overduePayables && homeData.overduePayables.count > 0 && (
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
                   <div className="flex items-center justify-between">
@@ -319,9 +342,49 @@ export default function HomeDashboardPage() {
             </div>
           )}
 
-          {/* AUDITOR: Low stock + Recent adjustments */}
+          {/* AUDITOR: Count accuracy + Low stock + Recent adjustments */}
           {role === 'AUDITOR' && (
             <>
+              {homeData.countAccuracy && (
+                <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <ClipboardCheck size={14} className="text-sky-400" />
+                      <span className="text-xs font-semibold text-sky-400 uppercase tracking-wider">Precisión de conteo</span>
+                    </div>
+                    <div className="flex rounded-lg bg-slate-700/50 p-0.5 text-[11px] font-medium">
+                      {(['d15', 'd30'] as const).map((w) => (
+                        <button
+                          key={w}
+                          onClick={() => setAccWindow(w)}
+                          className={`px-2 py-0.5 rounded-md transition-colors ${
+                            accWindow === w ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {w === 'd15' ? '15d' : '30d'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {homeData.countAccuracy[accWindow].pct === null ? (
+                    <>
+                      <p className="text-2xl font-bold text-slate-500">—</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Sin conteos aprobados en {accWindow === 'd15' ? '15' : '30'} días</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className={`text-2xl font-bold ${
+                        (homeData.countAccuracy[accWindow].pct ?? 0) >= 95 ? 'text-emerald-400'
+                          : (homeData.countAccuracy[accWindow].pct ?? 0) >= 85 ? 'text-amber-400' : 'text-red-400'
+                      }`}>{homeData.countAccuracy[accWindow].pct}%</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {homeData.countAccuracy[accWindow].matched.toLocaleString()} de {homeData.countAccuracy[accWindow].audited.toLocaleString()} ítems ·{' '}
+                        {homeData.countAccuracy[accWindow].counts} conteo{homeData.countAccuracy[accWindow].counts !== 1 ? 's' : ''}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
               {homeData.lowStock && homeData.lowStock.length > 0 && (
                 <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
                   <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-1.5">

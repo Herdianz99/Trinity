@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   DollarSign, RotateCcw, TrendingUp, TrendingDown,
-  AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package,
+  AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package, PackageX,
   Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
-  Building2, PiggyBank,
+  Building2, PiggyBank, ClipboardCheck,
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -125,6 +125,21 @@ interface DashboardData {
     count: number;
     vsLastPeriod: number | null;
   };
+  inventory: {
+    stockout: { agotados: number; total: number; pct: number };
+    countAccuracy: {
+      d15: CountAccuracyWindow;
+      d30: CountAccuracyWindow;
+    };
+  };
+}
+
+interface CountAccuracyWindow {
+  counts: number;
+  audited: number;
+  matched: number;
+  mismatches: number;
+  pct: number | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -180,6 +195,9 @@ export default function DashboardGerencialClient() {
   const [error, setError] = useState('');
   // Series ocultas en la grafica de ventas (toggle al hacer clic en la leyenda)
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+
+  // Ventana del KPI de precisión de conteo (auditoría): 15 o 30 días.
+  const [accWindow, setAccWindow] = useState<'d15' | 'd30'>('d30');
   // Desglose de "Otras" categorías (modal): null = cerrado.
   const [othersDetail, setOthersDetail] = useState<{ categoryName: string; totalUsd: number; pct: number }[] | null>(null);
   // Contexto de la instancia: nombre de la empresa (usuarios con varias empresas se
@@ -428,6 +446,72 @@ export default function DashboardGerencialClient() {
               href={`/receivables?type=FINANCING_PLATFORM&from=${fromDate}&to=${toDate}`}
             />
           </div>
+
+          {/* ═══ Indicadores de inventario (Compras + Auditoría) ═══ */}
+          {data.inventory && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Quiebre de inventario (Compras) */}
+              <Link
+                href="/inventory/alerts"
+                className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 block cursor-pointer transition-colors hover:border-amber-500/40 hover:bg-slate-800/80"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Quiebre de inventario</span>
+                  <div className="p-2 rounded-lg bg-amber-500/15 text-amber-400"><PackageX size={20} /></div>
+                </div>
+                <p className={`text-2xl font-bold tabular-nums mb-1 ${
+                  data.inventory.stockout.pct >= 30 ? 'text-red-400' : data.inventory.stockout.pct >= 15 ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {data.inventory.stockout.pct}%
+                </p>
+                <span className="text-xs text-slate-500">
+                  {data.inventory.stockout.agotados.toLocaleString()} agotados de {data.inventory.stockout.total.toLocaleString()} artículos
+                </span>
+              </Link>
+
+              {/* Precisión de conteo (Auditoría) con selector 15/30 días */}
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Precisión de conteo</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-lg bg-slate-700/50 p-0.5 text-[11px] font-medium">
+                      {(['d15', 'd30'] as const).map((w) => (
+                        <button
+                          key={w}
+                          onClick={() => setAccWindow(w)}
+                          className={`px-2 py-0.5 rounded-md transition-colors ${
+                            accWindow === w ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {w === 'd15' ? '15d' : '30d'}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400"><ClipboardCheck size={20} /></div>
+                  </div>
+                </div>
+                {data.inventory.countAccuracy[accWindow].pct === null ? (
+                  <>
+                    <p className="text-2xl font-bold text-slate-500 tabular-nums mb-1">—</p>
+                    <span className="text-xs text-slate-500">Sin conteos aprobados en {accWindow === 'd15' ? '15' : '30'} días</span>
+                  </>
+                ) : (
+                  <>
+                    <p className={`text-2xl font-bold tabular-nums mb-1 ${
+                      (data.inventory.countAccuracy[accWindow].pct ?? 0) >= 95 ? 'text-emerald-400'
+                        : (data.inventory.countAccuracy[accWindow].pct ?? 0) >= 85 ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {data.inventory.countAccuracy[accWindow].pct}%
+                    </p>
+                    <span className="text-xs text-slate-500">
+                      {data.inventory.countAccuracy[accWindow].matched.toLocaleString()} de {data.inventory.countAccuracy[accWindow].audited.toLocaleString()} ítems ·{' '}
+                      {data.inventory.countAccuracy[accWindow].counts} conteo{data.inventory.countAccuracy[accWindow].counts !== 1 ? 's' : ''}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ═══ Row 2: CxC + CxP ═══ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -16,6 +16,16 @@ function pctChange(current: number, previous: number): number | null {
   return round2(((current - previous) / previous) * 100);
 }
 
+// Resultado del KPI de precisión de conteo en una ventana de tiempo. pct=null si no hubo
+// conteos aprobados en la ventana (el frontend muestra "sin conteos").
+export interface CountAccuracyWindow {
+  counts: number;      // # de conteos aprobados en la ventana
+  audited: number;     // total de ítems auditados (suma de ítems de esos conteos)
+  matched: number;     // ítems que coincidieron (audited − mismatches)
+  mismatches: number;  // ítems con diferencia ≠ 0
+  pct: number | null;  // % de coincidencia, entero
+}
+
 // Venta REAL (neta) de una factura del periodo: monto original y monto neto de devoluciones,
 // mas los flags para clasificarla en los distintos KPI de ventas. Ver getNetInvoiceRows.
 interface NetInvoiceRow {
@@ -68,6 +78,8 @@ export class DashboardService {
       prevFinancing,
       profit,
       prevProfit,
+      stockout,
+      countAccuracy,
     ] = await Promise.all([
       this.getNetInvoiceRows(dateRange),
       this.getNetInvoiceRows(prevDateRange),
@@ -85,6 +97,10 @@ export class DashboardService {
       this.getFinancingSales(prevDateRange),
       this.getProfit(dateRange),
       this.getProfit(prevDateRange),
+      // KPIs de inventario (independientes del rango de fechas del tablero): el quiebre es
+      // una foto del stock actual y la precisión usa ventanas fijas de 15/30 días.
+      this.getStockoutRate(),
+      this.getCountAccuracy(),
     ]);
 
     // Derivados sincronos de las filas netas por factura (sin mas consultas).
@@ -167,6 +183,71 @@ export class DashboardService {
         count: groupSales.count,
         vsLastPeriod: pctChange(groupSales.totalUsd, prevGroupSales.totalUsd),
       },
+      inventory: {
+        stockout: stockout,
+        countAccuracy: countAccuracy,
+      },
+    };
+  }
+
+  // ── KPI: Quiebre de inventario (Compras) ───────────────────────────────────
+  // % de artículos agotados = productos ACTIVOS no-servicio con stock <= 0 sobre el total
+  // de productos activos no-servicio. Mismo universo que las alertas de "agotados"
+  // (inventory-analysis). El % se redondea a entero.
+  private async getStockoutRate(): Promise<{ agotados: number; total: number; pct: number }> {
+    const rows = await this.prisma.$queryRaw<Array<{ total: number; agotados: number }>>`
+      WITH st AS (
+        SELECT p.id, COALESCE(SUM(s.quantity), 0) AS q
+        FROM "Product" p
+        LEFT JOIN "Stock" s ON s."productId" = p.id
+        WHERE p."isActive" = true AND p."isService" = false
+        GROUP BY p.id
+      )
+      SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE q <= 0)::int AS agotados
+      FROM st
+    `;
+    const total = rows[0]?.total || 0;
+    const agotados = rows[0]?.agotados || 0;
+    return { agotados, total, pct: total > 0 ? Math.round((agotados / total) * 100) : 0 };
+  }
+
+  // ── KPI: Precisión de conteo (Auditoría) ───────────────────────────────────
+  // De los conteos físicos APROBADOS en la ventana, % de ítems que coincidieron:
+  //   coinciden = totalÍtems − ítemsConDiferencia (difference ≠ 0)
+  //   pct = coinciden / totalÍtems  (redondeado a entero)
+  // Funciona tanto si el auditor registra todos los ítems como si solo registra las
+  // discrepancias (los no-contados quedan con difference = null → se cuentan como coincidencia).
+  // Devuelve las ventanas de 15 y 30 días (el frontend elige con un selector).
+  private async getCountAccuracy(): Promise<{
+    d15: CountAccuracyWindow;
+    d30: CountAccuracyWindow;
+  }> {
+    const now = Date.now();
+    const since30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const since15 = new Date(now - 15 * 24 * 60 * 60 * 1000);
+    const counts = await this.prisma.inventoryCount.findMany({
+      where: { status: 'APPROVED', createdAt: { gte: since30 } },
+      select: { createdAt: true, items: { select: { difference: true } } },
+    });
+    const calc = (rows: typeof counts): CountAccuracyWindow => {
+      let audited = 0;
+      let mismatches = 0;
+      for (const c of rows) {
+        audited += c.items.length;
+        mismatches += c.items.filter((i) => Math.abs(i.difference || 0) > 0.0001).length;
+      }
+      const matched = audited - mismatches;
+      return {
+        counts: rows.length,
+        audited,
+        matched,
+        mismatches,
+        pct: audited > 0 ? Math.round((matched / audited) * 100) : null,
+      };
+    };
+    return {
+      d30: calc(counts),
+      d15: calc(counts.filter((c) => c.createdAt >= since15)),
     };
   }
 
@@ -547,9 +628,15 @@ export class DashboardService {
         warehouseName: a.warehouse.name,
         createdAt: a.createdAt.toISOString(),
       }));
+
+      // KPI: precisión de conteo (15/30 días).
+      result.countAccuracy = await this.getCountAccuracy();
     }
 
     if (role === 'BUYER') {
+      // KPI: quiebre de inventario (% de artículos agotados).
+      result.stockout = await this.getStockoutRate();
+
       // Overdue payables
       const overdue = await this.prisma.payable.findMany({
         where: { status: 'OVERDUE' },
