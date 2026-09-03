@@ -116,6 +116,7 @@ export class PayablesPdfService {
       'Neto USD': Math.round((p.netPayableUsd || 0) * 100) / 100,
       'Pagado USD': Math.round((p.paidAmountUsd || 0) * 100) / 100,
       'Saldo USD': Math.round((p.balanceUsd || 0) * 100) / 100,
+      'Emisión': this.dueDate(p.originalDate || p.receptionDate),
       'Vence': this.dueDate(p.dueDate),
       'Estado': STATUS_LABELS[p.status] || p.status,
     }));
@@ -123,9 +124,9 @@ export class PayablesPdfService {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       { wch: 34 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 13 },
-      { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 },
+      { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
     ];
-    if (rows.length) ws['!autofilter'] = { ref: `A1:J${rows.length + 1}` };
+    if (rows.length) ws['!autofilter'] = { ref: `A1:K${rows.length + 1}` };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'CxP');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

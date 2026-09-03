@@ -87,6 +87,20 @@ export class ReceiptsController {
     res.end(buffer);
   }
 
+  // Reporte EXCEL detallado: una fila por documento cobrado/pagado (mismos filtros). Debe ir
+  // ANTES de las rutas con :id para que 'report' no se interprete como un id de recibo.
+  @Get('report/detailed/excel')
+  async getDetailedReportExcel(@Query() query: QueryReceiptsDto, @Res() res: Response) {
+    const buffer = await this.reportExcelService.generateDetailed(query);
+    const kind = query.type === 'PAYMENT' ? 'pago' : 'cobro';
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="reporte-recibos-${kind}-detallado.xlsx"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id/pdf')
   async getPdf(@Param('id') id: string, @Res() res: Response) {
     const buffer = await this.pdfService.generatePdf(id);

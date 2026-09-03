@@ -257,6 +257,7 @@ export class ReceivablesPdfService {
         'Monto USD': Math.round((r.amountUsd || 0) * 100) / 100,
         'Cobrado USD': Math.round((r.paidAmountUsd || 0) * 100) / 100,
         'Saldo USD': Math.round((r.balanceUsd || 0) * 100) / 100,
+        'Emisión': this.dueDate(r.originalDate || r.receptionDate),
         'Vence': this.dueDate(r.dueDate),
         'Estado': STATUS_LABELS[r.status] || r.status,
       };
@@ -265,9 +266,9 @@ export class ReceivablesPdfService {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       { wch: 12 }, { wch: 34 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 22 },
-      { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 },
+      { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
     ];
-    if (rows.length) ws['!autofilter'] = { ref: `A1:K${rows.length + 1}` };
+    if (rows.length) ws['!autofilter'] = { ref: `A1:L${rows.length + 1}` };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'CxC');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

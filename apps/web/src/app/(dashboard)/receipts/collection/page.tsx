@@ -127,6 +127,16 @@ export default function ReceiptsCollectionPage() {
     a.remove();
   }
 
+  // Exporta el reporte DETALLADO a Excel (una fila por documento cobrado).
+  function exportDetailedExcel() {
+    const a = document.createElement('a');
+    a.href = `/api/proxy/receipts/report/detailed/excel?${reportParams()}`;
+    a.download = 'reporte-recibos-cobro-detallado.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -159,6 +169,9 @@ export default function ReceiptsCollectionPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportExcel} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
                 <FileSpreadsheet size={14} /> Exportar a Excel (resumen)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportDetailedExcel} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
+                <FileSpreadsheet size={14} /> Exportar a Excel (detallado)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
