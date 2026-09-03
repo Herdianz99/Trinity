@@ -4,7 +4,7 @@
 
 ### 🔒 Restringir fuga de precios de venta + stock a la competencia (IP-lock por usuario + bloqueo de exportación masiva)
 
-> **Estado: candado 1 (IP-lock) ✅ IMPLEMENTADO 2026-09-02 (ver Sesión 110 abajo), pendiente deploy. Candado 2 (bloquear exportación masiva) aún sin diseñar.** Idea acordada con Diego 2026-08-31. El **candado 1 (IP-lock)** se implementó siguiendo spec `docs/superpowers/specs/2026-09-01-ip-lock-onsite-design.md` + plan `docs/superpowers/plans/2026-09-01-ip-lock-onsite.md`: **inerte por defecto** (flag `User.restrictToOnSiteIp` opt-in + `CompanyConfig.allowedIps`; bloquea solo si flag + whitelist + IP fuera; **ADMIN exento**); `trust proxy` para la IP real; `IpAccessService` (regla fail-safe + caché + CIDR) aplicado en login y por-request (`jwt.strategy`). Bloqueante operacional para ACTIVAR: **confirmar que el local tenga IP fija**. El **candado 2 (bloquear exportación masiva Excel/PDF)** sigue sin diseñar — plan aparte.
+> **Estado: candado 1 (IP-lock) ✅ DESPLEGADO EN LAS 6 EMPRESAS 2026-09-03 (inerte; ver Sesión 110 abajo). Falta ACTIVARLO por empresa (confirmar IP fija del local + cargarla en /config). Candado 2 (bloquear exportación masiva) aún sin diseñar.** Idea acordada con Diego 2026-08-31. El **candado 1 (IP-lock)** se implementó siguiendo spec `docs/superpowers/specs/2026-09-01-ip-lock-onsite-design.md` + plan `docs/superpowers/plans/2026-09-01-ip-lock-onsite.md`: **inerte por defecto** (flag `User.restrictToOnSiteIp` opt-in + `CompanyConfig.allowedIps`; bloquea solo si flag + whitelist + IP fuera; **ADMIN exento**); `trust proxy` para la IP real; `IpAccessService` (regla fail-safe + caché + CIDR) aplicado en login y por-request (`jwt.strategy`). Bloqueante operacional para ACTIVAR: **confirmar que el local tenga IP fija**. El **candado 2 (bloquear exportación masiva Excel/PDF)** sigue sin diseñar — plan aparte.
 
 **Problema del negocio:** el dueño teme que un empleado molesto (u otra causa) le pase a la competencia la **lista de precios de venta y el stock**. Esos datos **NO se pueden ocultar por rol** porque los vendedores están **obligados a verlos** para trabajar. Hoy los ven sin restricción de lugar/hora.
 
@@ -19,7 +19,7 @@
 
 ## 🗓️ Sesión 112 (2026-09-03) — KPIs: quiebre de inventario (Compras) + precisión de conteo (Auditoría)
 
-> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commit `29f3c89`. **Solo dashboard (API lectura + Web), SIN migración** → deploy seguro. Valores validados contra la BD grande en local: quiebre **33%** (3073 agotados / 9394 activos), precisión **98%** (106 coinciden / 108 auditados, igual en 15d y 30d). API "Found 0 errors".
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-03) — HEAD `7e3ca30` (código en `29f3c89`); verificado por SSH: todas en el commit + PM2 reiniciado tras el deploy (ferre, inversiones, total, totalturen, aceros, acerosmayor). **Solo dashboard (API lectura + Web), SIN migración**. Valores validados contra la BD grande en local: quiebre **33%** (3073 agotados / 9394 activos), precisión **98%** (106 coinciden / 108 auditados, igual en 15d y 30d).
 
 Origen: el jefe pidió 2 indicadores nuevos, visibles en el dashboard gerencial para que los vea la gerencia, y también en el home del rol correspondiente.
 
@@ -30,7 +30,7 @@ Origen: el jefe pidió 2 indicadores nuevos, visibles en el dashboard gerencial 
 
 ## 🗓️ Sesión 111 (2026-09-03) — Reportes Excel: fecha de emisión en CxP/CxC + Excel detallado de recibos de cobro
 
-> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commit `c87f304`. **Solo generadores de reportes (API) + 1 ruta GET + UI, SIN migración** → deploy seguro. Compilación limpia.
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-03) — HEAD `7e3ca30` (código en `c87f304`); verificado por SSH (todas en el commit + PM2 reiniciado). **Solo generadores de reportes (API) + 1 ruta GET + UI, SIN migración**. Compilación limpia.
 
 Origen: pedidos puntuales del uso diario en cuentas por pagar/cobrar y recibos de cobro.
 
@@ -39,7 +39,7 @@ Origen: pedidos puntuales del uso diario en cuentas por pagar/cobrar y recibos d
 
 ## 🗓️ Sesión 110 (2026-09-02) — IP-lock por usuario ("acceso solo en sitio")
 
-> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commits `92e075d` (IP-lock) + `72a3cca` (toggle en la lista de usuarios, 2026-09-03). Candado 1 de la propuesta anti-fuga. **Inerte por defecto:** desplegar NO afecta a nadie; se activa POR EMPRESA cargando IPs. Migración **aditiva** `20260901220000_ip_lock_onsite` (`ADD COLUMN IF NOT EXISTS`). Smoke test e2e local OK: (1) inerte→201, (2) restringido+IP fuera→403 `OFFSITE_BLOCKED`, (3) ADMIN marcado→201 (exento), (4) `/auth/my-ip`→`{ip}`, (5) IP en whitelist→201. Typecheck API/Web limpio.
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-03) — HEAD `7e3ca30` (código en `92e075d` IP-lock + `72a3cca` toggle en la lista); verificado por SSH (todas en el commit + PM2 reiniciado). Candado 1 de la propuesta anti-fuga. **Inerte por defecto:** el deploy NO afectó a nadie; se activa POR EMPRESA cargando IPs (ninguna lo tiene activo aún). Migración **aditiva** `20260901220000_ip_lock_onsite` (`ADD COLUMN IF NOT EXISTS`). Smoke test e2e local OK: (1) inerte→201, (2) restringido+IP fuera→403 `OFFSITE_BLOCKED`, (3) ADMIN marcado→201 (exento), (4) `/auth/my-ip`→`{ip}`, (5) IP en whitelist→201. **Pendiente para ACTIVAR:** confirmar IP fija del local y cargarla en `/config`.
 
 Origen: el jefe quiere evitar que un empleado saque precios/stock desde fuera del local. Se implementó el **candado 1** del diseño (spec+plan de 2026-09-01). Diego lo activará **solo en una empresa** primero.
 
