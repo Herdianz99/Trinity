@@ -17,9 +17,29 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 112 (2026-09-03) — KPIs: quiebre de inventario (Compras) + precisión de conteo (Auditoría)
+
+> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commit `29f3c89`. **Solo dashboard (API lectura + Web), SIN migración** → deploy seguro. Valores validados contra la BD grande en local: quiebre **33%** (3073 agotados / 9394 activos), precisión **98%** (106 coinciden / 108 auditados, igual en 15d y 30d). API "Found 0 errors".
+
+Origen: el jefe pidió 2 indicadores nuevos, visibles en el dashboard gerencial para que los vea la gerencia, y también en el home del rol correspondiente.
+
+- **feat(dashboard): KPI de quiebre de inventario (Compras)** — `% agotados = productos ACTIVOS no-servicio con stock ≤ 0 / total activos no-servicio`. Mismo universo que las alertas de "agotados" (`inventory-analysis`). `getStockoutRate()` con `$queryRaw` (una sola consulta agregada). Se decidió el denominador **activos no-servicio (9394)**, no "todos" (9541), para que sea consistente con el resto del sistema (por eso da 33% y no 32%).
+- **feat(dashboard): KPI de precisión de conteo (Auditoría)** — de los conteos físicos **APROBADOS** en la ventana, `% coincidencia = (totalÍtems − ítemsConDiferencia) / totalÍtems`. La fórmula "total menos los de diferencia ≠ 0" funciona tanto si el auditor registra todos los ítems como si **solo registra las discrepancias** (los no-contados quedan `difference=null` → cuentan como coincidencia), que es como opera hoy (ej. conteo de 108 ítems con solo 2 registrados, ambos con diferencia → 106/108 = 98%). `getCountAccuracy()` devuelve **ventanas de 15 y 30 días**; `pct=null` si no hubo conteos (UI muestra "—"). Porcentajes **enteros**.
+- **Backend** — ambos helpers en `dashboard.service.ts`; se agregan al `getGerencial` (bloque `inventory: { stockout, countAccuracy }`) y al `getHome` por rol (BUYER→`stockout`, AUDITOR→`countAccuracy`). Interfaz `CountAccuracyWindow` **exportada** (si no, TS4053 por tipo de retorno público). Independientes del rango de fechas del tablero (quiebre = foto actual; precisión = ventanas fijas).
+- **Frontend** — **dashboard gerencial** (ADMIN/SUPERVISOR): nueva fila con 2 tarjetas, precisión con **selector 15d/30d**, colores semáforo (quiebre verde/ámbar/rojo; precisión verde ≥95 / ámbar ≥85 / rojo); quiebre enlaza a `/inventory/alerts`. **`/dashboard/home`**: Comprador ve el quiebre, Auditor ve la precisión (con el mismo selector).
+
+## 🗓️ Sesión 111 (2026-09-03) — Reportes Excel: fecha de emisión en CxP/CxC + Excel detallado de recibos de cobro
+
+> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commit `c87f304`. **Solo generadores de reportes (API) + 1 ruta GET + UI, SIN migración** → deploy seguro. Compilación limpia.
+
+Origen: pedidos puntuales del uso diario en cuentas por pagar/cobrar y recibos de cobro.
+
+- **feat(reports): columna "Emisión" en el Excel de CxP y CxC** — en `/payables` y `/receivables` el export a Excel solo traía la fecha de vencimiento; se agregó **"Emisión"** (`originalDate`, fallback `receptionDate`) antes de "Vence". Formateo en UTC (mismo helper que "Vence", coherente con la regla de timezone). Sin tocar queries ni frontend (los datos ya venían en `findAllForReport`). Archivos: `payables-pdf.service.ts`, `receivables-pdf.service.ts` (métodos `generateXlsx`).
+- **feat(reports): Excel detallado de recibos de cobro** — nueva opción "Exportar a Excel (detallado)" en el menú Reportes de `/receipts/collection`. **Una fila por documento** cobrado (factura→Haber, nota/retención→Debe), con los datos del recibo repetidos en cada fila para filtrar/ordenar/pivotar; **neto del recibo** y **métodos de pago** en la primera fila de cada recibo; fila de **TOTALES**. Espeja el PDF detallado (misma fuente `reportListDetailed` y filtros). Nuevo método `generateDetailed` en `receipts-report-excel.service.ts` + ruta `GET /receipts/report/detailed/excel` (antes de las rutas `:id`). El backend ya soporta `type=PAYMENT` → replicar en `/receipts/payment` es solo 1 botón (pendiente si lo piden).
+
 ## 🗓️ Sesión 110 (2026-09-02) — IP-lock por usuario ("acceso solo en sitio")
 
-> ### ⏳ IMPLEMENTADO Y PROBADO EN LOCAL, PENDIENTE COMMIT/DEPLOY — candado 1 de la propuesta anti-fuga. **Inerte por defecto:** desplegar NO afecta a nadie; se activa POR EMPRESA cargando IPs. Migración **aditiva** `20260901220000_ip_lock_onsite` (`ADD COLUMN IF NOT EXISTS`). Smoke test e2e local OK: (1) inerte→201, (2) restringido+IP fuera→403 `OFFSITE_BLOCKED`, (3) ADMIN marcado→201 (exento), (4) `/auth/my-ip`→`{ip}`, (5) IP en whitelist→201. Typecheck API/Web limpio.
+> ### ⏳ COMMITEADO Y EN GITHUB, PENDIENTE DEPLOY — commits `92e075d` (IP-lock) + `72a3cca` (toggle en la lista de usuarios, 2026-09-03). Candado 1 de la propuesta anti-fuga. **Inerte por defecto:** desplegar NO afecta a nadie; se activa POR EMPRESA cargando IPs. Migración **aditiva** `20260901220000_ip_lock_onsite` (`ADD COLUMN IF NOT EXISTS`). Smoke test e2e local OK: (1) inerte→201, (2) restringido+IP fuera→403 `OFFSITE_BLOCKED`, (3) ADMIN marcado→201 (exento), (4) `/auth/my-ip`→`{ip}`, (5) IP en whitelist→201. Typecheck API/Web limpio.
 
 Origen: el jefe quiere evitar que un empleado saque precios/stock desde fuera del local. Se implementó el **candado 1** del diseño (spec+plan de 2026-09-01). Diego lo activará **solo en una empresa** primero.
 
@@ -29,6 +49,7 @@ Origen: el jefe quiere evitar que un empleado saque precios/stock desde fuera de
 - **Modelo (aditivo):** `User.restrictToOnSiteIp Boolean @default(false)` + `CompanyConfig.allowedIps String @default("")`. DTOs (`CreateUserDto`, `UpdateCompanyConfigDto`) + `users.service` (select/update del flag).
 - **API:** `GET /auth/my-ip` (autenticado) devuelve la IP pública actual (para saber cuál cargar).
 - **Frontend:** `/config` sección "Acceso solo en sitio" (textarea IPs/CIDR + "Tu IP pública actual" con botón Agregar + caveat IP fija/WiFi); `/settings/users` toggle "Solo en sitio" en el modal de edición (**deshabilitado para ADMIN**).
+- **(2026-09-03, commit `72a3cca`) Toggle "Solo en sitio" directo en la lista de `/settings/users`** — botón en la columna Acciones (ícono `MapPin`/`MapPinOff`, distinto al toggle de activo) para prender/apagar `restrictToOnSiteIp` sin abrir el modal. Reusa `PATCH /users/:id` parcial; ADMIN deshabilitado (misma regla). Colores: verde=activado, gris=apagado.
 - **Límite conocido:** marcar el flag a alguien ya logueado aplica en su **próximo login** (el flag viaja en el token); la whitelist sí es live. **ADMIN nunca se bloquea** (rescate anti-lockout, junto a "mostrar tu IP" y regla fail-safe).
 - **Activación (operacional, DESPUÉS del deploy):** confirmar **IP fija** del local → en `/config` (estando en el local) cargar la IP y verificarla → marcar usuarios "Solo en sitio" de a uno probando cada uno. Rescate si alguien se encierra: por BD `UPDATE "User" SET "restrictToOnSiteIp"=false ...` o corregir `allowedIps`.
 
