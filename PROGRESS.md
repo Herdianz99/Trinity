@@ -17,6 +17,18 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 119 (2026-09-04) — Reporte ventas por vendedor: monto devuelto por factura + totalizado
+
+> ### ⚠️ SIN DESPLEGAR. Cambio **solo API** (1 archivo, `invoice-pdf.service.ts`), sin migración. Requiere rebuild del API. Typecheck limpio; verificado end-to-end contra la BD (devuelto general $2.299,30 = suma de NCV POSTED).
+
+Diego pidió mostrar en el reporte `/invoices/report/by-seller` el monto de la devolución de las facturas devueltas/parcialmente devueltas, y totalizarlo en los pies.
+
+- **Fuente del dato**: devolución de venta = Notas de Crédito **NCV en estado POSTED** enlazadas a la factura (`Invoice.creditDebitNotes`). La consulta las incluye (`type: 'NCV', status: 'POSTED'`, solo `totalUsd`). Monto devuelto de la factura = suma de esas NCV.
+- **Por factura** (devueltas/parciales): línea en rojo `Devuelto: -$X    Neto: $Y` (Neto = Total − Devuelto) bajo la fecha/Total.
+- **Pie de vendedor**: además de `Total {vendedor}: $X`, si hubo devoluciones → `Devuelto: -$Y   Neto: $Z`.
+- **Pie del reporte**: además de `TOTAL GENERAL: $X`, si hubo devoluciones → `Devuelto general: -$Y   Neto general: $Z`.
+- Los **totales siguen siendo brutos** (no se restaron); el devuelto y el neto se muestran al lado. Verificado: TOTAL GENERAL $157.038,11 / Devuelto -$2.299,30 / Neto $154.738,81 (cuadra con la BD).
+
 ## 🗓️ Sesión 118 (2026-09-04) — Conteo físico: campo de observaciones (+ en los reportes con Ref. Prov.)
 
 > ### ⚠️ SIN DESPLEGAR. Cambio **web + API + schema** (migración aditiva). Requiere rebuild + `prisma migrate deploy`. Typecheck limpio; endpoints y PDFs probados end-to-end en local. **Commiteada junto con la 117** (mismos archivos).

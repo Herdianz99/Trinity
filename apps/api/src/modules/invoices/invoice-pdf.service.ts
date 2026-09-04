@@ -57,6 +57,8 @@ export class InvoicePdfService {
         customer: { select: { name: true } },
         seller: { select: { name: true } },
         items: { select: { productId: true, productName: true, quantity: true, totalUsd: true, discountPct: true } },
+        // Devoluciones de venta = Notas de Credito (NCV) POSTED enlazadas a la factura.
+        creditDebitNotes: { where: { type: 'NCV', status: 'POSTED' }, select: { totalUsd: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -124,6 +126,7 @@ export class InvoicePdfService {
       }
 
       let grandTotal = 0;
+      let grandReturned = 0;
       for (const [sellerName, sellerInvoices] of sortedGroups) {
         ensure(46);
         doc.rect(left, y, right - left, 16).fill('#1e293b');
@@ -133,14 +136,23 @@ export class InvoicePdfService {
         doc.fillColor('#000');
 
         let sellerTotal = 0;
+        let sellerReturned = 0;
         for (const inv of sellerInvoices) {
-          ensure(40);
+          ensure(50);
           sellerTotal += inv.totalUsd;
+          const returnedUsd = inv.creditDebitNotes.reduce((s, n) => s + (n.totalUsd || 0), 0);
+          sellerReturned += returnedUsd;
           doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#0f766e')
             .text(`${inv.number || 'S/N'}  —  ${inv.customer?.name || 'Cliente Final'}`, C.art, y, { width: 360 });
           doc.fontSize(7.5).font('Helvetica').fillColor('#555')
             .text(`${new Date(inv.createdAt).toLocaleDateString('es-VE')}    Total: $${fmt(inv.totalUsd)}`, 400, y + 1, { width: right - 400, align: 'right' });
           y += 13;
+          // Facturas devueltas o parcialmente devueltas: monto devuelto (NCV) y neto.
+          if (returnedUsd > 0) {
+            doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#b91c1c')
+              .text(`Devuelto: -$${fmt(returnedUsd)}    Neto: $${fmt(inv.totalUsd - returnedUsd)}`, 400, y - 1, { width: right - 400, align: 'right' });
+            y += 11;
+          }
           doc.fillColor('#000');
           itemHeader();
           for (const it of inv.items) {
@@ -167,15 +179,29 @@ export class InvoicePdfService {
         y += 3;
         doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#000')
           .text(`Total ${sellerName}: $${fmt(sellerTotal)}`, left, y, { width: right - left, align: 'right' });
-        y += 18;
+        y += 12;
+        if (sellerReturned > 0) {
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#b91c1c')
+            .text(`Devuelto: -$${fmt(sellerReturned)}     Neto: $${fmt(sellerTotal - sellerReturned)}`, left, y, { width: right - left, align: 'right' });
+          y += 12;
+          doc.fillColor('#000');
+        }
+        y += 6;
         grandTotal += sellerTotal;
+        grandReturned += sellerReturned;
       }
 
-      ensure(24);
+      ensure(38);
       doc.moveTo(left, y).lineTo(right, y).strokeColor('#94a3b8').stroke();
       y += 4;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
         .text(`TOTAL GENERAL: $${fmt(grandTotal)}`, left, y, { width: right - left, align: 'right' });
+      if (grandReturned > 0) {
+        y += 14;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#b91c1c')
+          .text(`Devuelto general: -$${fmt(grandReturned)}     Neto general: $${fmt(grandTotal - grandReturned)}`, left, y, { width: right - left, align: 'right' });
+        doc.fillColor('#000');
+      }
 
       doc.end();
     });
