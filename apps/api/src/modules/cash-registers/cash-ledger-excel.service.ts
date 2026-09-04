@@ -39,7 +39,7 @@ export class CashLedgerExcelService {
    * cada uno en la columna de su moneda.
    */
   async generateLedgerExcel(filters: {
-    cashRegisterId?: string; userId?: string; sessionId?: string;
+    cashRegisterId?: string; userIds?: string[]; sessionId?: string;
     from?: string; to?: string; methodIds?: string[];
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }): Promise<Buffer> {

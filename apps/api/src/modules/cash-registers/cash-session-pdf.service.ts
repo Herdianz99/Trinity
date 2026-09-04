@@ -563,7 +563,7 @@ export class CashSessionPdfService {
    * efectivo de gaveta. Es la fuente unica del arqueo.
    */
   async generateLedgerReport(filters: {
-    cashRegisterId?: string; userId?: string; sessionId?: string;
+    cashRegisterId?: string; userIds?: string[]; sessionId?: string;
     from?: string; to?: string; methodIds?: string[];
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }): Promise<Buffer> {
@@ -680,7 +680,7 @@ export class CashSessionPdfService {
    * (getLedgerEntriesForReport) y mismos filtros que el detallado. A4 vertical.
    */
   async generateLedgerSummaryReport(filters: {
-    cashRegisterId?: string; userId?: string; sessionId?: string;
+    cashRegisterId?: string; userIds?: string[]; sessionId?: string;
     from?: string; to?: string; methodIds?: string[];
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }): Promise<Buffer> {

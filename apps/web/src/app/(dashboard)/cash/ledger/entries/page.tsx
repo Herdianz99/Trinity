@@ -37,7 +37,7 @@ export default function CashLedgerEntriesPage() {
   const [methods, setMethods] = useState<any[]>([]);
 
   const [filterRegister, setFilterRegister] = useState('');
-  const [filterCashier, setFilterCashier] = useState('');
+  const [filterCashierIds, setFilterCashierIds] = useState<string[]>([]);
   const [filterFrom, setFilterFrom] = useState(todayStr());
   const [filterTo, setFilterTo] = useState(todayStr());
   const [filterMethodIds, setFilterMethodIds] = useState<string[]>([]);
@@ -68,7 +68,7 @@ export default function CashLedgerEntriesPage() {
   const buildParams = useCallback(() => {
     const p = new URLSearchParams();
     if (filterRegister) p.set('cashRegisterId', filterRegister);
-    if (filterCashier) p.set('userId', filterCashier);
+    if (filterCashierIds.length) p.set('userIds', filterCashierIds.join(','));
     if (filterFrom) p.set('from', filterFrom);
     if (filterTo) p.set('to', filterTo);
     if (filterMethodIds.length) p.set('methodIds', filterMethodIds.join(','));
@@ -77,7 +77,7 @@ export default function CashLedgerEntriesPage() {
     if (onlyCash) p.set('onlyCash', 'true');
     p.set('page', String(page));
     return p.toString();
-  }, [filterRegister, filterCashier, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash, page]);
+  }, [filterRegister, filterCashierIds, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash, page]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,12 +93,12 @@ export default function CashLedgerEntriesPage() {
   }, [buildParams]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [filterRegister, filterCashier, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash]);
+  useEffect(() => { setPage(1); }, [filterRegister, filterCashierIds, filterFrom, filterTo, filterMethodIds, filterSource, filterCurrency, onlyCash]);
 
   const reportParams = () => {
     const p = new URLSearchParams();
     if (filterRegister) p.set('cashRegisterId', filterRegister);
-    if (filterCashier) p.set('userId', filterCashier);
+    if (filterCashierIds.length) p.set('userIds', filterCashierIds.join(','));
     if (filterFrom) p.set('from', filterFrom);
     if (filterTo) p.set('to', filterTo);
     if (filterMethodIds.length) p.set('methodIds', filterMethodIds.join(','));
@@ -124,10 +124,12 @@ export default function CashLedgerEntriesPage() {
 
   const toggleMethod = (id: string) =>
     setFilterMethodIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+  const toggleCashier = (id: string) =>
+    setFilterCashierIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
 
-  const hasFilters = filterRegister || filterCashier || filterFrom || filterTo || filterMethodIds.length || filterSource || filterCurrency || onlyCash;
+  const hasFilters = filterRegister || filterCashierIds.length || filterFrom || filterTo || filterMethodIds.length || filterSource || filterCurrency || onlyCash;
   const clearFilters = () => {
-    setFilterRegister(''); setFilterCashier(''); setFilterFrom(todayStr()); setFilterTo(todayStr());
+    setFilterRegister(''); setFilterCashierIds([]); setFilterFrom(todayStr()); setFilterTo(todayStr());
     setFilterMethodIds([]); setFilterSource(''); setFilterCurrency(''); setOnlyCash(false);
   };
 
@@ -194,13 +196,6 @@ export default function CashLedgerEntriesPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Cajero</label>
-            <select value={filterCashier} onChange={e => setFilterCashier(e.target.value)} className="input-field !py-1.5 !w-44 text-sm">
-              <option value="">Todos</option>
-              {cashiers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs text-slate-400 mb-1">Origen</label>
             <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="input-field !py-1.5 !w-44 text-sm">
               <option value="">Todos</option>
@@ -231,6 +226,24 @@ export default function CashLedgerEntriesPage() {
             <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-white pb-1.5 flex items-center gap-1"><Filter size={12} /> Limpiar</button>
           ) : null}
         </div>
+
+        {/* Cajeros (multi) */}
+        {cashiers.length > 0 && (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5">Cajeros</label>
+            <div className="flex flex-wrap gap-1.5">
+              {cashiers.map(c => {
+                const sel = filterCashierIds.includes(c.id);
+                return (
+                  <button key={c.id} onClick={() => toggleCashier(c.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${sel ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`}>
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Métodos de pago (multi) */}
         <div>

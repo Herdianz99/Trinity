@@ -17,6 +17,17 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 114 (2026-09-04) — Libro mayor de caja: multi-selección de cajeros en el filtro
+
+> ### ⚠️ SIN DESPLEGAR. Cambio de **web + API** (5 archivos), sin migración. Requiere rebuild de ambos (`deploy.sh` lo hace). Typecheck limpio (API y web) y verificado levantando el sistema en local.
+
+Diego pidió poder filtrar por **varios cajeros a la vez** en `/cash/ledger/entries` (antes era un `<select>` de un solo cajero).
+
+- **Frontend** (`entries/page.tsx`) — el filtro de Cajero pasó de `<select>` único a **multi-select por "pills"** (misma UX que "Métodos de pago", fila nueva "Cajeros"). Estado `filterCashierIds: string[]`; envía `userIds` (CSV) tanto en la tabla como en `reportParams()` → los 3 reportes (PDF detallado, PDF resumen, Excel) respetan la selección.
+- **API controller** — los 4 endpoints del libro mayor (`cash/ledger-entries` + `-report`/`-summary`/`-excel`) aceptan `userIds` (CSV). Helper `parseUserIds()` que cae al `userId` legacy (single) por **compatibilidad** (nada viejo se rompe).
+- **Service** — `ledgerWhere` filtra `cashSession.openedById: { in: userIds }` (mismo criterio de antes: el cajero = quien abrió la sesión). El meta de los reportes (`getLedgerEntriesForReport`) hace `findMany` de los usuarios y arma `cashierName` uniendo los nombres (ej. `Cajero: Juan, Pedro`), así que **el PDF/Excel no necesitó tocarse** (siguen consumiendo `meta.cashierName` como string).
+- **PDF + Excel services** — solo se actualizaron las signaturas de filtros (`userId?: string` → `userIds?: string[]`).
+
 ## 🗓️ Sesión 113 (2026-09-04) — Fix IP-lock: la IP detectada era la del servidor, no la del cliente
 
 > ### ⚠️ SIN DESPLEGAR — HEAD pendiente. Cambio de **1 archivo del web** (`apps/web/src/app/api/proxy/[...path]/route.ts`), sin migración. Requiere rebuild de Next (`deploy.sh` ya lo hace) en las 6 empresas.

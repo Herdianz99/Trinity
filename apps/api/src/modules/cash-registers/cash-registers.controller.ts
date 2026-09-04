@@ -24,6 +24,14 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
+// Cajero(s) del filtro del libro mayor: acepta `userIds` (CSV, multi-select) y cae al
+// `userId` legacy (single) por compatibilidad. Devuelve undefined si no hay ninguno.
+function parseUserIds(userIds?: string, userId?: string): string[] | undefined {
+  const list = userIds ? userIds.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  if (list.length) return list;
+  return userId ? [userId] : undefined;
+}
+
 @ApiTags('Cash Registers')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -135,6 +143,7 @@ export class CashRegistersController {
   getLedgerEntries(
     @Query('cashRegisterId') cashRegisterId?: string,
     @Query('userId') userId?: string,
+    @Query('userIds') userIds?: string,
     @Query('sessionId') sessionId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -145,8 +154,9 @@ export class CashRegistersController {
     @Query('page') page?: string,
   ) {
     const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
+    const uids = parseUserIds(userIds, userId);
     return this.service.getLedgerEntries(
-      { cashRegisterId, userId, sessionId, from, to, methodIds: ids, sourceType, currency, onlyCash: onlyCash === 'true' },
+      { cashRegisterId, userIds: uids, sessionId, from, to, methodIds: ids, sourceType, currency, onlyCash: onlyCash === 'true' },
       parseInt(page || '1', 10),
     );
   }
@@ -157,6 +167,7 @@ export class CashRegistersController {
     @Res() res: Response,
     @Query('cashRegisterId') cashRegisterId?: string,
     @Query('userId') userId?: string,
+    @Query('userIds') userIds?: string,
     @Query('sessionId') sessionId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -167,7 +178,7 @@ export class CashRegistersController {
   ) {
     const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
     const buffer = await this.pdfService.generateLedgerReport({
-      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      cashRegisterId, userIds: parseUserIds(userIds, userId), sessionId, from, to, methodIds: ids,
       sourceType, currency, onlyCash: onlyCash === 'true',
     });
     res.set({
@@ -184,6 +195,7 @@ export class CashRegistersController {
     @Res() res: Response,
     @Query('cashRegisterId') cashRegisterId?: string,
     @Query('userId') userId?: string,
+    @Query('userIds') userIds?: string,
     @Query('sessionId') sessionId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -194,7 +206,7 @@ export class CashRegistersController {
   ) {
     const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
     const buffer = await this.pdfService.generateLedgerSummaryReport({
-      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      cashRegisterId, userIds: parseUserIds(userIds, userId), sessionId, from, to, methodIds: ids,
       sourceType, currency, onlyCash: onlyCash === 'true',
     });
     res.set({
@@ -211,6 +223,7 @@ export class CashRegistersController {
     @Res() res: Response,
     @Query('cashRegisterId') cashRegisterId?: string,
     @Query('userId') userId?: string,
+    @Query('userIds') userIds?: string,
     @Query('sessionId') sessionId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -221,7 +234,7 @@ export class CashRegistersController {
   ) {
     const ids = methodIds ? methodIds.split(',').filter(Boolean) : undefined;
     const buffer = await this.excelService.generateLedgerExcel({
-      cashRegisterId, userId, sessionId, from, to, methodIds: ids,
+      cashRegisterId, userIds: parseUserIds(userIds, userId), sessionId, from, to, methodIds: ids,
       sourceType, currency, onlyCash: onlyCash === 'true',
     });
     res.set({

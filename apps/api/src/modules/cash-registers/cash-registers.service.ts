@@ -772,7 +772,7 @@ export class CashRegistersService {
   async getLedgerEntries(
     filters: {
       cashRegisterId?: string;
-      userId?: string;
+      userIds?: string[];
       sessionId?: string;
       from?: string;
       to?: string;
@@ -931,7 +931,7 @@ export class CashRegistersService {
 
   /** Construye el `where` de la tabla madre a partir de los filtros (compartido lista/reporte). */
   private ledgerWhere(filters: {
-    cashRegisterId?: string; userId?: string; sessionId?: string;
+    cashRegisterId?: string; userIds?: string[]; sessionId?: string;
     from?: string; to?: string; methodIds?: string[];
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }) {
@@ -943,10 +943,10 @@ export class CashRegistersService {
     if (filters.currency) where.currency = filters.currency;
     if (filters.onlyCash) where.isCash = true;
     if (filters.sessionId) where.cashSessionId = filters.sessionId;
-    if (filters.cashRegisterId || filters.userId) {
+    if (filters.cashRegisterId || (filters.userIds && filters.userIds.length)) {
       where.cashSession = {
         ...(filters.cashRegisterId ? { cashRegisterId: filters.cashRegisterId } : {}),
-        ...(filters.userId ? { openedById: filters.userId } : {}),
+        ...(filters.userIds && filters.userIds.length ? { openedById: { in: filters.userIds } } : {}),
       };
     }
     return where;
@@ -954,7 +954,7 @@ export class CashRegistersService {
 
   /** TODAS las filas del ledger (sin paginar) + totales + meta — para el reporte PDF detallado. */
   async getLedgerEntriesForReport(filters: {
-    cashRegisterId?: string; userId?: string; sessionId?: string;
+    cashRegisterId?: string; userIds?: string[]; sessionId?: string;
     from?: string; to?: string; methodIds?: string[];
     sourceType?: string; currency?: string; onlyCash?: boolean;
   }) {
@@ -1011,15 +1011,15 @@ export class CashRegistersService {
     };
 
     // Meta para el encabezado del reporte
-    const [reg, usr, mets] = await Promise.all([
+    const [reg, usrs, mets] = await Promise.all([
       filters.cashRegisterId ? this.prisma.cashRegister.findUnique({ where: { id: filters.cashRegisterId }, select: { name: true } }) : null,
-      filters.userId ? this.prisma.user.findUnique({ where: { id: filters.userId }, select: { name: true } }) : null,
+      filters.userIds && filters.userIds.length ? this.prisma.user.findMany({ where: { id: { in: filters.userIds } }, select: { name: true } }) : [],
       filters.methodIds && filters.methodIds.length ? this.prisma.paymentMethod.findMany({ where: { id: { in: filters.methodIds } }, select: { name: true } }) : [],
     ]);
     const meta = {
       from: filters.from || null, to: filters.to || null,
       registerName: reg?.name || 'Todas',
-      cashierName: usr?.name || 'Todos',
+      cashierName: (usrs || []).length ? (usrs || []).map((u) => u.name).join(', ') : 'Todos',
       methodNames: (mets || []).map((m) => m.name),
       sourceType: filters.sourceType || null,
       currency: filters.currency || null,
