@@ -84,6 +84,18 @@ Diego pidió poder filtrar por **varios cajeros a la vez** en `/cash/ledger/entr
 - **Service** — `ledgerWhere` filtra `cashSession.openedById: { in: userIds }` (mismo criterio de antes: el cajero = quien abrió la sesión). El meta de los reportes (`getLedgerEntriesForReport`) hace `findMany` de los usuarios y arma `cashierName` uniendo los nombres (ej. `Cajero: Juan, Pedro`), así que **el PDF/Excel no necesitó tocarse** (siguen consumiendo `meta.cashierName` como string).
 - **PDF + Excel services** — solo se actualizaron las signaturas de filtros (`userId?: string` → `userIds?: string[]`).
 
+## 🗓️ Sesión 120 (2026-09-04) — Fix IP-lock parte 2: las rutas /api/auth/* también rebotaban la IP
+
+> ### ⚠️ DESPLEGADO EN LA GRANDE (inversiones) — pendiente en las otras 5. Cambio de **web** (nuevo `apps/web/src/lib/server-api.ts` + login/me/refresh/change-password/proxy), sin migración. Requiere rebuild de Next (`deploy.sh`).
+
+**Síntoma:** tras el fix de la Sesión 113 (proxy) la IP detectada en /config ya era la real, Diego la puso en la whitelist y restringió a un usuario — pero ese usuario **seguía bloqueado desde el propio local** (login daba `403 OFFSITE_BLOCKED`).
+
+**Causa raíz:** la Ses.113 solo parchó el proxy `api/proxy/[...path]`. Las rutas **`/api/auth/*`** (login, me, refresh, change-password) son rutas de Next **aparte** que (1) usaban `NEXT_PUBLIC_API_URL` (dominio público → rebote que mete la IP del server en `X-Forwarded-For`) y (2) **no reenviaban** la IP real del cliente. Como el **login valida la IP** (`auth.service.login`), el API veía `134.209.164.59` y bloqueaba. (ADMIN queda exento, por eso Diego-admin sí entraba.)
+
+**Fix:** helper `lib/server-api.ts` (`SERVER_API_URL` = `API_PROXY_TARGET || NEXT_PUBLIC_API_URL || localhost` + `forwardClientIp()`), aplicado en las 4 rutas de auth y en el proxy (una sola fuente de verdad). En la grande además se seteó `API_PROXY_TARGET=http://localhost:4000` en `apps/web/.env` (runtime, sin rebuild). IP real del local de Diego = `195.242.214.131`.
+
+**Pendiente:** aplicar a las otras 5 empresas al activar IP-lock — cada una necesita `API_PROXY_TARGET=http://localhost:PORT` (co-locados: total/aceros=4000, totalturen/acerosmayor=4001) + deploy del código nuevo.
+
 ## 🗓️ Sesión 113 (2026-09-04) — Fix IP-lock: la IP detectada era la del servidor, no la del cliente
 
 > ### ⚠️ SIN DESPLEGAR — HEAD pendiente. Cambio de **1 archivo del web** (`apps/web/src/app/api/proxy/[...path]/route.ts`), sin migración. Requiere rebuild de Next (`deploy.sh` ya lo hace) en las 6 empresas.

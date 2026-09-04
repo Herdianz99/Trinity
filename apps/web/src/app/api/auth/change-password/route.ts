@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { SERVER_API_URL, forwardClientIp } from '@/lib/server-api';
 
 export async function PATCH(request: NextRequest) {
   const token = request.cookies.get('accessToken')?.value;
@@ -12,11 +11,12 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const res = await fetch(`${API_URL}/auth/change-password`, {
+    const res = await fetch(`${SERVER_API_URL}/auth/change-password`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        ...forwardClientIp(request),
       },
       body: JSON.stringify(body),
     });

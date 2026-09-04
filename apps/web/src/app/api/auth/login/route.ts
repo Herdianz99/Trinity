@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { SERVER_API_URL, forwardClientIp } from '@/lib/server-api';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const res = await fetch(`${API_URL}/auth/login`, {
+    const res = await fetch(`${SERVER_API_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...forwardClientIp(request) },
       body: JSON.stringify(body),
     });
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { SERVER_API_URL, forwardClientIp } from '@/lib/server-api';
 
 export async function GET(request: NextRequest) {
   const token = request.cookies.get('accessToken')?.value;
@@ -10,8 +9,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(`${SERVER_API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}`, ...forwardClientIp(request) },
     });
 
     if (!res.ok) {

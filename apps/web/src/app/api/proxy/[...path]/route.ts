@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SERVER_API_URL, forwardClientIp } from '@/lib/server-api';
 
-// API_PROXY_TARGET permite fijar el backend en RUNTIME (no se congela en build como
-// NEXT_PUBLIC_*). Util para correr 2 instancias desde un mismo build (pruebas locales).
-const API_URL = process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// SERVER_API_URL sale de API_PROXY_TARGET (runtime, no se congela en build como
+// NEXT_PUBLIC_*). Util para correr 2 instancias desde un mismo build (pruebas locales)
+// y OBLIGATORIO en prod = localhost para no romper el IP-lock (ver server-api.ts).
+const API_URL = SERVER_API_URL;
 
 async function handler(request: NextRequest, { params }: { params: { path: string[] } }) {
   const token = request.cookies.get('accessToken')?.value;
@@ -19,13 +21,8 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
   }
 
   // IP-lock: este proxy corre server-side, asi que el API veria SIEMPRE la IP del
-  // servidor y nunca la del navegador. Reenviamos la IP real del cliente (que nginx
-  // ya puso en X-Forwarded-For / X-Real-IP al entrar a Next) para que el API la lea.
-  const clientIp =
-    request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for');
-  if (clientIp) {
-    headers['X-Forwarded-For'] = clientIp;
-  }
+  // servidor y nunca la del navegador. Reenviamos la IP real del cliente (ver server-api.ts).
+  Object.assign(headers, forwardClientIp(request));
 
   let body: string | undefined;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
