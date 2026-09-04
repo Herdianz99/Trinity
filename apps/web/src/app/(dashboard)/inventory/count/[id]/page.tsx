@@ -534,7 +534,7 @@ export default function InventoryCountDetailPage() {
       ) : count.observations ? (
         <div className="card p-4 mb-4">
           <p className="text-xs font-medium text-slate-400 mb-1">Observaciones del conteo</p>
-          <p className="text-sm text-slate-300 whitespace-pre-wrap">{count.observations}</p>
+          <p className="text-sm text-slate-300 whitespace-pre-wrap break-words">{count.observations}</p>
         </div>
       ) : null}
 
