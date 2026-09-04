@@ -17,6 +17,16 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 116 (2026-09-04) — Alertas de inventario: "Ref. proveedor" en el Excel
+
+> ### ⚠️ SIN DESPLEGAR. Cambio **solo de web** (1 archivo), sin migración. Requiere rebuild del web. Typecheck limpio.
+
+Diego pidió que el Excel de `/inventory/alerts` incluyera también el código "Ref. proveedor". El API ya devolvía `supplierRef` en cada alerta (`getInventoryAlerts`); solo faltaba usarlo en el frontend.
+
+- Nueva columna **"Ref. proveedor"** en el Excel (generado client-side con `xlsx`), ubicada justo después de "Código". Fallback `—` si el producto no tiene ref.
+- Se ajustó la fila **TOTAL** (reportes Exceso / Sin rotación) para alinear con la columna extra.
+- El PDF de alertas NO se tocó (solo se pidió el Excel).
+
 ## 🗓️ Sesión 115 (2026-09-04) — Código de cliente correlativo (CLI-000001)
 
 > ### ⚠️ SIN DESPLEGAR. Cambio de **web + API + schema** (migración aditiva). Requiere rebuild de ambos + `prisma migrate deploy` (que corre el backfill automáticamente en cada empresa). Typecheck limpio; migración probada en local sobre la BD real de la grande (52.315 clientes).

@@ -8,7 +8,7 @@ import { MetricsHelpButton } from '@/components/metrics-help-modal';
 type Nivel = 'RECIEN_INGRESADO' | 'NUEVO_SIN_ROTACION' | 'STOCK_MUERTO';
 interface AlertItem {
   productId: string; productCode: string; productName: string; category: string;
-  supplierId: string | null; supplierName: string;
+  supplierRef: string; supplierId: string | null; supplierName: string;
   currentStock: number; minStock: number; costUsd: number; inventoryValueUsd: number;
   bregaPct: number; costoConBrechaUsd: number; inventoryValueBregaUsd: number;
   lastEntryDate: string; lastEntrySource: 'PURCHASE' | 'CREATED';
@@ -107,14 +107,14 @@ export default function InventoryAlertsPage() {
   const fmtUsd = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function exportExcel() {
-    const header = ['Código', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'];
+    const header = ['Código', 'Ref. proveedor', 'Producto', 'Proveedor', 'Stock', 'Mínimo', `Ventas (${period}d)`, 'Última entrada', 'Días', 'Estado'];
     if (showAgotado) header.push('Agotado desde', 'Días agotado');
     if (showValor) header.push('Costo+brecha (USD)', 'Valor stock (USD)');
     const aoa: (string | number)[][] = [
       header,
       ...filtered.map((it) => {
         const row: (string | number)[] = [
-          it.productCode, it.productName, it.supplierName, it.currentStock, it.minStock,
+          it.productCode, it.supplierRef || '—', it.productName, it.supplierName, it.currentStock, it.minStock,
           it.periodSales, fmtDate(it.lastEntryDate), it.daysSinceEntry, estadoTexto(it),
         ];
         if (showAgotado) row.push(it.outOfStockDate ? fmtDate(it.outOfStockDate) : '—', it.daysOutOfStock ?? '—');
@@ -122,7 +122,7 @@ export default function InventoryAlertsPage() {
         return row;
       }),
     ];
-    if (showValor) aoa.push(['', '', '', '', '', '', '', '', 'TOTAL', '', Math.round(totalValorBrecha * 100) / 100]);
+    if (showValor) aoa.push(['', '', '', '', '', '', '', '', '', 'TOTAL', '', Math.round(totalValorBrecha * 100) / 100]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Alertas');
