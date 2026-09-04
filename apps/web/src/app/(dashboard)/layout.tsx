@@ -6,13 +6,12 @@ import PrintMonitor from '@/components/print-monitor';
 import MobileBottomNav from '@/components/mobile-bottom-nav';
 import SessionKeeper from '@/components/session-keeper';
 import { NavGuardProvider } from '@/components/nav-guard';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { SERVER_API_URL, forwardClientIpFromHeaders } from '@/lib/server-api';
 
 async function getUser(token: string) {
   try {
-    const res = await fetch(`${API_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(`${SERVER_API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}`, ...forwardClientIpFromHeaders() },
       cache: 'no-store',
     });
     if (!res.ok) return null;

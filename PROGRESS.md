@@ -94,6 +94,8 @@ Diego pidió poder filtrar por **varios cajeros a la vez** en `/cash/ledger/entr
 
 **Fix:** helper `lib/server-api.ts` (`SERVER_API_URL` = `API_PROXY_TARGET || NEXT_PUBLIC_API_URL || localhost` + `forwardClientIp()`), aplicado en las 4 rutas de auth y en el proxy (una sola fuente de verdad). En la grande además se seteó `API_PROXY_TARGET=http://localhost:4000` en `apps/web/.env` (runtime, sin rebuild). IP real del local de Diego = `195.242.214.131`.
 
+**Parte 3 (mismo día) — server components:** el usuario restringido entraba pero **sin menús**. Causa: `layout.tsx` (permisos→sidebar) y `dashboard/page.tsx` (rol) son **server components** que consultan `/auth/me` server-side con el mismo defecto (dominio público, sin reenviar IP) → el guard los bloqueaba con la IP del server → `permissions=[]`. Fix: variante `forwardClientIpFromHeaders()` (lee IP de `next/headers`) aplicada en ambos. `middleware.ts` OK (lee permisos del token, no llama al API).
+
 **Pendiente:** aplicar a las otras 5 empresas al activar IP-lock — cada una necesita `API_PROXY_TARGET=http://localhost:PORT` (co-locados: total/aceros=4000, totalturen/acerosmayor=4001) + deploy del código nuevo.
 
 ## 🗓️ Sesión 113 (2026-09-04) — Fix IP-lock: la IP detectada era la del servidor, no la del cliente
