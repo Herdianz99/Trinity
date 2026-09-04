@@ -17,6 +17,22 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 113 (2026-09-04) — Fix IP-lock: la IP detectada era la del servidor, no la del cliente
+
+> ### ⚠️ SIN DESPLEGAR — HEAD pendiente. Cambio de **1 archivo del web** (`apps/web/src/app/api/proxy/[...path]/route.ts`), sin migración. Requiere rebuild de Next (`deploy.sh` ya lo hace) en las 6 empresas.
+
+**Síntoma reportado por Diego:** el IP-lock mostraba como "IP pública actual" la del servidor (ej. `134.209.164.59`) en vez de la real del local (`156.235.91.151`). Poniendo la del servidor entraban **todos**; poniendo la real **nadie** entraba, ni desde el propio local.
+
+**Causa raíz:** el navegador **no habla directo con el API** — todo pasa por el proxy server-side de Next (`api/proxy/[...path]/route.ts`), que hacía `fetch` al API **sin reenviar la IP del cliente**. Por eso el API (vía `req.ip`) siempre veía la IP del servidor. La cadena `X-Forwarded-For` llegaba bien de nginx→Next, pero se **rompía** en el salto Next→API.
+
+**Fix:** el proxy ahora toma la IP real del cliente (`X-Real-IP`, que nginx ya fija en el bloque :3000; fallback `X-Forwarded-For`) y la reenvía al API como `X-Forwarded-For`. El API ya sabía leerla (`trust proxy=1` en `main.ts`; target del proxy = `localhost:4000`, 1 salto → sin tocar `TRUST_PROXY_HOPS`).
+
+**Al desplegar (para no bloquear a nadie):**
+1. Antes del deploy, en /config agregar la IP real del local (`156.235.91.151`) **sin quitar** la del servidor (deja ambas).
+2. Deploy; verificar que "Tu IP pública actual" muestre la real.
+3. Recién ahí quitar la IP del servidor de la lista y guardar.
+- Verificar en cada servidor que nginx pase `X-Real-IP` en el bloque :3000 (`grep X-Real-IP /etc/nginx/sites-enabled/*`), sobre todo en los co-locados (aceros/total) con config fuera del repo. IP dinámica del local → usar CIDR (ej. `156.235.91.0/24`). ADMIN nunca se bloquea.
+
 ## 🗓️ Sesión 112 (2026-09-03) — KPIs: quiebre de inventario (Compras) + precisión de conteo (Auditoría)
 
 > ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-03) — HEAD `7e3ca30` (código en `29f3c89`); verificado por SSH: todas en el commit + PM2 reiniciado tras el deploy (ferre, inversiones, total, totalturen, aceros, acerosmayor). **Solo dashboard (API lectura + Web), SIN migración**. Valores validados contra la BD grande en local: quiebre **33%** (3073 agotados / 9394 activos), precisión **98%** (106 coinciden / 108 auditados, igual en 15d y 30d).

@@ -18,6 +18,15 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
     headers['Content-Type'] = contentType;
   }
 
+  // IP-lock: este proxy corre server-side, asi que el API veria SIEMPRE la IP del
+  // servidor y nunca la del navegador. Reenviamos la IP real del cliente (que nginx
+  // ya puso en X-Forwarded-For / X-Real-IP al entrar a Next) para que el API la lea.
+  const clientIp =
+    request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for');
+  if (clientIp) {
+    headers['X-Forwarded-For'] = clientIp;
+  }
+
   let body: string | undefined;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     body = await request.text();
