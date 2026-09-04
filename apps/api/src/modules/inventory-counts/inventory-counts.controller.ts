@@ -25,6 +25,7 @@ import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { UpdateCountItemsDto } from './dto/update-count-items.dto';
 import { AddItemsByFilterDto, AddItemsByIdsDto } from './dto/add-items.dto';
 import { RemoveItemsDto } from './dto/remove-items.dto';
+import { UpdateObservationsDto } from './dto/update-observations.dto';
 
 @ApiTags('Inventory Counts')
 @ApiBearerAuth()
@@ -83,6 +84,18 @@ export class InventoryCountsController {
     res.end(buffer);
   }
 
+  // Diferencias VALORADAS: monto con signo (sobrante +, faltante -) y neto (sobrantes - faltantes).
+  @Get(':id/pdf-differences-valued')
+  async getPdfDifferencesValued(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateValuedDifferencesReport(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="diferencias-valoradas-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryCountsService.findOne(id);
@@ -109,6 +122,11 @@ export class InventoryCountsController {
   @Patch(':id/items')
   updateItems(@Param('id') id: string, @Body() dto: UpdateCountItemsDto) {
     return this.inventoryCountsService.updateItems(id, dto);
+  }
+
+  @Patch(':id/observations')
+  updateObservations(@Param('id') id: string, @Body() dto: UpdateObservationsDto) {
+    return this.inventoryCountsService.updateObservations(id, dto.observations ?? null);
   }
 
   @Patch(':id/approve')

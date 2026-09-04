@@ -2864,3 +2864,6 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "code" TEXT;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "lastCustomerNumber" INTEGER NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS "Customer_code_key" ON "Customer"("code");
+
+-- Observaciones de conteo fisico (Session 118): columna aditiva
+ALTER TABLE "InventoryCount" ADD COLUMN IF NOT EXISTS "observations" TEXT;

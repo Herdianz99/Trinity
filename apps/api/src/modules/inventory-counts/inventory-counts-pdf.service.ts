@@ -7,6 +7,30 @@ export class InventoryCountsPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Bloque de "Observaciones" del conteo. Usa width=pageWidth para que PDFKit
+   * envuelva el texto y crezca a varias lineas si la observacion es larga
+   * (la altura se mide con heightOfString y avanza `y` en consecuencia).
+   */
+  private drawObservations(
+    doc: PDFKit.PDFDocument,
+    observations: string | null | undefined,
+    y: number,
+    pageWidth: number,
+  ): number {
+    if (!observations || !observations.trim()) return y;
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#333333');
+    doc.text('Observaciones:', 40, y);
+    y += 11;
+    doc.font('Helvetica').fillColor('#000000');
+    const obsH = doc.heightOfString(observations, { width: pageWidth });
+    doc.text(observations, 40, y, { width: pageWidth });
+    y += obsH + 6;
+    doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
+    y += 6;
+    return y;
+  }
+
+  /**
    * Hoja de conteo fisico — para imprimir ANTES de ir a contar.
    * Columnas en blanco para escribir a mano la cantidad contada (2 conteos).
    */
@@ -153,7 +177,7 @@ export class InventoryCountsPdfService {
         warehouse: true,
         items: {
           include: {
-            product: { select: { code: true, name: true, costUsd: true } },
+            product: { select: { code: true, name: true, supplierRef: true, costUsd: true } },
           },
           orderBy: { product: { name: 'asc' } },
         },
@@ -218,32 +242,19 @@ export class InventoryCountsPdfService {
         return y;
       };
 
-      // Column positions (portrait LETTER = 612 x 792)
+      // Column positions (portrait LETTER = 612 x 792, area util 40..572)
       const col = {
-        num: 40,
-        code: 60,
-        product: 130,
-        system: 300,
-        counted: 350,
-        diff: 400,
-        costUnit: 450,
-        costTotal: 500,
+        num: 40, code: 56, ref: 110, product: 178, system: 330, counted: 372, diff: 414, costUnit: 450, costTotal: 500,
       };
       const colWidths = {
-        num: 18,
-        code: 65,
-        product: 168,
-        system: 45,
-        counted: 45,
-        diff: 45,
-        costUnit: 48,
-        costTotal: 60,
+        num: 16, code: 52, ref: 66, product: 150, system: 40, counted: 40, diff: 34, costUnit: 48, costTotal: 70,
       };
 
       const drawTableHeader = (y: number): number => {
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000');
         doc.text('#', col.num, y, { width: colWidths.num, align: 'center' });
         doc.text('Codigo', col.code, y, { width: colWidths.code });
+        doc.text('Ref. Prov.', col.ref, y, { width: colWidths.ref });
         doc.text('Producto', col.product, y, { width: colWidths.product });
         doc.text('Sistema', col.system, y, { width: colWidths.system, align: 'right' });
         doc.text('Contado', col.counted, y, { width: colWidths.counted, align: 'right' });
@@ -257,6 +268,7 @@ export class InventoryCountsPdfService {
       };
 
       let y = drawHeader(40);
+      y = this.drawObservations(doc, count.observations, y, pageWidth);
 
       if (diffItems.length === 0) {
         y += 20;
@@ -270,10 +282,11 @@ export class InventoryCountsPdfService {
         doc.fontSize(7).font('Helvetica');
 
         diffItems.forEach((item, idx) => {
-          // Altura dinamica: el nombre puede ocupar 2 lineas.
+          // Altura dinamica: el nombre, codigo o ref pueden ocupar 2 lineas.
           doc.fontSize(7).font('Helvetica');
           const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
-          const rowH = Math.max(14, nameH + 2);
+          const refH = doc.heightOfString(item.product.supplierRef || '', { width: colWidths.ref });
+          const rowH = Math.max(14, nameH + 2, refH + 2);
 
           if (y > pageHeight - 100 - rowH) {
             doc.addPage();
@@ -288,6 +301,7 @@ export class InventoryCountsPdfService {
           doc.fillColor('#000000');
           doc.text(String(idx + 1), col.num, y, { width: colWidths.num, align: 'center' });
           doc.text(item.product.code, col.code, y, { width: colWidths.code });
+          doc.text(item.product.supplierRef || '', col.ref, y, { width: colWidths.ref });
           doc.text(item.product.name, col.product, y, { width: colWidths.product });
           doc.text(String(item.systemQuantity), col.system, y, {
             width: colWidths.system,
@@ -339,6 +353,206 @@ export class InventoryCountsPdfService {
         doc.fillColor('#cc0000');
         doc.font('Helvetica-Bold');
         doc.text(`Costo total de faltantes: $${costoFaltantes.toFixed(2)}`, 40, y);
+        y += 20;
+      }
+
+      // Footer
+      if (y > pageHeight - 40) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.fontSize(7).font('Helvetica').fillColor('#888888');
+      doc.text(`Generado el ${new Date().toLocaleString('es-VE')} — Trinity ERP`, 40, y, {
+        width: pageWidth,
+        align: 'center',
+      });
+
+      doc.end();
+    });
+  }
+
+  /**
+   * Reporte de diferencias VALORADAS — igual que el de diferencias, pero el monto lleva SIGNO:
+   * sobrante (diff > 0) => monto positivo; faltante (diff < 0) => monto negativo.
+   * Al final: monto de sobrantes, monto de faltantes y NETO (sobrantes - faltantes).
+   */
+  async generateValuedDifferencesReport(id: string): Promise<Buffer> {
+    const count = await this.prisma.inventoryCount.findUnique({
+      where: { id },
+      include: {
+        warehouse: true,
+        items: {
+          include: {
+            product: { select: { code: true, name: true, supplierRef: true, costUsd: true } },
+          },
+          orderBy: { product: { name: 'asc' } },
+        },
+      },
+    });
+
+    if (!count) throw new NotFoundException('Conteo no encontrado');
+
+    const diffItems = count.items.filter(
+      (item) => item.difference !== null && item.difference !== 0,
+    );
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+      const buffers: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const pageWidth = doc.page.width - 80;
+      const pageHeight = doc.page.height;
+
+      // Aggregation — montos con signo
+      let totalSobrante = 0; // unidades
+      let totalFaltante = 0; // unidades (positivo)
+      let montoSobrantes = 0; // $ (positivo)
+      let montoFaltantes = 0; // $ (negativo)
+
+      for (const item of diffItems) {
+        const diff = item.difference!;
+        const monto = diff * item.product.costUsd; // con signo
+        if (diff > 0) {
+          totalSobrante += diff;
+          montoSobrantes += monto;
+        } else {
+          totalFaltante += Math.abs(diff);
+          montoFaltantes += monto; // negativo
+        }
+      }
+      const neto = montoSobrantes + montoFaltantes; // sobrantes - faltantes
+
+      // Formatea un monto con signo: -$12.34 / $12.34
+      const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`;
+
+      const drawHeader = (y: number): number => {
+        doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('REPORTE DE DIFERENCIAS VALORADAS - CONTEO FISICO', 40, y, {
+          width: pageWidth,
+          align: 'center',
+        });
+        y += 20;
+
+        doc.fontSize(9).font('Helvetica').fillColor('#333333');
+        doc.text(`Almacen: ${count.warehouse.name}`, 40, y);
+        doc.text(`Fecha: ${new Date(count.createdAt).toLocaleDateString('es-VE')}`, 350, y);
+        y += 14;
+        if (count.notes) {
+          doc.text(`Notas: ${count.notes}`, 40, y);
+          y += 14;
+        }
+        doc.text(
+          `Productos con diferencia: ${diffItems.length} de ${count.items.length} total`,
+          40,
+          y,
+        );
+        y += 18;
+        doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#999999');
+        y += 8;
+        return y;
+      };
+
+      const col = {
+        num: 40, code: 56, ref: 110, product: 178, system: 330, counted: 372, diff: 414, costUnit: 450, costTotal: 500,
+      };
+      const colWidths = {
+        num: 16, code: 52, ref: 66, product: 150, system: 40, counted: 40, diff: 34, costUnit: 48, costTotal: 70,
+      };
+
+      const drawTableHeader = (y: number): number => {
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('#', col.num, y, { width: colWidths.num, align: 'center' });
+        doc.text('Codigo', col.code, y, { width: colWidths.code });
+        doc.text('Ref. Prov.', col.ref, y, { width: colWidths.ref });
+        doc.text('Producto', col.product, y, { width: colWidths.product });
+        doc.text('Sistema', col.system, y, { width: colWidths.system, align: 'right' });
+        doc.text('Contado', col.counted, y, { width: colWidths.counted, align: 'right' });
+        doc.text('Difer.', col.diff, y, { width: colWidths.diff, align: 'right' });
+        doc.text('Costo USD', col.costUnit, y, { width: colWidths.costUnit, align: 'right' });
+        doc.text('Monto Dif.', col.costTotal, y, { width: colWidths.costTotal, align: 'right' });
+        y += 14;
+        doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#999999');
+        y += 4;
+        return y;
+      };
+
+      let y = drawHeader(40);
+      y = this.drawObservations(doc, count.observations, y, pageWidth);
+
+      if (diffItems.length === 0) {
+        y += 20;
+        doc.fontSize(10).font('Helvetica').fillColor('#333333');
+        doc.text('No se encontraron diferencias en este conteo.', 40, y, {
+          width: pageWidth,
+          align: 'center',
+        });
+      } else {
+        y = drawTableHeader(y);
+        doc.fontSize(7).font('Helvetica');
+
+        diffItems.forEach((item, idx) => {
+          doc.fontSize(7).font('Helvetica');
+          const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
+          const refH = doc.heightOfString(item.product.supplierRef || '', { width: colWidths.ref });
+          const rowH = Math.max(14, nameH + 2, refH + 2);
+
+          if (y > pageHeight - 120 - rowH) {
+            doc.addPage();
+            y = 40;
+            y = drawTableHeader(y);
+            doc.fontSize(7).font('Helvetica');
+          }
+
+          const diff = item.difference!;
+          const montoDif = diff * item.product.costUsd; // con signo
+
+          doc.fillColor('#000000');
+          doc.text(String(idx + 1), col.num, y, { width: colWidths.num, align: 'center' });
+          doc.text(item.product.code, col.code, y, { width: colWidths.code });
+          doc.text(item.product.supplierRef || '', col.ref, y, { width: colWidths.ref });
+          doc.text(item.product.name, col.product, y, { width: colWidths.product });
+          doc.text(String(item.systemQuantity), col.system, y, { width: colWidths.system, align: 'right' });
+          doc.text(String(item.countedQuantity ?? 0), col.counted, y, { width: colWidths.counted, align: 'right' });
+
+          doc.fillColor(diff > 0 ? '#0066cc' : '#cc0000');
+          doc.text(`${diff > 0 ? '+' : ''}${diff}`, col.diff, y, { width: colWidths.diff, align: 'right' });
+
+          doc.fillColor('#000000');
+          doc.text(`$${item.product.costUsd.toFixed(2)}`, col.costUnit, y, { width: colWidths.costUnit, align: 'right' });
+
+          // Monto de la diferencia CON SIGNO (positivo sobrante, negativo faltante)
+          doc.fillColor(montoDif < 0 ? '#cc0000' : '#0066cc');
+          doc.text(money(montoDif), col.costTotal, y, { width: colWidths.costTotal, align: 'right' });
+
+          y += rowH;
+        });
+
+        // Summary
+        y += 8;
+        doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#999999');
+        y += 10;
+
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+        doc.text('RESUMEN', 40, y);
+        y += 16;
+
+        doc.fontSize(9).font('Helvetica');
+        doc.fillColor('#0066cc');
+        doc.text(`Sobrantes: +${totalSobrante} uds   =   ${money(montoSobrantes)}`, 40, y);
+        y += 14;
+
+        doc.fillColor('#cc0000');
+        doc.text(`Faltantes: -${totalFaltante} uds   =   ${money(montoFaltantes)}`, 40, y);
+        y += 14;
+
+        // Neto = sobrantes - faltantes (azul si >= 0, rojo si negativo)
+        doc.moveTo(40, y).lineTo(260, y).stroke('#cccccc');
+        y += 8;
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(neto < 0 ? '#cc0000' : '#0066cc');
+        doc.text(`NETO (sobrantes - faltantes): ${money(neto)}`, 40, y);
         y += 20;
       }
 

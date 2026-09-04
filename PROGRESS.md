@@ -17,6 +17,27 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 118 (2026-09-04) — Conteo físico: campo de observaciones (+ en los reportes con Ref. Prov.)
+
+> ### ⚠️ SIN DESPLEGAR. Cambio **web + API + schema** (migración aditiva). Requiere rebuild + `prisma migrate deploy`. Typecheck limpio; endpoints y PDFs probados end-to-end en local. **Commiteada junto con la 117** (mismos archivos).
+
+Diego pidió un campo de observaciones para el conteo físico, editable mientras está en borrador/en progreso (para anotar lo que se notó durante el conteo antes de procesar), y que además saliera en los reportes.
+
+- **Schema/migración** — `InventoryCount.observations String?` (nuevo, separado del `notes` de creación). Migración `20260904234500_count_observations` aditiva (`IF NOT EXISTS`) + `fix-schema.sql`.
+- **Backend** — endpoint `PATCH :id/observations` (+ DTO `UpdateObservationsDto`); `updateObservations()` **solo permite editar en DRAFT o IN_PROGRESS** (aprobado/cancelado → 400).
+- **Frontend** — card "Observaciones del conteo" con textarea + botón Guardar, visible/editable en borrador y en progreso; de solo lectura si está aprobado (muestra el texto). **Bug corregido**: al guardar observaciones ya NO se re-fetchea el conteo (eso reconstruía `countValues` desde la BD y borraba los números tecleados-sin-guardar en la pestaña de conteo); ahora solo se actualiza `observations` en memoria.
+- **Reportes** (ambos PDFs de diferencias) — muestran el bloque **"Observaciones:"** con **expansión multilínea** (altura medida con `heightOfString(width=pageWidth)` → la tabla baja lo que haga falta; probado con 4 líneas) vía helper compartido `drawObservations()`. Además nueva columna **"Ref. Prov."** (`supplierRef`) entre Código y Producto, con anchos rebalanceados (Producto 108→150, última col 96→70) para dar más espacio al nombre y quitar el blanco sobrante.
+
+## 🗓️ Sesión 117 (2026-09-04) — Conteo físico: reporte de diferencias VALORADAS + botón "Reportes"
+
+> ### ⚠️ SIN DESPLEGAR. Cambio **web + API** (sin migración). Requiere rebuild de ambos. Typecheck limpio; probado end-to-end (neto verificado contra la BD).
+
+Diego pidió un segundo reporte de diferencias donde el monto lleve signo (sobrante +, faltante −) y abajo se reste, todo bajo un único botón "Reportes" con dropdown.
+
+- **Backend** — endpoint `GET :id/pdf-differences-valued` + método `generateValuedDifferencesReport()`: columna **"Monto Dif." con signo** (sobrante azul/positivo, faltante rojo/negativo) y RESUMEN con `Sobrantes = $X`, `Faltantes = -$Y` y **NETO (sobrantes − faltantes)**. El reporte viejo (`pdf-differences`, costo de faltantes en valor absoluto) queda igual.
+- **Frontend** — el botón suelto "Imprimir diferencias" pasó a un botón **"Reportes"** (con `ChevronDown`) que abre un dropdown con 2 opciones: "Diferencias (costo de faltantes)" y "Diferencias valoradas (monto con signo + neto)".
+- **Verificado local** (conteo con 2 diferencias): ambos PDFs 200; neto = $5.94 (13.15 − 7.20), idéntico al cálculo directo en BD.
+
 ## 🗓️ Sesión 116 (2026-09-04) — Alertas de inventario: "Ref. proveedor" en el Excel
 
 > ### ⚠️ SIN DESPLEGAR. Cambio **solo de web** (1 archivo), sin migración. Requiere rebuild del web. Typecheck limpio.

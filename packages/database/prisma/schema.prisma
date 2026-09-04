@@ -711,6 +711,7 @@ model InventoryCount {
   warehouse    Warehouse            @relation(fields: [warehouseId], references: [id])
   status       CountStatus          @default(DRAFT)
   notes        String?
+  observations String?              // Observaciones que el usuario anota DURANTE el conteo (editable en borrador/en progreso)
   items        InventoryCountItem[]
   createdById  String
   approvedById String?

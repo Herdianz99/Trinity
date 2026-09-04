@@ -228,6 +228,23 @@ export class InventoryCountsService {
     return { removed: result.count };
   }
 
+  // Observaciones del conteo: editables solo mientras esta en borrador o en progreso
+  // (antes de procesar). Aprobado/cancelado quedan de solo lectura.
+  async updateObservations(id: string, observations: string | null) {
+    const count = await this.prisma.inventoryCount.findUnique({ where: { id } });
+    if (!count) throw new NotFoundException(`Conteo con id ${id} no encontrado`);
+    if (count.status !== 'DRAFT' && count.status !== 'IN_PROGRESS') {
+      throw new BadRequestException(
+        'Solo se pueden editar las observaciones de un conteo en borrador o en progreso',
+      );
+    }
+    return this.prisma.inventoryCount.update({
+      where: { id },
+      data: { observations: observations?.trim() ? observations.trim() : null },
+      select: { id: true, observations: true },
+    });
+  }
+
   async updateItems(id: string, dto: UpdateCountItemsDto) {
     const count = await this.prisma.inventoryCount.findUnique({
       where: { id },

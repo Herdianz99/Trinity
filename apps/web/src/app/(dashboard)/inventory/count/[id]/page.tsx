@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Search, Plus, Trash2, Check, Save,
-  Package, Settings, ClipboardList, BarChart3, Printer,
+  Package, Settings, ClipboardList, BarChart3, Printer, ChevronDown,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -33,6 +33,7 @@ interface CountDetail {
   warehouse: { id: string; name: string };
   status: 'DRAFT' | 'IN_PROGRESS' | 'APPROVED' | 'CANCELLED';
   notes: string | null;
+  observations: string | null;
   items: CountItem[];
 }
 
@@ -88,8 +89,13 @@ export default function InventoryCountDetailPage() {
   const [countValues, setCountValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
+  // Observaciones del conteo (editable en borrador / en progreso)
+  const [observations, setObservations] = useState('');
+  const [savingObs, setSavingObs] = useState(false);
+
   // Menu para elegir la hoja de conteo con o sin columna de existencia
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [showReportsMenu, setShowReportsMenu] = useState(false);
 
   // ── Data fetching ──────────────────────────────────
   const fetchCount = useCallback(async () => {
@@ -99,6 +105,7 @@ export default function InventoryCountDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setCount(data);
+        setObservations(data.observations || '');
         // Pre-fill count values
         const vals: Record<string, number> = {};
         data.items.forEach((item: CountItem) => {
@@ -278,6 +285,35 @@ export default function InventoryCountDetailPage() {
         fetchCount();
       }
     } catch { /* ignore */ }
+  }
+
+  // ── Guardar observaciones ──────────────────────────
+  async function handleSaveObservations() {
+    if (!count) return;
+    setSavingObs(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/proxy/inventory-counts/${id}/observations`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ observations }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // NO re-fetchear: eso reconstruye countValues desde la BD y borra los numeros
+        // que el usuario escribio pero aun no guardo. Solo actualizamos las observaciones.
+        setCount(prev => (prev ? { ...prev, observations: data.observations ?? null } : prev));
+        setObservations(data.observations ?? '');
+        setMessage({ type: 'success', text: 'Observaciones guardadas' });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error');
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingObs(false);
+    }
   }
 
   // ── Start count (DRAFT → IN_PROGRESS) ──────────────
@@ -470,6 +506,37 @@ export default function InventoryCountDetailPage() {
           {message.text}
         </div>
       )}
+
+      {/* Observaciones del conteo (editable en borrador / en progreso) */}
+      {(isDraft || isInProgress) ? (
+        <div className="card p-4 mb-4">
+          <label className="block text-xs font-medium text-slate-400 mb-1.5">
+            Observaciones del conteo
+            <span className="text-slate-500 font-normal"> — anota lo que notaste durante el conteo (antes de procesar)</span>
+          </label>
+          <textarea
+            value={observations}
+            onChange={(e) => setObservations(e.target.value)}
+            rows={3}
+            placeholder="Ej: faltaban 3 cajas en el pasillo B, producto X estaba mal ubicado, etc."
+            className="input-field text-sm w-full resize-y"
+          />
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={handleSaveObservations}
+              disabled={savingObs || observations === (count.observations || '')}
+              className="btn-secondary !py-1.5 text-sm flex items-center gap-2 disabled:opacity-40"
+            >
+              <Save size={15} /> {savingObs ? 'Guardando...' : 'Guardar observaciones'}
+            </button>
+          </div>
+        </div>
+      ) : count.observations ? (
+        <div className="card p-4 mb-4">
+          <p className="text-xs font-medium text-slate-400 mb-1">Observaciones del conteo</p>
+          <p className="text-sm text-slate-300 whitespace-pre-wrap">{count.observations}</p>
+        </div>
+      ) : null}
 
       {/* Tabs */}
       <Tabs key={count.status} defaultValue={defaultTab}>
@@ -832,15 +899,37 @@ export default function InventoryCountDetailPage() {
             </div>
           </div>
 
-          {/* Print button */}
+          {/* Reportes */}
           {itemsWithDiff > 0 && (
             <div className="flex justify-end mb-4">
-              <button
-                onClick={() => window.open(`/api/proxy/inventory-counts/${id}/pdf-differences`)}
-                className="btn-secondary !py-2 text-sm flex items-center gap-2"
-              >
-                <Printer size={16} /> Imprimir diferencias
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowReportsMenu(v => !v)}
+                  className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                >
+                  <Printer size={16} /> Reportes
+                  <ChevronDown size={14} className={`transition-transform ${showReportsMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showReportsMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowReportsMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 w-72 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl overflow-hidden">
+                      <button
+                        onClick={() => { window.open(`/api/proxy/inventory-counts/${id}/pdf-differences`); setShowReportsMenu(false); }}
+                        className="w-full text-left px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors"
+                      >
+                        Diferencias (costo de faltantes)
+                      </button>
+                      <button
+                        onClick={() => { window.open(`/api/proxy/inventory-counts/${id}/pdf-differences-valued`); setShowReportsMenu(false); }}
+                        className="w-full text-left px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors border-t border-slate-700/30"
+                      >
+                        Diferencias valoradas (monto con signo + neto)
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
