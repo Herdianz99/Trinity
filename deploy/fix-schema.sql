@@ -2859,3 +2859,8 @@ DO $$ BEGIN
   ALTER TABLE "DisciplinaryAttachment" ADD CONSTRAINT "DisciplinaryAttachment_actionId_fkey"
     FOREIGN KEY ("actionId") REFERENCES "DisciplinaryAction"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Codigo de cliente (Session 115): columnas aditivas; el backfill vive en la migracion 20260904230000_customer_code
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "code" TEXT;
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "lastCustomerNumber" INTEGER NOT NULL DEFAULT 0;
+CREATE UNIQUE INDEX IF NOT EXISTS "Customer_code_key" ON "Customer"("code");

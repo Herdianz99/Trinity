@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface Customer {
-  id: string; name: string; documentType: string; rif: string | null;
+  id: string; code: string | null; name: string; documentType: string; rif: string | null;
   phone: string | null; email: string | null; creditLimit: number;
   creditDays: number; isActive: boolean;
 }
@@ -82,7 +82,7 @@ export default function CustomersPage() {
       <div className="card p-4 mb-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-          <input type="text" placeholder="Buscar por nombre, RIF, telefono..." value={search}
+          <input type="text" placeholder="Buscar por codigo, nombre, RIF, telefono..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }} className="input-field pl-9 !py-2.5 text-sm" />
         </div>
       </div>
@@ -96,7 +96,10 @@ export default function CustomersPage() {
         ) : customers.map(c => (
           <Link key={c.id} href={`/sales/customers/${c.id}`} className="card p-4 block active:scale-[0.98] transition-transform">
             <div className="flex items-start justify-between mb-1">
-              <span className="text-sm font-medium text-white">{c.name}</span>
+              <span className="text-sm font-medium text-white">
+                {c.code && <span className="font-mono text-xs text-slate-500 mr-1.5">{c.code}</span>}
+                {c.name}
+              </span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.isActive ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-red-400 border-red-500/30 bg-red-500/10'}`}>
                 {c.isActive ? 'Activo' : 'Inactivo'}
               </span>
@@ -126,6 +129,7 @@ export default function CustomersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50">
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Codigo</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden sm:table-cell">RIF</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Telefono</th>
@@ -137,11 +141,12 @@ export default function CustomersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
+                <tr><td colSpan={8} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
               ) : customers.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-slate-500">No se encontraron clientes</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-500">No se encontraron clientes</td></tr>
               ) : customers.map(c => (
                 <tr key={c.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => router.push(`/sales/customers/${c.id}`)}>
+                  <td className="px-4 py-3 text-slate-400 font-mono text-xs whitespace-nowrap">{c.code || '—'}</td>
                   <td className="px-4 py-3">
                     <Link href={`/sales/customers/${c.id}`} className="text-white font-medium hover:text-green-400 transition-colors">
                       {c.name}

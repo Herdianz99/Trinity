@@ -17,6 +17,19 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 115 (2026-09-04) — Código de cliente correlativo (CLI-000001)
+
+> ### ⚠️ SIN DESPLEGAR. Cambio de **web + API + schema** (migración aditiva). Requiere rebuild de ambos + `prisma migrate deploy` (que corre el backfill automáticamente en cada empresa). Typecheck limpio; migración probada en local sobre la BD real de la grande (52.315 clientes).
+
+Diego pidió un código de cliente (para nuevos y existentes). Se reusó el patrón atómico de correlativo que ya usan los códigos de producto.
+
+- **Formato `CLI-000001`** — prefijo `CLI` + **6 dígitos** (la grande supera 50.000 clientes). Auto-generado, de solo lectura (no editable, para no romper la serie).
+- **Schema** — `Customer.code String? @unique` (nullable para clientes previos al backfill) + `CompanyConfig.lastCustomerNumber Int @default(0)` (contador).
+- **Migración `20260904230000_customer_code`** — columnas con `IF NOT EXISTS` + **backfill** de los existentes (numerados por **día-calendario Caracas** de creación y, dentro del mismo día, **alfabético por nombre**, vía `ROW_NUMBER()`) + fija el contador al máximo + índice único. Aditiva e idempotente. `deploy/fix-schema.sql` también trae las columnas (red de seguridad; el backfill vive solo en la migración para no re-ejecutarse).
+- **Service** — `generateCustomerCode()` (`UPDATE CompanyConfig ... +1 RETURNING`, row-lock, sin carreras) usado en `create`; `code` agregado a la búsqueda (`findAll`).
+- **Frontend** — columna **Código** en el listado (+ card móvil + placeholder), y el código en el detalle + `document.title` (`CLI-XXXXXX - Nombre`).
+- **Verificado local**: `CLI-000001` = el más antiguo; dentro del mismo día orden alfabético correcto; contador = 52.315 (próximo = `CLI-052316`); todos únicos. Cada empresa numera su propia serie desde 1 (BDs separadas, no chocan).
+
 ## 🗓️ Sesión 114 (2026-09-04) — Libro mayor de caja: multi-selección de cajeros en el filtro
 
 > ### ⚠️ SIN DESPLEGAR. Cambio de **web + API** (5 archivos), sin migración. Requiere rebuild de ambos (`deploy.sh` lo hace). Typecheck limpio (API y web) y verificado levantando el sistema en local.

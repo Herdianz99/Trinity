@@ -288,6 +288,7 @@ model CompanyConfig {
   unidadTributaria        Float    @default(43)
   receivableNextNumber    Int      @default(1)
   payableNextNumber       Int      @default(1)
+  lastCustomerNumber      Int      @default(0) // Correlativo de codigo de cliente (CLI-000001)
   // Interruptor del libro mayor de caja: true = el arqueo lee del CashLedgerEntry (tabla madre);
   // false = método viejo (3 fuentes). Reversa instantánea sin redeploy si algo sale mal.
   useCashLedger           Boolean  @default(false)
@@ -1004,6 +1005,7 @@ model PurchaseAttachment {
 
 model Customer {
   id           String       @id @default(cuid())
+  code         String?      @unique // Codigo correlativo CLI-000001 (auto-generado; nullable para clientes previos al backfill)
   name         String
   documentType String       @default("V")
   rif          String?

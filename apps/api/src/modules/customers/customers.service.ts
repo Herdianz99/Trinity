@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import * as http from 'http';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -76,6 +76,7 @@ export class CustomersService {
 
     if (filters.search) {
       where.OR = [
+        { code: { contains: filters.search, mode: 'insensitive' } },
         { name: { contains: filters.search, mode: 'insensitive' } },
         { rif: { contains: filters.search, mode: 'insensitive' } },
         { phone: { contains: filters.search, mode: 'insensitive' } },
@@ -199,9 +200,27 @@ export class CustomersService {
       await this.assertCanEditCredit(userId);
       this.validateCreditFields(creditLimit, dto.creditDays, dto.creditAuthorizedBy);
     }
+    const code = await this.generateCustomerCode();
     return this.prisma.customer.create({
-      data: { ...dto, creditReviewedAt: creditLimit > 0 ? new Date() : null },
+      data: { ...dto, code, creditReviewedAt: creditLimit > 0 ? new Date() : null },
     });
+  }
+
+  /**
+   * Codigo correlativo de cliente CLI-000001. Incrementa el contador de CompanyConfig
+   * de forma atomica (UPDATE ... RETURNING = row-lock en Postgres, sin carreras),
+   * mismo patron que el codigo de producto. 6 digitos (la grande supera 50.000 clientes).
+   */
+  private async generateCustomerCode(): Promise<string> {
+    const result = await this.prisma.$queryRaw<{ lastCustomerNumber: number }[]>`
+      UPDATE "CompanyConfig"
+      SET "lastCustomerNumber" = "lastCustomerNumber" + 1
+      WHERE id = 'singleton'
+      RETURNING "lastCustomerNumber"
+    `;
+    const n = result[0]?.lastCustomerNumber;
+    if (!n) throw new ConflictException('No se pudo generar el codigo de cliente (config no encontrada)');
+    return `CLI-${String(n).padStart(6, '0')}`;
   }
 
   /** Un cliente es "por defecto" si tiene el flag isDefault o es el defaultCustomerId de la config. */

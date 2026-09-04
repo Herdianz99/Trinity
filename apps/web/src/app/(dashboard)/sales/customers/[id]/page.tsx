@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import SeniatModal from '@/components/seniat-modal';
 
 interface Customer {
-  id: string; name: string; documentType: string; rif: string | null;
+  id: string; code: string | null; name: string; documentType: string; rif: string | null;
   phone: string | null; email: string | null; address: string | null;
   creditLimit: number; creditDays: number; isActive: boolean;
   isGroupCompany?: boolean;
@@ -148,7 +148,7 @@ export default function CustomerDetailPage() {
   useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
 
   useEffect(() => {
-    if (customer) document.title = `${customer.name} | Trinity ERP`;
+    if (customer) document.title = `${customer.code ? customer.code + ' - ' : ''}${customer.name} | Trinity ERP`;
   }, [customer]);
 
   // Lazy load: invoices when sales tab is active
@@ -255,7 +255,10 @@ export default function CustomerDetailPage() {
           <UserCheck className="text-green-400" size={22} />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">{customer.name}</h1>
+          <div className="flex items-center gap-2">
+            {customer.code && <span className="font-mono text-xs text-slate-400 px-2 py-0.5 rounded-md border border-slate-700 bg-slate-800/60">{customer.code}</span>}
+            <h1 className="text-2xl font-bold text-white">{customer.name}</h1>
+          </div>
           <p className="text-slate-400 text-sm">{customer.documentType}-{customer.rif || '—'}</p>
         </div>
       </div>
