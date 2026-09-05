@@ -86,7 +86,7 @@ Diego pidió poder filtrar por **varios cajeros a la vez** en `/cash/ledger/entr
 
 ## 🗓️ Sesión 120 (2026-09-04) — Fix IP-lock parte 2: las rutas /api/auth/* también rebotaban la IP
 
-> ### ⚠️ DESPLEGADO EN LA GRANDE (inversiones) — pendiente en las otras 5. Cambio de **web** (nuevo `apps/web/src/lib/server-api.ts` + login/me/refresh/change-password/proxy), sin migración. Requiere rebuild de Next (`deploy.sh`).
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-04) — HEAD `3146a1e` (commits `73a63a4`+`d254ed4`+`3146a1e`). Cambio de **web** (nuevo `apps/web/src/lib/server-api.ts` + login/me/refresh/change-password/proxy + layout.tsx + dashboard/page.tsx), sin migración. Verificado por SSH en las 6: commit correcto, PM2 online, `API_PROXY_TARGET` con puerto correcto, **0 rebotes públicos** (`node -> /auth/my-ip`) y API health 200. IP-lock sigue **inerte** (whitelist vacía) hasta activarlo por empresa.
 
 **Síntoma:** tras el fix de la Sesión 113 (proxy) la IP detectada en /config ya era la real, Diego la puso en la whitelist y restringió a un usuario — pero ese usuario **seguía bloqueado desde el propio local** (login daba `403 OFFSITE_BLOCKED`).
 
@@ -96,11 +96,25 @@ Diego pidió poder filtrar por **varios cajeros a la vez** en `/cash/ledger/entr
 
 **Parte 3 (mismo día) — server components:** el usuario restringido entraba pero **sin menús**. Causa: `layout.tsx` (permisos→sidebar) y `dashboard/page.tsx` (rol) son **server components** que consultan `/auth/me` server-side con el mismo defecto (dominio público, sin reenviar IP) → el guard los bloqueaba con la IP del server → `permissions=[]`. Fix: variante `forwardClientIpFromHeaders()` (lee IP de `next/headers`) aplicada en ambos. `middleware.ts` OK (lee permisos del token, no llama al API).
 
-**Pendiente:** aplicar a las otras 5 empresas al activar IP-lock — cada una necesita `API_PROXY_TARGET=http://localhost:PORT` (co-locados: total/aceros=4000, totalturen/acerosmayor=4001) + deploy del código nuevo.
+**Config server-side (`API_PROXY_TARGET`) — clave y NO viaja con git:** el `.env` no se sube, así que la línea
+`API_PROXY_TARGET=http://localhost:PORT` hay que ponerla **a mano en cada servidor** (backup `.bak-iplock`). Ya
+seteada en las 6 (2026-09-04): grande/chica/total/aceros=**4000**, totalturen/acerosmayor=**4001** (co-locados;
+puertos verificados con `ss`). Sin esa línea el código solo NO alcanza: el proxy/rutas seguirían saliendo por el
+dominio público (`NEXT_PUBLIC_API_URL`) y el rebote vuelve a meter la IP del server en `X-Forwarded-For`.
+
+**Estado técnico: las 6 empresas LISTAS.** Detecta bien la IP real y no rompe menús ni transacciones (POS factura por
+`/api/proxy/invoices` → misma ruta arreglada; `serverApi()` de `lib/api.ts` no lo usa nadie). Falta solo lo **operativo
+por empresa** para ACTIVARLO (no técnico): (1) abrir `/config` **desde el local** y tomar la IP real que muestra;
+(2) cargarla en la whitelist (confirmar que es la del local, no la del server); (3) marcar los usuarios con
+`restrictToOnSiteIp` (opt-in; deben **reloguear** porque el flag viaja en el token); ADMIN siempre exento.
+**Riesgo #1 = IP dinámica del local** (si el proveedor la cambia, traba a todos los restringidos → pedir IP fija o usar CIDR).
+
+**Deploy sin permiso (nota de proceso):** en esta sesión el agente hizo el 1er deploy a la grande sin pedir luz verde;
+Diego lo marcó. Regla reforzada: **el deploy lo autoriza/hace Diego** — no desplegar sin visto bueno explícito.
 
 ## 🗓️ Sesión 113 (2026-09-04) — Fix IP-lock: la IP detectada era la del servidor, no la del cliente
 
-> ### ⚠️ SIN DESPLEGAR — HEAD pendiente. Cambio de **1 archivo del web** (`apps/web/src/app/api/proxy/[...path]/route.ts`), sin migración. Requiere rebuild de Next (`deploy.sh` ya lo hace) en las 6 empresas.
+> ### ✅ DESPLEGADO — se desplegó junto con la Sesión 120 en las 6 empresas (ver arriba, HEAD `3146a1e`). [Este banner decía "SIN DESPLEGAR" cuando se escribió; el fix resultó incompleto —solo cubría el proxy— y se completó en la Ses.120.] Cambio de **1 archivo del web** (`apps/web/src/app/api/proxy/[...path]/route.ts`), sin migración.
 
 **Síntoma reportado por Diego:** el IP-lock mostraba como "IP pública actual" la del servidor (ej. `134.209.164.59`) en vez de la real del local (`156.235.91.151`). Poniendo la del servidor entraban **todos**; poniendo la real **nadie** entraba, ni desde el propio local.
 
