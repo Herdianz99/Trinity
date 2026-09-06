@@ -19,7 +19,7 @@
 
 ## 🗓️ Sesión 121 (2026-09-06) — Módulo "Pedidos a proveedor" (lista compartida compras↔ventas)
 
-> ### ⚠️ SIN DESPLEGAR. Módulo **nuevo e independiente** + **1 migración** (`20260906120000_supplier_order_items`: crea tabla `SupplierOrderItem` con `IF NOT EXISTS` **y** habilita el permiso `pedidos` en ADMIN/SUPERVISOR/BUYER/ACCOUNTANT/SELLER/CASHIER). El único toque a código vivo es un hook **defensivo post-commit** en `processBill`. Typecheck API+Web limpio; verificado end-to-end contra la BD grande en local (matching, FIFO, parseo del Excel real). Al desplegar, la migración deja el permiso listo en las 6 empresas sin toque manual. Spec: `docs/superpowers/specs/2026-09-06-lista-pedidos-proveedor-design.md`.
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-06) — HEAD `e56cc0b`. Verificado por SSH en las 6 BD: tabla `SupplierOrderItem` creada **y** permiso `pedidos` activo en SELLER+BUYER (inversiones, eltrebol/ferre, total, totalturen, aceros, acerosmayor). Módulo **nuevo e independiente** + **1 migración** (`20260906120000_supplier_order_items`: crea la tabla con `IF NOT EXISTS` **y** habilita el permiso `pedidos` en ADMIN/SUPERVISOR/BUYER/ACCOUNTANT/SELLER/CASHIER de forma idempotente). El único toque a código vivo es un hook **defensivo post-commit** en `processBill`. Typecheck API+Web limpio; verificado end-to-end contra la BD grande en local (matching, FIFO, parseo del Excel real). Spec: `docs/superpowers/specs/2026-09-06-lista-pedidos-proveedor-design.md`.
 
 Origen: compras arma sus pedidos a proveedor en un Excel libre; ventas no se entera de si un artículo ya fue pedido. Se creó una **lista liviana de seguimiento** (NO es la factura de compra: no mueve inventario, costos ni CxP), consultable por ventas.
 
