@@ -50,6 +50,7 @@ import {
   ClipboardList,
   Repeat,
   PackageSearch,
+  PackageCheck,
   Tags,
   PackageX,
   Camera,
@@ -95,6 +96,15 @@ const menuSections: MenuSection[] = [
       { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=sale', icon: <FileX2 size={18} /> },
       { label: 'Retenciones clientes', href: '/sales/customer-retentions', icon: <Shield size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
+    ],
+  },
+  {
+    key: 'pedidos',
+    label: 'PEDIDOS',
+    icon: <PackageCheck size={20} />,
+    permission: 'pedidos',
+    items: [
+      { label: 'Pedidos a proveedor', href: '/pedidos', icon: <PackageCheck size={18} /> },
     ],
   },
   {

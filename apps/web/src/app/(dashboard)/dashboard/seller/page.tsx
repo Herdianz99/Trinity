@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Target, FileText, RotateCcw, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Package, Pencil, Check, X,
+  PackageCheck, ChevronRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -303,6 +305,21 @@ export default function SellerDashboardPage() {
           </p>
         </div>
       </div>
+
+      {/* ═══ Acceso directo — Pedidos a proveedor ═══ */}
+      <Link
+        href="/pedidos"
+        className="flex items-center gap-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hover:border-emerald-500/40 hover:bg-slate-800/80 transition-colors group"
+      >
+        <div className="w-10 h-10 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+          <PackageCheck size={20} className="text-emerald-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-200">Pedidos a proveedor</p>
+          <p className="text-xs text-slate-500">Consulta si un artículo ya fue pedido a compras</p>
+        </div>
+        <ChevronRight size={18} className="text-slate-500 group-hover:text-emerald-400 transition-colors shrink-0" />
+      </Link>
 
       {/* ═══ Sales Chart (en %) ═══ */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">

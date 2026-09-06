@@ -99,6 +99,11 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 121 (2026-09-06) — Módulo "Pedidos a proveedor" (lista compartida compras↔ventas)
+- Módulo **nuevo e independiente** (`modules/purchase-requests/` + página `/pedidos`) para que ventas consulte lo que compras ya pidió al proveedor. **No** es la factura de compra: no mueve inventario, costos ni CxP.
+- Tabla plana `SupplierOrderItem` (migración `20260906120000_supplier_order_items`, idempotente); carga desde Excel (formato `CODIGO/CANTIDAD/COSTO/DESCRIPCION`) con preview, registro manual, `observation` editable, buscador y tabs `Todos/En tránsito/Recibidos`.
+- Al procesar una FC, hook **defensivo** marca recibido el pedido pendiente más antiguo (FIFO) que coincida por `supplierRef`→`code`, con la cantidad de la factura. Permiso nuevo `pedidos` (ver = compras+ventas; editar = compras/supervisión/admin), habilitado por la propia migración. **Sin desplegar.**
+
 #### Sesión 2026-07-28 — Factura de compra: columna "Costo ant. $" junto a Precio USD
 - Nueva columna **"Costo ant. $"** en la tabla de ítems de la factura de compra, a la derecha de "Precio USD", en crear (`purchases/new/page.tsx`) y editar (`purchases/[id]/edit/page.tsx`). Muestra el costo actual del producto en dólares (`product.costUsd`, el costo previo a esa compra), **siempre en USD** aunque la factura esté en Bs; solo lectura, `-` sin producto. Campo `previousCostUsd` en `FormItem` poblado al seleccionar/crear/editar producto; en editar se lee de `item.product.costUsd` del detalle (ya venía en `includeDetail`). **Sin backend ni migraciones.**
 - **Deploy:** solo en `total` (commit `7383d48`, verificado). **PENDIENTE** en `inversiones` (grande), `eltrebol` (chica) y `totalturen`.

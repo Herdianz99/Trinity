@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PurchaseRequestsService } from '../purchase-requests/purchase-requests.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { IvaType, PurchaseStatus } from '@prisma/client';
@@ -32,7 +33,10 @@ const round6 = (n: number) => Math.round(n * 1000000) / 1000000;
 
 @Injectable()
 export class PurchaseOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly purchaseRequests: PurchaseRequestsService,
+  ) {}
 
   private async generatePurchaseNumber(tx: any): Promise<{ purchaseNumber: number; number: string }> {
     const result = await tx.$queryRaw<{ max: number | null }[]>`
@@ -748,7 +752,7 @@ export class PurchaseOrdersService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const processed = await this.prisma.$transaction(async (tx) => {
       // Process inventory for non-service items
       for (const item of order.items) {
         if (item.product.isService) continue;
@@ -948,6 +952,16 @@ export class PurchaseOrdersService {
 
       return updatedOrder;
     });
+
+    // Hook: marcar recibido el pedido pendiente (FIFO) que coincida con cada articulo
+    // de esta factura. Defensivo: si falla, la compra ya quedo procesada igual.
+    try {
+      await this.purchaseRequests.markReceivedFromBill(processed as any);
+    } catch (err) {
+      console.error('[purchase-requests] markReceivedFromBill fallo (compra procesada OK):', err);
+    }
+
+    return processed;
   }
 
   async getSuggestedPrices(id: string) {

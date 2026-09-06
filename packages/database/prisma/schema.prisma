@@ -367,6 +367,7 @@ model User {
   purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
   treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
   treasuryBsMovements TreasuryBsMovement[] @relation("TreasuryBsMovementCreator")
+  supplierOrderItems  SupplierOrderItem[] @relation("SupplierOrderItemCreator")
   audits5s            Audit5S[]           @relation("Audit5SCreator")
   damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
   damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
@@ -571,6 +572,7 @@ model Product {
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
   damageReportItems   DamageReportItem[]
   lostSales        LostSale[]
+  supplierOrderItems  SupplierOrderItem[]
   images                ProductImage[]
   primaryImageThumbUrl  String?
   primaryImageMediumUrl String?
@@ -2664,4 +2666,41 @@ model TreasuryBsMovement {
 
   @@index([companyId, date])
   @@index([date])
+}
+
+// ============================================================================
+// LISTA DE PEDIDOS A PROVEEDOR (Sesion 121)
+// Lista liviana de "lo que compras ya pidio al proveedor", consultable por ventas.
+// NO es la factura de compra (PurchaseOrder): no mueve inventario, costos ni CxP.
+// Ver spec: docs/superpowers/specs/2026-09-06-lista-pedidos-proveedor-design.md
+// ============================================================================
+enum SupplierOrderStatus {
+  PENDING   // "en transito" / pedido
+  RECEIVED
+}
+
+model SupplierOrderItem {
+  id                      String              @id @default(cuid())
+  supplierRef             String                                    // "CODIGO" del Excel = ref. proveedor
+  productId               String?                                   // enlace al producto si se encontro
+  product                 Product?            @relation(fields: [productId], references: [id])
+  productCode             String?                                   // snapshot del codigo interno si matcheo
+  description             String                                    // "DESCRIPCION" del Excel o manual
+  quantityOrdered         Float                                     // "CANTIDAD"
+  unitCost                Float?                                    // "COSTO" (USD), opcional
+  supplierName            String?                                   // proveedor (texto libre; el Excel no lo trae)
+  observation             String?                                   // editable desde la lista
+  status                  SupplierOrderStatus @default(PENDING)
+  orderedAt               DateTime            @default(now())        // fecha del pedido (dia de carga o manual)
+  receivedAt              DateTime?                                  // se llena al recibir
+  quantityReceived        Float?                                    // cantidad que llego
+  receivedPurchaseOrderId String?                                   // FC que lo surtio (si fue automatico)
+  createdById             String?
+  createdBy               User?               @relation("SupplierOrderItemCreator", fields: [createdById], references: [id])
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([status])
+  @@index([supplierRef])
+  @@index([orderedAt])
 }

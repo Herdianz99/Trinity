@@ -22,6 +22,7 @@ import { LabelsModule } from './modules/labels/labels.module';
 import { LostSalesModule } from './modules/lost-sales/lost-sales.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { PurchaseRequestsModule } from './modules/purchase-requests/purchase-requests.module';
 import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
@@ -99,6 +100,7 @@ import { DamageReportsModule } from './modules/damage-reports/damage-reports.mod
     LostSalesModule,
     StockMovementsModule,
     PurchaseOrdersModule,
+    PurchaseRequestsModule,
     ExchangeRateModule,
     CustomersModule,
     CashRegistersModule,

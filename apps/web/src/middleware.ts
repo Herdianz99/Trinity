@@ -22,6 +22,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/inventory/damage-reports', ['inventory', 'almacen']],
   ['/inventory', ['inventory']],
   ['/purchases', ['purchases']],
+  ['/pedidos', ['pedidos']],
   ['/cash', ['cash']],
   ['/receivables', ['receivables']],
   ['/payment-schedules', ['payment-schedules']],

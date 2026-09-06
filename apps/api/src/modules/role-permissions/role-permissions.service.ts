@@ -7,7 +7,7 @@ import { ROLE_PERMISSIONS } from '../auth/role-permissions';
 const VALID_MODULES = [
   'dashboard', 'sales', 'commands', 'quotations', 'catalog', 'inventory',
   'inventory-consult',
-  'purchases', 'cash', 'receivables', 'payables', 'fiscal',
+  'purchases', 'pedidos', 'cash', 'receivables', 'payables', 'fiscal',
   'users', 'settings', 'expenses', 'payment-schedules', 'store', 'payroll', 'incidents', 'divisas', 'almacen',
   'RETURN_INVOICE', 'CREDIT_NOTE_SALE', 'DEBIT_NOTE_SALE',
   'RETURN_PURCHASE', 'CREDIT_NOTE_PURCHASE', 'DEBIT_NOTE_PURCHASE',

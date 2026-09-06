@@ -17,6 +17,20 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 121 (2026-09-06) — Módulo "Pedidos a proveedor" (lista compartida compras↔ventas)
+
+> ### ⚠️ SIN DESPLEGAR. Módulo **nuevo e independiente** + **1 migración** (`20260906120000_supplier_order_items`: crea tabla `SupplierOrderItem` con `IF NOT EXISTS` **y** habilita el permiso `pedidos` en ADMIN/SUPERVISOR/BUYER/ACCOUNTANT/SELLER/CASHIER). El único toque a código vivo es un hook **defensivo post-commit** en `processBill`. Typecheck API+Web limpio; verificado end-to-end contra la BD grande en local (matching, FIFO, parseo del Excel real). Al desplegar, la migración deja el permiso listo en las 6 empresas sin toque manual. Spec: `docs/superpowers/specs/2026-09-06-lista-pedidos-proveedor-design.md`.
+
+Origen: compras arma sus pedidos a proveedor en un Excel libre; ventas no se entera de si un artículo ya fue pedido. Se creó una **lista liviana de seguimiento** (NO es la factura de compra: no mueve inventario, costos ni CxP), consultable por ventas.
+
+- **Modelo** — tabla plana `SupplierOrderItem` (schema + migración idempotente). Campos: `supplierRef` (= "CODIGO" del Excel = ref. proveedor), `productId`/`productCode` (enlace resuelto), `description`, `quantityOrdered`, `unitCost?`, `supplierName?`, **`observation?` (editable, no viene en el Excel)**, `status` (`PENDING`/`RECEIVED`), `orderedAt`, `receivedAt?`, `quantityReceived?`, `receivedPurchaseOrderId?`.
+- **API** (`modules/purchase-requests/`) — listar (tabs `ALL/PENDING/RECEIVED` + buscador `supplierRef`/descripción/`productCode` + contadores), crear manual, editar, `upload/preview` y `upload/confirm` (Excel), `:id/receive`, `:id/unreceive`, borrar. **Ver** = `@RequireModule('pedidos')` (vendedores, solo lectura); **editar** = `@Roles(ADMIN,SUPERVISOR,BUYER)`.
+- **Cruce automático "recibido"** — hook `markReceivedFromBill` enganchado en `PurchaseOrdersService.process` **fuera de la transacción y envuelto en try/catch** (nunca puede romper el procesamiento de la factura). Por cada ítem de la FC marca recibido el pedido pendiente **más antiguo (FIFO)** que coincida por prioridad `productId → supplierRef → code`, trayendo la cantidad de la factura. También hay "Marcar recibido" manual (cantidad opcional, pre-carga la pedida).
+- **Enlace a producto** — `resolveProduct`: primero `Product.supplierRef`, luego `Product.code` (por si a futuro usan el código interno). El "CODIGO" del Excel es la ref. proveedor.
+- **Frontend** — página `/pedidos` (nivel superior, **tema oscuro** calcando `/sales/invoices`: `card`/`input-field`/`btn-primary`/`btn-secondary`, badges pill), con tabs, buscador (debounce), y modales de cargar Excel (parseo cliente → preview con enlaces → confirmar), agregar/editar y marcar recibido. Parseo del `Formato Pedido.xlsx`: detecta la fila "CODIGO", ignora empresa/encabezado/vacías/TOTAL.
+- **Acceso** — menú propio **"PEDIDOS"** en el sidebar (`permission: 'pedidos'`, no el de Compras) + **acceso directo** en el dashboard del vendedor (`/dashboard/seller`). Ruta agregada al `middleware.ts` y toggle en "Permisos por rol".
+- **Permisos** — `pedidos` agregado a `VALID_MODULES`, a los defaults de `role-permissions.ts`, y a los registros existentes vía la migración (idempotente). Ver = compras + ventas; editar = compras/supervisión/admin.
+
 ## 🗓️ Sesión 119 (2026-09-04) — Reporte ventas por vendedor: monto devuelto por factura + totalizado
 
 > ### ⚠️ SIN DESPLEGAR. Cambio **solo API** (1 archivo, `invoice-pdf.service.ts`), sin migración. Requiere rebuild del API. Typecheck limpio; verificado end-to-end contra la BD (devuelto general $2.299,30 = suma de NCV POSTED).

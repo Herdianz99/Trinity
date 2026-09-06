@@ -48,6 +48,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'inventory', label: 'Inventario' },
       { key: 'inventory-consult', label: 'Inventario (solo consulta: articulos + etiquetas)' },
       { key: 'purchases', label: 'Compras' },
+      { key: 'pedidos', label: 'Pedidos a proveedor' },
       { key: 'cash', label: 'Caja' },
       { key: 'receivables', label: 'Cuentas por Cobrar' },
       { key: 'payables', label: 'Cuentas por Pagar' },
