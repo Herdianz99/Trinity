@@ -49,12 +49,18 @@ Una **lista compartida de pedidos a proveedor** que:
 Módulo **nuevo e independiente**, separado del módulo contable `purchase-orders`.
 
 - **API (NestJS):** módulo `purchase-requests` (`apps/api/src/modules/purchase-requests/`).
-- **Web (Next.js):** ruta bajo `(dashboard)/purchases/pedidos` con menú propio "Pedidos".
+- **Web (Next.js):** ruta **de nivel superior** `(dashboard)/pedidos` (NO anidada bajo
+  `purchases`, para no obligar a dar el menú de Compras a los vendedores).
+- **Menú:** una **entrada propia "Pedidos"** en el sidebar, como grupo de nivel superior
+  con `permission: 'pedidos'` (aparte de `purchases`). Además, un **acceso directo (card)
+  en el dashboard** para que los vendedores lo tengan a mano.
 - **Permisos:** nueva clave de módulo `pedidos`.
   - **Ver:** `SELLER`, `CASHIER` (solo lectura), además de `BUYER`, `SUPERVISOR`,
     `ADMIN`, `ACCOUNTANT`.
   - **Editar** (crear, cargar Excel, marcar recibido, editar observación, borrar):
     solo `BUYER`, `SUPERVISOR`, `ADMIN`. Se aplica con guard de rol en el controller.
+  - Nota: la ruta física `/pedidos` es independiente del permiso; la visibilidad la
+    controla el `permission: 'pedidos'` del ítem del sidebar, no la carpeta de la URL.
 
 ### Modelo de datos
 
@@ -112,9 +118,13 @@ Si ninguna fila pendiente coincide, no pasa nada (la compra sigue normal). El ho
 debe hacer fallar el procesamiento de la factura (envolver en try/catch defensivo o
 dentro de la misma tx pero sin lógica que pueda lanzar por datos faltantes).
 
-También existe **"Marcar recibido" manual** (endpoint aparte) para artículos que llegan
-fuera del sistema: setea `status=RECEIVED`, `receivedAt = ahora`, `quantityReceived`
-opcional ingresada por el usuario.
+**Camino automático vs. manual:** el camino **normal es automático** — al procesar la FC,
+la cantidad recibida se **trae de la factura de compra** (`quantityReceived =
+billItem.quantity`), sin tecleo. El botón **"Marcar recibido" manual** es solo un
+**respaldo** para artículos que llegan pero **no se cargan como compra en el sistema**;
+en ese caso no hay factura de dónde leer la cantidad, así que el formulario **pre-carga
+`quantityOrdered`** como valor por defecto (editable). Setea `status=RECEIVED`,
+`receivedAt = ahora`.
 
 ### Carga de Excel
 
@@ -142,9 +152,11 @@ Endpoint `POST /purchase-requests/upload` (multipart), usa la lib `xlsx` ya pres
 
 ### Frontend
 
-Página `(dashboard)/purchases/pedidos/page.tsx`:
+Página `(dashboard)/pedidos/page.tsx` (nivel superior):
 
 - `document.title = 'Pedidos | Trinity ERP'` (useEffect `[]`).
+- Entrada propia "Pedidos" en `sidebar.tsx` (grupo top-level, `permission: 'pedidos'`) +
+  card de acceso directo en el dashboard para el rol `SELLER`.
 - **Tabs:** `Todos` · `Pedidos` · `Recibidos`.
 - **Buscador** server-side con debounce (ref/código + descripción).
 - **Tabla:** Ref · Descripción · Cant. pedida · Costo · Proveedor · Observación · Fecha
