@@ -7,6 +7,15 @@ export class InventoryCountsPdfService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Formatea una cantidad redondeando a maximo 2 decimales y quitando ceros
+   * sobrantes: 13.0000000001 -> "13", 13.5 -> "13.5", 2.333333 -> "2.33".
+   * Evita que cantidades con muchos decimales (float) salgan feas en el PDF.
+   */
+  private fmtQty(n: number | null | undefined): string {
+    return Number(Number(n ?? 0).toFixed(2)).toString();
+  }
+
+  /**
    * Bloque de "Observaciones" del conteo. Usa width=pageWidth para que PDFKit
    * envuelva el texto y crezca a varias lineas si la observacion es larga
    * (la altura se mide con heightOfString y avanza `y` en consecuencia).
@@ -303,18 +312,18 @@ export class InventoryCountsPdfService {
           doc.text(item.product.code, col.code, y, { width: colWidths.code });
           doc.text(item.product.supplierRef || '', col.ref, y, { width: colWidths.ref });
           doc.text(item.product.name, col.product, y, { width: colWidths.product });
-          doc.text(String(item.systemQuantity), col.system, y, {
+          doc.text(this.fmtQty(item.systemQuantity), col.system, y, {
             width: colWidths.system,
             align: 'right',
           });
-          doc.text(String(item.countedQuantity ?? 0), col.counted, y, {
+          doc.text(this.fmtQty(item.countedQuantity), col.counted, y, {
             width: colWidths.counted,
             align: 'right',
           });
 
           // Difference with color
           doc.fillColor(diff > 0 ? '#0066cc' : '#cc0000');
-          doc.text(`${diff > 0 ? '+' : ''}${diff}`, col.diff, y, {
+          doc.text(`${diff > 0 ? '+' : ''}${this.fmtQty(diff)}`, col.diff, y, {
             width: colWidths.diff,
             align: 'right',
           });
@@ -343,11 +352,11 @@ export class InventoryCountsPdfService {
 
         doc.fontSize(9).font('Helvetica');
         doc.fillColor('#0066cc');
-        doc.text(`Sobrante total: +${totalSobrante} unidades`, 40, y);
+        doc.text(`Sobrante total: +${this.fmtQty(totalSobrante)} unidades`, 40, y);
         y += 14;
 
         doc.fillColor('#cc0000');
-        doc.text(`Faltante total: -${totalFaltante} unidades`, 40, y);
+        doc.text(`Faltante total: -${this.fmtQty(totalFaltante)} unidades`, 40, y);
         y += 14;
 
         doc.fillColor('#cc0000');
@@ -376,7 +385,7 @@ export class InventoryCountsPdfService {
    * sobrante (diff > 0) => monto positivo; faltante (diff < 0) => monto negativo.
    * Al final: monto de sobrantes, monto de faltantes y NETO (sobrantes - faltantes).
    */
-  async generateValuedDifferencesReport(id: string): Promise<Buffer> {
+  async generateValuedDifferencesReport(id: string, includeAll = false): Promise<Buffer> {
     const count = await this.prisma.inventoryCount.findUnique({
       where: { id },
       include: {
@@ -395,6 +404,9 @@ export class InventoryCountsPdfService {
     const diffItems = count.items.filter(
       (item) => item.difference !== null && item.difference !== 0,
     );
+    // Filas a mostrar: solo diferencias, o TODOS los articulos del conteo.
+    // El resumen (sobrantes/faltantes/neto) siempre agrega solo las diferencias.
+    const rows = includeAll ? count.items : diffItems;
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
@@ -430,10 +442,14 @@ export class InventoryCountsPdfService {
 
       const drawHeader = (y: number): number => {
         doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000');
-        doc.text('REPORTE DE DIFERENCIAS VALORADAS - CONTEO FISICO', 40, y, {
-          width: pageWidth,
-          align: 'center',
-        });
+        doc.text(
+          includeAll
+            ? 'REPORTE VALORADO (TODOS LOS ARTICULOS) - CONTEO FISICO'
+            : 'REPORTE DE DIFERENCIAS VALORADAS - CONTEO FISICO',
+          40,
+          y,
+          { width: pageWidth, align: 'center' },
+        );
         y += 20;
 
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
@@ -445,7 +461,9 @@ export class InventoryCountsPdfService {
           y += 14;
         }
         doc.text(
-          `Productos con diferencia: ${diffItems.length} de ${count.items.length} total`,
+          includeAll
+            ? `Total de articulos: ${count.items.length}   (con diferencia: ${diffItems.length})`
+            : `Productos con diferencia: ${diffItems.length} de ${count.items.length} total`,
           40,
           y,
         );
@@ -482,18 +500,22 @@ export class InventoryCountsPdfService {
       let y = drawHeader(40);
       y = this.drawObservations(doc, count.observations, y, pageWidth);
 
-      if (diffItems.length === 0) {
+      if (rows.length === 0) {
         y += 20;
         doc.fontSize(10).font('Helvetica').fillColor('#333333');
-        doc.text('No se encontraron diferencias en este conteo.', 40, y, {
-          width: pageWidth,
-          align: 'center',
-        });
+        doc.text(
+          includeAll
+            ? 'Este conteo no tiene articulos.'
+            : 'No se encontraron diferencias en este conteo.',
+          40,
+          y,
+          { width: pageWidth, align: 'center' },
+        );
       } else {
         y = drawTableHeader(y);
         doc.fontSize(7).font('Helvetica');
 
-        diffItems.forEach((item, idx) => {
+        rows.forEach((item, idx) => {
           doc.fontSize(7).font('Helvetica');
           const nameH = doc.heightOfString(item.product.name, { width: colWidths.product });
           const refH = doc.heightOfString(item.product.supplierRef || '', { width: colWidths.ref });
@@ -506,7 +528,7 @@ export class InventoryCountsPdfService {
             doc.fontSize(7).font('Helvetica');
           }
 
-          const diff = item.difference!;
+          const diff = item.difference ?? 0;
           const montoDif = diff * item.product.costUsd; // con signo
 
           doc.fillColor('#000000');
@@ -514,17 +536,19 @@ export class InventoryCountsPdfService {
           doc.text(item.product.code, col.code, y, { width: colWidths.code });
           doc.text(item.product.supplierRef || '', col.ref, y, { width: colWidths.ref });
           doc.text(item.product.name, col.product, y, { width: colWidths.product });
-          doc.text(String(item.systemQuantity), col.system, y, { width: colWidths.system, align: 'right' });
-          doc.text(String(item.countedQuantity ?? 0), col.counted, y, { width: colWidths.counted, align: 'right' });
+          doc.text(this.fmtQty(item.systemQuantity), col.system, y, { width: colWidths.system, align: 'right' });
+          doc.text(this.fmtQty(item.countedQuantity), col.counted, y, { width: colWidths.counted, align: 'right' });
 
-          doc.fillColor(diff > 0 ? '#0066cc' : '#cc0000');
-          doc.text(`${diff > 0 ? '+' : ''}${diff}`, col.diff, y, { width: colWidths.diff, align: 'right' });
+          // Color: azul sobrante, rojo faltante, negro si no hay diferencia.
+          const diffColor = diff > 0 ? '#0066cc' : diff < 0 ? '#cc0000' : '#000000';
+          doc.fillColor(diffColor);
+          doc.text(`${diff > 0 ? '+' : ''}${this.fmtQty(diff)}`, col.diff, y, { width: colWidths.diff, align: 'right' });
 
           doc.fillColor('#000000');
           doc.text(`$${item.product.costUsd.toFixed(2)}`, col.costUnit, y, { width: colWidths.costUnit, align: 'right' });
 
           // Monto de la diferencia CON SIGNO (positivo sobrante, negativo faltante)
-          doc.fillColor(montoDif < 0 ? '#cc0000' : '#0066cc');
+          doc.fillColor(diffColor);
           doc.text(money(montoDif), col.costTotal, y, { width: colWidths.costTotal, align: 'right' });
 
           y += rowH;
@@ -541,11 +565,11 @@ export class InventoryCountsPdfService {
 
         doc.fontSize(9).font('Helvetica');
         doc.fillColor('#0066cc');
-        doc.text(`Sobrantes: +${totalSobrante} uds   =   ${money(montoSobrantes)}`, 40, y);
+        doc.text(`Sobrantes: +${this.fmtQty(totalSobrante)} uds   =   ${money(montoSobrantes)}`, 40, y);
         y += 14;
 
         doc.fillColor('#cc0000');
-        doc.text(`Faltantes: -${totalFaltante} uds   =   ${money(montoFaltantes)}`, 40, y);
+        doc.text(`Faltantes: -${this.fmtQty(totalFaltante)} uds   =   ${money(montoFaltantes)}`, 40, y);
         y += 14;
 
         // Neto = sobrantes - faltantes (azul si >= 0, rojo si negativo)

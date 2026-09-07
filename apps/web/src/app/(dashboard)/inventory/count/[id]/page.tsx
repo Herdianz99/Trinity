@@ -427,7 +427,7 @@ export default function InventoryCountDetailPage() {
     }
   }
 
-  const canApprove = userRole === 'ADMIN' || userRole === 'SUPERVISOR';
+  const canApprove = userRole === 'ADMIN' || userRole === 'SUPERVISOR' || userRole === 'AUDITOR';
 
   // ── Loading state ──────────────────────────────────
   if (loading) {
@@ -925,6 +925,12 @@ export default function InventoryCountDetailPage() {
                         className="w-full text-left px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors border-t border-slate-700/30"
                       >
                         Diferencias valoradas (monto con signo + neto)
+                      </button>
+                      <button
+                        onClick={() => { window.open(`/api/proxy/inventory-counts/${id}/pdf-valued-all`); setShowReportsMenu(false); }}
+                        className="w-full text-left px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700/50 transition-colors border-t border-slate-700/30"
+                      >
+                        Valorado completo (todos los artículos)
                       </button>
                     </div>
                   </>

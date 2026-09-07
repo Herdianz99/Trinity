@@ -96,6 +96,18 @@ export class InventoryCountsController {
     res.end(buffer);
   }
 
+  // Igual que el valorado pero incluye TODOS los articulos del conteo (con o sin diferencia).
+  @Get(':id/pdf-valued-all')
+  async getPdfValuedAll(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdfService.generateValuedDifferencesReport(id, true);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="conteo-valorado-completo-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryCountsService.findOne(id);
@@ -131,7 +143,7 @@ export class InventoryCountsController {
 
   @Patch(':id/approve')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.AUDITOR)
   approve(
     @Param('id') id: string,
     @CurrentUser() user: { id: string; email: string; role: UserRole },
