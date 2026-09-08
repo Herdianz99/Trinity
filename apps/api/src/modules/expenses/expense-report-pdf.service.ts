@@ -16,6 +16,16 @@ export class ExpenseReportPdfService {
     return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // Dibuja un monto alineado a la derecha en un ancho FIJO. Si el numero es muy grande (los
+  // montos en Bs pueden ser de millones) encoge la fuente hasta que quepa, en vez de partirlo
+  // en dos lineas (bug: se veia solo "Bs" y el numero caia debajo) o invadir la columna vecina.
+  private money(doc: any, text: string, x: number, y: number, w: number, size: number, bold: boolean, color: string): void {
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica');
+    let s = size;
+    while (s > 5 && doc.fontSize(s).widthOfString(text) > w) s -= 0.5;
+    doc.fontSize(s).fillColor(color).text(text, x, y, { width: w, align: 'right', lineBreak: false });
+  }
+
   // Reporte AGRUPADO en 2 niveles: primero por clasificacion (Fijo / Extraordinario) de la
   // categoria, luego por categoria, con subtotal por tipo y TOTAL GENERAL. Respeta el rango
   // de fechas (sobre Expense.date, anclado a Caracas como el dashboard) y el filtro de categoria.
@@ -116,7 +126,7 @@ export class ExpenseReportPdfService {
       doc.rect(40, y - 2, RIGHT - 40, 17).fill(g.type === 'FIXED' ? '#1e3a5f' : '#5b3a1e');
       doc.fillColor('#fff').fontSize(9.5).font('Helvetica-Bold');
       doc.text(`${EXPENSE_TYPE_LABELS[g.type]}  (${g.cats.size} categorias · ${g.count} gastos)`, 46, y + 1.5, { width: RIGHT - 200, lineBreak: false });
-      doc.text(`$${this.fmt(g.totalUsd)}`, cUsd.x, y + 1.5, { width: cUsd.w + cBs.w - 4, align: 'right', lineBreak: false });
+      this.money(doc, `$${this.fmt(g.totalUsd)}`, cUsd.x, y + 1.5, cUsd.w + cBs.w - 4, 9.5, true, '#fff');
       doc.fillColor('#000');
       y += 20;
 
@@ -125,12 +135,12 @@ export class ExpenseReportPdfService {
       const cats = Array.from(g.cats.values()).sort((a, b) => b.totalUsd - a.totalUsd);
       doc.fontSize(8).font('Helvetica');
       for (const c of cats) {
-        if (y + 13 > bottom()) { doc.addPage(); y = 40; drawColHeader(); doc.fontSize(8).font('Helvetica'); }
-        doc.fillColor('#1e293b');
+        if (y + 13 > bottom()) { doc.addPage(); y = 40; drawColHeader(); }
+        doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
         doc.text(c.name, cName.x, y, { width: cName.w, lineBreak: false, ellipsis: true });
         doc.text(String(c.count), cCant.x, y, { width: cCant.w, align: 'right' });
-        doc.text(`$${this.fmt(c.totalUsd)}`, cUsd.x, y, { width: cUsd.w, align: 'right' });
-        doc.text(`Bs ${this.fmt(c.totalBs)}`, cBs.x, y, { width: cBs.w, align: 'right' });
+        this.money(doc, `$${this.fmt(c.totalUsd)}`, cUsd.x, y, cUsd.w, 8, false, '#1e293b');
+        this.money(doc, `Bs ${this.fmt(c.totalBs)}`, cBs.x, y, cBs.w, 8, false, '#1e293b');
         doc.fillColor('#000');
         y += 13;
       }
@@ -141,8 +151,8 @@ export class ExpenseReportPdfService {
       doc.fillColor('#0f172a').fontSize(8).font('Helvetica-Bold');
       doc.text(`Subtotal ${EXPENSE_TYPE_LABELS[g.type]}`, cName.x, y + 1.5, { width: cName.w, lineBreak: false });
       doc.text(String(g.count), cCant.x, y + 1.5, { width: cCant.w, align: 'right' });
-      doc.text(`$${this.fmt(g.totalUsd)}`, cUsd.x, y + 1.5, { width: cUsd.w, align: 'right' });
-      doc.text(`Bs ${this.fmt(g.totalBs)}`, cBs.x, y + 1.5, { width: cBs.w, align: 'right' });
+      this.money(doc, `$${this.fmt(g.totalUsd)}`, cUsd.x, y + 1.5, cUsd.w, 8, true, '#0f172a');
+      this.money(doc, `Bs ${this.fmt(g.totalBs)}`, cBs.x, y + 1.5, cBs.w, 8, true, '#0f172a');
       doc.fillColor('#000');
       y += 22;
     }
@@ -155,8 +165,8 @@ export class ExpenseReportPdfService {
       doc.rect(40, y - 2, RIGHT - 40, 17).fill('#0f172a');
       doc.fillColor('#fff').fontSize(9.5).font('Helvetica-Bold');
       doc.text(`TOTAL GENERAL  (${expenses.length} gastos)`, 46, y + 1.5, { width: 260, lineBreak: false });
-      doc.text(`$${this.fmt(grandUsd)}`, cUsd.x, y + 1.5, { width: cUsd.w, align: 'right' });
-      doc.text(`Bs ${this.fmt(grandBs)}`, cBs.x, y + 1.5, { width: cBs.w, align: 'right' });
+      this.money(doc, `$${this.fmt(grandUsd)}`, cUsd.x, y + 1.5, cUsd.w, 9.5, true, '#fff');
+      this.money(doc, `Bs ${this.fmt(grandBs)}`, cBs.x, y + 1.5, cBs.w, 9.5, true, '#fff');
       doc.fillColor('#000');
     }
 
@@ -278,8 +288,8 @@ export class ExpenseReportPdfService {
       doc.rect(40, y - 2, RIGHT - 40, 17).fill('#1e3a5f');
       doc.fillColor('#fff').fontSize(9.5).font('Helvetica-Bold');
       doc.text(`${c.name}  (${c.count} gasto${c.count !== 1 ? 's' : ''})`, 46, y + 1.5, { width: 300, lineBreak: false, ellipsis: true });
-      doc.text(`$${this.fmt(c.totalUsd)}`, cUsd.x, y + 1.5, { width: cUsd.w, align: 'right', lineBreak: false });
-      doc.text(`Bs ${this.fmt(c.totalBs)}`, cBs.x, y + 1.5, { width: cBs.w, align: 'right', lineBreak: false });
+      this.money(doc, `$${this.fmt(c.totalUsd)}`, cUsd.x, y + 1.5, cUsd.w, 9.5, true, '#fff');
+      this.money(doc, `Bs ${this.fmt(c.totalBs)}`, cBs.x, y + 1.5, cBs.w, 9.5, true, '#fff');
       doc.fillColor('#000');
       y += 20;
     };
@@ -305,12 +315,12 @@ export class ExpenseReportPdfService {
         if (stripe) { doc.save(); doc.rect(40, y - 1, RIGHT - 40, rowH).fill('#f8fafc'); doc.restore(); doc.fillColor('#000'); }
         stripe = !stripe;
         const dateStr = new Date(exp.date).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
-        doc.fillColor('#1e293b');
+        doc.fontSize(8).font('Helvetica').fillColor('#1e293b');
         doc.text(dateStr, cDate.x, y, { width: cDate.w, lineBreak: false });
         doc.text(descText, cDesc.x, y, { width: cDesc.w });
         doc.text(exp.reference || '-', cRef.x, y, { width: cRef.w, lineBreak: false, ellipsis: true });
-        doc.text(`$${this.fmt(exp.amountUsd)}`, cUsd.x, y, { width: cUsd.w, align: 'right', lineBreak: false });
-        doc.text(`Bs ${this.fmt(exp.amountBs)}`, cBs.x, y, { width: cBs.w, align: 'right', lineBreak: false });
+        this.money(doc, `$${this.fmt(exp.amountUsd)}`, cUsd.x, y, cUsd.w, 8, false, '#1e293b');
+        this.money(doc, `Bs ${this.fmt(exp.amountBs)}`, cBs.x, y, cBs.w, 8, false, '#1e293b');
         doc.fillColor('#000');
         y += rowH;
       }
@@ -325,8 +335,8 @@ export class ExpenseReportPdfService {
       doc.rect(40, y - 2, RIGHT - 40, 17).fill('#0f172a');
       doc.fillColor('#fff').fontSize(9.5).font('Helvetica-Bold');
       doc.text(`TOTAL GENERAL  (${expenses.length} gasto${expenses.length !== 1 ? 's' : ''})`, 46, y + 1.5, { width: 260, lineBreak: false });
-      doc.text(`$${this.fmt(grandUsd)}`, cUsd.x, y + 1.5, { width: cUsd.w, align: 'right' });
-      doc.text(`Bs ${this.fmt(grandBs)}`, cBs.x, y + 1.5, { width: cBs.w, align: 'right' });
+      this.money(doc, `$${this.fmt(grandUsd)}`, cUsd.x, y + 1.5, cUsd.w, 9.5, true, '#fff');
+      this.money(doc, `Bs ${this.fmt(grandBs)}`, cBs.x, y + 1.5, cBs.w, 9.5, true, '#fff');
       doc.fillColor('#000');
     }
 

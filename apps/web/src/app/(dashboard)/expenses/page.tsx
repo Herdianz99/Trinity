@@ -15,6 +15,7 @@ import {
   X,
   FileText,
   FileDown,
+  FileSpreadsheet,
   ChevronDown,
   Layers,
 } from 'lucide-react';
@@ -412,6 +413,11 @@ export default function ExpensesPage() {
     window.open(`/api/proxy/expenses/report-grouped-pdf?${reportParams()}`, '_blank');
   }
 
+  // Reporte plano en Excel (una fila por gasto), mismos filtros del listado.
+  function openReportExcel() {
+    window.open(`/api/proxy/expenses/report-excel?${reportParams()}`, '_blank');
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
@@ -441,6 +447,9 @@ export default function ExpensesPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={openGroupedReportPdf} className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white gap-2">
                 <Layers size={14} /> Fijo / Extraordinario (por categoria)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openReportExcel} className="cursor-pointer text-emerald-300 focus:bg-slate-700 focus:text-emerald-200 gap-2">
+                <FileSpreadsheet size={14} /> Exportar a Excel
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

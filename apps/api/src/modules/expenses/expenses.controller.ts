@@ -16,6 +16,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { ExpensesService } from './expenses.service';
 import { ExpenseReportPdfService } from './expense-report-pdf.service';
+import { ExpenseReportExcelService } from './expense-report-excel.service';
 import { ExpensePdfService } from './expense-pdf.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
@@ -29,6 +30,7 @@ export class ExpensesController {
   constructor(
     private readonly service: ExpensesService,
     private readonly reportPdfService: ExpenseReportPdfService,
+    private readonly reportExcelService: ExpenseReportExcelService,
     private readonly pdfService: ExpensePdfService,
   ) {}
 
@@ -119,6 +121,23 @@ export class ExpensesController {
     res!.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="reporte-gastos-fijo-extraordinario.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res!.end(buffer);
+  }
+
+  // Reporte PLANO en Excel (una fila por gasto), mismos filtros que el listado/PDF.
+  @Get('expenses/report-excel')
+  async getReportExcel(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('categoryId') categoryId?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.reportExcelService.generate({ from, to, categoryId });
+    res!.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="reporte-gastos.xlsx"`,
       'Content-Length': buffer.length,
     });
     res!.end(buffer);
