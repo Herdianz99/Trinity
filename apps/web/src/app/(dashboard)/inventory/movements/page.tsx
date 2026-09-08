@@ -70,7 +70,11 @@ export default function MovementsPage() {
   const [total, setTotal] = useState(0);
 
   // Filters
+  // filterProductId: solo para el deep-link desde la ficha de un producto (?productId=...).
+  // search: busqueda libre que escribe el usuario (nombre, codigo, ref. proveedor, codigo de
+  // barras o categoria) — el cliente no conoce ids.
   const [filterProductId, setFilterProductId] = useState(initialProductId);
+  const [search, setSearch] = useState('');
   const [filterWarehouseId, setFilterWarehouseId] = useState('');
   const [filterSupplierId, setFilterSupplierId] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -110,6 +114,7 @@ export default function MovementsPage() {
   const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
     if (filterProductId) params.set('productId', filterProductId);
+    if (search.trim()) params.set('search', search.trim());
     if (filterWarehouseId) params.set('warehouseId', filterWarehouseId);
     if (filterSupplierId) params.set('supplierId', filterSupplierId);
     if (filterType) params.set('type', filterType);
@@ -118,7 +123,7 @@ export default function MovementsPage() {
     if (range.to) params.set('to', range.to);
     return params;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterProductId, filterWarehouseId, filterSupplierId, filterType, dateRange, customFrom, customTo]);
+  }, [filterProductId, search, filterWarehouseId, filterSupplierId, filterType, dateRange, customFrom, customTo]);
 
   const fetchMovements = useCallback(async () => {
     setLoading(true);
@@ -254,10 +259,10 @@ export default function MovementsPage() {
           </select>
           <input
             type="text"
-            value={filterProductId}
-            onChange={(e) => { setFilterProductId(e.target.value); setPage(1); }}
-            placeholder="ID de producto..."
-            className="input-field !py-2 text-sm"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); if (filterProductId) setFilterProductId(''); setPage(1); }}
+            placeholder="Buscar por nombre, codigo, ref, cod. barras o categoria..."
+            className="input-field !py-2 text-sm md:col-span-2"
           />
         </div>
       </div>

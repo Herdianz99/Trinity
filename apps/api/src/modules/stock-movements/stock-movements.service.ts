@@ -10,11 +10,14 @@ export class StockMovementsService {
 
   // Construye el filtro Prisma compartido por el listado y los reportes.
   // supplierId filtra por el proveedor de la FICHA del producto (Product.supplierId).
+  // search: busqueda parcial (insensible a mayusculas) sobre nombre, codigo, ref. proveedor,
+  // codigo de barras y nombre de categoria del producto — el cliente no conoce ids.
   private buildWhere(filters: {
     productId?: string;
     warehouseId?: string;
     type?: string;
     supplierId?: string;
+    search?: string;
     from?: string;
     to?: string;
   }) {
@@ -23,7 +26,21 @@ export class StockMovementsService {
     if (filters.productId) where.productId = filters.productId;
     if (filters.warehouseId) where.warehouseId = filters.warehouseId;
     if (filters.type) where.type = filters.type;
-    if (filters.supplierId) where.product = { supplierId: filters.supplierId };
+
+    // Filtros que aplican sobre la FICHA del producto (se combinan en where.product).
+    const productFilter: any = {};
+    if (filters.supplierId) productFilter.supplierId = filters.supplierId;
+    const s = filters.search?.trim();
+    if (s) {
+      productFilter.OR = [
+        { name: { contains: s, mode: 'insensitive' } },
+        { code: { contains: s, mode: 'insensitive' } },
+        { supplierRef: { contains: s, mode: 'insensitive' } },
+        { barcode: { contains: s, mode: 'insensitive' } },
+        { category: { name: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+    if (Object.keys(productFilter).length) where.product = productFilter;
 
     if (filters.from || filters.to) {
       where.createdAt = {};
@@ -39,6 +56,7 @@ export class StockMovementsService {
     warehouseId?: string;
     type?: string;
     supplierId?: string;
+    search?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -123,6 +141,7 @@ export class StockMovementsService {
     warehouseId?: string;
     type?: string;
     supplierId?: string;
+    search?: string;
     from?: string;
     to?: string;
   }) {
@@ -206,6 +225,7 @@ export class StockMovementsService {
     warehouseId?: string;
     type?: string;
     supplierId?: string;
+    search?: string;
     from?: string;
     to?: string;
   }) {

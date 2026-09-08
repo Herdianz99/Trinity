@@ -88,12 +88,20 @@ interface DashboardData {
     totalOverdueUsd: number;
     count: number;
     overdueCount: number;
+    // Cobros DEL PERIODO mostrado (recibos de cobro POSTED), no el saldo pendiente.
+    collectedUsd: number;
+    collectedBs: number;
+    collectedCount: number;
   };
   payables: {
     totalPendingUsd: number;
     totalOverdueUsd: number;
     count: number;
     overdueCount: number;
+    // Pagos DEL PERIODO mostrado (recibos de pago POSTED), no el saldo pendiente.
+    paidUsd: number;
+    paidBs: number;
+    paidCount: number;
   };
   salesTimeline: { label: string; totalUsd: number; count: number }[];
   financing: {
@@ -533,6 +541,15 @@ export default function DashboardGerencialClient() {
                   </span>
                 )}
               </div>
+              {/* Monto COBRADO en el periodo mostrado (recibos de cobro), aparte del saldo por cobrar. */}
+              <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <span className="text-xs text-slate-400">Cobrado en el periodo</span>
+                <p className="text-sm font-semibold text-emerald-400 tabular-nums mt-0.5">
+                  ${fmt(data.receivables.collectedUsd)}
+                  <span className="text-slate-500 font-normal"> · Bs {fmt(data.receivables.collectedBs)}</span>
+                </p>
+                <span className="text-[11px] text-slate-500">{data.receivables.collectedCount} recibo{data.receivables.collectedCount !== 1 ? 's' : ''} de cobro</span>
+              </div>
             </Link>
 
             <Link href="/payables" className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 block cursor-pointer transition-colors hover:border-emerald-500/40 hover:bg-slate-800/80">
@@ -552,6 +569,15 @@ export default function DashboardGerencialClient() {
                     ${fmt(data.payables.totalOverdueUsd)} vencidas ({data.payables.overdueCount})
                   </span>
                 )}
+              </div>
+              {/* Monto PAGADO en el periodo mostrado (recibos de pago), aparte del saldo por pagar. */}
+              <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <span className="text-xs text-slate-400">Pagado en el periodo</span>
+                <p className="text-sm font-semibold text-rose-400 tabular-nums mt-0.5">
+                  ${fmt(data.payables.paidUsd)}
+                  <span className="text-slate-500 font-normal"> · Bs {fmt(data.payables.paidBs)}</span>
+                </p>
+                <span className="text-[11px] text-slate-500">{data.payables.paidCount} recibo{data.payables.paidCount !== 1 ? 's' : ''} de pago</span>
               </div>
             </Link>
           </div>

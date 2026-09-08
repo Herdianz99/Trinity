@@ -80,6 +80,8 @@ export class DashboardService {
       prevProfit,
       stockout,
       countAccuracy,
+      collections,
+      payments,
     ] = await Promise.all([
       this.getNetInvoiceRows(dateRange),
       this.getNetInvoiceRows(prevDateRange),
@@ -101,6 +103,10 @@ export class DashboardService {
       // una foto del stock actual y la precisión usa ventanas fijas de 15/30 días.
       this.getStockoutRate(),
       this.getCountAccuracy(),
+      // Cobros del periodo (SI respeta el rango, a diferencia del saldo por cobrar).
+      this.getCollectionsInPeriod(fromYmd, toYmd),
+      // Pagos del periodo (SI respeta el rango, a diferencia del saldo por pagar).
+      this.getPaymentsInPeriod(fromYmd, toYmd),
     ]);
 
     // Derivados sincronos de las filas netas por factura (sin mas consultas).
@@ -145,8 +151,10 @@ export class DashboardService {
       salesByFiscalType,
       cashSummary,
       expenses,
-      receivables,
-      payables,
+      // receivables = saldo por cobrar (foto actual) + cobros DEL PERIODO (collectedUsd/Bs/Count).
+      receivables: { ...receivables, ...collections },
+      // payables = saldo por pagar (foto actual) + pagos DEL PERIODO (paidUsd/Bs/Count).
+      payables: { ...payables, ...payments },
       salesTimeline: salesByHourOrDay,
       financing: {
         casheaUsd: financing.casheaUsd,
@@ -1249,6 +1257,51 @@ export class DashboardService {
       byCategory: Array.from(catMap.entries())
         .map(([categoryName, catTotalUsd]) => ({ categoryName, totalUsd: round2(catTotalUsd) }))
         .sort((a, b) => b.totalUsd - a.totalUsd),
+    };
+  }
+
+  // ── Cobros del periodo (recibos de cobro POSTED) ───────────────────────────
+  // A diferencia del SALDO por cobrar (getReceivables, foto actual que ignora el periodo),
+  // esto SI respeta el rango del tablero: cuanto se COBRO (recibos de cobro procesados) en las
+  // fechas mostradas. Misma fuente y criterio que la pantalla /receipts/collection.
+  private async getCollectionsInPeriod(fromYmd: string, toYmd: string) {
+    // documentDate es date-only a medianoche UTC de la fecha-Caracas → se compara con caracasDateKey.
+    const receipts = await this.prisma.receipt.findMany({
+      where: {
+        type: 'COLLECTION',
+        status: 'POSTED',
+        documentDate: { gte: caracasDateKey(fromYmd), lte: caracasDateKey(toYmd) },
+      },
+      select: { totalUsd: true, totalBsHistoric: true },
+    });
+    let collectedUsd = 0, collectedBs = 0;
+    for (const r of receipts) { collectedUsd += r.totalUsd; collectedBs += r.totalBsHistoric; }
+    return {
+      collectedUsd: round2(collectedUsd),
+      collectedBs: round2(collectedBs),
+      collectedCount: receipts.length,
+    };
+  }
+
+  // ── Pagos del periodo (recibos de pago POSTED) ─────────────────────────────
+  // Espejo de getCollectionsInPeriod para Cuentas por Pagar: cuanto se PAGO (recibos de pago
+  // procesados) en las fechas mostradas. Misma fuente y criterio que /receipts/payment.
+  private async getPaymentsInPeriod(fromYmd: string, toYmd: string) {
+    // documentDate es date-only a medianoche UTC de la fecha-Caracas → se compara con caracasDateKey.
+    const receipts = await this.prisma.receipt.findMany({
+      where: {
+        type: 'PAYMENT',
+        status: 'POSTED',
+        documentDate: { gte: caracasDateKey(fromYmd), lte: caracasDateKey(toYmd) },
+      },
+      select: { totalUsd: true, totalBsHistoric: true },
+    });
+    let paidUsd = 0, paidBs = 0;
+    for (const r of receipts) { paidUsd += r.totalUsd; paidBs += r.totalBsHistoric; }
+    return {
+      paidUsd: round2(paidUsd),
+      paidBs: round2(paidBs),
+      paidCount: receipts.length,
     };
   }
 

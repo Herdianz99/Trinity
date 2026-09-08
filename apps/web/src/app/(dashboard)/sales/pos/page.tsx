@@ -304,7 +304,7 @@ export default function POSPage() {
   // Client modal state
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [showEditClient, setShowEditClient] = useState(false);
-  const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '' });
+  const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '', email: '' });
   const [savingClient, setSavingClient] = useState(false);
   const [seniatOpen, setSeniatOpen] = useState(false);
   const [clientRifWarning, setClientRifWarning] = useState('');
@@ -1712,9 +1712,9 @@ export default function POSPage() {
     const cleaned = raw.replace(/[\s.\-]/g, '');
     const m = cleaned.match(/^([VEJGCP])?(\d{5,})$/i);
     if (m) {
-      setClientForm({ documentType: (m[1] || 'V').toUpperCase(), rif: m[2], name: '', address: '', phone: '' });
+      setClientForm({ documentType: (m[1] || 'V').toUpperCase(), rif: m[2], name: '', address: '', phone: '', email: '' });
     } else {
-      setClientForm({ documentType: 'V', rif: '', name: raw, address: '', phone: '' });
+      setClientForm({ documentType: 'V', rif: '', name: raw, address: '', phone: '', email: '' });
     }
     setShowCreateClient(true);
   }
@@ -1766,6 +1766,7 @@ export default function POSPage() {
           name: data.name || '',
           address: data.address || '',
           phone: data.phone || '',
+          email: data.email || '',
         });
         setShowEditClient(true);
       });
@@ -3110,6 +3111,16 @@ export default function POSPage() {
                     onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
                     className="input-field !py-3 md:!py-2 text-sm"
                     placeholder="0414-1234567"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">Correo</label>
+                  <input
+                    type="email"
+                    value={clientForm.email}
+                    onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))}
+                    className="input-field !py-3 md:!py-2 text-sm"
+                    placeholder="correo@ejemplo.com"
                   />
                 </div>
               </div>

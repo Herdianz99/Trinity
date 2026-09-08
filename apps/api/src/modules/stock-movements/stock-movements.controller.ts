@@ -35,6 +35,7 @@ export class StockMovementsController {
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'type', required: false })
   @ApiQuery({ name: 'supplierId', required: false, description: 'Proveedor de la ficha del producto' })
+  @ApiQuery({ name: 'search', required: false, description: 'Nombre, codigo, ref. proveedor, codigo de barras o categoria' })
   @ApiQuery({ name: 'from', required: false, description: 'Date in ISO format (YYYY-MM-DD)' })
   @ApiQuery({ name: 'to', required: false, description: 'Date in ISO format (YYYY-MM-DD)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -44,6 +45,7 @@ export class StockMovementsController {
     @Query('warehouseId') warehouseId?: string,
     @Query('type') type?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page?: string,
@@ -54,6 +56,7 @@ export class StockMovementsController {
       warehouseId,
       type,
       supplierId,
+      search,
       from,
       to,
       page: page ? parseInt(page, 10) : undefined,
@@ -66,6 +69,7 @@ export class StockMovementsController {
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'type', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
   async reportByCategory(
@@ -74,6 +78,7 @@ export class StockMovementsController {
     @Query('warehouseId') warehouseId?: string,
     @Query('type') type?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
@@ -82,6 +87,7 @@ export class StockMovementsController {
       warehouseId,
       type,
       supplierId,
+      search,
       from,
       to,
     });
@@ -99,6 +105,7 @@ export class StockMovementsController {
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'type', required: false })
   @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
   async reportCosts(
@@ -107,6 +114,7 @@ export class StockMovementsController {
     @Query('warehouseId') warehouseId?: string,
     @Query('type') type?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
@@ -115,6 +123,7 @@ export class StockMovementsController {
       warehouseId,
       type,
       supplierId,
+      search,
       from,
       to,
     });
