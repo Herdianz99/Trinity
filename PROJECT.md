@@ -1138,11 +1138,11 @@ model QuotationItem {
 
 **Claves Dinamicas de Autorizacion (DynamicKeysModule):**
 - Modelos: DynamicKey (keyHash bcrypt, isActive), DynamicKeyPermission (enum DynamicKeyPerm), DynamicKeyLog (audit trail)
-- 14 permisos configurables: eliminar NC/ND venta/compra, eliminar recibo cobro/pago, eliminar gasto, modificar precio, anular sesion caja, cambiar tasa, ajuste inventario, dar descuento, facturar a credito, movimiento manual caja
+- Permisos configurables (enum DynamicKeyPerm): eliminar NC/ND venta/compra, eliminar recibo cobro/pago, eliminar CxC/CxP, eliminar anticipo cliente/proveedor, eliminar gasto, modificar precio, anular sesion caja, cambiar tasa, ajuste inventario, dar descuento, facturar a credito, movimiento manual caja, vender sin stock (negativo), autorizar credito con vencidos/sobre cupo, **activar/bloquear producto para la venta (TOGGLE_PRODUCT_SALE, Sesión 124)**
 - CRUD de claves solo ADMIN, validacion abierta a autenticados
 - Validacion: itera claves activas, bcrypt.compare, verifica permiso, crea log con entityType/entityId/action
 - Componente reutilizable DynamicKeyModal: campo password, llama POST /dynamic-keys/validate, ejecuta callback si autorizado
-- Integrado en: anular notas credito/debito, cancelar recibos cobro/pago, eliminar gastos, movimientos manuales de caja
+- Integrado en: anular notas credito/debito, cancelar recibos cobro/pago, eliminar gastos, movimientos manuales de caja, **activar/bloquear producto para la venta** en `/inventory/articulos` (endpoint dedicado `PATCH /products/:id/sale-block`; el toggle equivalente de `/catalog/products` se deja sin clave, es solo-ADMIN)
 - Frontend: /settings/dynamic-keys (gestion), /settings/dynamic-keys/[id]/logs (historial)
 - Sidebar: bajo CONFIGURACION
 
