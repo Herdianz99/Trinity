@@ -8,9 +8,10 @@ import { ProductsCatalogReportService } from './products-catalog-report.service'
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { StoreExportModule } from '../store-export/store-export.module';
 import { IntegrationModule } from '../integration/integration.module';
+import { DynamicKeysModule } from '../dynamic-keys/dynamic-keys.module';
 
 @Module({
-  imports: [StoreExportModule, IntegrationModule],
+  imports: [StoreExportModule, IntegrationModule, DynamicKeysModule],
   controllers: [ProductsController],
   providers: [ProductsService, PurchaseAnalysisPdfService, ProductsReportPdfService, ProductsNoPhotoReportPdfService, ProductsCatalogReportService, ProductsUtilidadReportService],
   exports: [ProductsService],

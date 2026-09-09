@@ -47,6 +47,7 @@ const PERM_LABELS: Record<string, string> = {
   MANUAL_CASH_MOVEMENT: 'Movimiento manual caja',
   SELL_NEGATIVE_STOCK: 'Vender sin stock (negativo)',
   OVERRIDE_CREDIT_BLOCK: 'Autorizar credito con vencidos / sobre cupo',
+  TOGGLE_PRODUCT_SALE: 'Activar/bloquear producto para la venta',
 };
 
 const ALL_PERMS = Object.keys(PERM_LABELS);

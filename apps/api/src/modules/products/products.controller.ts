@@ -21,6 +21,7 @@ import { ProductsUtilidadReportService } from './products-utilidad-report.servic
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
 import { SetBarcodeDto } from './dto/set-barcode.dto';
+import { SetSaleBlockDto } from './dto/set-sale-block.dto';
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -181,6 +182,12 @@ export class ProductsController {
   @RequireModule('catalog')
   setBarcode(@Param('id') id: string, @Body() dto: SetBarcodeDto) {
     return this.productsService.setBarcode(id, dto.barcode);
+  }
+
+  // Activar/bloquear un producto para la venta. Requiere clave dinamica (TOGGLE_PRODUCT_SALE).
+  @Patch(':id/sale-block')
+  setSaleBlock(@Param('id') id: string, @Body() dto: SetSaleBlockDto) {
+    return this.productsService.setSaleBlock(id, dto);
   }
 
   @Patch(':id')

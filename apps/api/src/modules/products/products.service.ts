@@ -11,6 +11,8 @@ import { IvaType, Prisma } from '@prisma/client';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
 import { StoreExportService } from '../store-export/store-export.service';
 import { IntegrationService } from '../integration/integration.service';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
+import { SetSaleBlockDto } from './dto/set-sale-block.dto';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
 
@@ -27,6 +29,7 @@ export class ProductsService {
     private prisma: PrismaService,
     private storeExport: StoreExportService,
     private integration: IntegrationService,
+    private dynamicKeys: DynamicKeysService,
   ) {}
 
   // Analisis de compra: productos (filtrables por categoria/marca/proveedor) con su existencia
@@ -612,6 +615,34 @@ export class ProductsService {
         priceDetal,
         priceMayor,
       },
+      include: {
+        category: true,
+        brand: true,
+        supplier: true,
+        stock: { include: { warehouse: true } },
+      },
+    });
+    this.storeExport.scheduleExport(); // republica el snapshot de la tienda
+    return updated;
+  }
+
+  // Activar/bloquear para la venta. Exige clave dinamica (TOGGLE_PRODUCT_SALE) y deja log de auditoria.
+  // Si el estado no cambia, no pide clave (no-op).
+  async setSaleBlock(id: string, dto: SetSaleBlockDto) {
+    const existing = await this.findOne(id);
+    if (existing.saleBlocked === dto.saleBlocked) return existing;
+
+    await this.dynamicKeys.validate({
+      key: dto.dynamicKey || '',
+      permission: 'TOGGLE_PRODUCT_SALE',
+      action: `${dto.saleBlocked ? 'Bloquear' : 'Activar'} para la venta: ${existing.code} - ${existing.name}`,
+      entityType: 'Product',
+      entityId: id,
+    });
+
+    const updated = await this.prisma.product.update({
+      where: { id },
+      data: { saleBlocked: dto.saleBlocked },
       include: {
         category: true,
         brand: true,

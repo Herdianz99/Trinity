@@ -2867,3 +2867,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Customer_code_key" ON "Customer"("code");
 
 -- Observaciones de conteo fisico (Session 118): columna aditiva
 ALTER TABLE "InventoryCount" ADD COLUMN IF NOT EXISTS "observations" TEXT;
+
+-- Permiso de clave dinamica: activar/bloquear producto para la venta (Session 124)
+ALTER TYPE "DynamicKeyPerm" ADD VALUE IF NOT EXISTS 'TOGGLE_PRODUCT_SALE';

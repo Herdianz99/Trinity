@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import Toggle from '@/components/toggle';
+import DynamicKeyModal from '@/components/dynamic-key-modal';
 
 // ── Types ──
 interface StockRow { quantity: number; warehouse: { id: string; name: string }; }
@@ -71,6 +72,9 @@ export default function InventoryArticlesPage() {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [savingSale, setSavingSale] = useState(false);
   const [saleErr, setSaleErr] = useState(false);
+  // Clave dinamica para activar/bloquear la venta
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [pendingActive, setPendingActive] = useState<boolean | null>(null);
   const [kLoading, setKLoading] = useState(false);
   const [kPage, setKPage] = useState(1);
   const [kTotalPages, setKTotalPages] = useState(1);
@@ -144,17 +148,24 @@ export default function InventoryArticlesPage() {
     setSelected(null);
     setMovements([]);
   }
-  // Activar/bloquear el articulo seleccionado para la venta (guarda al instante).
-  async function toggleSaleForSelected(active: boolean) {
+  // Al mover el toggle no se guarda directo: se pide la clave dinamica (permiso TOGGLE_PRODUCT_SALE).
+  function requestToggleSale(active: boolean) {
     if (!selected || savingSale) return;
-    const saleBlocked = !active;
+    setSaleErr(false);
+    setPendingActive(active);
+    setKeyModalOpen(true);
+  }
+  // Ejecuta el cambio ya con la clave validada por el modal (el backend la revalida y deja log).
+  async function executeToggleSale(key: string) {
+    if (!selected || pendingActive === null) return;
+    const saleBlocked = !pendingActive;
     setSavingSale(true);
     setSaleErr(false);
     try {
-      const res = await fetch(`/api/proxy/products/${selected.id}`, {
+      const res = await fetch(`/api/proxy/products/${selected.id}/sale-block`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saleBlocked }),
+        body: JSON.stringify({ saleBlocked, dynamicKey: key }),
       });
       if (!res.ok) throw new Error();
       setSelected(s => (s ? { ...s, saleBlocked } : s));
@@ -163,6 +174,7 @@ export default function InventoryArticlesPage() {
       setSaleErr(true); // el toggle queda en su estado real (no cambiamos selected)
     } finally {
       setSavingSale(false);
+      setPendingActive(null);
     }
   }
   function changeKardexPage(p: number) {
@@ -337,7 +349,7 @@ export default function InventoryArticlesPage() {
                 </div>
                 {/* Activar/desactivar para la venta (guarda al instante) */}
                 <div className="flex items-center gap-2 mt-2.5">
-                  <Toggle checked={!selected.saleBlocked} onChange={toggleSaleForSelected} disabled={savingSale} label="Activo para la venta" />
+                  <Toggle checked={!selected.saleBlocked} onChange={requestToggleSale} disabled={savingSale} label="Activo para la venta" />
                   {savingSale && <Loader2 className="animate-spin text-slate-500" size={12} />}
                   {selected.saleBlocked && !savingSale && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Bloqueado</span>
@@ -415,6 +427,18 @@ export default function InventoryArticlesPage() {
           onClose={() => setShowScanner(false)}
         />
       )}
+
+      <DynamicKeyModal
+        isOpen={keyModalOpen}
+        onClose={() => { setKeyModalOpen(false); setPendingActive(null); }}
+        onAuthorized={executeToggleSale}
+        permission="TOGGLE_PRODUCT_SALE"
+        title={pendingActive ? 'Activar para la venta' : 'Bloquear para la venta'}
+        description="Ingresa la clave de autorizacion para cambiar el estado de venta"
+        entityType="Product"
+        entityId={selected?.id}
+        action={`${pendingActive ? 'Activar' : 'Bloquear'} para la venta: ${selected?.code ?? ''}`}
+      />
     </div>
   );
 }
