@@ -50,6 +50,13 @@ export class QueryReceivablesDto {
   @IsBoolean()
   employeeOnly?: boolean;
 
+  // Clientes reales: excluye empresas del grupo, empleados y plataformas de financiamiento.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  realCustomers?: boolean;
+
   // Proximas a vencer: dueDate entre hoy y hoy+N (no vencidas, no pagadas)
   @ApiProperty({ required: false })
   @IsOptional()

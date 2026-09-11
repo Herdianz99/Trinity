@@ -136,6 +136,7 @@ export default function ReceivablesPage() {
   const [dueSoon, setDueSoon] = useState(false);
   const [dueSoonDays, setDueSoonDays] = useState(7);
   const [employeeOnly, setEmployeeOnly] = useState(false);
+  const [realCustomers, setRealCustomers] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -180,6 +181,7 @@ export default function ReceivablesPage() {
       if (overdue) params.set('overdue', 'true');
       else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
       if (employeeOnly) params.set('employeeOnly', 'true');
+      if (realCustomers) params.set('realCustomers', 'true');
       const res = await fetch(`/api/proxy/receivables?${params}`);
       const data = await res.json();
       setReceivables(data.data || []);
@@ -190,7 +192,7 @@ export default function ReceivablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, type, status, reference, from, to, overdue, dueSoon, dueSoonDays, employeeOnly]);
+  }, [page, type, status, reference, from, to, overdue, dueSoon, dueSoonDays, employeeOnly, realCustomers]);
 
   // Filtros actuales del listado de CxC (compartidos por ambos reportes PDF).
   function buildReceivablesReportParams() {
@@ -203,6 +205,7 @@ export default function ReceivablesPage() {
     if (overdue) params.set('overdue', 'true');
     else if (dueSoon) params.set('dueWithinDays', String(dueSoonDays));
     if (employeeOnly) params.set('employeeOnly', 'true');
+    if (realCustomers) params.set('realCustomers', 'true');
     return params;
   }
 
@@ -597,9 +600,14 @@ export default function ReceivablesPage() {
             </div>
           )}
           <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2">
-            <input type="checkbox" checked={employeeOnly} onChange={e => { setEmployeeOnly(e.target.checked); setPage(1); }}
+            <input type="checkbox" checked={employeeOnly} onChange={e => { setEmployeeOnly(e.target.checked); if (e.target.checked) setRealCustomers(false); setPage(1); }}
               className="rounded border-slate-600" />
             Solo empleados
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer pb-2" title="Excluye empresas del grupo, empleados y plataformas de financiamiento">
+            <input type="checkbox" checked={realCustomers} onChange={e => { setRealCustomers(e.target.checked); if (e.target.checked) setEmployeeOnly(false); setPage(1); }}
+              className="rounded border-slate-600" />
+            Clientes reales
           </label>
         </div>
       </div>

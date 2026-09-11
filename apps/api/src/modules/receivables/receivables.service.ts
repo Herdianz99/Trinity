@@ -308,6 +308,13 @@ export class ReceivablesService {
     if (query.employeeOnly) {
       where.customer = { ...(where.customer || {}), isEmployee: true };
     }
+    if (query.realCustomers) {
+      // Clientes reales: excluye empresas del grupo y empleados (por flags del cliente) y las
+      // plataformas de financiamiento (por tipo). Requiere que exista el cliente (una CxC de
+      // plataforma sin cliente queda fuera por el filtro de relacion).
+      where.customer = { ...(where.customer || {}), isGroupCompany: false, isEmployee: false };
+      if (!where.type) where.type = { not: 'FINANCING_PLATFORM' };
+    }
     return where;
   }
 
