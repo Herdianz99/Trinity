@@ -503,7 +503,7 @@ export class PaymentSchedulesService {
       where: payableWhere,
       include: {
         supplier: { select: { id: true, name: true } },
-        purchaseOrder: { select: { id: true, number: true } },
+        purchaseOrder: { select: { id: true, number: true, supplierInvoiceNumber: true } },
       },
       orderBy: { dueDate: 'asc' },
     });
@@ -514,6 +514,7 @@ export class PaymentSchedulesService {
       supplierId: p.supplierId,
       supplierName: p.supplier.name,
       reference: p.purchaseOrder?.number || `CxP ${p.id.slice(-6)}`,
+      docNumber: p.documentNumber || p.purchaseOrder?.supplierInvoiceNumber || '',
       totalAmountUsd: p.netPayableUsd,
       totalAmountBs: p.netPayableBs,
       paidAmountUsd: p.paidAmountUsd,
@@ -550,6 +551,7 @@ export class PaymentSchedulesService {
         supplierId: n.purchaseOrder?.supplierId || null,
         supplierName: n.purchaseOrder?.supplier?.name || 'Sin proveedor',
         reference: n.number,
+        docNumber: n.number,
         totalAmountUsd: n.totalUsd,
         totalAmountBs: n.totalBs,
         paidAmountUsd: 0,
@@ -566,7 +568,8 @@ export class PaymentSchedulesService {
       results = results.filter(
         (r) =>
           r.supplierName.toLowerCase().includes(s) ||
-          r.reference.toLowerCase().includes(s),
+          r.reference.toLowerCase().includes(s) ||
+          (r.docNumber || '').toLowerCase().includes(s),
       );
     }
 

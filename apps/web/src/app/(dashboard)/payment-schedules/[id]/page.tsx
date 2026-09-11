@@ -84,6 +84,7 @@ interface PendingPayable {
   supplierId: string | null;
   supplierName: string;
   reference: string;
+  docNumber?: string;
   totalAmountUsd: number;
   totalAmountBs: number;
   paidAmountUsd: number;
@@ -772,7 +773,7 @@ export default function PaymentScheduleDetailPage() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                     <input
                       type="text"
-                      placeholder="Proveedor o referencia..."
+                      placeholder="Proveedor o N° documento..."
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200"
                       value={filterSearch}
                       onChange={(e) => setFilterSearch(e.target.value)}
@@ -794,7 +795,7 @@ export default function PaymentScheduleDetailPage() {
                     <thead className="sticky top-0 bg-slate-900">
                       <tr className="text-slate-500 border-b border-slate-800">
                         <th className="text-left px-3 py-2 font-medium">Proveedor</th>
-                        <th className="text-left px-3 py-2 font-medium">Referencia</th>
+                        <th className="text-left px-3 py-2 font-medium">Nro. documento</th>
                         <th className="text-center px-3 py-2 font-medium">Tipo</th>
                         <th className="text-right px-3 py-2 font-medium">Saldo USD</th>
                         <th className="text-left px-3 py-2 font-medium">Vencimiento</th>
@@ -817,7 +818,7 @@ export default function PaymentScheduleDetailPage() {
                             }`}
                           >
                             <td className="px-3 py-2.5 text-slate-200">{p.supplierName}</td>
-                            <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{p.reference}</td>
+                            <td className="px-3 py-2.5 text-slate-400 font-mono text-xs">{p.docNumber || p.reference}</td>
                             <td className="px-3 py-2.5 text-center">
                               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
                                 p.type === 'NDC'
