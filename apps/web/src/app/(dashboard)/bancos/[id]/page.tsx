@@ -95,6 +95,29 @@ export default function BankAccountDetailPage() {
     });
   }
 
+  // Conciliar/desconciliar UN movimiento con guardado inmediato (fuera del modo por lotes)
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  async function toggleOne(m: Movement) {
+    setTogglingId(m.id);
+    try {
+      const res = await fetch('/api/proxy/bancos/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          movementIds: [m.id],
+          reconciled: !m.reconciled,
+          statementDate: !m.reconciled ? statementDate || undefined : undefined,
+        }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error'); }
+      await load();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   async function saveReconcile() {
     if (!data) return;
     const toReconcile = data.movements.filter((m) => selected.has(m.id) && !m.reconciled).map((m) => m.id);
@@ -316,10 +339,16 @@ export default function BankAccountDetailPage() {
                   <td className="px-3 py-2.5 text-center">
                     {reconcileMode ? (
                       <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleRow(m.id)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
-                    ) : m.reconciled ? (
-                      <CheckCircle size={14} className="text-green-400 inline" />
+                    ) : togglingId === m.id ? (
+                      <Loader2 size={14} className="animate-spin text-slate-400 inline" />
                     ) : (
-                      <span className="text-slate-600">—</span>
+                      <input
+                        type="checkbox"
+                        checked={m.reconciled}
+                        onChange={() => toggleOne(m)}
+                        title={m.reconciled ? 'Conciliado — clic para desmarcar' : 'Marcar como conciliado'}
+                        className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                      />
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
