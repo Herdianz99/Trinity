@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -114,6 +114,12 @@ export default function CreditDebitNoteDetailPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [posting, setPosting] = useState(false);
+  const [printingFiscal, setPrintingFiscal] = useState(false);
+  const [printingTicket, setPrintingTicket] = useState(false);
+  // Candado sincrónico anti doble-clic: bloquea la 2da llamada aunque el re-render que
+  // deshabilita el boton todavia no haya ocurrido. Critico para no imprimir 2 veces la
+  // misma nota de credito en la maquina fiscal (doble devolucion = problema con el SENIAT).
+  const fiscalPrintingRef = useRef(false);
   const [processingComandas, setProcessingComandas] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -294,6 +300,11 @@ export default function CreditDebitNoteDetailPage() {
 
   async function handleFiscalPrint() {
     if (!note || !note.invoice) return;
+    // Guard sincrónico: si ya hay una impresion fiscal en curso, ignorar el clic.
+    if (fiscalPrintingRef.current) return;
+    fiscalPrintingRef.current = true;
+    setPrintingFiscal(true);
+    setMessage(null);
     try {
       const { buildFiscalCreditNoteCommands, sendToFiscalPrinter } = await import('@/lib/fiscal-printer');
       const configRes = await fetch('/api/proxy/config');
@@ -335,11 +346,16 @@ export default function CreditDebitNoteDetailPage() {
         return;
       }
       setMessage({ type: 'error', text: `Error fiscal: ${err.message}` });
+    } finally {
+      fiscalPrintingRef.current = false;
+      setPrintingFiscal(false);
     }
   }
 
   async function handleReturnTicketPrint() {
     if (!note || !note.invoice) return;
+    if (printingTicket) return;
+    setPrintingTicket(true);
     try {
       const { printReturnReceipt } = await import('@/lib/print-receipt');
       const configRes = await fetch('/api/proxy/config');
@@ -348,6 +364,8 @@ export default function CreditDebitNoteDetailPage() {
       setMessage({ type: 'success', text: 'Ticket de devolución enviado a imprimir' });
     } catch (err: any) {
       setMessage({ type: 'error', text: `Error al imprimir ticket: ${err.message}` });
+    } finally {
+      setPrintingTicket(false);
     }
   }
 
@@ -431,13 +449,13 @@ export default function CreditDebitNoteDetailPage() {
           {note.status === 'POSTED' && (
             <>
               {note.type === 'NCV' && note.serie?.isFiscal && !note.fiscalPrinted && (
-                <button onClick={handleFiscalPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors">
-                  <Printer size={14} /> Imprimir Fiscal
+                <button onClick={handleFiscalPrint} disabled={printingFiscal} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {printingFiscal ? <Loader2 className="animate-spin" size={14} /> : <Printer size={14} />} {printingFiscal ? 'Imprimiendo…' : 'Imprimir Fiscal'}
                 </button>
               )}
               {note.type === 'NCV' && note.origin === 'MERCHANDISE' && !note.serie?.isFiscal && (
-                <button onClick={handleReturnTicketPrint} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors">
-                  <Printer size={14} /> Imprimir Ticket
+                <button onClick={handleReturnTicketPrint} disabled={printingTicket} className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {printingTicket ? <Loader2 className="animate-spin" size={14} /> : <Printer size={14} />} {printingTicket ? 'Imprimiendo…' : 'Imprimir Ticket'}
                 </button>
               )}
               {note.type === 'NCV' && note.origin === 'MERCHANDISE' && !note.comandasProcessedAt && (
