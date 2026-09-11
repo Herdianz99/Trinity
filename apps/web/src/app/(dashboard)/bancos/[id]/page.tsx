@@ -53,6 +53,12 @@ export default function BankAccountDetailPage() {
   const [manual, setManual] = useState({ direction: 'OUT', type: 'COMISION', amount: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
   const [transfer, setTransfer] = useState({ toAccountId: '', amountFrom: 0, amountTo: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
 
+  // Conciliación (check-off)
+  const [reconcileMode, setReconcileMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [statementDate, setStatementDate] = useState(todayStr());
+  const [reconSaving, setReconSaving] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -74,6 +80,50 @@ export default function BankAccountDetailPage() {
   useEffect(() => {
     if (data?.account) document.title = `${data.account.name} | Trinity ERP`;
   }, [data?.account]);
+
+  // Al cargar datos, la selección de conciliación parte del estado ya persistido.
+  useEffect(() => {
+    if (data) setSelected(new Set(data.movements.filter((m) => m.reconciled).map((m) => m.id)));
+  }, [data]);
+
+  function toggleRow(mid: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
+  }
+
+  async function saveReconcile() {
+    if (!data) return;
+    const toReconcile = data.movements.filter((m) => selected.has(m.id) && !m.reconciled).map((m) => m.id);
+    const toUnreconcile = data.movements.filter((m) => !selected.has(m.id) && m.reconciled).map((m) => m.id);
+    setReconSaving(true);
+    try {
+      if (toReconcile.length) {
+        await fetch('/api/proxy/bancos/reconcile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ movementIds: toReconcile, reconciled: true, statementDate: statementDate || undefined }),
+        });
+      }
+      if (toUnreconcile.length) {
+        await fetch('/api/proxy/bancos/reconcile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ movementIds: toUnreconcile, reconciled: false }),
+        });
+      }
+      setMessage({ type: 'success', text: `Conciliación guardada (${toReconcile.length} marcados, ${toUnreconcile.length} desmarcados)` });
+      setReconcileMode(false);
+      load();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setReconSaving(false);
+    }
+  }
 
   const acc = data?.account;
   const isUsd = acc?.currency === 'USD';
@@ -148,7 +198,13 @@ export default function BankAccountDetailPage() {
     }
   }
 
-  const partidas = data ? Math.round((data.balance - data.reconciledBalance) * 100) / 100 : 0;
+  const signed = (m: Movement) => (m.direction === 'IN' ? m.amount : -m.amount);
+  const reconciledLive = data
+    ? reconcileMode
+      ? Math.round((data.balance - data.movements.filter((m) => !selected.has(m.id)).reduce((s, m) => s + signed(m), 0)) * 100) / 100
+      : data.reconciledBalance
+    : 0;
+  const partidas = data ? Math.round((data.balance - reconciledLive) * 100) / 100 : 0;
 
   return (
     <div>
@@ -166,6 +222,9 @@ export default function BankAccountDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setReconcileMode((v) => !v)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border ${reconcileMode ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'btn-secondary'}`}>
+            <CheckCircle size={16} /> {reconcileMode ? 'Salir de conciliar' : 'Conciliar'}
+          </button>
           <button onClick={() => setTransferOpen(true)} className="btn-secondary flex items-center gap-2"><ArrowLeftRight size={16} /> Traspaso</button>
           <button onClick={() => setManualOpen(true)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Movimiento manual</button>
         </div>
@@ -184,8 +243,8 @@ export default function BankAccountDetailPage() {
             <p className="text-2xl font-bold text-white font-mono">{sym}{fmt(data.balance)}</p>
           </div>
           <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
-            <p className="text-xs text-slate-500 uppercase">Saldo conciliado</p>
-            <p className="text-2xl font-bold text-emerald-400 font-mono">{sym}{fmt(data.reconciledBalance)}</p>
+            <p className="text-xs text-slate-500 uppercase">Saldo conciliado {reconcileMode && <span className="text-emerald-400">(en vivo)</span>}</p>
+            <p className="text-2xl font-bold text-emerald-400 font-mono">{sym}{fmt(reconciledLive)}</p>
           </div>
           <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
             <p className="text-xs text-slate-500 uppercase">Partidas conciliatorias</p>
@@ -212,6 +271,19 @@ export default function BankAccountDetailPage() {
           </select>
         </label>
       </div>
+
+      {reconcileMode && (
+        <div className="mb-4 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-emerald-300">Marca los movimientos que ya aparecen en el estado de cuenta del banco.</span>
+          <label className="text-sm flex items-center gap-2 ml-auto">
+            <span className="text-slate-400">Fecha del estado:</span>
+            <input type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
+          </label>
+          <button onClick={saveReconcile} disabled={reconSaving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+            {reconSaving ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />} Guardar conciliación
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-20 text-center text-slate-400">Cargando…</div>
@@ -242,7 +314,13 @@ export default function BankAccountDetailPage() {
                   <td className="px-3 py-2.5 text-right font-mono text-red-400">{m.direction === 'OUT' ? fmt(m.amount) : ''}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-white">{fmt(m.runningBalance)}</td>
                   <td className="px-3 py-2.5 text-center">
-                    {m.reconciled ? <CheckCircle size={14} className="text-green-400 inline" /> : <span className="text-slate-600">—</span>}
+                    {reconcileMode ? (
+                      <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleRow(m.id)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
+                    ) : m.reconciled ? (
+                      <CheckCircle size={14} className="text-green-400 inline" />
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     {m.sourceType === 'MANUAL' && !m.reconciled && (
