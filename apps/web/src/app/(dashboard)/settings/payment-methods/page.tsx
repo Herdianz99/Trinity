@@ -26,7 +26,16 @@ interface PaymentMethod {
   sortOrder: number;
   fiscalCode: string | null;
   parentId: string | null;
+  bankAccountId?: string | null;
   children?: PaymentMethod[];
+}
+
+interface BankAccountLite {
+  id: string;
+  name: string;
+  bankName: string;
+  currency: string;
+  isActive: boolean;
 }
 
 export default function PaymentMethodsPage() {
@@ -46,6 +55,8 @@ export default function PaymentMethodsPage() {
   const [formSortOrder, setFormSortOrder] = useState(0);
   const [formFiscalCode, setFormFiscalCode] = useState('');
   const [formParentId, setFormParentId] = useState('');
+  const [formBankAccountId, setFormBankAccountId] = useState('');
+  const [bankAccounts, setBankAccounts] = useState<BankAccountLite[]>([]);
 
   const fetchMethods = useCallback(async () => {
     try {
@@ -61,6 +72,14 @@ export default function PaymentMethodsPage() {
   useEffect(() => {
     fetchMethods();
   }, [fetchMethods]);
+
+  // Cuentas bancarias para el selector (si el módulo de bancos no está habilitado, queda vacío)
+  useEffect(() => {
+    fetch('/api/proxy/bancos/accounts')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setBankAccounts(Array.isArray(d) ? d.filter((a: BankAccountLite) => a.isActive) : []))
+      .catch(() => {});
+  }, []);
 
   function toggleGroup(id: string) {
     setExpandedGroups(prev => {
@@ -80,6 +99,7 @@ export default function PaymentMethodsPage() {
     setFormSortOrder(0);
     setFormFiscalCode('');
     setFormParentId(parentId || '');
+    setFormBankAccountId('');
     setModalOpen(true);
   }
 
@@ -92,6 +112,7 @@ export default function PaymentMethodsPage() {
     setFormSortOrder(method.sortOrder);
     setFormFiscalCode(method.fiscalCode || '');
     setFormParentId(method.parentId || '');
+    setFormBankAccountId(method.bankAccountId || '');
     setModalOpen(true);
   }
 
@@ -108,6 +129,7 @@ export default function PaymentMethodsPage() {
         sortOrder: formSortOrder,
         fiscalCode: formFiscalCode || undefined,
         parentId: formParentId || undefined,
+        bankAccountId: formBankAccountId || null,
       };
 
       const url = editingMethod
@@ -425,6 +447,27 @@ export default function PaymentMethodsPage() {
                   ))}
                 </select>
               </div>
+
+              {bankAccounts.length > 0 && (
+                <div>
+                  <label className="text-sm text-slate-400">Cuenta bancaria destino</label>
+                  <select
+                    value={formBankAccountId}
+                    onChange={e => setFormBankAccountId(e.target.value)}
+                    className="input-field mt-1"
+                  >
+                    <option value="">Sin cuenta (efectivo o sin rastreo en bancos)</option>
+                    {bankAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} · {a.bankName} ({a.currency})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Solo para métodos electrónicos (transferencia, pago móvil, Zelle): sus cobros/pagos entrarán al libro banco de esta cuenta.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="text-sm text-slate-400">Orden</label>
