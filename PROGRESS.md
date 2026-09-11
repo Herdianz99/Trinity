@@ -19,7 +19,7 @@
 
 ## 🗓️ Sesión 125 (2026-09-10) — Dashboard: KPI "Clientes nuevos" con drill-down (compraron / sin comprar)
 
-> ### ⏳ SIN DESPLEGAR. Cambio **web + API sin migración** (solo rebuild). Typecheck API+Web limpio. Verificado end-to-end en local (grande): endpoint `/dashboard/gerencial` 200 OK y conteos que reconcilian (52.299 nuevos = 9.587 compraron + 42.712 sin comprar).
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-10) — HEAD `8ae5062`. Verificado por SSH: las 6 en `8ae5062` con PM2 `online` y API health `database:ok` (grande/inversiones, chica/ferre, total, totalturen, aceros, acerosmayor). Cambio **web + API sin migración** (solo rebuild). Typecheck API+Web limpio. Verificado end-to-end en local antes del deploy (grande): `/dashboard/gerencial` 200 OK y conteos que reconcilian (52.299 nuevos = 9.587 compraron + 42.712 sin comprar). Dos commits: `43aadbbe` (KPI + drill-down + sub-filtro Todos/Compraron/Sin comprar) y `8ae5062` (panel ancho `col-span-full` con barra de conversión clickeable).
 
 Diego pidió agregar al dashboard el **número de clientes nuevos** ingresados en el período, y luego la posibilidad de ver **quiénes no han comprado**.
 
