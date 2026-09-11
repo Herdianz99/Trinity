@@ -458,16 +458,56 @@ export default function DashboardGerencialClient() {
               positiveIsGood
               href={`/receivables?type=FINANCING_PLATFORM&from=${fromDate}&to=${toDate}`}
             />
-            <KpiCard
-              icon={<UserPlus size={20} />}
-              iconBg="bg-sky-500/15 text-sky-400"
-              label="Clientes nuevos"
-              value={data.newCustomers.count.toString()}
-              sub={<><span className="text-sky-300 font-semibold">{data.newCustomers.purchasedCount} compraron</span>{data.newCustomers.count > 0 && <> ({Math.round((data.newCustomers.purchasedCount / data.newCustomers.count) * 100)}%)</>} · <span className="text-slate-400">{data.newCustomers.count - data.newCustomers.purchasedCount} sin comprar</span></>}
-              change={data.newCustomers.vsLastPeriod}
-              positiveIsGood
-              href={`/sales/customers?createdFrom=${fromDate}&createdTo=${toDate}`}
-            />
+            {/* Panel ancho (llena la fila): Clientes nuevos + desglose compraron/sin comprar,
+                cada segmento clickeable a la lista filtrada (purchased=true|false). */}
+            {(() => {
+              const nc = data.newCustomers;
+              const notBought = nc.count - nc.purchasedCount;
+              const pctBought = nc.count > 0 ? Math.round((nc.purchasedCount / nc.count) * 100) : 0;
+              const baseUrl = `/sales/customers?createdFrom=${fromDate}&createdTo=${toDate}`;
+              return (
+                <div className="col-span-full bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400"><UserPlus size={20} /></div>
+                      <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Clientes nuevos</span>
+                    </div>
+                    {nc.vsLastPeriod !== null && nc.vsLastPeriod !== 0 ? (
+                      <span className={`text-xs font-medium flex items-center gap-0.5 ${nc.vsLastPeriod > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {nc.vsLastPeriod > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {nc.vsLastPeriod > 0 ? '+' : ''}{nc.vsLastPeriod}%
+                      </span>
+                    ) : <span className="text-xs text-slate-600">--</span>}
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+                    <Link href={baseUrl} className="shrink-0 hover:opacity-80 transition-opacity">
+                      <p className="text-4xl font-bold text-white tabular-nums leading-none">{nc.count}</p>
+                      <p className="text-xs text-slate-500 mt-1">nuevos en el período</p>
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex h-3 rounded-full overflow-hidden bg-slate-700/50">
+                        <div className="bg-sky-500" style={{ width: `${pctBought}%` }} />
+                        <div className="bg-slate-600" style={{ width: `${100 - pctBought}%` }} />
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        <Link href={`${baseUrl}&purchased=true`}
+                          className="flex-1 min-w-[150px] flex items-center gap-2 rounded-lg border border-slate-700/50 hover:border-sky-500/40 hover:bg-slate-800/80 px-3 py-2 transition-colors">
+                          <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shrink-0" />
+                          <span className="text-sm font-semibold text-white tabular-nums">{nc.purchasedCount}</span>
+                          <span className="text-xs text-slate-400">compraron ({pctBought}%)</span>
+                        </Link>
+                        <Link href={`${baseUrl}&purchased=false`}
+                          className="flex-1 min-w-[150px] flex items-center gap-2 rounded-lg border border-slate-700/50 hover:border-sky-500/40 hover:bg-slate-800/80 px-3 py-2 transition-colors">
+                          <span className="h-2.5 w-2.5 rounded-full bg-slate-500 shrink-0" />
+                          <span className="text-sm font-semibold text-white tabular-nums">{notBought}</span>
+                          <span className="text-xs text-slate-400">sin comprar ({100 - pctBought}%)</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* ═══ Indicadores de inventario (Compras + Auditoría) ═══ */}
