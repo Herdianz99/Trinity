@@ -1871,6 +1871,37 @@ export class InvoicesService {
           }
         }
       }
+
+      // --- Sincronizar libro banco tras editar métodos ---
+      // Borra y recrea los movimientos de banco NO conciliados de esta factura, para que la
+      // cuenta refleje el nuevo conjunto de métodos (efectivo<->transferencia, Banesco<->Mercantil).
+      const cfgBank = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+      if (cfgBank?.bancosEnabled) {
+        await tx.bankMovement.deleteMany({
+          where: { sourceType: 'SALE_PAYMENT', sourceId: id, reconciled: false },
+        });
+        const finalPayments = await tx.payment.findMany({ where: { invoiceId: id } });
+        const finalMethodIds = [...new Set(finalPayments.map((p) => p.methodId))];
+        const finalMethods = await tx.paymentMethod.findMany({
+          where: { id: { in: finalMethodIds } },
+          select: { id: true, bankAccountId: true },
+        });
+        const finalMap = new Map(finalMethods.map((m) => [m.id, m]));
+        for (const p of finalPayments) {
+          const fm = finalMap.get(p.methodId);
+          if (!fm) continue;
+          await recordPaymentToBank(tx, {
+            bancosEnabled: true,
+            method: { bankAccountId: fm.bankAccountId ?? null },
+            direction: 'IN',
+            amountUsd: p.amountUsd, amountBs: p.amountBs, exchangeRate: p.exchangeRate,
+            date: new Date(), type: 'COBRO',
+            sourceType: 'SALE_PAYMENT', sourceId: id,
+            reference: p.reference ?? null, description: `Factura (método editado)`,
+            createdById: invoice.createdById,
+          });
+        }
+      }
     });
 
     return this.findOne(id);
