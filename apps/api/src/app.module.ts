@@ -70,6 +70,7 @@ import { IntegrationModule } from './modules/integration/integration.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { DisciplinaryModule } from './modules/disciplinary/disciplinary.module';
 import { DivisasModule } from './modules/divisas/divisas.module';
+import { BancosModule } from './modules/bancos/bancos.module';
 import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
 import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
 
@@ -146,6 +147,7 @@ import { DamageReportsModule } from './modules/damage-reports/damage-reports.mod
     IntegrationModule,
     IncidentsModule,
     DivisasModule,
+    BancosModule,
     Audit5SModule,
     DamageReportsModule,
   ],
