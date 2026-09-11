@@ -6,6 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
+import { recordPaymentToBank } from '../../common/bank-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveBregaPct, effectiveCost } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
@@ -1024,6 +1025,10 @@ export class InvoicesService {
         }
       }
 
+      // Flag del módulo de bancos (gatea el espejo en el libro banco; apagado = no hace nada)
+      const bankCfg = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+      const bancosEnabled = !!bankCfg?.bancosEnabled;
+
       // Create payments
       let igtfAssigned = false;
       for (const payment of dto.payments) {
@@ -1059,6 +1064,19 @@ export class InvoicesService {
           currency: paymentMethod.isDivisa ? 'USD' : 'BS', exchangeRate: invoice.exchangeRate,
           methodId: payment.methodId, isCash: paymentMethod.isCash,
           sourceType: 'SALE_PAYMENT', sourceId: id, reason: `Pago factura`, createdById: user.id,
+        });
+
+        // Espejo en el libro banco (solo métodos con cuenta bancaria y si el módulo está activo).
+        await recordPaymentToBank(tx, {
+          bancosEnabled,
+          method: { bankAccountId: (paymentMethod as any).bankAccountId ?? null },
+          direction: 'IN',
+          amountUsd: payment.amountUsd, amountBs: payment.amountBs,
+          exchangeRate: invoice.exchangeRate,
+          date: new Date(), type: 'COBRO',
+          sourceType: 'SALE_PAYMENT', sourceId: id,
+          reference: payment.reference ?? null, description: `Factura ${invoiceNumber}`,
+          createdById: user.id,
         });
         void payRow;
 
