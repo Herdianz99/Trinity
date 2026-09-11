@@ -17,7 +17,7 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 126 (2026-09-11) — Módulo de Bancos (libro banco + conciliación) + fix doble-impresión fiscal de notas de crédito
+## 🗓️ Sesión 126 (2026-09-11) — Módulo de Bancos + Programación de pagos (descuentos/observación/Nro. doc) + filtro "Clientes reales" + fix nota de crédito + correcciones de datos en total
 
 > ### ⚠️ SIN DESPLEGAR — arranca INOFENSIVO. El módulo de bancos está gateado por `CompanyConfig.bancosEnabled` (default **false** en las 6 empresas): con el flag apagado el menú no aparece, las rutas requieren el permiso de rol `'bancos'`, y **los enganches automáticos no hacen nada**. Migración **idempotente** (`20260911150000_bancos_module`, `IF NOT EXISTS`) y aditiva. Typecheck API+Web limpio. Falta prueba end-to-end en la UI (cobrar por transferencia y ver el movimiento) y el deploy. Spec: `docs/superpowers/specs/2026-09-11-modulo-bancos-design.md`; plan: `docs/superpowers/plans/2026-09-11-modulo-bancos.md`.
 
@@ -31,6 +31,27 @@
 - **Conciliación check-off:** marcar movimientos que ya salen en el estado de cuenta; saldo según libro vs conciliado vs partidas conciliatorias (en vivo). Borrado de manuales solo si no están conciliados.
 - **Fuera de alcance (decisión de Diego):** reversas por devolución (el negocio hace cambio de producto, no reembolso), importación de estados de cuenta (fase 2 futura), recarga histórica (arranca desde saldo inicial). Independiente del módulo divisas.
 - **UI:** `/bancos` (resumen con avisos de métodos sin cuenta), `/bancos/cuentas` (CRUD), `/bancos/[id]` (libro banco + manual + traspaso + conciliar), selector de cuenta en `/settings/payment-methods`. Menú "Bancos" gateado por permiso de rol.
+- **Toggle en `/config`:** switch "Activar módulo de bancos" (`bancosEnabled` desde la UI, sin tocar BD) en la pantalla de Configuración de empresa (`UpdateCompanyConfigDto` + página config). Commit `b7f001e7`.
+- **Conciliación uno-por-uno:** además del modo por lotes, cada fila tiene checkbox que concilia/desconcilia al instante (guardado inmediato). 
+- **Fix campos de monto:** los inputs de monto/tasa eran `type="number"` con estado numérico en 0 → no dejaban borrar el "0" y con locale es-VE forzaban la coma (rechazaban el punto). Se pasaron a `type="text"` + `inputMode="decimal"` con estado string y parseo que acepta coma **y** punto (`0,50`/`0.50`/`8.399,81`/`8399.81`). Commit `df4bb75f`.
+
+### Programación de pagos (`/payment-schedules/[id]`) — observación, descuento por proveedor, método de pago, Nro. documento
+Commits `bc919976` (+ migración `20260911160000_payment_schedule_supplier_discount`) y `0609e6e3`.
+- **Observación global** editable (reusa `notes`), con endpoint `PATCH /:id/notes`.
+- **Descuento % por proveedor:** tabla nueva `PaymentScheduleSupplierDiscount` (scheduleId+supplierName+%, unique). Totaliza el grupo y aplica el descuento mostrando **bruto → descuento → neto** (no altera los montos guardados; se calcula al vuelo en detalle y PDF). Endpoint `PATCH /:id/supplier-discount`. Muestra también neto total.
+- **Método de pago por proveedor:** tomado de `Supplier.paymentMethod` (texto libre) vía CxP→OC→proveedor.
+- **Columna "Referencia" → "Nro. documento":** mismo contenido que `/payables` (`documentNumber` ó `purchaseOrder.supplierInvoiceNumber`), en el detalle, el PDF **y** el panel "Agregar documentos" (que además ahora filtra por ese número).
+
+### Filtro "Clientes reales" en `/receivables`
+Commit `d05a999e`. Checkbox que excluye **empresas del grupo** (`isGroupCompany`), **empleados** (`isEmployee`) y **plataformas** de financiamiento (`type=FINANCING_PLATFORM`). Parámetro `realCustomers` en DTO + `buildWhere`; mutuamente excluyente con "Solo empleados"; aplica también al PDF.
+
+### Correcciones de datos en PRODUCCIÓN (empresa `total`, 161.35.52.221) — todas con `pg_dump` previo
+- **FC-00052** cargada por error como fiscal siendo nota de entrega: cambiada a serie "Nota de entrega compras" (`isFiscal=false`), **eliminada su retención IVA** `20260900000038`, borrado su asiento del **libro de compras** (las NEC no llevan asiento), y **renumeradas** las 2 retenciones siguientes (39→38, 40→39) para tapar el hueco + contador `retentionNextNumber` a 40. Método reusable guardado en memoria [[fix-compra-fiscal-a-nota-entrega]].
+- **Nº de factura** de esas 2 retenciones: se dejó solo lo posterior al "/" (`41651`/`41650`) en los 3 lugares (línea retención, OC, libro).
+- **Emisión** de esas 2 retenciones: quitada la letra "B" de la serie (`supplierSerialNumber`/`supplierSerie`), estado → ISSUED, fecha 2026-08-21, y creadas sus líneas de retención en el libro (réplica fiel de `retention-vouchers.issue`).
+- **NE-26-00002560:** método de pago "Efectivo USD" → "P.V ACTIVO" (Payment + sincronización de la fila del cash ledger: `isCash=false`, currency BS).
+
+> **Estado de deploy:** TODO el código de la Sesión 126 está en `main` pero **SIN desplegar**. Incluye **2 migraciones** aditivas (`bancos_module`, `payment_schedule_supplier_discount`). El módulo de bancos arranca apagado (`bancosEnabled=false`). Falta prueba end-to-end de bancos y el deploy a los servidores.
 
 ## 🗓️ Sesión 125 (2026-09-10) — Dashboard: KPI "Clientes nuevos" con drill-down (compraron / sin comprar)
 
