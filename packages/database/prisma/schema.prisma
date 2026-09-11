@@ -306,6 +306,9 @@ model CompanyConfig {
   partnerTransferCreatesAccounts Boolean @default(true)
   partnerTransferCustomerId      String?
   partnerTransferSupplierId      String?
+  // Opt-in por empresa del módulo de bancos: gatea los enganches automáticos al libro banco.
+  // Default false = las demás empresas no ven efecto hasta encenderlo.
+  bancosEnabled           Boolean  @default(false)
   updatedAt               DateTime @updatedAt
 }
 
@@ -344,6 +347,8 @@ model User {
   permissions         UserPermission[]
   sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
   sessionsClosed      CashSession[]       @relation("SessionClosedBy")
+  bankMovementsCreated    BankMovement[]  @relation("BankMovementCreator")
+  bankMovementsReconciled BankMovement[]  @relation("BankMovementReconciler")
   seller              Seller?
   invoicesAsCashier   Invoice[]           @relation("InvoiceCashier")
   expenses            Expense[]
@@ -1150,6 +1155,9 @@ model PaymentMethod {
   ledgerEntries      CashLedgerEntry[]
   intendedInvoices   Invoice[]           @relation("IntendedPayment")
   cashMovements      CashMovement[]      @relation("CashMovementMethod")
+  // Mapeo método electrónico -> cuenta bancaria fija (null para efectivo o método sin configurar)
+  bankAccountId      String?
+  bankAccount        BankAccount?        @relation(fields: [bankAccountId], references: [id])
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -2704,4 +2712,58 @@ model SupplierOrderItem {
   @@index([status])
   @@index([supplierRef])
   @@index([orderedAt])
+}
+
+// ============================================
+// MÓDULO DE BANCOS (libro banco + conciliación)
+// ============================================
+
+model BankAccount {
+  id                String          @id @default(cuid())
+  name              String                                  // alias, ej "Banesco Corriente Principal"
+  bankName          String                                  // Banesco, Mercantil, BNC, Zelle...
+  accountNumber     String?                                 // nº de cuenta (opcional para Zelle)
+  accountType       String          @default("CORRIENTE")   // CORRIENTE | AHORRO | CUSTODIA | ZELLE | OTRO
+  currency          String          @default("VES")         // VES | USD
+  openingBalance    Float           @default(0)             // saldo inicial en la moneda de la cuenta
+  openingBalanceBs  Float           @default(0)             // equivalente Bs del saldo inicial
+  openingBalanceUsd Float           @default(0)             // equivalente USD del saldo inicial
+  openingDate       DateTime?                               // fecha de corte del saldo inicial
+  isActive          Boolean         @default(true)
+  sortOrder         Int             @default(0)
+  movements         BankMovement[]
+  paymentMethods    PaymentMethod[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model BankMovement {
+  id              String       @id @default(cuid())
+  bankAccountId   String
+  bankAccount     BankAccount  @relation(fields: [bankAccountId], references: [id])
+  date            DateTime                                  // fecha del movimiento
+  direction       String                                   // IN | OUT
+  amount          Float                                    // monto en la MONEDA DE LA CUENTA
+  amountBs        Float        @default(0)                 // equivalente Bs
+  amountUsd       Float        @default(0)                 // equivalente USD
+  exchangeRate    Float        @default(0)                 // tasa Bs/USD usada
+  type            String                                   // COBRO|PAGO|COMISION|IGTF|INTERES|NOTA_DEBITO|NOTA_CREDITO|TRASPASO|AJUSTE
+  reference       String?                                  // nº de referencia bancaria
+  description     String?
+  sourceType      String       @default("MANUAL")          // SALE_PAYMENT|RECEIPT_COLLECTION|RECEIPT_PAYMENT|EXPENSE|ADVANCE|MANUAL
+  sourceId        String?                                  // id del documento origen (null si MANUAL)
+  transferGroupId String?                                  // vincula las 2 patas de un TRASPASO
+  reconciled      Boolean      @default(false)
+  reconciledAt    DateTime?
+  reconciledById  String?
+  reconciledBy    User?        @relation("BankMovementReconciler", fields: [reconciledById], references: [id])
+  statementDate   DateTime?                                // fecha en que apareció en el estado de cuenta
+  createdById     String
+  createdBy       User         @relation("BankMovementCreator", fields: [createdById], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([bankAccountId, date])
+  @@index([sourceType, sourceId])
+  @@index([bankAccountId, reconciled])
 }
