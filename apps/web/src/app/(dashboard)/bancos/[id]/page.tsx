@@ -33,6 +33,13 @@ interface LedgerResp {
 
 const MANUAL_TYPES = ['COMISION', 'IGTF', 'INTERES', 'NOTA_DEBITO', 'NOTA_CREDITO', 'AJUSTE'];
 const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Convierte texto de monto (acepta coma o punto, permite vacío) a número.
+const parseNum = (s: string): number => {
+  const n = parseFloat(String(s).replace(/\./g, s.includes(',') ? '' : '.').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+// Solo deja dígitos, separador (coma/punto) y signo negativo mientras se escribe.
+const sanitizeNum = (s: string): string => s.replace(/[^0-9.,-]/g, '');
 const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -50,8 +57,8 @@ export default function BankAccountDetailPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [manual, setManual] = useState({ direction: 'OUT', type: 'COMISION', amount: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
-  const [transfer, setTransfer] = useState({ toAccountId: '', amountFrom: 0, amountTo: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
+  const [manual, setManual] = useState({ direction: 'OUT', type: 'COMISION', amount: '', exchangeRate: '', reference: '', description: '', date: todayStr() });
+  const [transfer, setTransfer] = useState({ toAccountId: '', amountFrom: '', amountTo: '', exchangeRate: '', reference: '', description: '', date: todayStr() });
 
   // Conciliación (check-off)
   const [reconcileMode, setReconcileMode] = useState(false);
@@ -153,7 +160,8 @@ export default function BankAccountDetailPage() {
   const sym = isUsd ? '$ ' : 'Bs ';
 
   async function submitManual() {
-    if (!manual.amount || manual.amount <= 0) { setMessage({ type: 'error', text: 'El monto debe ser mayor a 0' }); return; }
+    const amt = parseNum(manual.amount);
+    if (!amt || amt <= 0) { setMessage({ type: 'error', text: 'El monto debe ser mayor a 0' }); return; }
     setSaving(true);
     try {
       const res = await fetch('/api/proxy/bancos/movements', {
@@ -163,8 +171,8 @@ export default function BankAccountDetailPage() {
           bankAccountId: id,
           date: manual.date,
           direction: manual.direction,
-          amount: Number(manual.amount),
-          exchangeRate: Number(manual.exchangeRate) || 0,
+          amount: amt,
+          exchangeRate: parseNum(manual.exchangeRate),
           type: manual.type,
           reference: manual.reference || undefined,
           description: manual.description || undefined,
@@ -172,7 +180,7 @@ export default function BankAccountDetailPage() {
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error'); }
       setManualOpen(false);
-      setManual({ direction: 'OUT', type: 'COMISION', amount: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
+      setManual({ direction: 'OUT', type: 'COMISION', amount: '', exchangeRate: '', reference: '', description: '', date: todayStr() });
       setMessage({ type: 'success', text: 'Movimiento registrado' });
       load();
     } catch (err: any) {
@@ -182,7 +190,9 @@ export default function BankAccountDetailPage() {
 
   async function submitTransfer() {
     if (!transfer.toAccountId) { setMessage({ type: 'error', text: 'Elige la cuenta destino' }); return; }
-    if (!transfer.amountFrom || !transfer.amountTo) { setMessage({ type: 'error', text: 'Indica los montos' }); return; }
+    const aFrom = parseNum(transfer.amountFrom);
+    const aTo = parseNum(transfer.amountTo);
+    if (!aFrom || !aTo) { setMessage({ type: 'error', text: 'Indica los montos' }); return; }
     setSaving(true);
     try {
       const res = await fetch('/api/proxy/bancos/transfers', {
@@ -192,16 +202,16 @@ export default function BankAccountDetailPage() {
           fromAccountId: id,
           toAccountId: transfer.toAccountId,
           date: transfer.date,
-          amountFrom: Number(transfer.amountFrom),
-          amountTo: Number(transfer.amountTo),
-          exchangeRate: Number(transfer.exchangeRate) || 0,
+          amountFrom: aFrom,
+          amountTo: aTo,
+          exchangeRate: parseNum(transfer.exchangeRate),
           reference: transfer.reference || undefined,
           description: transfer.description || undefined,
         }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error'); }
       setTransferOpen(false);
-      setTransfer({ toAccountId: '', amountFrom: 0, amountTo: 0, exchangeRate: 0, reference: '', description: '', date: todayStr() });
+      setTransfer({ toAccountId: '', amountFrom: '', amountTo: '', exchangeRate: '', reference: '', description: '', date: todayStr() });
       setMessage({ type: 'success', text: 'Traspaso registrado' });
       load();
     } catch (err: any) {
@@ -387,11 +397,11 @@ export default function BankAccountDetailPage() {
                 </select>
               </label>
               <label className="text-sm"><span className="text-slate-400">Monto ({acc?.currency})</span>
-                <input type="number" value={manual.amount} onChange={(e) => setManual({ ...manual, amount: Number(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={manual.amount} onChange={(e) => setManual({ ...manual, amount: sanitizeNum(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               {isUsd && (
                 <label className="text-sm"><span className="text-slate-400">Tasa (equiv. Bs)</span>
-                  <input type="number" value={manual.exchangeRate} onChange={(e) => setManual({ ...manual, exchangeRate: Number(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                  <input type="text" inputMode="decimal" placeholder="0,00" value={manual.exchangeRate} onChange={(e) => setManual({ ...manual, exchangeRate: sanitizeNum(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
                 </label>
               )}
               <label className="text-sm"><span className="text-slate-400">Fecha</span>
@@ -430,13 +440,13 @@ export default function BankAccountDetailPage() {
                 </select>
               </label>
               <label className="text-sm"><span className="text-slate-400">Sale (de esta)</span>
-                <input type="number" value={transfer.amountFrom} onChange={(e) => setTransfer({ ...transfer, amountFrom: Number(e.target.value), amountTo: transfer.amountTo || Number(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountFrom} onChange={(e) => { const v = sanitizeNum(e.target.value); setTransfer({ ...transfer, amountFrom: v, amountTo: transfer.amountTo || v }); }} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               <label className="text-sm"><span className="text-slate-400">Entra (a destino)</span>
-                <input type="number" value={transfer.amountTo} onChange={(e) => setTransfer({ ...transfer, amountTo: Number(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountTo} onChange={(e) => setTransfer({ ...transfer, amountTo: sanitizeNum(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               <label className="text-sm"><span className="text-slate-400">Tasa (si cambia moneda)</span>
-                <input type="number" value={transfer.exchangeRate} onChange={(e) => setTransfer({ ...transfer, exchangeRate: Number(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.exchangeRate} onChange={(e) => setTransfer({ ...transfer, exchangeRate: sanitizeNum(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               <label className="text-sm"><span className="text-slate-400">Fecha</span>
                 <input type="date" value={transfer.date} onChange={(e) => setTransfer({ ...transfer, date: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />

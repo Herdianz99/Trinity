@@ -19,14 +19,22 @@ interface Account {
 const ACCOUNT_TYPES = ['CORRIENTE', 'AHORRO', 'CUSTODIA', 'ZELLE', 'OTRO'];
 const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Convierte texto de monto (acepta coma o punto, permite vacío) a número.
+const parseNum = (s: string): number => {
+  const n = parseFloat(String(s).replace(/\./g, s.includes(',') ? '' : '.').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+// Solo deja dígitos, un separador (coma/punto) y signo negativo mientras se escribe.
+const sanitizeNum = (s: string): string => s.replace(/[^0-9.,-]/g, '');
+
 const emptyForm = {
   name: '',
   bankName: '',
   accountNumber: '',
   accountType: 'CORRIENTE',
   currency: 'VES',
-  openingBalance: 0,
-  exchangeRate: 0,
+  openingBalance: '',
+  exchangeRate: '',
   openingDate: '',
 };
 
@@ -72,8 +80,8 @@ export default function CuentasBancariasPage() {
           accountNumber: form.accountNumber.trim() || undefined,
           accountType: form.accountType,
           currency: form.currency,
-          openingBalance: Number(form.openingBalance) || 0,
-          exchangeRate: Number(form.exchangeRate) || 0,
+          openingBalance: parseNum(form.openingBalance),
+          exchangeRate: parseNum(form.exchangeRate),
           openingDate: form.openingDate || undefined,
         }),
       });
@@ -209,13 +217,15 @@ export default function CuentasBancariasPage() {
               </label>
               <label className="text-sm">
                 <span className="text-slate-400">Saldo inicial</span>
-                <input type="number" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: Number(e.target.value) })}
+                <input type="text" inputMode="decimal" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: sanitizeNum(e.target.value) })}
+                  placeholder="0,00"
                   className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               {form.currency === 'USD' && (
                 <label className="text-sm">
                   <span className="text-slate-400">Tasa (para equiv. Bs)</span>
-                  <input type="number" value={form.exchangeRate} onChange={(e) => setForm({ ...form, exchangeRate: Number(e.target.value) })}
+                  <input type="text" inputMode="decimal" value={form.exchangeRate} onChange={(e) => setForm({ ...form, exchangeRate: sanitizeNum(e.target.value) })}
+                    placeholder="0,00"
                     className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
                 </label>
               )}
