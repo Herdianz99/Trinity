@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
+import { recordPaymentToBank } from '../../common/bank-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
@@ -766,9 +767,13 @@ export class ReceiptsService {
       // Metodos de los pagos del recibo (para isCash/moneda del ledger)
       const rMethodIds = [...new Set(dto.payments.map((p) => p.methodId).filter(Boolean))];
       const rMethods = rMethodIds.length
-        ? await tx.paymentMethod.findMany({ where: { id: { in: rMethodIds } }, select: { id: true, isCash: true, isDivisa: true } })
+        ? await tx.paymentMethod.findMany({ where: { id: { in: rMethodIds } }, select: { id: true, isCash: true, isDivisa: true, bankAccountId: true } })
         : [];
       const rMethodMap = new Map(rMethods.map((m) => [m.id, m]));
+
+      // Flag del módulo de bancos (gatea el espejo en el libro banco)
+      const bankCfg = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+      const bancosEnabled = !!bankCfg?.bancosEnabled;
 
       // Create payment records on the receipt (+ fila del ledger por cada pago)
       for (const payment of dto.payments) {
@@ -782,11 +787,11 @@ export class ReceiptsService {
             reference: payment.reference || null,
           },
         });
+        // Reintegro (cobro negativo) = sale dinero -> OUT; cobro normal -> IN; pago -> OUT.
+        const m = rMethodMap.get(payment.methodId);
+        const isOut = isReintegro || receipt.type !== 'COLLECTION';
         if (dto.cashSessionId) {
           // UNA fila del ledger por CADA metodo, tal como se metio en caja (sin agrupar).
-          // Reintegro (cobro negativo) = sale dinero -> OUT; cobro normal -> IN; pago -> OUT.
-          const m = rMethodMap.get(payment.methodId);
-          const isOut = isReintegro || receipt.type !== 'COLLECTION';
           await writeCashLedger(tx, {
             cashSessionId: dto.cashSessionId,
             direction: isOut ? 'OUT' : 'IN',
@@ -797,6 +802,20 @@ export class ReceiptsService {
             sourceId: receipt.id, reason: `Recibo ${receipt.number}`, createdById: userId,
           });
         }
+        // Espejo en el libro banco (independiente de la sesión de caja: una transferencia no
+        // pertenece a un arqueo). No hace nada si el método no tiene cuenta o el módulo está off.
+        await recordPaymentToBank(tx, {
+          bancosEnabled,
+          method: { bankAccountId: (m as any)?.bankAccountId ?? null },
+          direction: isOut ? 'OUT' : 'IN',
+          amountUsd: payment.amountUsd, amountBs: payment.amountBs, exchangeRate: postRate,
+          date: new Date(),
+          type: isOut ? 'PAGO' : 'COBRO',
+          sourceType: receipt.type === 'COLLECTION' ? 'RECEIPT_COLLECTION' : 'RECEIPT_PAYMENT',
+          sourceId: receipt.id,
+          reference: payment.reference ?? null, description: `Recibo ${receipt.number}`,
+          createdById: userId,
+        });
       }
 
       // Sobrepago -> anticipo por el excedente. El dinero ya entro por los ReceiptPayment de
