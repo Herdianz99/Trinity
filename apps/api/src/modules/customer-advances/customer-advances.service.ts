@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
+import { recordPaymentToBank } from '../../common/bank-ledger';
 import { CreateCustomerAdvanceDto } from './dto/create-customer-advance.dto';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
@@ -124,6 +125,19 @@ export class CustomerAdvancesService {
         methodId: dto.methodId, isCash: method.isCash,
         sourceType: 'CUSTOMER_ADVANCE', sourceId: advance.id,
         reason: `Anticipo cliente: ${customer.name}`, createdById: userId,
+      });
+
+      // Espejo en el libro banco (anticipo cliente por medio electrónico = entra dinero)
+      const cfgBank = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+      await recordPaymentToBank(tx, {
+        bancosEnabled: !!cfgBank?.bancosEnabled,
+        method: { bankAccountId: (method as any).bankAccountId ?? null },
+        direction: 'IN',
+        amountUsd: dto.amountUsd, amountBs, exchangeRate: rateVal,
+        date: new Date(), type: 'COBRO',
+        sourceType: 'ADVANCE', sourceId: advance.id,
+        reference: dto.reference ?? null, description: `Anticipo cliente: ${customer.name}`,
+        createdById: userId,
       });
 
       return advance;

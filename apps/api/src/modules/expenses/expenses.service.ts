@@ -5,6 +5,7 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { caracasDateKey, caracasDayStart } from '../../common/timezone';
 import { writeCashLedger } from '../../common/cash-ledger';
+import { recordPaymentToBank } from '../../common/bank-ledger';
 
 @Injectable()
 export class ExpensesService {
@@ -287,7 +288,7 @@ export class ExpensesService {
       // (el front autocompleta ambos montos) y el arqueo restaba del efectivo USD aunque se pagara
       // en Bs -> descuadre. Fallback al monto solo si no hay método.
       const method = dto.methodId
-        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true, isCash: true } })
+        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true, isCash: true, bankAccountId: true } })
         : null;
       const movCurrency = method ? (method.isDivisa ? 'USD' : 'BS') : (dto.amountUsd ? 'USD' : 'BS');
       // ¿Sale de la gaveta física? Solo si el método es efectivo. Un gasto por transferencia/
@@ -339,6 +340,19 @@ export class ExpensesService {
           methodId: dto.methodId || null, isCash: movIsCash,
           sourceType: 'EXPENSE', sourceId: expense.id,
           reason: `Gasto: ${dto.description}`, createdById: userId,
+        });
+
+        // Espejo en el libro banco (gasto de contado por medio electrónico)
+        const cfgBank = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+        await recordPaymentToBank(tx, {
+          bancosEnabled: !!cfgBank?.bancosEnabled,
+          method: { bankAccountId: method?.bankAccountId ?? null },
+          direction: 'OUT',
+          amountUsd: amountUsd!, amountBs: amountBs!, exchangeRate: rateVal,
+          date: new Date(), type: 'PAGO',
+          sourceType: 'EXPENSE', sourceId: expense.id,
+          reference: dto.reference ?? null, description: `Gasto: ${dto.description}`,
+          createdById: userId,
         });
 
         return expense;
