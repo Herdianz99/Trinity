@@ -6,7 +6,7 @@ import {
   DollarSign, RotateCcw, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package, PackageX,
   Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
-  Building2, PiggyBank, ClipboardCheck,
+  Building2, PiggyBank, ClipboardCheck, UserPlus,
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -139,6 +139,11 @@ interface DashboardData {
       d15: CountAccuracyWindow;
       d30: CountAccuracyWindow;
     };
+  };
+  newCustomers: {
+    count: number;
+    purchasedCount: number;
+    vsLastPeriod: number | null;
   };
 }
 
@@ -452,6 +457,16 @@ export default function DashboardGerencialClient() {
               change={data.financing.vsCrediagro}
               positiveIsGood
               href={`/receivables?type=FINANCING_PLATFORM&from=${fromDate}&to=${toDate}`}
+            />
+            <KpiCard
+              icon={<UserPlus size={20} />}
+              iconBg="bg-sky-500/15 text-sky-400"
+              label="Clientes nuevos"
+              value={data.newCustomers.count.toString()}
+              sub={<><span className="text-sky-300 font-semibold">{data.newCustomers.purchasedCount} compraron</span>{data.newCustomers.count > 0 && <> ({Math.round((data.newCustomers.purchasedCount / data.newCustomers.count) * 100)}%)</>} · <span className="text-slate-400">{data.newCustomers.count - data.newCustomers.purchasedCount} sin comprar</span></>}
+              change={data.newCustomers.vsLastPeriod}
+              positiveIsGood
+              href={`/sales/customers?createdFrom=${fromDate}&createdTo=${toDate}`}
             />
           </div>
 

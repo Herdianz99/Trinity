@@ -17,6 +17,16 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 125 (2026-09-10) — Dashboard: KPI "Clientes nuevos" con drill-down (compraron / sin comprar)
+
+> ### ⏳ SIN DESPLEGAR. Cambio **web + API sin migración** (solo rebuild). Typecheck API+Web limpio. Verificado end-to-end en local (grande): endpoint `/dashboard/gerencial` 200 OK y conteos que reconcilian (52.299 nuevos = 9.587 compraron + 42.712 sin comprar).
+
+Diego pidió agregar al dashboard el **número de clientes nuevos** ingresados en el período, y luego la posibilidad de ver **quiénes no han comprado**.
+
+- **Nuevo KPI "Clientes nuevos"** en el dashboard gerencial (`dashboard.service.ts` `getNewCustomers` + `gerencial-client.tsx`): cuenta clientes creados en el rango del tablero (**excluye empresas del grupo**; `createdAt` es TIMESTAMP → usa el rango ya anclado a día-Caracas, como el resto de KPIs). Desglose en la tarjeta: **"X compraron (%) · Y sin comprar"** (comprado = ≥1 factura en `PAID/PARTIAL_RETURN/RETURNED`). Con comparativo vs período anterior.
+- **Robustez (bug atrapado en la prueba local):** la 1ra versión usaba `groupBy` con `customerId: { in: [...ids] }` y **reventaba el límite de 32.767 bind-vars de Postgres** con muchos clientes (52k en la grande). Reescrito con **filtro de relación** `some`/`none` (se traduce a `EXISTS`/`NOT EXISTS`, sin materializar IDs → escala a cualquier volumen).
+- **Drill-down clickeable:** la tarjeta enlaza a `/sales/customers` filtrado. La lista de clientes (`customers.service.findAll` + controller + `sales/customers/page.tsx`) ahora acepta `createdFrom`/`createdTo` (anclados a Caracas con `caracasDayStart/End`, y excluye grupo para cuadrar con el KPI) y `purchased=true|false`. En la UI: chip con el rango + botón para quitarlo, y **sub-filtro Todos / Ya compraron / Sin comprar** para revisar quiénes no han comprado (seguimiento comercial). Los conteos reconcilian: compraron + sin comprar = total nuevos.
+
 ## 🗓️ Sesión 124 (2026-09-08) — Activar/bloquear producto para la venta protegido con clave dinámica
 
 > ### ⏳ SIN DESPLEGAR. Cambio **API + Web + migración de enum**. Typecheck API+Web limpio. Local: aplicado el `ADD VALUE` al enum en la BD + `prisma generate` a mano (en prod lo hace `deploy.sh` solo).

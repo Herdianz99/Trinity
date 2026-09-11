@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  UserCheck, Plus, Search, Loader2, Edit2, Trash2, ChevronLeft, ChevronRight,
+  UserCheck, Plus, Search, Loader2, Edit2, Trash2, ChevronLeft, ChevronRight, UserPlus, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -22,6 +22,11 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  // Filtro por fecha de creacion (viene del KPI "Clientes nuevos" del tablero via URL).
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  // '' = todos · 'true' = ya compraron · 'false' = sin comprar
+  const [purchased, setPurchased] = useState('');
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -30,13 +35,32 @@ export default function CustomersPage() {
       params.set('page', page.toString());
       params.set('limit', '20');
       if (search) params.set('search', search);
+      if (createdFrom) params.set('createdFrom', createdFrom);
+      if (createdTo) params.set('createdTo', createdTo);
+      if (purchased) params.set('purchased', purchased);
       const res = await fetch(`/api/proxy/customers?${params}`);
       const data = await res.json();
       setCustomers(data.data || []);
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
     } catch { setMessage({ type: 'error', text: 'Error al cargar clientes' }); } finally { setLoading(false); }
-  }, [page, search]);
+  }, [page, search, createdFrom, createdTo, purchased]);
+
+  // Lee el rango de fechas de creacion (y purchased) de la URL una sola vez al montar.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    setCreatedFrom(sp.get('createdFrom') || '');
+    setCreatedTo(sp.get('createdTo') || '');
+    setPurchased(sp.get('purchased') || '');
+  }, []);
+
+  function clearCreatedFilter() {
+    setCreatedFrom('');
+    setCreatedTo('');
+    setPurchased('');
+    setPage(1);
+    router.replace('/sales/customers');
+  }
 
   useEffect(() => { document.title = 'Clientes | Trinity ERP'; }, []);
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
@@ -65,7 +89,7 @@ export default function CustomersPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Clientes</h1>
-            <p className="text-slate-400 text-sm">{total} clientes registrados</p>
+            <p className="text-slate-400 text-sm">{total} clientes {(createdFrom || createdTo) ? (purchased === 'true' ? 'nuevos que ya compraron' : purchased === 'false' ? 'nuevos sin comprar' : 'nuevos en el período') : 'registrados'}</p>
           </div>
         </div>
         <Link href="/sales/customers/new" className="btn-primary flex items-center gap-2">
@@ -85,6 +109,24 @@ export default function CustomersPage() {
           <input type="text" placeholder="Buscar por codigo, nombre, RIF, telefono..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }} className="input-field pl-9 !py-2.5 text-sm" />
         </div>
+        {(createdFrom || createdTo) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 text-xs bg-sky-500/10 text-sky-300 border border-sky-500/20 rounded-full pl-3 pr-2 py-1.5">
+              <UserPlus size={13} />
+              <span>Clientes nuevos{createdFrom && createdTo ? ` · ${createdFrom} a ${createdTo}` : createdFrom ? ` · desde ${createdFrom}` : ` · hasta ${createdTo}`}</span>
+              <button onClick={clearCreatedFilter} className="p-0.5 rounded-full hover:bg-sky-500/20" title="Quitar filtro"><X size={13} /></button>
+            </div>
+            {/* Sub-filtro: han comprado o no. count(compraron) + count(sin comprar) = total nuevos. */}
+            <div className="inline-flex items-center rounded-lg border border-slate-700 overflow-hidden text-xs">
+              {([['', 'Todos'], ['true', 'Ya compraron'], ['false', 'Sin comprar']] as const).map(([val, lbl]) => (
+                <button key={val} onClick={() => { setPurchased(val); setPage(1); }}
+                  className={`px-3 py-1.5 transition-colors ${purchased === val ? 'bg-sky-500/20 text-sky-300 font-semibold' : 'text-slate-400 hover:bg-slate-700/50'}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mobile card list */}

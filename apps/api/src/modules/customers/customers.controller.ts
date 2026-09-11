@@ -44,8 +44,11 @@ export class CustomersController {
     @Query('isActive') isActive?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('createdFrom') createdFrom?: string,
+    @Query('createdTo') createdTo?: string,
+    @Query('purchased') purchased?: string,
   ) {
-    return this.service.findAll({ search, isActive, page, limit });
+    return this.service.findAll({ search, isActive, page, limit, createdFrom, createdTo, purchased });
   }
 
   @Get(':id/credit-balance')

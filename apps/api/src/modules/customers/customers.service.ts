@@ -3,7 +3,7 @@ import * as http from 'http';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { caracasDateKey } from '../../common/timezone';
+import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { RolePermissionsService } from '../role-permissions/role-permissions.service';
 
 const SENIAT_BASE = 'http://contribuyente.seniat.gob.ve/BuscaRif';
@@ -65,13 +65,31 @@ export class CustomersService {
     private readonly rolePermissions: RolePermissionsService,
   ) {}
 
-  async findAll(filters: { search?: string; isActive?: string; page?: number; limit?: number }) {
+  async findAll(filters: { search?: string; isActive?: string; page?: number; limit?: number; createdFrom?: string; createdTo?: string; purchased?: string }) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const where: any = {};
 
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive === 'true';
+    }
+
+    // Filtro por fecha de creacion (drill-down del KPI "Clientes nuevos" del tablero). createdAt es
+    // TIMESTAMP -> se ancla al dia-calendario de Caracas para cuadrar con el conteo del dashboard.
+    // Excluye empresas del grupo, igual que el KPI, para que el total de la lista cuadre exacto.
+    if (filters.createdFrom || filters.createdTo) {
+      where.createdAt = {};
+      if (filters.createdFrom) where.createdAt.gte = caracasDayStart(filters.createdFrom);
+      if (filters.createdTo) where.createdAt.lte = caracasDayEnd(filters.createdTo);
+      where.isGroupCompany = false;
+    }
+
+    // Compraron / no compraron: mismo criterio que el KPI del tablero (factura cobrada en
+    // PAID/PARTIAL_RETURN/RETURNED). "false" = sin ninguna factura cobrada -> se traduce a un
+    // NOT EXISTS. Asi count(compraron) + count(sin comprar) = total de clientes nuevos.
+    if (filters.purchased === 'true' || filters.purchased === 'false') {
+      const soldStatuses = { status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] } };
+      where.invoices = filters.purchased === 'true' ? { some: soldStatuses } : { none: soldStatuses };
     }
 
     if (filters.search) {

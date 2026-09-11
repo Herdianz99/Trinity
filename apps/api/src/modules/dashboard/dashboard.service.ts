@@ -82,6 +82,8 @@ export class DashboardService {
       countAccuracy,
       collections,
       payments,
+      newCustomers,
+      prevNewCustomers,
     ] = await Promise.all([
       this.getNetInvoiceRows(dateRange),
       this.getNetInvoiceRows(prevDateRange),
@@ -107,6 +109,9 @@ export class DashboardService {
       this.getCollectionsInPeriod(fromYmd, toYmd),
       // Pagos del periodo (SI respeta el rango, a diferencia del saldo por pagar).
       this.getPaymentsInPeriod(fromYmd, toYmd),
+      // Clientes nuevos del periodo (+ cuantos ya compraron), y el periodo anterior para el %.
+      this.getNewCustomers(dateRange),
+      this.getNewCustomers(prevDateRange),
     ]);
 
     // Derivados sincronos de las filas netas por factura (sin mas consultas).
@@ -195,7 +200,33 @@ export class DashboardService {
         stockout: stockout,
         countAccuracy: countAccuracy,
       },
+      newCustomers: {
+        count: newCustomers.count,
+        purchasedCount: newCustomers.purchasedCount,
+        vsLastPeriod: pctChange(newCustomers.count, prevNewCustomers.count),
+      },
     };
+  }
+
+  // ── KPI: Clientes nuevos del periodo (+ cuantos ya compraron) ──────────────
+  // Clientes creados en el rango del tablero, EXCLUYE empresas del grupo (isGroupCompany).
+  // purchasedCount = de esos nuevos, cuantos tienen al menos una factura cobrada
+  // (PAID/PARTIAL_RETURN/RETURNED). createdAt es TIMESTAMP -> se usa el rango ya anclado al
+  // dia-Caracas (dateRange), igual que el resto de KPIs de ventas.
+  private async getNewCustomers(dateRange: { gte: Date; lte: Date }) {
+    // Dos count con filtro de relacion (EXISTS): NO se materializa la lista de ids, asi que
+    // escala a cualquier volumen (evita el limite de 32767 bind-variables de un IN gigante).
+    const nuevosWhere = { createdAt: dateRange, isGroupCompany: false };
+    const [count, purchasedCount] = await Promise.all([
+      this.prisma.customer.count({ where: nuevosWhere }),
+      this.prisma.customer.count({
+        where: {
+          ...nuevosWhere,
+          invoices: { some: { status: { in: ['PAID', 'PARTIAL_RETURN', 'RETURNED'] } } },
+        },
+      }),
+    ]);
+    return { count, purchasedCount };
   }
 
   // ── KPI: Quiebre de inventario (Compras) ───────────────────────────────────
