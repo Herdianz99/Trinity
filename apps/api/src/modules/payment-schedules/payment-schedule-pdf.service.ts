@@ -15,12 +15,20 @@ export class PaymentSchedulePdfService {
       where: { id: scheduleId },
       include: {
         createdBy: { select: { name: true } },
+        supplierDiscounts: true,
         items: {
           include: {
             payable: {
               select: {
+                documentNumber: true,
                 dueDate: true,
-                purchaseOrder: { select: { number: true } },
+                purchaseOrder: {
+                  select: {
+                    number: true,
+                    supplierInvoiceNumber: true,
+                    supplier: { select: { paymentMethod: true } },
+                  },
+                },
               },
             },
             creditDebitNote: {
@@ -35,24 +43,55 @@ export class PaymentSchedulePdfService {
     if (!schedule) throw new NotFoundException('Programación no encontrada');
     const config = await this.prisma.companyConfig.findFirst();
 
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const docNumberOf = (item: (typeof schedule.items)[number]): string => {
+      const p: any = item.payable;
+      const fromPayable = p?.documentNumber || p?.purchaseOrder?.supplierInvoiceNumber;
+      if (fromPayable) return fromPayable;
+      if (item.creditDebitNote) return item.creditDebitNote.number;
+      return item.description;
+    };
+    const discountMap = new Map(schedule.supplierDiscounts.map((d) => [d.supplierName, d.discountPct]));
+
     // Group items by supplier
     const groups: Record<string, {
       supplierName: string;
+      paymentMethod: string | null;
       totalUsd: number;
       totalBs: number;
-      items: typeof schedule.items;
+      items: (typeof schedule.items[number] & { docNumber: string })[];
     }> = {};
 
     for (const item of schedule.items) {
       if (!groups[item.supplierName]) {
-        groups[item.supplierName] = { supplierName: item.supplierName, totalUsd: 0, totalBs: 0, items: [] };
+        groups[item.supplierName] = { supplierName: item.supplierName, paymentMethod: null, totalUsd: 0, totalBs: 0, items: [] };
       }
-      groups[item.supplierName].totalUsd += item.plannedAmountUsd;
-      groups[item.supplierName].totalBs += item.plannedAmountBs;
-      groups[item.supplierName].items.push(item);
+      const g = groups[item.supplierName];
+      if (!g.paymentMethod) {
+        g.paymentMethod = (item.payable as any)?.purchaseOrder?.supplier?.paymentMethod ?? null;
+      }
+      g.totalUsd += item.plannedAmountUsd;
+      g.totalBs += item.plannedAmountBs;
+      g.items.push({ ...item, docNumber: docNumberOf(item) });
     }
 
-    const supplierGroups = Object.values(groups);
+    let netTotalUsd = 0;
+    let netTotalBs = 0;
+    const supplierGroups = Object.values(groups).map((g) => {
+      const totalUsd = round2(g.totalUsd);
+      const totalBs = round2(g.totalBs);
+      const discountPct = discountMap.get(g.supplierName) ?? 0;
+      const discountAmountUsd = round2(totalUsd * (discountPct / 100));
+      const discountAmountBs = round2(totalBs * (discountPct / 100));
+      const netUsd = round2(totalUsd - discountAmountUsd);
+      const netBs = round2(totalBs - discountAmountBs);
+      netTotalUsd += netUsd;
+      netTotalBs += netBs;
+      return { ...g, totalUsd, totalBs, discountPct, discountAmountUsd, discountAmountBs, netUsd, netBs };
+    });
+    netTotalUsd = round2(netTotalUsd);
+    netTotalBs = round2(netTotalBs);
+    const anyDiscount = supplierGroups.some((g) => g.discountPct > 0);
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -116,8 +155,9 @@ export class PaymentSchedulePdfService {
       y += Math.max(16, titleH + 2);
       if (schedule.notes) {
         doc.fontSize(8).font('Helvetica');
-        const notesH = doc.heightOfString(schedule.notes, { width: pageWidth });
-        doc.text(schedule.notes, 40, y, { width: pageWidth });
+        const obsText = `Observación: ${schedule.notes}`;
+        const notesH = doc.heightOfString(obsText, { width: pageWidth });
+        doc.text(obsText, 40, y, { width: pageWidth });
         y += Math.max(14, notesH + 2);
       }
 
@@ -168,10 +208,17 @@ export class PaymentSchedulePdfService {
         doc.text(`$${this.fmt(group.totalUsd)}  |  Bs ${this.fmt(group.totalBs)}`, 350, y + 4, { width: pageWidth - 315, align: 'right' });
         y += 22;
 
+        // Método de pago del proveedor (texto libre)
+        if (group.paymentMethod) {
+          doc.fontSize(8).font('Helvetica-Oblique').fillColor('#444444');
+          doc.text(`Método de pago: ${group.paymentMethod}`, 45, y);
+          y += 12;
+        }
+
         // Table header
         const colX = { ref: 45, type: 170, due: 230, balance: 310, usd: 390, bs: 460 };
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
-        doc.text('Referencia', colX.ref, y);
+        doc.text('Nro. documento', colX.ref, y);
         doc.text('Tipo', colX.type, y);
         doc.text('Vencimiento', colX.due, y);
         doc.text('Saldo Total', colX.balance, y);
@@ -186,7 +233,7 @@ export class PaymentSchedulePdfService {
         for (const item of group.items) {
           // Altura dinamica: la referencia/descripcion puede ocupar 2 lineas.
           doc.fontSize(8).font('Helvetica');
-          const descH = doc.heightOfString(item.description, { width: 120 });
+          const descH = doc.heightOfString(item.docNumber, { width: 120 });
           const rowH = Math.max(14, descH + 2);
           if (y + rowH > 752) {
             doc.addPage();
@@ -203,7 +250,7 @@ export class PaymentSchedulePdfService {
             doc.fillColor('#000000');
           }
 
-          doc.text(item.description, colX.ref, y, { width: 120 });
+          doc.text(item.docNumber, colX.ref, y, { width: 120 });
           doc.text(type, colX.type, y, { lineBreak: false });
           doc.text(dueDate, colX.due, y, { lineBreak: false });
           doc.text(`$${this.fmt(item.totalAmountUsd)}`, colX.balance, y, { lineBreak: false });
@@ -212,13 +259,24 @@ export class PaymentSchedulePdfService {
           y += rowH;
         }
 
-        // Supplier subtotal
+        // Supplier subtotal (+ descuento/neto si aplica)
         doc.moveTo(colX.usd, y).lineTo(40 + pageWidth - 5, y).stroke('#cccccc');
         y += 4;
-        doc.fontSize(8).font('Helvetica-Bold');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
         doc.text(`Subtotal: $${this.fmt(group.totalUsd)}`, colX.usd, y);
         doc.text(`Bs ${this.fmt(group.totalBs)}`, colX.bs, y);
-        y += 16;
+        y += 12;
+        if (group.discountPct > 0) {
+          const rightW = 40 + pageWidth - colX.balance;
+          doc.font('Helvetica').fillColor('#b00000');
+          doc.text(`Descuento (${this.fmt(group.discountPct)}%): -$${this.fmt(group.discountAmountUsd)}  /  -Bs ${this.fmt(group.discountAmountBs)}`, colX.balance, y, { width: rightW, align: 'right' });
+          y += 12;
+          doc.font('Helvetica-Bold').fillColor('#006600');
+          doc.text(`Neto a pagar: $${this.fmt(group.netUsd)}  |  Bs ${this.fmt(group.netBs)}`, colX.balance, y, { width: rightW, align: 'right' });
+          y += 12;
+          doc.fillColor('#000000');
+        }
+        y += 6;
       }
 
       // ============ GRAND TOTAL ============
@@ -230,12 +288,23 @@ export class PaymentSchedulePdfService {
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#333333');
       y += 8;
       doc.fontSize(11).font('Helvetica-Bold');
-      doc.text('TOTAL:', 40, y);
+      doc.text(anyDiscount ? 'TOTAL (bruto):' : 'TOTAL:', 40, y);
       doc.text(`$${this.fmt(schedule.totalUsd)}`, 350, y, { width: pageWidth - 315, align: 'right' });
       y += 14;
       doc.fontSize(10).font('Helvetica');
       doc.text(`Bs ${this.fmt(schedule.totalBs)}`, 350, y, { width: pageWidth - 315, align: 'right' });
       y += 14;
+      if (anyDiscount) {
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#006600');
+        doc.text('NETO A PAGAR:', 40, y);
+        doc.text(`$${this.fmt(netTotalUsd)}`, 350, y, { width: pageWidth - 315, align: 'right' });
+        y += 14;
+        doc.fontSize(10).font('Helvetica');
+        doc.text(`Bs ${this.fmt(netTotalBs)}`, 350, y, { width: pageWidth - 315, align: 'right' });
+        y += 14;
+        doc.fillColor('#000000');
+      }
+      doc.fontSize(10).font('Helvetica').fillColor('#000000');
       doc.text(`(${schedule.items.length} documentos)`, 40, y);
 
       // ============ FOOTER ============

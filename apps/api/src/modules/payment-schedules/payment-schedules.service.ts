@@ -75,18 +75,27 @@ export class PaymentSchedulesService {
       where: { id },
       include: {
         createdBy: { select: { id: true, name: true } },
+        supplierDiscounts: true,
         items: {
           include: {
             payable: {
               select: {
                 id: true,
+                documentNumber: true,
                 dueDate: true,
                 status: true,
                 netPayableUsd: true,
                 netPayableBs: true,
                 paidAmountUsd: true,
                 paidAmountBs: true,
-                purchaseOrder: { select: { id: true, number: true } },
+                purchaseOrder: {
+                  select: {
+                    id: true,
+                    number: true,
+                    supplierInvoiceNumber: true,
+                    supplier: { select: { name: true, paymentMethod: true } },
+                  },
+                },
               },
             },
             creditDebitNote: {
@@ -106,35 +115,96 @@ export class PaymentSchedulesService {
 
     if (!schedule) throw new NotFoundException('Programación no encontrada');
 
+    // Nro. de documento del item: igual que en /payables (documentNumber de la CxP,
+    // si no el N° de factura del proveedor en la OC; para notas, su número).
+    const docNumberOf = (item: (typeof schedule.items)[number]): string => {
+      const p: any = item.payable;
+      const fromPayable = p?.documentNumber || p?.purchaseOrder?.supplierInvoiceNumber;
+      if (fromPayable) return fromPayable;
+      if (item.creditDebitNote) return item.creditDebitNote.number;
+      return item.description;
+    };
+
+    // Mapa de descuento por proveedor (%).
+    const discountMap = new Map(
+      schedule.supplierDiscounts.map((d) => [d.supplierName, d.discountPct]),
+    );
+
     // Group items by supplier
     const supplierGroups: Record<string, {
       supplierName: string;
+      paymentMethod: string | null;
       totalUsd: number;
       totalBs: number;
-      items: typeof schedule.items;
+      items: any[];
     }> = {};
 
     for (const item of schedule.items) {
       if (!supplierGroups[item.supplierName]) {
         supplierGroups[item.supplierName] = {
           supplierName: item.supplierName,
+          paymentMethod: null,
           totalUsd: 0,
           totalBs: 0,
           items: [],
         };
       }
-      supplierGroups[item.supplierName].totalUsd += item.plannedAmountUsd;
-      supplierGroups[item.supplierName].totalBs += item.plannedAmountBs;
-      supplierGroups[item.supplierName].items.push(item);
+      const g = supplierGroups[item.supplierName];
+      // Método de pago del proveedor (texto libre), tomado del primer item que lo traiga
+      if (!g.paymentMethod) {
+        g.paymentMethod = (item.payable as any)?.purchaseOrder?.supplier?.paymentMethod ?? null;
+      }
+      g.totalUsd += item.plannedAmountUsd;
+      g.totalBs += item.plannedAmountBs;
+      g.items.push({ ...item, docNumber: docNumberOf(item) });
     }
 
-    const groupedBySupplier = Object.values(supplierGroups).map((g) => ({
-      ...g,
-      totalUsd: Math.round(g.totalUsd * 100) / 100,
-      totalBs: Math.round(g.totalBs * 100) / 100,
-    }));
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    let netTotalUsd = 0;
+    let netTotalBs = 0;
+    const groupedBySupplier = Object.values(supplierGroups).map((g) => {
+      const totalUsd = round2(g.totalUsd);
+      const totalBs = round2(g.totalBs);
+      const discountPct = discountMap.get(g.supplierName) ?? 0;
+      const discountAmountUsd = round2(totalUsd * (discountPct / 100));
+      const discountAmountBs = round2(totalBs * (discountPct / 100));
+      const netUsd = round2(totalUsd - discountAmountUsd);
+      const netBs = round2(totalBs - discountAmountBs);
+      netTotalUsd += netUsd;
+      netTotalBs += netBs;
+      return { ...g, totalUsd, totalBs, discountPct, discountAmountUsd, discountAmountBs, netUsd, netBs };
+    });
 
-    return { ...schedule, groupedBySupplier };
+    return {
+      ...schedule,
+      groupedBySupplier,
+      netTotalUsd: round2(netTotalUsd),
+      netTotalBs: round2(netTotalBs),
+    };
+  }
+
+  // Actualiza la observación global de la programación
+  async updateNotes(id: string, notes: string) {
+    const schedule = await this.prisma.paymentSchedule.findUnique({ where: { id } });
+    if (!schedule) throw new NotFoundException('Programación no encontrada');
+    await this.prisma.paymentSchedule.update({
+      where: { id },
+      data: { notes: notes?.trim() || null },
+    });
+    return this.findOne(id);
+  }
+
+  // Fija/actualiza el % de descuento de un proveedor dentro de la programación
+  async setSupplierDiscount(id: string, supplierName: string, discountPct: number) {
+    const schedule = await this.prisma.paymentSchedule.findUnique({ where: { id } });
+    if (!schedule) throw new NotFoundException('Programación no encontrada');
+    const pct = Math.max(0, Math.min(100, discountPct || 0));
+    await this.prisma.paymentScheduleSupplierDiscount.upsert({
+      where: { scheduleId_supplierName: { scheduleId: id, supplierName } },
+      update: { discountPct: pct },
+      create: { scheduleId: id, supplierName, discountPct: pct },
+    });
+    return this.findOne(id);
   }
 
   // ============ CREATE ============

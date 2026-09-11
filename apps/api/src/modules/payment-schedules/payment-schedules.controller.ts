@@ -20,6 +20,8 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdateNotesDto } from './dto/update-notes.dto';
+import { SetSupplierDiscountDto } from './dto/set-supplier-discount.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Payment Schedules')
@@ -89,6 +91,16 @@ export class PaymentSchedulesController {
     @Body() dto: UpdateItemDto,
   ) {
     return this.service.updateItem(id, itemId, dto);
+  }
+
+  @Patch(':id/notes')
+  updateNotes(@Param('id') id: string, @Body() dto: UpdateNotesDto) {
+    return this.service.updateNotes(id, dto.notes ?? '');
+  }
+
+  @Patch(':id/supplier-discount')
+  setSupplierDiscount(@Param('id') id: string, @Body() dto: SetSupplierDiscountDto) {
+    return this.service.setSupplierDiscount(id, dto.supplierName, dto.discountPct);
   }
 
   @Patch(':id/status')

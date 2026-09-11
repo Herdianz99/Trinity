@@ -31,6 +31,7 @@ interface ScheduleItem {
   plannedAmountUsd: number;
   plannedAmountBs: number;
   isPaid: boolean;
+  docNumber?: string;
   payable?: {
     id: string;
     dueDate: string | null;
@@ -46,8 +47,14 @@ interface ScheduleItem {
 
 interface SupplierGroup {
   supplierName: string;
+  paymentMethod: string | null;
   totalUsd: number;
   totalBs: number;
+  discountPct: number;
+  discountAmountUsd: number;
+  discountAmountBs: number;
+  netUsd: number;
+  netBs: number;
   items: ScheduleItem[];
 }
 
@@ -63,6 +70,8 @@ interface Schedule {
   totalBs: number;
   exchangeRate: number;
   notes: string | null;
+  netTotalUsd: number;
+  netTotalBs: number;
   createdBy: { id: string; name: string };
   createdAt: string;
   items: ScheduleItem[];
@@ -131,6 +140,12 @@ export default function PaymentScheduleDetailPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
 
+  // Observación global + descuentos por proveedor
+  const [obsText, setObsText] = useState('');
+  const [savingObs, setSavingObs] = useState(false);
+  const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({});
+  const [savingDiscount, setSavingDiscount] = useState<string | null>(null);
+
   useEffect(() => {
     fetch('/api/proxy/auth/me')
       .then((r) => r.json())
@@ -144,6 +159,10 @@ export default function PaymentScheduleDetailPage() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setSchedule(data);
+      setObsText(data.notes || '');
+      const di: Record<string, string> = {};
+      for (const g of data.groupedBySupplier || []) di[g.supplierName] = String(g.discountPct || 0);
+      setDiscountInputs(di);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar la programacion' });
     } finally {
@@ -170,6 +189,49 @@ export default function PaymentScheduleDetailPage() {
       return () => clearTimeout(t);
     }
   }, [message]);
+
+  async function saveObservation() {
+    setSavingObs(true);
+    try {
+      const res = await fetch(`/api/proxy/payment-schedules/${id}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: obsText }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSchedule(data);
+      setMessage({ type: 'success', text: 'Observación guardada' });
+    } catch {
+      setMessage({ type: 'error', text: 'Error al guardar la observación' });
+    } finally {
+      setSavingObs(false);
+    }
+  }
+
+  async function saveDiscount(supplierName: string) {
+    const pct = Number(discountInputs[supplierName] ?? 0);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      setMessage({ type: 'error', text: 'El descuento debe estar entre 0 y 100' });
+      return;
+    }
+    setSavingDiscount(supplierName);
+    try {
+      const res = await fetch(`/api/proxy/payment-schedules/${id}/supplier-discount`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierName, discountPct: pct }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSchedule(data);
+      setMessage({ type: 'success', text: `Descuento de ${supplierName} actualizado` });
+    } catch {
+      setMessage({ type: 'error', text: 'Error al guardar el descuento' });
+    } finally {
+      setSavingDiscount(null);
+    }
+  }
 
   const fetchPendingPayables = useCallback(async () => {
     setPendingLoading(true);
@@ -468,11 +530,25 @@ export default function PaymentScheduleDetailPage() {
             </div>
           )}
         </div>
-        {schedule.notes && (
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            <p className="text-xs text-slate-500">Notas: <span className="text-slate-400">{schedule.notes}</span></p>
+        <div className="mt-3 pt-3 border-t border-slate-800">
+          <label className="text-xs text-slate-500 block mb-1">Observación (global)</label>
+          <div className="flex items-start gap-2">
+            <textarea
+              value={obsText}
+              onChange={(e) => setObsText(e.target.value)}
+              rows={2}
+              placeholder="Observación para quien ejecuta los pagos…"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 resize-y"
+            />
+            <button
+              onClick={saveObservation}
+              disabled={savingObs || obsText === (schedule.notes || '')}
+              className="btn-primary flex items-center gap-1.5 text-sm disabled:opacity-40 shrink-0"
+            >
+              {savingObs ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Guardar
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Documents grouped by supplier */}
@@ -497,12 +573,48 @@ export default function PaymentScheduleDetailPage() {
             {schedule.groupedBySupplier.map((group) => (
               <div key={group.supplierName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 {/* Supplier header */}
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-800/50 border-b border-slate-800">
-                  <h3 className="font-semibold text-slate-200">{group.supplierName}</h3>
-                  <div className="text-sm text-slate-400">
-                    <span className="font-medium text-slate-200">${fmt(group.totalUsd)}</span>
-                    <span className="mx-2">|</span>
-                    <span>Bs {fmt(group.totalBs)}</span>
+                <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-800">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-semibold text-slate-200">{group.supplierName}</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Método de pago: <span className="text-slate-300">{group.paymentMethod || '—'}</span>
+                      </p>
+                    </div>
+                    <div className="text-sm text-slate-400 text-right">
+                      <div>
+                        <span className="font-medium text-slate-200">${fmt(group.totalUsd)}</span>
+                        <span className="mx-2">|</span>
+                        <span>Bs {fmt(group.totalBs)}</span>
+                      </div>
+                      {group.discountPct > 0 && (
+                        <div className="text-xs mt-0.5">
+                          <span className="text-red-400">−{fmt(group.discountPct)}% (−${fmt(group.discountAmountUsd)})</span>
+                          <span className="mx-1">→</span>
+                          <span className="text-green-400 font-semibold">Neto ${fmt(group.netUsd)} | Bs {fmt(group.netBs)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Descuento por proveedor */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <label className="text-xs text-slate-500">Descuento %:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={discountInputs[group.supplierName] ?? '0'}
+                      onChange={(e) => setDiscountInputs((prev) => ({ ...prev, [group.supplierName]: e.target.value }))}
+                      className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-right text-slate-200"
+                    />
+                    <button
+                      onClick={() => saveDiscount(group.supplierName)}
+                      disabled={savingDiscount === group.supplierName || Number(discountInputs[group.supplierName] ?? 0) === group.discountPct}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 flex items-center gap-1"
+                    >
+                      {savingDiscount === group.supplierName ? <Loader2 className="animate-spin" size={12} /> : <Check size={12} />} Aplicar
+                    </button>
                   </div>
                 </div>
 
@@ -511,7 +623,7 @@ export default function PaymentScheduleDetailPage() {
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-800/50">
                       <th className="text-left px-4 py-2 font-medium">Tipo</th>
-                      <th className="text-left px-4 py-2 font-medium">Referencia</th>
+                      <th className="text-left px-4 py-2 font-medium">Nro. documento</th>
                       <th className="text-left px-4 py-2 font-medium">Vencimiento</th>
                       <th className="text-right px-4 py-2 font-medium">Saldo total</th>
                       <th className="text-right px-4 py-2 font-medium">A pagar USD</th>
@@ -552,7 +664,7 @@ export default function PaymentScheduleDetailPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 text-slate-200 font-mono text-xs">{item.description}</td>
+                          <td className="px-4 py-2.5 text-slate-200 font-mono text-xs">{item.docNumber || item.description}</td>
                           <td className="px-4 py-2.5 text-slate-400">
                             {dueDate ? dueDate.toLocaleDateString('es-VE') : '-'}
                           </td>

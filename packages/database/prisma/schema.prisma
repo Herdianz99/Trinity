@@ -1861,10 +1861,26 @@ model PaymentSchedule {
   exchangeRate   Float                 @default(0)
   notes          String?
   items          PaymentScheduleItem[]
+  supplierDiscounts PaymentScheduleSupplierDiscount[]
   createdById    String
   createdBy      User                  @relation(fields: [createdById], references: [id])
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+}
+
+// Descuento por proveedor dentro de una programacion de pago. El % se aplica al total
+// planificado del grupo (proveedor) para calcular el neto a pagar; NO altera los montos
+// guardados de los items (se calcula al vuelo en detalle y PDF).
+model PaymentScheduleSupplierDiscount {
+  id           String          @id @default(cuid())
+  scheduleId   String
+  schedule     PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  supplierName String
+  discountPct  Float           @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([scheduleId, supplierName])
 }
 
 model PaymentScheduleItem {
