@@ -92,6 +92,7 @@ export class PaymentMethodsService {
         sortOrder: dto.sortOrder ?? 0,
         fiscalCode: dto.fiscalCode || null,
         parentId: dto.parentId || null,
+        bankAccountId: dto.bankAccountId || null,
       },
     });
   }
@@ -122,6 +123,7 @@ export class PaymentMethodsService {
         sortOrder: dto.sortOrder ?? method.sortOrder,
         fiscalCode: dto.fiscalCode !== undefined ? (dto.fiscalCode || null) : method.fiscalCode,
         parentId: dto.parentId !== undefined ? (dto.parentId || null) : method.parentId,
+        bankAccountId: dto.bankAccountId !== undefined ? (dto.bankAccountId || null) : method.bankAccountId,
       },
     });
   }

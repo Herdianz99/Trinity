@@ -36,4 +36,10 @@ export class CreatePaymentMethodDto {
   @IsOptional()
   @IsString()
   parentId?: string;
+
+  // Cuenta bancaria destino (mapeo método electrónico -> cuenta fija del módulo de bancos)
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  bankAccountId?: string;
 }
