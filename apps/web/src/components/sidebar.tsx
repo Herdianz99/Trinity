@@ -34,6 +34,7 @@ import {
   SlidersHorizontal,
   FileCheck,
   Banknote,
+  Landmark,
   History,
   HandCoins,
   Coins,
@@ -258,6 +259,16 @@ const menuSections: MenuSection[] = [
       { label: 'Movimientos Bs', href: '/divisas/movimientos-bs', icon: <Coins size={18} /> },
       { label: 'Empresas', href: '/divisas/empresas', icon: <Building2 size={18} /> },
       { label: 'Bancos de origen (Bs)', href: '/divisas/bancos-origen', icon: <Coins size={18} /> },
+    ],
+  },
+  {
+    key: 'bancos',
+    label: 'BANCOS',
+    icon: <Landmark size={20} />,
+    permission: 'bancos',
+    items: [
+      { label: 'Resumen', href: '/bancos', icon: <BarChart3 size={18} /> },
+      { label: 'Cuentas', href: '/bancos/cuentas', icon: <Landmark size={18} /> },
     ],
   },
   {
