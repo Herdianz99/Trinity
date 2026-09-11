@@ -117,6 +117,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   useAlmacenOps?: boolean;
 
+  // Opt-in: habilita el Módulo de Bancos (libro banco + conciliación). Gatea los enganches automáticos.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  bancosEnabled?: boolean;
+
   @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

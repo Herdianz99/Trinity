@@ -108,6 +108,7 @@ interface CompanyConfig {
   requireCustomerAddress: boolean;
   useScanDispatch: boolean;
   useAlmacenOps: boolean;
+  bancosEnabled: boolean;
   defaultCustomerId: string;
   retentionProvidencia: string;
   retentionNextNumber: number;
@@ -148,6 +149,7 @@ export default function ConfigPage() {
     requireCustomerAddress: false,
     useScanDispatch: false,
     useAlmacenOps: false,
+    bancosEnabled: false,
     defaultCustomerId: '',
     retentionProvidencia: 'SNAT/2025/000054',
     retentionNextNumber: 1,
@@ -313,6 +315,7 @@ export default function ConfigPage() {
           requireCustomerAddress: data.requireCustomerAddress ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
           useAlmacenOps: data.useAlmacenOps ?? false,
+          bancosEnabled: data.bancosEnabled ?? false,
           defaultCustomerId: data.defaultCustomerId || '',
           retentionProvidencia: data.retentionProvidencia || 'SNAT/2025/000054',
           retentionNextNumber: data.retentionNextNumber ?? 1,
@@ -404,6 +407,7 @@ export default function ConfigPage() {
           requireCustomerAddress: config.requireCustomerAddress,
           useScanDispatch: config.useScanDispatch,
           useAlmacenOps: config.useAlmacenOps,
+          bancosEnabled: config.bancosEnabled,
           defaultCustomerId: config.defaultCustomerId || null,
           retentionProvidencia: config.retentionProvidencia,
           retentionNextNumber: Number(config.retentionNextNumber),
@@ -1037,6 +1041,32 @@ export default function ConfigPage() {
                   <p className="text-xs text-slate-500">
                     Habilita en el menú la &quot;Auditoría 5S&quot; de cierre de turno y el &quot;Reporte de daños&quot;
                     de inventario (despacho reporta la mercancía dañada; el auditor la resuelve por reemplazo o merma).
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Modulo de Bancos */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Módulo de Bancos</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Libro banco y conciliación de las cuentas bancarias.
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.bancosEnabled}
+                  onChange={(e) => handleChange('bancosEnabled', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Activar módulo de bancos</span>
+                  <p className="text-xs text-slate-500">
+                    Habilita el menú &quot;Bancos&quot; (cuentas, libro banco y conciliación) y hace que los cobros/pagos
+                    con métodos electrónicos enlazados a una cuenta entren automáticamente al libro banco. Apagado = sin
+                    efecto. Recuerda enlazar cada método electrónico a su cuenta en Métodos de Pago.
                   </p>
                 </div>
               </label>
