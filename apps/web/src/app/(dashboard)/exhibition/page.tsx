@@ -95,17 +95,22 @@ export default function ExhibitionPage() {
 
   async function confirmPlace() {
     if (!placeTarget) return;
+    const target = placeTarget;
+    const loc = placeLocation.trim() || null;
     setProcessing(true);
     try {
       const res = await fetch('/api/proxy/exhibition/place', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: placeTarget.id, location: placeLocation || undefined }),
+        body: JSON.stringify({ productId: target.id, location: loc || undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
+      // Actualiza SOLO esa fila en su lugar (sin recargar la lista → no salta el scroll)
+      setRows((prev) => prev.map((r) => r.id === target.id
+        ? { ...r, isExhibited: true, exhibitedSince: new Date().toISOString(), exhibitionLocation: loc, daysExhibited: 0 }
+        : r));
       setMessage({ type: 'success', text: 'Artículo puesto en exhibición' });
       setPlaceTarget(null); setPlaceLocation('');
-      await fetchRows(true);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
@@ -113,17 +118,21 @@ export default function ExhibitionPage() {
 
   async function confirmRemove() {
     if (!removeTarget) return;
+    const target = removeTarget;
     setProcessing(true);
     try {
       const res = await fetch('/api/proxy/exhibition/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: removeTarget.id, reason: removeReason, note: removeNote || undefined }),
+        body: JSON.stringify({ productId: target.id, reason: removeReason, note: removeNote || undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
+      // Actualiza SOLO esa fila en su lugar (sin recargar la lista → no salta el scroll)
+      setRows((prev) => prev.map((r) => r.id === target.id
+        ? { ...r, isExhibited: false, exhibitedSince: null, exhibitionLocation: null, daysExhibited: null }
+        : r));
       setMessage({ type: 'success', text: 'Artículo retirado de exhibición' });
       setRemoveTarget(null); setRemoveReason('OTHER'); setRemoveNote('');
-      await fetchRows(true);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
