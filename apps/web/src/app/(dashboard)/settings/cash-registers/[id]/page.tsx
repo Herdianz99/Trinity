@@ -21,6 +21,7 @@ interface CashRegister {
   code: string;
   name: string;
   isShared: boolean;
+  includeInDashboard: boolean;
   isActive: boolean;
   serie?: { id: string; name: string; prefix: string; isFiscal: boolean; comPort: string | null; fiscalMachineSerial: string | null } | null;
 }
@@ -35,7 +36,7 @@ export default function CashRegisterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ name: '', isShared: false, serieId: '' });
+  const [form, setForm] = useState({ name: '', isShared: false, includeInDashboard: true, serieId: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -52,6 +53,7 @@ export default function CashRegisterDetailPage() {
       setForm({
         name: data.name,
         isShared: data.isShared || false,
+        includeInDashboard: data.includeInDashboard !== false,
         serieId: data.serie?.id || '',
       });
       if (seriesRes.ok) {
@@ -86,6 +88,7 @@ export default function CashRegisterDetailPage() {
         name: form.name,
         code: register?.code,
         isShared: form.isShared,
+        includeInDashboard: form.includeInDashboard,
       };
       const res = await fetch(`/api/proxy/cash-registers/${id}`, {
         method: 'PATCH',
@@ -253,6 +256,23 @@ export default function CashRegisterDetailPage() {
             {form.isShared ? 'Si' : 'No'}
           </button>
           <span className="text-xs text-slate-500">Visible para todos los usuarios en el POS</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-300">Contar en dashboard:</label>
+          <button
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, includeInDashboard: !f.includeInDashboard }))}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              form.includeInDashboard
+                ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+            }`}
+          >
+            {form.includeInDashboard ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+            {form.includeInDashboard ? 'Si' : 'No'}
+          </button>
+          <span className="text-xs text-slate-500">Apágalo para que esta caja NO cuente en el "Resumen de Caja" del dashboard (ej. caja administración)</span>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
