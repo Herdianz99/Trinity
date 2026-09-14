@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class QueryProductsDto {
@@ -18,12 +18,13 @@ export class QueryProductsDto {
   @IsString()
   location?: string;
 
-  // OJO: enableImplicitConversion convierte "true"->true por el tipo boolean,
-  // por eso hay que aceptar ambos (mismo bug/fix de query-payables/receivables).
+  // String, NO boolean: con enableImplicitConversion un campo boolean convierte el
+  // string "false" a `true` (Boolean("false") es truthy), rompiendo el filtro. Se
+  // interpreta como string en el service ('true' | 'false').
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
-  @IsBoolean()
-  exhibited?: boolean;
+  @IsString()
+  @IsIn(['true', 'false'])
+  exhibited?: string;
 
   @IsOptional()
   @Transform(({ value }) => parseInt(value, 10))

@@ -19,7 +19,8 @@ export class ExhibitionService {
 
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.brandId) where.brandId = query.brandId;
-    if (query.exhibited !== undefined) where.isExhibited = query.exhibited;
+    if (query.exhibited === 'true') where.isExhibited = true;
+    else if (query.exhibited === 'false') where.isExhibited = false;
     if (query.location) {
       where.exhibitionLocation = { contains: query.location, mode: 'insensitive' };
     }
