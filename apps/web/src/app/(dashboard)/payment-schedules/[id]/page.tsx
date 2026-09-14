@@ -735,16 +735,18 @@ export default function PaymentScheduleDetailPage() {
 
       {/* Add Documents Panel (order-1: se muestra ARRIBA de la lista de documentos) */}
       {canEdit && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden order-1">
+        <div className="bg-slate-900 border border-blue-500/40 rounded-xl overflow-hidden order-1 shadow-lg shadow-blue-500/10">
           <button
             onClick={() => setShowAddPanel(!showAddPanel)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/50 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3.5 bg-gradient-to-r from-blue-500/20 to-blue-500/5 hover:from-blue-500/30 hover:to-blue-500/10 transition-colors"
           >
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
-              <Plus size={16} className="text-blue-400" />
+            <div className="flex items-center gap-3 text-sm font-semibold text-blue-100">
+              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/25 text-blue-300 shrink-0">
+                <Plus size={18} />
+              </span>
               Agregar documentos
             </div>
-            {showAddPanel ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+            {showAddPanel ? <ChevronUp size={18} className="text-blue-300" /> : <ChevronDown size={18} className="text-blue-300" />}
           </button>
 
           {showAddPanel && (
