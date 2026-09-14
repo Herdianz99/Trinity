@@ -143,20 +143,20 @@ export default function ExhibitionPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <form onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }} className="flex-1 min-w-[220px] relative">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+        <form onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }} className="w-full sm:flex-1 sm:min-w-[220px] relative order-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Buscar por código, nombre o código de barras…"
+            placeholder="Buscar por código, nombre o barras…"
             className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200"
           />
         </form>
         <button
           type="button"
           onClick={() => setShowScanner(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700"
+          className="order-2 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700"
           title="Escanear código de barras"
         >
           <Camera size={16} /> Escanear
@@ -164,7 +164,7 @@ export default function ExhibitionPage() {
         <select
           value={exhibitedFilter}
           onChange={(e) => setExhibitedFilter(e.target.value as any)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+          className="order-3 flex-1 sm:flex-none bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
         >
           <option value="all">Todos</option>
           <option value="yes">Exhibidos</option>
@@ -178,56 +178,95 @@ export default function ExhibitionPage() {
         </div>
       )}
 
-      {/* Tabla */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-10 text-center text-slate-500"><Loader2 className="animate-spin mx-auto" /></div>
-        ) : rows.length === 0 ? (
-          <div className="p-10 text-center text-slate-500">Sin artículos</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-800">
-                <th className="px-4 py-3">Código</th>
-                <th className="px-4 py-3">Artículo</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Ubicación</th>
-                <th className="px-4 py-3 text-center">Días</th>
-                <th className="px-4 py-3 text-center">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className={`border-b border-slate-800/50 ${p.isExhibited ? 'bg-green-500/5' : ''}`}>
-                  <td className="px-4 py-2.5 text-slate-300 font-mono text-xs">{p.code}</td>
-                  <td className="px-4 py-2.5 text-slate-200">{p.name}</td>
-                  <td className="px-4 py-2.5">
-                    {p.isExhibited
-                      ? <span className="text-green-400">Exhibido</span>
-                      : <span className="text-slate-500">No exhibido</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-400">{p.exhibitionLocation || '—'}</td>
-                  <td className="px-4 py-2.5 text-center text-slate-400">{p.daysExhibited ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                    {p.isExhibited ? (
-                      <button onClick={() => setRemoveTarget(p)} className="px-3 py-1.5 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-xs">
-                        Retirar
-                      </button>
-                    ) : (
-                      <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); }} className="px-3 py-1.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-xs inline-flex items-center gap-1">
-                        <Plus size={14} /> Exhibir
-                      </button>
-                    )}
-                    <button onClick={() => openHistory(p)} title="Historial" className="ml-2 p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
-                      <History size={14} />
-                    </button>
-                  </td>
+      {/* Lista */}
+      {loading ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center text-slate-500"><Loader2 className="animate-spin mx-auto" /></div>
+      ) : rows.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center text-slate-500">Sin artículos</div>
+      ) : (
+        <>
+          {/* Desktop: tabla */}
+          <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-800">
+                  <th className="px-4 py-3">Código</th>
+                  <th className="px-4 py-3">Artículo</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Ubicación</th>
+                  <th className="px-4 py-3 text-center">Días</th>
+                  <th className="px-4 py-3 text-center">Acción</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {rows.map((p) => (
+                  <tr key={p.id} className={`border-b border-slate-800/50 ${p.isExhibited ? 'bg-green-500/5' : ''}`}>
+                    <td className="px-4 py-2.5 text-slate-300 font-mono text-xs">{p.code}</td>
+                    <td className="px-4 py-2.5 text-slate-200">{p.name}</td>
+                    <td className="px-4 py-2.5">
+                      {p.isExhibited
+                        ? <span className="text-green-400">Exhibido</span>
+                        : <span className="text-slate-500">No exhibido</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-400">{p.exhibitionLocation || '—'}</td>
+                    <td className="px-4 py-2.5 text-center text-slate-400">{p.daysExhibited ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                      {p.isExhibited ? (
+                        <button onClick={() => setRemoveTarget(p)} className="px-3 py-1.5 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-xs">
+                          Retirar
+                        </button>
+                      ) : (
+                        <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); }} className="px-3 py-1.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-xs inline-flex items-center gap-1">
+                          <Plus size={14} /> Exhibir
+                        </button>
+                      )}
+                      <button onClick={() => openHistory(p)} title="Historial" className="ml-2 p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
+                        <History size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: tarjetas */}
+          <div className="md:hidden space-y-2">
+            {rows.map((p) => (
+              <div key={p.id} className={`bg-slate-900 border rounded-xl p-3 ${p.isExhibited ? 'border-green-500/30' : 'border-slate-800'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-slate-200 font-medium leading-tight">{p.name}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{p.code}</p>
+                  </div>
+                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${p.isExhibited ? 'bg-green-500/15 text-green-400' : 'bg-slate-800 text-slate-500'}`}>
+                    {p.isExhibited ? 'Exhibido' : 'No exhibido'}
+                  </span>
+                </div>
+                {p.isExhibited && (
+                  <p className="text-xs text-slate-400 mt-2">
+                    {p.exhibitionLocation || 'Sin ubicación'}{p.daysExhibited != null ? ` · ${p.daysExhibited} día(s)` : ''}
+                  </p>
+                )}
+                <div className="flex items-center gap-2 mt-3">
+                  {p.isExhibited ? (
+                    <button onClick={() => setRemoveTarget(p)} className="flex-1 px-3 py-2 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-sm">
+                      Retirar
+                    </button>
+                  ) : (
+                    <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); }} className="flex-1 px-3 py-2 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-sm inline-flex items-center justify-center gap-1">
+                      <Plus size={16} /> Exhibir
+                    </button>
+                  )}
+                  <button onClick={() => openHistory(p)} title="Historial" className="px-3 py-2 rounded-lg text-slate-400 bg-slate-800 hover:bg-slate-700">
+                    <History size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Escáner */}
       {showScanner && (
