@@ -7,7 +7,7 @@ import {
   Monitor, FileText, Landmark, Wallet, Package, ArrowLeftRight,
   RefreshCw, ClipboardList, ShoppingCart, CreditCard, CalendarClock,
   Factory, BookOpen, BarChart3, AlertTriangle, Loader2, AlertCircle,
-  ChevronRight, ArrowDownRight, Clock, PackageX, ClipboardCheck,
+  ChevronRight, ArrowDownRight, Clock, PackageX, ClipboardCheck, Store,
 } from 'lucide-react';
 
 // ── Role config ──────────────────────────────────────────────────────────────
@@ -84,6 +84,8 @@ export default function HomeDashboardPage() {
   const [loading, setLoading] = useState(true);
   // Ventana del KPI de precisión de conteo (auditor): 15 o 30 días.
   const [accWindow, setAccWindow] = useState<'d15' | 'd30'>('d30');
+  // KPIs de exhibición (solo almacenista): currentlyExhibited es actual; puestas/retiros son de hoy.
+  const [exhib, setExhib] = useState<{ currentlyExhibited: number; placedCount: number; removedCount: number; avgDaysExhibited: number } | null>(null);
 
   useEffect(() => { document.title = 'Inicio | Trinity ERP'; }, []);
 
@@ -114,6 +116,17 @@ export default function HomeDashboardPage() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Almacenista: cargar KPIs de exhibición (puestas/retiros de hoy + total exhibidos)
+  useEffect(() => {
+    if (user?.role !== 'WAREHOUSE') return;
+    const d = new Date();
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    fetch(`/api/proxy/exhibition/summary?from=${ymd}&to=${ymd}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setExhib(data); })
+      .catch(() => {});
+  }, [user?.role]);
 
   const greeting = (() => {
     const h = now.getHours();
@@ -182,6 +195,36 @@ export default function HomeDashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* ═══ Exhibición (almacenista) ═══ */}
+      {role === 'WAREHOUSE' && exhib && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Exhibición</h2>
+            <button onClick={() => router.push('/exhibition')} className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5">
+              Ir al modulo <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button onClick={() => router.push('/exhibition')} className="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-4 text-left hover:border-emerald-400/40 transition-all">
+              <div className="flex items-center gap-1.5 mb-1"><Store size={15} className="text-emerald-400" /><span className="text-[11px] text-slate-400">Exhibidos ahora</span></div>
+              <p className="text-2xl font-bold text-slate-100">{exhib.currentlyExhibited}</p>
+            </button>
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+              <p className="text-[11px] text-slate-400">Puestas hoy</p>
+              <p className="text-2xl font-bold text-green-400">{exhib.placedCount}</p>
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+              <p className="text-[11px] text-slate-400">Retiros hoy</p>
+              <p className="text-2xl font-bold text-red-400">{exhib.removedCount}</p>
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+              <p className="text-[11px] text-slate-400">Dias prom. en vitrina</p>
+              <p className="text-2xl font-bold text-slate-100">{exhib.avgDaysExhibited}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ Role-specific Info ═══ */}
       {homeData && (
