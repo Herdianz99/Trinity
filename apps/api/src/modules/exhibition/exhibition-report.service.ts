@@ -82,14 +82,14 @@ export class ExhibitionReportService {
   }
 
   private drawHeaderRow(doc: any, y: number): number {
-    doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
+    // Barra de encabezado con color (oscuro + texto blanco), estilo de los reportes del sistema.
+    doc.rect(40, y - 2, RIGHT - 40, 15).fill('#0f172a');
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#ffffff');
     for (const c of COLS) {
-      doc.text(c.label, c.x, y, { width: c.width, lineBreak: false });
+      doc.text(c.label, c.x + 2, y + 1.5, { width: c.width, lineBreak: false });
     }
     doc.fillColor('#000');
-    y += 13;
-    doc.moveTo(40, y).lineTo(RIGHT, y).stroke('#e2e8f0');
-    return y + 4;
+    return y + 17;
   }
 
   async buildPdf(rows: ActivityRow[], query: ActivityQuery = {}): Promise<Buffer> {
