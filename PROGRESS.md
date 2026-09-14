@@ -17,10 +17,26 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 126 (2026-09-11) — Módulo de Bancos + Programación de pagos (descuentos/observación/Nro. doc) + filtro "Clientes reales" + fix nota de crédito + correcciones de datos en total
+## 🗓️ 2026-09-14 — Métodos de pago "F" en PROD grande + fix programación de pagos (OVERDUE)
 
-> ### 🐛 Fix (2026-09-14) — Programación de pagos no traía las CxP **vencidas** (`OVERDUE`)
-> El panel "Agregar documentos" de `/payment-schedules/:id` omitía las CxP vencidas: el cron nocturno (`payables-cron.service.ts`) marca como `OVERDUE` toda CxP pasada de fecha, pero `payment-schedules.service.ts` era el único módulo que filtraba solo `['PENDING','PARTIAL']` (el resto del sistema —recibos, listado CxP, KPIs— usa `['PENDING','PARTIAL','OVERDUE']`). Justo las vencidas (las que más se quieren programar) faltaban. Fix en 2 puntos: `getPendingPayables` (filtro de la lista) y `addItem` (validación al agregar, que si no rechazaba la OVERDUE). Solo backend, aditivo, sin migración. Typecheck API 0. **SIN DESPLEGAR** (a pedido de Diego: se estaba trabajando en vivo, no se podía parar).
+**1) Chequeo de despliegue:** las 6 empresas (eltrebol/ferre, inversiones, total, totalturen, aceros, acerosmayor) verificadas en HEAD `00ae7086` = `origin/main`. Todo al día.
+
+**2) Grupos "F" de métodos de pago replicados en PROD grande** (inversiones, `trinity_db`) — solo datos, sin código. Se hizo en local en la Ses.126 (ver memoria `grupos-f-metodos-pago-grande`) y hoy se pasó a prod en pasos:
+- Creados 2 grupos padre: **PUNTO V. F** (`pm_pdv_f`) y **PAGO MOVIL F** (`pm_pmovil_f`), al tope del orden; se reordenó el resto del top-level para replicar el orden de local.
+- **7 puntos de venta con "F"** movidos a PUNTO V. F (cambio de `parentId`, conservan `id` → **historial intacto**): BANCARIBE F, BANCO ACTIVO F, BANESCO F (primero) + MERCANTIL F, BICENTENARIO F, PROVINCIAL F, VENEZUELA F (renombrados por Diego en la UI, movidos después).
+- **8 pago móviles duplicados** con `INSERT...SELECT` dentro de PAGO MOVIL F (`id||'_f'`, `nombre||' F'`); los originales quedan intactos, los nuevos arrancan en 0 historial. `bankAccountId` heredado NULL (las cuentas de local no existen en prod).
+
+**3) Grupo TRANSFERENCIA F en PROD grande** — duplicado del grupo TRANSFERENCIA (`pm_transf_f`) + sus 8 hijos (`id||'_f'`, `nombre||' F'`). Reordenado el top-level para que en el POS (grid de 4 por fila) la **fila 2** quede: **TRANSFERENCIA F · EFECTIVO · DIVISA · TRANSFERENCIA**, empujando **BIOPAGO** a la fila 3. Verificado contra la lógica del POS (`sales/pos/page.tsx` grid-cols-4, ordena por `sortOrder` del API `payment-methods.findAll`).
+
+> Respaldos previos de la tabla `PaymentMethod` en el server grande: `/root/backup-PaymentMethod-20260914-105344.sql` y `-135821.sql`.
+
+> ### 🐛 Fix (código, commit `ba521bd4`) — Programación de pagos no traía las CxP **vencidas** (`OVERDUE`)
+> El panel "Agregar documentos" de `/payment-schedules/:id` omitía las CxP vencidas: el cron nocturno (`payables-cron.service.ts`) marca como `OVERDUE` toda CxP pasada de fecha, pero `payment-schedules.service.ts` era el único módulo que filtraba solo `['PENDING','PARTIAL']` (el resto del sistema —recibos, listado CxP, KPIs— usa `['PENDING','PARTIAL','OVERDUE']`). Justo las vencidas (las que más se quieren programar) faltaban. Fix en 2 puntos: `getPendingPayables` (filtro de la lista) y `addItem` (validación al agregar, que si no rechazaba la OVERDUE). Solo backend, aditivo, sin migración. Typecheck API 0. **SIN DESPLEGAR** (a pedido de Diego: se estaba trabajando en vivo, no se podía parar) — pendiente `git pull + deploy.sh` en la grande y demás empresas.
+
+> ### 🐛 Fix (frontend) — el módulo **Bancos** faltaba en "Permisos por rol"
+> La pantalla `/settings/role-permissions` tenía la lista de módulos hardcodeada (`MODULE_GROUPS`) y **no incluía `bancos`** (ni `store`), aunque el backend sí lo acepta (`VALID_MODULES`). Por eso no se podía asignar el permiso de Bancos a ningún rol desde la UI. Se agregó el checkbox **Bancos**. Solo frontend, sin migración. Typecheck web 0. **SIN DESPLEGAR**. Nota sobre cómo funciona el permiso: el acceso al módulo Bancos depende **solo** del permiso `bancos` del rol (no de `CompanyConfig.bancosEnabled`, que solo controla los movimientos automáticos). Mientras tanto se asignó `bancos` al rol **Contador (ACCOUNTANT)** directo en la BD de la **grande** (`array_append` + `DEL role-permissions:ACCOUNTANT` en Redis); el contador debe re-loguear para ver el menú.
+
+## 🗓️ Sesión 126 (2026-09-11) — Módulo de Bancos + Programación de pagos (descuentos/observación/Nro. doc) + filtro "Clientes reales" + fix nota de crédito + correcciones de datos en total
 
 > ### ⚠️ SIN DESPLEGAR — arranca INOFENSIVO. El módulo de bancos está gateado por `CompanyConfig.bancosEnabled` (default **false** en las 6 empresas): con el flag apagado el menú no aparece, las rutas requieren el permiso de rol `'bancos'`, y **los enganches automáticos no hacen nada**. Migración **idempotente** (`20260911150000_bancos_module`, `IF NOT EXISTS`) y aditiva. Typecheck API+Web limpio. Falta prueba end-to-end en la UI (cobrar por transferencia y ver el movimiento) y el deploy. Spec: `docs/superpowers/specs/2026-09-11-modulo-bancos-design.md`; plan: `docs/superpowers/plans/2026-09-11-modulo-bancos.md`.
 
