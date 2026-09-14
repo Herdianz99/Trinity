@@ -8,6 +8,7 @@ import {
   Settings,
   Users,
   Package,
+  Store,
   ShoppingCart,
   Warehouse,
   Receipt,
@@ -281,6 +282,16 @@ const menuSections: MenuSection[] = [
       { label: 'Auditoría 5S', href: '/audit-5s', icon: <ClipboardCheck size={18} />, almacenOpsOnly: true },
       { label: 'Reporte de daños', href: '/inventory/damage-reports', icon: <AlertTriangle size={18} />, almacenOpsOnly: true },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} />, almacenOpsOnly: true },
+    ],
+  },
+  {
+    key: 'exhibicion',
+    label: 'EXHIBICIÓN',
+    icon: <Store size={20} />,
+    permission: 'exhibicion',
+    items: [
+      { label: 'Exhibición', href: '/exhibition', icon: <Store size={18} /> },
+      { label: 'Reporte', href: '/exhibition/reporte', icon: <BarChart3 size={18} /> },
     ],
   },
   {
