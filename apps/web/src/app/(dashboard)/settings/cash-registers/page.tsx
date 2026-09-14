@@ -31,6 +31,7 @@ interface CashRegister {
   code: string;
   isShared: boolean;
   showInPos?: boolean;
+  includeInDashboard?: boolean;
   isActive: boolean;
   sessions: CashRegisterSession[];
   serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
@@ -52,6 +53,7 @@ export default function CashRegistersPage() {
   const [formCode, setFormCode] = useState('');
   const [formIsShared, setFormIsShared] = useState(false);
   const [formShowInPos, setFormShowInPos] = useState(true);
+  const [formIncludeInDashboard, setFormIncludeInDashboard] = useState(true);
   const [formSerieId, setFormSerieId] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -93,6 +95,7 @@ export default function CashRegistersPage() {
     setFormCode('');
     setFormIsShared(false);
     setFormShowInPos(true);
+    setFormIncludeInDashboard(true);
     setFormSerieId('');
     setFormError('');
     setModalOpen(true);
@@ -104,6 +107,7 @@ export default function CashRegistersPage() {
     setFormCode(register.code);
     setFormIsShared(register.isShared);
     setFormShowInPos(register.showInPos !== false);
+    setFormIncludeInDashboard(register.includeInDashboard !== false);
     setFormSerieId(register.serie?.id || '');
     setFormError('');
     setModalOpen(true);
@@ -115,7 +119,7 @@ export default function CashRegistersPage() {
     setSaving(true);
 
     try {
-      const body = { name: formName, code: formCode, isShared: formIsShared, showInPos: formShowInPos };
+      const body = { name: formName, code: formCode, isShared: formIsShared, showInPos: formShowInPos, includeInDashboard: formIncludeInDashboard };
 
       const url = editingRegister
         ? `/api/proxy/cash-registers/${editingRegister.id}`
@@ -448,6 +452,23 @@ export default function CashRegistersPage() {
                 {formShowInPos ? 'Si' : 'No (Administración)'}
               </button>
               <span className="text-xs text-slate-500">Apágalo para una caja de administración (proveedores/gastos), oculta del POS</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">Contar en dashboard:</label>
+              <button
+                type="button"
+                onClick={() => setFormIncludeInDashboard(!formIncludeInDashboard)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  formIncludeInDashboard
+                    ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                }`}
+              >
+                {formIncludeInDashboard ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                {formIncludeInDashboard ? 'Si' : 'No'}
+              </button>
+              <span className="text-xs text-slate-500">Apágalo para que esta caja NO cuente en el "Resumen de Caja" del dashboard (ej. caja administración)</span>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

@@ -1211,6 +1211,10 @@ model CashRegister {
   // Caja de administración (pagos de proveedores, gastos, etc.): con showInPos=false NO
   // aparece en el POS; se abre desde /cash y se usa en gastos/recibos de pago.
   showInPos        Boolean           @default(true)
+  // Contar los movimientos de esta caja en el "Resumen de Caja" del dashboard gerencial.
+  // Las cajas de administración (gastos/CxP/caja chica) se marcan false para que la gerencia
+  // vea solo la caja real de mostrador (efectivo/divisas que cobra a clientes).
+  includeInDashboard Boolean         @default(true)
   isActive         Boolean           @default(true)
   serie            Serie?
   sessions         CashSession[]

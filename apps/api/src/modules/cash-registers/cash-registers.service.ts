@@ -95,6 +95,7 @@ export class CashRegistersService {
         name: dto.name,
         isShared: dto.isShared ?? false,
         showInPos: dto.showInPos ?? true,
+        includeInDashboard: dto.includeInDashboard ?? true,
       },
     });
   }
@@ -120,6 +121,7 @@ export class CashRegistersService {
         code: dto.code,
         isShared: dto.isShared,
         showInPos: dto.showInPos,
+        includeInDashboard: dto.includeInDashboard,
       },
     });
   }

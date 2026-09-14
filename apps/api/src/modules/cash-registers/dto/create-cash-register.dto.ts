@@ -20,4 +20,11 @@ export class CreateCashRegisterDto {
   @IsOptional()
   @IsBoolean()
   showInPos?: boolean;
+
+  // Contar esta caja en el "Resumen de Caja" del dashboard gerencial (false para la
+  // caja de administración / caja chica).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  includeInDashboard?: boolean;
 }
