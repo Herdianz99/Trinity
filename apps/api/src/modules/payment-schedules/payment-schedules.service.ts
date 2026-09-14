@@ -291,8 +291,8 @@ export class PaymentSchedulesService {
         },
       });
       if (!payable) throw new NotFoundException('Cuenta por pagar no encontrada');
-      if (payable.status !== 'PENDING' && payable.status !== 'PARTIAL') {
-        throw new BadRequestException('La cuenta por pagar debe estar PENDIENTE o PARCIAL');
+      if (payable.status !== 'PENDING' && payable.status !== 'PARTIAL' && payable.status !== 'OVERDUE') {
+        throw new BadRequestException('La cuenta por pagar debe estar PENDIENTE, PARCIAL o VENCIDA');
       }
 
       supplierName = payable.supplier.name;
@@ -488,9 +488,10 @@ export class PaymentSchedulesService {
     dueBefore?: string;
     search?: string;
   }) {
-    // 1. CxP with status PENDING or PARTIAL
+    // 1. CxP with status PENDING, PARTIAL or OVERDUE (vencidas marcadas por el cron;
+    //    son justo las que mas se quieren programar para pagar).
     const payableWhere: any = {
-      status: { in: ['PENDING', 'PARTIAL'] },
+      status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
     };
     if (filters.supplierId) payableWhere.supplierId = filters.supplierId;
     if (filters.dueBefore) {
