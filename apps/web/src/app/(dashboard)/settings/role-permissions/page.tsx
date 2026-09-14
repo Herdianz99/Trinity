@@ -58,6 +58,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'divisas', label: 'Compra de divisas (finanzas)' },
       { key: 'bancos', label: 'Bancos (libro banco + conciliación)' },
       { key: 'almacen', label: 'Almacén (5S + reporte de daños)' },
+      { key: 'exhibicion', label: 'Exhibición' },
       { key: 'payment-schedules', label: 'Programación de Pagos' },
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
