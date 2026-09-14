@@ -25,7 +25,10 @@ export class QueryPayablesDto {
   to?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  // enableImplicitConversion ya convierte "true"->true (boolean) por el tipo del campo,
+  // asi que hay que aceptar AMBOS: el string "true" y el boolean true. Con solo
+  // `value === 'true'` quedaba siempre false (true === 'true' es false) y el filtro no corria.
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   overdue?: boolean;
 
