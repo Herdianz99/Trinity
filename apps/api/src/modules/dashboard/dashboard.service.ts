@@ -1214,8 +1214,14 @@ export class DashboardService {
     // TODO el flujo de dinero: pagos de ventas, cobros/pagos de recibos, anticipos, gastos,
     // vuelto y movimientos manuales. (Antes se leia CashMovement, que NO incluye los pagos
     // de ventas -> los ingresos salian siempre en 0.) direction IN = ingreso, OUT = egreso.
+    // Solo cajas marcadas para el dashboard: excluye la "caja administración" (gastos/CxP/
+    // caja chica), para que la gerencia vea solo la caja real de mostrador. Opt-out por
+    // CashRegister.includeInDashboard (ver /settings/cash-registers).
     const entries = await this.prisma.cashLedgerEntry.findMany({
-      where: { createdAt: dateRange },
+      where: {
+        createdAt: dateRange,
+        cashSession: { cashRegister: { includeInDashboard: true } },
+      },
       select: {
         direction: true,
         amountUsd: true,
@@ -1226,24 +1232,27 @@ export class DashboardService {
 
     let totalIncomeUsd = 0, totalIncomeBs = 0;
     let totalExpensesUsd = 0, totalExpensesBs = 0;
-    // "Por metodo" agrupa los INGRESOS por metodo de pago (efectivo, Zelle, PdV, Cashea...).
+    // "Por metodo" muestra el NETO por metodo (ingresos − egresos), para reflejar lo que
+    // realmente queda en caja de cada metodo (ej. el vuelto/egresos en dolares reducen el
+    // efectivo real). IN suma, OUT resta.
     const methodMap = new Map<string, { methodName: string; totalUsd: number; totalBs: number }>();
 
     for (const e of entries) {
+      const sign = e.direction === 'IN' ? 1 : -1;
       if (e.direction === 'IN') {
         totalIncomeUsd += e.amountUsd;
         totalIncomeBs += e.amountBs;
-        const name = e.method?.name || 'Otros';
-        const existing = methodMap.get(name);
-        if (existing) {
-          existing.totalUsd += e.amountUsd;
-          existing.totalBs += e.amountBs;
-        } else {
-          methodMap.set(name, { methodName: name, totalUsd: e.amountUsd, totalBs: e.amountBs });
-        }
       } else {
         totalExpensesUsd += e.amountUsd;
         totalExpensesBs += e.amountBs;
+      }
+      const name = e.method?.name || 'Otros';
+      const existing = methodMap.get(name);
+      if (existing) {
+        existing.totalUsd += sign * e.amountUsd;
+        existing.totalBs += sign * e.amountBs;
+      } else {
+        methodMap.set(name, { methodName: name, totalUsd: sign * e.amountUsd, totalBs: sign * e.amountBs });
       }
     }
 
