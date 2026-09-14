@@ -73,6 +73,7 @@ import { DivisasModule } from './modules/divisas/divisas.module';
 import { BancosModule } from './modules/bancos/bancos.module';
 import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
 import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
+import { ExhibitionModule } from './modules/exhibition/exhibition.module';
 
 @Module({
   imports: [
@@ -150,6 +151,7 @@ import { DamageReportsModule } from './modules/damage-reports/damage-reports.mod
     BancosModule,
     Audit5SModule,
     DamageReportsModule,
+    ExhibitionModule,
   ],
 })
 export class AppModule {}
