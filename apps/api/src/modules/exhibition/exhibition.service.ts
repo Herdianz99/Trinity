@@ -28,6 +28,7 @@ export class ExhibitionService {
       where.OR = [
         { code: { contains: query.search, mode: 'insensitive' } },
         { name: { contains: query.search, mode: 'insensitive' } },
+        { supplierRef: { contains: query.search, mode: 'insensitive' } },
         { barcode: { contains: query.search, mode: 'insensitive' } },
       ];
     }

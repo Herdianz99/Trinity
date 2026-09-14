@@ -41,7 +41,6 @@ export default function ExhibitionPage() {
   const [rows, setRows] = useState<Prod[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
   const [exhibitedFilter, setExhibitedFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -155,15 +154,15 @@ export default function ExhibitionPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
-        <form onSubmit={(e) => { e.preventDefault(); setPage(1); setSearch(searchInput); }} className="w-full sm:flex-1 sm:min-w-[220px] relative order-1">
+        <div className="w-full sm:flex-1 sm:min-w-[220px] relative order-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Buscar por código, nombre o barras…"
+            value={search}
+            onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+            placeholder="Buscar por nombre, código, barras o ref. proveedor…"
             className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200"
           />
-        </form>
+        </div>
         <button
           type="button"
           onClick={() => setShowScanner(true)}
@@ -307,7 +306,7 @@ export default function ExhibitionPage() {
       {/* Escáner */}
       {showScanner && (
         <BarcodeScanner
-          onScan={(code) => { setPage(1); setSearchInput(code); setSearch(code); setShowScanner(false); }}
+          onScan={(code) => { setPage(1); setSearch(code); setShowScanner(false); }}
           onClose={() => setShowScanner(false)}
         />
       )}
