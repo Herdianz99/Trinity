@@ -64,8 +64,10 @@ export default function ExhibitionPage() {
 
   useEffect(() => { document.title = 'Exhibición | Trinity ERP'; }, []);
 
-  const fetchRows = useCallback(async () => {
-    setLoading(true);
+  // silent=true recarga sin mostrar el spinner (evita que la lista colapse y el
+  // scroll salte al exhibir/retirar). La vista se actualiza en su lugar.
+  const fetchRows = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set('limit', String(LIMIT));
@@ -81,7 +83,7 @@ export default function ExhibitionPage() {
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar artículos' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, exhibitedFilter, page]);
 
@@ -103,7 +105,7 @@ export default function ExhibitionPage() {
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
       setMessage({ type: 'success', text: 'Artículo puesto en exhibición' });
       setPlaceTarget(null); setPlaceLocation('');
-      await fetchRows();
+      await fetchRows(true);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
@@ -121,7 +123,7 @@ export default function ExhibitionPage() {
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
       setMessage({ type: 'success', text: 'Artículo retirado de exhibición' });
       setRemoveTarget(null); setRemoveReason('OTHER'); setRemoveNote('');
-      await fetchRows();
+      await fetchRows(true);
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
