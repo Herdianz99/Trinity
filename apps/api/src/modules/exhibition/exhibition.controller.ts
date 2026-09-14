@@ -68,7 +68,7 @@ export class ExhibitionController {
   @Get('activity/pdf')
   async pdf(@Query() query: QueryActivityDto, @Res() res: Response) {
     const rows = await this.service.activity(query);
-    const buffer = await this.report.buildPdf(rows as any);
+    const buffer = await this.report.buildPdf(rows as any, query);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="exhibicion.pdf"',
