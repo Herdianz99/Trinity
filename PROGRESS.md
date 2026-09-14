@@ -19,6 +19,14 @@
 
 ## 🗓️ 2026-09-14 — Métodos de pago "F" en PROD grande + fix programación de pagos (OVERDUE)
 
+> ### 🆕 Módulo de Exhibición (nuevo) — **SIN DESPLEGAR**
+> Módulo independiente para controlar qué artículos están exhibidos y cuáles no, con bitácora y reporte por rango de fechas. Spec: `docs/superpowers/specs/2026-09-14-modulo-exhibicion-design.md`; plan: `docs/superpowers/plans/2026-09-14-modulo-exhibicion.md`.
+> - **Datos:** estado en `Product` (`isExhibited`, `exhibitedSince`, `exhibitionLocation`) + tabla append-only `ExhibitionEntry` (action PLACED/REMOVED, reason, location, note, createdBy). Migración `20260914170000_modulo_exhibicion` **aditiva e idempotente**. NO toca stock/ventas.
+> - **API** `apps/api/src/modules/exhibition` (patrón damage-reports, `@RequireModule('exhibicion')`): `GET products` (con filtros + estado + días en vitrina), `POST place`, `POST remove` (con motivo), `GET activity` (reporte por rango, helpers Caracas), `GET summary` (KPIs), `GET products/:id/history`, `GET activity/pdf` y `/xlsx`.
+> - **Web** `/exhibition` (control: buscar + escaneo de barras reusando `BarcodeScanner`, filtros, poner/retirar con modales, historial por artículo) y `/exhibition/reporte` (rango hoy/semana/mes/personalizado, KPIs, tabla de toda la actividad, export PDF/Excel).
+> - **Permiso** `exhibicion` (VALID_MODULES + defaults ADMIN/SUPERVISOR/WAREHOUSE + checkbox en Permisos por rol + sección en el sidebar).
+> - **Verificado en local:** typecheck API+Web 0; e2e backend OK (place/summary/activity/remove/history). Extras incluidos: export PDF/Excel, KPIs + tiempo en vitrina, motivo al retirar. NO incluye foto (diferido). Migración inofensiva; el módulo queda invisible hasta asignar el permiso.
+
 **1) Chequeo de despliegue:** las 6 empresas (eltrebol/ferre, inversiones, total, totalturen, aceros, acerosmayor) verificadas en HEAD `00ae7086` = `origin/main`. Todo al día.
 
 **2) Grupos "F" de métodos de pago replicados en PROD grande** (inversiones, `trinity_db`) — solo datos, sin código. Se hizo en local en la Ses.126 (ver memoria `grupos-f-metodos-pago-grande`) y hoy se pasó a prod en pasos:
