@@ -377,6 +377,7 @@ model User {
   audits5s            Audit5S[]           @relation("Audit5SCreator")
   damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
   damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
+  exhibitionEntries   ExhibitionEntry[]
   disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -567,6 +568,9 @@ model Product {
   isOnSale         Boolean                  @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
   showInStore      Boolean                  @default(false)
   storeFeatured    Boolean                  @default(false)
+  isExhibited        Boolean                @default(false)
+  exhibitedSince     DateTime?
+  exhibitionLocation String?
   searchVector     Unsupported("tsvector")?
   stock            Stock[]
   movements        StockMovement[]
@@ -577,6 +581,7 @@ model Product {
   replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
   damageReportItems   DamageReportItem[]
+  exhibitionEntries   ExhibitionEntry[]
   lostSales        LostSale[]
   supplierOrderItems  SupplierOrderItem[]
   images                ProductImage[]
@@ -2782,4 +2787,37 @@ model BankMovement {
   @@index([bankAccountId, date])
   @@index([sourceType, sourceId])
   @@index([bankAccountId, reconciled])
+}
+
+// ============================================
+// EXHIBICION (control de articulos exhibidos)
+// ============================================
+
+enum ExhibitionAction {
+  PLACED
+  REMOVED
+}
+
+enum ExhibitionReason {
+  SOLD
+  DAMAGED
+  ROTATION
+  OTHER
+}
+
+model ExhibitionEntry {
+  id          String            @id @default(cuid())
+  productId   String
+  product     Product           @relation(fields: [productId], references: [id])
+  action      ExhibitionAction
+  location    String?
+  reason      ExhibitionReason?
+  note        String?
+  createdAt   DateTime          @default(now())
+  createdById String
+  createdBy   User              @relation(fields: [createdById], references: [id])
+
+  @@index([createdAt])
+  @@index([productId])
+  @@index([action])
 }
