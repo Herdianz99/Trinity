@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { productSearchTsQuery } from '../../common/product-search';
 import { PlaceItemDto } from './dto/place-item.dto';
 import { RemoveItemDto } from './dto/remove-item.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
@@ -24,13 +25,26 @@ export class ExhibitionService {
     if (query.location) {
       where.exhibitionLocation = { contains: query.location, mode: 'insensitive' };
     }
-    if (query.search) {
-      where.OR = [
-        { code: { contains: query.search, mode: 'insensitive' } },
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { supplierRef: { contains: query.search, mode: 'insensitive' } },
-        { barcode: { contains: query.search, mode: 'insensitive' } },
-      ];
+
+    // Full-text search igual que /catalog/products: to_tsquery exige TODAS las palabras
+    // en cualquier orden (prefijo palabra:*), con ILIKE de respaldo para codigos/refs.
+    const search = query.search?.trim();
+    if (search) {
+      const tsq = productSearchTsQuery(search);
+      const like = `%${search}%`;
+      const searchResults = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Product"
+        WHERE "searchVector" @@ to_tsquery('spanish', ${tsq})
+        OR code ILIKE ${like}
+        OR barcode ILIKE ${like}
+        OR "supplierRef" ILIKE ${like}
+        OR "otherCode" ILIKE ${like}
+      `;
+      const ids = searchResults.map((r) => r.id);
+      if (ids.length === 0) {
+        return { data: [], total: 0, page, limit, totalPages: 0 };
+      }
+      where.id = { in: ids };
     }
 
     const [rows, total] = await Promise.all([
