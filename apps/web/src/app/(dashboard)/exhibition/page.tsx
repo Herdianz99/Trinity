@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Store, Search, Plus, X, Loader2, History, Camera } from 'lucide-react';
+import { Store, Search, Plus, X, Loader2, History, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 
 interface Prod {
@@ -43,6 +43,10 @@ export default function ExhibitionPage() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [exhibitedFilter, setExhibitedFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 50;
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
@@ -65,19 +69,22 @@ export default function ExhibitionPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set('limit', '50');
+      params.set('limit', String(LIMIT));
+      params.set('page', String(page));
       if (search) params.set('search', search);
       if (exhibitedFilter === 'yes') params.set('exhibited', 'true');
       if (exhibitedFilter === 'no') params.set('exhibited', 'false');
       const res = await fetch(`/api/proxy/exhibition/products?${params}`);
       const data = await res.json();
       setRows(data.data || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar artículos' });
     } finally {
       setLoading(false);
     }
-  }, [search, exhibitedFilter]);
+  }, [search, exhibitedFilter, page]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -138,13 +145,17 @@ export default function ExhibitionPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">Exhibición</h1>
-          <p className="text-sm text-slate-400">Control de artículos en exhibición</p>
+          <p className="text-sm text-slate-400">
+            {total.toLocaleString('es-VE')}{' '}
+            {exhibitedFilter === 'yes' ? 'exhibidos' : exhibitedFilter === 'no' ? 'no exhibidos' : 'artículos'}
+            {search ? ' (filtrado)' : ''}
+          </p>
         </div>
       </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
-        <form onSubmit={(e) => { e.preventDefault(); setSearch(searchInput); }} className="w-full sm:flex-1 sm:min-w-[220px] relative order-1">
+        <form onSubmit={(e) => { e.preventDefault(); setPage(1); setSearch(searchInput); }} className="w-full sm:flex-1 sm:min-w-[220px] relative order-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={searchInput}
@@ -163,7 +174,7 @@ export default function ExhibitionPage() {
         </button>
         <select
           value={exhibitedFilter}
-          onChange={(e) => setExhibitedFilter(e.target.value as any)}
+          onChange={(e) => { setPage(1); setExhibitedFilter(e.target.value as any); }}
           className="order-3 flex-1 sm:flex-none bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
         >
           <option value="all">Todos</option>
@@ -268,10 +279,35 @@ export default function ExhibitionPage() {
         </>
       )}
 
+      {/* Paginación */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-sm text-slate-400">
+            Página {page} de {totalPages} ({total.toLocaleString('es-VE')})
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Escáner */}
       {showScanner && (
         <BarcodeScanner
-          onScan={(code) => { setSearchInput(code); setSearch(code); setShowScanner(false); }}
+          onScan={(code) => { setPage(1); setSearchInput(code); setSearch(code); setShowScanner(false); }}
           onClose={() => setShowScanner(false)}
         />
       )}
