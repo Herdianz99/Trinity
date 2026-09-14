@@ -292,8 +292,10 @@ export default function PaymentScheduleDetailPage() {
         throw new Error(err.message || 'Error al agregar');
       }
       setMessage({ type: 'success', text: 'Documento agregado' });
+      // Solo recargamos la programacion: el documento agregado se quita solo de la
+      // lista de disponibles via el filtro cliente (filteredPending). NO refrescamos
+      // pending-payables para evitar el spinner que colapsa la lista y salta el scroll.
       await fetchSchedule();
-      await fetchPendingPayables();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -552,8 +554,12 @@ export default function PaymentScheduleDetailPage() {
         </div>
       </div>
 
+      {/* Documentos + panel: envueltos en flex-col; el panel "Agregar documentos" va
+          ARRIBA (order-1) para que al agregar, la lista crezca por debajo y la vista
+          no salte. Reordena visualmente sin mover el DOM. */}
+      <div className="flex flex-col gap-4">
       {/* Documents grouped by supplier */}
-      <div className="mb-4">
+      <div className="mb-4 order-2">
         <h2 className="text-sm font-semibold text-slate-300 mb-3">Documentos por proveedor</h2>
 
         {schedule.groupedBySupplier.length === 0 ? (
@@ -727,9 +733,9 @@ export default function PaymentScheduleDetailPage() {
         )}
       </div>
 
-      {/* Add Documents Panel */}
+      {/* Add Documents Panel (order-1: se muestra ARRIBA de la lista de documentos) */}
       {canEdit && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden order-1">
           <button
             onClick={() => setShowAddPanel(!showAddPanel)}
             className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/50 transition-colors"
@@ -863,6 +869,7 @@ export default function PaymentScheduleDetailPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
