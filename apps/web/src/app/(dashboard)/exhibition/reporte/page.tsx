@@ -88,21 +88,21 @@ export default function ExhibitionReportPage() {
       </div>
 
       {/* Rango */}
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div className="flex gap-1">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:flex gap-1.5">
           {[['today', 'Hoy'], ['week', 'Semana'], ['month', 'Mes'], ['custom', 'Personalizado']].map(([k, l]) => (
             <button key={k} onClick={() => applyPreset(k)} className={`px-3 py-2 rounded-lg text-sm ${preset === k ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400'}`}>{l}</button>
           ))}
         </div>
         {preset === 'custom' && (
-          <>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
-          </>
+          <div className="grid grid-cols-2 sm:flex gap-2">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
+          </div>
         )}
-        <div className="ml-auto flex gap-2">
-          <a href={exportUrl('pdf')} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm"><FileText size={16} /> PDF</a>
-          <a href={exportUrl('xlsx')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm"><Download size={16} /> Excel</a>
+        <div className="grid grid-cols-2 sm:flex gap-2 sm:ml-auto">
+          <a href={exportUrl('pdf')} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm"><FileText size={16} /> PDF</a>
+          <a href={exportUrl('xlsx')} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm"><Download size={16} /> Excel</a>
         </div>
       </div>
 
@@ -123,34 +123,62 @@ export default function ExhibitionReportPage() {
         ) : entries.length === 0 ? (
           <div className="p-10 text-center text-slate-500">Sin actividad en el rango</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-800">
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3">Código</th>
-                <th className="px-4 py-3">Artículo</th>
-                <th className="px-4 py-3">Acción</th>
-                <th className="px-4 py-3">Ubicación</th>
-                <th className="px-4 py-3">Motivo</th>
-                <th className="px-4 py-3">Usuario</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Móvil: tarjetas */}
+            <div className="md:hidden divide-y divide-slate-800/50">
               {entries.map((e) => (
-                <tr key={e.id} className="border-b border-slate-800/50">
-                  <td className="px-4 py-2.5 text-slate-400">{new Date(e.createdAt).toLocaleString('es-VE')}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-300">{e.product?.code}</td>
-                  <td className="px-4 py-2.5 text-slate-200">{e.product?.name}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={e.action === 'PLACED' ? 'text-green-400' : 'text-red-400'}>{ACTION_LABEL[e.action]}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-400">{e.location || '—'}</td>
-                  <td className="px-4 py-2.5 text-slate-400">{e.reason ? REASON_LABEL[e.reason] : '—'}</td>
-                  <td className="px-4 py-2.5 text-slate-400">{e.createdBy?.name || '—'}</td>
-                </tr>
+                <div key={e.id} className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-slate-200 font-medium truncate">{e.product?.name || '—'}</div>
+                      <div className="text-xs font-mono text-slate-500">{e.product?.code || '—'}</div>
+                    </div>
+                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border ${e.action === 'PLACED' ? 'bg-green-500/15 text-green-400 border-green-500/25' : 'bg-red-500/15 text-red-400 border-red-500/25'}`}>
+                      {ACTION_LABEL[e.action]}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-400">
+                    <span className="col-span-2">{new Date(e.createdAt).toLocaleString('es-VE')}</span>
+                    <span><span className="text-slate-500">Ubic:</span> {e.location || '—'}</span>
+                    <span><span className="text-slate-500">Motivo:</span> {e.reason ? REASON_LABEL[e.reason] : '—'}</span>
+                    <span className="col-span-2"><span className="text-slate-500">Usuario:</span> {e.createdBy?.name || '—'}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Desktop: tabla (con scroll horizontal de seguridad) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-400 border-b border-slate-800">
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Código</th>
+                    <th className="px-4 py-3">Artículo</th>
+                    <th className="px-4 py-3">Acción</th>
+                    <th className="px-4 py-3">Ubicación</th>
+                    <th className="px-4 py-3">Motivo</th>
+                    <th className="px-4 py-3">Usuario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((e) => (
+                    <tr key={e.id} className="border-b border-slate-800/50">
+                      <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">{new Date(e.createdAt).toLocaleString('es-VE')}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-slate-300">{e.product?.code}</td>
+                      <td className="px-4 py-2.5 text-slate-200">{e.product?.name}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={e.action === 'PLACED' ? 'text-green-400' : 'text-red-400'}>{ACTION_LABEL[e.action]}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-400">{e.location || '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{e.reason ? REASON_LABEL[e.reason] : '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{e.createdBy?.name || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
