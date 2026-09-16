@@ -1068,10 +1068,13 @@ export class ReceiptsService {
       };
 
       if (query.search) {
-        // Busca por N° de orden, N° de documento o descripcion (para CxP de gasto,
-        // que no tienen orden de compra pero si descripcion "Gasto: ...").
+        // Busca por N° de orden, N° de factura del proveedor, N° de documento o descripcion
+        // (para CxP de gasto, que no tienen orden de compra pero si descripcion "Gasto: ...").
+        // El supplierInvoiceNumber es el N° que ve el usuario en la lista (ej. "419433"),
+        // por eso DEBE ser buscable aunque el CxP no tenga documentNumber propio.
         where.OR = [
           { purchaseOrder: { number: { contains: query.search, mode: 'insensitive' } } },
+          { purchaseOrder: { supplierInvoiceNumber: { contains: query.search, mode: 'insensitive' } } },
           { documentNumber: { contains: query.search, mode: 'insensitive' } },
           { description: { contains: query.search, mode: 'insensitive' } },
         ];
