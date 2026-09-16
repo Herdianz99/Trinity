@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, ScanLine, Check, AlertTriangle, X, Camera, Search, ArrowLeft } from 'lucide-react';
+import { BarcodeScanner } from '@/components/barcode-scanner';
 
 type Line = {
   dispatchItemId: string;
@@ -75,6 +76,7 @@ export default function DispatchScanPage() {
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
+  const [showInvoiceScanner, setShowInvoiceScanner] = useState(false); // cámara para escanear el N° de factura de la comanda
   const [recent, setRecent] = useState<any[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
 
@@ -383,17 +385,27 @@ export default function DispatchScanPage() {
       {!resolved && (
         <div>
         <div className="relative">
-          <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3">
-            <Search size={18} className="text-slate-500 shrink-0" />
-            <input
-              autoFocus
-              value={invoiceInput}
-              onChange={(e) => setInvoiceInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') resolveInvoice(invoiceInput); }}
-              placeholder="Factura, cliente o cédula/RIF…"
-              className="flex-1 bg-transparent py-3 text-base text-slate-100 outline-none"
-            />
-            {(searchingInv || loading) && <Loader2 className="animate-spin text-slate-500 shrink-0" size={16} />}
+          <div className="flex gap-2">
+            <div className="flex-1 min-w-0 flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3">
+              <Search size={18} className="text-slate-500 shrink-0" />
+              <input
+                autoFocus
+                value={invoiceInput}
+                onChange={(e) => setInvoiceInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') resolveInvoice(invoiceInput); }}
+                placeholder="Factura, cliente o cédula/RIF…"
+                className="flex-1 min-w-0 bg-transparent py-3 text-base text-slate-100 outline-none"
+              />
+              {(searchingInv || loading) && <Loader2 className="animate-spin text-slate-500 shrink-0" size={16} />}
+            </div>
+            {/* Escanear el código de barras de la factura (de la comanda) con la cámara */}
+            <button
+              onClick={() => setShowInvoiceScanner(true)}
+              title="Escanear la factura con la cámara"
+              className="shrink-0 px-4 rounded-lg border bg-indigo-500/20 border-indigo-500/30 text-indigo-300 flex items-center gap-2 font-medium"
+            >
+              <Camera size={20} /><span className="hidden sm:inline">Escanear</span>
+            </button>
           </div>
 
           {invoiceResults.length > 0 && (
@@ -556,6 +568,14 @@ export default function DispatchScanPage() {
           </>
           )}
         </div>
+      )}
+
+      {/* Escáner de cámara para el N° de factura (paso inicial). Reusa el componente del catálogo. */}
+      {showInvoiceScanner && (
+        <BarcodeScanner
+          onScan={(code) => { setShowInvoiceScanner(false); setInvoiceInput(code); resolveInvoice(code); }}
+          onClose={() => setShowInvoiceScanner(false)}
+        />
       )}
 
       {/* Modal de ERROR (grande, rojo) */}

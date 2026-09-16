@@ -45,6 +45,16 @@ export default function PrintMonitor() {
   const processedIds = useRef<Set<string>>(new Set());
   const isPrinting = useRef(false);
   const printAreaId = useRef<string | null>(null);
+  // Solo la empresa con "Despacho verificado por escaneo" imprime el código de barras de la
+  // factura en la comanda (para que el despachador la abra escaneándola). Las demás: sin cambios.
+  const scanDispatchOn = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/proxy/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { scanDispatchOn.current = !!d?.useScanDispatch; })
+      .catch(() => {});
+  }, []);
 
   // Reserva atomica de la comanda en el backend. Solo la pestana/PC que gana
   // la reserva (claimed === true) imprime; las demas la saltan. Evita duplicados
@@ -127,6 +137,11 @@ export default function PrintMonitor() {
       if (affectedInvoice) lines.push(`Factura afectada: ${affectedInvoice}`);
     } else {
       lines.push(`{{BOLD}}Factura: ${docNumber}{{/BOLD}}`);
+      // Código de barras del N° de factura (CODE128) para abrir la comanda escaneándola en
+      // /dispatch/scan. Solo si la empresa usa el escaneo y hay un número real.
+      if (scanDispatchOn.current && docNumber && docNumber !== 'S/N') {
+        lines.push(`{{CENTER}}{{BARCODE:${docNumber}}}{{/CENTER}}`);
+      }
     }
     lines.push(`${dateStr} ${timeStr}`);
     lines.push(`{{BOLD}}Cliente:{{/BOLD}} ${customerName}`);

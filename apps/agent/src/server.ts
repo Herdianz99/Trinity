@@ -44,7 +44,7 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    version: '1.1.5',
+    version: '1.1.6',
     thermalEnabled: config.thermalEnabled,
     printerName: config.thermalPrinterName,
   });
@@ -80,7 +80,7 @@ app.post('/print-ticket', async (req, res) => {
 // Iniciar servidor
 app.listen(config.port, () => {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║       TRINITY AGENT v1.1.4              ║');
+  console.log('║       TRINITY AGENT v1.1.6              ║');
   console.log('╠══════════════════════════════════════════╣');
   console.log(`║  Puerto: ${config.port}                          ║`);
   console.log(`║  Impresora: ${config.thermalEnabled ? 'ACTIVA' : 'DESACTIVADA'}                  ║`);

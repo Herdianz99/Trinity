@@ -35,10 +35,37 @@ const SIZE_DOUBLE_H = [GS, 0x21, 0x01]; // TALL: double height only
 const PARTIAL_CUT = [GS, 0x56, 0x01]; // GS V 1 — partial cut
 const OPEN_DRAWER = [ESC, 0x70, 0x00, 0x19, 0x78]; // ESC p 0 25 120
 
-const TAG_RE = /\{\{(\/?[A-Z_]+(?::[0-9]+)?)\}\}/g;
+// El valor tras ':' admite alfanumerico + guiones (para BARCODE con N° de factura tipo
+// "NE1-26-00002510"), no solo digitos como FEED:3.
+const TAG_RE = /\{\{(\/?[A-Z_]+(?::[^}]+)?)\}\}/g;
 
 function feedLines(n: number): number[] {
   return [ESC, 0x64, n]; // ESC d n — feed n lines
+}
+
+// GS k CODE128 — imprime el N° de factura como codigo de barras escaneable en la comanda.
+// Se usa la forma "GS k 73 n d1..dn" (m=73 = CODE128) con prefijo de code set {B (0x7B 0x42),
+// que cubre ASCII imprimible: digitos, letras y guiones. La alineacion (ESC a) la fija el
+// tag {{CENTER}} que envuelve al barcode.
+function barcode128(data: string): number[] {
+  const clean = (data || '').trim();
+  if (!clean) return [];
+  const HEIGHT = 60; // GS h n — alto en puntos
+  const MODULE = 2; // GS w n — ancho de modulo (2 = fino, cabe ~24 chars en 80mm)
+  const HRI_BELOW = 2; // GS H n — numero legible DEBAJO del barcode
+  const HRI_FONT = 0; // GS f n — font A para el numero legible
+  // {B = code set B; luego los bytes ASCII del texto (se recorta a 7 bits por seguridad).
+  const payload = [0x7b, 0x42, ...Array.from(clean, (c) => c.charCodeAt(0) & 0x7f)];
+  const n = Math.min(payload.length, 255);
+  return [
+    GS, 0x68, HEIGHT, // GS h
+    GS, 0x77, MODULE, // GS w
+    GS, 0x48, HRI_BELOW, // GS H
+    GS, 0x66, HRI_FONT, // GS f
+    GS, 0x6b, 0x49, n, // GS k 73 n
+    ...payload.slice(0, n),
+    0x0a, // avance de linea tras el barcode
+  ];
 }
 
 function dashLine(width: number): string {
@@ -105,6 +132,10 @@ export function parseMarkupToEscPos(content: string, lineWidth = 48): Buffer {
     } else if (tag.startsWith('FEED:')) {
       const n = parseInt(tag.split(':')[1], 10) || 1;
       chunks.push(Buffer.from(feedLines(n)));
+    } else if (tag.startsWith('BARCODE:')) {
+      const data = tag.slice('BARCODE:'.length);
+      const bytes = barcode128(data);
+      if (bytes.length > 0) chunks.push(Buffer.from(bytes));
     }
     // Unknown tags are silently ignored
 
