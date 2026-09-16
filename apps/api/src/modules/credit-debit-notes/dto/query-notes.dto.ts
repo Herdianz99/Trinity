@@ -17,7 +17,7 @@ export class QueryNotesDto {
 
   // Motivo de la devolución de ventas (solo NCV)
   @IsOptional()
-  @IsIn(['ASESORIA', 'CLIENTE', 'FALTANTE_ALMACEN', 'PRODUCTO_DEFECTUOSO'])
+  @IsIn(['ASESORIA', 'CLIENTE', 'FALTANTE_ALMACEN', 'PRODUCTO_DEFECTUOSO', 'CAMBIO_NOTA_A_FISCAL'])
   motivo?: string;
 
   @IsOptional()

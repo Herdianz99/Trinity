@@ -95,6 +95,7 @@ const MOTIVO_LABELS: Record<string, string> = {
   CLIENTE: 'Cliente',
   FALTANTE_ALMACEN: 'Faltante en almacén',
   PRODUCTO_DEFECTUOSO: 'Producto defectuoso',
+  CAMBIO_NOTA_A_FISCAL: 'Cambio de nota a fiscal',
 };
 
 const IVA_LABELS: Record<string, string> = {

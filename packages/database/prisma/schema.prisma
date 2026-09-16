@@ -69,6 +69,7 @@ enum SalesReturnReason {
   CLIENTE
   FALTANTE_ALMACEN
   PRODUCTO_DEFECTUOSO
+  CAMBIO_NOTA_A_FISCAL
 }
 
 enum TransferStatus {

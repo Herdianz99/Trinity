@@ -191,14 +191,14 @@ export class RetentionVouchersPdfService {
       let ay = boxTop + 15;
       ay = labelValue(doc, 'Nombre: ', config?.companyName || '', col1X + 5, ay, bw);
       ay = labelValue(doc, 'RIF: ', config?.rif || '', col1X + 5, ay, bw);
-      ay = labelValue(doc, 'Dirección: ', (config?.address || '').substring(0, 60), col1X + 5, ay, bw);
+      ay = labelValue(doc, 'Dirección: ', config?.address || '', col1X + 5, ay, bw);
       if (config?.phone) ay = labelValue(doc, 'Teléfono: ', config.phone, col1X + 5, ay, bw);
 
       // Sujeto retenido (supplier) — columna derecha
       let sy = boxTop + 15;
       sy = labelValue(doc, 'Nombre: ', voucher.supplier.name, col2X + 5, sy, bw);
       sy = labelValue(doc, 'RIF: ', voucher.supplier.rif || '', col2X + 5, sy, bw);
-      if (voucher.supplier.address) sy = labelValue(doc, 'Dirección: ', voucher.supplier.address.substring(0, 60), col2X + 5, sy, bw);
+      if (voucher.supplier.address) sy = labelValue(doc, 'Dirección: ', voucher.supplier.address, col2X + 5, sy, bw);
       if (voucher.supplier.phone) sy = labelValue(doc, 'Teléfono: ', voucher.supplier.phone, col2X + 5, sy, bw);
 
       // Recuadros dibujados AL FINAL con la altura del más alto (para que ninguno corte texto).

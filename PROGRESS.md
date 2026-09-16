@@ -64,6 +64,14 @@
 > - **`dashboard.service.getCashSummary`:** ahora filtra a `cashSession.cashRegister.includeInDashboard = true` y **"Por método" pasa a NETO (IN − OUT)**; métodos con neto negativo se muestran en rojo en el frontend.
 > - **Verificado (read-only en prod grande):** con la nueva lógica DOLAR = **$2.511,00** exacto (vs −$2.819 contando todas las cajas). Solo el "Resumen de Caja" (y su gráfico Ingresos vs Egresos) lee `CashLedgerEntry`; ningún otro KPI de caja se afecta. ✅ **DESPLEGADO** (menos el toggle de la pág. de detalle, ver banner arriba).
 
+## 🗓️ Sesión 127 (2026-09-16) — Motivo "Cambio de nota a fiscal" en devoluciones + Bs en Resumen de Caja + dirección completa en comprobante de retención IVA
+
+> ### ⚠️ SIN DESPLEGAR — arranca INOFENSIVO. Incluye **1 migración aditiva** (`20260916120000_return_reason_cambio_fiscal`, `ALTER TYPE ... ADD VALUE IF NOT EXISTS`), respaldada también en `deploy/fix-schema.sql`. Cambios pequeños y localizados. El deploy estándar (`git pull && bash deploy.sh`) corre `migrate deploy` + `prisma generate` + `fix-schema.sql`, así que el nuevo valor del enum queda cubierto.
+
+- **Nuevo motivo de devolución de ventas (NCV): "Cambio de nota a fiscal"** (`CAMBIO_NOTA_A_FISCAL`). Agregado al enum `SalesReturnReason` (schema + migración + fix-schema), a la validación `IsIn` del query DTO, y a las etiquetas en el formulario nuevo, el filtro del listado, el detalle y el PDF del comprobante. Cliente Prisma regenerado (para `@IsEnum` del DTO create-note).
+- **Resumen de Caja (dashboard gerencial): montos en Bs en "Por método".** Los totales (Ingresos/Egresos/Neto) ya mostraban Bs; faltaba el desglose por método, que solo mostraba USD. Se agregó la línea en Bs bajo cada método (el backend ya enviaba `totalBs` en `byMethod`).
+- **Comprobante de retención de IVA en compras: dirección completa.** En `retention-vouchers-pdf.service.ts` la dirección del agente de retención y del proveedor se truncaba a 60 caracteres (`.substring(0, 60)`). Se quitó el truncado: el helper `labelValue` ya ajusta el texto en varias líneas y la caja crece con la altura del más alto.
+
 ## 🗓️ Sesión 126 (2026-09-11) — Módulo de Bancos + Programación de pagos (descuentos/observación/Nro. doc) + filtro "Clientes reales" + fix nota de crédito + correcciones de datos en total
 
 > ### ⚠️ SIN DESPLEGAR — arranca INOFENSIVO. El módulo de bancos está gateado por `CompanyConfig.bancosEnabled` (default **false** en las 6 empresas): con el flag apagado el menú no aparece, las rutas requieren el permiso de rol `'bancos'`, y **los enganches automáticos no hacen nada**. Migración **idempotente** (`20260911150000_bancos_module`, `IF NOT EXISTS`) y aditiva. Typecheck API+Web limpio. Falta prueba end-to-end en la UI (cobrar por transferencia y ver el movimiento) y el deploy. Spec: `docs/superpowers/specs/2026-09-11-modulo-bancos-design.md`; plan: `docs/superpowers/plans/2026-09-11-modulo-bancos.md`.

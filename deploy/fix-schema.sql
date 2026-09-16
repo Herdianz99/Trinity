@@ -2870,3 +2870,6 @@ ALTER TABLE "InventoryCount" ADD COLUMN IF NOT EXISTS "observations" TEXT;
 
 -- Permiso de clave dinamica: activar/bloquear producto para la venta (Session 124)
 ALTER TYPE "DynamicKeyPerm" ADD VALUE IF NOT EXISTS 'TOGGLE_PRODUCT_SALE';
+
+-- Motivo de devolucion de ventas: cambio de nota a fiscal (Session 127)
+ALTER TYPE "SalesReturnReason" ADD VALUE IF NOT EXISTS 'CAMBIO_NOTA_A_FISCAL';

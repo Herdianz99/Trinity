@@ -795,7 +795,10 @@ export default function DashboardGerencialClient() {
                   {data.cashSummary.byMethod.map((m) => (
                     <div key={m.methodName} className="flex items-center justify-between py-1 border-b border-slate-700/30 last:border-0">
                       <span className="text-xs text-slate-400">{m.methodName}</span>
-                      <span className={`text-xs font-mono tabular-nums ${m.totalUsd < 0 ? 'text-red-400' : 'text-white'}`}>${fmt(m.totalUsd)}</span>
+                      <span className="text-right">
+                        <span className={`block text-xs font-mono tabular-nums ${m.totalUsd < 0 ? 'text-red-400' : 'text-white'}`}>${fmt(m.totalUsd)}</span>
+                        <span className="block text-[10px] font-mono text-slate-500 tabular-nums">Bs {fmt(m.totalBs)}</span>
+                      </span>
                     </div>
                   ))}
                 </div>
