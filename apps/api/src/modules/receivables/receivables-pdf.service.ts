@@ -47,6 +47,13 @@ export class ReceivablesPdfService {
     return new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' });
   }
 
+  // Para timestamps reales (ej. createdAt): formatear en Caracas para no correr el dia
+  // en operaciones de la noche (8 PM Caracas = medianoche UTC del dia siguiente).
+  private timestampDate(d: Date | string | null | undefined): string {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
+  }
+
   private drawHeaderRow(doc: any, y: number): number {
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#334155');
     for (const c of COLS) {
@@ -257,7 +264,14 @@ export class ReceivablesPdfService {
         'Monto USD': Math.round((r.amountUsd || 0) * 100) / 100,
         'Cobrado USD': Math.round((r.paidAmountUsd || 0) * 100) / 100,
         'Saldo USD': Math.round((r.balanceUsd || 0) * 100) / 100,
-        'Emisión': this.dueDate(r.originalDate || r.receptionDate),
+        // Fecha de emisión: originalDate/receptionDate solo se llenan en ciertos flujos;
+        // para las CxC derivadas de factura (CUSTOMER_CREDIT/FINANCING_PLATFORM) están vacías,
+        // así que cae a la fecha de la factura (createdAt) y por último a la del propio CxC.
+        // Ojo timezone: originalDate/receptionDate son date-only (medianoche UTC) → formatear UTC;
+        // createdAt es timestamp real → formatear en Caracas para no correr el día de la noche.
+        'Emisión': (r.originalDate || r.receptionDate)
+          ? this.dueDate(r.originalDate || r.receptionDate)
+          : this.timestampDate(r.invoice?.createdAt || r.createdAt),
         'Vence': this.dueDate(r.dueDate),
         'Estado': STATUS_LABELS[r.status] || r.status,
       };

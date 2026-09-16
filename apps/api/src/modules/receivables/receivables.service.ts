@@ -364,7 +364,7 @@ export class ReceivablesService {
         customer: { select: { id: true, name: true, documentType: true, rif: true, isGroupCompany: true } },
         invoice: {
           select: {
-            id: true, number: true,
+            id: true, number: true, createdAt: true,
             customer: { select: { id: true, name: true, documentType: true, rif: true } },
             seller: { select: { id: true, code: true, name: true } },
           },
