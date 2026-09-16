@@ -162,6 +162,9 @@ const menuSections: MenuSection[] = [
       { label: 'Por despachar', href: '/dispatch', icon: <Truck size={18} />, permission: 'inventory-consult' },
       { label: 'Movimientos', href: '/inventory/movements', icon: <Activity size={18} /> },
       { label: 'Etiquetas', href: '/inventory/etiquetas', icon: <Tags size={18} />, permission: 'inventory-consult' },
+      // Sesiones de catálogo accesibles también para el rol solo-consultor (inventory-consult).
+      { label: 'Sesion de fotos', href: '/catalog/photo-session', icon: <Camera size={18} />, permission: 'inventory-consult' },
+      { label: 'Sesion de codigos de barras', href: '/catalog/barcode-session', icon: <Barcode size={18} />, permission: 'inventory-consult' },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },
     ],
   },

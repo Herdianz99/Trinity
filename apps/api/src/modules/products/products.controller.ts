@@ -16,6 +16,7 @@ import { PurchaseAnalysisDto } from './dto/purchase-analysis.dto';
 import { PurchaseAnalysisPdfService } from './purchase-analysis-pdf.service';
 import { ProductsReportPdfService } from './products-report-pdf.service';
 import { ProductsNoPhotoReportPdfService } from './products-no-photo-report-pdf.service';
+import { ProductsNoBarcodeReportPdfService } from './products-no-barcode-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
@@ -33,6 +34,7 @@ export class ProductsController {
     private purchaseAnalysisPdf: PurchaseAnalysisPdfService,
     private productsReportPdf: ProductsReportPdfService,
     private noPhotoReportPdf: ProductsNoPhotoReportPdfService,
+    private noBarcodeReportPdf: ProductsNoBarcodeReportPdfService,
     private catalogReport: ProductsCatalogReportService,
     private utilidadReport: ProductsUtilidadReportService,
   ) {}
@@ -87,6 +89,18 @@ export class ProductsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="articulos-sin-foto.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Reporte de articulos SIN codigo de barras, agrupado por categoria.
+  @Get('report/no-barcode/pdf')
+  async noBarcodeReportPdfReport(@Res() res: Response) {
+    const buffer = await this.noBarcodeReportPdf.generate();
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="articulos-sin-codigo-barras.pdf"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);
@@ -179,7 +193,8 @@ export class ProductsController {
 
   @Patch(':id/barcode')
   @UseGuards(AuthGuard('jwt'), ModuleGuard)
-  @RequireModule('catalog')
+  // La sesión de códigos de barras también la usan los roles de inventario (incl. solo-consulta).
+  @RequireModule('catalog', 'inventory', 'inventory-consult')
   setBarcode(@Param('id') id: string, @Body() dto: SetBarcodeDto) {
     return this.productsService.setBarcode(id, dto.barcode);
   }

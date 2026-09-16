@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Barcode, Search, Loader2, X, Check, ScanLine } from 'lucide-react';
+import { Barcode, Search, Loader2, X, Check, ScanLine, FileText } from 'lucide-react';
 
 interface FoundProduct {
   id: string;
@@ -198,6 +198,14 @@ export default function BarcodeSessionPage() {
           <p className="text-slate-400 text-sm">Busca un artículo, escanea el código dos veces y guarda</p>
         </div>
       </div>
+
+      {/* Reporte de artículos SIN código de barras, agrupado por categoría */}
+      <button
+        onClick={() => window.open('/api/proxy/products/report/no-barcode/pdf', '_blank')}
+        className="w-full mb-4 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 text-sm"
+      >
+        <FileText size={16} /> Reporte: artículos sin código (por categoría)
+      </button>
 
       {msg && (
         <div className={`mb-3 px-4 py-2 rounded-lg text-sm ${msg.type === 'ok' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>

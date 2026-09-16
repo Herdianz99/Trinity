@@ -9,6 +9,9 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/dispatch', ['commands', 'inventory', 'inventory-consult']],
   ['/store', ['store']],
   ['/catalog/suppliers', ['purchases']],
+  // Sesiones de fotos / codigos de barras: tambien accesibles desde Inventario (incl. solo-consulta)
+  ['/catalog/photo-session', ['catalog', 'inventory', 'inventory-consult']],
+  ['/catalog/barcode-session', ['catalog', 'inventory', 'inventory-consult']],
   ['/quotations', ['sales']],
   ['/sales', ['sales']],
   ['/catalog', ['catalog']],

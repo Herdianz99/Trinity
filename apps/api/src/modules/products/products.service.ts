@@ -416,6 +416,38 @@ export class ProductsService {
       });
   }
 
+  // Articulos ACTIVOS SIN codigo de barras (barcode null o vacio), para el reporte de la
+  // sesion de codigos de barras. Agrupados por categoria (ordenados por categoria y luego
+  // por existencia desc para priorizar lo que hay en stock).
+  async noBarcodeReportList() {
+    const products = await this.prisma.product.findMany({
+      where: {
+        isActive: true,
+        OR: [{ barcode: null }, { barcode: '' }],
+      },
+      select: {
+        code: true,
+        supplierRef: true,
+        name: true,
+        category: { select: { name: true } },
+        stock: { select: { quantity: true } },
+      },
+    });
+
+    return products
+      .map((p) => ({
+        code: p.code,
+        supplierRef: p.supplierRef,
+        name: p.name,
+        category: p.category?.name || 'Sin categoria',
+        stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
+      }))
+      .sort((a, b) => {
+        if (a.category !== b.category) return a.category.localeCompare(b.category, 'es');
+        return b.stock - a.stock;
+      });
+  }
+
   // Lista completa (sin paginar) para el reporte del catalogo (Excel/PDF). Aplica los mismos
   // filtros que la pantalla /catalog/products (search, categoria, marca, proveedor, stock bajo,
   // solo desactivados, solo bloqueados para venta) e incluye precio, estado y tasa del dia.

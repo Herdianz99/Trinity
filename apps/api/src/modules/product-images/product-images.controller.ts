@@ -20,7 +20,7 @@ export class ProductImagesController {
   }
 
   @Post()
-  @RequireModule('catalog')
+  @RequireModule('catalog', 'inventory', 'inventory-consult')
   upload(
     @Param('productId') productId: string,
     @Body() dto: UploadProductImageDto,
@@ -30,13 +30,13 @@ export class ProductImagesController {
   }
 
   @Patch(':imageId/primary')
-  @RequireModule('catalog')
+  @RequireModule('catalog', 'inventory', 'inventory-consult')
   setPrimary(@Param('productId') productId: string, @Param('imageId') imageId: string) {
     return this.service.setPrimary(productId, imageId);
   }
 
   @Delete(':imageId')
-  @RequireModule('catalog')
+  @RequireModule('catalog', 'inventory', 'inventory-consult')
   remove(@Param('productId') productId: string, @Param('imageId') imageId: string) {
     return this.service.remove(productId, imageId);
   }
