@@ -10,6 +10,7 @@ import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { caracasDayStart, caracasDayEnd, caracasDateKey } from '../../common/timezone';
+import { effectivePct, itemNet, round2 as round2d } from './payment-schedule-discount';
 
 @Injectable()
 export class PaymentSchedulesService {
@@ -130,12 +131,18 @@ export class PaymentSchedulesService {
       schedule.supplierDiscounts.map((d) => [d.supplierName, d.discountPct]),
     );
 
-    // Group items by supplier
+    // Group items by supplier. El descuento se resuelve por ÍTEM (override propio o el del
+    // proveedor) y luego se agrega, para soportar documentos con descuento distinto al resto.
     const supplierGroups: Record<string, {
       supplierName: string;
       paymentMethod: string | null;
+      supplierDiscountPct: number;
       totalUsd: number;
       totalBs: number;
+      discountAmountUsd: number;
+      discountAmountBs: number;
+      netUsd: number;
+      netBs: number;
       items: any[];
     }> = {};
 
@@ -144,8 +151,13 @@ export class PaymentSchedulesService {
         supplierGroups[item.supplierName] = {
           supplierName: item.supplierName,
           paymentMethod: null,
+          supplierDiscountPct: discountMap.get(item.supplierName) ?? 0,
           totalUsd: 0,
           totalBs: 0,
+          discountAmountUsd: 0,
+          discountAmountBs: 0,
+          netUsd: 0,
+          netBs: 0,
           items: [],
         };
       }
@@ -154,32 +166,56 @@ export class PaymentSchedulesService {
       if (!g.paymentMethod) {
         g.paymentMethod = (item.payable as any)?.purchaseOrder?.supplier?.paymentMethod ?? null;
       }
+      // Descuento efectivo del ítem: su override si existe, si no el del proveedor.
+      const pct = effectivePct(item.discountPct, g.supplierDiscountPct);
+      const net = itemNet(item.plannedAmountUsd, item.plannedAmountBs, pct);
       g.totalUsd += item.plannedAmountUsd;
       g.totalBs += item.plannedAmountBs;
-      g.items.push({ ...item, docNumber: docNumberOf(item) });
+      g.discountAmountUsd += net.discountUsd;
+      g.discountAmountBs += net.discountBs;
+      g.netUsd += net.netUsd;
+      g.netBs += net.netBs;
+      g.items.push({
+        ...item,
+        docNumber: docNumberOf(item),
+        effectiveDiscountPct: pct,
+        discountAmountUsd: net.discountUsd,
+        discountAmountBs: net.discountBs,
+        netUsd: net.netUsd,
+        netBs: net.netBs,
+      });
     }
 
-    const round2 = (n: number) => Math.round(n * 100) / 100;
     let netTotalUsd = 0;
     let netTotalBs = 0;
     const groupedBySupplier = Object.values(supplierGroups).map((g) => {
-      const totalUsd = round2(g.totalUsd);
-      const totalBs = round2(g.totalBs);
-      const discountPct = discountMap.get(g.supplierName) ?? 0;
-      const discountAmountUsd = round2(totalUsd * (discountPct / 100));
-      const discountAmountBs = round2(totalBs * (discountPct / 100));
-      const netUsd = round2(totalUsd - discountAmountUsd);
-      const netBs = round2(totalBs - discountAmountBs);
+      const totalUsd = round2d(g.totalUsd);
+      const totalBs = round2d(g.totalBs);
+      const discountAmountUsd = round2d(g.discountAmountUsd);
+      const discountAmountBs = round2d(g.discountAmountBs);
+      const netUsd = round2d(g.netUsd);
+      const netBs = round2d(g.netBs);
       netTotalUsd += netUsd;
       netTotalBs += netBs;
-      return { ...g, totalUsd, totalBs, discountPct, discountAmountUsd, discountAmountBs, netUsd, netBs };
+      // discountPct = % del proveedor (default para el input); el descuento real puede variar
+      // por ítem, por eso el monto de descuento se agrega, no se recalcula del pct.
+      return {
+        ...g,
+        discountPct: g.supplierDiscountPct,
+        totalUsd,
+        totalBs,
+        discountAmountUsd,
+        discountAmountBs,
+        netUsd,
+        netBs,
+      };
     });
 
     return {
       ...schedule,
       groupedBySupplier,
-      netTotalUsd: round2(netTotalUsd),
-      netTotalBs: round2(netTotalBs),
+      netTotalUsd: round2d(netTotalUsd),
+      netTotalBs: round2d(netTotalBs),
     };
   }
 
@@ -203,6 +239,20 @@ export class PaymentSchedulesService {
       where: { scheduleId_supplierName: { scheduleId: id, supplierName } },
       update: { discountPct: pct },
       create: { scheduleId: id, supplierName, discountPct: pct },
+    });
+    return this.findOne(id);
+  }
+
+  // Fija/quita el descuento % propio de un documento (override). null = hereda el del proveedor.
+  async setItemDiscount(id: string, itemId: string, discountPct: number | null) {
+    const item = await this.prisma.paymentScheduleItem.findFirst({
+      where: { id: itemId, scheduleId: id },
+    });
+    if (!item) throw new NotFoundException('Documento no encontrado en la programación');
+    const pct = discountPct == null ? null : Math.max(0, Math.min(100, discountPct));
+    await this.prisma.paymentScheduleItem.update({
+      where: { id: itemId },
+      data: { discountPct: pct },
     });
     return this.findOne(id);
   }

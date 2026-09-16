@@ -2873,3 +2873,6 @@ ALTER TYPE "DynamicKeyPerm" ADD VALUE IF NOT EXISTS 'TOGGLE_PRODUCT_SALE';
 
 -- Motivo de devolucion de ventas: cambio de nota a fiscal (Session 127)
 ALTER TYPE "SalesReturnReason" ADD VALUE IF NOT EXISTS 'CAMBIO_NOTA_A_FISCAL';
+
+-- Descuento % por documento (override) en programacion de pagos (Session 127)
+ALTER TABLE "PaymentScheduleItem" ADD COLUMN IF NOT EXISTS "discountPct" DOUBLE PRECISION;

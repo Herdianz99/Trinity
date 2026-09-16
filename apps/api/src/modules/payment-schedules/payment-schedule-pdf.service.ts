@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
+import { caracasDateKey } from '../../common/timezone';
+import { effectivePct, itemNet, round2 as round2d } from './payment-schedule-discount';
 
 @Injectable()
 export class PaymentSchedulePdfService {
@@ -10,7 +12,8 @@ export class PaymentSchedulePdfService {
     return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  async generate(scheduleId: string): Promise<Buffer> {
+  async generate(scheduleId: string, opts: { overdue?: boolean } = {}): Promise<Buffer> {
+    const overdue = !!opts.overdue;
     const schedule = await this.prisma.paymentSchedule.findUnique({
       where: { id: scheduleId },
       include: {
@@ -22,6 +25,11 @@ export class PaymentSchedulePdfService {
               select: {
                 documentNumber: true,
                 dueDate: true,
+                status: true,
+                netPayableUsd: true,
+                netPayableBs: true,
+                paidAmountUsd: true,
+                paidAmountBs: true,
                 purchaseOrder: {
                   select: {
                     number: true,
@@ -43,7 +51,7 @@ export class PaymentSchedulePdfService {
     if (!schedule) throw new NotFoundException('Programación no encontrada');
     const config = await this.prisma.companyConfig.findFirst();
 
-    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const round2 = round2d;
     const docNumberOf = (item: (typeof schedule.items)[number]): string => {
       const p: any = item.payable;
       const fromPayable = p?.documentNumber || p?.purchaseOrder?.supplierInvoiceNumber;
@@ -53,45 +61,101 @@ export class PaymentSchedulePdfService {
     };
     const discountMap = new Map(schedule.supplierDiscounts.map((d) => [d.supplierName, d.discountPct]));
 
-    // Group items by supplier
+    // Corte de "vencido": documentos cuya fecha de vencimiento es hoy o antes (Caracas).
+    // dueDate es date-only (medianoche UTC) → comparar contra caracasDateKey (medianoche UTC de hoy).
+    const dueCutoff = caracasDateKey();
+
+    // Group items by supplier. El descuento se resuelve por ÍTEM (override o el del proveedor).
+    // En el reporte de vencidos: solo CxP vencidas y NO pagadas en el sistema; el monto a pagar
+    // es el SALDO real pendiente (netPayable − pagado), para reflejar abonos parciales.
     const groups: Record<string, {
       supplierName: string;
       paymentMethod: string | null;
       totalUsd: number;
       totalBs: number;
-      items: (typeof schedule.items[number] & { docNumber: string })[];
+      discountAmountUsd: number;
+      discountAmountBs: number;
+      netUsd: number;
+      netBs: number;
+      items: any[];
     }> = {};
 
     for (const item of schedule.items) {
+      const p: any = item.payable;
+      let baseUsd = item.plannedAmountUsd;
+      let baseBs = item.plannedAmountBs;
+      let saldoUsd = item.totalAmountUsd;
+
+      if (overdue) {
+        // Solo documentos de CxP con vencimiento (las notas quedan fuera del reporte de vencidos).
+        if (!p || !p.dueDate) continue;
+        if (new Date(p.dueDate) > dueCutoff) continue; // aún no vencido
+        // Excluir los ya pagados en el sistema (aunque sigan en la programación).
+        const remainingUsd = round2((p.netPayableUsd ?? 0) - (p.paidAmountUsd ?? 0));
+        const remainingBs = round2((p.netPayableBs ?? 0) - (p.paidAmountBs ?? 0));
+        if (p.status === 'PAID' || remainingUsd <= 0.01) continue;
+        // El monto a pagar = saldo real pendiente (soporta abonos parciales).
+        baseUsd = remainingUsd;
+        baseBs = remainingBs;
+        saldoUsd = remainingUsd;
+      }
+
       if (!groups[item.supplierName]) {
-        groups[item.supplierName] = { supplierName: item.supplierName, paymentMethod: null, totalUsd: 0, totalBs: 0, items: [] };
+        groups[item.supplierName] = {
+          supplierName: item.supplierName,
+          paymentMethod: null,
+          totalUsd: 0, totalBs: 0,
+          discountAmountUsd: 0, discountAmountBs: 0,
+          netUsd: 0, netBs: 0,
+          items: [],
+        };
       }
       const g = groups[item.supplierName];
       if (!g.paymentMethod) {
-        g.paymentMethod = (item.payable as any)?.purchaseOrder?.supplier?.paymentMethod ?? null;
+        g.paymentMethod = p?.purchaseOrder?.supplier?.paymentMethod ?? null;
       }
-      g.totalUsd += item.plannedAmountUsd;
-      g.totalBs += item.plannedAmountBs;
-      g.items.push({ ...item, docNumber: docNumberOf(item) });
+      const pct = effectivePct(item.discountPct, discountMap.get(item.supplierName) ?? 0);
+      const net = itemNet(baseUsd, baseBs, pct);
+      g.totalUsd += baseUsd;
+      g.totalBs += baseBs;
+      g.discountAmountUsd += net.discountUsd;
+      g.discountAmountBs += net.discountBs;
+      g.netUsd += net.netUsd;
+      g.netBs += net.netBs;
+      g.items.push({
+        ...item,
+        docNumber: docNumberOf(item),
+        baseUsd, baseBs, saldoUsd,
+        effectiveDiscountPct: pct,
+        netUsd: net.netUsd, netBs: net.netBs,
+      });
     }
 
     let netTotalUsd = 0;
     let netTotalBs = 0;
+    let grossTotalUsd = 0;
+    let grossTotalBs = 0;
     const supplierGroups = Object.values(groups).map((g) => {
       const totalUsd = round2(g.totalUsd);
       const totalBs = round2(g.totalBs);
-      const discountPct = discountMap.get(g.supplierName) ?? 0;
-      const discountAmountUsd = round2(totalUsd * (discountPct / 100));
-      const discountAmountBs = round2(totalBs * (discountPct / 100));
-      const netUsd = round2(totalUsd - discountAmountUsd);
-      const netBs = round2(totalBs - discountAmountBs);
+      const discountAmountUsd = round2(g.discountAmountUsd);
+      const discountAmountBs = round2(g.discountAmountBs);
+      const netUsd = round2(g.netUsd);
+      const netBs = round2(g.netBs);
       netTotalUsd += netUsd;
       netTotalBs += netBs;
+      grossTotalUsd += totalUsd;
+      grossTotalBs += totalBs;
+      // discountPct del proveedor (referencia); el descuento real puede variar por ítem.
+      const discountPct = discountMap.get(g.supplierName) ?? 0;
       return { ...g, totalUsd, totalBs, discountPct, discountAmountUsd, discountAmountBs, netUsd, netBs };
     });
     netTotalUsd = round2(netTotalUsd);
     netTotalBs = round2(netTotalBs);
-    const anyDiscount = supplierGroups.some((g) => g.discountPct > 0);
+    grossTotalUsd = round2(grossTotalUsd);
+    grossTotalBs = round2(grossTotalBs);
+    const totalItems = supplierGroups.reduce((s, g) => s + g.items.length, 0);
+    const anyDiscount = supplierGroups.some((g) => g.discountAmountUsd > 0);
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -127,8 +191,14 @@ export class PaymentSchedulePdfService {
       // Document title (right)
       const rightX = 340;
       let ry = 40;
-      doc.fontSize(13).font('Helvetica-Bold').text('PROGRAMACIÓN DE PAGOS', rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
+      doc.fontSize(13).font('Helvetica-Bold').text(overdue ? 'DOCUMENTOS VENCIDOS' : 'PROGRAMACIÓN DE PAGOS', rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
       ry += 20;
+      if (overdue) {
+        doc.fontSize(8).font('Helvetica-Oblique').fillColor('#b00000')
+          .text('Vencidos y pendientes de pago', rightX, ry, { width: pageWidth - rightX + 40, align: 'right' });
+        doc.fillColor('#000000');
+        ry += 12;
+      }
       doc.fontSize(9).font('Helvetica');
       doc.text(`No: ${schedule.number}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 13;
       doc.text(`Fecha: ${new Date(schedule.createdAt).toLocaleDateString('es-VE')}`, rightX, ry, { width: pageWidth - rightX + 40, align: 'right' }); ry += 13;
@@ -161,8 +231,8 @@ export class PaymentSchedulePdfService {
         y += Math.max(14, notesH + 2);
       }
 
-      // ============ BUDGET SUMMARY ============
-      if (schedule.budgetUsd && schedule.budgetUsd > 0) {
+      // ============ BUDGET SUMMARY ============ (solo en el reporte completo, no en vencidos)
+      if (!overdue && schedule.budgetUsd && schedule.budgetUsd > 0) {
         y += 5;
         doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#eeeeee');
         y += 8;
@@ -221,7 +291,7 @@ export class PaymentSchedulePdfService {
         doc.text('Nro. documento', colX.ref, y);
         doc.text('Tipo', colX.type, y);
         doc.text('Vencimiento', colX.due, y);
-        doc.text('Saldo Total', colX.balance, y);
+        doc.text(overdue ? 'Saldo pend.' : 'Saldo Total', colX.balance, y);
         doc.text('A Pagar USD', colX.usd, y);
         doc.text('A Pagar Bs', colX.bs, y);
         y += 12;
@@ -231,9 +301,13 @@ export class PaymentSchedulePdfService {
         // Items
         doc.fontSize(8).font('Helvetica').fillColor('#000000');
         for (const item of group.items) {
+          // Etiqueta del documento + % de descuento efectivo (si tiene).
+          const refLabel = item.effectiveDiscountPct > 0
+            ? `${item.docNumber}  (−${this.fmt(item.effectiveDiscountPct)}%)`
+            : item.docNumber;
           // Altura dinamica: la referencia/descripcion puede ocupar 2 lineas.
           doc.fontSize(8).font('Helvetica');
-          const descH = doc.heightOfString(item.docNumber, { width: 120 });
+          const descH = doc.heightOfString(refLabel, { width: 120 });
           const rowH = Math.max(14, descH + 2);
           if (y + rowH > 752) {
             doc.addPage();
@@ -245,17 +319,18 @@ export class PaymentSchedulePdfService {
             ? new Date(item.payable.dueDate).toLocaleDateString('es-VE')
             : '-';
 
-          if (item.isPaid) {
+          // En el reporte completo se resalta lo ya pagado; en vencidos todos son pendientes.
+          if (!overdue && item.isPaid) {
             doc.rect(45, y - 2, pageWidth - 10, rowH).fill('#e8f5e9');
             doc.fillColor('#000000');
           }
 
-          doc.text(item.docNumber, colX.ref, y, { width: 120 });
+          doc.text(refLabel, colX.ref, y, { width: 120 });
           doc.text(type, colX.type, y, { lineBreak: false });
           doc.text(dueDate, colX.due, y, { lineBreak: false });
-          doc.text(`$${this.fmt(item.totalAmountUsd)}`, colX.balance, y, { lineBreak: false });
-          doc.text(`$${this.fmt(item.plannedAmountUsd)}`, colX.usd, y, { lineBreak: false });
-          doc.text(`Bs ${this.fmt(item.plannedAmountBs)}`, colX.bs, y, { lineBreak: false });
+          doc.text(`$${this.fmt(item.saldoUsd)}`, colX.balance, y, { lineBreak: false });
+          doc.text(`$${this.fmt(item.baseUsd)}`, colX.usd, y, { lineBreak: false });
+          doc.text(`Bs ${this.fmt(item.baseBs)}`, colX.bs, y, { lineBreak: false });
           y += rowH;
         }
 
@@ -266,10 +341,13 @@ export class PaymentSchedulePdfService {
         doc.text(`Subtotal: $${this.fmt(group.totalUsd)}`, colX.usd, y);
         doc.text(`Bs ${this.fmt(group.totalBs)}`, colX.bs, y);
         y += 12;
-        if (group.discountPct > 0) {
+        if (group.discountAmountUsd > 0) {
+          // El descuento puede variar por documento, por eso se muestra el MONTO agregado
+          // (sin un % único). Se añade el % del proveedor entre paréntesis solo como referencia.
           const rightW = 40 + pageWidth - colX.balance;
+          const pctRef = group.discountPct > 0 ? ` (prov. ${this.fmt(group.discountPct)}%)` : '';
           doc.font('Helvetica').fillColor('#b00000');
-          doc.text(`Descuento (${this.fmt(group.discountPct)}%): -$${this.fmt(group.discountAmountUsd)}  /  -Bs ${this.fmt(group.discountAmountBs)}`, colX.balance, y, { width: rightW, align: 'right' });
+          doc.text(`Descuento${pctRef}: -$${this.fmt(group.discountAmountUsd)}  /  -Bs ${this.fmt(group.discountAmountBs)}`, colX.balance, y, { width: rightW, align: 'right' });
           y += 12;
           doc.font('Helvetica-Bold').fillColor('#006600');
           doc.text(`Neto a pagar: $${this.fmt(group.netUsd)}  |  Bs ${this.fmt(group.netBs)}`, colX.balance, y, { width: rightW, align: 'right' });
@@ -277,6 +355,14 @@ export class PaymentSchedulePdfService {
           doc.fillColor('#000000');
         }
         y += 6;
+      }
+
+      // Reporte de vencidos sin resultados: mensaje claro.
+      if (overdue && supplierGroups.length === 0) {
+        doc.fontSize(11).font('Helvetica').fillColor('#666666');
+        doc.text('No hay documentos vencidos pendientes de pago en esta programación.', 40, y, { width: pageWidth });
+        doc.fillColor('#000000');
+        y += 20;
       }
 
       // ============ GRAND TOTAL ============
@@ -289,10 +375,10 @@ export class PaymentSchedulePdfService {
       y += 8;
       doc.fontSize(11).font('Helvetica-Bold');
       doc.text(anyDiscount ? 'TOTAL (bruto):' : 'TOTAL:', 40, y);
-      doc.text(`$${this.fmt(schedule.totalUsd)}`, 350, y, { width: pageWidth - 315, align: 'right' });
+      doc.text(`$${this.fmt(grossTotalUsd)}`, 350, y, { width: pageWidth - 315, align: 'right' });
       y += 14;
       doc.fontSize(10).font('Helvetica');
-      doc.text(`Bs ${this.fmt(schedule.totalBs)}`, 350, y, { width: pageWidth - 315, align: 'right' });
+      doc.text(`Bs ${this.fmt(grossTotalBs)}`, 350, y, { width: pageWidth - 315, align: 'right' });
       y += 14;
       if (anyDiscount) {
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#006600');
@@ -305,7 +391,7 @@ export class PaymentSchedulePdfService {
         doc.fillColor('#000000');
       }
       doc.fontSize(10).font('Helvetica').fillColor('#000000');
-      doc.text(`(${schedule.items.length} documentos)`, 40, y);
+      doc.text(`(${totalItems} documentos)`, 40, y);
 
       // ============ FOOTER ============
       y += 30;

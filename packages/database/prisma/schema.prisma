@@ -1907,6 +1907,9 @@ model PaymentScheduleItem {
   totalAmountBs     Float
   plannedAmountUsd  Float
   plannedAmountBs   Float
+  // Descuento % propio del documento (override). null = hereda el descuento del proveedor
+  // (PaymentScheduleSupplierDiscount); un valor (incluso 0) = override explícito para este documento.
+  discountPct       Float?
   isPaid            Boolean          @default(false)
   createdAt         DateTime         @default(now())
 }

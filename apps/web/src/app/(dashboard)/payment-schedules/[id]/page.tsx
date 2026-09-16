@@ -30,6 +30,11 @@ interface ScheduleItem {
   totalAmountBs: number;
   plannedAmountUsd: number;
   plannedAmountBs: number;
+  discountPct: number | null; // override del documento; null = hereda el del proveedor
+  effectiveDiscountPct?: number; // % efectivo resuelto por el backend
+  discountAmountUsd?: number;
+  netUsd?: number;
+  netBs?: number;
   isPaid: boolean;
   docNumber?: string;
   payable?: {
@@ -147,6 +152,11 @@ export default function PaymentScheduleDetailPage() {
   const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({});
   const [savingDiscount, setSavingDiscount] = useState<string | null>(null);
 
+  // Descuento por documento (override) + menú de reportes
+  const [itemDiscountInputs, setItemDiscountInputs] = useState<Record<string, string>>({});
+  const [savingItemDiscount, setSavingItemDiscount] = useState<string | null>(null);
+  const [showReports, setShowReports] = useState(false);
+
   useEffect(() => {
     fetch('/api/proxy/auth/me')
       .then((r) => r.json())
@@ -164,6 +174,10 @@ export default function PaymentScheduleDetailPage() {
       const di: Record<string, string> = {};
       for (const g of data.groupedBySupplier || []) di[g.supplierName] = String(g.discountPct || 0);
       setDiscountInputs(di);
+      // Inputs de descuento por documento: vacío = hereda el del proveedor.
+      const idi: Record<string, string> = {};
+      for (const it of data.items || []) idi[it.id] = it.discountPct == null ? '' : String(it.discountPct);
+      setItemDiscountInputs(idi);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar la programacion' });
     } finally {
@@ -231,6 +245,39 @@ export default function PaymentScheduleDetailPage() {
       setMessage({ type: 'error', text: 'Error al guardar el descuento' });
     } finally {
       setSavingDiscount(null);
+    }
+  }
+
+  // Descuento % propio de un documento (override). Vacío = quitar el override (hereda proveedor).
+  async function saveItemDiscount(itemId: string) {
+    const raw = (itemDiscountInputs[itemId] ?? '').trim();
+    let discountPct: number | null = null;
+    if (raw !== '') {
+      const pct = Number(raw);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        setMessage({ type: 'error', text: 'El descuento del documento debe estar entre 0 y 100' });
+        return;
+      }
+      discountPct = pct;
+    }
+    setSavingItemDiscount(itemId);
+    try {
+      const res = await fetch(`/api/proxy/payment-schedules/${id}/items/${itemId}/discount`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discountPct }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSchedule(data);
+      const idi: Record<string, string> = {};
+      for (const it of data.items || []) idi[it.id] = it.discountPct == null ? '' : String(it.discountPct);
+      setItemDiscountInputs(idi);
+      setMessage({ type: 'success', text: discountPct == null ? 'Descuento del documento removido' : 'Descuento del documento actualizado' });
+    } catch {
+      setMessage({ type: 'error', text: 'Error al guardar el descuento del documento' });
+    } finally {
+      setSavingItemDiscount(null);
     }
   }
 
@@ -376,8 +423,10 @@ export default function PaymentScheduleDetailPage() {
     }
   };
 
-  const handlePrintPdf = () => {
-    window.open(`/api/proxy/payment-schedules/${id}/pdf`, '_blank');
+  const handlePrintPdf = (type?: 'overdue') => {
+    const q = type ? `?type=${type}` : '';
+    window.open(`/api/proxy/payment-schedules/${id}/pdf${q}`, '_blank');
+    setShowReports(false);
   };
 
   const canEdit = schedule?.status === 'DRAFT' || schedule?.status === 'APPROVED';
@@ -439,13 +488,44 @@ export default function PaymentScheduleDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrintPdf}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
-          >
-            <Printer size={16} />
-            Imprimir PDF
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowReports((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
+            >
+              <Printer size={16} />
+              Reportes
+              <ChevronDown size={14} className={`transition-transform ${showReports ? 'rotate-180' : ''}`} />
+            </button>
+            {showReports && (
+              <>
+                {/* Cierra el menú al hacer clic fuera */}
+                <div className="fixed inset-0 z-10" onClick={() => setShowReports(false)} />
+                <div className="absolute right-0 mt-1 w-60 z-20 rounded-lg border border-slate-700 bg-slate-800 shadow-xl overflow-hidden">
+                  <button
+                    onClick={() => handlePrintPdf()}
+                    className="w-full flex items-start gap-2 px-3 py-2.5 text-left hover:bg-slate-700/70 transition-colors"
+                  >
+                    <Printer size={15} className="mt-0.5 text-slate-400 shrink-0" />
+                    <span>
+                      <span className="block text-sm text-slate-200">Completo</span>
+                      <span className="block text-xs text-slate-500">Toda la programación por proveedor</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handlePrintPdf('overdue')}
+                    className="w-full flex items-start gap-2 px-3 py-2.5 text-left hover:bg-slate-700/70 transition-colors border-t border-slate-700/60"
+                  >
+                    <AlertTriangle size={15} className="mt-0.5 text-red-400 shrink-0" />
+                    <span>
+                      <span className="block text-sm text-slate-200">Documentos vencidos</span>
+                      <span className="block text-xs text-slate-500">Vencidos y aún no pagados en el sistema</span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {schedule.status === 'DRAFT' && isAdmin && (
             <button
               onClick={() => handleStatusChange('APPROVED')}
@@ -594,9 +674,9 @@ export default function PaymentScheduleDetailPage() {
                         <span className="mx-2">|</span>
                         <span>Bs {fmt(group.totalBs)}</span>
                       </div>
-                      {group.discountPct > 0 && (
+                      {group.discountAmountUsd > 0 && (
                         <div className="text-xs mt-0.5">
-                          <span className="text-red-400">−{fmt(group.discountPct)}% (−${fmt(group.discountAmountUsd)})</span>
+                          <span className="text-red-400">Desc. −${fmt(group.discountAmountUsd)}</span>
                           <span className="mx-1">→</span>
                           <span className="text-green-400 font-semibold">Neto ${fmt(group.netUsd)} | Bs {fmt(group.netBs)}</span>
                         </div>
@@ -635,6 +715,7 @@ export default function PaymentScheduleDetailPage() {
                       <th className="text-right px-4 py-2 font-medium">Saldo total</th>
                       <th className="text-right px-4 py-2 font-medium">A pagar USD</th>
                       <th className="text-right px-4 py-2 font-medium">A pagar Bs</th>
+                      <th className="text-center px-4 py-2 font-medium w-28">Desc. %</th>
                       {canEdit && <th className="text-center px-4 py-2 font-medium w-20">Acciones</th>}
                     </tr>
                   </thead>
@@ -711,6 +792,40 @@ export default function PaymentScheduleDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-2.5 text-right text-slate-400">Bs {fmt(item.plannedAmountBs)}</td>
+                          {/* Descuento % propio del documento (override). Vacío = hereda el del proveedor. */}
+                          <td className="px-4 py-2.5">
+                            {canEdit ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    value={itemDiscountInputs[item.id] ?? ''}
+                                    placeholder={group.discountPct > 0 ? fmt(group.discountPct) : '0'}
+                                    onChange={(e) => setItemDiscountInputs((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') saveItemDiscount(item.id); }}
+                                    onBlur={() => {
+                                      const cur = (itemDiscountInputs[item.id] ?? '').trim();
+                                      const orig = item.discountPct == null ? '' : String(item.discountPct);
+                                      if (cur !== orig) saveItemDiscount(item.id);
+                                    }}
+                                    title="Descuento propio del documento (vacío = hereda el del proveedor)"
+                                    className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-right text-slate-200"
+                                  />
+                                  {savingItemDiscount === item.id && <Loader2 className="animate-spin text-slate-400" size={12} />}
+                                </div>
+                                {(item.effectiveDiscountPct ?? 0) > 0 && (
+                                  <span className="text-[10px] text-green-400">Neto ${fmt(item.netUsd ?? 0)}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center text-xs text-slate-400">
+                                {(item.effectiveDiscountPct ?? 0) > 0 ? `${fmt(item.effectiveDiscountPct ?? 0)}%` : '—'}
+                              </div>
+                            )}
+                          </td>
                           {canEdit && (
                             <td className="px-4 py-2.5 text-center">
                               <button

@@ -22,6 +22,7 @@ import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdateNotesDto } from './dto/update-notes.dto';
 import { SetSupplierDiscountDto } from './dto/set-supplier-discount.dto';
+import { SetItemDiscountDto } from './dto/set-item-discount.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Payment Schedules')
@@ -103,6 +104,16 @@ export class PaymentSchedulesController {
     return this.service.setSupplierDiscount(id, dto.supplierName, dto.discountPct);
   }
 
+  // Descuento % propio de un documento (override). discountPct=null quita el override.
+  @Patch(':id/items/:itemId/discount')
+  setItemDiscount(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: SetItemDiscountDto,
+  ) {
+    return this.service.setItemDiscount(id, itemId, dto.discountPct ?? null);
+  }
+
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,
@@ -113,11 +124,17 @@ export class PaymentSchedulesController {
   }
 
   @Get(':id/pdf')
-  async pdf(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.pdfService.generate(id);
+  async pdf(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Query('type') type?: string,
+  ) {
+    const overdue = type === 'overdue';
+    const buffer = await this.pdfService.generate(id, { overdue });
+    const suffix = overdue ? 'vencidos' : 'programacion';
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="programacion-${id}.pdf"`,
+      'Content-Disposition': `inline; filename="${suffix}-${id}.pdf"`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);
