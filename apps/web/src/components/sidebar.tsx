@@ -40,6 +40,7 @@ import {
   HandCoins,
   Coins,
   CreditCard,
+  MessageCircle,
   BookOpen,
   BarChart3,
   Shield,
@@ -199,6 +200,7 @@ const menuSections: MenuSection[] = [
     permission: 'receivables',
     items: [
       { label: 'Cuentas por cobrar', href: '/receivables', icon: <HandCoins size={18} /> },
+      { label: 'Recordatorios WhatsApp', href: '/receivables/recordatorios', icon: <MessageCircle size={18} /> },
       { label: 'Recibos de cobro', href: '/receipts/collection', icon: <FileText size={18} /> },
       { label: 'Por plataforma', href: '/receivables/platforms', icon: <CreditCard size={18} /> },
     ],

@@ -438,6 +438,107 @@ export class ReceivablesService {
     return result;
   }
 
+  // Clientes con facturas VENCIDAS o PRÓXIMAS A VENCER, para recordatorios por WhatsApp.
+  //   vencida  = dueDate < hoy (Caracas), no pagada (mismo criterio que balancesByCustomers).
+  //   próxima  = dueDate entre hoy y hoy+N días (holgura), no pagada. N = 3 por defecto.
+  // Solo clientes reales (con customerId): las CxC de plataforma/manuales sin cliente quedan fuera.
+  // Se trae todo en una sola query (dueDate <= fin de la ventana) y se clasifica en JS.
+  async overdueByCustomer() {
+    const WINDOW_DAYS = 3; // holgura de "próximas a vencer"
+    const todayKey = caracasDateKey();
+    const windowEnd = caracasDayEnd(new Date(Date.now() + WINDOW_DAYS * 86400000));
+
+    const rows = await this.prisma.receivable.findMany({
+      where: {
+        customerId: { not: null },
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+        dueDate: { lte: windowEnd }, // vencidas (pasadas) + próximas dentro de la ventana
+      },
+      select: {
+        id: true,
+        number: true,
+        documentNumber: true,
+        amountUsd: true,
+        paidAmountUsd: true,
+        dueDate: true,
+        invoice: { select: { number: true } },
+        customer: { select: { id: true, name: true, phone: true, documentType: true, rif: true, isEmployee: true, isGroupCompany: true, lastReminderAt: true, reminderNote: true } },
+      },
+      orderBy: { dueDate: 'asc' },
+    });
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    type Item = { id: string; number: string; dueDate: Date | null; balanceUsd: number; daysLeft?: number };
+    type Group = {
+      customerId: string; name: string; phone: string | null;
+      documentType: string | null; rif: string | null;
+      isEmployee: boolean; isGroupCompany: boolean;
+      lastReminderAt: Date | null; reminderNote: string | null;
+      count: number; totalUsd: number;
+      upcomingCount: number; upcomingTotalUsd: number;
+      items: Item[]; upcoming: Item[];
+    };
+    const map = new Map<string, Group>();
+
+    for (const r of rows) {
+      const c = r.customer;
+      if (!c) continue;
+      const balance = round2(r.amountUsd - r.paidAmountUsd);
+      if (balance <= 0.01) continue;
+      let g = map.get(c.id);
+      if (!g) {
+        g = {
+          customerId: c.id, name: c.name, phone: c.phone ?? null,
+          documentType: c.documentType ?? null, rif: c.rif ?? null,
+          isEmployee: !!c.isEmployee, isGroupCompany: !!c.isGroupCompany,
+          lastReminderAt: (c as any).lastReminderAt ?? null, reminderNote: (c as any).reminderNote ?? null,
+          count: 0, totalUsd: 0, upcomingCount: 0, upcomingTotalUsd: 0,
+          items: [], upcoming: [],
+        };
+        map.set(c.id, g);
+      }
+      const number = r.invoice?.number || r.documentNumber || r.number || '—';
+      // Clasificar por FECHA-calendario Caracas del vencimiento (no por la hora del timestamp):
+      //   daysLeft <= 0  → VENCIDA (incluye "vence hoy": ya toca cobrarla)
+      //   1..WINDOW_DAYS → PRÓXIMA a vencer
+      if (!r.dueDate) continue;
+      const dueKey = caracasDateKey(r.dueDate);
+      const daysLeft = Math.round((dueKey.getTime() - todayKey.getTime()) / 86400000);
+      if (daysLeft <= 0) {
+        g.count += 1;
+        g.totalUsd = round2(g.totalUsd + balance);
+        g.items.push({ id: r.id, number, dueDate: r.dueDate, balanceUsd: balance });
+      } else if (daysLeft <= WINDOW_DAYS) {
+        g.upcomingCount += 1;
+        g.upcomingTotalUsd = round2(g.upcomingTotalUsd + balance);
+        g.upcoming.push({ id: r.id, number, dueDate: r.dueDate, balanceUsd: balance, daysLeft });
+      }
+    }
+
+    // Ordenar: primero los que más deben vencido; luego los de solo próximas.
+    const customers = Array.from(map.values()).sort(
+      (a, b) => (b.totalUsd - a.totalUsd) || (b.upcomingTotalUsd - a.upcomingTotalUsd),
+    );
+    const config = await this.prisma.companyConfig.findFirst({ select: { companyName: true } });
+    return { companyName: config?.companyName || 'Trinity', windowDays: WINDOW_DAYS, customers };
+  }
+
+  // Actualiza los datos de recordatorio de un cliente: marcar como enviado (sella fecha/hora)
+  // y/o guardar la observación de cobranza. Ambos opcionales; se aplica lo que venga.
+  async updateReminder(customerId: string, dto: { markSent?: boolean; note?: string }) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+    const data: any = {};
+    if (dto.markSent) data.lastReminderAt = new Date();
+    if (dto.note !== undefined) data.reminderNote = dto.note?.trim() || null;
+    const updated = await this.prisma.customer.update({
+      where: { id: customerId },
+      data,
+      select: { lastReminderAt: true, reminderNote: true },
+    });
+    return updated;
+  }
+
   async summary() {
     const pending = await this.prisma.receivable.findMany({
       where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },

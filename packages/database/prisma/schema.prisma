@@ -1036,6 +1036,9 @@ model Customer {
   isEmployee        Boolean  @default(false) // Cliente empleado (para reportes / cobro por sueldo)
   creditAuthorizedBy String?                 // Quien aprobo la linea de credito (administracion)
   creditReviewedAt   DateTime?               // Fecha del ultimo analisis de credito (auto-sellada)
+  // Recordatorios de cobro por WhatsApp (/receivables/recordatorios):
+  lastReminderAt     DateTime?               // Fecha/hora del ultimo recordatorio marcado como enviado
+  reminderNote       String?                 // Observacion libre de cobranza (ej. "recordar manana AM")
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]

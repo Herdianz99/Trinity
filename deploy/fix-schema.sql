@@ -2876,3 +2876,7 @@ ALTER TYPE "SalesReturnReason" ADD VALUE IF NOT EXISTS 'CAMBIO_NOTA_A_FISCAL';
 
 -- Descuento % por documento (override) en programacion de pagos (Session 127)
 ALTER TABLE "PaymentScheduleItem" ADD COLUMN IF NOT EXISTS "discountPct" DOUBLE PRECISION;
+
+-- Recordatorios de cobro por WhatsApp: ultimo mensaje + observacion por cliente (Session 127)
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastReminderAt" TIMESTAMP(3);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "reminderNote" TEXT;

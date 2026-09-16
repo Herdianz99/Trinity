@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -17,6 +18,7 @@ import { ReceivablesService } from './receivables.service';
 import { ReceivablesPdfService } from './receivables-pdf.service';
 import { QueryReceivablesDto } from './dto/query-receivables.dto';
 import { CreateReceivableDto } from './dto/create-receivable.dto';
+import { UpdateReminderDto } from './dto/update-reminder.dto';
 
 @ApiTags('Receivables')
 @ApiBearerAuth()
@@ -95,6 +97,18 @@ export class ReceivablesController {
   @Get('platforms/analytics')
   platformAnalytics(@Query('from') from?: string, @Query('to') to?: string) {
     return this.receivablesService.platformAnalytics(from, to);
+  }
+
+  // Clientes con facturas vencidas + su detalle, para recordatorios por WhatsApp.
+  @Get('overdue-by-customer')
+  overdueByCustomer() {
+    return this.receivablesService.overdueByCustomer();
+  }
+
+  // Marcar recordatorio enviado y/o guardar observación de cobranza de un cliente.
+  @Patch('reminder/:customerId')
+  updateReminder(@Param('customerId') customerId: string, @Body() dto: UpdateReminderDto) {
+    return this.receivablesService.updateReminder(customerId, dto);
   }
 
   @Get('customer/:customerId')
