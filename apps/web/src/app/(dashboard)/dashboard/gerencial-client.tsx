@@ -6,7 +6,7 @@ import {
   DollarSign, RotateCcw, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package, PackageX,
   Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
-  Building2, PiggyBank, ClipboardCheck, UserPlus,
+  Building2, PiggyBank, ClipboardCheck, UserPlus, Layers,
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -145,6 +145,15 @@ interface DashboardData {
     purchasedCount: number;
     vsLastPeriod: number | null;
   };
+  salesByBrecha: {
+    conBrechaUsd: number;
+    conBrechaBs: number;
+    conBrechaPct: number;
+    sinBrechaUsd: number;
+    sinBrechaBs: number;
+    sinBrechaPct: number;
+    totalUsd: number;
+  };
 }
 
 interface CountAccuracyWindow {
@@ -191,6 +200,8 @@ const CATEGORY_BAR_COLORS = ['#10b981', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef444
 // Fiscal = azul (SENIAT), No fiscal = ámbar.
 const FISCAL_COLOR = '#3b82f6';
 const NON_FISCAL_COLOR = '#f59e0b';
+const BRECHA_COLOR = '#10b981';
+const NO_BRECHA_COLOR = '#64748b';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -922,6 +933,69 @@ export default function DashboardGerencialClient() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ═══ Row 5b: Ventas con brecha vs sin brecha ═══ */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+              <Layers size={14} className="text-slate-500" />
+              Ventas con Brecha vs sin Brecha
+            </h3>
+            {data.salesByBrecha.totalUsd > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Con brecha', value: data.salesByBrecha.conBrechaUsd, pct: data.salesByBrecha.conBrechaPct },
+                        { name: 'Sin brecha', value: data.salesByBrecha.sinBrechaUsd, pct: data.salesByBrecha.sinBrechaPct },
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      <Cell fill={BRECHA_COLOR} />
+                      <Cell fill={NO_BRECHA_COLOR} />
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: '#1e293b', border: '1px solid #475569', borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: '#ffffff', fontWeight: 600 }}
+                      itemStyle={{ color: '#ffffff' }}
+                      formatter={(v: any, _: any, props: any) => [`$${fmt(Number(v) || 0)} (${props.payload?.pct ?? 0}%)`, props.payload?.name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2.5 h-2.5 rounded-sm" style={{ background: BRECHA_COLOR }} />
+                      <span className="text-xs text-slate-300 font-medium">Con brecha</span>
+                      <span className="text-xs text-emerald-400 font-semibold ml-auto">{data.salesByBrecha.conBrechaPct}%</span>
+                    </div>
+                    <p className="text-lg font-bold text-white tabular-nums">${fmt(data.salesByBrecha.conBrechaUsd)}</p>
+                    <p className="text-[10px] text-slate-500 tabular-nums">Bs {fmt(data.salesByBrecha.conBrechaBs)}</p>
+                  </div>
+                  <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2.5 h-2.5 rounded-sm" style={{ background: NO_BRECHA_COLOR }} />
+                      <span className="text-xs text-slate-300 font-medium">Sin brecha</span>
+                      <span className="text-xs text-slate-400 font-semibold ml-auto">{data.salesByBrecha.sinBrechaPct}%</span>
+                    </div>
+                    <p className="text-lg font-bold text-white tabular-nums">${fmt(data.salesByBrecha.sinBrechaUsd)}</p>
+                    <p className="text-[10px] text-slate-500 tabular-nums">Bs {fmt(data.salesByBrecha.sinBrechaBs)}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
+                Sin ventas en este período
+              </div>
+            )}
           </div>
 
           {/* ═══ Row 6: Expenses ═══ */}

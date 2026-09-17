@@ -96,11 +96,15 @@ export class ProductsController {
 
   // Reporte de articulos SIN codigo de barras, agrupado por categoria.
   @Get('report/no-barcode/pdf')
-  async noBarcodeReportPdfReport(@Res() res: Response) {
-    const buffer = await this.noBarcodeReportPdf.generate();
+  async noBarcodeReportPdfReport(
+    @Query('withStock') withStock: string | undefined,
+    @Res() res: Response,
+  ) {
+    const onlyWithStock = withStock === '1' || withStock === 'true';
+    const buffer = await this.noBarcodeReportPdf.generate(onlyWithStock);
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="articulos-sin-codigo-barras.pdf"',
+      'Content-Disposition': `inline; filename="${onlyWithStock ? 'articulos-sin-codigo-barras-con-existencias' : 'articulos-sin-codigo-barras'}.pdf"`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);

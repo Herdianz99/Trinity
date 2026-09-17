@@ -84,6 +84,7 @@ export class DashboardService {
       payments,
       newCustomers,
       prevNewCustomers,
+      salesByBrecha,
     ] = await Promise.all([
       this.getNetInvoiceRows(dateRange),
       this.getNetInvoiceRows(prevDateRange),
@@ -112,6 +113,8 @@ export class DashboardService {
       // Clientes nuevos del periodo (+ cuantos ya compraron), y el periodo anterior para el %.
       this.getNewCustomers(dateRange),
       this.getNewCustomers(prevDateRange),
+      // Ventas de productos CON brecha vs SIN brecha (monto y %) del periodo.
+      this.getSalesByBrecha(dateRange),
     ]);
 
     // Derivados sincronos de las filas netas por factura (sin mas consultas).
@@ -205,6 +208,7 @@ export class DashboardService {
         purchasedCount: newCustomers.purchasedCount,
         vsLastPeriod: pctChange(newCustomers.count, prevNewCustomers.count),
       },
+      salesByBrecha,
     };
   }
 
@@ -806,6 +810,67 @@ export class DashboardService {
     return {
       contadoUsd: round2(contadoUsd), contadoBs: round2(contadoBs), contadoCount,
       creditoUsd: round2(creditoUsd), creditoBs: round2(creditoBs), creditoCount,
+    };
+  }
+
+  // ── KPI: Ventas de productos CON brecha vs SIN brecha ─────────────────────
+  // "Con brecha" = producto con el flag bregaApplies=true (lleva brecha), sin importar
+  // el % efectivo. Se suma el monto vendido a nivel de LINEA (InvoiceItem.totalUsd, incluye
+  // IVA) de las facturas cobradas del periodo y se le resta lo devuelto, por bucket. Las
+  // devoluciones (NCV POSTED) se atan al MISMO criterio que el KPI "Ventas NETO"
+  // (getNetInvoiceRows): por el paidAt de la factura ORIGINAL, no por la fecha de la NCV, para
+  // que con+sin reconcilie con Ventas NETO. Los ítems sin producto vinculado (NCV con productId
+  // nulo) caen en "sin brecha". El % es sobre el total neto (con+sin).
+  // Residual esperado vs Ventas NETO (unos pocos $): el IGTF va en Invoice.totalUsd pero no en
+  // las lineas, y Ventas NETO aplica un piso a 0 por factura (aqui el neteo es por bucket).
+  private async getSalesByBrecha(dateRange: { gte: Date; lte: Date }) {
+    const { gte, lte } = dateRange;
+    const [salesRows, returnRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ brega: boolean; usd: number; bs: number }>>`
+        SELECT COALESCE(p."bregaApplies", false) AS brega,
+               COALESCE(SUM(ii."totalUsd"), 0)::float8 AS usd,
+               COALESCE(SUM(ii."totalBs"), 0)::float8 AS bs
+        FROM "InvoiceItem" ii
+        JOIN "Invoice" i ON i.id = ii."invoiceId"
+        LEFT JOIN "Product" p ON p.id = ii."productId"
+        WHERE i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
+          AND i."paidAt" >= ${gte} AND i."paidAt" <= ${lte}
+        GROUP BY COALESCE(p."bregaApplies", false)
+      `,
+      this.prisma.$queryRaw<Array<{ brega: boolean; usd: number; bs: number }>>`
+        SELECT COALESCE(p."bregaApplies", false) AS brega,
+               COALESCE(SUM(ni."totalUsd"), 0)::float8 AS usd,
+               COALESCE(SUM(ni."totalBs"), 0)::float8 AS bs
+        FROM "CreditDebitNoteItem" ni
+        JOIN "CreditDebitNote" n ON n.id = ni."noteId"
+        JOIN "Invoice" i ON i.id = n."invoiceId"
+        LEFT JOIN "Product" p ON p.id = ni."productId"
+        WHERE n.type = 'NCV' AND n.status = 'POSTED'
+          AND i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
+          AND i."paidAt" >= ${gte} AND i."paidAt" <= ${lte}
+        GROUP BY COALESCE(p."bregaApplies", false)
+      `,
+    ]);
+
+    const pick = (rows: Array<{ brega: boolean; usd: number; bs: number }>, brega: boolean) =>
+      rows.find((r) => r.brega === brega) || { usd: 0, bs: 0 };
+    const cs = pick(salesRows, true), ss = pick(salesRows, false);
+    const cr = pick(returnRows, true), sr = pick(returnRows, false);
+
+    const conUsd = Math.max(0, cs.usd - cr.usd);
+    const sinUsd = Math.max(0, ss.usd - sr.usd);
+    const conBs = Math.max(0, cs.bs - cr.bs);
+    const sinBs = Math.max(0, ss.bs - sr.bs);
+    const totalUsd = conUsd + sinUsd;
+
+    return {
+      conBrechaUsd: round2(conUsd),
+      conBrechaBs: round2(conBs),
+      sinBrechaUsd: round2(sinUsd),
+      sinBrechaBs: round2(sinBs),
+      totalUsd: round2(totalUsd),
+      conBrechaPct: totalUsd > 0 ? round2((conUsd / totalUsd) * 100) : 0,
+      sinBrechaPct: totalUsd > 0 ? round2((sinUsd / totalUsd) * 100) : 0,
     };
   }
 

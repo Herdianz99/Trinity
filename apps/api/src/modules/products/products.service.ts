@@ -419,7 +419,7 @@ export class ProductsService {
   // Articulos ACTIVOS SIN codigo de barras (barcode null o vacio), para el reporte de la
   // sesion de codigos de barras. Agrupados por categoria (ordenados por categoria y luego
   // por existencia desc para priorizar lo que hay en stock).
-  async noBarcodeReportList() {
+  async noBarcodeReportList(onlyWithStock = false) {
     const products = await this.prisma.product.findMany({
       where: {
         isActive: true,
@@ -442,6 +442,7 @@ export class ProductsService {
         category: p.category?.name || 'Sin categoria',
         stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
       }))
+      .filter((p) => !onlyWithStock || p.stock > 0)
       .sort((a, b) => {
         if (a.category !== b.category) return a.category.localeCompare(b.category, 'es');
         return b.stock - a.stock;

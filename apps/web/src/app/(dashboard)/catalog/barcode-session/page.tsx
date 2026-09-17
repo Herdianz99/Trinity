@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Barcode, Search, Loader2, X, Check, ScanLine, FileText } from 'lucide-react';
+import { Barcode, Search, Loader2, X, Check, ScanLine, FileText, ChevronDown } from 'lucide-react';
 
 interface FoundProduct {
   id: string;
@@ -25,6 +25,9 @@ export default function BarcodeSessionPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
+
+  const reportMenuRef = useRef<HTMLDivElement>(null);
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -187,6 +190,21 @@ export default function BarcodeSessionPage() {
   useEffect(() => { resetCapture(); setScannerActive(false); stopScanner(); }, [selected]);
   useEffect(() => () => stopScanner(), []);
 
+  // Cerrar el menu de reportes al hacer clic fuera
+  useEffect(() => {
+    if (!reportMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) setReportMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [reportMenuOpen]);
+
+  function openReport(withStock: boolean) {
+    setReportMenuOpen(false);
+    window.open(`/api/proxy/products/report/no-barcode/pdf${withStock ? '?withStock=1' : ''}`, '_blank');
+  }
+
   return (
     <div className="max-w-md mx-auto">
       <div className="flex items-center gap-3 mb-4">
@@ -199,13 +217,32 @@ export default function BarcodeSessionPage() {
         </div>
       </div>
 
-      {/* Reporte de artículos SIN código de barras, agrupado por categoría */}
-      <button
-        onClick={() => window.open('/api/proxy/products/report/no-barcode/pdf', '_blank')}
-        className="w-full mb-4 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 text-sm"
-      >
-        <FileText size={16} /> Reporte: artículos sin código (por categoría)
-      </button>
+      {/* Reportes de artículos SIN código de barras (dropdown) */}
+      <div ref={reportMenuRef} className="relative mb-4">
+        <button
+          onClick={() => setReportMenuOpen((v) => !v)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 text-sm"
+        >
+          <FileText size={16} /> Reportes: artículos sin código
+          <ChevronDown size={16} className={`transition-transform ${reportMenuOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {reportMenuOpen && (
+          <div className="absolute z-10 mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 shadow-lg overflow-hidden">
+            <button
+              onClick={() => openReport(false)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+            >
+              <FileText size={15} className="shrink-0 text-slate-400" /> Todos (por categoría)
+            </button>
+            <button
+              onClick={() => openReport(true)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 hover:bg-slate-700 border-t border-slate-700/60"
+            >
+              <FileText size={15} className="shrink-0 text-slate-400" /> Solo con existencias (por categoría)
+            </button>
+          </div>
+        )}
+      </div>
 
       {msg && (
         <div className={`mb-3 px-4 py-2 rounded-lg text-sm ${msg.type === 'ok' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>

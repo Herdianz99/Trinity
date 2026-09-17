@@ -23,10 +23,10 @@ export class ProductsNoBarcodeReportPdfService {
     return rounded.toLocaleString('es-VE', { maximumFractionDigits: 2 });
   }
 
-  async generate(): Promise<Buffer> {
+  async generate(onlyWithStock = false): Promise<Buffer> {
     const [company, items] = await Promise.all([
       this.getCompanyName(),
-      this.productsService.noBarcodeReportList(),
+      this.productsService.noBarcodeReportList(onlyWithStock),
     ]);
 
     const doc = new PDFDocument({
@@ -38,8 +38,18 @@ export class ProductsNoBarcodeReportPdfService {
 
     // Header
     doc.fontSize(16).font('Helvetica-Bold').fillColor('#000').text(company, 40, 40);
-    doc.fontSize(12).font('Helvetica-Bold').text('Articulos sin codigo de barras', 40, 60);
-    doc.fontSize(9).font('Helvetica').fillColor('#334155').text('Agrupado por categoria', 40, 78);
+    doc.fontSize(12).font('Helvetica-Bold').text(
+      onlyWithStock
+        ? 'Articulos sin codigo de barras (con existencias)'
+        : 'Articulos sin codigo de barras',
+      40,
+      60,
+    );
+    doc.fontSize(9).font('Helvetica').fillColor('#334155').text(
+      onlyWithStock ? 'Agrupado por categoria · solo con existencias' : 'Agrupado por categoria',
+      40,
+      78,
+    );
     doc.text(
       `Generado: ${new Date().toLocaleDateString('es-VE')}  |  ${items.length} articulos`,
       40,
