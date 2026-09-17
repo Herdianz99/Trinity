@@ -378,6 +378,7 @@ model User {
   audits5s            Audit5S[]           @relation("Audit5SCreator")
   damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
   damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
+  goodsReceiptsCreated   GoodsReceipt[]   @relation("GoodsReceiptCreator")
   exhibitionEntries   ExhibitionEntry[]
   disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
   createdAt           DateTime            @default(now())
@@ -527,6 +528,7 @@ model Supplier {
   advances              SupplierAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
   expenses              Expense[]
+  goodsReceipts         GoodsReceipt[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -582,6 +584,7 @@ model Product {
   replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
   replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
   damageReportItems   DamageReportItem[]
+  goodsReceiptItems   GoodsReceiptItem[]
   exhibitionEntries   ExhibitionEntry[]
   lostSales        LostSale[]
   supplierOrderItems  SupplierOrderItem[]
@@ -631,6 +634,7 @@ model Warehouse {
   inventoryAdjustments InventoryAdjustment[]
   inventoryReplacements InventoryReplacement[]
   damageReports         DamageReport[]
+  goodsReceipts         GoodsReceipt[]
   purchaseBills        PurchaseOrder[]  @relation("PurchaseBillWarehouse")
   createdAt       DateTime         @default(now())
 }
@@ -904,6 +908,70 @@ model DamageReportPhoto {
   mediumKey String
   createdAt DateTime         @default(now())
 
+  @@index([itemId])
+}
+
+// ============================================
+// RECEPCION DE MERCANCIA (modulo Almacen)
+// ============================================
+// Ficha DOCUMENTAL de lo que recibe el almacen (bitacora). NO mueve stock ni kardex: las
+// compras siguen manejando el inventario. Registra chofer/placa del camion, proveedor que
+// envio, lo recibido y lo devuelto por defecto/dano, con fotos. Estatus: REGISTRADO | ANULADO.
+model GoodsReceipt {
+  id           String              @id @default(cuid())
+  number       String              @unique // REC-0001
+  date         DateTime // fecha-calendario (medianoche UTC, date-only)
+  warehouseId  String?
+  warehouse    Warehouse?          @relation(fields: [warehouseId], references: [id])
+  supplierId   String?
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id])
+  supplierName String // snapshot del proveedor que envio
+  driverName   String? // chofer
+  truckPlate   String? // placa del camion
+  notes        String?
+  status       String              @default("REGISTRADO") // REGISTRADO | ANULADO
+  items        GoodsReceiptItem[]
+  photos       GoodsReceiptPhoto[] // fotos generales de la ficha (receiptId set, itemId null)
+  createdById  String
+  createdBy    User                @relation("GoodsReceiptCreator", fields: [createdById], references: [id])
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([status])
+  @@index([date])
+}
+
+model GoodsReceiptItem {
+  id           String              @id @default(cuid())
+  receiptId    String
+  receipt      GoodsReceipt        @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product             @relation(fields: [productId], references: [id])
+  productName  String // snapshot
+  productCode  String? // snapshot
+  qtyReceived  Float // cantidad recibida (buena)
+  qtyReturned  Float               @default(0) // devuelto por defecto/dano
+  returnReason String? // motivo del devuelto (DEFECTO | DANO | texto libre)
+  note         String?
+  photos       GoodsReceiptPhoto[] // fotos del renglon devuelto (itemId set)
+
+  @@index([receiptId])
+}
+
+// Foto (thumb 150px + medium 800px webp en Spaces), mismo procesamiento que las fotos de danos.
+// Doble uso: general de la ficha (receiptId set, itemId null) o de un renglon devuelto
+// (itemId set, receiptId null).
+model GoodsReceiptPhoto {
+  id        String            @id @default(cuid())
+  receiptId String?
+  receipt   GoodsReceipt?     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      GoodsReceiptItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  thumbKey  String
+  mediumKey String
+  createdAt DateTime          @default(now())
+
+  @@index([receiptId])
   @@index([itemId])
 }
 

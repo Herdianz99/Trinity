@@ -73,6 +73,7 @@ import { DivisasModule } from './modules/divisas/divisas.module';
 import { BancosModule } from './modules/bancos/bancos.module';
 import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
 import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
+import { GoodsReceiptsModule } from './modules/goods-receipts/goods-receipts.module';
 import { ExhibitionModule } from './modules/exhibition/exhibition.module';
 
 @Module({
@@ -151,6 +152,7 @@ import { ExhibitionModule } from './modules/exhibition/exhibition.module';
     BancosModule,
     Audit5SModule,
     DamageReportsModule,
+    GoodsReceiptsModule,
     ExhibitionModule,
   ],
 })

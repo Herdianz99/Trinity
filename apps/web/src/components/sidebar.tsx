@@ -284,6 +284,7 @@ const menuSections: MenuSection[] = [
     permission: 'almacen',
     items: [
       { label: 'Resumen gerencial', href: '/inventory/summary', icon: <BarChart3 size={18} />, almacenOpsOnly: true },
+      { label: 'Recepción de mercancía', href: '/inventory/goods-receipts', icon: <Truck size={18} />, almacenOpsOnly: true },
       { label: 'Auditoría 5S', href: '/audit-5s', icon: <ClipboardCheck size={18} />, almacenOpsOnly: true },
       { label: 'Reporte de daños', href: '/inventory/damage-reports', icon: <AlertTriangle size={18} />, almacenOpsOnly: true },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} />, almacenOpsOnly: true },
