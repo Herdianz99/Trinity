@@ -286,7 +286,7 @@ export class PaymentSchedulePdfService {
         }
 
         // Table header
-        const colX = { ref: 45, type: 170, due: 230, balance: 310, usd: 390, bs: 460 };
+        const colX = { ref: 45, type: 170, due: 230, balance: 295, usd: 365, bs: 462 };
         doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555');
         doc.text('Nro. documento', colX.ref, y);
         doc.text('Tipo', colX.type, y);
