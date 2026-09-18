@@ -867,7 +867,7 @@ export class CashRegistersService {
       Array.from(new Set(rows.filter((r) => types.includes(r.sourceType) && r.sourceId).map((r) => r.sourceId as string)));
     const [invs, rcs, exps, cas, sas, mvs] = await Promise.all([
       (() => { const ids = idsOf(['SALE_PAYMENT', 'CHANGE', 'SALE_INVOICE']); return ids.length ? this.prisma.invoice.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, customer: { select: { name: true } }, payments: { select: { methodId: true, amountBs: true, reference: true } } } }) : []; })(),
-      (() => { const ids = idsOf(['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT', 'REINTEGRO']); return ids.length ? this.prisma.receipt.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, customer: { select: { name: true } }, supplier: { select: { name: true } } } }) : []; })(),
+      (() => { const ids = idsOf(['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT', 'REINTEGRO']); return ids.length ? this.prisma.receipt.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, customer: { select: { name: true } }, supplier: { select: { name: true } }, payments: { select: { methodId: true, amountBs: true, reference: true } } } }) : []; })(),
       (() => { const ids = idsOf(['EXPENSE']); return ids.length ? this.prisma.expense.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, description: true, supplier: { select: { name: true } }, category: { select: { name: true } } } }) : []; })(),
       (() => { const ids = idsOf(['CUSTOMER_ADVANCE']); return ids.length ? this.prisma.customerAdvance.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, customer: { select: { name: true } } } }) : []; })(),
       (() => { const ids = idsOf(['SUPPLIER_ADVANCE']); return ids.length ? this.prisma.supplierAdvance.findMany({ where: { id: { in: ids } }, select: { id: true, reference: true, supplier: { select: { name: true } } } }) : []; })(),
@@ -897,28 +897,36 @@ export class CashRegistersService {
           const rc = r.sourceId ? rcMap.get(r.sourceId) : null;
           r.docNumber = rc?.number || 'S/N';
           r.partyName = rc?.customer?.name || rc?.supplier?.name || '';
-          r.reference = r.sourceType === 'RECEIPT_COLLECTION' ? 'Cobro' : r.sourceType === 'RECEIPT_PAYMENT' ? 'Pago' : 'Reintegro';
+          // Referencia bancaria del pago (transferencia/pago movil), igual que en las ventas.
+          // Se ubica el pago del recibo por metodo + monto Bs; si no tiene referencia (ej. efectivo)
+          // se cae a la etiqueta del tipo de movimiento.
+          const rpay = rc?.payments?.find((p) => p.methodId === r.methodId && Math.abs((p.amountBs || 0) - r.amountBs) < 0.01);
+          const tipoRef = r.sourceType === 'RECEIPT_COLLECTION' ? 'Cobro' : r.sourceType === 'RECEIPT_PAYMENT' ? 'Pago' : 'Reintegro';
+          r.reference = rpay?.reference || tipoRef;
           break;
         }
         case 'EXPENSE': {
           const ex = r.sourceId ? expMap.get(r.sourceId) : null;
-          r.docNumber = ex?.reference || '—';
-          r.partyName = ex?.supplier?.name || ex?.description || 'Gasto';
-          r.reference = ex?.category?.name || 'Gasto';
+          // "Detalle": categoria + proveedor/descripcion. "Referencia": el comprobante/ref del gasto.
+          r.docNumber = ex?.category?.name || 'Gasto';
+          r.partyName = ex?.supplier?.name || ex?.description || '';
+          r.reference = ex?.reference || '';
           break;
         }
         case 'CUSTOMER_ADVANCE': {
           const a = r.sourceId ? caMap.get(r.sourceId) : null;
-          r.docNumber = a?.reference || '—';
+          // La referencia (transferencia/pago movil que escribe el usuario) va en "Referencia";
+          // si esta vacia se cae a la etiqueta del tipo de movimiento.
+          r.docNumber = '—';
           r.partyName = a?.customer?.name || 'Cliente';
-          r.reference = 'Anticipo';
+          r.reference = a?.reference || 'Anticipo';
           break;
         }
         case 'SUPPLIER_ADVANCE': {
           const a = r.sourceId ? saMap.get(r.sourceId) : null;
-          r.docNumber = a?.reference || '—';
+          r.docNumber = '—';
           r.partyName = a?.supplier?.name || 'Proveedor';
-          r.reference = 'Anticipo';
+          r.reference = a?.reference || 'Anticipo';
           break;
         }
         default: { // MANUAL u otros
