@@ -391,14 +391,8 @@ export class CreditDebitNotesService {
       if (invoice.status === 'RETURNED') {
         throw new BadRequestException('La factura ya fue devuelta completamente');
       }
-      // NCV with MANUAL origin only applies to CREDIT invoices
-      if (dto.type === 'NCV' && dto.origin === 'MANUAL' && invoice.paymentType !== 'CREDIT') {
-        throw new BadRequestException('Las notas de crédito por ajuste solo aplican a facturas a crédito');
-      }
-      // NDV only applies to CREDIT invoices
-      if (dto.type === 'NDV' && invoice.paymentType !== 'CREDIT') {
-        throw new BadRequestException('Las notas de débito solo aplican a facturas a crédito');
-      }
+      // Las notas de credito/debito manuales (por ajuste de monto) aplican a cualquier
+      // factura, sea de contado o a credito. Antes se limitaban solo a las de credito.
       // NCV MERCHANDISE: allows PAID or PARTIAL_RETURN
       if (dto.type === 'NCV' && dto.origin === 'MERCHANDISE') {
         if (!['PAID', 'PARTIAL_RETURN'].includes(invoice.status)) {

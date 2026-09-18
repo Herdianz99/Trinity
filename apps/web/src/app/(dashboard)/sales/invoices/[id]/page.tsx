@@ -257,8 +257,10 @@ export default function InvoiceDetailPage() {
   const isPaidish = ['PAID', 'PARTIAL_RETURN'].includes(invoice?.status || '');
   const canPrintPdf = ['PAID', 'PARTIAL_RETURN', 'RETURNED'].includes(invoice?.status || '');
   const canReturnInvoice = isPaidish && hasPerm('RETURN_INVOICE');
-  const canCreditNote = invoice?.paymentType === 'CREDIT' && hasPerm('CREDIT_NOTE_SALE');
-  const canDebitNote = invoice?.paymentType === 'CREDIT' && hasPerm('DEBIT_NOTE_SALE');
+  // Notas de credito/debito manuales: disponibles para cualquier factura (contado o credito),
+  // no solo a credito. Solo requieren el permiso correspondiente.
+  const canCreditNote = hasPerm('CREDIT_NOTE_SALE');
+  const canDebitNote = hasPerm('DEBIT_NOTE_SALE');
   // Duplicar: disponible para cualquier factura con articulos (crea una pre-factura nueva a precios de hoy).
   const canDuplicate = (invoice?.items?.length || 0) > 0;
   const hasMenuActions = canPrintPdf || canReturnInvoice || canCreditNote || canDebitNote || canRetain || canDuplicate;
