@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, HandCoins, Loader2, Save, Plus, Pencil, Shield } from 'lucide-react';
+import { ArrowLeft, HandCoins, Loader2, Save, Plus, Pencil, Shield, AlertTriangle } from 'lucide-react';
 import CustomerFormModal from '@/components/customer-form-modal';
 import CustomerSearchSelect from '@/components/customer-search-select';
 
@@ -74,6 +74,9 @@ export default function NewReceivablePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Credito del cliente (limite + deuda actual) para la alerta de sobregiro. Todo en USD.
+  const [creditInfo, setCreditInfo] = useState<{ creditLimit: number; totalDebt: number } | null>(null);
+
   useEffect(() => { document.title = 'Nueva CxC | Trinity ERP'; }, []);
 
   useEffect(() => {
@@ -104,6 +107,20 @@ export default function NewReceivablePage() {
     const base = new Date(y, m - 1, d);
     setDueDate(formatLocalDate(addDays(base, creditDays)));
   }, [creditDays, originalDate]);
+
+  // Al seleccionar cliente (o tras editarlo, via custKey) traer su limite y deuda actual.
+  useEffect(() => {
+    if (!customerId) { setCreditInfo(null); return; }
+    let cancelled = false;
+    fetch(`/api/proxy/receivables/customer/${customerId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled || !d) return;
+        setCreditInfo({ creditLimit: d.customer?.creditLimit ?? 0, totalDebt: d.totalDebt ?? 0 });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [customerId, custKey]);
 
   function openNewCustomer() { setCustomerModalMode('create'); setCustomerModalOpen(true); }
   function openEditCustomer() { if (customerId) { setCustomerModalMode('edit'); setCustomerModalOpen(true); } }
@@ -137,6 +154,27 @@ export default function NewReceivablePage() {
     if (!exchangeRate || !createRetention) return 0;
     return currency === 'USD' ? Math.round(retentionAmount * exchangeRate * 100) / 100 : retentionAmount;
   }, [retentionAmount, exchangeRate, currency, createRetention]);
+
+  // Monto de esta CxC en USD (la deuda del backend viene en USD; si la CxC es en Bs se convierte por la tasa).
+  const newAmountUsd = useMemo(() => {
+    if (currency === 'USD') return totalDoc;
+    return exchangeRate ? Math.round((totalDoc / exchangeRate) * 100) / 100 : 0;
+  }, [currency, totalDoc, exchangeRate]);
+
+  // Alerta de sobregiro: deuda actual + esta CxC supera el limite. Con limite 0 alerta ante cualquier monto.
+  // Solo avisa; nunca bloquea el guardado.
+  const creditAlert = useMemo(() => {
+    if (!creditInfo) return null;
+    const projected = Math.round((creditInfo.totalDebt + newAmountUsd) * 100) / 100;
+    if (projected <= creditInfo.creditLimit) return null;
+    return {
+      creditLimit: creditInfo.creditLimit,
+      currentDebt: creditInfo.totalDebt,
+      newAmount: newAmountUsd,
+      projected,
+      excess: Math.round((projected - creditInfo.creditLimit) * 100) / 100,
+    };
+  }, [creditInfo, newAmountUsd]);
 
   const handleSubmit = useCallback(async () => {
     setError('');
@@ -206,6 +244,23 @@ export default function NewReceivablePage() {
 
       {error && (
         <div className="px-4 py-3 rounded-lg text-sm border bg-red-500/10 text-red-400 border-red-500/20">{error}</div>
+      )}
+
+      {creditAlert && (
+        <div className="px-4 py-3 rounded-lg text-sm border bg-amber-500/10 border-amber-500/30 flex items-start gap-2.5">
+          <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-400" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-amber-200">Se supera el limite de credito del cliente</p>
+            <p className="text-amber-300/90 font-mono text-xs">
+              Limite: ${fmt(creditAlert.creditLimit)} &nbsp;·&nbsp; Deuda actual: ${fmt(creditAlert.currentDebt)} &nbsp;·&nbsp; Esta CxC: ${fmt(creditAlert.newAmount)}
+            </p>
+            <p className="text-amber-300/90 text-xs">
+              Deuda proyectada: <span className="font-semibold font-mono">${fmt(creditAlert.projected)}</span> — excede el limite por{' '}
+              <span className="font-semibold font-mono">${fmt(creditAlert.excess)}</span>.
+            </p>
+            <p className="text-[11px] text-amber-400/70 pt-0.5">Es solo un aviso: puedes continuar y guardar la CxC de todas formas.</p>
+          </div>
+        </div>
       )}
 
       {/* Layout 2 columnas */}
