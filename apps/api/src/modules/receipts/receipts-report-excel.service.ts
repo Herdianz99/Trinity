@@ -209,7 +209,11 @@ export class ReceiptsReportExcelService {
       gDebe += rDebe; gHaber += rHaber;
 
       const pays = (r.payments || []).filter((p: any) => (p.amountUsd || 0) > 0.0001);
-      const metodos = pays.map((p: any) => `${p.method?.name || 'Pago'} $${this.fmt(p.amountUsd)}`).join('  ·  ');
+      const metodos = pays.map((p: any) => {
+        const base = `${p.method?.name || 'Pago'} $${this.fmt(p.amountUsd)}`;
+        const ref = (p.reference || '').trim();
+        return ref ? `${base} - ${ref}` : base;
+      }).join('  ·  ');
 
       if (items.length === 0) {
         // Recibo sin items con monto: al menos una fila con el neto.
@@ -244,7 +248,7 @@ export class ReceiptsReportExcelService {
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [
       { wch: 11 }, { wch: 14 }, { wch: 30 }, { wch: 16 }, { wch: 11 }, { wch: 16 }, { wch: 22 },
-      { wch: 13 }, { wch: 13 }, { wch: 15 }, { wch: 34 },
+      { wch: 13 }, { wch: 13 }, { wch: 15 }, { wch: 50 },
     ];
 
     const range = XLSX.utils.decode_range(ws['!ref'] as string);

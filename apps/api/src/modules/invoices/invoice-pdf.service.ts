@@ -216,6 +216,7 @@ export class InvoicePdfService {
         items: true,
         payments: { include: { method: true } },
         serie: true,
+        seller: { select: { name: true } },
       },
     });
 
@@ -303,6 +304,7 @@ export class InvoicePdfService {
       } else {
         doc.text('Cliente: General / Consumidor Final', 40, y); y += 12;
       }
+      if (invoice.seller?.name) { doc.text(`Vendedor: ${invoice.seller.name}`, 40, y); y += 12; }
 
       y += 10;
 

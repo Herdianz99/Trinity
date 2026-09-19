@@ -17,6 +17,27 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 131 (2026-09-19) — Vendedor en PDF de factura · Referencia en métodos de pago (Excel detallado de cobranzas)
+
+> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **solo API sin migración** (rebuild). Diego lo despliega cuando quiera.
+
+- **Vendedor en el PDF de factura** (`invoice-pdf.service.ts`, endpoint `/invoices/:id/pdf`). Se agregó la relación `seller` al query y se muestra `Vendedor: <nombre>` justo debajo de los datos del cliente (fiscal y nota de entrega). Condicional: si la factura no tiene vendedor, no aparece la línea.
+- **Referencia en la columna "Metodos de pago" del Excel detallado de cobranzas** (`receipts-report-excel.service.ts`, `generateDetailed`, pantalla `/receipts/collection`). Ahora cada método muestra su referencia bancaria: `P.V BANCARIBE P $50,00 - 478512`. Condicional (sin referencia se ve igual que antes); varios métodos se separan con `·`. Se ensanchó la columna (34→50). El campo `ReceiptPayment.reference` ya venía en el query (usa `include`).
+- **Data prod (aceros):** se eliminó la factura de venta `VTA-26-00002282` (nota de entrega a crédito) y todos sus documentos derivados (CxC `CUSTOMER_CREDIT`, asiento del libro de ventas, print job, movimiento de stock) en una transacción; se repuso +300 al stock de CON00003 (−253→47). Correlativo con hueco a propósito. Respaldo en el server `/root/backup-aceros-VTA2282-*.sql.gz`.
+
+## 🗓️ Sesión 130 (2026-09-19) — Notas de crédito/débito de venta en cualquier factura
+
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-19, commit `f23dfc11`). Verificado por SSH: las 6 instancias (eltrebol/ferre, inversiones, total, totalturen, aceros, acerosmayor) en HEAD `f23dfc1` = `origin/main`. Cambio **web + API sin migración** (solo rebuild).
+
+- **Notas de crédito/débito de venta disponibles en cualquier factura (contado o crédito), no solo a crédito.** Antes solo se podían emitir sobre facturas a crédito; se eliminó esa restricción en `credit-debit-notes.service.ts` y se ajustó la UI del detalle de factura (`sales/invoices/[id]/page.tsx`) para ofrecer la opción en facturas de contado también.
+
+## 🗓️ Sesión 129 (2026-09-18) — Alerta de límite de crédito al crear CxC · Libro mayor de caja con referencia real
+
+> ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-19, commits `44c0449a` + `f32379f1`). Verificado por SSH: las 6 instancias en HEAD `f23dfc1` (incluye estos commits). Cambio **web + API sin migración** (solo rebuild).
+
+- **Alerta de límite de crédito al crear CxC (`/receivables/new`).** Al seleccionar cliente se consulta su `creditLimit` y deuda actual (`GET /receivables/customer/:id`). Si deuda + esta CxC supera el límite, muestra un banner de aviso (límite, deuda actual, monto, excedente). **Solo avisa, NO bloquea** el guardado. Con límite 0 alerta ante cualquier monto. CxC en Bs se convierte a USD por la tasa para comparar contra la deuda (USD).
+- **Fix — Libro mayor de caja muestra la referencia real** (no la palabra genérica). En `enrichLedgerRows` la columna "Referencia" estaba hardcodeada por tipo de movimiento (Cobro/Pago/Reintegro/Anticipo/categoría), ignorando la referencia bancaria/comprobante que sí se guarda. Ahora: Cobro/Pago/Reintegro usan `ReceiptPayment.reference` (match por método + monto Bs, respaldo a la etiqueta si es efectivo/sin ref); Anticipo cliente/proveedor muestra su `reference`; Gasto usa comprobante/reference. Afecta tabla y PDF (comparten la función). Sin migraciones.
+
 ## 🗓️ 2026-09-14 — Módulo de Exhibición + "Resumen de Caja" por caja + métodos "F" + varios fixes
 
 > ### ✅ DESPLEGADO EN LAS 6 EMPRESAS (2026-09-14, HEAD `0086667`)
@@ -66,7 +87,9 @@
 
 ## 🗓️ Sesión 128 (2026-09-17) — Dashboard: KPI Ventas con brecha vs sin brecha · dropdown de reportes en Sesión de códigos de barras · Recepción de mercancía (módulo Almacén)
 
-> ### ⚠️ SIN DESPLEGAR (todo en `main`) — arranca INOFENSIVO. Incluye **1 migración aditiva** (`20260917140000_goods_receipt`, `CREATE TABLE IF NOT EXISTS`, respaldada en `deploy/fix-schema.sql`). El deploy estándar (`git pull && bash deploy.sh`) corre `migrate deploy` + `prisma generate` + `fix-schema.sql`, así que queda cubierta. La Recepción de mercancía solo la ven empresas con `useAlmacenOps` ON (hoy aceros/acerosmayor).
+> ### ✅ DESPLEGADO en las 6 empresas (2026-09-17, commit `960806d`). Verificado en los 4 servidores: commit al día, tabla `GoodsReceipt` creada (migración `20260917140000_goods_receipt`), PM2 online, APIs arriba. Incluyó **1 migración aditiva** (`CREATE TABLE IF NOT EXISTS`, respaldada en `deploy/fix-schema.sql`).
+>
+> **⚠️ Recepción de mercancía GATED por `useAlmacenOps` (todo el módulo Almacén es `almacenOpsOnly`).** Revisado post-deploy: **aceros y acerosmayor tienen `useAlmacenOps=false`** → no ven el menú ALMACÉN todavía. Para activarlo: `UPDATE "CompanyConfig" SET "useAlmacenOps"=true` en la BD de cada empresa (también surface Auditoría 5S, Reporte de daños, Resumen gerencial y Alertas). PENDIENTE decidir/activar en las empresas que usarán la recepción.
 
 - **Nuevo KPI en el dashboard gerencial: "Ventas con Brecha vs sin Brecha"** (dona + monto USD/Bs + %). "Con brecha" = producto con flag `bregaApplies=true` (lleva brecha), sin importar el % efectivo. Monto = ventas NETAS a nivel de línea (`InvoiceItem.totalUsd`, incluye IVA) de las facturas cobradas del período, menos lo devuelto.
   - **Reconciliación con Ventas NETO:** las devoluciones (NCV POSTED) se atan al **mismo criterio** que `getNetInvoiceRows` (por `paidAt` de la factura ORIGINAL, no por `documentDate` de la NCV) para que `con+sin` cuadre con el KPI "Ventas". Queda un residual de pocos $ (IGTF va en `Invoice.totalUsd` pero no en las líneas; + piso a 0 por factura de Ventas NETO), inherente a un split por producto e imposible de atribuir a "con/sin brecha".
