@@ -14,6 +14,7 @@ export interface Company {
 
 export const COMPANIES: Company[] = [
   { key: 'inversiones', name: 'Inversiones El Trébol',      host: 'inversiones.eltrebol.app', url: 'https://inversiones.eltrebol.app' },
+  { key: 'trebolmayor', name: 'Inversiones El Trébol Mayorista', host: 'mayor.eltrebol.app',  url: 'https://mayor.eltrebol.app' },
   { key: 'eltrebol',    name: 'Ferreconstrucciones El Trébol', host: 'eltrebol.app',         url: 'https://eltrebol.app' },
   { key: 'total',       name: 'Total Tools',                 host: 'total.eltrebol.app',       url: 'https://total.eltrebol.app' },
   { key: 'totalturen',  name: 'Total Tools Turén',           host: 'totalturen.eltrebol.app',  url: 'https://totalturen.eltrebol.app' },
