@@ -2956,3 +2956,10 @@ DO $$ BEGIN
   ALTER TABLE "GoodsReceiptPhoto" ADD CONSTRAINT "GoodsReceiptPhoto_itemId_fkey"
     FOREIGN KEY ("itemId") REFERENCES "GoodsReceiptItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Customer: quien registro el cliente (rastreo de creacion)
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "createdById" TEXT;
+DO $$ BEGIN
+  ALTER TABLE "Customer" ADD CONSTRAINT "Customer_createdById_fkey"
+    FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

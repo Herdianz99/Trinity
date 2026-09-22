@@ -381,6 +381,7 @@ model User {
   goodsReceiptsCreated   GoodsReceipt[]   @relation("GoodsReceiptCreator")
   exhibitionEntries   ExhibitionEntry[]
   disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
+  customersCreated    Customer[]          @relation("CustomerCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -1117,6 +1118,8 @@ model Customer {
   ivaRetentions         CustomerIvaRetention[]
   lostSales             LostSale[]
   employee              Employee?
+  createdById  String?                              // Usuario que registro el cliente (null en clientes previos al backfill)
+  createdBy    User?        @relation("CustomerCreator", fields: [createdById], references: [id])
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }

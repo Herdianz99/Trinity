@@ -827,6 +827,8 @@ export class ReceivablesService {
       .filter((r) => r.dueDate && r.dueDate < todayKey)
       .reduce((sum, r) => sum + (r.amountUsd - r.paidAmountUsd), 0);
 
+    const analysis = this.buildCreditAnalysis(receivables, customer.creditDays, todayKey);
+
     return {
       customer: {
         id: customer.id,
@@ -839,10 +841,123 @@ export class ReceivablesService {
       totalDebt: Math.round(totalDebt * 100) / 100,
       totalOverdue: Math.round(totalOverdue * 100) / 100,
       availableCredit: Math.round((customer.creditLimit - totalDebt) * 100) / 100,
+      analysis,
       receivables: receivables.map((r) => ({
         ...r,
         balanceUsd: Math.round((r.amountUsd - r.paidAmountUsd) * 100) / 100,
       })),
+    };
+  }
+
+  /**
+   * Analisis del comportamiento de pago del cliente sobre su credito PROPIO.
+   * Excluye FINANCING_PLATFORM (Cashea/Crediagro): esos los cobra la plataforma, no reflejan
+   * si el cliente paga a tiempo. Mide puntualidad = saldar en/antes del vencimiento (dueDate).
+   * Fechas ancladas al dia-Caracas (caracasDateKey) para que "dias" sean enteros limpios.
+   */
+  private buildCreditAnalysis(
+    receivables: Array<{
+      type: string;
+      status: string;
+      amountUsd: number;
+      paidAmountUsd: number;
+      dueDate: Date | null;
+      paidAt: Date | null;
+      createdAt: Date;
+      payments?: Array<{ createdAt: Date }>;
+    }>,
+    creditDays: number,
+    todayKey: Date,
+  ) {
+    const MS_DAY = 86400000;
+    // Solo credito directo del cliente (CxC propias + manuales). Fuera plataformas de financiamiento.
+    const credit = receivables.filter((r) => r.type !== 'FINANCING_PLATFORM');
+
+    const paid = credit.filter((r) => r.status === 'PAID');
+    const pending = credit.filter((r) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(r.status));
+
+    // Fecha en que se salda una CxC: paidAt, o el ultimo abono, o su createdAt como ultimo recurso.
+    const settleDate = (r: { paidAt: Date | null; payments?: Array<{ createdAt: Date }>; createdAt: Date }) =>
+      r.paidAt ?? r.payments?.[0]?.createdAt ?? r.createdAt;
+
+    let onTimeCount = 0;
+    let lateCount = 0;
+    let lateDaysSum = 0;
+    let maxDaysLate = 0;
+    let daysToPaySum = 0;
+    let daysToPayN = 0;
+
+    for (const r of paid) {
+      const settleKey = caracasDateKey(settleDate(r));
+      const issueKey = caracasDateKey(r.createdAt);
+      const dtp = Math.round((settleKey.getTime() - issueKey.getTime()) / MS_DAY);
+      if (dtp >= 0) { daysToPaySum += dtp; daysToPayN++; }
+      if (r.dueDate) {
+        const lateDays = Math.round((settleKey.getTime() - r.dueDate.getTime()) / MS_DAY);
+        if (lateDays <= 0) {
+          onTimeCount++;
+        } else {
+          lateCount++;
+          lateDaysSum += lateDays;
+          if (lateDays > maxDaysLate) maxDaysLate = lateDays;
+        }
+      }
+    }
+
+    // Vencido HOY (saldo pendiente con dueDate pasada)
+    const overdueNow = pending.filter((r) => r.dueDate && r.dueDate < todayKey);
+    const currentOverdueUsd = overdueNow.reduce((s, r) => s + (r.amountUsd - r.paidAmountUsd), 0);
+    let currentMaxOverdueDays = 0;
+    for (const r of overdueNow) {
+      const d = Math.round((todayKey.getTime() - (r.dueDate as Date).getTime()) / MS_DAY);
+      if (d > currentMaxOverdueDays) currentMaxOverdueDays = d;
+    }
+
+    const settledWithDue = onTimeCount + lateCount;
+    const onTimeRate = settledWithDue > 0 ? onTimeCount / settledWithDue : null;
+
+    // Clasificacion del pagador
+    let rating:
+      | 'SIN_HISTORIAL'
+      | 'EN_MORA'
+      | 'EXCELENTE'
+      | 'BUENO'
+      | 'REGULAR'
+      | 'LENTO';
+    if (credit.length === 0) {
+      rating = 'SIN_HISTORIAL';
+    } else if (currentOverdueUsd > 0.01 && currentMaxOverdueDays > 30) {
+      rating = 'EN_MORA';
+    } else if (onTimeRate === null) {
+      rating = 'SIN_HISTORIAL';
+    } else if (onTimeRate >= 0.9) {
+      rating = 'EXCELENTE';
+    } else if (onTimeRate >= 0.7) {
+      rating = 'BUENO';
+    } else if (onTimeRate >= 0.4) {
+      rating = 'REGULAR';
+    } else {
+      rating = 'LENTO';
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      rating,
+      creditDays,
+      totalCount: credit.length,
+      paidCount: paid.length,
+      pendingCount: pending.length,
+      overdueCount: overdueNow.length,
+      onTimeCount,
+      lateCount,
+      onTimeRate: onTimeRate === null ? null : Math.round(onTimeRate * 100), // 0..100 %
+      avgDaysToPay: daysToPayN > 0 ? Math.round(daysToPaySum / daysToPayN) : null,
+      avgDaysLate: lateCount > 0 ? Math.round(lateDaysSum / lateCount) : null,
+      maxDaysLate: lateCount > 0 ? maxDaysLate : null,
+      currentOverdueUsd: r2(currentOverdueUsd),
+      currentMaxOverdueDays,
+      totalCreditUsd: r2(credit.reduce((s, r) => s + r.amountUsd, 0)),
+      totalPaidUsd: r2(credit.reduce((s, r) => s + r.paidAmountUsd, 0)),
     };
   }
 

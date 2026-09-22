@@ -141,6 +141,7 @@ export class CustomersService {
             type: true,
           },
         },
+        createdBy: { select: { id: true, name: true } },
       },
     });
 
@@ -220,7 +221,7 @@ export class CustomersService {
     }
     const code = await this.generateCustomerCode();
     return this.prisma.customer.create({
-      data: { ...dto, code, creditReviewedAt: creditLimit > 0 ? new Date() : null },
+      data: { ...dto, code, createdById: userId, creditReviewedAt: creditLimit > 0 ? new Date() : null },
     });
   }
 

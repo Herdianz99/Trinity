@@ -56,15 +56,22 @@ ya es medianoche UTC, asi que todo lo de la noche cae en el dia siguiente (venta
 - Para fechas locales en **frontend** usar getFullYear()/getMonth()/getDate() (que es la hora local del navegador
   = Caracas para el usuario), nunca toISOString().
 
-## Deploy al servidor
-- Servidor: `134.209.220.233` (root)
+## Deploy al servidor (empresa grande / inversiones)
+- Servidor: `134.209.164.59` (root)
 - Ruta del proyecto: `/opt/Trinity`
 - SIEMPRE usar este comando para hacer deploy:
-  `ssh root@134.209.220.233 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`
+  `ssh root@134.209.164.59 "cd /opt/Trinity && git pull origin main && bash deploy.sh"`
 - NUNCA usar solo `bash deploy.sh` sin hacer `git pull` primero — el script se actualiza a sí mismo y la versión vieja en memoria no refleja los cambios
 - El script `deploy.sh` ejecuta: pnpm install, prisma migrate, prisma generate, build API + Web, restart PM2, health check
 - PM2 procesos: `trinity-api` (puerto 4000), `trinity-web` (puerto 3000)
 - Prisma en servidor usa v5: `npx prisma@5.22.0`
+
+### Empresa MAYORISTA (trebolmayor) — co-locada en el MISMO servidor, aislada
+- Mismo droplet `134.209.164.59`, pero instancia separada — NO tocar con el deploy de arriba
+- Web `https://mayor.eltrebol.app` (:3001) · API `https://api.mayor.eltrebol.app` (:4001)
+- DB `trebolmayor_db`, clon `/opt/Trinity-mayor`, PM2 `trinity-api-mayor` / `trinity-web-mayor`
+- Deploy propio (NO el deploy.sh del repo, ese reinicia la grande):
+  `ssh root@134.209.164.59 "bash /opt/deploy-trinity-mayor.sh"`
 
 ### Pre-deploy checklist — CRITICO
 ANTES de hacer deploy o decirle al usuario que haga deploy, ejecutar SIEMPRE:

@@ -17,9 +17,20 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 134 (2026-09-22) — Cliente: quién lo creó + análisis de crédito (puntualidad de pago)
+
+> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260922130000_customer_created_by`, aditiva/idempotente con `IF NOT EXISTS` + respaldo en `deploy/fix-schema.sql`). Diego lo despliega cuando quiera. Verificado e2e en local (grande_db) con JWT firmado.
+
+Dos añadidos a la pantalla de detalle de cliente (`/sales/customers/[id]`):
+
+- **Quién registró el cliente**: nuevo campo `Customer.createdById` (FK a `User`, nullable). Se setea en `customers.service.create` con el userId autenticado; `findOne` incluye `createdBy {id,name}`. En la pestaña **Información General** se muestra un bloque "Registrado por" + fecha de registro. Los clientes previos al cambio quedan en `null` → la UI muestra *"No registrado"* (no hay log histórico para backfillear el autor; de aquí en adelante sí queda). Migración + red de seguridad en `fix-schema.sql`.
+- **Análisis de crédito** (tarjeta en la pestaña **Cuentas por cobrar**): `receivables.service.findByCustomer` ahora devuelve `analysis` (helper `buildCreditAnalysis`). Mide puntualidad = saldar en/antes del `dueDate`. **Excluye `FINANCING_PLATFORM`** (Cashea/Crediagro los cobra la plataforma, no reflejan al cliente). Métricas: rating (SIN_HISTORIAL / EN_MORA (vencido >30d) / EXCELENTE ≥90% / BUENO ≥70% / REGULAR ≥40% / LENTO), % pagos a tiempo, días promedio en pagar (issue→saldo vía `paidAt`/último abono), atraso promedio y peor atraso, vencido hoy + días, totales a crédito/pagado. Fechas ancladas con `caracasDateKey`. Verificado con JALIL CASA → **En mora**, 50% puntual, 13d prom, $6.280 vencido.
+
+**Aparte (operación de datos, sin código):** se cargaron **300 productos** a la empresa **trebolmayor** (`mayor.eltrebol.app`) desde `PROGRAMACION.xlsx` — categoría genérica GEN, Referencia→`supplierRef`, Código→`otherCode`, precio = costo×1.5×1.16, sin brecha, stock inicial con kardex.
+
 ## 🗓️ Sesión 133 (2026-09-21) — Exhibición: cantidad exhibida + retiro automático al vender
 
-> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260921120000_exhibicion_cantidad`, aditiva/idempotente). Diego lo despliega cuando quiera.
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-21, deploy manual de Diego, commit `8381bf2c`): eltrebol/ferre, inversiones, trebolmayor, total, totalturen, aceros, acerosmayor. Cambio **web + API CON migración** (`20260921120000_exhibicion_cantidad`, aditiva/idempotente). Verificado por SSH: las 7 en HEAD `8381bf2` = `origin/main`; `migrate status = up to date` en las 7 BDs (columna `exhibitedQuantity` presente); PM2 api+web `online` en los 4 droplets; health `200` y `/products` `401` (no `500`) en las 7 APIs. Nota: la migración ya se había aplicado también en local (grande_db) — antes de correrla, el API reventaba con `500` en `/products` (`column Product.exhibitedQuantity does not exist`) y POS + `/catalog/products` salían vacíos.
 
 Evolución del módulo `/exhibition` (antes binario exhibido sí/no, aparte de ventas) para llevar **cantidad exhibida** por artículo y **retirar automáticamente de la vitrina al vender**. Revierte a propósito 2 decisiones del diseño original (`docs/superpowers/specs/2026-09-14-modulo-exhibicion-design.md`): "sin cantidades" y "no se cruza con ventas".
 
@@ -32,7 +43,7 @@ Evolución del módulo `/exhibition` (antes binario exhibido sí/no, aparte de v
 
 ## 🗓️ Sesión 131 (2026-09-19) — Vendedor en PDF de factura · Referencia en métodos de pago (Excel detallado de cobranzas)
 
-> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **solo API sin migración** (rebuild). Diego lo despliega cuando quiera.
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-21, deploy manual de Diego, incluido en `8381bf2c`). Cambio **solo API sin migración** (rebuild). Verificado por SSH: las 7 instancias en HEAD `8381bf2` = `origin/main`.
 
 - **Vendedor en el PDF de factura** (`invoice-pdf.service.ts`, endpoint `/invoices/:id/pdf`). Se agregó la relación `seller` al query y se muestra `Vendedor: <nombre>` justo debajo de los datos del cliente (fiscal y nota de entrega). Condicional: si la factura no tiene vendedor, no aparece la línea.
 - **Referencia en la columna "Metodos de pago" del Excel detallado de cobranzas** (`receipts-report-excel.service.ts`, `generateDetailed`, pantalla `/receipts/collection`). Ahora cada método muestra su referencia bancaria: `P.V BANCARIBE P $50,00 - 478512`. Condicional (sin referencia se ve igual que antes); varios métodos se separan con `·`. Se ensanchó la columna (34→50). El campo `ReceiptPayment.reference` ya venía en el query (usa `include`).

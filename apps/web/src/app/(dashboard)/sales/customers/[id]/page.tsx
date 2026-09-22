@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, UserCheck, Save, Loader2, ChevronLeft, ChevronRight,
   ExternalLink, DollarSign, X, Search, LogOut,
+  Award, Clock, AlertTriangle, CalendarClock, UserPlus,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import SeniatModal from '@/components/seniat-modal';
@@ -17,6 +18,8 @@ interface Customer {
   isEmployee?: boolean;
   creditAuthorizedBy?: string | null;
   creditReviewedAt?: string | null;
+  createdBy?: { id: string; name: string } | null;
+  createdAt?: string;
   pendingDebt: number; availableCredit: number;
   invoices: { id: string; number: string; status: string; totalUsd: number; totalBs: number; createdAt: string }[];
 }
@@ -24,8 +27,19 @@ interface Receivable {
   id: string; amountUsd: number; balanceUsd: number; dueDate: string | null;
   status: string; invoice: { id: string; number: string };
 }
+interface CreditAnalysis {
+  rating: 'SIN_HISTORIAL' | 'EN_MORA' | 'EXCELENTE' | 'BUENO' | 'REGULAR' | 'LENTO';
+  creditDays: number;
+  totalCount: number; paidCount: number; pendingCount: number; overdueCount: number;
+  onTimeCount: number; lateCount: number;
+  onTimeRate: number | null;
+  avgDaysToPay: number | null; avgDaysLate: number | null; maxDaysLate: number | null;
+  currentOverdueUsd: number; currentMaxOverdueDays: number;
+  totalCreditUsd: number; totalPaidUsd: number;
+}
 interface CxCData {
   totalDebt: number; totalOverdue: number; availableCredit: number;
+  analysis?: CreditAnalysis;
   receivables: Receivable[];
 }
 
@@ -44,6 +58,24 @@ const INV_STATUS_LABELS: Record<string, string> = {
   RETURNED: 'Devuelta',
   CANCELLED: 'Cancelada',
 };
+
+const RATING_META: Record<string, { label: string; desc: string; box: string; text: string; badge: string }> = {
+  EXCELENTE: { label: 'Excelente pagador', desc: 'Salda a tiempo de forma consistente.', box: 'border-emerald-500/30 bg-emerald-500/10', text: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  BUENO:     { label: 'Buen pagador',      desc: 'Cumple casi siempre con los plazos.', box: 'border-green-500/30 bg-green-500/10', text: 'text-green-400', badge: 'bg-green-500/20 text-green-300 border-green-500/30' },
+  REGULAR:   { label: 'Pagador regular',   desc: 'Se atrasa con cierta frecuencia.', box: 'border-amber-500/30 bg-amber-500/10', text: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  LENTO:     { label: 'Pagador lento',     desc: 'Suele pagar despues del vencimiento.', box: 'border-orange-500/30 bg-orange-500/10', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/30' },
+  EN_MORA:   { label: 'En mora',           desc: 'Tiene saldo vencido por mas de 30 dias.', box: 'border-red-500/30 bg-red-500/10', text: 'text-red-400', badge: 'bg-red-500/20 text-red-300 border-red-500/30' },
+  SIN_HISTORIAL: { label: 'Sin historial de credito', desc: 'Aun no tiene ventas a credito saldadas para evaluar.', box: 'border-slate-600/40 bg-slate-800/40', text: 'text-slate-300', badge: 'bg-slate-600/30 text-slate-300 border-slate-600/40' },
+};
+
+function Stat({ label, value, tone = 'text-white' }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 px-3 py-2.5">
+      <p className="text-[11px] text-slate-500 leading-tight mb-1">{label}</p>
+      <p className={`text-base font-bold font-mono ${tone}`}>{value}</p>
+    </div>
+  );
+}
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -278,6 +310,35 @@ export default function CustomerDetailPage() {
 
         {/* ═══ TAB: Info ═══ */}
         <TabsContent value="info">
+          <div className="card p-4 mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                <UserPlus className="text-green-400" size={16} />
+              </div>
+              <div>
+                <span className="text-slate-500 text-xs block leading-none mb-0.5">Registrado por</span>
+                <span className="text-slate-200 font-medium">
+                  {customer.createdBy?.name || <span className="text-slate-500 italic">No registrado</span>}
+                </span>
+              </div>
+            </div>
+            {customer.createdAt && (
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-slate-700/40 border border-slate-600/40">
+                  <CalendarClock className="text-slate-400" size={16} />
+                </div>
+                <div>
+                  <span className="text-slate-500 text-xs block leading-none mb-0.5">Fecha de registro</span>
+                  <span className="text-slate-200 font-medium">{fmtDate(customer.createdAt)}</span>
+                </div>
+              </div>
+            )}
+            {!customer.createdBy && (
+              <span className="text-xs text-slate-500">
+                Los clientes creados antes de esta funcion no tienen autor registrado; los nuevos si.
+              </span>
+            )}
+          </div>
           <form onSubmit={handleSave} className="card p-6 space-y-4">
             {(customer as any).isDefaultCustomer && !isAdmin && (
               <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
@@ -461,6 +522,70 @@ export default function CustomerDetailPage() {
             <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-green-500" size={24} /></div>
           ) : cxc ? (
             <div className="space-y-4">
+              {cxc.analysis && (() => {
+                const a = cxc.analysis!;
+                const m = RATING_META[a.rating] || RATING_META.SIN_HISTORIAL;
+                const hasHistory = a.rating !== 'SIN_HISTORIAL';
+                const RatingIcon = a.rating === 'EN_MORA' ? AlertTriangle : a.rating === 'SIN_HISTORIAL' ? Clock : Award;
+                return (
+                  <div className={`card p-5 border ${m.box}`}>
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl border ${m.box}`}>
+                          <RatingIcon className={m.text} size={22} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-bold text-white">Analisis de credito</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border ${m.badge}`}>{m.label}</span>
+                          </div>
+                          <p className="text-sm text-slate-400">{m.desc}</p>
+                        </div>
+                      </div>
+                      {a.onTimeRate !== null && (
+                        <div className="text-right">
+                          <p className={`text-3xl font-bold font-mono ${m.text}`}>{a.onTimeRate}%</p>
+                          <p className="text-xs text-slate-500">pagos a tiempo</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {hasHistory ? (
+                      <>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                          <Stat label="A tiempo / atrasados" value={`${a.onTimeCount} / ${a.lateCount}`} />
+                          <Stat label="Dias prom. en pagar" value={a.avgDaysToPay != null ? `${a.avgDaysToPay} d` : '—'} />
+                          <Stat label="Atraso promedio" value={a.avgDaysLate != null ? `${a.avgDaysLate} d` : 'Sin atrasos'} tone={a.avgDaysLate != null ? 'text-amber-400' : 'text-emerald-400'} />
+                          <Stat label="Peor atraso" value={a.maxDaysLate != null ? `${a.maxDaysLate} d` : '—'} tone={a.maxDaysLate != null ? 'text-orange-400' : 'text-white'} />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                          <Stat label="CxC saldadas" value={`${a.paidCount} de ${a.totalCount}`} />
+                          <Stat label="Total a credito" value={`$${a.totalCreditUsd.toFixed(2)}`} />
+                          <Stat label="Total pagado" value={`$${a.totalPaidUsd.toFixed(2)}`} tone="text-emerald-400" />
+                          <Stat
+                            label={a.currentOverdueUsd > 0 ? `Vencido hoy (${a.currentMaxOverdueDays} d)` : 'Vencido hoy'}
+                            value={`$${a.currentOverdueUsd.toFixed(2)}`}
+                            tone={a.currentOverdueUsd > 0 ? 'text-red-400' : 'text-emerald-400'}
+                          />
+                        </div>
+                        {a.creditDays > 0 && (
+                          <p className="text-xs text-slate-500 mt-3">
+                            Plazo de credito acordado: <span className="text-slate-300 font-medium">{a.creditDays} dias</span>.
+                            La puntualidad se mide contra la fecha de vencimiento de cada cuenta.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-400 mt-3">
+                        Este cliente aun no tiene cuentas por cobrar a credito saldadas, por lo que no hay
+                        historial suficiente para evaluar su puntualidad de pago.
+                        {a.pendingCount > 0 && ` Tiene ${a.pendingCount} cuenta(s) pendiente(s) en curso.`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="grid grid-cols-3 gap-3">
                 <div className="card p-4 text-center">
                   <p className="text-xs text-slate-500">Deuda Total</p>
