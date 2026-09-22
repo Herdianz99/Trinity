@@ -811,6 +811,7 @@ export class PurchaseOrdersService {
             reference: order.number,
             sourceType: 'PURCHASE_ORDER',
             sourceId: order.id,
+            serieId: order.serieId || null,
             createdById: userId,
             createdAt: processedAt,
           },

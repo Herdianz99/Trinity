@@ -667,8 +667,15 @@ model StockMovement {
   reference   String?
   sourceType  String?      // SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT
   sourceId    String?      // ID real del documento origen, para auditar (abrir el documento desde el movimiento)
+  // Serie del documento origen (factura de venta/compra o nota) — denormalizada al crear el
+  // movimiento para poder filtrar por serie fiscal vs nota de entrega (isFiscal). Null si el
+  // movimiento no viene de un documento con serie (ajustes, conteos, transferencias, reemplazos).
+  serieId     String?
+  serie       Serie?       @relation("SerieStockMovements", fields: [serieId], references: [id])
   createdById String
   createdAt   DateTime     @default(now())
+
+  @@index([serieId])
 }
 
 // ============================================
@@ -1271,6 +1278,7 @@ model Serie {
   islrRetentionVouchers   IslrRetentionVoucher[]
   receivables         Receivable[]       @relation("ReceivableSerie")
   payables            Payable[]          @relation("PayableSerie")
+  stockMovements      StockMovement[]    @relation("SerieStockMovements")
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }

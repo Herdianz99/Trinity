@@ -30,6 +30,7 @@ type Summary = {
   warehouseName: string | null;
   supplierName: string | null;
   type: string | null;
+  serie?: string | null;
   product: string | null;
 };
 
@@ -101,6 +102,7 @@ export class StockMovementsPdfService {
     if (summary.from || summary.to) parts.push(`Periodo: ${summary.from || '...'} a ${summary.to || '...'}`);
     if (summary.warehouseName) parts.push(`Almacen: ${summary.warehouseName}`);
     if (summary.type) parts.push(`Tipo: ${TYPE_LABELS[summary.type] || summary.type}`);
+    if (summary.serie) parts.push(summary.serie);
     if (summary.supplierName) parts.push(`Proveedor: ${summary.supplierName}`);
     if (summary.product) parts.push(`Producto: ${summary.product}`);
     doc.fontSize(8).font('Helvetica').fillColor('#475569');
@@ -219,6 +221,7 @@ export class StockMovementsPdfService {
     groups: Group[],
     summary: Summary,
     totalCount: number,
+    title = 'Movimientos de Stock por Categoria',
   ): Promise<Buffer> {
     const company = await this.getCompanyName();
     const doc = new PDFDocument({
@@ -232,13 +235,14 @@ export class StockMovementsPdfService {
 
     // ── Encabezado ──
     doc.fontSize(15).font('Helvetica-Bold').fillColor('#000').text(company, 30, 36);
-    doc.fontSize(11).font('Helvetica-Bold').text('Movimientos de Stock por Categoria', 30, 56);
+    doc.fontSize(11).font('Helvetica-Bold').text(title, 30, 56);
 
     // Filtros aplicados
     const parts: string[] = [];
     if (summary.from || summary.to) parts.push(`Periodo: ${summary.from || '...'} a ${summary.to || '...'}`);
     if (summary.warehouseName) parts.push(`Almacen: ${summary.warehouseName}`);
     if (summary.type) parts.push(`Tipo: ${TYPE_LABELS[summary.type] || summary.type}`);
+    if (summary.serie) parts.push(summary.serie);
     if (summary.supplierName) parts.push(`Proveedor: ${summary.supplierName}`);
     if (summary.product) parts.push(`Producto: ${summary.product}`);
     doc.fontSize(8).font('Helvetica').fillColor('#475569');

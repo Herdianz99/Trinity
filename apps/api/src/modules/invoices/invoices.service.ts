@@ -1287,6 +1287,7 @@ export class InvoicesService {
             reference: invoiceNumber,
             sourceType: 'SALE_INVOICE',
             sourceId: id,
+            serieId: paymentSerie.id,
             createdById: user.id,
           },
         });

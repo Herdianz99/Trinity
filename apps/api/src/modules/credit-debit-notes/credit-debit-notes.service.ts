@@ -795,6 +795,7 @@ export class CreditDebitNotesService {
               reference: note.number,
               sourceType: 'CREDIT_DEBIT_NOTE',
               sourceId: note.id,
+              serieId: note.serieId || null,
               createdById: userId,
             },
           });
@@ -899,6 +900,7 @@ export class CreditDebitNotesService {
               reference: note.number,
               sourceType: 'CREDIT_DEBIT_NOTE',
               sourceId: note.id,
+              serieId: note.serieId || null,
               createdById: userId,
             },
           });

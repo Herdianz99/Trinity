@@ -2963,3 +2963,11 @@ DO $$ BEGIN
   ALTER TABLE "Customer" ADD CONSTRAINT "Customer_createdById_fkey"
     FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- StockMovement: serie del documento origen (filtrar por fiscal vs nota de entrega)
+ALTER TABLE "StockMovement" ADD COLUMN IF NOT EXISTS "serieId" TEXT;
+DO $$ BEGIN
+  ALTER TABLE "StockMovement" ADD CONSTRAINT "StockMovement_serieId_fkey"
+    FOREIGN KEY ("serieId") REFERENCES "Serie"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS "StockMovement_serieId_idx" ON "StockMovement"("serieId");

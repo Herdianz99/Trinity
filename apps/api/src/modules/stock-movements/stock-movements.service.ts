@@ -20,12 +20,20 @@ export class StockMovementsService {
     search?: string;
     from?: string;
     to?: string;
+    serie?: string;
   }) {
     const where: any = {};
 
     if (filters.productId) where.productId = filters.productId;
     if (filters.warehouseId) where.warehouseId = filters.warehouseId;
     if (filters.type) where.type = filters.type;
+
+    // Filtro por serie del documento origen. Ambas opciones exigen que el movimiento tenga
+    // serie (la relacion se cumple solo si serieId no es null), asi que ajustes/conteos/
+    // transferencias/reemplazos quedan fuera automaticamente.
+    // - 'fiscal': serie fiscal (factura). - 'nota_entrega': serie no fiscal (nota de entrega).
+    if (filters.serie === 'fiscal') where.serie = { isFiscal: true };
+    else if (filters.serie === 'nota_entrega') where.serie = { isFiscal: false };
 
     // Filtros que aplican sobre la FICHA del producto (se combinan en where.product).
     const productFilter: any = {};
@@ -59,6 +67,7 @@ export class StockMovementsService {
     search?: string;
     from?: string;
     to?: string;
+    serie?: string;
     page?: number;
     limit?: number;
   }) {
@@ -73,6 +82,7 @@ export class StockMovementsService {
         include: {
           product: { select: { id: true, code: true, name: true } },
           warehouse: { select: { id: true, name: true } },
+          serie: { select: { id: true, name: true, isFiscal: true } },
         },
         orderBy: { createdAt: filters.productId ? 'asc' : 'desc' },
         skip,
@@ -144,6 +154,7 @@ export class StockMovementsService {
     search?: string;
     from?: string;
     to?: string;
+    serie?: string;
   }) {
     const where = this.buildWhere(filters);
 
@@ -167,23 +178,7 @@ export class StockMovementsService {
     }
     const groups = [...groupsMap.entries()]
       .sort((a, b) => a[0].localeCompare(b[0], 'es'))
-      .map(([category, items]) => {
-        let entradas = 0;
-        let salidas = 0;
-        let entradasVenta = 0;
-        let salidasVenta = 0;
-        for (const m of items) {
-          const price = m.product.priceDetal || 0;
-          if (m.quantity >= 0) { entradas += m.quantity; entradasVenta += m.quantity * price; }
-          else { salidas += Math.abs(m.quantity); salidasVenta += Math.abs(m.quantity) * price; }
-        }
-        const r2 = (n: number) => Math.round(n * 100) / 100;
-        return {
-          category, items, entradas, salidas, neto: entradas - salidas, count: items.length,
-          entradasVenta: r2(entradasVenta), salidasVenta: r2(salidasVenta),
-          netoVenta: r2(entradasVenta - salidasVenta),
-        };
-      });
+      .map(([category, items]) => this.summarizeGroup(category, items));
 
     // Resolver nombres para el encabezado del reporte
     const [warehouse, supplier, product] = await Promise.all([
@@ -207,9 +202,113 @@ export class StockMovementsService {
         warehouseName: warehouse?.name || null,
         supplierName: supplier?.name || null,
         type: filters.type || null,
+        serie: this.serieLabel(filters.serie),
         product: product ? `${product.code} — ${product.name}` : null,
       },
     };
+  }
+
+  /**
+   * Todos los movimientos que matchean los filtros (sin paginar), agrupados en solo 2 grupos:
+   * "Entradas" (cantidad >= 0) y "Salidas" (cantidad < 0). Para el reporte PDF "entradas y
+   * salidas" de /inventory/movements. Misma estructura que el reporte por categoria (reutiliza
+   * el mismo PDF), pero con 2 grupos por sentido en vez de N por categoria.
+   */
+  async getGroupedByDirection(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    serie?: string;
+  }) {
+    const where = this.buildWhere(filters);
+
+    const movements = await this.prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: {
+          select: { code: true, name: true, priceDetal: true, category: { select: { name: true } } },
+        },
+        warehouse: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Solo 2 grupos, en orden fijo: primero Entradas, luego Salidas. Se omite el vacio.
+    const entradas = movements.filter((m) => m.quantity >= 0);
+    const salidas = movements.filter((m) => m.quantity < 0);
+    const groups = [
+      this.summarizeGroup('Entradas', entradas),
+      this.summarizeGroup('Salidas', salidas),
+    ].filter((g) => g.count > 0);
+
+    const summary = await this.resolveFilterSummary(filters);
+
+    return { groups, totalCount: movements.length, summary };
+  }
+
+  /** Calcula los subtotales (cantidades + monto a precio de venta) de un grupo de movimientos. */
+  private summarizeGroup<T extends { quantity: number; product: { priceDetal: number | null } }>(
+    category: string,
+    items: T[],
+  ) {
+    let entradas = 0;
+    let salidas = 0;
+    let entradasVenta = 0;
+    let salidasVenta = 0;
+    for (const m of items) {
+      const price = m.product.priceDetal || 0;
+      if (m.quantity >= 0) { entradas += m.quantity; entradasVenta += m.quantity * price; }
+      else { salidas += Math.abs(m.quantity); salidasVenta += Math.abs(m.quantity) * price; }
+    }
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      category, items, entradas, salidas, neto: entradas - salidas, count: items.length,
+      entradasVenta: r2(entradasVenta), salidasVenta: r2(salidasVenta),
+      netoVenta: r2(entradasVenta - salidasVenta),
+    };
+  }
+
+  /** Resuelve los nombres (almacen/proveedor/producto) para el encabezado de un reporte. */
+  private async resolveFilterSummary(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    from?: string;
+    to?: string;
+    serie?: string;
+  }) {
+    const [warehouse, supplier, product] = await Promise.all([
+      filters.warehouseId
+        ? this.prisma.warehouse.findUnique({ where: { id: filters.warehouseId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.supplierId
+        ? this.prisma.supplier.findUnique({ where: { id: filters.supplierId }, select: { name: true } })
+        : Promise.resolve(null),
+      filters.productId
+        ? this.prisma.product.findUnique({ where: { id: filters.productId }, select: { code: true, name: true } })
+        : Promise.resolve(null),
+    ]);
+    return {
+      from: filters.from || null,
+      to: filters.to || null,
+      warehouseName: warehouse?.name || null,
+      supplierName: supplier?.name || null,
+      type: filters.type || null,
+      serie: this.serieLabel(filters.serie),
+      product: product ? `${product.code} — ${product.name}` : null,
+    };
+  }
+
+  /** Etiqueta legible del filtro de serie para los encabezados de reporte. */
+  private serieLabel(serie?: string): string | null {
+    if (serie === 'fiscal') return 'Solo serie fiscal';
+    if (serie === 'nota_entrega') return 'Solo nota de entrega';
+    return null;
   }
 
   /**
@@ -228,6 +327,7 @@ export class StockMovementsService {
     search?: string;
     from?: string;
     to?: string;
+    serie?: string;
   }) {
     const where = this.buildWhere(filters);
 
@@ -315,6 +415,7 @@ export class StockMovementsService {
         warehouseName: warehouse?.name || null,
         supplierName: supplier?.name || null,
         type: filters.type || null,
+        serie: this.serieLabel(filters.serie),
         product: product ? `${product.code} — ${product.name}` : null,
       },
     };

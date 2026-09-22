@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText } from 'lucide-react';
+import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText, ChevronDown, Layers, DollarSign, ArrowDownUp } from 'lucide-react';
 import { getMovementSource } from '@/lib/movement-source';
 
 interface Movement {
@@ -21,6 +21,7 @@ interface Movement {
   createdAt: string;
   product: { id: string; code: string; name: string };
   warehouse: { id: string; name: string };
+  serie: { id: string; name: string; isFiscal: boolean } | null;
 }
 
 interface Warehouse { id: string; name: string; }
@@ -78,9 +79,23 @@ export default function MovementsPage() {
   const [filterWarehouseId, setFilterWarehouseId] = useState('');
   const [filterSupplierId, setFilterSupplierId] = useState('');
   const [filterType, setFilterType] = useState('');
+  // Serie del documento origen: '' (todas), 'fiscal', 'nota_entrega'.
+  const [filterSerie, setFilterSerie] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+
+  // Menu de reportes (dropdown): agrupa los reportes PDF en un solo boton.
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
+  const reportMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!reportMenuOpen) return;
+    function onClick(e: MouseEvent) {
+      if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) setReportMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [reportMenuOpen]);
 
   // Formatea una fecha usando la hora LOCAL del navegador (= Caracas para el usuario).
   // NO usar toISOString(): a las 8 PM Caracas ya es el dia siguiente en UTC y "hoy"
@@ -118,12 +133,13 @@ export default function MovementsPage() {
     if (filterWarehouseId) params.set('warehouseId', filterWarehouseId);
     if (filterSupplierId) params.set('supplierId', filterSupplierId);
     if (filterType) params.set('type', filterType);
+    if (filterSerie) params.set('serie', filterSerie);
     const range = getDateRange();
     if (range.from) params.set('from', range.from);
     if (range.to) params.set('to', range.to);
     return params;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterProductId, search, filterWarehouseId, filterSupplierId, filterType, dateRange, customFrom, customTo]);
+  }, [filterProductId, search, filterWarehouseId, filterSupplierId, filterType, filterSerie, dateRange, customFrom, customTo]);
 
   const fetchMovements = useCallback(async () => {
     setLoading(true);
@@ -144,14 +160,10 @@ export default function MovementsPage() {
     }
   }, [page, buildFilterParams]);
 
-  function openCategoryReport() {
+  function openReport(path: string) {
     const params = buildFilterParams();
-    window.open(`/api/proxy/stock-movements/report/by-category?${params}`, '_blank');
-  }
-
-  function openCostReport() {
-    const params = buildFilterParams();
-    window.open(`/api/proxy/stock-movements/report/costs?${params}`, '_blank');
+    window.open(`/api/proxy/stock-movements/${path}?${params}`, '_blank');
+    setReportMenuOpen(false);
   }
 
   const fetchWarehouses = useCallback(async () => {
@@ -181,22 +193,52 @@ export default function MovementsPage() {
           <h1 className="text-2xl font-bold text-white">Movimientos de Stock</h1>
           <p className="text-slate-400 text-sm">{total} movimientos</p>
         </div>
-        <button
-          onClick={openCategoryReport}
-          className="ml-auto btn-secondary !py-2.5 text-sm flex items-center gap-2"
-          title="Generar PDF de los movimientos filtrados, agrupados por categoria"
-        >
-          <FileText size={16} />
-          <span className="hidden sm:inline">Reporte por categoria</span>
-        </button>
-        <button
-          onClick={openCostReport}
-          className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
-          title="Generar PDF con el costo (costo + brecha) de cada movimiento filtrado y el total"
-        >
-          <FileText size={16} />
-          <span className="hidden sm:inline">Reporte de costos</span>
-        </button>
+        <div className="relative ml-auto" ref={reportMenuRef}>
+          <button
+            onClick={() => setReportMenuOpen(o => !o)}
+            className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
+            title="Generar reportes PDF de los movimientos filtrados"
+          >
+            <FileText size={16} />
+            <span className="hidden sm:inline">Reportes</span>
+            <ChevronDown size={14} className={`transition-transform ${reportMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {reportMenuOpen && (
+            <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-700 bg-slate-800 shadow-xl z-20 overflow-hidden">
+              <p className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-slate-500">Reportes (PDF)</p>
+              <button
+                onClick={() => openReport('report/by-category')}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors"
+              >
+                <Layers size={16} className="text-green-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">Por categoria</span>
+                  <span className="block text-xs text-slate-500">Movimientos agrupados por categoria, con entradas/salidas y monto.</span>
+                </span>
+              </button>
+              <button
+                onClick={() => openReport('report/costs')}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors"
+              >
+                <DollarSign size={16} className="text-teal-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">De costos</span>
+                  <span className="block text-xs text-slate-500">Costo (costo + brecha) de cada movimiento y el total.</span>
+                </span>
+              </button>
+              <button
+                onClick={() => openReport('report/by-direction')}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-t border-slate-700/50"
+              >
+                <ArrowDownUp size={16} className="text-sky-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">Entradas y salidas</span>
+                  <span className="block text-xs text-slate-500">Agrupa los movimientos en solo 2 grupos: entradas y salidas.</span>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -257,12 +299,22 @@ export default function MovementsPage() {
             <option value="">Todos los tipos</option>
             {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+          <select
+            value={filterSerie}
+            onChange={(e) => { setFilterSerie(e.target.value); setPage(1); }}
+            className="input-field !py-2 text-sm"
+            title="Filtra los movimientos que vienen de facturas de venta/compra o notas segun su serie"
+          >
+            <option value="">Todas las series</option>
+            <option value="fiscal">Solo serie fiscal</option>
+            <option value="nota_entrega">Solo nota de entrega</option>
+          </select>
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); if (filterProductId) setFilterProductId(''); setPage(1); }}
             placeholder="Buscar por nombre, codigo, ref, cod. barras o categoria..."
-            className="input-field !py-2 text-sm md:col-span-2"
+            className="input-field !py-2 text-sm sm:col-span-2 lg:col-span-4"
           />
         </div>
       </div>
@@ -309,6 +361,14 @@ export default function MovementsPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${TYPE_BADGES[m.type] || ''}`}>
                       {TYPE_LABELS[m.type] || m.type}
                     </span>
+                    {m.serie && (
+                      <span
+                        className={`block mt-1 text-[10px] whitespace-nowrap ${m.serie.isFiscal ? 'text-sky-400' : 'text-slate-400'}`}
+                        title={`Serie: ${m.serie.name}`}
+                      >
+                        {m.serie.isFiscal ? 'Fiscal' : 'Nota entrega'}
+                      </span>
+                    )}
                   </td>
                   <td className={`px-4 py-3 text-right font-mono font-medium ${m.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {m.quantity > 0 ? '+' : ''}{m.quantity}

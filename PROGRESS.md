@@ -17,6 +17,16 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 135 (2026-09-22) — Movimientos de stock: filtro por serie (fiscal / nota de entrega) + dropdown de reportes + reporte "entradas y salidas"
+
+> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260922160000_stock_movement_serie`, aditiva/idempotente con backfill histórico + respaldo en `deploy/fix-schema.sql`). Diego lo despliega cuando quiera. Verificado e2e en local (grande_db) con JWT firmado.
+
+En `/inventory/movements`:
+
+- **Filtro por serie del documento origen** (fiscal vs nota de entrega). Como el `StockMovement` referencia el documento de forma polimórfica (`sourceType`+`sourceId`, sin relación Prisma), se **denormalizó** `StockMovement.serieId` (FK a `Serie`, nullable, indexado): se llena al crear el movimiento con la serie de su factura de venta (`paymentSerie.id`), factura de compra (`order.serieId`) o nota de crédito/débito (`note.serieId`) — 3 servicios, 4 call-sites. Migración con **backfill** de los movimientos históricos (join por sourceType/sourceId a Invoice/PurchaseOrder/CreditDebitNote). Filtro en `buildWhere`: `where.serie = { isFiscal }` (fiscal=true, nota_entrega=false); ambas opciones excluyen naturalmente ajustes/conteos/transferencias/reemplazos (sin serie). El listado muestra un tag "Fiscal"/"Nota entrega" por fila. En local: 43.863 movimientos con serie (17.285 fiscal · 26.578 nota de entrega).
+- **Dropdown de reportes**: los 2 reportes PDF que estaban como botones sueltos (Por categoría, De costos) ahora viven en un solo menú "Reportes ▾", más uno nuevo.
+- **Reporte nuevo "Entradas y salidas"** (`GET report/by-direction`): agrupa los movimientos filtrados en solo 2 grupos (Entradas = cantidad ≥ 0, Salidas = cantidad < 0) con detalle, subtotales y total general. Reutiliza el motor PDF del reporte por categoría (se le agregó parámetro `title`); cálculo de subtotales extraído a helper compartido `summarizeGroup`. Todos los reportes respetan el filtro de serie (aparece en el encabezado del PDF).
+
 ## 🗓️ Sesión 134 (2026-09-22) — Cliente: quién lo creó + análisis de crédito (puntualidad de pago)
 
 > ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260922130000_customer_created_by`, aditiva/idempotente con `IF NOT EXISTS` + respaldo en `deploy/fix-schema.sql`). Diego lo despliega cuando quiera. Verificado e2e en local (grande_db) con JWT firmado.
