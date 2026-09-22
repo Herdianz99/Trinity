@@ -56,8 +56,10 @@ export class ExhibitionService {
           name: true,
           barcode: true,
           isExhibited: true,
+          exhibitedQuantity: true,
           exhibitedSince: true,
           exhibitionLocation: true,
+          stock: { select: { quantity: true } },
           category: { select: { id: true, name: true } },
           brand: { select: { id: true, name: true } },
         },
@@ -69,8 +71,10 @@ export class ExhibitionService {
     ]);
 
     const now = Date.now();
-    const data = rows.map((p) => ({
+    const data = rows.map(({ stock, ...p }) => ({
       ...p,
+      // Existencia total (todos los depósitos) para mostrar y para topar la cantidad a exhibir.
+      totalStock: stock.reduce((s, x) => s + x.quantity, 0),
       daysExhibited: p.exhibitedSince
         ? Math.floor((now - new Date(p.exhibitedSince).getTime()) / 86400000)
         : null,
@@ -79,42 +83,78 @@ export class ExhibitionService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  // Poner en exhibicion
+  // Existencia total (todos los depositos) de un producto
+  private async totalStock(productId: string): Promise<number> {
+    const agg = await this.prisma.stock.aggregate({
+      where: { productId },
+      _sum: { quantity: true },
+    });
+    return agg._sum.quantity ?? 0;
+  }
+
+  // Poner en exhibicion. La cantidad se SUMA a la ya exhibida; no puede superar la existencia.
   async place(dto: PlaceItemDto, userId: string) {
     const product = await this.prisma.product.findUnique({ where: { id: dto.productId } });
     if (!product) throw new NotFoundException('Producto no encontrado');
-    if (product.isExhibited) throw new BadRequestException('El producto ya esta en exhibicion');
 
-    const location = dto.location?.trim() || null;
+    const qty = dto.quantity ?? 1;
+    if (qty < 1) throw new BadRequestException('La cantidad debe ser al menos 1');
+
+    const stock = await this.totalStock(dto.productId);
+    const newQty = product.exhibitedQuantity + qty;
+    if (newQty > stock) {
+      throw new BadRequestException(
+        `No hay suficiente existencia: exhibidas ${product.exhibitedQuantity}, existencia ${stock}`,
+      );
+    }
+
+    const location = dto.location?.trim() || product.exhibitionLocation || null;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: dto.productId },
-        data: { isExhibited: true, exhibitedSince: new Date(), exhibitionLocation: location },
+        data: {
+          isExhibited: true,
+          exhibitedQuantity: newQty,
+          // El "desde" arranca solo si venia de 0; si ya estaba exhibido se conserva.
+          exhibitedSince: product.isExhibited ? undefined : new Date(),
+          exhibitionLocation: location,
+        },
       });
       return tx.exhibitionEntry.create({
-        data: { productId: dto.productId, action: 'PLACED', location, createdById: userId },
+        data: { productId: dto.productId, action: 'PLACED', quantity: qty, location, createdById: userId },
       });
     });
   }
 
-  // Retirar de exhibicion
+  // Retirar de exhibicion. Sin cantidad retira TODO; con cantidad es retiro parcial.
   async remove(dto: RemoveItemDto, userId: string) {
     const product = await this.prisma.product.findUnique({ where: { id: dto.productId } });
     if (!product) throw new NotFoundException('Producto no encontrado');
-    if (!product.isExhibited) throw new BadRequestException('El producto no esta en exhibicion');
+    if (!product.isExhibited || product.exhibitedQuantity <= 0) {
+      throw new BadRequestException('El producto no esta en exhibicion');
+    }
 
+    const qty = Math.min(dto.quantity ?? product.exhibitedQuantity, product.exhibitedQuantity);
+    if (qty < 1) throw new BadRequestException('La cantidad debe ser al menos 1');
+    const newQty = product.exhibitedQuantity - qty;
     const prevLocation = product.exhibitionLocation;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: dto.productId },
-        data: { isExhibited: false, exhibitedSince: null, exhibitionLocation: null },
+        data: {
+          exhibitedQuantity: newQty,
+          isExhibited: newQty > 0,
+          exhibitedSince: newQty > 0 ? undefined : null,
+          exhibitionLocation: newQty > 0 ? undefined : null,
+        },
       });
       return tx.exhibitionEntry.create({
         data: {
           productId: dto.productId,
           action: 'REMOVED',
+          quantity: qty,
           location: prevLocation,
           reason: dto.reason ?? null,
           note: dto.note?.trim() || null,
@@ -184,11 +224,12 @@ export class ExhibitionService {
     const range = this.dateRange(query.from, query.to);
     const rangeWhere: Prisma.ExhibitionEntryWhereInput = range ? { createdAt: range } : {};
 
-    const [currentlyExhibited, placedCount, removedCount, exhibitedProducts, topRaw] =
+    const [currentlyExhibited, placedCount, removedCount, autoRemovedCount, exhibitedProducts, topRaw] =
       await Promise.all([
         this.prisma.product.count({ where: { isExhibited: true, isActive: true } }),
         this.prisma.exhibitionEntry.count({ where: { ...rangeWhere, action: 'PLACED' } }),
         this.prisma.exhibitionEntry.count({ where: { ...rangeWhere, action: 'REMOVED' } }),
+        this.prisma.exhibitionEntry.count({ where: { ...rangeWhere, action: 'REMOVED', isAutomatic: true } }),
         this.prisma.product.findMany({
           where: { isExhibited: true, isActive: true },
           select: { exhibitedSince: true },
@@ -225,6 +266,6 @@ export class ExhibitionService {
       placedCount: t._count.productId,
     }));
 
-    return { currentlyExhibited, placedCount, removedCount, avgDaysExhibited, top };
+    return { currentlyExhibited, placedCount, removedCount, autoRemovedCount, avgDaysExhibited, top };
   }
 }

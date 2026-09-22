@@ -7,6 +7,8 @@ interface Entry {
   id: string;
   createdAt: string;
   action: 'PLACED' | 'REMOVED';
+  quantity: number;
+  isAutomatic: boolean;
   location: string | null;
   reason: string | null;
   createdBy: { name: string } | null;
@@ -16,6 +18,7 @@ interface Summary {
   currentlyExhibited: number;
   placedCount: number;
   removedCount: number;
+  autoRemovedCount: number;
   avgDaysExhibited: number;
   top: { product: { code: string; name: string } | null; placedCount: number }[];
 }
@@ -46,6 +49,7 @@ export default function ExhibitionReportPage() {
   const [preset, setPreset] = useState('today');
   const [from, setFrom] = useState(rangeFor('today').from);
   const [to, setTo] = useState(rangeFor('today').to);
+  const [action, setAction] = useState<'' | 'PLACED' | 'REMOVED'>('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,20 +64,26 @@ export default function ExhibitionReportPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const qs = new URLSearchParams({ from, to }).toString();
+      const actParams = new URLSearchParams({ from, to });
+      if (action) actParams.set('action', action);
+      // El resumen (KPIs) NO se filtra por acción: siempre refleja todo el rango.
+      const sumQs = new URLSearchParams({ from, to }).toString();
       const [aRes, sRes] = await Promise.all([
-        fetch(`/api/proxy/exhibition/activity?${qs}`),
-        fetch(`/api/proxy/exhibition/summary?${qs}`),
+        fetch(`/api/proxy/exhibition/activity?${actParams.toString()}`),
+        fetch(`/api/proxy/exhibition/summary?${sumQs}`),
       ]);
       setEntries(await aRes.json());
       setSummary(await sRes.json());
     } finally { setLoading(false); }
-  }, [from, to]);
+  }, [from, to, action]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const exportUrl = (fmt: 'pdf' | 'xlsx') =>
-    `/api/proxy/exhibition/activity/${fmt}?${new URLSearchParams({ from, to })}`;
+  const exportUrl = (fmt: 'pdf' | 'xlsx') => {
+    const p = new URLSearchParams({ from, to });
+    if (action) p.set('action', action);
+    return `/api/proxy/exhibition/activity/${fmt}?${p.toString()}`;
+  };
 
   return (
     <div>
@@ -106,12 +116,26 @@ export default function ExhibitionReportPage() {
         </div>
       </div>
 
+      {/* Filtro por acción */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {([['', 'Todas'], ['PLACED', 'Puestos'], ['REMOVED', 'Quitados']] as const).map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => setAction(k)}
+            className={`px-3 py-1.5 rounded-lg text-sm ${action === k ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400'}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
       {/* KPIs */}
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
           <Kpi label="Exhibidos ahora" value={summary.currentlyExhibited} />
           <Kpi label="Puestas (período)" value={summary.placedCount} />
           <Kpi label="Retiros (período)" value={summary.removedCount} />
+          <Kpi label="Retiros auto" value={summary.autoRemovedCount} />
           <Kpi label="Días prom. en vitrina" value={summary.avgDaysExhibited} />
         </div>
       )}
@@ -133,12 +157,20 @@ export default function ExhibitionReportPage() {
                       <div className="text-slate-200 font-medium truncate">{e.product?.name || '—'}</div>
                       <div className="text-xs font-mono text-slate-500">{e.product?.code || '—'}</div>
                     </div>
-                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full border ${e.action === 'PLACED' ? 'bg-green-500/15 text-green-400 border-green-500/25' : 'bg-red-500/15 text-red-400 border-red-500/25'}`}>
-                      {ACTION_LABEL[e.action]}
-                    </span>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${e.action === 'PLACED' ? 'bg-green-500/15 text-green-400 border-green-500/25' : 'bg-red-500/15 text-red-400 border-red-500/25'}`}>
+                        {ACTION_LABEL[e.action]}
+                      </span>
+                      {e.isAutomatic && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                          Auto · existencia
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-400">
                     <span className="col-span-2">{new Date(e.createdAt).toLocaleString('es-VE')}</span>
+                    <span><span className="text-slate-500">Cant:</span> {e.quantity}</span>
                     <span><span className="text-slate-500">Ubic:</span> {e.location || '—'}</span>
                     <span><span className="text-slate-500">Motivo:</span> {e.reason ? REASON_LABEL[e.reason] : '—'}</span>
                     <span className="col-span-2"><span className="text-slate-500">Usuario:</span> {e.createdBy?.name || '—'}</span>
@@ -155,6 +187,7 @@ export default function ExhibitionReportPage() {
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Código</th>
                     <th className="px-4 py-3">Artículo</th>
+                    <th className="px-4 py-3 text-center">Cant.</th>
                     <th className="px-4 py-3">Acción</th>
                     <th className="px-4 py-3">Ubicación</th>
                     <th className="px-4 py-3">Motivo</th>
@@ -167,8 +200,14 @@ export default function ExhibitionReportPage() {
                       <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">{new Date(e.createdAt).toLocaleString('es-VE')}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-slate-300">{e.product?.code}</td>
                       <td className="px-4 py-2.5 text-slate-200">{e.product?.name}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2.5 text-center text-slate-300">{e.quantity}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className={e.action === 'PLACED' ? 'text-green-400' : 'text-red-400'}>{ACTION_LABEL[e.action]}</span>
+                        {e.isAutomatic && (
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                            Auto · existencia
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-slate-400">{e.location || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-400">{e.reason ? REASON_LABEL[e.reason] : '—'}</td>

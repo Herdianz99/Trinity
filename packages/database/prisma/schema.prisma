@@ -572,6 +572,7 @@ model Product {
   showInStore      Boolean                  @default(false)
   storeFeatured    Boolean                  @default(false)
   isExhibited        Boolean                @default(false)
+  exhibitedQuantity  Int                    @default(0) // unidades en vitrina ahora (0 = no exhibido)
   exhibitedSince     DateTime?
   exhibitionLocation String?
   searchVector     Unsupported("tsvector")?
@@ -2889,6 +2890,8 @@ model ExhibitionEntry {
   productId   String
   product     Product           @relation(fields: [productId], references: [id])
   action      ExhibitionAction
+  quantity    Int               @default(1) // unidades puestas/retiradas en este evento
+  isAutomatic Boolean           @default(false) // retiro automático por caer bajo la existencia
   location    String?
   reason      ExhibitionReason?
   note        String?

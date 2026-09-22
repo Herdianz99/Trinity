@@ -6,6 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 type ActivityRow = {
   createdAt: Date;
   action: 'PLACED' | 'REMOVED';
+  quantity: number;
+  isAutomatic: boolean;
   location: string | null;
   reason: string | null;
   createdBy: { name: string } | null;
@@ -24,13 +26,14 @@ const REASON_LABEL: Record<string, string> = {
 
 // Carta vertical, area util 40..572.
 const COLS = [
-  { label: 'Fecha', x: 40, width: 78 },
-  { label: 'Código', x: 120, width: 50 },
-  { label: 'Artículo', x: 172, width: 150 },
-  { label: 'Acción', x: 324, width: 44 },
-  { label: 'Ubicación', x: 370, width: 60 },
-  { label: 'Motivo', x: 432, width: 44 },
-  { label: 'Usuario', x: 478, width: 90 },
+  { label: 'Fecha', x: 40, width: 70 },
+  { label: 'Código', x: 112, width: 44 },
+  { label: 'Artículo', x: 158, width: 118 },
+  { label: 'Cant', x: 278, width: 26 },
+  { label: 'Acción', x: 306, width: 44 },
+  { label: 'Ubicación', x: 352, width: 58 },
+  { label: 'Motivo', x: 412, width: 74 },
+  { label: 'Usuario', x: 488, width: 84 },
 ] as const;
 const RIGHT = 572;
 
@@ -65,17 +68,19 @@ export class ExhibitionReportService {
       'Código': r.product?.code ?? '',
       'Artículo': r.product?.name ?? '',
       'Categoría': r.product?.category?.name ?? '',
+      'Cant.': r.quantity ?? '',
       'Acción': ACTION_LABEL[r.action] ?? r.action,
+      'Automático': r.isAutomatic ? 'Sí' : '',
       'Ubicación': r.location ?? '',
       'Motivo': r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : '',
       'Usuario': r.createdBy?.name ?? '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [
-      { wch: 18 }, { wch: 12 }, { wch: 40 }, { wch: 18 },
-      { wch: 10 }, { wch: 18 }, { wch: 12 }, { wch: 20 },
+      { wch: 18 }, { wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 6 },
+      { wch: 10 }, { wch: 11 }, { wch: 18 }, { wch: 12 }, { wch: 20 },
     ];
-    if (data.length) ws['!autofilter'] = { ref: `A1:H${data.length + 1}` };
+    if (data.length) ws['!autofilter'] = { ref: `A1:J${data.length + 1}` };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Exhibición');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
@@ -134,18 +139,21 @@ export class ExhibitionReportService {
         y = this.drawHeaderRow(doc, y);
         doc.fontSize(8).font('Helvetica');
       }
+      const motivo = r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : '—';
       const values = [
         this.fmtDate(r.createdAt),
         r.product?.code ?? '',
         r.product?.name ?? '',
+        String(r.quantity ?? ''),
         ACTION_LABEL[r.action] ?? r.action,
         r.location ?? '—',
-        r.reason ? (REASON_LABEL[r.reason] ?? r.reason) : '—',
+        r.isAutomatic ? `${motivo} (auto)` : motivo,
         r.createdBy?.name ?? '',
       ];
-      // La accion resalta: verde puesto, rojo retirado.
+      // La accion resalta: verde puesto, rojo retirado. El motivo automatico va en ambar.
       for (let i = 0; i < COLS.length; i++) {
-        if (i === 3) doc.fillColor(r.action === 'PLACED' ? '#16a34a' : '#dc2626');
+        if (i === 4) doc.fillColor(r.action === 'PLACED' ? '#16a34a' : '#dc2626');
+        else if (i === 6 && r.isAutomatic) doc.fillColor('#b45309');
         else doc.fillColor('#1e293b');
         const text = this.fit(doc, String(values[i] ?? ''), COLS[i].width - 3);
         doc.text(text, COLS[i].x, y, { width: COLS[i].width, lineBreak: false });

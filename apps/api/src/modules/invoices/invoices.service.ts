@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
 import { recordPaymentToBank } from '../../common/bank-ledger';
+import { syncExhibitionAfterSale } from '../../common/exhibition-sync';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveBregaPct, effectiveCost } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
@@ -1289,6 +1290,9 @@ export class InvoicesService {
             createdById: user.id,
           },
         });
+
+        // Retiro automático de vitrina si la venta dejó la existencia por debajo de lo exhibido.
+        await syncExhibitionAfterSale(tx, { productId: item.productId, userId: user.id });
       }
 
       // Record change (vuelto) on the first divisa payment

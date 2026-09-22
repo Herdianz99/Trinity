@@ -10,6 +10,8 @@ interface Prod {
   name: string;
   barcode: string | null;
   isExhibited: boolean;
+  exhibitedQuantity: number;
+  totalStock: number;
   exhibitedSince: string | null;
   exhibitionLocation: string | null;
   daysExhibited: number | null;
@@ -20,6 +22,8 @@ interface Prod {
 interface HistEntry {
   id: string;
   action: 'PLACED' | 'REMOVED';
+  quantity: number;
+  isAutomatic: boolean;
   location: string | null;
   reason: string | null;
   note: string | null;
@@ -53,10 +57,12 @@ export default function ExhibitionPage() {
   // Modal poner
   const [placeTarget, setPlaceTarget] = useState<Prod | null>(null);
   const [placeLocation, setPlaceLocation] = useState('');
+  const [placeQty, setPlaceQty] = useState('1');
   // Modal retirar
   const [removeTarget, setRemoveTarget] = useState<Prod | null>(null);
   const [removeReason, setRemoveReason] = useState('OTHER');
   const [removeNote, setRemoveNote] = useState('');
+  const [removeQty, setRemoveQty] = useState('');
   // Modal historial
   const [historyTarget, setHistoryTarget] = useState<Prod | null>(null);
   const [historyEntries, setHistoryEntries] = useState<HistEntry[]>([]);
@@ -97,20 +103,20 @@ export default function ExhibitionPage() {
     if (!placeTarget) return;
     const target = placeTarget;
     const loc = placeLocation.trim() || null;
+    const qty = parseInt(placeQty, 10);
+    if (!qty || qty < 1) { setMessage({ type: 'error', text: 'Cantidad inválida' }); return; }
     setProcessing(true);
     try {
       const res = await fetch('/api/proxy/exhibition/place', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: target.id, location: loc || undefined }),
+        body: JSON.stringify({ productId: target.id, quantity: qty, location: loc || undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
-      // Actualiza SOLO esa fila en su lugar (sin recargar la lista → no salta el scroll)
-      setRows((prev) => prev.map((r) => r.id === target.id
-        ? { ...r, isExhibited: true, exhibitedSince: new Date().toISOString(), exhibitionLocation: loc, daysExhibited: 0 }
-        : r));
-      setMessage({ type: 'success', text: 'Artículo puesto en exhibición' });
-      setPlaceTarget(null); setPlaceLocation('');
+      // Refresca la lista en su lugar (silent) para reflejar cantidad y existencia reales.
+      await fetchRows(true);
+      setMessage({ type: 'success', text: `${qty} u. puesta(s) en exhibición` });
+      setPlaceTarget(null); setPlaceLocation(''); setPlaceQty('1');
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
@@ -119,20 +125,23 @@ export default function ExhibitionPage() {
   async function confirmRemove() {
     if (!removeTarget) return;
     const target = removeTarget;
+    const qty = removeQty.trim() ? parseInt(removeQty, 10) : undefined;
+    if (qty !== undefined && (!qty || qty < 1 || qty > target.exhibitedQuantity)) {
+      setMessage({ type: 'error', text: `Cantidad entre 1 y ${target.exhibitedQuantity}` });
+      return;
+    }
     setProcessing(true);
     try {
       const res = await fetch('/api/proxy/exhibition/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: target.id, reason: removeReason, note: removeNote || undefined }),
+        body: JSON.stringify({ productId: target.id, quantity: qty, reason: removeReason, note: removeNote || undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).message || 'Error');
-      // Actualiza SOLO esa fila en su lugar (sin recargar la lista → no salta el scroll)
-      setRows((prev) => prev.map((r) => r.id === target.id
-        ? { ...r, isExhibited: false, exhibitedSince: null, exhibitionLocation: null, daysExhibited: null }
-        : r));
+      // Refresca la lista en su lugar (silent) para reflejar cantidad y existencia reales.
+      await fetchRows(true);
       setMessage({ type: 'success', text: 'Artículo retirado de exhibición' });
-      setRemoveTarget(null); setRemoveReason('OTHER'); setRemoveNote('');
+      setRemoveTarget(null); setRemoveReason('OTHER'); setRemoveNote(''); setRemoveQty('');
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message });
     } finally { setProcessing(false); }
@@ -214,6 +223,7 @@ export default function ExhibitionPage() {
                   <th className="px-4 py-3">Código</th>
                   <th className="px-4 py-3">Artículo</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-center">Exhib. / Exist.</th>
                   <th className="px-4 py-3">Ubicación</th>
                   <th className="px-4 py-3 text-center">Días</th>
                   <th className="px-4 py-3 text-center">Acción</th>
@@ -229,15 +239,25 @@ export default function ExhibitionPage() {
                         ? <span className="text-green-400">Exhibido</span>
                         : <span className="text-slate-500">No exhibido</span>}
                     </td>
+                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                      <span className={p.isExhibited ? 'text-green-400 font-medium' : 'text-slate-500'}>{p.exhibitedQuantity}</span>
+                      <span className="text-slate-600"> / </span>
+                      <span className="text-slate-400">{p.totalStock}</span>
+                    </td>
                     <td className="px-4 py-2.5 text-slate-400">{p.exhibitionLocation || '—'}</td>
                     <td className="px-4 py-2.5 text-center text-slate-400">{p.daysExhibited ?? '—'}</td>
                     <td className="px-4 py-2.5 text-center whitespace-nowrap">
                       {p.isExhibited ? (
-                        <button onClick={() => setRemoveTarget(p)} className="px-3 py-1.5 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-xs">
-                          Retirar
-                        </button>
+                        <>
+                          <button onClick={() => { setPlaceTarget(p); setPlaceLocation(p.exhibitionLocation || ''); setPlaceQty('1'); }} className="px-2.5 py-1.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-xs inline-flex items-center gap-1">
+                            <Plus size={13} /> Añadir
+                          </button>
+                          <button onClick={() => { setRemoveTarget(p); setRemoveQty(''); }} className="ml-1.5 px-2.5 py-1.5 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-xs">
+                            Retirar
+                          </button>
+                        </>
                       ) : (
-                        <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); }} className="px-3 py-1.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-xs inline-flex items-center gap-1">
+                        <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); setPlaceQty('1'); }} className="px-3 py-1.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-xs inline-flex items-center gap-1">
                           <Plus size={14} /> Exhibir
                         </button>
                       )}
@@ -261,21 +281,27 @@ export default function ExhibitionPage() {
                     <p className="text-xs text-slate-500 font-mono mt-0.5">{p.code}</p>
                   </div>
                   <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${p.isExhibited ? 'bg-green-500/15 text-green-400' : 'bg-slate-800 text-slate-500'}`}>
-                    {p.isExhibited ? 'Exhibido' : 'No exhibido'}
+                    {p.isExhibited ? `Exhibido · ${p.exhibitedQuantity} u.` : 'No exhibido'}
                   </span>
                 </div>
-                {p.isExhibited && (
-                  <p className="text-xs text-slate-400 mt-2">
-                    {p.exhibitionLocation || 'Sin ubicación'}{p.daysExhibited != null ? ` · ${p.daysExhibited} día(s)` : ''}
-                  </p>
-                )}
+                <p className="text-xs text-slate-400 mt-2">
+                  <span className="text-slate-500">Existencia:</span> {p.totalStock}
+                  {p.isExhibited && (
+                    <>{' · '}{p.exhibitionLocation || 'Sin ubicación'}{p.daysExhibited != null ? ` · ${p.daysExhibited} día(s)` : ''}</>
+                  )}
+                </p>
                 <div className="flex items-center gap-2 mt-3">
                   {p.isExhibited ? (
-                    <button onClick={() => setRemoveTarget(p)} className="flex-1 px-3 py-2 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-sm">
-                      Retirar
-                    </button>
+                    <>
+                      <button onClick={() => { setPlaceTarget(p); setPlaceLocation(p.exhibitionLocation || ''); setPlaceQty('1'); }} className="flex-1 px-3 py-2 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-sm inline-flex items-center justify-center gap-1">
+                        <Plus size={16} /> Añadir
+                      </button>
+                      <button onClick={() => { setRemoveTarget(p); setRemoveQty(''); }} className="flex-1 px-3 py-2 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 text-sm">
+                        Retirar
+                      </button>
+                    </>
                   ) : (
-                    <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); }} className="flex-1 px-3 py-2 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-sm inline-flex items-center justify-center gap-1">
+                    <button onClick={() => { setPlaceTarget(p); setPlaceLocation(''); setPlaceQty('1'); }} className="flex-1 px-3 py-2 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 text-sm inline-flex items-center justify-center gap-1">
                       <Plus size={16} /> Exhibir
                     </button>
                   )}
@@ -327,13 +353,22 @@ export default function ExhibitionPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPlaceTarget(null)}>
           <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-white">Exhibir: {placeTarget.name}</h3>
+              <h3 className="font-semibold text-white">
+                {placeTarget.isExhibited ? 'Añadir a exhibición' : 'Exhibir'}: {placeTarget.name}
+              </h3>
               <button onClick={() => setPlaceTarget(null)}><X size={18} className="text-slate-500" /></button>
             </div>
+            <p className="text-xs text-slate-400 mb-3">
+              Existencia: <span className="text-slate-200">{placeTarget.totalStock}</span>
+              {placeTarget.isExhibited && <> · Ya exhibidas: <span className="text-green-400">{placeTarget.exhibitedQuantity}</span></>}
+              {' · '}Máx. a {placeTarget.isExhibited ? 'añadir' : 'exhibir'}: <span className="text-slate-200">{placeTarget.totalStock - placeTarget.exhibitedQuantity}</span>
+            </p>
+            <label className="block text-xs text-slate-500 mb-1">Cantidad a {placeTarget.isExhibited ? 'añadir' : 'exhibir'}</label>
+            <input type="number" min={1} max={placeTarget.totalStock - placeTarget.exhibitedQuantity} value={placeQty} onChange={(e) => setPlaceQty(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 mb-3" />
             <label className="block text-xs text-slate-500 mb-1">Ubicación (opcional)</label>
             <input value={placeLocation} onChange={(e) => setPlaceLocation(e.target.value)} placeholder="Ej. Vitrina 3, Entrada…" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 mb-4" />
             <button onClick={confirmPlace} disabled={processing} className="btn-primary w-full disabled:opacity-50">
-              {processing ? 'Guardando…' : 'Confirmar exhibición'}
+              {processing ? 'Guardando…' : 'Confirmar'}
             </button>
           </div>
         </div>
@@ -347,6 +382,10 @@ export default function ExhibitionPage() {
               <h3 className="font-semibold text-white">Retirar: {removeTarget.name}</h3>
               <button onClick={() => setRemoveTarget(null)}><X size={18} className="text-slate-500" /></button>
             </div>
+            <label className="block text-xs text-slate-500 mb-1">
+              Cantidad a retirar (vacío = todas: {removeTarget.exhibitedQuantity})
+            </label>
+            <input type="number" min={1} max={removeTarget.exhibitedQuantity} value={removeQty} onChange={(e) => setRemoveQty(e.target.value)} placeholder={`Todas (${removeTarget.exhibitedQuantity})`} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 mb-3" />
             <label className="block text-xs text-slate-500 mb-1">Motivo</label>
             <select value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 mb-3">
               {REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -377,9 +416,14 @@ export default function ExhibitionPage() {
                 {historyEntries.map((e) => (
                   <li key={e.id} className="flex justify-between gap-3 border-b border-slate-800/50 pb-1.5">
                     <span className={e.action === 'PLACED' ? 'text-green-400' : 'text-red-400'}>
-                      {e.action === 'PLACED' ? 'Puesto' : 'Retirado'}
+                      {e.action === 'PLACED' ? 'Puesto' : 'Retirado'} {e.quantity} u.
                       {e.location ? ` · ${e.location}` : ''}
                       {e.reason ? ` · ${REASON_LABEL[e.reason] ?? e.reason}` : ''}
+                      {e.isAutomatic && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                          Auto · existencia
+                        </span>
+                      )}
                     </span>
                     <span className="text-slate-500 text-right shrink-0">
                       {new Date(e.createdAt).toLocaleString('es-VE')}<br />{e.createdBy?.name || ''}

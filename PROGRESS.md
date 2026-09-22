@@ -17,6 +17,19 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 133 (2026-09-21) — Exhibición: cantidad exhibida + retiro automático al vender
+
+> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260921120000_exhibicion_cantidad`, aditiva/idempotente). Diego lo despliega cuando quiera.
+
+Evolución del módulo `/exhibition` (antes binario exhibido sí/no, aparte de ventas) para llevar **cantidad exhibida** por artículo y **retirar automáticamente de la vitrina al vender**. Revierte a propósito 2 decisiones del diseño original (`docs/superpowers/specs/2026-09-14-modulo-exhibicion-design.md`): "sin cantidades" y "no se cruza con ventas".
+
+- **Regla acordada = "tope contra existencia" (Opción A):** la cantidad exhibida nunca supera la existencia física TOTAL (suma de todos los depósitos). Tras cada venta: `exhibida = mín(exhibida, existencia)`. Solo baja cuando la existencia cae por debajo de lo exhibido; con existencia de sobra vender NO toca la vitrina. Nunca sube sola (una devolución NO re-exhibe).
+- **Schema:** `Product.exhibitedQuantity Int @default(0)`; `ExhibitionEntry.quantity Int @default(1)` + `isAutomatic Boolean @default(false)`. Migración con backfill (exhibidos previos → 1 unidad).
+- **Retiro automático:** helper `apps/api/src/common/exhibition-sync.ts` (`syncExhibitionAfterSale`), llamado DENTRO del `$transaction` de venta en `invoices.service.ts` (tras el decremento de stock, por ítem). Registra `ExhibitionEntry` REMOVED / reason SOLD / `isAutomatic=true`. Patrón como `writeCashLedger`.
+- **Backend:** `place` suma unidades (tope = existencia), `remove` acepta cantidad parcial (default = todas). `summary` agrega KPI `autoRemovedCount`. `findProducts` devuelve `exhibitedQuantity` + `totalStock`.
+- **Reporte (`/exhibition/reporte`):** columna Cant., tag ámbar **"Auto · existencia"** en retiros automáticos, filtro por acción (Todas/Puestos/Quitados — el backend ya soportaba `action`), KPI "Retiros auto". PDF/Excel con columna Cant. + marca `(auto)`.
+- **Control (`/exhibition`):** al exhibir se pide cantidad (tope existencia), botón "Añadir" a lo ya exhibido, retiro parcial; la lista muestra `Exhib. / Exist.`.
+
 ## 🗓️ Sesión 131 (2026-09-19) — Vendedor en PDF de factura · Referencia en métodos de pago (Excel detallado de cobranzas)
 
 > ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **solo API sin migración** (rebuild). Diego lo despliega cuando quiera.
