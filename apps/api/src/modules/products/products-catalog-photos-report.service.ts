@@ -174,16 +174,21 @@ export class ProductsCatalogPhotosReportService {
         this.drawNoPhoto(doc, photoBoxX, photoBoxY, photoBoxW, photoH);
       }
 
-      // Texto: en vez del codigo interno mostramos "ref. proveedor" y "otro codigo"
+      // Texto: en vez del codigo interno mostramos "ref. proveedor" (esquina izq.) y
+      // "otro codigo" (esquina der.), ambos en negrita.
       let ty = photoBoxY + photoH + 6;
       const ref = it.supplierRef || '';
       const other = it.otherCode || '';
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(
-        ref || other || '-', x + padX, ty,
-        { width: photoBoxW, ellipsis: true, lineBreak: false, continued: !!(ref && other) },
-      );
-      if (ref && other) {
-        doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(`   ${other}`, { lineBreak: false });
+      const half = photoBoxW * 0.55;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a');
+      if (ref) {
+        doc.text(ref, x + padX, ty, { width: half, align: 'left', ellipsis: true, lineBreak: false });
+      }
+      if (other) {
+        doc.text(other, x + padX + (photoBoxW - half), ty, { width: half, align: 'right', ellipsis: true, lineBreak: false });
+      }
+      if (!ref && !other) {
+        doc.text('-', x + padX, ty, { width: photoBoxW, lineBreak: false });
       }
       ty += 12;
       doc.fontSize(7.5).font('Helvetica').fillColor('#475569').text(it.name, x + padX, ty, { width: photoBoxW, height: 18, ellipsis: true });
