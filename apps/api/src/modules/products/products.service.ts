@@ -464,6 +464,7 @@ export class ProductsService {
             select: {
               code: true,
               supplierRef: true,
+              otherCode: true,
               name: true,
               costUsd: true,
               priceDetal: true,
@@ -485,6 +486,7 @@ export class ProductsService {
     const items = products.map((p) => ({
       code: p.code,
       supplierRef: p.supplierRef || '',
+      otherCode: p.otherCode || '',
       name: p.name,
       category: p.category?.name || '',
       brand: p.brand?.name || '',

@@ -88,7 +88,7 @@ export class ProductsCatalogPhotosReportService {
   }
 
   async generatePdf(query: QueryProductsDto): Promise<Buffer> {
-    const [config, { items, rate }] = await Promise.all([
+    const [config, { items }] = await Promise.all([
       this.prisma.companyConfig.findFirst({ select: { companyName: true, logo: true } }),
       this.productsService.catalogReportList(query),
     ]);
@@ -122,7 +122,7 @@ export class ProductsCatalogPhotosReportService {
     doc.fontSize(18).font('Helvetica-Bold').fillColor('#0f172a').text(company, textX, 36, { width: textW });
     doc.fontSize(12).font('Helvetica-Bold').fillColor('#334155').text('Catalogo de productos', textX, 58, { width: textW });
     doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(
-      `${this.filterText(query)}   |   Generado: ${new Date().toLocaleDateString('es-VE')}   |   ${items.length} articulos${rate > 0 ? `   |   Tasa: ${this.fmtNum(rate)} Bs/$` : ''}`,
+      `${this.filterText(query)}   |   Generado: ${new Date().toLocaleDateString('es-VE')}   |   ${items.length} articulos`,
       textX, 74, { width: textW },
     );
     const headerBottom = 92;
@@ -174,16 +174,22 @@ export class ProductsCatalogPhotosReportService {
         this.drawNoPhoto(doc, photoBoxX, photoBoxY, photoBoxW, photoH);
       }
 
-      // Texto
+      // Texto: en vez del codigo interno mostramos "ref. proveedor" y "otro codigo"
       let ty = photoBoxY + photoH + 6;
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(it.code, x + padX, ty, { width: photoBoxW, ellipsis: true, lineBreak: false });
+      const ref = it.supplierRef || '';
+      const other = it.otherCode || '';
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(
+        ref || other || '-', x + padX, ty,
+        { width: photoBoxW, ellipsis: true, lineBreak: false, continued: !!(ref && other) },
+      );
+      if (ref && other) {
+        doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(`   ${other}`, { lineBreak: false });
+      }
       ty += 12;
       doc.fontSize(7.5).font('Helvetica').fillColor('#475569').text(it.name, x + padX, ty, { width: photoBoxW, height: 18, ellipsis: true });
       ty += 18;
       const priceUsd = `$${this.fmtNum(it.priceDetal)}`;
-      const priceBs = rate > 0 ? `   Bs ${this.fmtNum(it.priceDetalBs)}` : '';
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d').text(priceUsd, x + padX, ty, { width: photoBoxW, continued: rate > 0, lineBreak: false });
-      if (rate > 0) doc.fontSize(8).font('Helvetica').fillColor('#334155').text(priceBs, { lineBreak: false });
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d').text(priceUsd, x + padX, ty, { width: photoBoxW, lineBreak: false });
     };
 
     for (let i = 0; i < items.length; i++) {
