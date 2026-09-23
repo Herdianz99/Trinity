@@ -56,6 +56,9 @@ export default function ProductsPage() {
   const [onlySaleBlocked, setOnlySaleBlocked] = useState(false);
   const [onlyOnSale, setOnlyOnSale] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Modal del catalogo con fotos: pregunta la categoria a exportar. '' = todas (segmentado).
+  const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [catalogCategory, setCatalogCategory] = useState('');
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -133,8 +136,21 @@ export default function ProductsPage() {
   }
 
   // Catalogo visual con fotos: logo de la empresa + cuadricula de 3 columnas (foto, codigo, precio).
-  function exportPhotoCatalog() {
-    window.open(`/api/proxy/products/report/catalog-photos/pdf?${reportParams()}`, '_blank');
+  // Abre un modal que pregunta que categoria sacar; por defecto usa la categoria del filtro de la tabla.
+  function openPhotoCatalog() {
+    setCatalogCategory(filterCategory);
+    setShowCatalogModal(true);
+  }
+
+  // Genera el catalogo con fotos para la categoria elegida en el modal. Si no se elige ninguna,
+  // el backend saca TODO segmentado por categorias. La eleccion del modal manda sobre el filtro
+  // de la tabla (para poder sacar cualquier categoria sin cambiar la vista).
+  function generatePhotoCatalog() {
+    const params = reportParams();
+    if (catalogCategory) params.set('categoryId', catalogCategory);
+    else params.delete('categoryId');
+    window.open(`/api/proxy/products/report/catalog-photos/pdf?${params}`, '_blank');
+    setShowCatalogModal(false);
   }
 
   async function handleDelete(id: string) {
@@ -184,8 +200,8 @@ export default function ProductsPage() {
             <FileText size={16} /> PDF
           </button>
           <button
-            onClick={exportPhotoCatalog}
-            title="Catalogo con fotos: logo de la empresa + cuadricula de 3 columnas (foto, codigo y precio). Respeta los filtros"
+            onClick={openPhotoCatalog}
+            title="Catalogo con fotos: elige la categoria a exportar (o todas, segmentado por categorias)"
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600/15 text-indigo-400 border border-indigo-600/30 hover:bg-indigo-600/25 transition-colors"
           >
             <Images size={16} /> Catalogo
@@ -423,6 +439,62 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: elegir categoria para el catalogo con fotos */}
+      {showCatalogModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowCatalogModal(false)}
+        >
+          <div
+            className="card w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-indigo-600/15 border border-indigo-600/30">
+                <Images className="text-indigo-400" size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Catalogo con fotos</h2>
+                <p className="text-sm text-slate-400">Elige que categoria exportar</p>
+              </div>
+            </div>
+
+            <label className="block text-sm text-slate-400 mb-1.5">Categoria</label>
+            <select
+              value={catalogCategory}
+              onChange={(e) => setCatalogCategory(e.target.value)}
+              className="input-field !py-2.5 text-sm w-full"
+              autoFocus
+            >
+              <option value="">Todas las categorias (segmentado)</option>
+              {allCategories.map(c => (
+                <option key={c.id} value={c.id}>{c.isChild ? `└ ${c.name.trim()}` : c.name}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              {catalogCategory
+                ? 'Sale solo la categoria elegida (con sus subcategorias si es una categoria principal).'
+                : 'Si no eliges categoria, sale el catalogo completo agrupado por categorias.'}
+            </p>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setShowCatalogModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={generatePhotoCatalog}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+              >
+                <FileText size={16} /> Generar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

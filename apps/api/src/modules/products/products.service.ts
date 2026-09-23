@@ -454,6 +454,19 @@ export class ProductsService {
   // solo desactivados, solo bloqueados para venta) e incluye precio, estado y tasa del dia.
   async catalogReportList(query: QueryProductsDto) {
     const where = await this.buildListWhere(query);
+    // En los reportes de catalogo, si se filtra por una categoria PRINCIPAL (raiz), se
+    // incluyen tambien sus subcategorias (buildListWhere por si solo matchea exacto). Asi
+    // "Plomeria" trae Sanitarios, Griferia, etc. Solo aplica aca (no toca la tabla ni el POS).
+    if (where && query.categoryId) {
+      const children = await this.prisma.category.findMany({
+        where: { parentId: query.categoryId },
+        select: { id: true },
+      });
+      if (children.length > 0) {
+        delete where.categoryId;
+        where.categoryId = { in: [query.categoryId, ...children.map((c) => c.id)] };
+      }
+    }
     const today = caracasDateKey();
     const [rateRow, products] = await Promise.all([
       this.prisma.exchangeRate.findUnique({ where: { date: today } }),

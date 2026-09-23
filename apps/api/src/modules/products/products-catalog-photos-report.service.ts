@@ -31,14 +31,16 @@ export class ProductsCatalogPhotosReportService {
     return n.toLocaleString('es-VE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
   }
 
-  private filterText(query: QueryProductsDto): string {
+  private filterText(query: QueryProductsDto, categoryName?: string | null): string {
     const f: string[] = [];
+    if (categoryName) f.push(`Categoria: ${categoryName}`);
     if (query.search) f.push(`Busqueda: "${query.search}"`);
     if (query.lowStock) f.push('Solo stock bajo');
     if (query.inStock) f.push('Solo con existencia');
     if (query.isActive === false) f.push('Solo desactivados');
     if (query.saleBlocked) f.push('Solo bloqueados para la venta');
-    return f.length ? f.join('  |  ') : 'Todos los articulos';
+    if (f.length === 0) return 'Todos los articulos (segmentado por categoria)';
+    return f.join('  |  ');
   }
 
   // Descarga una foto WebP de la CDN y la transcodifica a JPEG (buffer) para PDFKit.
@@ -88,11 +90,18 @@ export class ProductsCatalogPhotosReportService {
   }
 
   async generatePdf(query: QueryProductsDto): Promise<Buffer> {
-    const [config, { items }] = await Promise.all([
+    // El catalogo con fotos NUNCA muestra articulos desactivados: forzamos solo-activos
+    // sin importar los filtros que venga del frontend (includeInactive / isActive).
+    const activeQuery: QueryProductsDto = { ...query, isActive: true, includeInactive: false };
+    const [config, { items }, category] = await Promise.all([
       this.prisma.companyConfig.findFirst({ select: { companyName: true, logo: true } }),
-      this.productsService.catalogReportList(query),
+      this.productsService.catalogReportList(activeQuery),
+      query.categoryId
+        ? this.prisma.category.findUnique({ where: { id: query.categoryId }, select: { name: true } })
+        : Promise.resolve(null),
     ]);
     const company = config?.companyName || 'Trinity ERP';
+    const categoryName = category?.name || null;
 
     // Pre-descarga todas las fotos (transcodificadas a JPEG) antes de dibujar.
     const photos = await this.mapLimit(items, 6, (it) => this.fetchImageJpeg(it.imageUrl));
@@ -122,7 +131,7 @@ export class ProductsCatalogPhotosReportService {
     doc.fontSize(18).font('Helvetica-Bold').fillColor('#0f172a').text(company, textX, 36, { width: textW });
     doc.fontSize(12).font('Helvetica-Bold').fillColor('#334155').text('Catalogo de productos', textX, 58, { width: textW });
     doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(
-      `${this.filterText(query)}   |   Generado: ${new Date().toLocaleDateString('es-VE')}   |   ${items.length} articulos`,
+      `${this.filterText(activeQuery, categoryName)}   |   Generado: ${new Date().toLocaleDateString('es-VE')}   |   ${items.length} articulos`,
       textX, 74, { width: textW },
     );
     const headerBottom = 92;
@@ -137,7 +146,7 @@ export class ProductsCatalogPhotosReportService {
       return this.collect(doc);
     }
 
-    // --- Cuadricula de 3 columnas ---
+    // --- Cuadricula de 3 columnas, SEGMENTADA por categoria ---
     const COLS = 3;
     const GUTTER = 16;
     const cardW = (usableW - GUTTER * (COLS - 1)) / COLS; // ~166.7
@@ -145,16 +154,41 @@ export class ProductsCatalogPhotosReportService {
     const textH = 52;                   // alto del bloque de texto (codigo + nombre + precio)
     const cardH = photoH + textH + 10;  // + padding interno
     const rowGap = 14;
+    const bandH = 22;                   // alto de la banda de encabezado de categoria
     const topStart = headerBottom + 14;
     const bottomLimit = doc.page.height - doc.page.margins.bottom;
+
+    // Empareja cada item con su foto ya transcodificada, agrupa por categoria y ordena:
+    // por categoria (asc, "Sin categoria" al final) y luego por nombre.
+    const SIN_CAT = 'Sin categoria';
+    const entries = items.map((it, i) => ({ it, photo: photos[i], cat: it.category || SIN_CAT }));
+    entries.sort((a, b) => {
+      // "Sin categoria" siempre al final.
+      if (a.cat !== b.cat) {
+        if (a.cat === SIN_CAT) return 1;
+        if (b.cat === SIN_CAT) return -1;
+        return a.cat.localeCompare(b.cat, 'es');
+      }
+      return a.it.name.localeCompare(b.it.name, 'es');
+    });
+    const counts = new Map<string, number>();
+    for (const e of entries) counts.set(e.cat, (counts.get(e.cat) || 0) + 1);
 
     let col = 0;
     let y = topStart;
 
-    const drawCard = (i: number) => {
-      const it = items[i];
-      const x = marginX + col * (cardW + GUTTER);
+    // Banda de encabezado de categoria (a todo el ancho). `cont` marca la continuacion
+    // de una categoria que salto de pagina.
+    const drawCategoryBand = (label: string, cont = false) => {
+      doc.roundedRect(marginX, y, usableW, bandH, 4).fillColor('#eef2ff').fill();
+      doc.fillColor('#3730a3').fontSize(11).font('Helvetica-Bold').text(
+        `${label}${cont ? ' (cont.)' : ''}   (${counts.get(label) || 0})`,
+        marginX + 10, y + 6, { width: usableW - 20, lineBreak: false, ellipsis: true },
+      );
+      y += bandH + 10;
+    };
 
+    const drawCard = (it: (typeof entries)[number]['it'], photo: Buffer | null, x: number) => {
       // Marco de la tarjeta
       doc.roundedRect(x, y, cardW, cardH, 6).lineWidth(0.8).strokeColor('#e2e8f0').stroke();
 
@@ -163,10 +197,9 @@ export class ProductsCatalogPhotosReportService {
       const photoBoxX = x + padX;
       const photoBoxY = y + 8;
       const photoBoxW = cardW - padX * 2;
-      const buf = photos[i];
-      if (buf) {
+      if (photo) {
         try {
-          doc.image(buf, photoBoxX, photoBoxY, { fit: [photoBoxW, photoH], align: 'center', valign: 'center' });
+          doc.image(photo, photoBoxX, photoBoxY, { fit: [photoBoxW, photoH], align: 'center', valign: 'center' });
         } catch {
           this.drawNoPhoto(doc, photoBoxX, photoBoxY, photoBoxW, photoH);
         }
@@ -197,14 +230,25 @@ export class ProductsCatalogPhotosReportService {
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d').text(priceUsd, x + padX, ty, { width: photoBoxW, lineBreak: false });
     };
 
-    for (let i = 0; i < items.length; i++) {
-      // Salto de pagina cuando la fila no cabe.
+    let currentCat: string | null = null;
+    for (const e of entries) {
+      // Nueva categoria: cierra la fila en curso y dibuja la banda de encabezado.
+      if (e.cat !== currentCat) {
+        if (col !== 0) { col = 0; y += cardH + rowGap; }
+        // Evita encabezado huerfano al pie: banda + al menos una tarjeta deben caber.
+        if (y + bandH + 10 + cardH > bottomLimit) { doc.addPage(); y = 40; col = 0; }
+        drawCategoryBand(e.cat);
+        currentCat = e.cat;
+      }
+      // Salto de pagina dentro de la categoria: repite el encabezado como "(cont.)".
       if (y + cardH > bottomLimit) {
         doc.addPage();
         y = 40;
         col = 0;
+        drawCategoryBand(e.cat, true);
       }
-      drawCard(i);
+      const x = marginX + col * (cardW + GUTTER);
+      drawCard(e.it, e.photo, x);
       col++;
       if (col >= COLS) {
         col = 0;
