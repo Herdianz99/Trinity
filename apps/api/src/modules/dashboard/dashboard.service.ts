@@ -821,8 +821,9 @@ export class DashboardService {
   // (getNetInvoiceRows): por el paidAt de la factura ORIGINAL, no por la fecha de la NCV, para
   // que con+sin reconcilie con Ventas NETO. Los ítems sin producto vinculado (NCV con productId
   // nulo) caen en "sin brecha". El % es sobre el total neto (con+sin).
-  // Residual esperado vs Ventas NETO (unos pocos $): el IGTF va en Invoice.totalUsd pero no en
-  // las lineas, y Ventas NETO aplica un piso a 0 por factura (aqui el neteo es por bucket).
+  // EXCLUYE las ventas a empresas del grupo (isGroupCompany), igual que el KPI Ganancia; por eso
+  // ya NO reconcilia 1:1 con "Ventas NETO" (que sí incluye al grupo).
+  // Residual esperado (unos pocos $): el IGTF va en Invoice.totalUsd pero no en las lineas.
   private async getSalesByBrecha(dateRange: { gte: Date; lte: Date }) {
     const { gte, lte } = dateRange;
     const [salesRows, returnRows] = await Promise.all([
@@ -833,8 +834,10 @@ export class DashboardService {
         FROM "InvoiceItem" ii
         JOIN "Invoice" i ON i.id = ii."invoiceId"
         LEFT JOIN "Product" p ON p.id = ii."productId"
+        LEFT JOIN "Customer" c ON c.id = i."customerId"
         WHERE i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
           AND i."paidAt" >= ${gte} AND i."paidAt" <= ${lte}
+          AND COALESCE(c."isGroupCompany", false) = false
         GROUP BY COALESCE(p."bregaApplies", false)
       `,
       this.prisma.$queryRaw<Array<{ brega: boolean; usd: number; bs: number }>>`
@@ -845,9 +848,11 @@ export class DashboardService {
         JOIN "CreditDebitNote" n ON n.id = ni."noteId"
         JOIN "Invoice" i ON i.id = n."invoiceId"
         LEFT JOIN "Product" p ON p.id = ni."productId"
+        LEFT JOIN "Customer" c ON c.id = i."customerId"
         WHERE n.type = 'NCV' AND n.status = 'POSTED'
           AND i.status IN ('PAID', 'PARTIAL_RETURN', 'RETURNED')
           AND i."paidAt" >= ${gte} AND i."paidAt" <= ${lte}
+          AND COALESCE(c."isGroupCompany", false) = false
         GROUP BY COALESCE(p."bregaApplies", false)
       `,
     ]);
@@ -905,14 +910,25 @@ export class DashboardService {
   private async getProfit(dateRange: { gte: Date; lte: Date }) {
     const [invoices, notes, config] = await Promise.all([
       this.prisma.invoice.findMany({
-        where: { status: { in: ['PAID', 'PARTIAL_RETURN'] }, paidAt: dateRange },
+        // Excluye ventas a empresas del grupo (isGroupCompany). El NOT preserva las facturas
+        // sin cliente (mostrador/contado), que con `customer: { isGroupCompany: false }` se
+        // perderian por ser customerId nulo.
+        where: {
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          paidAt: dateRange,
+          NOT: { customer: { isGroupCompany: true } },
+        },
         select: {
           serie: { select: { isFiscal: true } },
           items: { select: { totalUsd: true, ivaAmount: true, costUsd: true, quantity: true } },
         },
       }),
       this.prisma.creditDebitNote.findMany({
-        where: { type: 'NCV', status: 'POSTED', documentDate: dateRange },
+        // Misma exclusion: se descartan las NCV cuya factura original fue a una empresa del grupo.
+        where: {
+          type: 'NCV', status: 'POSTED', documentDate: dateRange,
+          NOT: { invoice: { customer: { isGroupCompany: true } } },
+        },
         select: {
           serie: { select: { isFiscal: true } },
           items: { select: { productId: true, quantity: true, totalUsd: true, ivaAmount: true } },
