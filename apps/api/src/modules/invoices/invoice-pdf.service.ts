@@ -300,7 +300,15 @@ export class InvoicePdfService {
       if (invoice.customer) {
         doc.text(`Nombre: ${invoice.customer.name}`, 40, y); y += 12;
         if (invoice.customer.rif) { doc.text(`RIF: ${invoice.customer.rif}`, 40, y); y += 12; }
-        if (invoice.customer.address) { doc.text(`Direccion: ${invoice.customer.address}`, 40, y); y += 12; }
+        if (invoice.customer.address) {
+          // La direccion puede ser larga y envolver en 2+ lineas: avanzamos y por el alto REAL
+          // del texto (heightOfString) para que "Vendedor" no se monte encima. Ancho fijo para
+          // que el calculo del alto coincida con el render.
+          const addrText = `Direccion: ${invoice.customer.address}`;
+          const addrH = doc.heightOfString(addrText, { width: pageWidth });
+          doc.text(addrText, 40, y, { width: pageWidth });
+          y += Math.max(12, Math.ceil(addrH));
+        }
       } else {
         doc.text('Cliente: General / Consumidor Final', 40, y); y += 12;
       }
