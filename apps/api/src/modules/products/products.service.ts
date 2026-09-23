@@ -470,6 +470,8 @@ export class ProductsService {
               priceMayor: true,
               isActive: true,
               saleBlocked: true,
+              primaryImageMediumUrl: true,
+              primaryImageThumbUrl: true,
               category: { select: { name: true } },
               brand: { select: { name: true } },
               supplier: { select: { name: true } },
@@ -493,6 +495,9 @@ export class ProductsService {
       priceDetalBs: Math.round(p.priceDetal * rate * 100) / 100,
       stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
       status: !p.isActive ? 'Inactivo' : p.saleBlocked ? 'Bloq. venta' : 'Activo',
+      // URL de la foto principal (para el catalogo con imagenes). thumb = celda pequena del grid,
+      // mucho mas liviano/rapido que medium; medium solo como respaldo si no hay miniatura.
+      imageUrl: p.primaryImageThumbUrl || p.primaryImageMediumUrl || '',
     }));
 
     return { items, rate };

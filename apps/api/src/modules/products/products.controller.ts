@@ -18,6 +18,7 @@ import { ProductsReportPdfService } from './products-report-pdf.service';
 import { ProductsNoPhotoReportPdfService } from './products-no-photo-report-pdf.service';
 import { ProductsNoBarcodeReportPdfService } from './products-no-barcode-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
+import { ProductsCatalogPhotosReportService } from './products-catalog-photos-report.service';
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { PriceAdjustmentQueryDto } from './dto/price-adjustment-query.dto';
 import { ApplyPriceAdjustmentDto } from './dto/apply-price-adjustment.dto';
@@ -36,6 +37,7 @@ export class ProductsController {
     private noPhotoReportPdf: ProductsNoPhotoReportPdfService,
     private noBarcodeReportPdf: ProductsNoBarcodeReportPdfService,
     private catalogReport: ProductsCatalogReportService,
+    private catalogPhotosReport: ProductsCatalogPhotosReportService,
     private utilidadReport: ProductsUtilidadReportService,
   ) {}
 
@@ -116,6 +118,18 @@ export class ProductsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="catalogo-productos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Catalogo VISUAL: logo de la empresa + cuadricula de 3 columnas (foto, codigo y precio).
+  @Get('report/catalog-photos/pdf')
+  async catalogPhotosReportPdf(@Query() query: QueryProductsDto, @Res() res: Response) {
+    const buffer = await this.catalogPhotosReport.generatePdf(query);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="catalogo-con-fotos.pdf"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

@@ -6,6 +6,7 @@ import { ProductsReportPdfService } from './products-report-pdf.service';
 import { ProductsNoPhotoReportPdfService } from './products-no-photo-report-pdf.service';
 import { ProductsNoBarcodeReportPdfService } from './products-no-barcode-report-pdf.service';
 import { ProductsCatalogReportService } from './products-catalog-report.service';
+import { ProductsCatalogPhotosReportService } from './products-catalog-photos-report.service';
 import { ProductsUtilidadReportService } from './products-utilidad-report.service';
 import { StoreExportModule } from '../store-export/store-export.module';
 import { IntegrationModule } from '../integration/integration.module';
@@ -14,7 +15,7 @@ import { DynamicKeysModule } from '../dynamic-keys/dynamic-keys.module';
 @Module({
   imports: [StoreExportModule, IntegrationModule, DynamicKeysModule],
   controllers: [ProductsController],
-  providers: [ProductsService, PurchaseAnalysisPdfService, ProductsReportPdfService, ProductsNoPhotoReportPdfService, ProductsNoBarcodeReportPdfService, ProductsCatalogReportService, ProductsUtilidadReportService],
+  providers: [ProductsService, PurchaseAnalysisPdfService, ProductsReportPdfService, ProductsNoPhotoReportPdfService, ProductsNoBarcodeReportPdfService, ProductsCatalogReportService, ProductsCatalogPhotosReportService, ProductsUtilidadReportService],
   exports: [ProductsService],
 })
 export class ProductsModule {}

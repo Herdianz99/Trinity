@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Package, Plus, Search, ChevronLeft, ChevronRight,
   Edit2, Trash2, Loader2, AlertTriangle, PowerOff, Ban, Tag,
-  FileSpreadsheet, FileText,
+  FileSpreadsheet, FileText, Images,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -113,7 +113,8 @@ export default function ProductsPage() {
   // Reporte del catalogo: abre el endpoint con EXACTAMENTE los mismos filtros que la tabla
   // (sin paginar). El backend genera PDF/Excel respetando search, categoria, marca, proveedor,
   // stock bajo, solo desactivados y solo bloqueados para la venta.
-  function exportReport(format: 'pdf' | 'xlsx') {
+  // Arma los params del reporte con EXACTAMENTE los mismos filtros que la tabla.
+  function reportParams() {
     const params = new URLSearchParams();
     params.set('includeInactive', 'true');
     if (search) params.set('search', search);
@@ -124,7 +125,16 @@ export default function ProductsPage() {
     if (onlyInactive) params.set('isActive', 'false');
     if (onlySaleBlocked) params.set('saleBlocked', 'true');
     if (onlyOnSale) params.set('isOnSale', 'true');
-    window.open(`/api/proxy/products/report/catalog/${format}?${params}`, '_blank');
+    return params;
+  }
+
+  function exportReport(format: 'pdf' | 'xlsx') {
+    window.open(`/api/proxy/products/report/catalog/${format}?${reportParams()}`, '_blank');
+  }
+
+  // Catalogo visual con fotos: logo de la empresa + cuadricula de 3 columnas (foto, codigo, precio).
+  function exportPhotoCatalog() {
+    window.open(`/api/proxy/products/report/catalog-photos/pdf?${reportParams()}`, '_blank');
   }
 
   async function handleDelete(id: string) {
@@ -172,6 +182,13 @@ export default function ProductsPage() {
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-600/15 text-red-400 border border-red-600/30 hover:bg-red-600/25 transition-colors"
           >
             <FileText size={16} /> PDF
+          </button>
+          <button
+            onClick={exportPhotoCatalog}
+            title="Catalogo con fotos: logo de la empresa + cuadricula de 3 columnas (foto, codigo y precio). Respeta los filtros"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600/15 text-indigo-400 border border-indigo-600/30 hover:bg-indigo-600/25 transition-colors"
+          >
+            <Images size={16} /> Catalogo
           </button>
           <Link href="/catalog/products/new" className="btn-primary flex items-center gap-2">
             <Plus size={18} /> Nuevo producto
