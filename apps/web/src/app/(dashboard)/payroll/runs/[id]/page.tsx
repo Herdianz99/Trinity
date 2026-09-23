@@ -321,7 +321,7 @@ export default function PayrollRunDetailPage() {
       </div>
 
       {isDraft && (
-        <p className="text-xs text-slate-500 flex items-center gap-1.5"><RefreshCw size={13} /> Las columnas calculadas se actualizan al pulsar <span className="text-slate-300">Guardar y recalcular</span>.</p>
+        <p className="text-xs text-slate-500 flex items-center gap-1.5"><RefreshCw size={13} /> Al pulsar <span className="text-slate-300">Guardar y recalcular</span> se vuelve a leer el sueldo base de cada empleado y se recalculan todas las columnas.</p>
       )}
 
       {/* Table */}

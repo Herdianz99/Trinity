@@ -168,7 +168,7 @@ export class PayrollRunsService {
   }
 
   async updateLines(id: string, dto: UpdatePayrollLinesDto) {
-    const run = await this.prisma.payrollRun.findUnique({ where: { id }, include: { lines: { select: { id: true } } } });
+    const run = await this.prisma.payrollRun.findUnique({ where: { id }, include: { lines: { select: { id: true, employeeId: true } } } });
     if (!run) throw new NotFoundException('Corrida no encontrada');
     if (run.status !== 'DRAFT') throw new BadRequestException('La corrida ya está cerrada; no se puede editar');
 
@@ -177,7 +177,25 @@ export class PayrollRunsService {
       if (!validIds.has(l.id)) throw new BadRequestException(`La línea ${l.id} no pertenece a esta corrida`);
     }
 
+    // "Guardar y recalcular" re-lee el sueldo base ACTUAL de la ficha de cada empleado y lo
+    // refresca en su línea antes de recalcular. Así, si mientras se trabaja el borrador se corrige
+    // el Sueldo base (USD) del empleado, la corrida lo toma sin tener que rehacerla de cero.
+    // El bonusUsd NO se re-sincroniza aquí: es un campo editable por línea (columna "Bonif. USD").
+    const empIds = [...new Set(run.lines.map((l) => l.employeeId))];
+    const employees = await this.prisma.employee.findMany({
+      where: { id: { in: empIds } },
+      select: { id: true, salaryBaseUsd: true },
+    });
+    const baseByEmp = new Map(employees.map((e) => [e.id, e.salaryBaseUsd]));
+
     await this.prisma.$transaction(async (tx) => {
+      // Refresca el sueldo base de TODAS las líneas de la corrida (no solo las del dto).
+      for (const line of run.lines) {
+        const base = baseByEmp.get(line.employeeId);
+        if (base !== undefined) {
+          await tx.payrollRunLine.update({ where: { id: line.id }, data: { salaryBaseUsd: base } });
+        }
+      }
       for (const l of dto.lines) {
         await tx.payrollRunLine.update({
           where: { id: l.id },
