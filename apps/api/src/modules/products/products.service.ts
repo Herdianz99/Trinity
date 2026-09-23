@@ -495,9 +495,10 @@ export class ProductsService {
       priceDetalBs: Math.round(p.priceDetal * rate * 100) / 100,
       stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
       status: !p.isActive ? 'Inactivo' : p.saleBlocked ? 'Bloq. venta' : 'Activo',
-      // URL de la foto principal (para el catalogo con imagenes). thumb = celda pequena del grid,
-      // mucho mas liviano/rapido que medium; medium solo como respaldo si no hay miniatura.
-      imageUrl: p.primaryImageThumbUrl || p.primaryImageMediumUrl || '',
+      // URL de la foto principal (para el catalogo con imagenes). medium (800px) para que se vea
+      // nitida impresa: la celda mide ~150pt (~2"), y la miniatura de 150px daba solo ~72 DPI
+      // (borrosa). thumb solo como respaldo si el producto no tiene medium.
+      imageUrl: p.primaryImageMediumUrl || p.primaryImageThumbUrl || '',
     }));
 
     return { items, rate };

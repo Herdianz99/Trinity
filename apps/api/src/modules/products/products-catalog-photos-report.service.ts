@@ -58,7 +58,7 @@ export class ProductsCatalogPhotosReportService {
       // Fondo blanco por si la imagen trae transparencia (WebP/PNG).
       const jpeg = await sharp(raw, { failOn: 'none' })
         .flatten({ background: '#ffffff' })
-        .jpeg({ quality: 82 })
+        .jpeg({ quality: 88 })
         .toBuffer();
       // Guarda en cache (desaloja el mas antiguo si se llena).
       if (cache.size >= ProductsCatalogPhotosReportService.CACHE_MAX) {
