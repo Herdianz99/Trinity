@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 
 const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const FRECUENCIA: Record<string, string> = { WEEKLY: 'Semanal', BIWEEKLY: 'Quincenal', MONTHLY: 'Mensual' };
 
 interface Perfil {
   code: string | null; bank: string | null; salaryBaseUsd: number; frequency: string;
@@ -42,7 +43,7 @@ export default function MisDatosPage() {
         <Row label="Dirección" value={p.customer.address} />
         <Row label="Departamento" value={p.department?.name} />
         <Row label="Cargo" value={p.position?.name} />
-        <Row label="Frecuencia de pago" value={p.frequency} />
+        <Row label="Frecuencia de pago" value={FRECUENCIA[p.frequency] || p.frequency} />
         <Row label="Banco" value={p.bank} />
         <Row label="Límite de crédito" value={`$ ${fmt(p.customer.creditLimit)}`} />
         <Row label="Días de crédito" value={p.customer.creditDays} />
