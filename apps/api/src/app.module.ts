@@ -75,6 +75,8 @@ import { Audit5SModule } from './modules/audit-5s/audit-5s.module';
 import { DamageReportsModule } from './modules/damage-reports/damage-reports.module';
 import { GoodsReceiptsModule } from './modules/goods-receipts/goods-receipts.module';
 import { ExhibitionModule } from './modules/exhibition/exhibition.module';
+import { MeModule } from './modules/me/me.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -154,6 +156,8 @@ import { ExhibitionModule } from './modules/exhibition/exhibition.module';
     DamageReportsModule,
     GoodsReceiptsModule,
     ExhibitionModule,
+    MeModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

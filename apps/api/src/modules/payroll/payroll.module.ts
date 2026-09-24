@@ -10,6 +10,6 @@ import { PayrollPdfService } from './payroll-pdf.service';
 @Module({
   controllers: [EmployeesController, PayrollParamsController, PayrollRunsController],
   providers: [EmployeesService, PayrollParamsService, PayrollRunsService, PayrollPdfService],
-  exports: [EmployeesService, PayrollParamsService, PayrollRunsService],
+  exports: [EmployeesService, PayrollParamsService, PayrollRunsService, PayrollPdfService],
 })
 export class PayrollModule {}
