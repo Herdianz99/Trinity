@@ -30,4 +30,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   restrictToOnSiteIp?: boolean;
+
+  @ApiProperty({ required: false, description: 'Empleado de nomina vinculado (para el portal Mi Perfil)' })
+  @IsOptional()
+  @IsString()
+  employeeId?: string;
 }

@@ -36,6 +36,7 @@ export class UsersService {
         password: hashedPassword,
         role: dto.role,
         isActive: dto.isActive ?? true,
+        employeeId: dto.employeeId || null,
         mustChangePassword: true,
       },
     });
@@ -54,6 +55,8 @@ export class UsersService {
         restrictToOnSiteIp: true,
         lastLoginAt: true,
         createdAt: true,
+        employeeId: true,
+        employee: { select: { id: true, code: true, customer: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -65,6 +68,7 @@ export class UsersService {
       where: { id },
       include: {
         seller: { select: { id: true, code: true, name: true, isActive: true } },
+        employee: { select: { id: true, code: true, customer: { select: { name: true } } } },
       },
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -94,6 +98,7 @@ export class UsersService {
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.restrictToOnSiteIp !== undefined) data.restrictToOnSiteIp = dto.restrictToOnSiteIp;
+    if (dto.employeeId !== undefined) data.employeeId = dto.employeeId || null;
     const user = await this.prisma.user.update({ where: { id }, data });
     const { password, ...result } = user;
     return result;
