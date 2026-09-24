@@ -42,11 +42,11 @@ async function getJson(url: string) {
 }
 
 /* ---------- small UI atoms ---------- */
-function Reveal({ i, children }: { i: number; children: React.ReactNode }) {
+function Reveal({ i, children, className }: { i: number; children: React.ReactNode; className?: string }) {
   const [on, setOn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setOn(true), 60 + i * 70); return () => clearTimeout(t); }, [i]);
   return (
-    <div className="transition-all duration-500 ease-out" style={{ opacity: on ? 1 : 0, transform: on ? 'translateY(0)' : 'translateY(12px)' }}>
+    <div className={`transition-all duration-500 ease-out ${className || ''}`} style={{ opacity: on ? 1 : 0, transform: on ? 'translateY(0)' : 'translateY(12px)' }}>
       {children}
     </div>
   );
@@ -206,8 +206,8 @@ export default function MiPerfilPage() {
         </Reveal>
 
         {/* PANEL CON PESTAÑAS */}
-        <Reveal i={3}>
-          <div className="lg:col-span-2 card p-0 overflow-hidden">
+        <Reveal i={3} className="lg:col-span-2">
+          <div className="card p-0 overflow-hidden">
             <div className="flex gap-1 p-1.5 border-b border-slate-700/50 overflow-x-auto">
               {tabs.map((t) => (
                 <button key={t.key} onClick={() => setTab(t.key)}
