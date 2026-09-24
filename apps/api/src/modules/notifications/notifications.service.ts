@@ -44,6 +44,23 @@ export class NotificationsService {
     });
   }
 
+  /** Empleados y departamentos activos para componer una notificacion (para el emisor). */
+  async targets() {
+    const [employees, departments] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, departmentId: true, customer: { select: { name: true } } },
+        orderBy: { customer: { name: 'asc' } },
+      }),
+      this.prisma.department.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    return { employees, departments };
+  }
+
   async listForSender(query: { type?: string }) {
     const rows = await this.prisma.notification.findMany({
       where: query.type ? { type: query.type as any } : {},

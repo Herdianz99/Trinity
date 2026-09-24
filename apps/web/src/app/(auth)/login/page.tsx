@@ -40,7 +40,8 @@ export default function LoginPage() {
       if (data.mustChangePassword) {
         router.push('/change-password');
       } else {
-        router.push('/dashboard');
+        const role = data.user?.role ?? data.role;
+        router.push(role === 'EMPLOYEE' ? '/mi-perfil' : '/dashboard');
       }
       router.refresh();
     } catch (err: any) {

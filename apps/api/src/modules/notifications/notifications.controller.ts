@@ -27,6 +27,13 @@ export class NotificationsController {
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRHH, UserRole.SUPERVISOR)
+  @Get('targets')
+  targets() {
+    return this.service.targets();
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.RRHH, UserRole.SUPERVISOR)
   @Get()
   list(@Query('type') type?: string) {
     return this.service.listForSender({ type });
