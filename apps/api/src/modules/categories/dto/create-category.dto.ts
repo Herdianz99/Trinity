@@ -27,6 +27,12 @@ export class CreateCategoryDto {
   @Min(0)
   bregaPct?: number;
 
+  @ApiProperty({ required: false, description: 'Orden manual en el catalogo con fotos (menor primero; 0 = alfabetico)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sortOrder?: number;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

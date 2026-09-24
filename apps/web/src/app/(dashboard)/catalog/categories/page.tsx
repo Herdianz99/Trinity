@@ -12,6 +12,7 @@ interface Category {
   code: string | null;
   commissionPct: number;
   bregaPct: number;
+  sortOrder: number;
   parentId: string | null;
   printAreaId: string | null;
   printArea: { id: string; name: string } | null;
@@ -35,6 +36,7 @@ export default function CategoriesPage() {
   const [editPrintAreaId, setEditPrintAreaId] = useState('');
   const [editCommissionPct, setEditCommissionPct] = useState('0');
   const [editBregaPct, setEditBregaPct] = useState('0');
+  const [editSortOrder, setEditSortOrder] = useState('0');
   const [addingParentId, setAddingParentId] = useState<string | null | 'root'>(null);
   const [newName, setNewName] = useState('');
   const [newCode, setNewCode] = useState('');
@@ -133,7 +135,7 @@ export default function CategoriesPage() {
     }
     setSaving(true);
     try {
-      const body: Record<string, unknown> = { name: editName.trim() };
+      const body: Record<string, unknown> = { name: editName.trim(), sortOrder: parseInt(editSortOrder, 10) || 0 };
       if (isRoot) {
         body.code = editCode.toUpperCase();
         body.printAreaId = editPrintAreaId || null;
@@ -251,6 +253,19 @@ export default function CategoriesPage() {
                 className="input-field !py-1 !px-2 text-sm flex-1"
                 autoFocus={!isRoot}
               />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={editSortOrder}
+                  onChange={(e) => setEditSortOrder(e.target.value)}
+                  min="0"
+                  step="1"
+                  className="input-field !py-1 !px-2 text-sm w-16 text-center"
+                  placeholder="0"
+                  title="Orden en el catalogo con fotos (menor primero; 0 = alfabetico)"
+                />
+                <span className="text-xs text-slate-500">orden</span>
+              </div>
               {isRoot && (
                 <select
                   value={editPrintAreaId}
@@ -333,6 +348,11 @@ export default function CategoriesPage() {
                   {cat.bregaPct}% brecha
                 </span>
               )}
+              {cat.sortOrder > 0 && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20" title="Orden en el catalogo con fotos">
+                  orden {cat.sortOrder}
+                </span>
+              )}
               <span className="text-xs text-slate-600 mr-2">
                 {hasChildren ? `${cat.children.length} sub` : ''}
               </span>
@@ -359,6 +379,7 @@ export default function CategoriesPage() {
                   setEditPrintAreaId(cat.printAreaId || '');
                   setEditCommissionPct(String(cat.commissionPct || 0));
                   setEditBregaPct(String(cat.bregaPct || 0));
+                  setEditSortOrder(String(cat.sortOrder || 0));
                 }}
                 className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-white transition-colors"
                 title="Editar"

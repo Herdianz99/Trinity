@@ -2972,6 +2972,9 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS "StockMovement_serieId_idx" ON "StockMovement"("serieId");
 
+-- Orden manual de familias en el catalogo con fotos (Sesion 141)
+ALTER TABLE "Category" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+
 -- Portal del empleado (Mi Perfil) + Notificaciones (Sesion 141)
 ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'EMPLOYEE';
 

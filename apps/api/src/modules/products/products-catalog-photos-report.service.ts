@@ -159,14 +159,19 @@ export class ProductsCatalogPhotosReportService {
     const bottomLimit = doc.page.height - doc.page.margins.bottom;
 
     // Empareja cada item con su foto ya transcodificada, agrupa por categoria y ordena:
-    // por categoria (asc, "Sin categoria" al final) y luego por nombre.
+    // por el ORDEN MANUAL de la categoria (sortOrder, menor primero; 0 al final como el resto),
+    // desempatando alfabeticamente; "Sin categoria" siempre al final; dentro de la categoria por nombre.
     const SIN_CAT = 'Sin categoria';
-    const entries = items.map((it, i) => ({ it, photo: photos[i], cat: it.category || SIN_CAT }));
+    // orden efectivo: sortOrder>0 va primero por su valor; sortOrder 0 (sin orden asignado) va después.
+    const ord = (o: number) => (o > 0 ? o : Number.MAX_SAFE_INTEGER);
+    const entries = items.map((it, i) => ({ it, photo: photos[i], cat: it.category || SIN_CAT, order: (it as any).categoryOrder ?? 0 }));
     entries.sort((a, b) => {
       // "Sin categoria" siempre al final.
       if (a.cat !== b.cat) {
         if (a.cat === SIN_CAT) return 1;
         if (b.cat === SIN_CAT) return -1;
+        const oa = ord(a.order), ob = ord(b.order);
+        if (oa !== ob) return oa - ob;
         return a.cat.localeCompare(b.cat, 'es');
       }
       return a.it.name.localeCompare(b.it.name, 'es');
@@ -284,22 +289,19 @@ export class ProductsCatalogPhotosReportService {
     return this.collect(doc);
   }
 
-  // Pagina final a todo el ancho con condiciones de credito, promociones de cables y
-  // formas de pago/descuentos. Diseño visual con bandas y tarjetas.
+  // Pagina final: contraportada con las condiciones de pago (contado / credito).
   private drawBackCover(doc: PDFKit.PDFDocument, company: string) {
     doc.addPage();
-    // Anula los margenes de ESTA pagina: dibujamos con coordenadas absolutas (bandas al borde,
-    // texto del pie cerca del fondo) y sin esto PDFKit auto-agrega una pagina en blanco al
-    // "desbordar" el margen inferior.
+    // Anula los margenes de ESTA pagina: dibujamos con coordenadas absolutas (bandas al borde);
+    // sin esto PDFKit auto-agrega una pagina en blanco al "desbordar" el margen inferior.
     doc.page.margins = { top: 0, bottom: 0, left: 0, right: 0 };
     const W = doc.page.width;   // 612
     const H = doc.page.height;  // 792
     const M = 40;
     const cw = W - M * 2;       // 532
     const INK = '#064e2b';      // verde muy oscuro (bandas)
-    const ACCENT = '#009b36';   // verde del logo (titulos de seccion, badges)
-    const GREEN = '#15803d';    // verde (descuentos)
-    const LIGHT = '#e7f6ec';    // fondo pill verde claro
+    const ACCENT = '#009b36';   // verde del logo
+    const GREEN = '#15803d';    // verde (badge de descuento)
 
     // Fondo general
     doc.rect(0, 0, W, H).fill('#f8fafc');
@@ -307,77 +309,27 @@ export class ProductsCatalogPhotosReportService {
     // --- Banda superior ---
     doc.rect(0, 0, W, 116).fill(INK);
     doc.fillColor('#bbe6c8').font('Helvetica-Bold').fontSize(10)
-      .text(company.toUpperCase(), M, 30, { width: cw, align: 'center', lineBreak: false });
+      .text(company.toUpperCase(), M, 34, { width: cw, align: 'center', lineBreak: false });
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(24)
-      .text('CONDICIONES Y PROMOCIONES', M, 50, { width: cw, align: 'center', lineBreak: false });
-    doc.fillColor('#8ed4a3').font('Helvetica').fontSize(9)
-      .text('Venta al mayor', M, 86, { width: cw, align: 'center', lineBreak: false });
+      .text('CONDICIONES DE PAGO', M, 54, { width: cw, align: 'center', lineBreak: false });
 
-    // Titulo de seccion (pill)
-    const sectionTitle = (label: string, y: number) => {
-      doc.font('Helvetica-Bold').fontSize(11);
-      const tw = doc.widthOfString(label) + 26;
-      doc.roundedRect(M, y, tw, 22, 11).fill(ACCENT);
-      doc.fillColor('#ffffff').text(label, M + 13, y + 6, { lineBreak: false });
+    // Dos tarjetas grandes centradas verticalmente con la condicion y su descuento.
+    const cardH = 130;
+    const gap = 20;
+    const startY = 220;
+    const condCard = (y: number, titulo: string, detalle: string, badge: string) => {
+      doc.roundedRect(M, y, cw, cardH, 14).fillAndStroke('#ffffff', '#e2e8f0');
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(30)
+        .text(titulo, M + 30, y + 34, { width: cw - 200, lineBreak: false });
+      doc.fillColor('#64748b').font('Helvetica').fontSize(13)
+        .text(detalle, M + 30, y + 78, { width: cw - 200, lineBreak: false });
+      const badgeW = 150;
+      doc.roundedRect(M + cw - badgeW - 24, y + (cardH - 56) / 2, badgeW, 56, 12).fill(GREEN);
+      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(30)
+        .text(badge, M + cw - badgeW - 24, y + (cardH - 56) / 2 + 13, { width: badgeW, align: 'center', lineBreak: false });
     };
-
-    // === CONDICIONES DE CREDITO ===
-    let y = 140;
-    sectionTitle('CONDICIONES DE CREDITO', y);
-    y += 32;
-    const gap = 16;
-    const halfW = (cw - gap) / 2;
-    const creditBox = (x: number, dias: string, detalle: string) => {
-      doc.roundedRect(x, y, halfW, 86, 10).fillAndStroke('#ffffff', '#e2e8f0');
-      doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(9).text('CREDITO', x, y + 12, { width: halfW, align: 'center', lineBreak: false });
-      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(28).text(`${dias} DIAS`, x, y + 26, { width: halfW, align: 'center', lineBreak: false });
-      const pillW = 130;
-      doc.roundedRect(x + (halfW - pillW) / 2, y + 60, pillW, 20, 10).fill(LIGHT);
-      doc.fillColor(ACCENT).font('Helvetica-Bold').fontSize(11).text(detalle, x + (halfW - pillW) / 2, y + 66, { width: pillW, align: 'center', lineBreak: false });
-    };
-    creditBox(M, '15', 'hasta $999');
-    creditBox(M + halfW + gap, '21', 'desde $1.000');
-    y += 86;
-
-    // === PROMOCIONES: CABLES POR BULTO ===
-    y += 22;
-    sectionTitle('PROMOCIONES  ·  CABLES POR BULTO', y);
-    y += 30;
-    const cables: [string, string][] = [
-      ['1 x 14', '8'], ['1 x 12', '6'], ['1 x 10', '4'],
-      ['1 x 8', '2'], ['2 x 14', '4'], ['2 x 12', '4'],
-    ];
-    const itemW = (cw - gap) / 2;
-    const itemH = 42;
-    const rgap = 11;
-    cables.forEach((c, idx) => {
-      const cx = M + (idx % 2) * (itemW + gap);
-      const cy = y + Math.floor(idx / 2) * (itemH + rgap);
-      doc.roundedRect(cx, cy, itemW, itemH, 8).fillAndStroke('#ffffff', '#e2e8f0');
-      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(15).text(`CABLE ${c[0]}`, cx + 16, cy + 13, { width: itemW - 110, lineBreak: false });
-      const badgeW = 92;
-      doc.roundedRect(cx + itemW - badgeW - 10, cy + 8, badgeW, 26, 6).fill(ACCENT);
-      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(10.5).text(`BULTO ${c[1]} PZ`, cx + itemW - badgeW - 10, cy + 16, { width: badgeW, align: 'center', lineBreak: false });
-    });
-    y += 3 * (itemH + rgap);
-
-    // === FORMAS DE PAGO Y DESCUENTOS ===
-    y += 10;
-    sectionTitle('FORMAS DE PAGO Y DESCUENTOS', y);
-    y += 30;
-    const pagos: [string, string][] = [
-      ['A partir de 5 bultos por modelo', '-5%'],
-      ['Pago a 7 dias', '-5%'],
-      ['Pago de contado', '-6%'],
-    ];
-    pagos.forEach((p, idx) => {
-      const py = y + idx * 44;
-      doc.roundedRect(M, py, cw, 36, 8).fillAndStroke('#ffffff', '#e2e8f0');
-      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(13).text(p[0], M + 16, py + 11, { width: cw - 120, lineBreak: false });
-      const badgeW = 74;
-      doc.roundedRect(M + cw - badgeW - 10, py + 5, badgeW, 26, 6).fill(GREEN);
-      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(15).text(p[1], M + cw - badgeW - 10, py + 10, { width: badgeW, align: 'center', lineBreak: false });
-    });
+    condCard(startY, 'CONTADO', 'Pago de contado', '10%');
+    condCard(startY + cardH + gap, '15 DIAS DE CREDITO', 'Pago hasta 15 dias', '5%');
 
     // --- Banda inferior ---
     const fy = H - 92;
