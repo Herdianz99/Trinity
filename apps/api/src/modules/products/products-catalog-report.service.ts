@@ -164,6 +164,8 @@ export class ProductsCatalogReportService {
       'Marca': it.brand,
       'Proveedor': it.supplier,
       'Costo USD': it.cost,
+      'Brecha (%)': it.bregaPct,
+      'Ganancia detal (%)': it.gananciaPct,
       'Precio USD': it.priceDetal,
       'Precio Mayor USD': it.priceMayor,
       'Precio Bs': rate > 0 ? it.priceDetalBs : '',
@@ -174,7 +176,7 @@ export class ProductsCatalogReportService {
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
       { wch: 12 }, { wch: 14 }, { wch: 40 }, { wch: 20 }, { wch: 18 },
-      { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 },
+      { wch: 22 }, { wch: 12 }, { wch: 11 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Catalogo');

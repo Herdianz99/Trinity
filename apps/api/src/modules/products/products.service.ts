@@ -468,8 +468,10 @@ export class ProductsService {
       }
     }
     const today = caracasDateKey();
-    const [rateRow, products] = await Promise.all([
+    const [rateRow, config, catBregaMap, products] = await Promise.all([
       this.prisma.exchangeRate.findUnique({ where: { date: today } }),
+      this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } }),
+      buildCategoryBregaMap(this.prisma),
       where
         ? this.prisma.product.findMany({
             where,
@@ -482,6 +484,9 @@ export class ProductsService {
               costUsd: true,
               priceDetal: true,
               priceMayor: true,
+              gananciaPct: true,
+              bregaApplies: true,
+              categoryId: true,
               isActive: true,
               saleBlocked: true,
               primaryImageMediumUrl: true,
@@ -496,7 +501,14 @@ export class ProductsService {
     ]);
 
     const rate = rateRow?.rate || 0;
-    const items = products.map((p) => ({
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const items = products.map((p) => {
+      const bregaPct = resolveBregaPct({
+        bregaApplies: p.bregaApplies,
+        categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      return {
       code: p.code,
       supplierRef: p.supplierRef || '',
       otherCode: p.otherCode || '',
@@ -508,13 +520,16 @@ export class ProductsService {
       priceDetal: p.priceDetal,
       priceMayor: p.priceMayor,
       priceDetalBs: Math.round(p.priceDetal * rate * 100) / 100,
+      bregaPct: Math.round(bregaPct * 100) / 100,
+      gananciaPct: Math.round(p.gananciaPct * 100) / 100,
       stock: Math.round(p.stock.reduce((s, x) => s + x.quantity, 0) * 1000) / 1000,
       status: !p.isActive ? 'Inactivo' : p.saleBlocked ? 'Bloq. venta' : 'Activo',
       // URL de la foto principal (para el catalogo con imagenes). medium (800px) para que se vea
       // nitida impresa: la celda mide ~150pt (~2"), y la miniatura de 150px daba solo ~72 DPI
       // (borrosa). thumb solo como respaldo si el producto no tiene medium.
       imageUrl: p.primaryImageMediumUrl || p.primaryImageThumbUrl || '',
-    }));
+      };
+    });
 
     return { items, rate };
   }
