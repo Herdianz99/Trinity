@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bell, CreditCard, Receipt, AlertTriangle, FileDown, Wallet, Phone, Mail, MapPin,
-  Building2, Briefcase, CalendarClock, Check, X, BadgeCheck, IdCard, Landmark, Loader2,
+  Building2, Briefcase, CalendarClock, Check, X, BadgeCheck, FileText, Landmark, Loader2,
 } from 'lucide-react';
 
 /* ---------- helpers ---------- */
@@ -137,7 +137,7 @@ export default function MiPerfilPage() {
   if (loading) return <div className="py-24 flex items-center justify-center text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> Cargando tu perfil…</div>;
   if (error) return (
     <div className="max-w-md mx-auto py-24 text-center">
-      <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-4"><IdCard className="text-slate-500" size={26} /></div>
+      <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mb-4"><FileText className="text-slate-500" size={26} /></div>
       <p className="text-slate-300 font-medium">Portal no disponible</p>
       <p className="text-slate-500 text-sm mt-1">{error}</p>
     </div>
@@ -193,7 +193,7 @@ export default function MiPerfilPage() {
         {/* DATOS */}
         <Reveal i={2}>
           <div className="card p-5 lg:sticky lg:top-4">
-            <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><IdCard size={16} className="text-emerald-400" /> Mis datos</h2>
+            <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><FileText size={16} className="text-emerald-400" /> Mis datos</h2>
             <div className="space-y-3.5">
               <Info icon={<Phone size={15} />} label="Teléfono" value={c.phone} />
               <Info icon={<Mail size={15} />} label="Correo" value={c.email} />
