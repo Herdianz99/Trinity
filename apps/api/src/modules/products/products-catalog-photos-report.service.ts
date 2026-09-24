@@ -328,8 +328,8 @@ export class ProductsCatalogPhotosReportService {
       doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(30)
         .text(badge, M + cw - badgeW - 24, y + (cardH - 56) / 2 + 13, { width: badgeW, align: 'center', lineBreak: false });
     };
-    condCard(startY, 'CONTADO', 'Pago de contado', '10%');
-    condCard(startY + cardH + gap, '15 DIAS DE CREDITO', 'Pago hasta 15 dias', '5%');
+    condCard(startY, 'CONTADO', 'Pago de contado', '-10%');
+    condCard(startY + cardH + gap, '15 DIAS DE CREDITO', 'Pago hasta 15 dias', '-5%');
 
     // --- Banda inferior ---
     const fy = H - 92;
