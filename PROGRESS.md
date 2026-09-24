@@ -17,6 +17,62 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 140 (2026-09-24) — Módulo Bancos: editar cuenta desde la UI + al eliminar documentos se revierte el movimiento del banco
+
+> ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API, SIN migración** (no toca schema). Diego lo despliega cuando quiera. Verificado: typecheck API y web limpios; sistema levantado en local (API :4000 0 errores, Web :3000).
+
+Dos arreglos al módulo de Bancos (Ses.126) reportados por Diego:
+
+### 1) Editar cuenta bancaria desde `/bancos/cuentas`
+El endpoint `PATCH /bancos/accounts/:id` **ya existía** en el backend, pero la página solo permitía crear. Se agregó la UI:
+- Botón **editar (lápiz)** por fila (nueva columna "Acciones") que abre el mismo modal precargado.
+- En edición se corrigen los **datos básicos** (nombre/alias, banco, N° de cuenta, tipo, moneda) + toggle **Cuenta activa** → hace `PATCH`.
+- El **saldo inicial / fecha de corte** se ocultan en edición (con nota) a propósito, para no descuadrar el libro banco. Crear sigue igual (`POST`).
+- `apps/web/src/app/(dashboard)/bancos/cuentas/page.tsx`.
+
+### 2) Eliminar documentos ahora revierte el `BankMovement` (bug de movimientos huérfanos)
+El bug: al eliminar recibos/gastos/anticipos se borraba el asiento de caja (`cashLedgerEntry`) pero **NO** el `BankMovement`, dejando movimientos huérfanos que descuadraban el saldo de la cuenta bancaria.
+- Nuevo helper **`removeBankMovements(tx, sourceType|sourceTypes, sourceId)`** en `apps/api/src/common/bank-ledger.ts`. Borra los movimientos del documento origen y **aborta con `BadRequestException` si alguno ya fue CONCILIADO** (mismo criterio que el borrado de movimientos manuales: hay que desconciliar primero para no romper el cuadre contra el estado de cuenta).
+- Enganchado en:
+  - `receipts.service.ts` (`remove` POSTED) → `RECEIPT_COLLECTION` / `RECEIPT_PAYMENT`.
+  - `expenses.service.ts` (`delete`) → `EXPENSE`. **Además** se envolvió en transacción y ahora también limpia `cashMovement` (por `expenseId`) y `cashLedgerEntry` (`sourceType EXPENSE`), que antes tampoco se borraban (quedaban en el arqueo/ledger). El retorno pasó de la fila `expense` a `{ deleted: true }` (el front solo mira `res.ok`).
+  - `customer-advances.service.ts` (`remove`) y `supplier-advances.service.ts` (`remove`) → `ADVANCE`.
+  - `invoices.service.ts` (`delete`) → `SALE_PAYMENT` (defensivo; solo borra facturas PENDING que normalmente no tienen pagos en banco).
+- **GOTCHA sourceType:** los pagos de factura usan `SALE_PAYMENT`; recibos `RECEIPT_COLLECTION`/`RECEIPT_PAYMENT`; gastos `EXPENSE`; ambos anticipos (cliente/proveedor) usan `ADVANCE` con su propio `advance.id` (sin colisión). El `sourceId` siempre es el id del documento.
+
+**Pendiente/idea:** revisar si notas de crédito/débito y compras (CxP) deberían revertir movimientos de banco al eliminarse (no tocado esta sesión).
+
+## 🗓️ Sesión 139 (2026-09-23) — Empresa MAYOR: precios (quitar IVA + 5%), categorización completa de 300 productos + reporte catálogo con fotos (modal, segmentado, AGOTADO, contraportada)
+
+> ### ⚠️ DOS NIVELES DISTINTOS — leer con cuidado:
+> - **CÓDIGO (reporte catálogo con fotos):** commiteado en `main` (`6751964e` + `6c828cae`), **SIN DESPLEGAR**. Solo API, sin migración. En producción del mayor las mejoras del PDF (modal, segmentado, AGOTADO, contraportada) **corren recién cuando se despliegue** (`/opt/deploy-trinity-mayor.sh`). Diego pidió explícitamente NO desplegar hoy.
+> - **DATOS (BD del mayor):** aplicados por SQL directo **en local (`trebolmayor_db` Docker) Y en producción (`134.209.164.59:trebolmayor_db`)**, SIN deploy ni código. Precios, categorización, códigos de subcategoría y borrado de categorías vacías **YA están vivos en prod**. Backups completos en el server (`/root/_mayor-backup-precat-*.sql.gz`, `/root/_mayor-backup-preprecio2-*.sql.gz`).
+
+Toda la sesión giró en torno a la empresa **trebolmayor** (mayorista, `mayor.eltrebol.app`, co-locada en la grande; identidad = inversiones). El dump de prod se restauró en local (`_mayor.sql.gz`) para trabajar.
+
+### Datos aplicados en el mayor (LOCAL + PROD)
+
+- **Precios "quitar IVA + 5%"** a los artículos con `priceMayor > 10`. Fórmula: `precio ÷ 1.16 × 1.05` (redondeo 2 dec) sobre `priceMayor` y `priceDetal`. **GOTCHA CLAVE (lo detectó Diego):** al inicio lo apliqué cambiando el **precio final** directo, pero como los productos tienen `manualPrice=false` y la fórmula es `precio = costo × (1+brecha) × (1+ganancia) × multIVA` (`common/pricing.ts`), **cualquier recálculo/reimportación lo revierte** (recomputa `costo × 1.5 × 1.16`). De hecho una reimportación del catálogo en prod (2026-09-23 21:01) borró el cambio y agregó 6 productos. **Fix correcto = ajustar la GANANCIA, no el precio:** `ganancia_new = (1+ganancia_old) × 1.05/1.16 − 1` (50% → **35.7759%**), manteniendo `ivaType=GENERAL`. Es **a prueba de recálculos** porque la base/brecha se cancela: `costo × (1+ganancia_new) × 1.16 = precio_deseado` exacto. Aplicado a los **92** del catálogo original (ganancia 50%, `priceMayor>10`). Multiplicadores IVA: `EXEMPT=1, REDUCED=1.08, GENERAL=1.16, SPECIAL=1.31` (`company-config.service.ts`). Ej. GEN00077: costo 191.70 → priceMayor **301.93**. **Pendiente decisión de Diego:** los 5 cables nuevos `CAB00002–06` (priceMayor>10, márgenes propios mayor=20%) NO se tocaron.
+- **Categorización de los 300 productos** (estaban todos en GENERAL). Se reutilizó el árbol seed + se crearon **9 categorías nuevas** (ids `mayorcat_*`): subcats Sanitarios, Duchas y Regaderas, Válvulas y Llaves de Paso, Mallas y Alambres, Ruedas y Garruchas, Estantería y Organización, Revestimientos Decorativos; raíces Seguridad Industrial (SEG) y Hogar y Electrodomésticos (HOG). Clasificación producto a producto por nombre.
+- **Fregaderos → Grifería y Llaves:** los 10 productos `FREGADERO%` se movieron de Sanitarios a Grifería (queda en 34). El filtro excluye los "GRIFO/GIFRO FREGADERO" (ya estaban en Grifería).
+- **Borrar categorías vacías:** de 39 → **34** (se borraron 5 hojas seed sin productos: Herramientas de Medición, Pinturas Interior/Exterior, Solventes, Herramientas de Jardín). **GENERAL se preservó a propósito** (aunque quedó vacía) por ser la categoría estructural que genera los códigos `GEN####`. Regla: borrar solo categorías sin productos NI hijas, excepto GENERAL.
+- **Letras de código a las subcategorías:** las subcats tenían `code=NULL` → al crear un artículo en una subcategoría el API lanzaba *"La categoria no tiene codigo asignado"* (`generateCodeFromCategory` usa el code de la categoría seleccionada, sin fallback al padre). Diego eligió "cada subcategoría con su letra". Se asignó un code único a las **24 subcategorías** (GRI, SAN, VAL, TUB, INT, TAB, CAB, ABR, ADH, CER, EST, MAL, RUE, TOR, HEL, HMA, ILU, IMP, RIE, APT, RDE, ABA, DUC, CEM) — sin chocar con las raíces (HER, PIN, ELE, PLO, FER, CON, JAR, SEG, HOG, GEN). Nuevo artículo en Grifería → `GRI00001`.
+
+### Código — reporte "Catálogo con fotos" (commiteado, SIN deploy)
+
+`products-catalog-photos-report.service.ts` + `products.service.ts` (`catalogReportList`) + `apps/web/.../catalog/products/page.tsx`:
+
+- **Modal para elegir categoría** al pulsar "Catalogo": si eliges una, sale filtrada; si no, sale **todo segmentado por categoría** (banda de encabezado por sección con nombre+cantidad, repite "(cont.)" al cruzar página; ordena por categoría y "Sin categoria" al final).
+- **`catalogReportList` expande la categoría raíz a sus subcategorías** (vía `category.parentId`) SOLO en los reportes de catálogo. **GOTCHA:** `buildListWhere` filtra por `categoryId` EXACTO (no incluye subcategorías) — por eso filtrar por una raíz en la tabla/POS trae 0; los reportes de catálogo lo expanden, la tabla y el POS siguen exactos.
+- **Excluye desactivados:** el catálogo con fotos fuerza solo-activos en el backend (ignora `includeInactive`).
+- **Leyenda "AGOTADO"** en rojo (en vez del precio) cuando `stock ≤ 0` (al reponer puede llegar más caro).
+- **Contraportada** a toda la página (condiciones de crédito, promociones de cables por bulto, formas de pago/descuentos, tasa Binance/Zelle/Efectivo, @inversioneseltrebol). Colores en el **verde del logo** (`#009b36`, extraído de `favicon.png`). **GOTCHA PDFKit:** el texto del pie desbordaba el margen inferior y generaba una página en blanco → se ponen los márgenes de esa página en 0 (`doc.page.margins = {0,0,0,0}`) para dibujar al borde sin auto-paginar; la contraportada va sin número de página (paginación numera solo las páginas de producto). Verificado renderizando el PDF a PNG (pdf-to-img) y leyendo la imagen.
+
+**Commits:** `6751964e` (modal + segmentado + excluye desactivados), `6c828cae` (AGOTADO + contraportada + verde del logo).
+
+### Infra/local
+- **GOTCHA:** la base a la que se conecta el API local la controla **`packages/database/.env`** (Prisma lo carga junto al schema), NO `apps/api/.env` — gana sobre los demás. Apuntaba a `grande_db`; se cambió a `trebolmayor_db`. Verificar la BD real con `pg_stat_activity`.
+
 ## 🗓️ Sesión 135 (2026-09-22) — Movimientos de stock: filtro por serie (fiscal / nota de entrega) + dropdown de reportes + reporte "entradas y salidas"
 
 > ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API CON migración** (`20260922160000_stock_movement_serie`, aditiva/idempotente con backfill histórico + respaldo en `deploy/fix-schema.sql`). Diego lo despliega cuando quiera. Verificado e2e en local (grande_db) con JWT firmado.

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Landmark, Plus, Loader2, X, ExternalLink } from 'lucide-react';
+import { Landmark, Plus, Loader2, X, ExternalLink, Pencil } from 'lucide-react';
 
 interface Account {
   id: string;
@@ -36,15 +36,41 @@ const emptyForm = {
   openingBalance: '',
   exchangeRate: '',
   openingDate: '',
+  isActive: true,
 };
 
 export default function CuentasBancariasPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ ...emptyForm });
+
+  function openCreate() {
+    setEditId(null);
+    setForm({ ...emptyForm });
+    setError('');
+    setModalOpen(true);
+  }
+
+  function openEdit(a: Account) {
+    setEditId(a.id);
+    setForm({
+      name: a.name,
+      bankName: a.bankName,
+      accountNumber: a.accountNumber || '',
+      accountType: a.accountType,
+      currency: a.currency,
+      openingBalance: '',
+      exchangeRate: '',
+      openingDate: '',
+      isActive: a.isActive,
+    });
+    setError('');
+    setModalOpen(true);
+  }
 
   useEffect(() => {
     document.title = 'Cuentas bancarias | Trinity ERP';
@@ -71,25 +97,40 @@ export default function CuentasBancariasPage() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/proxy/bancos/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          bankName: form.bankName.trim(),
-          accountNumber: form.accountNumber.trim() || undefined,
-          accountType: form.accountType,
-          currency: form.currency,
-          openingBalance: parseNum(form.openingBalance),
-          exchangeRate: parseNum(form.exchangeRate),
-          openingDate: form.openingDate || undefined,
-        }),
-      });
+      // En edicion NO se toca el saldo inicial (se corrigen solo los datos basicos).
+      const body = editId
+        ? {
+            name: form.name.trim(),
+            bankName: form.bankName.trim(),
+            accountNumber: form.accountNumber.trim() || null,
+            accountType: form.accountType,
+            currency: form.currency,
+            isActive: form.isActive,
+          }
+        : {
+            name: form.name.trim(),
+            bankName: form.bankName.trim(),
+            accountNumber: form.accountNumber.trim() || undefined,
+            accountType: form.accountType,
+            currency: form.currency,
+            openingBalance: parseNum(form.openingBalance),
+            exchangeRate: parseNum(form.exchangeRate),
+            openingDate: form.openingDate || undefined,
+          };
+      const res = await fetch(
+        editId ? `/api/proxy/bancos/accounts/${editId}` : '/api/proxy/bancos/accounts',
+        {
+          method: editId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e.message || 'Error al crear la cuenta');
+        throw new Error(e.message || (editId ? 'Error al actualizar la cuenta' : 'Error al crear la cuenta'));
       }
       setModalOpen(false);
+      setEditId(null);
       setForm({ ...emptyForm });
       load();
     } catch (err: any) {
@@ -112,7 +153,7 @@ export default function CuentasBancariasPage() {
             <p className="text-slate-400 text-sm">Catálogo de cuentas y su saldo inicial.</p>
           </div>
         </div>
-        <button onClick={() => setModalOpen(true)} className="btn-primary flex items-center gap-2">
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
           <Plus size={16} /> Nueva cuenta
         </button>
       </div>
@@ -132,6 +173,7 @@ export default function CuentasBancariasPage() {
                 <th className="text-right px-4 py-3 font-medium">Saldo inicial</th>
                 <th className="text-left px-4 py-3 font-medium">Métodos</th>
                 <th className="text-center px-4 py-3 font-medium">Estado</th>
+                <th className="text-center px-4 py-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -160,11 +202,20 @@ export default function CuentasBancariasPage() {
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/20">Inactiva</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => openEdit(a)}
+                      title="Editar cuenta"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {accounts.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-slate-500">
+                  <td colSpan={9} className="text-center py-12 text-slate-500">
                     No hay cuentas. Crea la primera con “Nueva cuenta”.
                   </td>
                 </tr>
@@ -178,7 +229,7 @@ export default function CuentasBancariasPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-white">Nueva cuenta bancaria</h2>
+              <h2 className="text-lg font-bold text-white">{editId ? 'Editar cuenta bancaria' : 'Nueva cuenta bancaria'}</h2>
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X size={20} />
               </button>
@@ -215,30 +266,45 @@ export default function CuentasBancariasPage() {
                   <option value="USD">USD</option>
                 </select>
               </label>
-              <label className="text-sm">
-                <span className="text-slate-400">Saldo inicial</span>
-                <input type="text" inputMode="decimal" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: sanitizeNum(e.target.value) })}
-                  placeholder="0,00"
-                  className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
-              </label>
-              {form.currency === 'USD' && (
-                <label className="text-sm">
-                  <span className="text-slate-400">Tasa (para equiv. Bs)</span>
-                  <input type="text" inputMode="decimal" value={form.exchangeRate} onChange={(e) => setForm({ ...form, exchangeRate: sanitizeNum(e.target.value) })}
-                    placeholder="0,00"
-                    className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+              {!editId && (
+                <>
+                  <label className="text-sm">
+                    <span className="text-slate-400">Saldo inicial</span>
+                    <input type="text" inputMode="decimal" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: sanitizeNum(e.target.value) })}
+                      placeholder="0,00"
+                      className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                  </label>
+                  {form.currency === 'USD' && (
+                    <label className="text-sm">
+                      <span className="text-slate-400">Tasa (para equiv. Bs)</span>
+                      <input type="text" inputMode="decimal" value={form.exchangeRate} onChange={(e) => setForm({ ...form, exchangeRate: sanitizeNum(e.target.value) })}
+                        placeholder="0,00"
+                        className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                    </label>
+                  )}
+                  <label className="text-sm">
+                    <span className="text-slate-400">Fecha de corte</span>
+                    <input type="date" value={form.openingDate} onChange={(e) => setForm({ ...form, openingDate: e.target.value })}
+                      className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
+                  </label>
+                </>
+              )}
+              {editId && (
+                <label className="col-span-2 text-sm flex items-center gap-2 mt-1">
+                  <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500" />
+                  <span className="text-slate-300">Cuenta activa</span>
                 </label>
               )}
-              <label className="text-sm">
-                <span className="text-slate-400">Fecha de corte</span>
-                <input type="date" value={form.openingDate} onChange={(e) => setForm({ ...form, openingDate: e.target.value })}
-                  className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
-              </label>
             </div>
+            {editId && (
+              <p className="mt-3 text-xs text-slate-500">El saldo inicial no se edita aquí para no descuadrar el libro banco.</p>
+            )}
             <div className="flex justify-end gap-2 mt-5">
               <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancelar</button>
               <button onClick={submit} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Crear
+                {saving ? <Loader2 className="animate-spin" size={16} /> : editId ? <Pencil size={16} /> : <Plus size={16} />}
+                {editId ? 'Guardar cambios' : 'Crear'}
               </button>
             </div>
           </div>

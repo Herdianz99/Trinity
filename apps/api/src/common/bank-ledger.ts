@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
 
 const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
@@ -55,6 +56,34 @@ export async function writeBankMovement(tx: Prisma.TransactionClient, e: BankMov
       createdById: e.createdById,
     },
   });
+}
+
+/**
+ * Elimina del libro banco los movimientos generados por un documento origen (recibo, gasto,
+ * anticipo, factura) cuando ese documento se elimina/reversa, para no dejar filas huerfanas
+ * que descuadren el saldo de la cuenta. Si algun movimiento ya fue CONCILIADO se aborta con
+ * error: primero hay que desconciliarlo (borrarlo rompe el cuadre con el estado de cuenta),
+ * igual criterio que el borrado de movimientos manuales.
+ * Devuelve la cantidad de movimientos eliminados.
+ */
+export async function removeBankMovements(
+  tx: Prisma.TransactionClient,
+  sourceType: string | string[],
+  sourceId: string,
+): Promise<number> {
+  const sourceTypes = Array.isArray(sourceType) ? sourceType : [sourceType];
+  const movements = await tx.bankMovement.findMany({
+    where: { sourceType: { in: sourceTypes }, sourceId },
+    select: { id: true, reconciled: true },
+  });
+  if (movements.length === 0) return 0;
+  if (movements.some((m) => m.reconciled)) {
+    throw new BadRequestException(
+      'Este documento tiene un movimiento de banco ya conciliado. Desconcilialo en el libro banco antes de eliminar el documento.',
+    );
+  }
+  await tx.bankMovement.deleteMany({ where: { id: { in: movements.map((m) => m.id) } } });
+  return movements.length;
 }
 
 /**

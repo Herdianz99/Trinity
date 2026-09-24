@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
-import { recordPaymentToBank } from '../../common/bank-ledger';
+import { recordPaymentToBank, removeBankMovements } from '../../common/bank-ledger';
 import { syncExhibitionAfterSale } from '../../common/exhibition-sync';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveBregaPct, effectiveCost } from '../../common/pricing';
@@ -1990,6 +1990,8 @@ export class InvoicesService {
 
     // Hard delete: items, payments, receivables cascade via Prisma schema
     await this.prisma.$transaction(async (tx) => {
+      // Borrar movimientos de banco por si la factura llego a tener pagos (aborta si conciliado)
+      await removeBankMovements(tx, 'SALE_PAYMENT', id);
       await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       await tx.payment.deleteMany({ where: { invoiceId: id } });
       await tx.invoice.delete({ where: { id } });

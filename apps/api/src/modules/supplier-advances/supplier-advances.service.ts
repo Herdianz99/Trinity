@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
-import { recordPaymentToBank } from '../../common/bank-ledger';
+import { recordPaymentToBank, removeBankMovements } from '../../common/bank-ledger';
 import { CreateSupplierAdvanceDto } from './dto/create-supplier-advance.dto';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
@@ -39,6 +39,8 @@ export class SupplierAdvancesService {
     });
 
     await this.prisma.$transaction(async (tx) => {
+      // Revertir el libro banco (aborta si el movimiento ya fue conciliado)
+      await removeBankMovements(tx, 'ADVANCE', id);
       await tx.cashLedgerEntry.deleteMany({ where: { sourceType: 'SUPPLIER_ADVANCE', sourceId: id } });
       const mv = await tx.cashMovement.findFirst({
         where: {

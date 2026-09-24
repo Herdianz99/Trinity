@@ -5,7 +5,7 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { caracasDateKey, caracasDayStart } from '../../common/timezone';
 import { writeCashLedger } from '../../common/cash-ledger';
-import { recordPaymentToBank } from '../../common/bank-ledger';
+import { recordPaymentToBank, removeBankMovements } from '../../common/bank-ledger';
 
 @Injectable()
 export class ExpensesService {
@@ -498,6 +498,14 @@ export class ExpensesService {
       );
     }
 
-    return this.prisma.expense.delete({ where: { id } });
+    // Reversa completa en una transaccion: caja (arqueo + libro mayor) y libro banco, para no
+    // dejar el gasto contado contado en el efectivo/banco despues de borrarlo.
+    await this.prisma.$transaction(async (tx) => {
+      await removeBankMovements(tx, 'EXPENSE', id);
+      await tx.cashLedgerEntry.deleteMany({ where: { sourceType: 'EXPENSE', sourceId: id } });
+      await tx.cashMovement.deleteMany({ where: { expenseId: id } });
+      await tx.expense.delete({ where: { id } });
+    });
+    return { deleted: true };
   }
 }

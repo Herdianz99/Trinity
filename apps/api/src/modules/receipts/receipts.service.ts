@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { writeCashLedger } from '../../common/cash-ledger';
-import { recordPaymentToBank } from '../../common/bank-ledger';
+import { recordPaymentToBank, removeBankMovements } from '../../common/bank-ledger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { PostReceiptDto } from './dto/post-receipt.dto';
@@ -1041,6 +1041,10 @@ export class ReceiptsService {
       // 5) Revertir caja: filas del libro mayor + cashMovement de reintegro (legacy)
       await tx.cashLedgerEntry.deleteMany({ where: { sourceId: id, sourceType: { in: ['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT', 'REINTEGRO'] } } });
       await tx.cashMovement.deleteMany({ where: { reason: `Reintegro recibo ${receipt.number}` } });
+
+      // 5b) Revertir libro banco: borrar los movimientos que genero este recibo (aborta si
+      // alguno ya esta conciliado -> hay que desconciliarlo primero).
+      await removeBankMovements(tx, ['RECEIPT_COLLECTION', 'RECEIPT_PAYMENT'], id);
 
       // 6) Borrar el recibo
       await tx.receiptPayment.deleteMany({ where: { receiptId: id } });

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { writeCashLedger } from '../../common/cash-ledger';
-import { recordPaymentToBank } from '../../common/bank-ledger';
+import { recordPaymentToBank, removeBankMovements } from '../../common/bank-ledger';
 import { CreateCustomerAdvanceDto } from './dto/create-customer-advance.dto';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
@@ -39,6 +39,8 @@ export class CustomerAdvancesService {
     });
 
     await this.prisma.$transaction(async (tx) => {
+      // Revertir el libro banco (aborta si el movimiento ya fue conciliado)
+      await removeBankMovements(tx, 'ADVANCE', id);
       // Revertir la fila del libro mayor (linkeada por sourceType/sourceId)
       await tx.cashLedgerEntry.deleteMany({ where: { sourceType: 'CUSTOMER_ADVANCE', sourceId: id } });
       // Revertir el CashMovement del arqueo (match por sesion + tipo + monto + razon)
