@@ -11,4 +11,5 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   AUDITOR: ['dashboard', 'inventory', 'almacen'],
   RRHH: ['dashboard', 'payroll'],
   SEGURIDAD: ['incidents'],
+  EMPLOYEE: ['mi-perfil'],
 };
