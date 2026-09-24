@@ -22,6 +22,7 @@ enum UserRole {
   AUDITOR
   RRHH
   SEGURIDAD
+  EMPLOYEE
 }
 
 enum IvaType {
@@ -344,6 +345,8 @@ model User {
   isActive            Boolean             @default(true)
   mustChangePassword  Boolean             @default(true)
   restrictToOnSiteIp  Boolean             @default(false)
+  employeeId          String?             @unique
+  employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
   lastLoginAt         DateTime?
   permissions         UserPermission[]
   sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
@@ -382,6 +385,7 @@ model User {
   exhibitionEntries   ExhibitionEntry[]
   disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
   customersCreated    Customer[]          @relation("CustomerCreator")
+  notificationsCreated Notification[]     @relation("NotificationCreator")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -2569,6 +2573,8 @@ model Employee {
   isActive      Boolean  @default(true)
   lines         PayrollRunLine[]
   disciplinaryActions DisciplinaryAction[]
+  user          User?    @relation("EmployeeUser")
+  notificationRecipients NotificationRecipient[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -2664,6 +2670,7 @@ model DisciplinaryAction {
   attachments DisciplinaryAttachment[]
   createdById String
   createdBy   User                     @relation("DisciplinaryActionCreator", fields: [createdById], references: [id])
+  notification Notification?
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 
@@ -2913,4 +2920,54 @@ model ExhibitionEntry {
   @@index([createdAt])
   @@index([productId])
   @@index([action])
+}
+
+// ============================================
+// NOTIFICACIONES (portal del empleado / Mi Perfil)
+// Acuse "enterado / en desacuerdo" + comentario como respaldo laboral.
+// Ver spec: docs/superpowers/specs/2026-09-24-portal-empleado-mi-perfil-design.md
+// ============================================
+
+enum NotificationType {
+  INFORMATIVA
+  REUNION
+  AMONESTACION
+}
+
+enum NotificationAckState {
+  PENDIENTE
+  RECIBIDO
+  RECHAZADO
+}
+
+model Notification {
+  id                    String                  @id @default(cuid())
+  title                 String
+  body                  String
+  type                  NotificationType        @default(INFORMATIVA)
+  disciplinaryActionId  String?                 @unique
+  disciplinaryAction    DisciplinaryAction?     @relation(fields: [disciplinaryActionId], references: [id], onDelete: Cascade)
+  createdById           String
+  createdBy             User                    @relation("NotificationCreator", fields: [createdById], references: [id])
+  recipients            NotificationRecipient[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@index([type])
+  @@index([createdAt])
+}
+
+model NotificationRecipient {
+  id              String               @id @default(cuid())
+  notificationId  String
+  notification    Notification         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  ackState        NotificationAckState @default(PENDIENTE)
+  comment         String?
+  ackAt           DateTime?
+  createdAt       DateTime             @default(now())
+
+  @@unique([notificationId, employeeId])
+  @@index([employeeId, ackState])
 }
