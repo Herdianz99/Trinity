@@ -203,7 +203,7 @@ export class DisciplinaryService {
         const lastNum = last ? parseInt(last.number.replace(/\D/g, ''), 10) || 0 : 0;
         const number = `LA-${String(lastNum + 1).padStart(4, '0')}`;
 
-        return tx.disciplinaryAction.create({
+        const created = await tx.disciplinaryAction.create({
           data: {
             number,
             employeeId: dto.employeeId,
@@ -222,6 +222,20 @@ export class DisciplinaryService {
             attachments: { select: { id: true, thumbKey: true, mediumKey: true }, orderBy: { createdAt: 'asc' } },
           },
         });
+
+        // Notificacion automatica de respaldo: el empleado debe acusar "enterado / en desacuerdo".
+        await tx.notification.create({
+          data: {
+            title: `${level}: ${faultType.name}`,
+            body: `Se te registro un(a) ${level.toLowerCase()} por "${faultType.name}". Motivo: ${reason}`,
+            type: 'AMONESTACION',
+            disciplinaryActionId: created.id,
+            createdById: userId,
+            recipients: { create: [{ employeeId: dto.employeeId }] },
+          },
+        });
+
+        return created;
       });
       return this.withPhotoUrls(action);
     } catch (e) {

@@ -24,8 +24,15 @@ interface User {
   role: string;
   isActive: boolean;
   restrictToOnSiteIp?: boolean;
+  employeeId?: string | null;
   lastLoginAt: string | null;
   createdAt: string;
+}
+
+interface EmployeeOption {
+  id: string;
+  code: string | null;
+  customer: { name: string };
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -39,6 +46,7 @@ const ROLE_COLORS: Record<string, string> = {
   AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
   RRHH: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
   SEGURIDAD: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+  EMPLOYEE: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -52,9 +60,10 @@ const ROLE_LABELS: Record<string, string> = {
   AUDITOR: 'Auditor',
   RRHH: 'Recursos Humanos',
   SEGURIDAD: 'Seguridad',
+  EMPLOYEE: 'Empleado (portal)',
 };
 
-const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD'];
+const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD', 'EMPLOYEE'];
 
 function formatDate(date: string | null) {
   if (!date) return 'Nunca';
@@ -69,6 +78,7 @@ function formatDate(date: string | null) {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -89,6 +99,7 @@ export default function UsersPage() {
   const [formPassword, setFormPassword] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [formRestrictIp, setFormRestrictIp] = useState(false);
+  const [formEmployeeId, setFormEmployeeId] = useState('');
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
@@ -109,6 +120,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetch('/api/proxy/employees')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setEmployees(Array.isArray(data) ? data : data.items ?? []))
+      .catch(() => setEmployees([]));
   }, [fetchUsers]);
 
   const filteredUsers = users.filter(
@@ -124,7 +139,7 @@ export default function UsersPage() {
     setFormError('');
     setFormLoading(true);
     try {
-      const body: any = { name: formName, email: formEmail, role: formRole };
+      const body: any = { name: formName, email: formEmail, role: formRole, employeeId: formEmployeeId || null };
       if (formPassword) body.password = formPassword;
       const res = await fetch('/api/proxy/users', {
         method: 'POST',
@@ -162,6 +177,7 @@ export default function UsersPage() {
           role: formRole,
           isActive: formActive,
           restrictToOnSiteIp: formRole === 'ADMIN' ? false : formRestrictIp,
+          employeeId: formEmployeeId || null,
         }),
       });
       const data = await res.json();
@@ -238,6 +254,7 @@ export default function UsersPage() {
     setFormEmail('');
     setFormRole('SELLER');
     setFormPassword('');
+    setFormEmployeeId('');
     setFormError('');
     setShowCreate(true);
   }
@@ -249,6 +266,7 @@ export default function UsersPage() {
     setFormRole(user.role);
     setFormActive(user.isActive);
     setFormRestrictIp(!!user.restrictToOnSiteIp);
+    setFormEmployeeId(user.employeeId ?? '');
     setFormError('');
     setShowEdit(true);
   }
@@ -458,6 +476,23 @@ export default function UsersPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                Empleado vinculado <span className="text-slate-500">(para el portal Mi Perfil)</span>
+              </label>
+              <select
+                value={formEmployeeId}
+                onChange={(e) => setFormEmployeeId(e.target.value)}
+                className="input-field"
+              >
+                <option value="">— Sin vincular —</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.customer?.name}{emp.code ? ` (${emp.code})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">
                 Contrasena temporal <span className="text-slate-500">(opcional — se genera automaticamente)</span>
               </label>
               <input
@@ -514,6 +549,23 @@ export default function UsersPage() {
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                Empleado vinculado <span className="text-slate-500">(para el portal Mi Perfil)</span>
+              </label>
+              <select
+                value={formEmployeeId}
+                onChange={(e) => setFormEmployeeId(e.target.value)}
+                className="input-field"
+              >
+                <option value="">— Sin vincular —</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.customer?.name}{emp.code ? ` (${emp.code})` : ''}
+                  </option>
                 ))}
               </select>
             </div>

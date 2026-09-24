@@ -242,6 +242,7 @@ const menuSections: MenuSection[] = [
       { label: 'Parametros', href: '/payroll/parameters', icon: <SlidersHorizontal size={18} /> },
       { label: 'Amonestaciones', href: '/payroll/disciplinary', icon: <AlertTriangle size={18} /> },
       { label: 'Tipos de falta', href: '/payroll/fault-types', icon: <Layers size={18} /> },
+      { label: 'Notificaciones', href: '/rrhh/notificaciones', icon: <MessageCircle size={18} /> },
     ],
   },
   {
@@ -329,6 +330,21 @@ const menuSections: MenuSection[] = [
       { label: 'Ventas por caja', href: '/reports/sales-cash', icon: <BarChart3 size={18} /> },
       { label: 'Ventas perdidas', href: '/reports/ventas-perdidas', icon: <PackageX size={18} /> },
       { label: 'Stock a la fecha', href: '/reports/stock-at-date', icon: <PackageSearch size={18} /> },
+    ],
+  },
+  {
+    key: 'mi-perfil',
+    label: 'MI PERFIL',
+    icon: <UserCheck size={20} />,
+    permission: 'mi-perfil',
+    items: [
+      { label: 'Resumen', href: '/mi-perfil', icon: <UserCheck size={18} /> },
+      { label: 'Mis datos', href: '/mi-perfil/datos', icon: <FileText size={18} /> },
+      { label: 'Mis cuentas por cobrar', href: '/mi-perfil/cxc', icon: <CreditCard size={18} /> },
+      { label: 'Mis facturas', href: '/mi-perfil/facturas', icon: <Receipt size={18} /> },
+      { label: 'Mis recibos de nomina', href: '/mi-perfil/recibos', icon: <Banknote size={18} /> },
+      { label: 'Mis amonestaciones', href: '/mi-perfil/amonestaciones', icon: <AlertTriangle size={18} /> },
+      { label: 'Notificaciones', href: '/mi-perfil/notificaciones', icon: <MessageCircle size={18} /> },
     ],
   },
   {

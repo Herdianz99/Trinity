@@ -17,6 +17,36 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 141 (2026-09-24) — Portal del empleado ("Mi Perfil") + Notificaciones
+
+> ### ⚠️ SIN DESPLEGAR — en la rama `feat/portal-empleado-mi-perfil` (fusionada a `main` al cerrar la sesión). Cambio **web + API CON migración** (`20260924120000_portal_empleado`, aditiva/idempotente + reflejada en `deploy/fix-schema.sql`). Verificado e2e en local contra `grande_db` (83 empleados) con usuarios de prueba (ya borrados). Diego despliega cuando quiera.
+
+Spec: `docs/superpowers/specs/2026-09-24-portal-empleado-mi-perfil-design.md` · Plan: `docs/superpowers/plans/2026-09-24-portal-empleado-mi-perfil.md`
+
+Portal de autoservicio para que cada empleado (con su propio login) vea SOLO su información. La mayoría del dato ya existía (Employee↔Customer, nómina, amonestaciones, CxC, facturas, límite de crédito); lo nuevo fue el **ancla** y las **notificaciones**.
+
+### Ancla y rol
+- **`User.employeeId`** (FK nullable única a Employee) — el vínculo login↔empleado. Se asigna al crear/editar un usuario (selector nuevo en Configuración → Usuarios).
+- **Rol nuevo `EMPLOYEE`** con permiso único `mi-perfil`: aterriza en `/mi-perfil` (redirect en login) y el sidebar solo le muestra esa sección. Los usuarios con rol existente + empleado vinculado también ven "Mi Perfil". **GOTCHA:** el usuario compartido de almacén NO debe vincularse (expondría datos de una persona a todos); Diego creará login individual por persona.
+
+### Backend
+- **Módulo `me`** (`apps/api/src/modules/me`), todo scoped por `@CurrentUser` (imposible ver ajeno): `GET /me/perfil|cxc|facturas|recibos|amonestaciones|resumen` + `GET /me/recibos/:lineId/pdf` (valida propiedad → reusa `PayrollPdfService.generateReceipt`). `me/recibos` solo muestra corridas **CLOSED** e incluye `creditDeductionBs` (abono a deuda del período).
+- **Módulo `notifications`**: emisor (`@Roles ADMIN/RRHH/SUPERVISOR`) `POST /notifications` con expansión de destino (INDIVIDUAL/MULTIPLE/DEPARTMENT/ALL → `NotificationRecipient` por empleado), `GET /notifications` (con conteos de acuse), `GET /notifications/:id`, `GET /notifications/targets` (empleados+departamentos activos, para que SUPERVISOR arme la notif sin necesitar el módulo `payroll`). Empleado: `GET /notifications/me/inbox` + `PATCH /notifications/me/:recipientId/ack` (**acuse inmutable**: RECIBIDO/RECHAZADO + comentario; re-acuse → 400).
+- **Amonestación → notificación automática**: `disciplinary.service.create` crea, en la MISMA tx, una `Notification` tipo AMONESTACION enlazada (`disciplinaryActionId` único, `onDelete Cascade` → al borrar la amonestación se borra su notificación).
+
+### Frontend
+- Sección "MI PERFIL" en el sidebar (7 páginas: resumen, datos+límite de crédito, CxC, facturas, recibos+PDF+abono, amonestaciones, buzón de notificaciones con botones Enterado/En desacuerdo + comentario).
+- Pantalla emisor en `/rrhh/notificaciones` (crear + tablero de acuse) bajo el grupo NOMINA.
+
+### Modelos nuevos (schema)
+`Notification` (title, body, type INFORMATIVA|REUNION|AMONESTACION, disciplinaryActionId?, createdBy) + `NotificationRecipient` (employeeId, ackState PENDIENTE|RECIBIDO|RECHAZADO, comment, ackAt; `@@unique(notificationId, employeeId)`). Enum `UserRole += EMPLOYEE`.
+
+### Fuera de v1 (YAGNI)
+Evaluaciones individuales / "ver su progreso", edición de datos personales (v1 solo lectura), notificaciones por correo/push.
+
+### E2E verificado (grande_db)
+Login EMPLOYEE → `/me/perfil` (datos+creditLimit), `/me/cxc` (1), `/me/facturas` (1), `/me/resumen`, `/me/recibos` (con corrida cerrada: netBs + abono), PDF propio 200 / **ajeno 403**; notificaciones crear→inbox→ack→re-ack **400**→conteos; amonestación LA-0003 → notificación AMONESTACION automática en el inbox. Datos de prueba (2 usuarios `@trinity.test`, la amonestación y las notifs) **borrados** tras la prueba.
+
 ## 🗓️ Sesión 140 (2026-09-24) — Módulo Bancos: editar cuenta desde la UI + al eliminar documentos se revierte el movimiento del banco
 
 > ### ⚠️ SIN DESPLEGAR (todo en `main`). Cambio **web + API, SIN migración** (no toca schema). Diego lo despliega cuando quiera. Verificado: typecheck API y web limpios; sistema levantado en local (API :4000 0 errores, Web :3000).
