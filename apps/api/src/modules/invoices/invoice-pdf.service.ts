@@ -234,13 +234,15 @@ export class InvoicePdfService {
     // configurado (asi las empresas que no manejan peso ven la factura igual que siempre).
     const weightProductIds = [...new Set(invoice.items.map((it) => it.productId))];
     const weightProducts = weightProductIds.length
-      ? await this.prisma.product.findMany({ where: { id: { in: weightProductIds } }, select: { id: true, weight: true, code: true } })
+      ? await this.prisma.product.findMany({ where: { id: { in: weightProductIds } }, select: { id: true, weight: true, code: true, supplierRef: true } })
       : [];
     const weightMap = new Map(weightProducts.map((p) => [p.id, p.weight || 0]));
     // Codigo real del producto (Product.code). El InvoiceItem solo guarda el
     // productId (CUID interno), asi que sin este mapa la columna "Codigo" mostraba
     // un pedazo del id de la BD en vez del codigo del producto.
     const codeMap = new Map(weightProducts.map((p) => [p.id, p.code]));
+    // Referencia del proveedor (Product.supplierRef) para la columna "Ref. Prov".
+    const refMap = new Map(weightProducts.map((p) => [p.id, p.supplierRef || '']));
     const hasWeight = invoice.items.some((it) => (weightMap.get(it.productId) || 0) > 0);
     let totalWeight = 0;
 
@@ -320,29 +322,33 @@ export class InvoicePdfService {
       // (guia de carga); sin peso, el layout es identico al de siempre.
       // La columna "% IVA" solo existe en series fiscales. En notas de entrega
       // se elimina y su espacio se reparte a descripcion / demas columnas.
+      // Se agrega una columna "Ref. Prov" (Product.supplierRef) entre Codigo y
+      // Descripcion. Para encajarla sin desbordar la pagina (LETTER, tabla 40..572)
+      // se reduce el ancho de Descripcion; las demas columnas conservan su posicion.
       const cols = isFiscal
         ? (hasWeight
             ? {
-                code: { x: 40, w: 50 }, desc: { x: 94, w: 214 }, qty: { x: 312, w: 34 },
+                code: { x: 40, w: 42 }, ref: { x: 84, w: 52 }, desc: { x: 138, w: 170 }, qty: { x: 312, w: 34 },
                 price: { x: 350, w: 46 }, iva: { x: 398, w: 52 }, peso: { x: 454, w: 44 }, total: { x: 502, w: 70 },
               }
             : {
-                code: { x: 40, w: 55 }, desc: { x: 100, w: 215 }, qty: { x: 320, w: 40 },
+                code: { x: 40, w: 42 }, ref: { x: 84, w: 54 }, desc: { x: 140, w: 175 }, qty: { x: 320, w: 40 },
                 price: { x: 370, w: 50 }, iva: { x: 430, w: 50 }, peso: null, total: { x: 490, w: 70 },
               })
         : (hasWeight
             ? {
-                code: { x: 40, w: 50 }, desc: { x: 94, w: 250 }, qty: { x: 350, w: 40 },
+                code: { x: 40, w: 46 }, ref: { x: 88, w: 58 }, desc: { x: 148, w: 198 }, qty: { x: 350, w: 40 },
                 price: { x: 398, w: 52 }, iva: null, peso: { x: 456, w: 46 }, total: { x: 506, w: 66 },
               }
             : {
-                code: { x: 40, w: 55 }, desc: { x: 100, w: 260 }, qty: { x: 366, w: 44 },
+                code: { x: 40, w: 46 }, ref: { x: 88, w: 60 }, desc: { x: 152, w: 208 }, qty: { x: 366, w: 44 },
                 price: { x: 416, w: 60 }, iva: null, peso: null, total: { x: 482, w: 90 },
               });
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
       y += 5;
       doc.fontSize(8).font('Helvetica-Bold');
-      doc.text('Codigo', cols.code.x, y);
+      doc.text('Codigo', cols.code.x, y, { width: cols.code.w, lineBreak: false });
+      doc.text('Ref. Prov', cols.ref.x, y, { width: cols.ref.w, lineBreak: false });
       doc.text('Descripcion', cols.desc.x, y);
       doc.text('Cant.', cols.qty.x, y, { width: cols.qty.w, align: 'right' });
       doc.text('P. Unit.', cols.price.x, y, { width: cols.price.w, align: 'right' });
@@ -364,7 +370,8 @@ export class InvoicePdfService {
           doc.addPage();
           y = 40;
         }
-        doc.text(codeMap.get(item.productId) || item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w });
+        doc.text(codeMap.get(item.productId) || item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w, lineBreak: false });
+        doc.text(refMap.get(item.productId) || '—', cols.ref.x, y, { width: cols.ref.w, lineBreak: false });
         doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
         doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
         // En notas de entrega (no fiscal) el P. Unit se muestra CON IVA incluido y
