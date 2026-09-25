@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell, CreditCard, Receipt, AlertTriangle, FileDown, Wallet, Phone, Mail, MapPin,
   Building2, Briefcase, CalendarClock, Check, X, BadgeCheck, FileText, Landmark, Loader2,
+  KeyRound, Lock, Eye, EyeOff, CheckCircle,
 } from 'lucide-react';
 
 /* ---------- helpers ---------- */
@@ -77,7 +78,7 @@ function Info({ icon, label, value }: { icon: React.ReactNode; label: string; va
 }
 
 /* ---------- page ---------- */
-type Tab = 'notificaciones' | 'cxc' | 'facturas' | 'recibos' | 'amonestaciones';
+type Tab = 'notificaciones' | 'cxc' | 'facturas' | 'recibos' | 'amonestaciones' | 'seguridad';
 
 export default function MiPerfilPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
@@ -92,6 +93,15 @@ export default function MiPerfilPage() {
   const [tab, setTab] = useState<Tab>('notificaciones');
   const [comments, setComments] = useState<Record<string, string>>({});
   const [savingAck, setSavingAck] = useState<string | null>(null);
+  // Cambio de contraseña (pestaña Seguridad)
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [showPwCurrent, setShowPwCurrent] = useState(false);
+  const [showPwNew, setShowPwNew] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
 
   useEffect(() => { document.title = 'Mi Perfil | Trinity ERP'; }, []);
 
@@ -134,6 +144,23 @@ export default function MiPerfilPage() {
     } catch (e: any) { alert(e.message); } finally { setSavingAck(null); }
   }
 
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(''); setPwSuccess(false); setPwLoading(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = Array.isArray(data.message) ? data.message[0] : data.message;
+        throw new Error(msg || 'No se pudo cambiar la contraseña');
+      }
+      setPwSuccess(true); setPwCurrent(''); setPwNew(''); setPwConfirm('');
+    } catch (err: any) { setPwError(err.message); } finally { setPwLoading(false); }
+  }
+
   if (loading) return <div className="py-24 flex items-center justify-center text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> Cargando tu perfil…</div>;
   if (error) return (
     <div className="max-w-md mx-auto py-24 text-center">
@@ -145,12 +172,19 @@ export default function MiPerfilPage() {
   if (!perfil || !resumen) return null;
 
   const c = perfil.customer;
+  // Reglas de contraseña (iguales al DTO del backend)
+  const pwHasMin = pwNew.length >= 8;
+  const pwHasUpper = /[A-Z]/.test(pwNew);
+  const pwHasNumber = /[0-9]/.test(pwNew);
+  const pwMatch = pwNew === pwConfirm && pwNew.length > 0;
+  const pwValid = pwHasMin && pwHasUpper && pwHasNumber && pwMatch && pwCurrent.length > 0;
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'notificaciones', label: 'Notificaciones', count: pendientes },
     { key: 'cxc', label: 'Cuentas por cobrar', count: cxc.length },
     { key: 'facturas', label: 'Facturas', count: facturas.length },
     { key: 'recibos', label: 'Recibos', count: recibos.length },
     { key: 'amonestaciones', label: 'Amonestaciones', count: amonestaciones.length },
+    { key: 'seguridad', label: 'Seguridad' },
   ];
 
   return (
@@ -316,6 +350,68 @@ export default function MiPerfilPage() {
                   ))}
                 </div>
               ) : <Empty text="No tienes amonestaciones. ¡Bien!" />)}
+
+              {/* SEGURIDAD — cambio de contraseña */}
+              {tab === 'seguridad' && (
+                <div className="max-w-md">
+                  <div className="flex items-center gap-2 mb-1">
+                    <KeyRound size={16} className="text-emerald-400" />
+                    <h3 className="text-sm font-semibold text-white">Cambiar contraseña</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">Ingresa tu contraseña actual y la nueva.</p>
+
+                  <form onSubmit={changePassword} className="space-y-4">
+                    {pwError && (
+                      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{pwError}</div>
+                    )}
+                    {pwSuccess && (
+                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm flex items-center gap-2">
+                        <CheckCircle size={15} /> Contraseña actualizada correctamente.
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">Contraseña actual</label>
+                      <div className="relative">
+                        <input type={showPwCurrent ? 'text' : 'password'} value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)}
+                          className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 pr-10 text-slate-200 text-sm focus:outline-none focus:border-emerald-500" required />
+                        <button type="button" onClick={() => setShowPwCurrent(!showPwCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                          {showPwCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">Nueva contraseña</label>
+                      <div className="relative">
+                        <input type={showPwNew ? 'text' : 'password'} value={pwNew} onChange={(e) => setPwNew(e.target.value)}
+                          className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 pr-10 text-slate-200 text-sm focus:outline-none focus:border-emerald-500" required />
+                        <button type="button" onClick={() => setShowPwNew(!showPwNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                          {showPwNew ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <div className="mt-2.5 space-y-1">
+                        <Rule ok={pwHasMin} text="Mínimo 8 caracteres" />
+                        <Rule ok={pwHasUpper} text="Al menos una mayúscula" />
+                        <Rule ok={pwHasNumber} text="Al menos un número" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1.5">Confirmar nueva contraseña</label>
+                      <input type={showPwNew ? 'text' : 'password'} value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)}
+                        className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-emerald-500" required />
+                      {pwConfirm && !pwMatch && <p className="text-red-400 text-xs mt-1.5">Las contraseñas no coinciden</p>}
+                    </div>
+
+                    <button type="submit" disabled={pwLoading || !pwValid}
+                      className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {pwLoading ? <Loader2 className="animate-spin" size={16} /> : <Lock size={15} />}
+                      {pwLoading ? 'Guardando…' : 'Cambiar contraseña'}
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           </div>
         </Reveal>
@@ -346,4 +442,11 @@ function Pill({ cls, children }: { cls?: string; children: React.ReactNode }) {
 }
 function Empty({ text }: { text: string }) {
   return <div className="text-center py-12 text-slate-500 text-sm">{text}</div>;
+}
+function Rule({ ok, text }: { ok: boolean; text: string }) {
+  return (
+    <div className={`flex items-center gap-2 text-xs ${ok ? 'text-green-400' : 'text-slate-500'}`}>
+      <CheckCircle size={13} /> <span>{text}</span>
+    </div>
+  );
 }
