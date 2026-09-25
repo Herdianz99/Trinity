@@ -376,7 +376,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 interface SidebarProps {
-  user: { name: string; email: string; role: string } | null;
+  user: { name: string; email: string; role: string; employeeId?: string | null } | null;
   permissions: string[];
 }
 
@@ -476,6 +476,11 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
     const gate = (items: MenuItem[]) =>
       items.filter((it) => (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
+    // "Mi Perfil" se muestra a cualquier usuario con empleado vinculado (cajero, vendedor,
+    // etc.) o al rol EMPLOYEE (que trae el permiso mi-perfil). Sin empleado vinculado, no sale.
+    if (section.key === 'mi-perfil') {
+      return (hasPermission(permissions, 'mi-perfil') || !!user?.employeeId) ? gate(section.items) : [];
+    }
     if (hasPermission(permissions, section.permission)) return gate(section.items);
     return gate(section.items.filter((it) => it.permission && hasPermission(permissions, it.permission)));
   };

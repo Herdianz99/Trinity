@@ -3,14 +3,14 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequireModule } from '../../common/decorators/require-module.decorator';
-import { ModuleGuard } from '../../common/guards/module.guard';
 import { MeService } from './me.service';
 
+// Solo requiere estar logueado: MeService.resolveEmployee() ya lanza 403 si el usuario
+// no tiene un empleado vinculado. Asi cualquier usuario (cajero, vendedor, etc.) con
+// employeeId ve su portal, sin necesidad del rol EMPLOYEE / permiso mi-perfil.
 @ApiTags('Me - Mi Perfil')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), ModuleGuard)
-@RequireModule('mi-perfil')
+@UseGuards(AuthGuard('jwt'))
 @Controller('me')
 export class MeController {
   constructor(private service: MeService) {}

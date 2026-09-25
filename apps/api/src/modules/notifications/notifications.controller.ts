@@ -5,8 +5,6 @@ import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { RequireModule } from '../../common/decorators/require-module.decorator';
-import { ModuleGuard } from '../../common/guards/module.guard';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { AckNotificationDto } from './dto/ack-notification.dto';
@@ -40,15 +38,16 @@ export class NotificationsController {
   }
 
   // ---- Empleado (buzón) — scoped por token ----
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
-  @RequireModule('mi-perfil')
+  // Solo requiere login: el service resuelve el employeeId del token y lanza 403 si el
+  // usuario no tiene empleado vinculado. No exige el rol EMPLOYEE / permiso mi-perfil,
+  // asi cualquier usuario con empleado vinculado (cajero, vendedor, etc.) ve su buzón.
+  @UseGuards(AuthGuard('jwt'))
   @Get('me/inbox')
   inbox(@CurrentUser('id') userId: string, @Query('ackState') ackState?: string) {
     return this.service.inbox(userId, ackState);
   }
 
-  @UseGuards(AuthGuard('jwt'), ModuleGuard)
-  @RequireModule('mi-perfil')
+  @UseGuards(AuthGuard('jwt'))
   @Patch('me/:recipientId/ack')
   ack(
     @CurrentUser('id') userId: string,
