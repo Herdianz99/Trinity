@@ -59,6 +59,7 @@ import {
   Camera,
   Barcode,
   ScanLine,
+  Bell,
 } from 'lucide-react';
 import CompanySwitcher from '@/components/company-switcher';
 
@@ -396,8 +397,15 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [scanDispatchOn, setScanDispatchOn] = useState(false);
   const [almacenOpsOn, setAlmacenOpsOn] = useState(false);
   const [companyName, setCompanyName] = useState('');
+  // Pendientes en "Mi Perfil" (notificaciones sin acuse, incl. amonestaciones que generan notif).
+  const [miPerfilPending, setMiPerfilPending] = useState(0);
+  // true solo si el usuario tiene perfil de empleado real (el resumen respondió OK).
+  const [hasPerfil, setHasPerfil] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  // Solo tiene sentido para usuarios con perfil de empleado (los que ven "Mi Perfil").
+  const canMiPerfil = hasPermission(permissions, 'mi-perfil') || !!user?.employeeId;
 
   // Estado de la integracion con la empresa socia (para mostrar/ocultar sus items)
   useEffect(() => {
@@ -415,6 +423,19 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
       .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); })
       .catch(() => {});
   }, []);
+
+  // Conteo de pendientes de "Mi Perfil". Se refresca al cambiar de ruta (p.ej. tras
+  // dar acuse en /mi-perfil y volver a otra pantalla). Si el usuario no tiene perfil, 0.
+  useEffect(() => {
+    if (!canMiPerfil) { setHasPerfil(false); setMiPerfilPending(0); return; }
+    fetch('/api/proxy/me/resumen')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) { setHasPerfil(true); setMiPerfilPending(d.notificacionesPendientes ?? 0); }
+        else { setHasPerfil(false); setMiPerfilPending(0); }
+      })
+      .catch(() => { setHasPerfil(false); setMiPerfilPending(0); });
+  }, [canMiPerfil, pathname]);
 
   // Load saved state from localStorage
   useEffect(() => {
@@ -524,6 +545,21 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
             Trinity <span className="text-green-400">ERP</span>
           </span>
         )}
+        {!collapsed && hasPerfil && (
+          <Link
+            href="/mi-perfil"
+            title={miPerfilPending > 0 ? `Tienes ${miPerfilPending} pendiente(s) en Mi Perfil` : 'Mi Perfil'}
+            onClick={() => setMobileOpen(false)}
+            className="relative ml-auto flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/60 transition-colors"
+          >
+            <Bell size={19} className={miPerfilPending > 0 ? 'text-emerald-400' : ''} />
+            {miPerfilPending > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                {miPerfilPending > 9 ? '9+' : miPerfilPending}
+              </span>
+            )}
+          </Link>
+        )}
       </div>
 
       {/* Navigation */}
@@ -580,12 +616,20 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
                 style={{ width: collapsed ? 'calc(100% - 16px)' : 'calc(100% - 16px)' }}
                 title={collapsed ? section.label : undefined}
               >
-                <span className={`flex-shrink-0 ${hasActiveItem ? 'text-green-400' : ''}`}>
+                <span className={`relative flex-shrink-0 ${hasActiveItem ? 'text-green-400' : ''}`}>
                   {section.icon}
+                  {section.key === 'mi-perfil' && miPerfilPending > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-slate-900" />
+                  )}
                 </span>
                 {!collapsed && (
                   <>
                     <span className="flex-1 text-left">{section.label}</span>
+                    {section.key === 'mi-perfil' && miPerfilPending > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                        {miPerfilPending > 9 ? '9+' : miPerfilPending}
+                      </span>
+                    )}
                     <ChevronDown
                       size={14}
                       className={`transition-transform duration-200 ${isOpen ? 'rotate-0' : '-rotate-90'}`}
