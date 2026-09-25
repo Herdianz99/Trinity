@@ -80,6 +80,14 @@ export class PayrollRunsController {
     res.end(buffer);
   }
 
+  // Igual que /relation/pdf pero la columna "Total" = Total neto + Total HE.
+  @Get(':id/relation-neto/pdf')
+  async relationNetoPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.pdf.generateRelation(id, { totalNetPlusHE: true });
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="relacion-nomina-neto-${id}.pdf"`, 'Content-Length': buffer.length });
+    res.end(buffer);
+  }
+
   // overtime=false genera los recibos SIN horas extra (total/neto solo salario + deducciones).
   @Get(':id/receipts/pdf')
   async receiptsPdf(@Param('id') id: string, @Query('overtime') overtime: string, @Res() res: Response) {

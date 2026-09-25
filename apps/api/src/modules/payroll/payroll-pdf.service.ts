@@ -182,7 +182,9 @@ export class PayrollPdfService {
 
   // ------- Relación por departamento -------
 
-  async generateRelation(runId: string): Promise<Buffer> {
+  // opts.totalNetPlusHE: variante donde la columna "Total" = Total neto (salario − deducciones)
+  // + Total HE, en vez del gross (salario + HE sin deducciones). Pedido por RRHH.
+  async generateRelation(runId: string, opts?: { totalNetPlusHE?: boolean }): Promise<Buffer> {
     const run = await this.loadRun(runId);
     const company = await this.company();
     const eng = await this.engineFor(run.type);
@@ -210,7 +212,7 @@ export class PayrollPdfService {
       // Total (salario + HE, sin deducciones). Anchos suman ≤ W.
       const NUM_W = { sal: 66, ivss: 48, faov: 48, otras: 54, neto: 72, heDia: 58, heNoc: 58, heTot: 62, total: 72 };
       const NUM_KEYS = ['sal', 'ivss', 'faov', 'otras', 'neto', 'heDia', 'heNoc', 'heTot', 'total'] as const;
-      const NUM_HEAD = { sal: 'Salario', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Total neto', heDia: 'HE Diurna', heNoc: 'HE Noct.', heTot: 'Total HE', total: 'Total' };
+      const NUM_HEAD = { sal: 'Salario', ivss: 'IVSS', faov: 'FAOV', otras: 'Otras', neto: 'Total neto', heDia: 'HE Diurna', heNoc: 'HE Noct.', heTot: 'Total HE', total: opts?.totalNetPlusHE ? 'Total (Neto+HE)' : 'Total' };
       const empW = W - NUM_KEYS.reduce((s, k) => s + NUM_W[k], 0); // ancho de la columna empleado
       const colX: Record<string, number> = {};
       let acc = L + empW;
@@ -223,7 +225,7 @@ export class PayrollPdfService {
 
       const header = (y: number): number => {
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#000').text(company.name, L, y, { width: W, align: 'center' }); y += 15;
-        doc.fontSize(10).font('Helvetica-Bold').text('RELACION DE NOMINA', L, y, { width: W, align: 'center' }); y += 14;
+        doc.fontSize(10).font('Helvetica-Bold').text(opts?.totalNetPlusHE ? 'RELACION DE NOMINA (NETO + HE)' : 'RELACION DE NOMINA', L, y, { width: W, align: 'center' }); y += 14;
         doc.fontSize(8).font('Helvetica').fillColor('#333');
         doc.text(`${run.number || ''}  ·  ${TYPE_LABEL[run.type]}  ·  Periodo ${fmtDate(run.periodFrom)} - ${fmtDate(run.periodTo)}  ·  Tasa ${fmt(run.exchangeRate)} Bs/$`, L, y, { width: W, align: 'center' });
         y += 16;
@@ -261,9 +263,13 @@ export class PayrollPdfService {
             manualDeductionUsd: l.manualDeductionUsd, creditDeductionBs: l.creditDeductionBs,
             rate: run.exchangeRate,
           }, eng);
+          // Total: por defecto el gross (salario + HE); en la variante Neto+HE = Total neto + Total HE.
+          const totalCol = opts?.totalNetPlusHE
+            ? Math.round((netoSinHE + c.overtimeBs) * 100) / 100
+            : l.grossBs;
           const vals = {
             sal: l.salaryBs, ivss: l.ivssBs, faov: l.faovBs, otras, neto: netoSinHE,
-            heDia: c.otDayTotalBs, heNoc: c.otNightTotalBs, heTot: c.overtimeBs, total: l.grossBs,
+            heDia: c.otDayTotalBs, heNoc: c.otNightTotalBs, heTot: c.overtimeBs, total: totalCol,
           };
           doc.font('Helvetica').fillColor('#000');
           doc.text(`${l.employee.code || ''} ${l.employee.customer.name}`.trim(), L, y, { width: empW - 4, ellipsis: true, lineBreak: false });

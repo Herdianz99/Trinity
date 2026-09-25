@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files, Mail, Check, X } from 'lucide-react';
+import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files, Mail, Check, X, ChevronDown } from 'lucide-react';
 
 interface Line {
   id: string;
@@ -64,6 +64,8 @@ export default function PayrollRunDetailPage() {
   const [pctVal, setPctVal] = useState('30');
   // Modal: preguntar si el recibo se genera con o sin horas extra. Guarda la URL base del PDF.
   const [otAsk, setOtAsk] = useState<string | null>(null);
+  // Dropdown de reportes (relación, relación neto+HE, recibos)
+  const [reportsOpen, setReportsOpen] = useState(false);
   // Edición de la tasa: fecha de la tasa (editable) + tasa (editable). A veces la tasa se
   // registra al día siguiente, por eso la fecha es aparte del período.
   const [rateDateInput, setRateDateInput] = useState('');
@@ -258,12 +260,39 @@ export default function PayrollRunDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <a href={`/api/proxy/payroll-runs/${id}/relation/pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
-            <FileText size={15} /> Relacion PDF
-          </a>
-          <button onClick={() => setOtAsk(`/api/proxy/payroll-runs/${id}/receipts/pdf`)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
-            <Files size={15} /> Recibos PDF
-          </button>
+          <div className="relative">
+            <button onClick={() => setReportsOpen((o) => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors">
+              <FileText size={15} /> Reportes <ChevronDown size={14} className={`transition-transform ${reportsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {reportsOpen && (
+              <>
+                {/* backdrop para cerrar al hacer click afuera */}
+                <div className="fixed inset-0 z-10" onClick={() => setReportsOpen(false)} />
+                <div className="absolute right-0 mt-1 w-64 z-20 rounded-lg border border-slate-700 bg-slate-800 shadow-xl py-1">
+                  <a
+                    href={`/api/proxy/payroll-runs/${id}/relation/pdf`} target="_blank" rel="noopener noreferrer"
+                    onClick={() => setReportsOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                  >
+                    <FileText size={15} /> Relacion PDF
+                  </a>
+                  <a
+                    href={`/api/proxy/payroll-runs/${id}/relation-neto/pdf`} target="_blank" rel="noopener noreferrer"
+                    onClick={() => setReportsOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                  >
+                    <FileText size={15} /> Relacion PDF (Neto + HE)
+                  </a>
+                  <button
+                    onClick={() => { setReportsOpen(false); setOtAsk(`/api/proxy/payroll-runs/${id}/receipts/pdf`); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors text-left"
+                  >
+                    <Files size={15} /> Recibos PDF
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={() => { setSendResult(null); setSendOpen(true); }} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-indigo-200 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 transition-colors">
             <Mail size={15} /> Enviar recibos
           </button>
