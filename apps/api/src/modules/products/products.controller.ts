@@ -119,6 +119,11 @@ export class ProductsController {
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="catalogo-productos.pdf"',
       'Content-Length': buffer.length,
+      // no-store: el reporte debe reflejar SIEMPRE el estado actual. Sin esto el navegador
+      // (sobre todo movil) reusa el PDF viejo aunque el catalogo haya cambiado.
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     });
     res.end(buffer);
   }
@@ -131,6 +136,11 @@ export class ProductsController {
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="catalogo-con-fotos.pdf"',
       'Content-Length': buffer.length,
+      // no-store: el reporte debe reflejar SIEMPRE el estado actual (fotos, precios, contraportada).
+      // Sin esto el navegador movil reusa el PDF viejo aunque el catalogo haya cambiado.
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     });
     res.end(buffer);
   }
@@ -143,6 +153,10 @@ export class ProductsController {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': 'attachment; filename="catalogo-productos.xlsx"',
       'Content-Length': buffer.length,
+      // no-store: el reporte debe reflejar SIEMPRE el estado actual del catalogo.
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     });
     res.end(buffer);
   }

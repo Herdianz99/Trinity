@@ -59,6 +59,16 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
       const buffer = await res.arrayBuffer();
       const responseHeaders: Record<string, string> = { 'Content-Type': resContentType };
       if (disposition) responseHeaders['Content-Disposition'] = disposition;
+      // Reenviar el control de cache del API (ej. reportes con 'no-store'): sin esto el
+      // navegador movil reusa el PDF/xlsx viejo aunque el dato haya cambiado.
+      const cacheControl = res.headers.get('cache-control');
+      if (cacheControl) {
+        responseHeaders['Cache-Control'] = cacheControl;
+        const pragma = res.headers.get('pragma');
+        const expires = res.headers.get('expires');
+        if (pragma) responseHeaders['Pragma'] = pragma;
+        if (expires) responseHeaders['Expires'] = expires;
+      }
       return new NextResponse(buffer, { status: res.status, headers: responseHeaders });
     }
 
