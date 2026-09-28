@@ -17,6 +17,27 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 145–146 (2026-09-28) — Buscador en compras · Mejoras al PDF de factura · Mi Perfil (abrir facturas + estados en español) · Clonar usuario a la grande · 2ª PC de desarrollo
+
+> ### ⚠️ SIN DESPLEGAR — todo el código está en `main` y pusheado (commits `fb776be9`, `40b889a6`, `d0591aec`, `6d02c04b`, `1f12c0db`). **Cambio web + API, SIN migraciones nuevas → deploy seguro.** OJO: al desplegar entra JUNTO con el Portal "Mi Perfil" (Sesión 141), que **sí trae migración** (`20260924120000_portal_empleado`, aditiva/idempotente). **Solo queda pendiente el deploy.**
+
+### 🔎 Buscador unificado en `/purchases` (Sesión 145 · commit `fb776be9`)
+- Barra de búsqueda estilo `/sales/invoices` (con debounce de 400 ms). Nuevo query param `search` en el endpoint `GET /purchases` que hace un `OR` case-insensitive sobre: **N° de documento** (`number`), **N° de factura del proveedor** (`supplierInvoiceNumber`), **nombre del proveedor** (`supplier.name`) y **RIF** (`supplier.rif`). Backend en `purchase-orders` (controller + service). Incluido en "Limpiar filtros".
+
+### 🧾 PDF de factura — dos mejoras (`invoice-pdf.service.ts`)
+- **Columna "Ref. Prov" más ancha** (commit `40b889a6`): antes el código del proveedor saltaba a la segunda línea. Se ensanchó ~14 px en las **4 variantes** de layout (fiscal/no-fiscal × con-peso/sin-peso), tomando el espacio de la columna Descripción, sin mover el resto. Reportado en factura del **mayor**.
+- **Marca de descuento por artículo** (commit `6d02c04b`): cuando un ítem tuvo descuento (`InvoiceItem.discountPct > 0`) ahora se muestra "**-X% desc.**" en azul bajo el nombre del producto, igual que el badge de la página de detalle. Altura de fila ajustada para que no se encime.
+
+### 👤 Portal "Mi Perfil" — dos mejoras (`me` module + `/mi-perfil`)
+- **Abrir el PDF de las facturas propias** (commit `d0591aec`): nuevo endpoint `GET /me/facturas/:id/pdf` que **valida pertenencia** (`invoice.customerId === customerId` del empleado → 403 si no es suya) y reusa `InvoicePdfService.generatePdf`. Se exportó `InvoicePdfService` desde su módulo y se importó `InvoicesModule` en `me.module`. Botón "PDF" en la tabla de facturas (mismo patrón que recibos).
+- **Estados en español** (commit `1f12c0db`): las pestañas Facturas y CxC mostraban los estados crudos en inglés (PENDING, PAID…). Se agregó mapa de etiquetas (Pendiente, Pagada, Parcial, Vencido, Dev. Parcial, Devuelta, Cancelada) + los colores que faltaban, reusando las traducciones de `/sales/invoices`.
+
+### 🗄️ Clonar usuario chica → grande (producción, SIN código)
+- Se copió el usuario **`angelimar@gmail.com`** (Angelimar Diaz, rol **AUDITOR**) de la **chica** (`trebol_db`, Docker en `134.209.220.233`) a la **grande** (`trinity_db`, `134.209.164.59`) **con su contraseña intacta** (hash bcrypt portable; `md5(password)` verificado idéntico en ambas BD). `id` nuevo (`gen_random_uuid()`), `employeeId=NULL`, `updatedAt=now()`, `ON CONFLICT (email)`. Sin filas en `UserPermission` (AUDITOR usa el set fijo del código). Método documentado en memoria [[clonar-usuario-entre-empresas]].
+
+### 💻 Segunda PC de desarrollo (infra, fuera del repo)
+- Diego configuró una segunda computadora para poder programar cuando no esté en la principal. Instalado a mano: **Node.js 24, Claude Code, Git, Docker Desktop** + copiados los **3 archivos `.env`** (secretos, no van a git) y la **llave SSH**. Se armó una carpeta de traspaso en el escritorio (`Trinity-config-nueva-pc`, con estructura de rutas + `LEEME.txt`) — **borrar tras usar** (contiene secretos). **La 2ª PC ya quedó operativa.**
+
 ## 🗓️ Sesión 141 (2026-09-24) — Portal del empleado ("Mi Perfil") + Notificaciones
 
 > ### ⚠️ SIN DESPLEGAR — en la rama `feat/portal-empleado-mi-perfil` (fusionada a `main` al cerrar la sesión). Cambio **web + API CON migración** (`20260924120000_portal_empleado`, aditiva/idempotente + reflejada en `deploy/fix-schema.sql`). Verificado e2e en local contra `grande_db` (83 empleados) con usuarios de prueba (ya borrados). Diego despliega cuando quiera.
