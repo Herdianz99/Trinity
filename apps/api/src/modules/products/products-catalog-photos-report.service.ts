@@ -117,24 +117,32 @@ export class ProductsCatalogPhotosReportService {
     const marginX = 40;
     const usableW = pageW - marginX * 2; // 532
 
-    // --- Encabezado con logo ---
-    let hasLogo = false;
+    // --- Encabezado: mismo patron que la factura y los demas reportes ---
+    // El logo va SOLO, arriba a la izquierda, en su propia fila; el texto (titulo + filtros)
+    // fluye DEBAJO. Antes el titulo se colocaba al lado del logo con un offset fijo y un logo
+    // apaisado terminaba montandose encima. Ahora el logo nunca invade el texto.
+    let headY = 34;
     if (config?.logo) {
       try {
         const logoBuffer = Buffer.from(config.logo.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-        doc.image(logoBuffer, marginX, 34, { height: 46 });
-        hasLogo = true;
-      } catch { /* logo invalido: se omite */ }
+        doc.image(logoBuffer, marginX, headY, { height: 50 });
+        headY += 56;
+      } catch {
+        doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a').text(company, marginX, headY);
+        headY += 22;
+      }
+    } else {
+      doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a').text(company, marginX, headY);
+      headY += 22;
     }
-    const textX = hasLogo ? marginX + 60 : marginX;
-    const textW = usableW - (hasLogo ? 60 : 0);
-    doc.fontSize(18).font('Helvetica-Bold').fillColor('#0f172a').text(company, textX, 36, { width: textW });
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#334155').text('Catalogo de productos', textX, 58, { width: textW });
+    doc.fontSize(13).font('Helvetica-Bold').fillColor('#334155').text('Catalogo de productos', marginX, headY);
+    headY += 16;
     doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(
       `${this.filterText(activeQuery, categoryName)}   |   Generado: ${new Date().toLocaleDateString('es-VE')}   |   ${items.length} articulos`,
-      textX, 74, { width: textW },
+      marginX, headY, { width: usableW },
     );
-    const headerBottom = 92;
+    headY += 13;
+    const headerBottom = headY;
     doc.moveTo(marginX, headerBottom).lineTo(pageW - marginX, headerBottom).strokeColor('#cbd5e1').lineWidth(1).stroke();
 
     if (items.length === 0) {
