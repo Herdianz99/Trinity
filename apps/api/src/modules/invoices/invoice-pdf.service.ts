@@ -361,10 +361,13 @@ export class InvoicePdfService {
       // Items
       doc.fontSize(8).font('Helvetica');
       for (const item of invoice.items) {
-        // Altura dinamica: la descripcion puede ocupar 2 lineas.
+        // Altura dinamica: la descripcion puede ocupar 2 lineas. Si el articulo
+        // tuvo descuento, se agrega una linea extra "-X% desc." bajo el nombre.
         doc.fontSize(8).font('Helvetica');
+        const discPct = item.discountPct || 0;
+        const discLabel = discPct > 0 ? `-${parseFloat(discPct.toFixed(2))}% desc.` : '';
         const descH = doc.heightOfString(item.productName, { width: cols.desc.w });
-        const rowH = Math.max(14, descH + 2);
+        const rowH = Math.max(14, descH + 2 + (discLabel ? 9 : 0));
         if (y + rowH > 720) {
           doc.addPage();
           y = 40;
@@ -372,6 +375,11 @@ export class InvoicePdfService {
         doc.text(codeMap.get(item.productId) || item.productId.slice(0, 8), cols.code.x, y, { width: cols.code.w, lineBreak: false });
         doc.text(refMap.get(item.productId) || '—', cols.ref.x, y, { width: cols.ref.w, lineBreak: false });
         doc.text(item.productName, cols.desc.x, y, { width: cols.desc.w });
+        if (discLabel) {
+          doc.fontSize(7).fillColor('#2563eb')
+            .text(discLabel, cols.desc.x, y + descH + 1, { width: cols.desc.w, lineBreak: false });
+          doc.fontSize(8).fillColor('#000');
+        }
         doc.text(item.quantity.toString(), cols.qty.x, y, { width: cols.qty.w, align: 'right', lineBreak: false });
         // En notas de entrega (no fiscal) el P. Unit se muestra CON IVA incluido y
         // se DERIVA del total de la linea (item.totalUsd ya trae descuento + IVA),
