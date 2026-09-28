@@ -11,6 +11,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 
 interface PurchaseBill {
@@ -58,6 +59,8 @@ export default function PurchasesPage() {
   const [total, setTotal] = useState(0);
   const [filterSupplier, setFilterSupplier] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -65,6 +68,15 @@ export default function PurchasesPage() {
   useEffect(() => {
     document.title = 'Facturas de Compra | Trinity ERP';
   }, []);
+
+  // Debounce del buscador
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Fetch suppliers for filter dropdown
   useEffect(() => {
@@ -84,6 +96,7 @@ export default function PurchasesPage() {
       params.set('limit', '20');
       if (filterSupplier) params.set('supplierId', filterSupplier);
       if (filterStatus) params.set('status', filterStatus);
+      if (searchDebounced) params.set('search', searchDebounced);
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       const res = await fetch(`/api/proxy/purchases?${params}`);
@@ -98,7 +111,7 @@ export default function PurchasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, filterSupplier, filterStatus, from, to]);
+  }, [page, filterSupplier, filterStatus, searchDebounced, from, to]);
 
   useEffect(() => {
     fetchBills();
@@ -147,7 +160,18 @@ export default function PurchasesPage() {
       )}
 
       {/* Filters */}
-      <div className="card p-4 mb-6">
+      <div className="card p-4 mb-6 space-y-3">
+        {/* Buscador */}
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por N° documento, N° factura del proveedor, proveedor o RIF..."
+            className="input-field !py-2 !pl-9 text-sm w-full"
+          />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <select
             value={filterSupplier}
@@ -184,10 +208,10 @@ export default function PurchasesPage() {
             placeholder="Hasta"
           />
         </div>
-        {(filterSupplier || filterStatus || from || to) && (
+        {(filterSupplier || filterStatus || search || from || to) && (
           <button
-            onClick={() => { setFilterSupplier(''); setFilterStatus(''); setFrom(''); setTo(''); setPage(1); }}
-            className="mt-3 btn-secondary !py-2 text-sm"
+            onClick={() => { setFilterSupplier(''); setFilterStatus(''); setSearch(''); setFrom(''); setTo(''); setPage(1); }}
+            className="btn-secondary !py-2 text-sm"
           >
             Limpiar filtros
           </button>

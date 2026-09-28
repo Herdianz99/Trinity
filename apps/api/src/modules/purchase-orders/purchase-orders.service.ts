@@ -481,17 +481,28 @@ export class PurchaseOrdersService {
   async findAll(filters: {
     supplierId?: string;
     status?: PurchaseStatus;
+    search?: string;
     from?: string;
     to?: string;
     page?: number;
     limit?: number;
   }) {
-    const { supplierId, status, from, to, page = 1, limit = 20 } = filters;
+    const { supplierId, status, search, from, to, page = 1, limit = 20 } = filters;
     const skip = (page - 1) * limit;
     const where: any = {};
 
     if (supplierId) where.supplierId = supplierId;
     if (status) where.status = status;
+
+    // Busqueda unificada: N° de documento, N° de factura del proveedor, nombre o RIF del proveedor
+    if (search) {
+      where.OR = [
+        { number: { contains: search, mode: 'insensitive' } },
+        { supplierInvoiceNumber: { contains: search, mode: 'insensitive' } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+        { supplier: { rif: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
 
     if (from || to) {
       where.invoiceDate = {};

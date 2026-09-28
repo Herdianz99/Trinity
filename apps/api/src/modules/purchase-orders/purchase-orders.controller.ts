@@ -55,6 +55,7 @@ export class PurchaseOrdersController {
   findAll(
     @Query('supplierId') supplierId?: string,
     @Query('status') status?: PurchaseStatus,
+    @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page?: string,
@@ -63,6 +64,7 @@ export class PurchaseOrdersController {
     return this.service.findAll({
       supplierId,
       status,
+      search,
       from,
       to,
       page: page ? parseInt(page, 10) : 1,
