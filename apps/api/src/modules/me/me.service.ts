@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PayrollPdfService } from '../payroll/payroll-pdf.service';
+import { InvoicePdfService } from '../invoices/invoice-pdf.service';
 
 const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
@@ -9,6 +10,7 @@ export class MeService {
   constructor(
     private prisma: PrismaService,
     private payrollPdf: PayrollPdfService,
+    private invoicePdf: InvoicePdfService,
   ) {}
 
   /**
@@ -135,5 +137,18 @@ export class MeService {
       throw new ForbiddenException('Recibo no disponible.');
     }
     return this.payrollPdf.generateReceipt(line.payrollRunId, lineId, overtime);
+  }
+
+  async getFacturaPdf(userId: string, invoiceId: string): Promise<Buffer> {
+    const { customerId } = await this.resolveEmployee(userId);
+    // Permiso: el usuario solo puede abrir facturas de SU cliente vinculado.
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, customerId: true },
+    });
+    if (!customerId || !invoice || invoice.customerId !== customerId) {
+      throw new ForbiddenException('Factura no disponible.');
+    }
+    return this.invoicePdf.generatePdf(invoiceId);
   }
 }

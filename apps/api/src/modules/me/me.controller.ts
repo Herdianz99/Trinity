@@ -45,6 +45,21 @@ export class MeController {
     return this.service.getResumen(userId);
   }
 
+  @Get('facturas/:id/pdf')
+  async getFacturaPdf(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.service.getFacturaPdf(userId, id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="factura-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('recibos/:lineId/pdf')
   async getReciboPdf(
     @CurrentUser('id') userId: string,

@@ -305,7 +305,7 @@ export default function MiPerfilPage() {
 
               {/* FACTURAS */}
               {tab === 'facturas' && (facturas.length ? (
-                <Table head={['Número', 'Fecha', 'Total', 'Saldo', 'Estado']}>
+                <Table head={['Número', 'Fecha', 'Total', 'Saldo', 'Estado', 'PDF']}>
                   {facturas.map((f) => (
                     <tr key={f.id} className="border-b border-slate-700/30 last:border-0">
                       <td className="px-3 py-2.5 text-slate-200">{f.fiscalNumber || f.number}</td>
@@ -313,6 +313,9 @@ export default function MiPerfilPage() {
                       <td className="px-3 py-2.5 text-right font-mono text-slate-300">$ {fmt(f.totalUsd)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-white">$ {fmt(f.saldoUsd)}</td>
                       <td className="px-3 py-2.5 text-center"><Pill cls={statusStyle[f.status]}>{f.status}</Pill></td>
+                      <td className="px-3 py-2.5 text-center">
+                        <a href={`/api/proxy/me/facturas/${f.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-400 hover:underline"><FileDown size={14} /> PDF</a>
+                      </td>
                     </tr>
                   ))}
                 </Table>
