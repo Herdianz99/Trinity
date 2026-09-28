@@ -21,6 +21,14 @@ const levelStyle: Record<string, string> = {
 const statusStyle: Record<string, string> = {
   PENDING: 'bg-amber-500/15 text-amber-300', PARTIAL: 'bg-blue-500/15 text-blue-300',
   OVERDUE: 'bg-red-500/15 text-red-300', PAID: 'bg-green-500/15 text-green-300',
+  PARTIAL_RETURN: 'bg-orange-500/15 text-orange-300', RETURNED: 'bg-red-500/15 text-red-300',
+  CANCELLED: 'bg-slate-500/15 text-slate-300',
+};
+
+// Etiquetas en español para los estados de CxC (Receivable) y Facturas (Invoice)
+const statusLabel: Record<string, string> = {
+  PENDING: 'Pendiente', PARTIAL: 'Parcial', OVERDUE: 'Vencido', PAID: 'Pagada',
+  PARTIAL_RETURN: 'Dev. Parcial', RETURNED: 'Devuelta', CANCELLED: 'Cancelada',
 };
 
 /* ---------- types ---------- */
@@ -297,7 +305,7 @@ export default function MiPerfilPage() {
                       <td className="px-3 py-2.5 text-slate-400">{fmtDate(r.dueDate)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-300">$ {fmt(r.amountUsd)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-white">$ {fmt(r.saldoUsd)}</td>
-                      <td className="px-3 py-2.5 text-center"><Pill cls={statusStyle[r.status]}>{r.status}</Pill></td>
+                      <td className="px-3 py-2.5 text-center"><Pill cls={statusStyle[r.status]}>{statusLabel[r.status] || r.status}</Pill></td>
                     </tr>
                   ))}
                 </Table>
@@ -312,7 +320,7 @@ export default function MiPerfilPage() {
                       <td className="px-3 py-2.5 text-slate-400">{fmtDate(f.createdAt)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-slate-300">$ {fmt(f.totalUsd)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-white">$ {fmt(f.saldoUsd)}</td>
-                      <td className="px-3 py-2.5 text-center"><Pill cls={statusStyle[f.status]}>{f.status}</Pill></td>
+                      <td className="px-3 py-2.5 text-center"><Pill cls={statusStyle[f.status]}>{statusLabel[f.status] || f.status}</Pill></td>
                       <td className="px-3 py-2.5 text-center">
                         <a href={`/api/proxy/me/facturas/${f.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-400 hover:underline"><FileDown size={14} /> PDF</a>
                       </td>
