@@ -327,20 +327,20 @@ export class InvoicePdfService {
       const cols = isFiscal
         ? (hasWeight
             ? {
-                code: { x: 40, w: 42 }, ref: { x: 84, w: 52 }, desc: { x: 138, w: 170 }, qty: { x: 312, w: 34 },
+                code: { x: 40, w: 42 }, ref: { x: 84, w: 66 }, desc: { x: 152, w: 156 }, qty: { x: 312, w: 34 },
                 price: { x: 350, w: 46 }, iva: { x: 398, w: 52 }, peso: { x: 454, w: 44 }, total: { x: 502, w: 70 },
               }
             : {
-                code: { x: 40, w: 42 }, ref: { x: 84, w: 54 }, desc: { x: 140, w: 175 }, qty: { x: 320, w: 40 },
+                code: { x: 40, w: 42 }, ref: { x: 84, w: 68 }, desc: { x: 154, w: 161 }, qty: { x: 320, w: 40 },
                 price: { x: 370, w: 50 }, iva: { x: 430, w: 50 }, peso: null, total: { x: 490, w: 70 },
               })
         : (hasWeight
             ? {
-                code: { x: 40, w: 46 }, ref: { x: 88, w: 58 }, desc: { x: 148, w: 198 }, qty: { x: 350, w: 40 },
+                code: { x: 40, w: 46 }, ref: { x: 88, w: 72 }, desc: { x: 162, w: 184 }, qty: { x: 350, w: 40 },
                 price: { x: 398, w: 52 }, iva: null, peso: { x: 456, w: 46 }, total: { x: 506, w: 66 },
               }
             : {
-                code: { x: 40, w: 46 }, ref: { x: 88, w: 60 }, desc: { x: 152, w: 208 }, qty: { x: 366, w: 44 },
+                code: { x: 40, w: 46 }, ref: { x: 88, w: 74 }, desc: { x: 166, w: 194 }, qty: { x: 366, w: 44 },
                 price: { x: 416, w: 60 }, iva: null, peso: null, total: { x: 482, w: 90 },
               });
       doc.moveTo(40, y).lineTo(40 + pageWidth, y).stroke('#cccccc');
