@@ -21,6 +21,10 @@ Lee el SKILL.md correspondiente antes de aplicar cada skill. No esperes a que te
 - Para detener un proceso específico usar: `npx kill-port {puerto}`
 
 ## Antes de cada sesión
+- **PRIMERO sincronizar con GitHub**: el usuario trabaja desde DOS PCs distintas, así que esta copia puede estar desactualizada.
+  Antes de leer o tocar cualquier código ejecutar `git fetch origin` y `git status`; si hay commits nuevos en `origin/main`,
+  hacer `git pull origin main` (si hay cambios locales sin commitear, avisar al usuario antes de hacer pull).
+  Hacerlo aunque el usuario no lo pida.
 - Leer PROJECT.md y PROGRESS.md antes de escribir cualquier código
 - Consultar skills en /mnt/skills/public/ especialmente frontend-design
 
