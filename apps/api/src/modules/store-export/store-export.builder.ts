@@ -56,8 +56,8 @@ export interface SnapshotBuild {
   meta: {
     generatedAt: string;
     rate: number;
-    categories: { slug: string; name: string; productCount: number }[];
-    brands: { slug: string; name: string; productCount: number }[];
+    categories: { slug: string; name: string; productCount: number; icon: string | null }[];
+    brands: { slug: string; name: string; productCount: number; logo: string | null }[];
     banners: ExportBanner[];
   };
   summary: { products: number; categories: number; brands: number; banners: number; generatedAt: string };
@@ -83,6 +83,8 @@ export function buildSnapshotData(
   rate: number,
   generatedAt: string,
   banners: ExportBanner[] = [],
+  catIcons: Record<string, string | null> = {}, // nombre de categoría → emoji
+  brandLogos: Record<string, string | null> = {}, // nombre de marca → URL de CDN
 ): SnapshotBuild {
   // Slugs de categoría/marca con dedupe determinista.
   const catSlugs = new Map<string, string>(); // name -> slug
@@ -142,11 +144,13 @@ export function buildSnapshotData(
     slug,
     name,
     productCount: catCount.get(slug) || 0,
+    icon: catIcons[name] ?? null,
   }));
   const brands = Array.from(brandSlugs.entries()).map(([name, slug]) => ({
     slug,
     name,
     productCount: brandCount.get(slug) || 0,
+    logo: brandLogos[name] ?? null,
   }));
 
   return {

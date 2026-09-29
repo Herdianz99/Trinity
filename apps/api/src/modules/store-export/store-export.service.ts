@@ -30,6 +30,22 @@ export class StoreExportService {
     this.exportTimer.unref?.(); // no mantener vivo el proceso por este timer
   }
 
+  /** Lee el "chrome" administrable: iconos de categoría (emoji) y logos de marca (URL). */
+  private async fetchChrome(): Promise<{
+    catIcons: Record<string, string | null>;
+    brandLogos: Record<string, string | null>;
+  }> {
+    const [cats, brands] = await Promise.all([
+      this.prisma.category.findMany({ select: { name: true, icon: true } }),
+      this.prisma.brand.findMany({ select: { name: true, logoKey: true } }),
+    ]);
+    const catIcons: Record<string, string | null> = {};
+    for (const c of cats) if (c.icon) catIcons[c.name] = c.icon;
+    const brandLogos: Record<string, string | null> = {};
+    for (const b of brands) if (b.logoKey) brandLogos[b.name] = this.spaces.cdnUrl(b.logoKey);
+    return { catIcons, brandLogos };
+  }
+
   /** Lee los banners activos y resuelve sus imágenes a URL de CDN. */
   private async fetchBanners(): Promise<ExportBanner[]> {
     const rows = await this.prisma.storeBanner.findMany({
@@ -102,8 +118,19 @@ export class StoreExportService {
 
   /** Construye y sube store/catalog.json + store/meta.json. Devuelve un resumen. */
   async exportCatalog(): Promise<SnapshotBuild['summary']> {
-    const [{ products, rate }, banners] = await Promise.all([this.fetchData(), this.fetchBanners()]);
-    const { catalog, meta, summary } = buildSnapshotData(products, rate, new Date().toISOString(), banners);
+    const [{ products, rate }, banners, chrome] = await Promise.all([
+      this.fetchData(),
+      this.fetchBanners(),
+      this.fetchChrome(),
+    ]);
+    const { catalog, meta, summary } = buildSnapshotData(
+      products,
+      rate,
+      new Date().toISOString(),
+      banners,
+      chrome.catIcons,
+      chrome.brandLogos,
+    );
 
     // Prefijo de la ruta del snapshot. En prod queda 'store'; en local se puede
     // apuntar a 'store-local' (STORE_SNAPSHOT_PREFIX) para NO pisar el snapshot real.

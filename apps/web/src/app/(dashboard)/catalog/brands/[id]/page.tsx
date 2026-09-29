@@ -1,15 +1,42 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Tag, Save, Loader2, ChevronLeft, ChevronRight, ExternalLink, LogOut,
+  Upload, Image as ImageIcon, Trash2,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface Brand {
   id: string;
   name: string;
+  logoKey?: string | null;
+  logoUrl?: string | null;
+}
+
+// Reduce la imagen en el navegador antes de subirla y la devuelve como data URI.
+function downscaleToDataUri(file: File, maxSize = 1024, quality = 0.9): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('No canvas context'));
+      ctx.drawImage(img, 0, 0, w, h);
+      // PNG para conservar transparencia de los logos
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
 }
 
 interface Product {
@@ -34,6 +61,10 @@ export default function BrandDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   const [activeTab, setActiveTab] = useState('info');
 
   // Products
@@ -51,8 +82,42 @@ export default function BrandDetailPage() {
       const data = await res.json();
       setBrand(data);
       setForm({ name: data.name });
+      setLogoUrl(data.logoUrl || null);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
+
+  async function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingLogo(true); setSaveMsg(null);
+    try {
+      const dataUri = await downscaleToDataUri(file);
+      const res = await fetch(`/api/proxy/brands/${id}/logo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'No se pudo subir el logo'); }
+      const updated = await res.json();
+      setLogoUrl(updated.logoUrl || null);
+      setSaveMsg({ type: 'success', text: 'Logo actualizado' });
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: err.message });
+    } finally { setUploadingLogo(false); }
+  }
+
+  async function handleRemoveLogo() {
+    if (!confirm('¿Quitar el logo de esta marca?')) return;
+    setUploadingLogo(true); setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/proxy/brands/${id}/logo`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('No se pudo quitar el logo');
+      setLogoUrl(null);
+      setSaveMsg({ type: 'success', text: 'Logo eliminado' });
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: err.message });
+    } finally { setUploadingLogo(false); }
+  }
 
   const fetchProducts = useCallback(async () => {
     setProdLoading(true);
@@ -146,6 +211,47 @@ export default function BrandDetailPage() {
               <label className="block text-xs font-medium text-slate-400 mb-1">Nombre *</label>
               <input type="text" value={form.name || ''} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
             </div>
+
+            {/* Logo para la tienda online */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Logo para la tienda online</label>
+              <div className="flex items-center gap-4">
+                <div className="w-28 h-20 rounded-lg bg-slate-800 border border-slate-700/50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoUrl} alt={brand.name} className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 text-slate-500 text-[10px]">
+                      <ImageIcon size={20} /> Sin logo
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoFile} className="hidden" />
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                  >
+                    {uploadingLogo ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                    {logoUrl ? 'Cambiar logo' : 'Subir logo'}
+                  </button>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      disabled={uploadingLogo}
+                      className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                    >
+                      <Trash2 size={12} /> Quitar logo
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">PNG con fondo transparente recomendado. Al tener logo, la marca deja de mostrarse como recuadro con el nombre.</p>
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
               <button
                 type="button"

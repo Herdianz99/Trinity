@@ -4,6 +4,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { UploadLogoDto } from './dto/upload-logo.dto';
 
 @ApiTags('Brands')
 @ApiBearerAuth()
@@ -35,5 +36,15 @@ export class BrandsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.brandsService.remove(id);
+  }
+
+  @Post(':id/logo')
+  uploadLogo(@Param('id') id: string, @Body() dto: UploadLogoDto) {
+    return this.brandsService.uploadLogo(id, dto.image);
+  }
+
+  @Delete(':id/logo')
+  removeLogo(@Param('id') id: string) {
+    return this.brandsService.removeLogo(id);
   }
 }

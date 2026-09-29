@@ -11,6 +11,7 @@ interface Category {
   id: string;
   name: string;
   code: string | null;
+  icon: string | null;
   commissionPct: number;
   bregaPct: number;
   lastProductNumber: number;
@@ -69,6 +70,7 @@ export default function CategoryDetailPage() {
       setForm({
         name: data.name,
         code: data.code || '',
+        icon: data.icon || '',
         printAreaId: data.printAreaId || '',
         commissionPct: String(data.commissionPct || 0),
         bregaPct: String(data.bregaPct || 0),
@@ -111,7 +113,7 @@ export default function CategoryDetailPage() {
     setSaving(true); setSaveMsg(null);
     try {
       const isRoot = !category?.parentId;
-      const body: Record<string, unknown> = { name: form.name };
+      const body: Record<string, unknown> = { name: form.name, icon: form.icon || null };
       if (isRoot) {
         body.code = form.code?.toUpperCase();
         body.printAreaId = form.printAreaId || null;
@@ -268,6 +270,35 @@ export default function CategoryDetailPage() {
                   <p className="text-[10px] text-slate-500 mt-0.5">0 = usar la brecha global. Al cambiarla se recalculan los precios de esta categoria.</p>
                 </div>
               )}
+            </div>
+
+            {/* Icono para la tienda online */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Icono (emoji) para la tienda online</label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  type="text"
+                  value={form.icon || ''}
+                  onChange={e => setForm((f: any) => ({ ...f, icon: e.target.value }))}
+                  className="input-field !py-2 text-xl w-20 text-center"
+                  maxLength={8}
+                  placeholder="📦"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {['🔧','⚡','🔩','🎨','🚿','💡','🦺','🧪','⚙️','🔐','🌿','📏','🛠️','🔌','🪛','📦'].map(em => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setForm((f: any) => ({ ...f, icon: em }))}
+                      className="w-8 h-8 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-lg leading-none"
+                      title={`Usar ${em}`}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">Se muestra en la tienda online. Vacío = icono por defecto (📦).</p>
             </div>
 
             {/* Parent (read-only for subcategories) */}

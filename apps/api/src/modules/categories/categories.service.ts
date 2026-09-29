@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CompanyConfigService } from '../company-config/company-config.service';
+import { StoreExportService } from '../store-export/store-export.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -9,6 +10,7 @@ export class CategoriesService {
   constructor(
     private prisma: PrismaService,
     private companyConfig: CompanyConfigService,
+    private storeExport: StoreExportService,
   ) {}
 
   async create(dto: CreateCategoryDto) {
@@ -104,6 +106,9 @@ export class CategoriesService {
     if (bregaChanged) {
       await this.companyConfig.recalculateCategoryPrices(id);
     }
+
+    // El icono/nombre afecta la tienda online → re-exportar snapshot.
+    this.storeExport.scheduleExport();
 
     return updated;
   }

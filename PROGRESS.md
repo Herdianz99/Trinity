@@ -19,7 +19,7 @@
 
 ## 🗓️ Sesión 147 (2026-09-29) — Tienda online: mapa + datos de contacto · sección /ofertas · Módulo "Personalización de tienda" (banners autoadministrables)
 
-> ### ⚠️ SIN DESPLEGAR — abarca DOS repos: **Trinity** (este) y **trebol-shop** (la tienda online, `Desktop/trebol-shop`). Todo en `main` y pusheado. Trinity trae **migración aditiva** `20260929120000_store_banner` (crea tabla `StoreBanner`, con `IF NOT EXISTS`). La tienda necesita su propio deploy (Vercel). **Ambos repos deben desplegarse para que la feature funcione end-to-end.**
+> ### ⚠️ SIN DESPLEGAR — abarca DOS repos: **Trinity** (este) y **trebol-shop** (la tienda online, `Desktop/trebol-shop`). Todo en `main` y pusheado. Trinity trae **2 migraciones aditivas**: `20260929120000_store_banner` (tabla `StoreBanner`) y `20260929140000_store_icon_logo` (`Category.icon` + `Brand.logoKey`), ambas con `IF NOT EXISTS`. La tienda necesita su propio deploy (Vercel). **Ambos repos deben desplegarse para que la feature funcione end-to-end.**
 
 ### Tienda (trebol-shop): retoques + sección de ofertas
 - **Footer:** mapa de Google (iframe→JSX) con "Cómo llegar"; dirección real (Calle 31 con av. 35 y 36, Acarigua 3303), teléfono +58 424-5731353, WhatsApp, correo `ventas@ferreteriaeltrebol.com`, horario Lun–Sáb 8am–8pm / Dom 9am–4pm, "más de 6 años". Mismo teléfono/correo en el Header.
@@ -32,8 +32,12 @@
 - **Tienda:** `HeroSection` y `PromoSection` ahora dinámicos con fallback; `getActiveBanners`/`getPromoBanner` leen de `meta.json`.
 - **Aislamiento local↔prod:** ruta del snapshot configurable por env — `STORE_SNAPSHOT_PREFIX` (API) y `NEXT_PUBLIC_STORE_PREFIX` (tienda); en local = `store-local` para NO pisar el `store/` de producción. En prod queda `store` (default).
 
-### Pendiente de esta línea de trabajo
-- **Iconos de categoría (emoji)** y **logos de marca (imagen)** autoadministrables desde las fichas (CATÁLOGO → Categorías / Marcas): campo `icon` en Category, `logoKey` en Brand, export en `meta.json`, la tienda los lee (lo hardcodeado en `store-config.ts` queda como fallback). DECIDIDO, sin empezar.
+### Iconos de categoría (emoji) + logos de marca (imagen) autoadministrables
+- **DB:** `Category.icon` (emoji) + `Brand.logoKey` (key de Spaces) + migración `20260929140000_store_icon_logo`.
+- **API:** la ficha de categoría guarda el icono (dispara re-export); la de marca sube/quita logo a Spaces (`processLogoImage` WebP 512px, conserva alpha) vía `POST/DELETE /brands/:id/logo`; `findAll/findOne` de marcas devuelven `logoUrl`. El export incluye `icon` por categoría y `logo` por marca en `meta.json` (`fetchChrome`).
+- **Web:** ficha de categoría con campo emoji + selector rápido; ficha de marca con subida de logo y preview; la **lista de marcas** ahora tiene columna de logo y el lápiz/nombre/miniatura abren la ficha (se quitó la edición de nombre en línea que confundía).
+- **Tienda:** `getAllCategories`/`getAllBrands`/`getBrandBySlug` y `mapProduct` prefieren el icono/logo del snapshot; `store-config.ts` queda como fallback. Al tener logo, la marca deja de mostrarse como recuadro gris.
+- **Local:** emojis cargados a las 30 categorías de `total_db`; `showInStore=true` en todos los productos para probar (9.516 visibles). Solo datos locales — producción intacta.
 
 ---
 

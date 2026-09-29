@@ -492,6 +492,7 @@ model Category {
   commissionPct     Float      @default(0)
   bregaPct          Float      @default(0)   // brecha propia (solo categorías RAÍZ; 0 = usar la global)
   sortOrder         Int        @default(0)   // orden manual de la familia en el catálogo con fotos (menor primero; 0 = alfabético)
+  icon              String?                  // emoji para la tienda online (se exporta al snapshot)
   printAreaId       String?
   printArea         PrintArea? @relation(fields: [printAreaId], references: [id])
   parentId          String?
@@ -504,6 +505,7 @@ model Category {
 model Brand {
   id        String    @id @default(cuid())
   name      String
+  logoKey   String?   // key en Spaces del logo para la tienda online (se exporta al snapshot)
   products  Product[]
   createdAt DateTime  @default(now())
 }

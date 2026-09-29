@@ -95,6 +95,20 @@ export async function processBannerImage(input: Buffer): Promise<{ image: Buffer
   return { image, bytes: image.length };
 }
 
+// Logo de marca: imagen chica, contenida, con transparencia (WebP conserva alpha).
+const LOGO_SIZE = 512;
+const LOGO_QUALITY = 85;
+
+/** Procesa el logo de una marca → un WebP contenido de máx 512px (mantiene transparencia). */
+export async function processLogoImage(input: Buffer): Promise<{ image: Buffer; bytes: number }> {
+  const image = await sharp(input, { failOn: 'none' })
+    .rotate()
+    .resize(LOGO_SIZE, LOGO_SIZE, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: LOGO_QUALITY })
+    .toBuffer();
+  return { image, bytes: image.length };
+}
+
 /** Decodifica un data URI ("data:image/jpeg;base64,....") a Buffer. Lanza si es inválido. */
 export function dataUriToBuffer(dataUri: string): Buffer {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUri);

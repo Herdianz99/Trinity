@@ -33,6 +33,12 @@ export class CreateCategoryDto {
   @Min(0)
   sortOrder?: number;
 
+  @ApiProperty({ required: false, description: 'Emoji para la tienda online (ej. 🔧)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  icon?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
