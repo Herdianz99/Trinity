@@ -44,6 +44,9 @@
 - **Causa:** la respuesta SÍ se guardaba (`NotificationRecipient.comment/ackState/ackAt`) y ya existía `GET /notifications/:id` (`detailForSender`) que la devuelve, pero la pantalla `/rrhh/notificaciones` solo mostraba contadores y no abría el detalle.
 - **Fix (solo frontend):** filas de la tabla ahora clicables → modal de detalle que consume el endpoint existente y muestra por empleado: estado (Enterado/En desacuerdo/Pendiente), fecha del acuse y **el comentario/respuesta**. Sin backend ni migración.
 
+### Mi Perfil: "Cuentas por cobrar" solo muestra las pendientes
+- `GET /me/cxc` (`me.service.ts`) ahora filtra `status in [PENDING, PARTIAL, OVERDUE]` (antes `not CANCELLED`, así que salían también las `PAID`). Es el mismo filtro que ya usaba el KPI "Saldo por cobrar", así lista, contador de la pestaña y saldo cuadran. Solo API, sin migración.
+
 ---
 
 ## 🗓️ Sesión 145–146 (2026-09-28) — Buscador en compras · Mejoras al PDF de factura · Mi Perfil (abrir facturas + estados en español) · Clonar usuario a la grande · 2ª PC de desarrollo
