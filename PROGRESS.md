@@ -19,7 +19,11 @@
 
 ## 🗓️ Sesión 145–146 (2026-09-28) — Buscador en compras · Mejoras al PDF de factura · Mi Perfil (abrir facturas + estados en español) · Clonar usuario a la grande · 2ª PC de desarrollo
 
-> ### ⚠️ SIN DESPLEGAR — todo el código está en `main` y pusheado (commits `fb776be9`, `40b889a6`, `d0591aec`, `6d02c04b`, `1f12c0db`). **Cambio web + API, SIN migraciones nuevas → deploy seguro.** OJO: al desplegar entra JUNTO con el Portal "Mi Perfil" (Sesión 141), que **sí trae migración** (`20260924120000_portal_empleado`, aditiva/idempotente). **Solo queda pendiente el deploy.**
+> ### ✅ DESPLEGADO Y VERIFICADO EN LAS 7 EMPRESAS (2026-09-28, noche Caracas) — HEAD `10310f4` en inversiones, trebolmayor, eltrebol, total, totalturen, aceros y acerosmayor
+> Commits `fb776be9`, `40b889a6`, `d0591aec`, `6d02c04b`, `1f12c0db` (+ docs `10310f4`). Web + API, sin migraciones nuevas (chica e inversiones estaban en `48ef631`, que ya tenía aplicada la de Sesión 141 `20260924120000_portal_empleado`).
+> - **Orden:** primero la **chica** (eltrebol) como prueba; verificada OK → luego las demás.
+> - **Respaldo pre-deploy (chica):** `/root/backups/predeploy-trebol_db-20260929-0034.dump` (`pg_dump -Fc`, 110 tablas; prefijo `predeploy-` para que la retención de 7 días de `/root/backup-db.sh` no lo borre) + commit previo `48ef631` en `/root/backups/predeploy-commit-20260929-0034.txt`. **Gotcha:** en la chica Postgres corre en **Docker** (no existe usuario `postgres` en el host) → el dump se hace con `pg_dump "$DATABASE_URL"` leyendo `/opt/Trinity/packages/database/.env`, igual que `backup-db.sh`.
+> - **Verificación post-deploy (las 7):** PM2 `online` sin reinicios en bucle, `GET /health` → `status ok, database ok` en :4000/:4001 de cada server, sin migraciones fallidas. Los errores `digest` de Next.js en `trinity-web-error.log` de la chica son **anteriores** al deploy (log sin escribir desde 17:37 UTC). El health es `/health` (no `/api/health`, da 404).
 
 ### 🔎 Buscador unificado en `/purchases` (Sesión 145 · commit `fb776be9`)
 - Barra de búsqueda estilo `/sales/invoices` (con debounce de 400 ms). Nuevo query param `search` en el endpoint `GET /purchases` que hace un `OR` case-insensitive sobre: **N° de documento** (`number`), **N° de factura del proveedor** (`supplierInvoiceNumber`), **nombre del proveedor** (`supplier.name`) y **RIF** (`supplier.rif`). Backend en `purchase-orders` (controller + service). Incluido en "Limpiar filtros".
@@ -40,7 +44,7 @@
 
 ## 🗓️ Sesión 141 (2026-09-24) — Portal del empleado ("Mi Perfil") + Notificaciones
 
-> ### ⚠️ SIN DESPLEGAR — en la rama `feat/portal-empleado-mi-perfil` (fusionada a `main` al cerrar la sesión). Cambio **web + API CON migración** (`20260924120000_portal_empleado`, aditiva/idempotente + reflejada en `deploy/fix-schema.sql`). Verificado e2e en local contra `grande_db` (83 empleados) con usuarios de prueba (ya borrados). Diego despliega cuando quiera.
+> ### ✅ DESPLEGADO en las 7 empresas (confirmado 2026-09-28, todas en `10310f4`). Venía de la rama `feat/portal-empleado-mi-perfil` (fusionada a `main` al cerrar la sesión). Cambio **web + API CON migración** (`20260924120000_portal_empleado`, aditiva/idempotente + reflejada en `deploy/fix-schema.sql`). Verificado e2e en local contra `grande_db` (83 empleados) con usuarios de prueba (ya borrados). Diego despliega cuando quiera.
 
 Spec: `docs/superpowers/specs/2026-09-24-portal-empleado-mi-perfil-design.md` · Plan: `docs/superpowers/plans/2026-09-24-portal-empleado-mi-perfil.md`
 
