@@ -61,6 +61,7 @@ import { IslrRetentionVouchersModule } from './modules/islr-retention-vouchers/i
 import { CustomerIvaRetentionsModule } from './modules/customer-iva-retentions/customer-iva-retentions.module';
 import { ProductImagesModule } from './modules/product-images/product-images.module';
 import { StoreExportModule } from './modules/store-export/store-export.module';
+import { StoreCustomizationModule } from './modules/store-customization/store-customization.module';
 import { PublicModule } from './modules/public/public.module';
 import { OnlineOrdersModule } from './modules/online-orders/online-orders.module';
 import { DispatchModule } from './modules/dispatch/dispatch.module';
@@ -142,6 +143,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     CustomerIvaRetentionsModule,
     ProductImagesModule,
     StoreExportModule,
+    StoreCustomizationModule,
     PublicModule,
     OnlineOrdersModule,
     DispatchModule,

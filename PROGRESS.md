@@ -17,6 +17,26 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 147 (2026-09-29) — Tienda online: mapa + datos de contacto · sección /ofertas · Módulo "Personalización de tienda" (banners autoadministrables)
+
+> ### ⚠️ SIN DESPLEGAR — abarca DOS repos: **Trinity** (este) y **trebol-shop** (la tienda online, `Desktop/trebol-shop`). Todo en `main` y pusheado. Trinity trae **migración aditiva** `20260929120000_store_banner` (crea tabla `StoreBanner`, con `IF NOT EXISTS`). La tienda necesita su propio deploy (Vercel). **Ambos repos deben desplegarse para que la feature funcione end-to-end.**
+
+### Tienda (trebol-shop): retoques + sección de ofertas
+- **Footer:** mapa de Google (iframe→JSX) con "Cómo llegar"; dirección real (Calle 31 con av. 35 y 36, Acarigua 3303), teléfono +58 424-5731353, WhatsApp, correo `ventas@ferreteriaeltrebol.com`, horario Lun–Sáb 8am–8pm / Dom 9am–4pm, "más de 6 años". Mismo teléfono/correo en el Header.
+- **Sección `/ofertas`:** muestra los productos con el flag "Oferta" (`Product.isOnSale`) activo. Se agregó `isOnSale` al **export del snapshot** (builder + service) como `offer`; la tienda lo lee (`getOfferProducts`), badge "Oferta" en `ProductCard`, link en el menú y footer. Es SOLO marcador (no cambia precio).
+
+### Módulo "Personalización de tienda" (banners hero + franja de oferta, autoadministrable)
+- **DB:** modelo `StoreBanner` (`placement` HERO/PROMO, título, subtítulo, tag, `imageKey`, link, orden, activo) + migración `20260929120000_store_banner`.
+- **API:** módulo nuevo `store-customization` (`/store-banners`, CRUD **solo ADMIN** + subida de imagen a Spaces reutilizando `product-images`; `processBannerImage` WebP 1600px). Cada cambio dispara `scheduleExport()`. Los banners se exportan en `meta.json` (`fetchBanners` → URLs de CDN).
+- **Web:** página `/store/personalizacion` (menú TIENDA) con secciones Hero y Promo: crear/editar/eliminar, subir imagen con preview, toggle visible, orden.
+- **Tienda:** `HeroSection` y `PromoSection` ahora dinámicos con fallback; `getActiveBanners`/`getPromoBanner` leen de `meta.json`.
+- **Aislamiento local↔prod:** ruta del snapshot configurable por env — `STORE_SNAPSHOT_PREFIX` (API) y `NEXT_PUBLIC_STORE_PREFIX` (tienda); en local = `store-local` para NO pisar el `store/` de producción. En prod queda `store` (default).
+
+### Pendiente de esta línea de trabajo
+- **Iconos de categoría (emoji)** y **logos de marca (imagen)** autoadministrables desde las fichas (CATÁLOGO → Categorías / Marcas): campo `icon` en Category, `logoKey` en Brand, export en `meta.json`, la tienda los lee (lo hardcodeado en `store-config.ts` queda como fallback). DECIDIDO, sin empezar.
+
+---
+
 ## 🗓️ Sesión 145–146 (2026-09-28) — Buscador en compras · Mejoras al PDF de factura · Mi Perfil (abrir facturas + estados en español) · Clonar usuario a la grande · 2ª PC de desarrollo
 
 > ### ✅ DESPLEGADO Y VERIFICADO EN LAS 7 EMPRESAS (2026-09-28, noche Caracas) — HEAD `10310f4` en inversiones, trebolmayor, eltrebol, total, totalturen, aceros y acerosmayor

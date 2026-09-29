@@ -79,6 +79,22 @@ export async function processDocumentImage(input: Buffer): Promise<ProcessedDocu
   return { thumb, full, bytes: full.length };
 }
 
+// Banner del hero de la tienda: imagen ancha. 1600px de ancho es suficiente para
+// pantallas grandes sin pesar de más; WebP q82 mantiene buena calidad de foto.
+const BANNER_WIDTH = 1600;
+const BANNER_HEIGHT = 900;
+const BANNER_QUALITY = 82;
+
+/** Procesa la imagen de fondo de un banner de tienda → un único WebP ancho. */
+export async function processBannerImage(input: Buffer): Promise<{ image: Buffer; bytes: number }> {
+  const image = await sharp(input, { failOn: 'none' })
+    .rotate() // respeta EXIF orientation
+    .resize(BANNER_WIDTH, BANNER_HEIGHT, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: BANNER_QUALITY })
+    .toBuffer();
+  return { image, bytes: image.length };
+}
+
 /** Decodifica un data URI ("data:image/jpeg;base64,....") a Buffer. Lanza si es inválido. */
 export function dataUriToBuffer(dataUri: string): Buffer {
   const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUri);

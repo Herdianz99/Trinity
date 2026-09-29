@@ -33,6 +33,7 @@ import {
   FileText,
   UserCheck,
   SlidersHorizontal,
+  Megaphone,
   FileCheck,
   Banknote,
   Landmark,
@@ -129,6 +130,7 @@ const menuSections: MenuSection[] = [
     permission: 'store',
     items: [
       { label: 'Pedidos online', href: '/store/orders', icon: <ShoppingCart size={18} /> },
+      { label: 'Personalización', href: '/store/personalizacion', icon: <Megaphone size={18} /> },
     ],
   },
   {

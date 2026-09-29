@@ -19,6 +19,7 @@ export interface StoreProduct {
   categorySlug: string | null;
   brandSlug: string | null;
   featured: boolean;
+  offer: boolean; // isOnSale en Trinity: producto marcado "en oferta"
 }
 
 /** Forma cruda de producto que espera el builder (subset del select de Prisma). */
@@ -28,12 +29,26 @@ export interface RawProduct {
   description: string | null;
   priceDetal: number;
   storeFeatured: boolean;
+  isOnSale: boolean;
   primaryImageThumbUrl: string | null;
   primaryImageMediumUrl: string | null;
   images: string[]; // URLs medium de todas las fotos (principal primero), ya resueltas a CDN
   category: { name: string } | null;
   brand: { name: string } | null;
   stock: { quantity: number }[];
+}
+
+/** Banner de tienda ya listo para el snapshot (imageKey resuelto a URL de CDN). */
+export interface ExportBanner {
+  id: string;
+  placement: string; // 'HERO' | 'PROMO'
+  title: string;
+  subtitle: string | null;
+  tag: string | null;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  linkLabel: string | null;
+  order: number;
 }
 
 export interface SnapshotBuild {
@@ -43,8 +58,9 @@ export interface SnapshotBuild {
     rate: number;
     categories: { slug: string; name: string; productCount: number }[];
     brands: { slug: string; name: string; productCount: number }[];
+    banners: ExportBanner[];
   };
-  summary: { products: number; categories: number; brands: number; generatedAt: string };
+  summary: { products: number; categories: number; brands: number; banners: number; generatedAt: string };
 }
 
 /** Convierte texto a slug: minúsculas, sin acentos, no-alfanumérico → guion. */
@@ -62,7 +78,12 @@ export function slugify(input: string): string {
  * Construye los payloads del snapshot (catalog.json + meta.json) a partir de los
  * productos ya consultados. Función PURA (sin BD ni Spaces) → testeable en aislamiento.
  */
-export function buildSnapshotData(products: RawProduct[], rate: number, generatedAt: string): SnapshotBuild {
+export function buildSnapshotData(
+  products: RawProduct[],
+  rate: number,
+  generatedAt: string,
+  banners: ExportBanner[] = [],
+): SnapshotBuild {
   // Slugs de categoría/marca con dedupe determinista.
   const catSlugs = new Map<string, string>(); // name -> slug
   const brandSlugs = new Map<string, string>();
@@ -113,6 +134,7 @@ export function buildSnapshotData(products: RawProduct[], rate: number, generate
       categorySlug,
       brandSlug,
       featured: p.storeFeatured,
+      offer: p.isOnSale,
     };
   });
 
@@ -129,11 +151,12 @@ export function buildSnapshotData(products: RawProduct[], rate: number, generate
 
   return {
     catalog: { generatedAt, rate, products: storeProducts },
-    meta: { generatedAt, rate, categories, brands },
+    meta: { generatedAt, rate, categories, brands, banners },
     summary: {
       products: storeProducts.length,
       categories: categories.length,
       brands: brands.length,
+      banners: banners.length,
       generatedAt,
     },
   };

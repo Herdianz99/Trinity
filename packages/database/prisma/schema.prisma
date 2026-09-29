@@ -508,6 +508,25 @@ model Brand {
   createdAt DateTime  @default(now())
 }
 
+/// Banners administrables de la tienda online (se exportan al snapshot del CDN).
+/// placement = 'HERO' (carrusel principal) | 'PROMO' (franja "Oferta del mes").
+model StoreBanner {
+  id        String   @id @default(cuid())
+  placement String   @default("HERO")
+  title     String
+  subtitle  String?
+  tag       String?
+  imageKey  String? // key en Spaces; se resuelve a URL de CDN al exportar
+  linkUrl   String?
+  linkLabel String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([placement, isActive])
+}
+
 model Supplier {
   id                String             @id @default(cuid())
   name              String

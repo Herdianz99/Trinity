@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
-import { buildSnapshotData, type RawProduct, type SnapshotBuild } from './store-export.builder';
+import { buildSnapshotData, type ExportBanner, type RawProduct, type SnapshotBuild } from './store-export.builder';
 import { caracasDateKey } from '../../common/timezone';
 
 @Injectable()
@@ -30,6 +30,25 @@ export class StoreExportService {
     this.exportTimer.unref?.(); // no mantener vivo el proceso por este timer
   }
 
+  /** Lee los banners activos y resuelve sus imágenes a URL de CDN. */
+  private async fetchBanners(): Promise<ExportBanner[]> {
+    const rows = await this.prisma.storeBanner.findMany({
+      where: { isActive: true },
+      orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    return rows.map((b) => ({
+      id: b.id,
+      placement: b.placement,
+      title: b.title,
+      subtitle: b.subtitle,
+      tag: b.tag,
+      imageUrl: b.imageKey ? this.spaces.cdnUrl(b.imageKey) : null,
+      linkUrl: b.linkUrl,
+      linkLabel: b.linkLabel,
+      order: b.sortOrder,
+    }));
+  }
+
   /** Lee los productos publicables + la tasa del día (para el builder). */
   private async fetchData(): Promise<{ products: RawProduct[]; rate: number }> {
     // "Última tasa con fecha <= hoy (Caracas)": ignora una tasa futura pre-cargada
@@ -49,6 +68,7 @@ export class StoreExportService {
         description: true,
         priceDetal: true,
         storeFeatured: true,
+        isOnSale: true,
         primaryImageThumbUrl: true,
         primaryImageMediumUrl: true,
         images: {
@@ -69,6 +89,7 @@ export class StoreExportService {
       description: r.description,
       priceDetal: r.priceDetal,
       storeFeatured: r.storeFeatured,
+      isOnSale: r.isOnSale,
       primaryImageThumbUrl: r.primaryImageThumbUrl,
       primaryImageMediumUrl: r.primaryImageMediumUrl,
       images: r.images.map((i) => this.spaces.cdnUrl(i.mediumKey)),
@@ -81,13 +102,16 @@ export class StoreExportService {
 
   /** Construye y sube store/catalog.json + store/meta.json. Devuelve un resumen. */
   async exportCatalog(): Promise<SnapshotBuild['summary']> {
-    const { products, rate } = await this.fetchData();
-    const { catalog, meta, summary } = buildSnapshotData(products, rate, new Date().toISOString());
+    const [{ products, rate }, banners] = await Promise.all([this.fetchData(), this.fetchBanners()]);
+    const { catalog, meta, summary } = buildSnapshotData(products, rate, new Date().toISOString(), banners);
 
-    await this.spaces.uploadJson('store/catalog.json', catalog, 60);
-    await this.spaces.uploadJson('store/meta.json', meta, 60);
+    // Prefijo de la ruta del snapshot. En prod queda 'store'; en local se puede
+    // apuntar a 'store-local' (STORE_SNAPSHOT_PREFIX) para NO pisar el snapshot real.
+    const prefix = (process.env.STORE_SNAPSHOT_PREFIX || 'store').replace(/\/+$/, '');
+    await this.spaces.uploadJson(`${prefix}/catalog.json`, catalog, 60);
+    await this.spaces.uploadJson(`${prefix}/meta.json`, meta, 60);
 
-    this.logger.log(`Snapshot tienda subido: ${JSON.stringify(summary)}`);
+    this.logger.log(`Snapshot tienda subido a "${prefix}/": ${JSON.stringify(summary)}`);
     return summary;
   }
 }
