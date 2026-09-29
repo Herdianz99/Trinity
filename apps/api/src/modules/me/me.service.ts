@@ -56,7 +56,8 @@ export class MeService {
     const { customerId } = await this.resolveEmployee(userId);
     if (!customerId) return [];
     const rows = await this.prisma.receivable.findMany({
-      where: { customerId, status: { not: 'CANCELLED' } },
+      // Solo las pendientes (mismo filtro que el saldo del resumen): las pagadas/anuladas no se muestran
+      where: { customerId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
       select: {
         id: true, number: true, documentNumber: true, type: true,
         amountUsd: true, amountBs: true, paidAmountUsd: true, paidAmountBs: true,
