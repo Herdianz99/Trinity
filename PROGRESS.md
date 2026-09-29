@@ -39,6 +39,11 @@
 - **Tienda:** `getAllCategories`/`getAllBrands`/`getBrandBySlug` y `mapProduct` prefieren el icono/logo del snapshot; `store-config.ts` queda como fallback. Al tener logo, la marca deja de mostrarse como recuadro gris.
 - **Local:** emojis cargados a las 30 categorías de `total_db`; `showInStore=true` en todos los productos para probar (9.516 visibles). Solo datos locales — producción intacta.
 
+### Fix: RRHH no veía las respuestas de las notificaciones
+- **Síntoma:** el empleado responde una notificación (acuse + comentario), pero RRHH (quien la creó) no veía la respuesta.
+- **Causa:** la respuesta SÍ se guardaba (`NotificationRecipient.comment/ackState/ackAt`) y ya existía `GET /notifications/:id` (`detailForSender`) que la devuelve, pero la pantalla `/rrhh/notificaciones` solo mostraba contadores y no abría el detalle.
+- **Fix (solo frontend):** filas de la tabla ahora clicables → modal de detalle que consume el endpoint existente y muestra por empleado: estado (Enterado/En desacuerdo/Pendiente), fecha del acuse y **el comentario/respuesta**. Sin backend ni migración.
+
 ---
 
 ## 🗓️ Sesión 145–146 (2026-09-28) — Buscador en compras · Mejoras al PDF de factura · Mi Perfil (abrir facturas + estados en español) · Clonar usuario a la grande · 2ª PC de desarrollo
