@@ -44,6 +44,7 @@ export default function QuotationDetailPage() {
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [converting, setConverting] = useState(false);
   const [printChoice, setPrintChoice] = useState(false);
+  const [printCurrency, setPrintCurrency] = useState<'USD' | 'BS'>('USD');
 
   const fetchQuotation = useCallback(async () => {
     setLoading(true);
@@ -101,9 +102,43 @@ export default function QuotationDetailPage() {
     }
   }
 
-  function handlePrint(hideIva: boolean) {
+  // Mismo comportamiento que el boton Imprimir del listado (/quotations)
+  async function handlePrint(hideIva = false, currency: 'USD' | 'BS' = 'USD') {
     setPrintChoice(false);
-    window.open(`/api/proxy/quotations/${id}/pdf${hideIva ? '?hideIva=true' : ''}`, '_blank');
+    const qp = new URLSearchParams();
+    if (hideIva) qp.set('hideIva', 'true');
+    if (currency === 'BS') qp.set('currency', 'BS');
+    const qs = qp.toString();
+    const url = `/api/proxy/quotations/${id}/pdf${qs ? `?${qs}` : ''}`;
+    const number = quotation?.number || 'cotizacion';
+    const filename = `Cotizacion-${number}.pdf`;
+
+    // En desktop (o navegadores sin Web Share): abrir el PDF en pestana nueva para ver/imprimir.
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile || typeof navigator === 'undefined' || !navigator.canShare) {
+      window.open(url, '_blank');
+      return;
+    }
+
+    // En movil: bajar el PDF y abrir el menu nativo de compartir (WhatsApp, correo, etc.)
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch');
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename, text: `Cotizacion ${number}` });
+      } else {
+        // soporta compartir pero no archivos: abrir el PDF
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+    } catch (err: any) {
+      // Si el usuario cancela el menu de compartir, no hacer nada
+      if (err?.name === 'AbortError') return;
+      window.open(url, '_blank'); // fallback
+    }
   }
 
   if (loading) {
@@ -165,7 +200,7 @@ export default function QuotationDetailPage() {
               Convertir a factura
             </button>
           )}
-          <button onClick={() => setPrintChoice(true)} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-200 hover:bg-slate-600 flex items-center gap-1.5">
+          <button onClick={() => { setPrintCurrency('USD'); setPrintChoice(true); }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-200 hover:bg-slate-600 flex items-center gap-1.5">
             <Printer size={12} /> Imprimir PDF
           </button>
         </div>
@@ -264,12 +299,36 @@ export default function QuotationDetailPage() {
                 <p className="text-sm text-slate-400">Elige el formato del PDF</p>
               </div>
             </div>
-            <div className="mt-5 space-y-2">
-              <button onClick={() => handlePrint(false)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors">
+            {/* Moneda del reporte */}
+            <div className="mt-5">
+              <p className="text-xs text-slate-400 mb-2">Moneda del reporte</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPrintCurrency('USD')}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${printCurrency === 'USD' ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+                >
+                  Dólares (USD)
+                </button>
+                <button
+                  onClick={() => setPrintCurrency('BS')}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${printCurrency === 'BS' ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-slate-700 text-slate-400 hover:bg-slate-700/40'}`}
+                >
+                  Bolívares (Bs)
+                </button>
+              </div>
+              {printCurrency === 'BS' && (
+                <p className="text-[11px] text-amber-400/80 mt-2">Los precios se calculan a la tasa del día; pueden variar sin previo aviso.</p>
+              )}
+            </div>
+
+            {/* Formato: con o sin IVA (genera el PDF) */}
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-slate-400 mb-1">Formato del PDF</p>
+              <button onClick={() => handlePrint(false, printCurrency)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors">
                 <p className="text-sm font-medium text-white">Con IVA</p>
                 <p className="text-xs text-slate-500">Muestra el desglose del IVA y el subtotal.</p>
               </button>
-              <button onClick={() => handlePrint(true)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors">
+              <button onClick={() => handlePrint(true, printCurrency)} className="w-full text-left px-4 py-3 rounded-xl border border-slate-700 hover:border-green-500/40 hover:bg-green-500/5 transition-colors">
                 <p className="text-sm font-medium text-white">Sin IVA</p>
                 <p className="text-xs text-slate-500">Solo precios y total finales, sin mostrar el impuesto.</p>
               </button>
