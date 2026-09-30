@@ -515,7 +515,12 @@ export default function BankAccountDetailPage() {
                 )}
               </label>
               <label className="text-sm"><span className="text-slate-400">Sale (de esta)</span>
-                <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountFrom} onChange={(e) => { const v = sanitizeNum(e.target.value); setTransfer({ ...transfer, amountFrom: v, amountTo: transfer.amountTo || v }); }} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountFrom} onChange={(e) => {
+                  // "Entra" sigue a "Sale" mientras este vacio o igual al valor anterior (no editado a mano)
+                  const v = sanitizeNum(e.target.value);
+                  const synced = !transfer.amountTo || transfer.amountTo === transfer.amountFrom;
+                  setTransfer({ ...transfer, amountFrom: v, amountTo: synced ? v : transfer.amountTo });
+                }} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
               </label>
               <label className="text-sm"><span className="text-slate-400">Entra (a destino)</span>
                 <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountTo} onChange={(e) => setTransfer({ ...transfer, amountTo: sanitizeNum(e.target.value) })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />

@@ -35,6 +35,7 @@
 - **Rechazar** marca ambas patas `REJECTED` (tachadas, fuera del saldo) → el dinero vuelve a la cuenta origen sin borrar el rastro.
 - Legs pendientes/rechazados no se concilian ni se borran; tampoco se puede borrar la salida de un traspaso cuyo ingreso está pendiente.
 - `transferGroupId` ahora incluye `Date.now()` (antes dos traspasos iguales el mismo día compartían grupo).
+- Formulario de traspaso: "Entra" se autorrellena con "Sale" mientras no se edite a mano (antes se quedaba con el primer dígito).
 
 ## 🗓️ Sesión 147 (2026-09-29) — Tienda online: mapa + datos de contacto · sección /ofertas · Módulo "Personalización de tienda" (banners autoadministrables)
 
