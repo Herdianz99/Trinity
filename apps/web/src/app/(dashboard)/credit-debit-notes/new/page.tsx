@@ -18,6 +18,8 @@ interface InvoiceItem {
   id: string;
   productId: string;
   productName: string;
+  productCode?: string | null;
+  supplierRef?: string | null;
   quantity: number;
   unitPrice: number;
   unitPriceWithoutIva: number;
@@ -30,7 +32,7 @@ interface InvoiceItem {
 interface POItem {
   id: string;
   productId: string;
-  product: { code: string; name: string; ivaType: string };
+  product: { code: string; name: string; ivaType: string; supplierRef?: string | null };
   quantity: number;
   costUsd: number;
   netCostUsd?: number;
@@ -425,6 +427,7 @@ export default function NewCreditDebitNotePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-800/30">
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Código / Ref. Prov</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium">Producto</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Cant. Original</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
@@ -446,6 +449,10 @@ export default function NewCreditDebitNotePage() {
                 const isPartial = returnedQty > 0 && !isFullyReturned;
                 return (
                   <tr key={item.id} className={`border-b border-slate-700/30 ${isFullyReturned ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-3">
+                      <p className="text-white font-mono">{item.productCode || '—'}</p>
+                      <p className="text-xs text-slate-500 font-mono">{item.supplierRef || '—'}</p>
+                    </td>
                     <td className="px-4 py-3 text-white">{item.productName}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-center">
@@ -488,6 +495,10 @@ export default function NewCreditDebitNotePage() {
                 const isPartial = returnedQty > 0 && !isFullyReturned;
                 return (
                   <tr key={item.id} className={`border-b border-slate-700/30 ${isFullyReturned ? 'opacity-50' : ''}`}>
+                    <td className="px-4 py-3">
+                      <p className="text-white font-mono">{item.product.code || '—'}</p>
+                      <p className="text-xs text-slate-500 font-mono">{item.product.supplierRef || '—'}</p>
+                    </td>
                     <td className="px-4 py-3 text-white">{item.product.name}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{item.quantity}</td>
                     <td className="px-4 py-3 text-center">

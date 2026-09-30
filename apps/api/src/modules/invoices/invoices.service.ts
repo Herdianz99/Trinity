@@ -222,10 +222,11 @@ export class InvoicesService {
     const products = productIds.length > 0
       ? await this.prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, code: true, priceDetal: true },
+          select: { id: true, code: true, supplierRef: true, priceDetal: true },
         })
       : [];
     const codeMap = new Map(products.map(p => [p.id, p.code]));
+    const refMap = new Map(products.map(p => [p.id, p.supplierRef]));
     const priceMap = new Map(products.map(p => [p.id, p.priceDetal]));
 
     // Caja de cada pago: el pago NO guarda cashSessionId, pero el libro mayor de caja
@@ -258,6 +259,7 @@ export class InvoicesService {
       items: invoice.items.map(item => ({
         ...item,
         productCode: codeMap.get(item.productId) || null,
+        supplierRef: refMap.get(item.productId) || null,
         priceDetal: priceMap.get(item.productId) ?? null,
       })),
       receivables: invoice.receivables.map(r => ({
