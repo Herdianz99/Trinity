@@ -11,6 +11,7 @@ interface Supplier {
   id: string; name: string; rif: string | null; phone: string | null;
   email: string | null; address: string | null; contactName: string | null;
   paymentMethod: string | null;
+  bankAccount: string | null; bankDocType: string | null;
   creditDays: number;
   isRetentionAgent: boolean; isActive: boolean; supplierType: string | null;
   islrConceptId: string | null;
@@ -88,6 +89,7 @@ export default function SupplierDetailPage() {
         email: data.email || '', address: data.address || '',
         contactName: data.contactName || '',
         paymentMethod: data.paymentMethod || '',
+        bankAccount: data.bankAccount || '', bankDocType: data.bankDocType || 'R',
         creditDays: data.creditDays ?? 0,
         isRetentionAgent: data.isRetentionAgent, isActive: data.isActive,
         supplierType: data.supplierType || '',
@@ -147,6 +149,8 @@ export default function SupplierDetailPage() {
         email: form.email || undefined, address: form.address || undefined,
         contactName: form.contactName || undefined,
         paymentMethod: form.paymentMethod || undefined,
+        bankAccount: form.bankAccount || null,
+        bankDocType: form.bankAccount ? form.bankDocType : null,
         creditDays: Number(form.creditDays) || 0,
         isRetentionAgent: form.isRetentionAgent, isActive: form.isActive,
         supplierType: form.supplierType || null,
@@ -254,6 +258,22 @@ export default function SupplierDetailPage() {
                 <label className="block text-xs font-medium text-slate-400 mb-1">Metodo de pago</label>
                 <input type="text" value={form.paymentMethod || ''} onChange={e => setForm((f: any) => ({ ...f, paymentMethod: e.target.value }))} className="input-field !py-2 text-sm" placeholder="Ej: Zelle a correo@x.com, Pago movil 0414..., Efectivo" />
                 <p className="text-[10px] text-slate-500 mt-1">Texto libre. Aparece junto al proveedor en el reporte de Cuentas por Pagar.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Cuenta bancaria (20 dígitos)</label>
+                <input type="text" inputMode="numeric" value={form.bankAccount || ''}
+                  onChange={e => setForm((f: any) => ({ ...f, bankAccount: e.target.value.replace(/[^0-9-\s]/g, '') }))}
+                  className="input-field !py-2 text-sm font-mono" placeholder="0114..." />
+                <p className="text-[10px] text-slate-500 mt-1">Para exportar pagos a Bancaribe. Se valida el dígito verificador.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de documento (banco)</label>
+                <select value={form.bankDocType || 'R'} onChange={e => setForm((f: any) => ({ ...f, bankDocType: e.target.value }))} className="input-field !py-2 text-sm">
+                  <option value="R">RIF</option>
+                  <option value="C">Cédula</option>
+                  <option value="P">Pasaporte</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">El número es el del campo RIF.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de proveedor (ISLR)</label>
