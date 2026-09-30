@@ -17,6 +17,25 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 148 (2026-09-29) — NCV motivo "Error de despacho" · KPI Ganancia sin IVA de notas · Aprobación de traspasos bancarios
+
+> ### ⚠️ SIN DESPLEGAR. 2 migraciones aditivas con `IF NOT EXISTS`: `20260929160000_return_reason_error_despacho` (enum `SalesReturnReason` + `ERROR_DESPACHO`) y `20260929170000_bank_transfer_approval` (enum `DynamicKeyPerm` + `APPROVE_BANK_TRANSFER`, `BankAccount.requiresTransferApproval`, `BankMovement.approvalStatus/approvedAt/approvedById/approvalKeyName/approvalNote`). También añadidas a `deploy/fix-schema.sql`. No se probaron contra una BD local (no había Postgres corriendo); API y web compilan (`tsc --noEmit`) y `prisma validate` OK.
+
+### 1) Nuevo motivo de devolución de ventas (NCV): "Error de despacho"
+- Enum `SalesReturnReason.ERROR_DESPACHO`; agregado al selector de `/credit-debit-notes/new`, al filtro del listado, al detalle y al PDF (`MOTIVO_LABELS`), y al `@IsIn` del query DTO.
+
+### 2) Dashboard gerencial — KPI "Ganancia"
+- El monto grande ahora **descuenta SIEMPRE el IVA**, incluso el de las notas de entrega (series no fiscales). El margen % y la variación vs. periodo anterior usan esa cifra.
+- Debajo, texto pequeño **"Con IVA de notas: $X"** = la cifra anterior (IVA de notas contado como ganancia, regla de CLAUDE.md). `getProfit` devuelve `profitUsd` + `profitWithNoteIvaUsd` (neto de devoluciones, también separando su IVA de nota).
+
+### 3) Bancos — aceptación de traspasos entrantes
+- Checkbox **"Requiere aceptar los traspasos entrantes"** en la ficha de cuenta (`/bancos/cuentas`, icono escudo en la lista).
+- Traspaso hacia esa cuenta: la pata IN nace `PENDING` y **no suma al saldo** hasta aceptarla (aviso en el modal de traspaso y en `/bancos`, con cantidad y monto por aceptar).
+- En el libro banco (`/bancos/[id]`) botones **Aceptar / Rechazar** → piden **clave dinámica** con el permiso nuevo **"Aceptar/rechazar traspasos bancarios"** (hay que asignarlo a una clave en `/settings/dynamic-keys`). Queda registrado usuario, fecha, nombre de la clave (y motivo si rechaza) y se muestra bajo la descripción. También queda en `DynamicKeyLog`.
+- **Rechazar** marca ambas patas `REJECTED` (tachadas, fuera del saldo) → el dinero vuelve a la cuenta origen sin borrar el rastro.
+- Legs pendientes/rechazados no se concilian ni se borran; tampoco se puede borrar la salida de un traspaso cuyo ingreso está pendiente.
+- `transferGroupId` ahora incluye `Date.now()` (antes dos traspasos iguales el mismo día compartían grupo).
+
 ## 🗓️ Sesión 147 (2026-09-29) — Tienda online: mapa + datos de contacto · sección /ofertas · Módulo "Personalización de tienda" (banners autoadministrables)
 
 > ### ⚠️ SIN DESPLEGAR — abarca DOS repos: **Trinity** (este) y **trebol-shop** (la tienda online, `Desktop/trebol-shop`). Todo en `main` y pusheado. Trinity trae **2 migraciones aditivas**: `20260929120000_store_banner` (tabla `StoreBanner`) y `20260929140000_store_icon_logo` (`Category.icon` + `Brand.logoKey`), ambas con `IF NOT EXISTS`. La tienda necesita su propio deploy (Vercel). **Ambos repos deben desplegarse para que la feature funcione end-to-end.**
