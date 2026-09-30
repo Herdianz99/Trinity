@@ -22,3 +22,9 @@ export class CreateTransferDto {
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsString() description?: string;
 }
+
+// Aceptar / rechazar el ingreso de un traspaso hacia una cuenta con requiresTransferApproval
+export class ApproveTransferDto {
+  @IsString() dynamicKey: string;
+  @IsOptional() @IsString() note?: string; // motivo (rechazo)
+}

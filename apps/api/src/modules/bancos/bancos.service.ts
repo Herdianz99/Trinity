@@ -6,12 +6,21 @@ import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { CreateBankMovementDto, CreateTransferDto } from './dto/create-bank-movement.dto';
 import { QueryMovementsDto } from './dto/query-movements.dto';
 import { ReconcileDto } from './dto/reconcile.dto';
+import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 
 const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
+// Movimientos que cuentan en el saldo: excluye traspasos PENDIENTES de aceptar y RECHAZADOS.
+const COUNTS_IN_BALANCE = { approvalStatus: { notIn: ['PENDING', 'REJECTED'] } };
+const countsInBalance = (m: { approvalStatus: string }) =>
+  m.approvalStatus !== 'PENDING' && m.approvalStatus !== 'REJECTED';
+
 @Injectable()
 export class BancosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private dynamicKeysService: DynamicKeysService,
+  ) {}
 
   // ---- Cuentas ----
   async listAccounts() {
@@ -39,6 +48,7 @@ export class BancosService {
         openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
         sortOrder: dto.sortOrder ?? 0,
         isActive: dto.isActive ?? true,
+        requiresTransferApproval: dto.requiresTransferApproval ?? false,
       },
     });
   }
@@ -54,6 +64,7 @@ export class BancosService {
     if (dto.currency !== undefined) data.currency = dto.currency;
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.requiresTransferApproval !== undefined) data.requiresTransferApproval = dto.requiresTransferApproval;
     if (dto.openingBalance !== undefined) {
       const rate = dto.exchangeRate ?? 0;
       const cur = dto.currency ?? acc.currency;
@@ -69,7 +80,7 @@ export class BancosService {
   private async computeBalance(accountId: string, opening: number) {
     const agg = await this.prisma.bankMovement.groupBy({
       by: ['direction'],
-      where: { bankAccountId: accountId },
+      where: { bankAccountId: accountId, ...COUNTS_IN_BALANCE },
       _sum: { amount: true },
     });
     const inSum = agg.find((a) => a.direction === 'IN')?._sum.amount ?? 0;
@@ -80,7 +91,7 @@ export class BancosService {
   private async reconciledBalance(accountId: string, opening: number) {
     const agg = await this.prisma.bankMovement.groupBy({
       by: ['direction'],
-      where: { bankAccountId: accountId, reconciled: true },
+      where: { bankAccountId: accountId, reconciled: true, ...COUNTS_IN_BALANCE },
       _sum: { amount: true },
     });
     const inSum = agg.find((a) => a.direction === 'IN')?._sum.amount ?? 0;
@@ -97,7 +108,12 @@ export class BancosService {
     for (const a of accounts) {
       const balance = await this.computeBalance(a.id, a.openingBalance);
       const pending = await this.prisma.bankMovement.count({
-        where: { bankAccountId: a.id, reconciled: false },
+        where: { bankAccountId: a.id, reconciled: false, ...COUNTS_IN_BALANCE },
+      });
+      const pendingApproval = await this.prisma.bankMovement.aggregate({
+        where: { bankAccountId: a.id, approvalStatus: 'PENDING' },
+        _count: true,
+        _sum: { amount: true },
       });
       rows.push({
         id: a.id,
@@ -107,6 +123,9 @@ export class BancosService {
         accountType: a.accountType,
         balance,
         pendingCount: pending,
+        requiresTransferApproval: a.requiresTransferApproval,
+        pendingApprovalCount: pendingApproval._count,
+        pendingApprovalAmount: r2(pendingApproval._sum.amount ?? 0),
       });
     }
     const totalBs = rows.filter((r) => r.currency === 'VES').reduce((s, r) => s + r.balance, 0);
@@ -131,11 +150,12 @@ export class BancosService {
     const movements = await this.prisma.bankMovement.findMany({
       where,
       orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      include: { approvedBy: { select: { id: true, name: true } } },
     });
-    // saldo corriente acumulado
+    // saldo corriente acumulado (los traspasos pendientes/rechazados no lo mueven)
     let running = acc.openingBalance;
     const rows = movements.map((m) => {
-      running = r2(running + (m.direction === 'IN' ? m.amount : -m.amount));
+      if (countsInBalance(m)) running = r2(running + (m.direction === 'IN' ? m.amount : -m.amount));
       return { ...m, runningBalance: running };
     });
     const balance = await this.computeBalance(accountId, acc.openingBalance);
@@ -177,7 +197,10 @@ export class BancosService {
     ]);
     if (!from || !to) throw new BadRequestException('Cuenta no valida');
     const rate = dto.exchangeRate ?? 0;
-    const groupId = `TR-${userId}-${dto.date}-${r2(dto.amountFrom)}`;
+    // Date.now() hace unico el grupo (2 traspasos iguales el mismo dia no comparten grupo)
+    const groupId = `TR-${userId}-${dto.date}-${r2(dto.amountFrom)}-${Date.now()}`;
+    // Cuenta destino que exige aceptacion: el ingreso nace PENDIENTE (no suma al saldo)
+    const inStatus = to.requiresTransferApproval ? 'PENDING' : 'NONE';
     const date = new Date(dto.date);
     const bsOf = (amt: number, cur: string) => (cur === 'USD' ? r2(amt * rate) : r2(amt));
     const usdOf = (amt: number, cur: string) => (cur === 'USD' ? r2(amt) : rate ? r2(amt / rate) : 0);
@@ -210,9 +233,60 @@ export class BancosService {
         description: dto.description ?? `Traspaso desde ${from.name}`,
         sourceType: 'MANUAL',
         transferGroupId: groupId,
+        approvalStatus: inStatus,
         createdById: userId,
       });
-      return { ok: true, transferGroupId: groupId };
+      return { ok: true, transferGroupId: groupId, pendingApproval: inStatus === 'PENDING' };
+    });
+  }
+
+  // ---- Aceptar / rechazar el ingreso de un traspaso (cuentas con requiresTransferApproval) ----
+  // Se valida una clave dinamica con permiso APPROVE_BANK_TRANSFER y queda registrado el usuario
+  // y el nombre de la clave. Aceptar: la pata IN pasa a APPROVED y suma al saldo. Rechazar: ambas
+  // patas pasan a REJECTED (ninguna cuenta en el saldo => el dinero vuelve a la cuenta origen).
+  async decideTransfer(
+    movementId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    dynamicKey: string,
+    note: string | undefined,
+    userId: string,
+  ) {
+    const m = await this.prisma.bankMovement.findUnique({
+      where: { id: movementId },
+      include: { bankAccount: { select: { name: true } } },
+    });
+    if (!m) throw new NotFoundException('Movimiento no encontrado');
+    if (m.approvalStatus !== 'PENDING') throw new BadRequestException('Este traspaso no esta pendiente de aceptacion');
+
+    const { keyName } = await this.dynamicKeysService.validate({
+      key: dynamicKey,
+      permission: 'APPROVE_BANK_TRANSFER',
+      action: `${decision === 'APPROVED' ? 'Aceptar' : 'Rechazar'} traspaso ${r2(m.amount)} en ${m.bankAccount.name}`,
+      entityType: 'BankMovement',
+      entityId: m.id,
+    });
+
+    const data = {
+      approvalStatus: decision,
+      approvedAt: new Date(),
+      approvedById: userId,
+      approvalKeyName: keyName,
+      approvalNote: note?.trim() || null,
+    };
+    return this.prisma.$transaction(async (tx) => {
+      // Re-chequeo dentro de la transaccion: evita doble aceptacion/rechazo concurrente
+      const upd = await tx.bankMovement.updateMany({
+        where: { id: m.id, approvalStatus: 'PENDING' },
+        data,
+      });
+      if (upd.count === 0) throw new BadRequestException('Este traspaso ya fue procesado');
+      if (decision === 'REJECTED' && m.transferGroupId) {
+        await tx.bankMovement.updateMany({
+          where: { transferGroupId: m.transferGroupId, direction: 'OUT', id: { not: m.id } },
+          data,
+        });
+      }
+      return { ok: true, status: decision, keyName };
     });
   }
 
@@ -222,6 +296,14 @@ export class BancosService {
     if (!m) throw new NotFoundException('Movimiento no encontrado');
     if (m.reconciled) throw new BadRequestException('No se puede borrar un movimiento conciliado; desconcilialo primero');
     if (m.sourceType !== 'MANUAL') throw new BadRequestException('Solo se pueden borrar movimientos manuales');
+    if (m.approvalStatus !== 'NONE') throw new BadRequestException('Este traspaso requiere aceptacion: usa Aceptar/Rechazar en lugar de borrarlo');
+    // La salida de un traspaso cuyo ingreso sigue pendiente tampoco se borra (dejaria el ingreso huerfano)
+    if (m.transferGroupId) {
+      const pendingLeg = await this.prisma.bankMovement.count({
+        where: { transferGroupId: m.transferGroupId, approvalStatus: 'PENDING' },
+      });
+      if (pendingLeg > 0) throw new BadRequestException('El ingreso de este traspaso esta pendiente de aceptar: rechazalo desde la cuenta destino');
+    }
     await this.prisma.bankMovement.delete({ where: { id } });
     return { ok: true };
   }
@@ -230,7 +312,8 @@ export class BancosService {
   async reconcile(dto: ReconcileDto, userId: string) {
     const statementDate = dto.statementDate ? new Date(dto.statementDate) : null;
     await this.prisma.bankMovement.updateMany({
-      where: { id: { in: dto.movementIds } },
+      // Un traspaso pendiente/rechazado no se concilia (no esta en el saldo)
+      where: { id: { in: dto.movementIds }, ...(dto.reconciled ? COUNTS_IN_BALANCE : {}) },
       data: dto.reconciled
         ? { reconciled: true, reconciledAt: new Date(), reconciledById: userId, statementDate }
         : { reconciled: false, reconciledAt: null, reconciledById: null, statementDate: null },

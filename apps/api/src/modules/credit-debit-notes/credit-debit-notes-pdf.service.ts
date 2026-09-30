@@ -15,6 +15,7 @@ const MOTIVO_LABELS: Record<string, string> = {
   CLIENTE: 'Cliente',
   FALTANTE_ALMACEN: 'Faltante almacen',
   CAMBIO_NOTA_A_FISCAL: 'Cambio nota a fiscal',
+  ERROR_DESPACHO: 'Error de despacho',
   DEVOLUCION: 'Devolucion',
 };
 

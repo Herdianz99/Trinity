@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Landmark, Plus, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Landmark, Plus, RefreshCw, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface AccountRow {
   id: string;
@@ -11,6 +11,9 @@ interface AccountRow {
   accountType: string;
   balance: number;
   pendingCount: number;
+  requiresTransferApproval: boolean;
+  pendingApprovalCount: number;
+  pendingApprovalAmount: number;
 }
 interface Summary {
   accounts: AccountRow[];
@@ -74,6 +77,13 @@ export default function BancosPage() {
         </div>
       )}
 
+      {data.accounts.some((a) => a.pendingApprovalCount > 0) && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-2">
+          <ShieldCheck size={16} /> Hay {data.accounts.reduce((s, a) => s + a.pendingApprovalCount, 0)} traspaso(s) esperando ser aceptados.
+          Entra a la cuenta para aceptarlos o rechazarlos.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
           <p className="text-xs text-slate-500 uppercase">Total en Bs</p>
@@ -104,6 +114,11 @@ export default function BancosPage() {
               {fmt(a.balance)}
             </p>
             {a.pendingCount > 0 && <p className="text-[11px] text-amber-400 mt-1">{a.pendingCount} sin conciliar</p>}
+            {a.pendingApprovalCount > 0 && (
+              <p className="text-[11px] text-amber-300 mt-1 flex items-center gap-1">
+                <ShieldCheck size={12} /> {a.pendingApprovalCount} traspaso(s) por aceptar · {a.currency === 'USD' ? '$ ' : 'Bs '}{fmt(a.pendingApprovalAmount)}
+              </p>
+            )}
           </Link>
         ))}
         {data.accounts.length === 0 && (

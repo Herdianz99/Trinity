@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Landmark, ArrowLeft, Plus, Loader2, X, Trash2, ArrowLeftRight, CheckCircle } from 'lucide-react';
+import { Landmark, ArrowLeft, Plus, Loader2, X, Trash2, ArrowLeftRight, CheckCircle, ShieldCheck, Ban, KeyRound } from 'lucide-react';
 
 interface Movement {
   id: string;
@@ -16,6 +16,11 @@ interface Movement {
   sourceId: string | null;
   reconciled: boolean;
   runningBalance: number;
+  approvalStatus: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvedAt: string | null;
+  approvedBy: { id: string; name: string } | null;
+  approvalKeyName: string | null;
+  approvalNote: string | null;
 }
 interface Account {
   id: string;
@@ -23,6 +28,7 @@ interface Account {
   bankName: string;
   currency: string;
   accountType: string;
+  requiresTransferApproval?: boolean;
 }
 interface LedgerResp {
   account: Account;
@@ -212,7 +218,8 @@ export default function BankAccountDetailPage() {
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error'); }
       setTransferOpen(false);
       setTransfer({ toAccountId: '', amountFrom: '', amountTo: '', exchangeRate: '', reference: '', description: '', date: todayStr() });
-      setMessage({ type: 'success', text: 'Traspaso registrado' });
+      const r = await res.json().catch(() => ({}));
+      setMessage({ type: 'success', text: r.pendingApproval ? 'Traspaso registrado — queda pendiente de aceptar en la cuenta destino' : 'Traspaso registrado' });
       load();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -231,10 +238,46 @@ export default function BankAccountDetailPage() {
     }
   }
 
+  // Aceptar / rechazar el ingreso de un traspaso (pide clave dinamica)
+  const [decision, setDecision] = useState<{ m: Movement; action: 'approve' | 'reject' } | null>(null);
+  const [decisionKey, setDecisionKey] = useState('');
+  const [decisionNote, setDecisionNote] = useState('');
+  const [decisionError, setDecisionError] = useState('');
+  const [deciding, setDeciding] = useState(false);
+
+  function openDecision(m: Movement, action: 'approve' | 'reject') {
+    setDecision({ m, action });
+    setDecisionKey('');
+    setDecisionNote('');
+    setDecisionError('');
+  }
+
+  async function submitDecision() {
+    if (!decision) return;
+    if (!decisionKey.trim()) { setDecisionError('Ingresa la clave'); return; }
+    setDeciding(true);
+    setDecisionError('');
+    try {
+      const res = await fetch(`/api/proxy/bancos/movements/${decision.m.id}/${decision.action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dynamicKey: decisionKey.trim(), note: decisionNote.trim() || undefined }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Error'); }
+      setMessage({ type: 'success', text: decision.action === 'approve' ? 'Traspaso aceptado' : 'Traspaso rechazado: el dinero vuelve a la cuenta origen' });
+      setDecision(null);
+      load();
+    } catch (err: any) {
+      setDecisionError(err.message);
+    } finally { setDeciding(false); }
+  }
+
+  // Traspasos pendientes/rechazados no estan en el saldo: no entran a la conciliacion
+  const inBalance = (m: Movement) => m.approvalStatus !== 'PENDING' && m.approvalStatus !== 'REJECTED';
   const signed = (m: Movement) => (m.direction === 'IN' ? m.amount : -m.amount);
   const reconciledLive = data
     ? reconcileMode
-      ? Math.round((data.balance - data.movements.filter((m) => !selected.has(m.id)).reduce((s, m) => s + signed(m), 0)) * 100) / 100
+      ? Math.round((data.balance - data.movements.filter((m) => inBalance(m) && !selected.has(m.id)).reduce((s, m) => s + signed(m), 0)) * 100) / 100
       : data.reconciledBalance
     : 0;
   const partidas = data ? Math.round((data.balance - reconciledLive) * 100) / 100 : 0;
@@ -338,16 +381,43 @@ export default function BankAccountDetailPage() {
             </thead>
             <tbody>
               {data?.movements.map((m) => (
-                <tr key={m.id} className="border-b border-slate-700/30 hover:bg-slate-800/30">
+                <tr key={m.id} className={`border-b border-slate-700/30 hover:bg-slate-800/30 ${m.approvalStatus === 'PENDING' ? 'bg-amber-500/5' : ''} ${m.approvalStatus === 'REJECTED' ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2.5 text-slate-300 font-mono whitespace-nowrap">{m.date.slice(0, 10)}</td>
                   <td className="px-3 py-2.5 text-slate-300">{m.type}</td>
                   <td className="px-3 py-2.5 text-slate-400 font-mono">{m.reference || '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-400">{m.description || '—'}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-emerald-400">{m.direction === 'IN' ? fmt(m.amount) : ''}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-red-400">{m.direction === 'OUT' ? fmt(m.amount) : ''}</td>
+                  <td className="px-3 py-2.5 text-slate-400">
+                    {m.description || '—'}
+                    {m.approvalStatus === 'PENDING' && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Pendiente de aceptar · no suma al saldo</span>
+                        {m.direction === 'IN' && (
+                          <>
+                            <button onClick={() => openDecision(m, 'approve')} className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 inline-flex items-center gap-1">
+                              <ShieldCheck size={12} /> Aceptar
+                            </button>
+                            <button onClick={() => openDecision(m, 'reject')} className="text-xs px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 inline-flex items-center gap-1">
+                              <Ban size={12} /> Rechazar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {(m.approvalStatus === 'APPROVED' || m.approvalStatus === 'REJECTED') && (
+                      <div className={`mt-1 text-[11px] ${m.approvalStatus === 'APPROVED' ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
+                        {m.approvalStatus === 'APPROVED' ? 'Aceptado' : 'Rechazado'} por {m.approvedBy?.name || '—'}
+                        {m.approvalKeyName && <> · clave “{m.approvalKeyName}”</>}
+                        {m.approvedAt && <> · {new Date(m.approvedAt).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}</>}
+                        {m.approvalNote && <> · {m.approvalNote}</>}
+                      </div>
+                    )}
+                  </td>
+                  <td className={`px-3 py-2.5 text-right font-mono text-emerald-400 ${inBalance(m) ? '' : 'line-through'}`}>{m.direction === 'IN' ? fmt(m.amount) : ''}</td>
+                  <td className={`px-3 py-2.5 text-right font-mono text-red-400 ${inBalance(m) ? '' : 'line-through'}`}>{m.direction === 'OUT' ? fmt(m.amount) : ''}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-white">{fmt(m.runningBalance)}</td>
                   <td className="px-3 py-2.5 text-center">
-                    {reconcileMode ? (
+                    {!inBalance(m) ? (
+                      <span className="text-slate-600">—</span>
+                    ) : reconcileMode ? (
                       <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleRow(m.id)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
                     ) : togglingId === m.id ? (
                       <Loader2 size={14} className="animate-spin text-slate-400 inline" />
@@ -362,7 +432,7 @@ export default function BankAccountDetailPage() {
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    {m.sourceType === 'MANUAL' && !m.reconciled && (
+                    {m.sourceType === 'MANUAL' && !m.reconciled && m.approvalStatus === 'NONE' && (
                       <button onClick={() => deleteMovement(m.id)} className="text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
                     )}
                   </td>
@@ -436,8 +506,13 @@ export default function BankAccountDetailPage() {
               <label className="col-span-2 text-sm"><span className="text-slate-400">Cuenta destino</span>
                 <select value={transfer.toAccountId} onChange={(e) => setTransfer({ ...transfer, toAccountId: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
                   <option value="">— elegir —</option>
-                  {accounts.filter((a) => a.id !== id).map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                  {accounts.filter((a) => a.id !== id).map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency}){a.requiresTransferApproval ? ' — requiere aceptación' : ''}</option>)}
                 </select>
+                {accounts.find((a) => a.id === transfer.toAccountId)?.requiresTransferApproval && (
+                  <span className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-400">
+                    <ShieldCheck size={13} /> Esta cuenta requiere aceptar los traspasos: el ingreso quedará pendiente hasta que lo acepten.
+                  </span>
+                )}
               </label>
               <label className="text-sm"><span className="text-slate-400">Sale (de esta)</span>
                 <input type="text" inputMode="decimal" placeholder="0,00" value={transfer.amountFrom} onChange={(e) => { const v = sanitizeNum(e.target.value); setTransfer({ ...transfer, amountFrom: v, amountTo: transfer.amountTo || v }); }} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono" />
@@ -459,6 +534,47 @@ export default function BankAccountDetailPage() {
               <button onClick={() => setTransferOpen(false)} className="btn-secondary">Cancelar</button>
               <button onClick={submitTransfer} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} Traspasar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal aceptar / rechazar traspaso */}
+      {decision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">{decision.action === 'approve' ? 'Aceptar traspaso' : 'Rechazar traspaso'}</h2>
+              <button onClick={() => setDecision(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <div className="mb-4 rounded-lg bg-slate-800/60 border border-slate-700/50 p-3 text-sm">
+              <p className="text-slate-400">{decision.m.description || 'Traspaso'}</p>
+              <p className="text-xl font-mono font-bold text-emerald-400 mt-1">{sym}{fmt(decision.m.amount)}</p>
+              {decision.action === 'reject' && (
+                <p className="text-xs text-red-400/90 mt-2">Se anula el traspaso completo y el dinero vuelve a la cuenta origen.</p>
+              )}
+            </div>
+            {decisionError && <div className="mb-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{decisionError}</div>}
+            <label className="block text-sm">
+              <span className="text-slate-400 flex items-center gap-1.5"><KeyRound size={13} /> Clave dinámica</span>
+              <input type="password" autoFocus autoComplete="off" value={decisionKey} onChange={(e) => setDecisionKey(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitDecision(); }}
+                className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
+            </label>
+            {decision.action === 'reject' && (
+              <label className="block text-sm mt-3">
+                <span className="text-slate-400">Motivo (opcional)</span>
+                <input value={decisionNote} onChange={(e) => setDecisionNote(e.target.value)}
+                  className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
+              </label>
+            )}
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setDecision(null)} className="btn-secondary">Cancelar</button>
+              <button onClick={submitDecision} disabled={deciding}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${decision.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}`}>
+                {deciding ? <Loader2 className="animate-spin" size={16} /> : decision.action === 'approve' ? <ShieldCheck size={16} /> : <Ban size={16} />}
+                {decision.action === 'approve' ? 'Aceptar' : 'Rechazar'}
               </button>
             </div>
           </div>

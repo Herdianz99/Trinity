@@ -191,6 +191,7 @@ export class DashboardService {
       profit: {
         totalUsd: profit.profitUsd,
         marginPct: profit.marginPct,
+        withNoteIvaUsd: profit.profitWithNoteIvaUsd,
         vsLastPeriod: pctChange(profit.profitUsd, prevProfit.profitUsd),
       },
       groupSales: {
@@ -940,20 +941,23 @@ export class DashboardService {
       }),
     ]);
 
-    let salesProfit = 0, salesRevenue = 0;
+    // La cifra principal descuenta SIEMPRE el IVA; el IVA de las notas de entrega (series no
+    // fiscales) se acumula aparte (noteIva) para la cifra secundaria "con IVA de notas".
+    let salesProfit = 0, salesRevenue = 0, salesNoteIva = 0;
     for (const inv of invoices) {
       const fiscal = !!inv.serie?.isFiscal;
       for (const it of inv.items) {
-        const revenue = fiscal ? it.totalUsd - it.ivaAmount : it.totalUsd;
+        const revenue = it.totalUsd - it.ivaAmount;
         salesRevenue += revenue;
         salesProfit += revenue - (it.costUsd || 0) * it.quantity;
+        if (!fiscal) salesNoteIva += it.ivaAmount;
       }
     }
 
     // Resolver el costo de lo devuelto. 1ro el costo historico de la factura original; lo que
     // no se halle ahi se junta para un unico fallback al costo actual del producto (con brecha).
     const bregaPct = config?.bregaGlobalPct || 0;
-    const pending: { productId: string | null; quantity: number; revenue: number; histCost?: number }[] = [];
+    const pending: { productId: string | null; quantity: number; revenue: number; noteIva: number; histCost?: number }[] = [];
     const missing = new Set<string>();
     for (const note of notes) {
       const fiscal = !!note.serie?.isFiscal;
@@ -962,10 +966,11 @@ export class DashboardService {
         if (ii.productId) costMap.set(ii.productId, ii.costUsd || 0);
       }
       for (const it of note.items) {
-        const revenue = fiscal ? it.totalUsd - it.ivaAmount : it.totalUsd;
+        const revenue = it.totalUsd - it.ivaAmount;
+        const noteIva = fiscal ? 0 : it.ivaAmount;
         const histCost = it.productId ? costMap.get(it.productId) : undefined;
         if (histCost === undefined && it.productId) missing.add(it.productId);
-        pending.push({ productId: it.productId, quantity: it.quantity, revenue, histCost });
+        pending.push({ productId: it.productId, quantity: it.quantity, revenue, noteIva, histCost });
       }
     }
     const fallbackCost = new Map<string, number>();
@@ -985,20 +990,24 @@ export class DashboardService {
       }
     }
 
-    let returnsProfit = 0, returnsRevenue = 0;
+    let returnsProfit = 0, returnsRevenue = 0, returnsNoteIva = 0;
     for (const r of pending) {
       const unitCost = r.histCost !== undefined
         ? r.histCost
         : (r.productId ? fallbackCost.get(r.productId) || 0 : 0);
       returnsRevenue += r.revenue;
       returnsProfit += r.revenue - unitCost * r.quantity;
+      returnsNoteIva += r.noteIva;
     }
 
     const netProfit = salesProfit - returnsProfit;
     const netRevenue = salesRevenue - returnsRevenue;
+    const netNoteIva = salesNoteIva - returnsNoteIva;
     return {
       profitUsd: round2(netProfit),
       marginPct: netRevenue > 0 ? round2((netProfit / netRevenue) * 100) : 0,
+      // Ganancia contando el IVA de las notas de entrega (criterio anterior del KPI)
+      profitWithNoteIvaUsd: round2(netProfit + netNoteIva),
     };
   }
 

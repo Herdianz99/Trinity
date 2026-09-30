@@ -66,6 +66,7 @@ const SALES_RETURN_REASONS: { value: string; label: string }[] = [
   { value: 'FALTANTE_ALMACEN', label: 'Faltante en almacén' },
   { value: 'PRODUCTO_DEFECTUOSO', label: 'Producto defectuoso' },
   { value: 'CAMBIO_NOTA_A_FISCAL', label: 'Cambio de nota a fiscal' },
+  { value: 'ERROR_DESPACHO', label: 'Error de despacho' },
 ];
 
 export default function NewCreditDebitNotePage() {

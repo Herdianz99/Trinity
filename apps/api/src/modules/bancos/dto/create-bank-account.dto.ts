@@ -11,4 +11,5 @@ export class CreateBankAccountDto {
   @IsOptional() @IsString() openingDate?: string; // 'YYYY-MM-DD'
   @IsOptional() @IsNumber() sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsBoolean() requiresTransferApproval?: boolean; // ingresos por traspaso requieren aceptacion
 }

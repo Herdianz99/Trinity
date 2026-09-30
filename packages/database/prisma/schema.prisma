@@ -71,6 +71,7 @@ enum SalesReturnReason {
   FALTANTE_ALMACEN
   PRODUCTO_DEFECTUOSO
   CAMBIO_NOTA_A_FISCAL
+  ERROR_DESPACHO
 }
 
 enum TransferStatus {
@@ -246,6 +247,7 @@ enum DynamicKeyPerm {
   DELETE_CUSTOMER_ADVANCE
   DELETE_SUPPLIER_ADVANCE
   TOGGLE_PRODUCT_SALE
+  APPROVE_BANK_TRANSFER
 }
 
 enum CashMovementType {
@@ -353,6 +355,7 @@ model User {
   sessionsClosed      CashSession[]       @relation("SessionClosedBy")
   bankMovementsCreated    BankMovement[]  @relation("BankMovementCreator")
   bankMovementsReconciled BankMovement[]  @relation("BankMovementReconciler")
+  bankMovementsApproved   BankMovement[]  @relation("BankMovementApprover")
   seller              Seller?
   invoicesAsCashier   Invoice[]           @relation("InvoiceCashier")
   expenses            Expense[]
@@ -2871,6 +2874,7 @@ model BankAccount {
   openingBalanceUsd Float           @default(0)             // equivalente USD del saldo inicial
   openingDate       DateTime?                               // fecha de corte del saldo inicial
   isActive          Boolean         @default(true)
+  requiresTransferApproval Boolean @default(false)          // los ingresos por TRASPASO a esta cuenta quedan PENDIENTES hasta aceptarlos con clave dinamica
   sortOrder         Int             @default(0)
   movements         BankMovement[]
   paymentMethods    PaymentMethod[]
@@ -2894,6 +2898,14 @@ model BankMovement {
   sourceType      String       @default("MANUAL")          // SALE_PAYMENT|RECEIPT_COLLECTION|RECEIPT_PAYMENT|EXPENSE|ADVANCE|MANUAL
   sourceId        String?                                  // id del documento origen (null si MANUAL)
   transferGroupId String?                                  // vincula las 2 patas de un TRASPASO
+  // Aprobacion de traspasos hacia cuentas con requiresTransferApproval. NONE = no aplica.
+  // PENDING (solo la pata IN) y REJECTED (ambas patas) NO cuentan en el saldo.
+  approvalStatus  String       @default("NONE")            // NONE | PENDING | APPROVED | REJECTED
+  approvedAt      DateTime?                                // fecha de aceptacion/rechazo
+  approvedById    String?
+  approvedBy      User?        @relation("BankMovementApprover", fields: [approvedById], references: [id])
+  approvalKeyName String?                                  // nombre de la clave dinamica usada
+  approvalNote    String?                                  // motivo del rechazo
   reconciled      Boolean      @default(false)
   reconciledAt    DateTime?
   reconciledById  String?

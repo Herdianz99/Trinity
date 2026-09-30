@@ -18,6 +18,7 @@ export interface BankMovementInput {
   sourceType: string; // SALE_PAYMENT|RECEIPT_COLLECTION|RECEIPT_PAYMENT|EXPENSE|ADVANCE|MANUAL
   sourceId?: string | null;
   transferGroupId?: string | null;
+  approvalStatus?: string; // NONE (default) | PENDING (traspaso por aceptar)
   createdById: string;
 }
 
@@ -53,6 +54,7 @@ export async function writeBankMovement(tx: Prisma.TransactionClient, e: BankMov
       sourceType: e.sourceType,
       sourceId: e.sourceId ?? null,
       transferGroupId: e.transferGroupId ?? null,
+      approvalStatus: e.approvalStatus ?? 'NONE',
       createdById: e.createdById,
     },
   });

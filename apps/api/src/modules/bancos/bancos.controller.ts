@@ -6,7 +6,7 @@ import { ModuleGuard } from '../../common/guards/module.guard';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { BancosService } from './bancos.service';
 import { CreateBankAccountDto } from './dto/create-bank-account.dto';
-import { CreateBankMovementDto, CreateTransferDto } from './dto/create-bank-movement.dto';
+import { CreateBankMovementDto, CreateTransferDto, ApproveTransferDto } from './dto/create-bank-movement.dto';
 import { QueryMovementsDto } from './dto/query-movements.dto';
 import { ReconcileDto } from './dto/reconcile.dto';
 
@@ -41,6 +41,13 @@ export class BancosController {
   }
   @Post('transfers') createTransfer(@Body() dto: CreateTransferDto, @CurrentUser() user: { id: string }) {
     return this.service.createTransfer(dto, user.id);
+  }
+  // Aceptar/rechazar el ingreso de un traspaso (cuentas con requiresTransferApproval), con clave dinamica
+  @Post('movements/:id/approve') approveTransfer(@Param('id') id: string, @Body() dto: ApproveTransferDto, @CurrentUser() user: { id: string }) {
+    return this.service.decideTransfer(id, 'APPROVED', dto.dynamicKey, dto.note, user.id);
+  }
+  @Post('movements/:id/reject') rejectTransfer(@Param('id') id: string, @Body() dto: ApproveTransferDto, @CurrentUser() user: { id: string }) {
+    return this.service.decideTransfer(id, 'REJECTED', dto.dynamicKey, dto.note, user.id);
   }
   @Delete('movements/:id') deleteMovement(@Param('id') id: string) {
     return this.service.deleteMovement(id);

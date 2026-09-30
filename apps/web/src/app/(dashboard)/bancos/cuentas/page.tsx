@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Landmark, Plus, Loader2, X, ExternalLink, Pencil } from 'lucide-react';
+import { Landmark, Plus, Loader2, X, ExternalLink, Pencil, ShieldCheck } from 'lucide-react';
 
 interface Account {
   id: string;
@@ -13,6 +13,7 @@ interface Account {
   openingBalance: number;
   openingDate: string | null;
   isActive: boolean;
+  requiresTransferApproval: boolean;
   paymentMethods: { id: string; name: string }[];
 }
 
@@ -37,6 +38,7 @@ const emptyForm = {
   exchangeRate: '',
   openingDate: '',
   isActive: true,
+  requiresTransferApproval: false,
 };
 
 export default function CuentasBancariasPage() {
@@ -67,6 +69,7 @@ export default function CuentasBancariasPage() {
       exchangeRate: '',
       openingDate: '',
       isActive: a.isActive,
+      requiresTransferApproval: a.requiresTransferApproval,
     });
     setError('');
     setModalOpen(true);
@@ -106,6 +109,7 @@ export default function CuentasBancariasPage() {
             accountType: form.accountType,
             currency: form.currency,
             isActive: form.isActive,
+            requiresTransferApproval: form.requiresTransferApproval,
           }
         : {
             name: form.name.trim(),
@@ -116,6 +120,7 @@ export default function CuentasBancariasPage() {
             openingBalance: parseNum(form.openingBalance),
             exchangeRate: parseNum(form.exchangeRate),
             openingDate: form.openingDate || undefined,
+            requiresTransferApproval: form.requiresTransferApproval,
           };
       const res = await fetch(
         editId ? `/api/proxy/bancos/accounts/${editId}` : '/api/proxy/bancos/accounts',
@@ -184,7 +189,14 @@ export default function CuentasBancariasPage() {
                       {a.name} <ExternalLink size={12} />
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">{a.bankName}</td>
+                  <td className="px-4 py-3 text-slate-300">
+                    <span className="inline-flex items-center gap-1.5">
+                      {a.bankName}
+                      {a.requiresTransferApproval && (
+                        <span title="Requiere aceptar los traspasos entrantes"><ShieldCheck size={14} className="text-amber-400" /></span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-400 font-mono">{a.accountNumber || '—'}</td>
                   <td className="px-4 py-3 text-center text-slate-400">{a.accountType}</td>
                   <td className="px-4 py-3 text-center text-slate-300">{a.currency}</td>
@@ -296,6 +308,14 @@ export default function CuentasBancariasPage() {
                   <span className="text-slate-300">Cuenta activa</span>
                 </label>
               )}
+              <label className="col-span-2 text-sm flex items-start gap-2 mt-1">
+                <input type="checkbox" checked={form.requiresTransferApproval} onChange={(e) => setForm({ ...form, requiresTransferApproval: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500" />
+                <span>
+                  <span className="text-slate-300">Requiere aceptar los traspasos entrantes</span>
+                  <span className="block text-xs text-slate-500">El dinero que llegue por traspaso queda pendiente (no suma al saldo) hasta que alguien lo acepte con una clave dinámica.</span>
+                </span>
+              </label>
             </div>
             {editId && (
               <p className="mt-3 text-xs text-slate-500">El saldo inicial no se edita aquí para no descuadrar el libro banco.</p>
