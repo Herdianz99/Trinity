@@ -60,26 +60,26 @@ export default function BancosPage() {
             <p className="text-slate-400 text-sm">Saldos, libro banco y conciliación por cuenta.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} className="btn-secondary flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+          <button onClick={load} className="btn-secondary flex items-center justify-center gap-2">
             <RefreshCw size={16} /> Actualizar
           </button>
-          <Link href="/bancos/cuentas" className="btn-primary flex items-center gap-2">
+          <Link href="/bancos/cuentas" className="btn-primary flex items-center justify-center gap-2">
             <Plus size={16} /> Cuentas
           </Link>
         </div>
       </div>
 
       {data.methodsSinCuenta > 0 && (
-        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm flex items-center gap-2">
-          <AlertTriangle size={16} /> Hay {data.methodsSinCuenta} método(s) electrónico(s) sin cuenta bancaria asignada — sus cobros/pagos no
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm flex items-start sm:items-center gap-2">
+          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5 sm:mt-0" /> Hay {data.methodsSinCuenta} método(s) electrónico(s) sin cuenta bancaria asignada — sus cobros/pagos no
           entrarán al libro banco.
         </div>
       )}
 
       {data.accounts.some((a) => a.pendingApprovalCount > 0) && (
-        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-2">
-          <ShieldCheck size={16} /> Hay {data.accounts.reduce((s, a) => s + a.pendingApprovalCount, 0)} traspaso(s) esperando ser aceptados.
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-start sm:items-center gap-2">
+          <ShieldCheck size={16} className="flex-shrink-0 mt-0.5 sm:mt-0" /> Hay {data.accounts.reduce((s, a) => s + a.pendingApprovalCount, 0)} traspaso(s) esperando ser aceptados.
           Entra a la cuenta para aceptarlos o rechazarlos.
         </div>
       )}
@@ -87,11 +87,11 @@ export default function BancosPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
           <p className="text-xs text-slate-500 uppercase">Total en Bs</p>
-          <p className="text-2xl font-bold text-sky-400 font-mono">Bs {fmt(data.totalBs)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-sky-400 font-mono break-all">Bs {fmt(data.totalBs)}</p>
         </div>
         <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
           <p className="text-xs text-slate-500 uppercase">Total en divisas</p>
-          <p className="text-2xl font-bold text-emerald-400 font-mono">$ {fmt(data.totalUsd)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-emerald-400 font-mono break-all">$ {fmt(data.totalUsd)}</p>
         </div>
       </div>
 
@@ -102,21 +102,21 @@ export default function BancosPage() {
             href={`/bancos/${a.id}`}
             className="rounded-xl p-4 bg-slate-800/50 border border-slate-700/40 hover:bg-slate-800/70 transition-colors"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-white font-medium">{a.name}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-300">{a.currency}</span>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-white font-medium min-w-0 truncate">{a.name}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-300 flex-shrink-0">{a.currency}</span>
             </div>
             <p className="text-xs text-slate-500">
               {a.bankName} · {a.accountType}
             </p>
-            <p className="text-xl font-mono font-bold text-white mt-2">
+            <p className="text-xl font-mono font-bold text-white mt-2 break-all">
               {a.currency === 'USD' ? '$ ' : 'Bs '}
               {fmt(a.balance)}
             </p>
             {a.pendingCount > 0 && <p className="text-[11px] text-amber-400 mt-1">{a.pendingCount} sin conciliar</p>}
             {a.pendingApprovalCount > 0 && (
-              <p className="text-[11px] text-amber-300 mt-1 flex items-center gap-1">
-                <ShieldCheck size={12} /> {a.pendingApprovalCount} traspaso(s) por aceptar · {a.currency === 'USD' ? '$ ' : 'Bs '}{fmt(a.pendingApprovalAmount)}
+              <p className="text-[11px] text-amber-300 mt-1 flex items-start gap-1">
+                <ShieldCheck size={12} className="flex-shrink-0 mt-0.5" /> {a.pendingApprovalCount} traspaso(s) por aceptar · {a.currency === 'USD' ? '$ ' : 'Bs '}{fmt(a.pendingApprovalAmount)}
               </p>
             )}
           </Link>

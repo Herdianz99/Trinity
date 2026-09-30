@@ -76,12 +76,12 @@ export default function EmisorNotificacionesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-white">Notificaciones</h1>
-        <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Nueva notificación</button>
+        <button onClick={() => setOpen(true)} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto"><Plus size={16} /> Nueva notificación</button>
       </div>
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm hidden md:table">
           <thead>
             <tr className="border-b border-slate-700/50 bg-slate-800/30 text-slate-400">
               <th className="text-left px-4 py-3">Título</th>
@@ -116,11 +116,35 @@ export default function EmisorNotificacionesPage() {
             {sent.length === 0 && <tr><td colSpan={6} className="text-center py-12 text-slate-500">No has enviado notificaciones.</td></tr>}
           </tbody>
         </table>
+
+        {/* Móvil: tarjetas clicables */}
+        <div className="md:hidden divide-y divide-slate-700/30">
+          {sent.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => openDetail(n.id)}
+              className="w-full text-left px-4 py-3 active:bg-slate-800/60"
+            >
+              <div className="flex items-start gap-2">
+                <MessageSquare size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-slate-200 font-medium flex-1 min-w-0 break-words">{n.title}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-300 flex-shrink-0">{n.type}</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 pl-6">{fmtDate(n.createdAt)}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 pl-6 text-xs">
+                <span className="text-emerald-400">Enterados {n.recibido}/{n.total}</span>
+                <span className="text-red-400">Desacuerdo {n.rechazado}</span>
+                <span className="text-slate-300">Pendientes {n.pendiente}</span>
+              </div>
+            </button>
+          ))}
+          {sent.length === 0 && <p className="text-center py-12 text-slate-500 text-sm">No has enviado notificaciones.</p>}
+        </div>
       </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">Nueva notificación</h2>
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -162,9 +186,9 @@ export default function EmisorNotificacionesPage() {
                 </select>
               )}
             </div>
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={submit} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <button onClick={submit} disabled={saving} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Enviar
               </button>
             </div>
@@ -175,20 +199,20 @@ export default function EmisorNotificacionesPage() {
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-700/50">
-              <h2 className="text-lg font-bold text-white">{detail?.title ?? 'Detalle'}</h2>
-              <button onClick={() => setDetailOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            <div className="flex items-start justify-between gap-3 p-4 sm:p-6 pb-4 border-b border-slate-700/50">
+              <h2 className="text-lg font-bold text-white min-w-0 break-words">{detail?.title ?? 'Detalle'}</h2>
+              <button onClick={() => setDetailOpen(false)} className="text-slate-400 hover:text-white flex-shrink-0"><X size={20} /></button>
             </div>
 
             {detailLoading || !detail ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-green-500" size={28} /></div>
             ) : (
-              <div className="overflow-y-auto p-6 pt-4 space-y-4">
+              <div className="overflow-y-auto p-4 sm:p-6 pt-4 space-y-4">
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">
                     {detail.type} · {detail.createdBy?.name} · {fmtDate(detail.createdAt)}
                   </div>
-                  <p className="text-sm text-slate-300 whitespace-pre-wrap">{detail.body}</p>
+                  <p className="text-sm text-slate-300 whitespace-pre-wrap break-words">{detail.body}</p>
                 </div>
 
                 <div>
@@ -205,9 +229,9 @@ export default function EmisorNotificacionesPage() {
                           : { icon: <Clock size={14} />, text: 'Pendiente', cls: 'text-slate-400' };
                       return (
                         <div key={r.id} className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-slate-100">{name}</span>
-                            <span className={`inline-flex items-center gap-1.5 text-xs ${badge.cls}`}>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
+                            <span className="text-sm font-medium text-slate-100 break-words">{name}</span>
+                            <span className={`inline-flex flex-wrap items-center gap-1.5 text-xs ${badge.cls}`}>
                               {badge.icon} {badge.text}
                               {r.ackAt && <span className="text-slate-500">· {fmtDate(r.ackAt)}</span>}
                             </span>

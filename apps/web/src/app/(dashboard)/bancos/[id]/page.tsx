@@ -282,27 +282,76 @@ export default function BankAccountDetailPage() {
     : 0;
   const partidas = data ? Math.round((data.balance - reconciledLive) * 100) / 100 : 0;
 
+  // Estado de aprobacion del traspaso (compartido entre tabla desktop y tarjetas movil)
+  const renderApproval = (m: Movement) => (
+    <>
+      {m.approvalStatus === 'PENDING' && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Pendiente de aceptar · no suma al saldo</span>
+          {m.direction === 'IN' && (
+            <>
+              <button onClick={() => openDecision(m, 'approve')} className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 inline-flex items-center gap-1">
+                <ShieldCheck size={12} /> Aceptar
+              </button>
+              <button onClick={() => openDecision(m, 'reject')} className="text-xs px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 inline-flex items-center gap-1">
+                <Ban size={12} /> Rechazar
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {(m.approvalStatus === 'APPROVED' || m.approvalStatus === 'REJECTED') && (
+        <div className={`mt-1 text-[11px] ${m.approvalStatus === 'APPROVED' ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
+          {m.approvalStatus === 'APPROVED' ? 'Aceptado' : 'Rechazado'} por {m.approvedBy?.name || '—'}
+          {m.approvalKeyName && <> · clave “{m.approvalKeyName}”</>}
+          {m.approvedAt && <> · {new Date(m.approvedAt).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}</>}
+          {m.approvalNote && <> · {m.approvalNote}</>}
+        </div>
+      )}
+    </>
+  );
+
+  // Control de conciliacion de la fila (compartido entre tabla desktop y tarjetas movil)
+  const renderReconcile = (m: Movement) =>
+    !inBalance(m) ? (
+      <span className="text-slate-600">—</span>
+    ) : reconcileMode ? (
+      <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleRow(m.id)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
+    ) : togglingId === m.id ? (
+      <Loader2 size={14} className="animate-spin text-slate-400 inline" />
+    ) : (
+      <input
+        type="checkbox"
+        checked={m.reconciled}
+        onChange={() => toggleOne(m)}
+        title={m.reconciled ? 'Conciliado — clic para desmarcar' : 'Marcar como conciliado'}
+        className="w-4 h-4 accent-emerald-500 cursor-pointer"
+      />
+    );
+
+  const canDelete = (m: Movement) => m.sourceType === 'MANUAL' && !m.reconciled && m.approvalStatus === 'NONE';
+
   return (
     <div>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/bancos" className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/bancos" className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white flex-shrink-0">
             <ArrowLeft size={20} />
           </Link>
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0 hidden sm:block">
             <Landmark className="text-emerald-400" size={22} />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">{acc?.name || 'Cuenta'}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-white break-words">{acc?.name || 'Cuenta'}</h1>
             <p className="text-slate-400 text-sm">{acc ? `${acc.bankName} · ${acc.accountType} · ${acc.currency}` : ''}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setReconcileMode((v) => !v)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border ${reconcileMode ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'btn-secondary'}`}>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+          <button onClick={() => setReconcileMode((v) => !v)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border ${reconcileMode ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'btn-secondary'}`}>
             <CheckCircle size={16} /> {reconcileMode ? 'Salir de conciliar' : 'Conciliar'}
           </button>
-          <button onClick={() => setTransferOpen(true)} className="btn-secondary flex items-center gap-2"><ArrowLeftRight size={16} /> Traspaso</button>
-          <button onClick={() => setManualOpen(true)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Movimiento manual</button>
+          <button onClick={() => setTransferOpen(true)} className="btn-secondary flex items-center justify-center gap-2"><ArrowLeftRight size={16} /> Traspaso</button>
+          <button onClick={() => setManualOpen(true)} className="btn-primary flex items-center justify-center gap-2 col-span-2"><Plus size={16} /> Movimiento manual</button>
         </div>
       </div>
 
@@ -314,33 +363,33 @@ export default function BankAccountDetailPage() {
 
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
+          <div className="rounded-xl p-4 sm:p-5 bg-slate-800/50 border border-slate-700/40">
             <p className="text-xs text-slate-500 uppercase">Saldo según libro</p>
-            <p className="text-2xl font-bold text-white font-mono">{sym}{fmt(data.balance)}</p>
+            <p className="text-xl sm:text-2xl font-bold text-white font-mono break-all">{sym}{fmt(data.balance)}</p>
           </div>
-          <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
+          <div className="rounded-xl p-4 sm:p-5 bg-slate-800/50 border border-slate-700/40">
             <p className="text-xs text-slate-500 uppercase">Saldo conciliado {reconcileMode && <span className="text-emerald-400">(en vivo)</span>}</p>
-            <p className="text-2xl font-bold text-emerald-400 font-mono">{sym}{fmt(reconciledLive)}</p>
+            <p className="text-xl sm:text-2xl font-bold text-emerald-400 font-mono break-all">{sym}{fmt(reconciledLive)}</p>
           </div>
-          <div className="rounded-xl p-5 bg-slate-800/50 border border-slate-700/40">
+          <div className="rounded-xl p-4 sm:p-5 bg-slate-800/50 border border-slate-700/40">
             <p className="text-xs text-slate-500 uppercase">Partidas conciliatorias</p>
-            <p className={`text-2xl font-bold font-mono ${Math.abs(partidas) < 0.01 ? 'text-slate-400' : 'text-amber-400'}`}>{sym}{fmt(partidas)}</p>
+            <p className={`text-xl sm:text-2xl font-bold font-mono break-all ${Math.abs(partidas) < 0.01 ? 'text-slate-400' : 'text-amber-400'}`}>{sym}{fmt(partidas)}</p>
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-3 mb-4">
         <label className="text-sm">
           <span className="text-slate-400 block text-xs">Desde</span>
-          <input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="mt-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
+          <input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="mt-1 w-full sm:w-auto bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
         </label>
         <label className="text-sm">
           <span className="text-slate-400 block text-xs">Hasta</span>
-          <input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="mt-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
+          <input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="mt-1 w-full sm:w-auto bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
         </label>
-        <label className="text-sm">
+        <label className="text-sm col-span-2">
           <span className="text-slate-400 block text-xs">Estado</span>
-          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="mt-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200">
+          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="mt-1 w-full sm:w-auto bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200">
             <option value="all">Todos</option>
             <option value="pending">Sin conciliar</option>
             <option value="reconciled">Conciliados</option>
@@ -349,13 +398,13 @@ export default function BankAccountDetailPage() {
       </div>
 
       {reconcileMode && (
-        <div className="mb-4 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex flex-wrap items-center gap-3">
+        <div className="mb-4 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
           <span className="text-sm text-emerald-300">Marca los movimientos que ya aparecen en el estado de cuenta del banco.</span>
-          <label className="text-sm flex items-center gap-2 ml-auto">
-            <span className="text-slate-400">Fecha del estado:</span>
-            <input type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
+          <label className="text-sm flex items-center gap-2 sm:ml-auto">
+            <span className="text-slate-400 whitespace-nowrap">Fecha del estado:</span>
+            <input type="date" value={statementDate} onChange={(e) => setStatementDate(e.target.value)} className="flex-1 sm:flex-none min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200" />
           </label>
-          <button onClick={saveReconcile} disabled={reconSaving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+          <button onClick={saveReconcile} disabled={reconSaving} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
             {reconSaving ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle size={16} />} Guardar conciliación
           </button>
         </div>
@@ -365,7 +414,7 @@ export default function BankAccountDetailPage() {
         <div className="py-20 text-center text-slate-400">Cargando…</div>
       ) : (
         <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm hidden md:table">
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-800/30 text-slate-400">
                 <th className="text-left px-3 py-3 font-medium">Fecha</th>
@@ -387,52 +436,14 @@ export default function BankAccountDetailPage() {
                   <td className="px-3 py-2.5 text-slate-400 font-mono">{m.reference || '—'}</td>
                   <td className="px-3 py-2.5 text-slate-400">
                     {m.description || '—'}
-                    {m.approvalStatus === 'PENDING' && (
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Pendiente de aceptar · no suma al saldo</span>
-                        {m.direction === 'IN' && (
-                          <>
-                            <button onClick={() => openDecision(m, 'approve')} className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 inline-flex items-center gap-1">
-                              <ShieldCheck size={12} /> Aceptar
-                            </button>
-                            <button onClick={() => openDecision(m, 'reject')} className="text-xs px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 inline-flex items-center gap-1">
-                              <Ban size={12} /> Rechazar
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    {(m.approvalStatus === 'APPROVED' || m.approvalStatus === 'REJECTED') && (
-                      <div className={`mt-1 text-[11px] ${m.approvalStatus === 'APPROVED' ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
-                        {m.approvalStatus === 'APPROVED' ? 'Aceptado' : 'Rechazado'} por {m.approvedBy?.name || '—'}
-                        {m.approvalKeyName && <> · clave “{m.approvalKeyName}”</>}
-                        {m.approvedAt && <> · {new Date(m.approvedAt).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}</>}
-                        {m.approvalNote && <> · {m.approvalNote}</>}
-                      </div>
-                    )}
+                    {renderApproval(m)}
                   </td>
                   <td className={`px-3 py-2.5 text-right font-mono text-emerald-400 ${inBalance(m) ? '' : 'line-through'}`}>{m.direction === 'IN' ? fmt(m.amount) : ''}</td>
                   <td className={`px-3 py-2.5 text-right font-mono text-red-400 ${inBalance(m) ? '' : 'line-through'}`}>{m.direction === 'OUT' ? fmt(m.amount) : ''}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-white">{fmt(m.runningBalance)}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    {!inBalance(m) ? (
-                      <span className="text-slate-600">—</span>
-                    ) : reconcileMode ? (
-                      <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleRow(m.id)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
-                    ) : togglingId === m.id ? (
-                      <Loader2 size={14} className="animate-spin text-slate-400 inline" />
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={m.reconciled}
-                        onChange={() => toggleOne(m)}
-                        title={m.reconciled ? 'Conciliado — clic para desmarcar' : 'Marcar como conciliado'}
-                        className="w-4 h-4 accent-emerald-500 cursor-pointer"
-                      />
-                    )}
-                  </td>
+                  <td className="px-3 py-2.5 text-center">{renderReconcile(m)}</td>
                   <td className="px-3 py-2.5 text-right">
-                    {m.sourceType === 'MANUAL' && !m.reconciled && m.approvalStatus === 'NONE' && (
+                    {canDelete(m) && (
                       <button onClick={() => deleteMovement(m.id)} className="text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
                     )}
                   </td>
@@ -443,18 +454,50 @@ export default function BankAccountDetailPage() {
               )}
             </tbody>
           </table>
+
+          {/* Móvil: tarjetas */}
+          <div className="md:hidden divide-y divide-slate-700/30">
+            {data?.movements.map((m) => (
+              <div key={m.id} className={`px-4 py-3 ${m.approvalStatus === 'PENDING' ? 'bg-amber-500/5' : ''} ${m.approvalStatus === 'REJECTED' ? 'opacity-50' : ''}`}>
+                <div className="flex items-start gap-3">
+                  <div className="pt-0.5 flex-shrink-0">{renderReconcile(m)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono whitespace-nowrap">{m.date.slice(0, 10)}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300 truncate">{m.type}</span>
+                    </div>
+                    <p className="text-sm text-slate-200 mt-0.5 break-words">{m.description || '—'}</p>
+                    {m.reference && <p className="text-xs text-slate-500 font-mono break-all">Ref: {m.reference}</p>}
+                    {renderApproval(m)}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className={`text-sm font-mono font-semibold ${m.direction === 'IN' ? 'text-emerald-400' : 'text-red-400'} ${inBalance(m) ? '' : 'line-through'}`}>
+                      {m.direction === 'IN' ? '+' : '−'}{fmt(m.amount)}
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-mono">Saldo {fmt(m.runningBalance)}</p>
+                    {canDelete(m) && (
+                      <button onClick={() => deleteMovement(m.id)} className="mt-1.5 p-1 text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {(!data || data.movements.length === 0) && (
+              <p className="text-center py-12 text-slate-500 text-sm">Sin movimientos en el periodo.</p>
+            )}
+          </div>
         </div>
       )}
 
       {/* Modal movimiento manual */}
       {manualOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">Movimiento manual</h2>
               <button onClick={() => setManualOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm"><span className="text-slate-400">Tipo</span>
                 <select value={manual.type} onChange={(e) => setManual({ ...manual, type: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
                   {MANUAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -480,13 +523,13 @@ export default function BankAccountDetailPage() {
               <label className="text-sm"><span className="text-slate-400">Referencia</span>
                 <input value={manual.reference} onChange={(e) => setManual({ ...manual, reference: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </label>
-              <label className="col-span-2 text-sm"><span className="text-slate-400">Descripción</span>
+              <label className="sm:col-span-2 text-sm"><span className="text-slate-400">Descripción</span>
                 <input value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </label>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
               <button onClick={() => setManualOpen(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={submitManual} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <button onClick={submitManual} disabled={saving} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Registrar
               </button>
             </div>
@@ -497,13 +540,13 @@ export default function BankAccountDetailPage() {
       {/* Modal traspaso */}
       {transferOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">Traspaso a otra cuenta</h2>
               <button onClick={() => setTransferOpen(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="col-span-2 text-sm"><span className="text-slate-400">Cuenta destino</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="sm:col-span-2 text-sm"><span className="text-slate-400">Cuenta destino</span>
                 <select value={transfer.toAccountId} onChange={(e) => setTransfer({ ...transfer, toAccountId: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
                   <option value="">— elegir —</option>
                   {accounts.filter((a) => a.id !== id).map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency}){a.requiresTransferApproval ? ' — requiere aceptación' : ''}</option>)}
@@ -531,13 +574,13 @@ export default function BankAccountDetailPage() {
               <label className="text-sm"><span className="text-slate-400">Fecha</span>
                 <input type="date" value={transfer.date} onChange={(e) => setTransfer({ ...transfer, date: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </label>
-              <label className="col-span-2 text-sm"><span className="text-slate-400">Descripción / referencia</span>
+              <label className="sm:col-span-2 text-sm"><span className="text-slate-400">Descripción / referencia</span>
                 <input value={transfer.description} onChange={(e) => setTransfer({ ...transfer, description: e.target.value })} className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </label>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
               <button onClick={() => setTransferOpen(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={submitTransfer} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <button onClick={submitTransfer} disabled={saving} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <ArrowLeftRight size={16} />} Traspasar
               </button>
             </div>
@@ -548,7 +591,7 @@ export default function BankAccountDetailPage() {
       {/* Modal aceptar / rechazar traspaso */}
       {decision && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">{decision.action === 'approve' ? 'Aceptar traspaso' : 'Rechazar traspaso'}</h2>
               <button onClick={() => setDecision(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -574,10 +617,10 @@ export default function BankAccountDetailPage() {
                   className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               </label>
             )}
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
               <button onClick={() => setDecision(null)} className="btn-secondary">Cancelar</button>
               <button onClick={submitDecision} disabled={deciding}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${decision.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}`}>
+                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${decision.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}`}>
                 {deciding ? <Loader2 className="animate-spin" size={16} /> : decision.action === 'approve' ? <ShieldCheck size={16} /> : <Ban size={16} />}
                 {decision.action === 'approve' ? 'Aceptar' : 'Rechazar'}
               </button>

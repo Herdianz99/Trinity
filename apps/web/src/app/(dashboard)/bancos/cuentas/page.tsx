@@ -147,18 +147,18 @@ export default function CuentasBancariasPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/bancos" className="text-slate-400 hover:text-white text-sm">← Bancos</Link>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/bancos" className="text-slate-400 hover:text-white text-sm w-full sm:w-auto">← Bancos</Link>
           <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
             <Landmark className="text-emerald-400" size={22} />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-white">Cuentas bancarias</h1>
             <p className="text-slate-400 text-sm">Catálogo de cuentas y su saldo inicial.</p>
           </div>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+        <button onClick={openCreate} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
           <Plus size={16} /> Nueva cuenta
         </button>
       </div>
@@ -167,7 +167,7 @@ export default function CuentasBancariasPage() {
         <div className="py-20 text-center text-slate-400">Cargando…</div>
       ) : (
         <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm hidden md:table">
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-800/30 text-slate-400">
                 <th className="text-left px-4 py-3 font-medium">Cuenta</th>
@@ -234,12 +234,58 @@ export default function CuentasBancariasPage() {
               )}
             </tbody>
           </table>
+
+          {/* Móvil: tarjetas */}
+          <div className="md:hidden divide-y divide-slate-700/30">
+            {accounts.map((a) => (
+              <div key={a.id} className="px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/bancos/${a.id}`} className="text-emerald-400 font-medium inline-flex items-center gap-1 break-words">
+                      {a.name} <ExternalLink size={12} className="flex-shrink-0" />
+                    </Link>
+                    <p className="text-xs text-slate-400 mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
+                      {a.bankName} · {a.accountType} · {a.currency}
+                      {a.requiresTransferApproval && (
+                        <span title="Requiere aceptar los traspasos entrantes"><ShieldCheck size={13} className="text-amber-400" /></span>
+                      )}
+                    </p>
+                    {a.accountNumber && <p className="text-xs text-slate-500 font-mono mt-0.5 break-all">{a.accountNumber}</p>}
+                  </div>
+                  {a.isActive ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 flex-shrink-0">Activa</span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/20 flex-shrink-0">Inactiva</span>
+                  )}
+                  <button
+                    onClick={() => openEdit(a)}
+                    title="Editar cuenta"
+                    className="p-1.5 -mt-1 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors flex-shrink-0"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                </div>
+                <div className="flex items-end justify-between gap-3 mt-2">
+                  <p className="text-xs text-slate-500 min-w-0">
+                    {a.paymentMethods.length ? a.paymentMethods.map((m) => m.name).join(', ') : 'Sin métodos'}
+                  </p>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[10px] text-slate-500 uppercase">Saldo inicial</p>
+                    <p className="text-sm text-white font-mono">{a.currency === 'USD' ? '$ ' : 'Bs '}{fmt(a.openingBalance)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {accounts.length === 0 && (
+              <p className="text-center py-12 text-slate-500 text-sm">No hay cuentas. Crea la primera con “Nueva cuenta”.</p>
+            )}
+          </div>
         </div>
       )}
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">{editId ? 'Editar cuenta bancaria' : 'Nueva cuenta bancaria'}</h2>
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white">
@@ -247,8 +293,8 @@ export default function CuentasBancariasPage() {
               </button>
             </div>
             {error && <div className="mb-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
-            <div className="grid grid-cols-2 gap-3">
-              <label className="col-span-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="sm:col-span-2 text-sm">
                 <span className="text-slate-400">Nombre / alias</span>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" placeholder="Banesco Corriente Principal" />
@@ -302,13 +348,13 @@ export default function CuentasBancariasPage() {
                 </>
               )}
               {editId && (
-                <label className="col-span-2 text-sm flex items-center gap-2 mt-1">
+                <label className="sm:col-span-2 text-sm flex items-center gap-2 mt-1">
                   <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                     className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500" />
                   <span className="text-slate-300">Cuenta activa</span>
                 </label>
               )}
-              <label className="col-span-2 text-sm flex items-start gap-2 mt-1">
+              <label className="sm:col-span-2 text-sm flex items-start gap-2 mt-1">
                 <input type="checkbox" checked={form.requiresTransferApproval} onChange={(e) => setForm({ ...form, requiresTransferApproval: e.target.checked })}
                   className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 accent-emerald-500" />
                 <span>
@@ -320,9 +366,9 @@ export default function CuentasBancariasPage() {
             {editId && (
               <p className="mt-3 text-xs text-slate-500">El saldo inicial no se edita aquí para no descuadrar el libro banco.</p>
             )}
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
               <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={submit} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <button onClick={submit} disabled={saving} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : editId ? <Pencil size={16} /> : <Plus size={16} />}
                 {editId ? 'Guardar cambios' : 'Crear'}
               </button>
