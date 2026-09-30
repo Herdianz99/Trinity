@@ -18,7 +18,9 @@ import {
   ChevronDown,
   ChevronUp,
   Pencil,
+  FileSpreadsheet,
 } from 'lucide-react';
+import BankExportModal from './bank-export-modal';
 
 interface ScheduleItem {
   id: string;
@@ -36,6 +38,8 @@ interface ScheduleItem {
   netUsd?: number;
   netBs?: number;
   isPaid: boolean;
+  bankExportedAt?: string | null; // ultima exportacion al Excel de Bancaribe
+  bankExportAmountBs?: number | null;
   docNumber?: string;
   payable?: {
     id: string;
@@ -156,6 +160,7 @@ export default function PaymentScheduleDetailPage() {
   const [itemDiscountInputs, setItemDiscountInputs] = useState<Record<string, string>>({});
   const [savingItemDiscount, setSavingItemDiscount] = useState<string | null>(null);
   const [showReports, setShowReports] = useState(false);
+  const [showBankExport, setShowBankExport] = useState(false);
 
   useEffect(() => {
     fetch('/api/proxy/auth/me')
@@ -488,6 +493,15 @@ export default function PaymentScheduleDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {schedule.status !== 'CANCELLED' && (
+            <button
+              onClick={() => setShowBankExport(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors"
+            >
+              <FileSpreadsheet size={16} className="text-green-400" />
+              Exportar a Bancaribe
+            </button>
+          )}
           <div className="relative">
             <button
               onClick={() => setShowReports((v) => !v)}
@@ -751,6 +765,14 @@ export default function PaymentScheduleDetailPage() {
                                 Pagado
                               </span>
                             )}
+                            {!item.isPaid && item.bankExportedAt && (
+                              <span
+                                className="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-amber-500/15 text-amber-400 border-amber-500/20"
+                                title={`Exportado a Bancaribe por Bs ${fmt(item.bankExportAmountBs ?? 0)}`}
+                              >
+                                Exportado {new Date(item.bankExportedAt).toLocaleDateString('es-VE')}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-slate-200 font-mono text-xs">{item.docNumber || item.description}</td>
                           <td className="px-4 py-2.5 text-slate-400">
@@ -987,6 +1009,10 @@ export default function PaymentScheduleDetailPage() {
         </div>
       )}
       </div>
+
+      {showBankExport && (
+        <BankExportModal scheduleId={schedule.id} onClose={() => setShowBankExport(false)} onExported={fetchSchedule} />
+      )}
     </div>
   );
 }
