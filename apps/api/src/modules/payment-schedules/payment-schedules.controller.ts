@@ -23,6 +23,8 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdateNotesDto } from './dto/update-notes.dto';
 import { SetSupplierDiscountDto } from './dto/set-supplier-discount.dto';
 import { SetItemDiscountDto } from './dto/set-item-discount.dto';
+import { BankExportDto } from './dto/bank-export.dto';
+import { PaymentScheduleBankExportService } from './payment-schedule-bank-export.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Payment Schedules')
@@ -33,6 +35,7 @@ export class PaymentSchedulesController {
   constructor(
     private readonly service: PaymentSchedulesService,
     private readonly pdfService: PaymentSchedulePdfService,
+    private readonly bankExport: PaymentScheduleBankExportService,
   ) {}
 
   @Get()
@@ -136,6 +139,26 @@ export class PaymentSchedulesController {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="${suffix}-${id}.pdf"`,
       'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Preview para el modal "Exportar a Bancaribe": items, neto USD, Bs a la tasa de hoy,
+  // motivo si no es exportable y marca de exportaciones anteriores.
+  @Get(':id/bank-export')
+  bankExportPreview(@Param('id') id: string) {
+    return this.bankExport.preview(id);
+  }
+
+  // Excel para pegar en la plantilla "Generador de TXT Bancaribe" (hoja Pagos, C14).
+  @Post(':id/bank-export')
+  async bankExportExcel(@Param('id') id: string, @Body() dto: BankExportDto, @Res() res: Response) {
+    const { buffer, filename } = await this.bankExport.generate(id, dto.itemIds);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+      'Cache-Control': 'no-store',
     });
     res.end(buffer);
   }
