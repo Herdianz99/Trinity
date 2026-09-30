@@ -19,7 +19,8 @@
 
 ## 🗓️ Sesión 150 (2026-09-30) — Exportar pagos a Bancaribe (Excel para la plantilla del banco) · vistas móviles · fixes varios
 
-> ### ⚠️ SIN DESPLEGAR — todo en `main` y pusheado (HEAD `9027b03` + commit de docs). Trae **1 migración aditiva** `20260930120000_bancaribe_export` (`Supplier.bankAccount`, `Supplier.bankDocType`, `PaymentScheduleItem.bankExportedAt/bankExportRate/bankExportAmountBs`), con `IF NOT EXISTS` y replicada en `deploy/fix-schema.sql`. Probada en BD local (migrate deploy OK). API y web compilan (`tsc --noEmit`).
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-30, deploy de Diego, HEAD `a94bb83`, junto con la Sesión 149): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `a94bb83` = `origin/main`; migración `20260930120000_bancaribe_export` aplicada y las 5 columnas presentes en las 7 BDs; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) y `GET`/`POST /payment-schedules/:id/bank-export` responden `401` (ruta existe) en las 7 APIs, revisadas en su puerto real (:4000 / :4001 en los co-locados). Sin errores de schema en los logs.
+> Trae **1 migración aditiva** `20260930120000_bancaribe_export` (`Supplier.bankAccount`, `Supplier.bankDocType`, `PaymentScheduleItem.bankExportedAt/bankExportRate/bankExportAmountBs`), con `IF NOT EXISTS` y replicada en `deploy/fix-schema.sql`. Probada en BD local (migrate deploy OK). API y web compilan (`tsc --noEmit`).
 
 ### 1) Programación de pagos → Excel para "Generador de TXT Bancaribe"
 - **Contexto:** la empresa paga a proveedores subiendo al banco un TXT que genera la plantilla oficial de Bancaribe (`Generador de TXT Bancaribe ... .xlsm`, macros VBA). Se analizaron sus macros: línea `PAP/<cta débito>//<banco>/<cuenta>/<CTE|AHO>//<monto>/<documento>/<nombre>/<ref>/<correo>/<teléfono>//`, validación módulo 11 de cuenta y RIF. **Decisión:** en vez de generar el TXT desde Trinity (riesgo de formato, p. ej. separador decimal según configuración regional), Trinity arma un **Excel con las columnas en el orden de la plantilla** y el usuario lo pega en la celda **C14** de la hoja Pagos; la plantilla del banco sigue siendo el último filtro. (También se analizó `Macro Pago Proveedores.xls` de Provincial/BBVA, ancho fijo; se descartó porque solo usan Bancaribe.)
@@ -42,7 +43,7 @@
 
 ## 🗓️ Sesión 149 (2026-09-30) — Columna "Código / Ref. Prov" en notas de crédito/débito
 
-> ### ⚠️ SIN DESPLEGAR (hecho desde la otra PC, commit `640609f`). Sin migraciones.
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-30, junto con la Sesión 150, HEAD `a94bb83`). Hecho desde la otra PC (commit `640609f`). Sin migraciones.
 - `invoices.service` expone `supplierRef` en los ítems de la factura.
 - `/credit-debit-notes/new`: nueva columna **Código / Ref. Prov** en las tablas de ítems de factura y de orden de compra (devoluciones).
 
