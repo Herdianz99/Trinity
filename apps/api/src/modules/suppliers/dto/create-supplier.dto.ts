@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsEmail, MinLength, IsEnum, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsEmail, MinLength, IsEnum, IsInt, Min, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { SupplierType } from '@prisma/client';
 
@@ -58,6 +58,16 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsString()
   islrConceptId?: string;
+
+  @ApiProperty({ required: false, description: 'Cuenta bancaria de 20 digitos (pagos por Bancaribe)' })
+  @IsOptional()
+  @IsString()
+  bankAccount?: string | null;
+
+  @ApiProperty({ required: false, enum: ['R', 'C', 'P'], description: 'R=RIF, C=cedula, P=pasaporte' })
+  @IsOptional()
+  @IsIn(['R', 'C', 'P'])
+  bankDocType?: string | null;
 
   @ApiProperty({ required: false, default: true })
   @IsOptional()

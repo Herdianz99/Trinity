@@ -2,10 +2,23 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
+import { isValidVeAccount } from '../../common/bancaribe';
 
 @Injectable()
 export class SuppliersService {
   constructor(private prisma: PrismaService) {}
+
+  // Cuenta bancaria: se guarda solo con digitos; vacia -> null. Invalida -> error
+  // (mismo algoritmo modulo 11 que la plantilla de Bancaribe).
+  private normalizeBankAccount(raw: string | null | undefined): string | null | undefined {
+    if (raw === undefined) return undefined;
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if (!digits) return null;
+    if (!isValidVeAccount(digits)) {
+      throw new BadRequestException('La cuenta bancaria no es válida (debe tener 20 dígitos y dígito verificador correcto)');
+    }
+    return digits;
+  }
 
   private normalizeRif(rif: string): string {
     return rif.replace(/[-\s]/g, '').toUpperCase();
@@ -39,7 +52,8 @@ export class SuppliersService {
 
   async create(dto: CreateSupplierDto) {
     await this.checkDuplicateRif(dto.rif);
-    return this.prisma.supplier.create({ data: dto });
+    const bankAccount = this.normalizeBankAccount(dto.bankAccount);
+    return this.prisma.supplier.create({ data: { ...dto, bankAccount } });
   }
 
   async findAll(query?: { search?: string; isRetentionAgent?: string; limit?: string }) {
@@ -78,9 +92,10 @@ export class SuppliersService {
   async update(id: string, dto: UpdateSupplierDto) {
     const existing = await this.findOne(id);
     await this.checkDuplicateRif(dto.rif ?? existing.rif, id);
+    const bankAccount = this.normalizeBankAccount(dto.bankAccount);
     return this.prisma.supplier.update({
       where: { id },
-      data: dto,
+      data: { ...dto, ...(bankAccount !== undefined ? { bankAccount } : {}) },
     });
   }
 
