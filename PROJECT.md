@@ -1029,6 +1029,7 @@ model QuotationItem {
 - Listas de facturas, cotizaciones y clientes con cards en mobile
 - Modales full-screen en mobile, centrados en desktop
 - Layout responsive con padding adaptativo
+- Ses.150: mismo patrón (tabla `hidden md:table` + tarjetas `md:hidden`) en /rrhh/notificaciones, /bancos, /bancos/cuentas, /bancos/[id] y /settings/users
 
 ### FASE 6 — Integraciones de Hardware y POS Avanzado
 - **POS Electron + Máquina Fiscal:** Migrar el POS a Electron para acceso nativo a puertos COM. El agente Electron se comunica con la máquina fiscal por puerto COM, recibe el número fiscal y lo guarda en Invoice.fiscalNumber. También habilita modo offline con sincronización posterior
@@ -1190,6 +1191,7 @@ model QuotationItem {
 - Solo ADMIN/SUPERVISOR pueden aprobar y ejecutar
 - Frontend: /payment-schedules (lista), /payment-schedules/new (crear), /payment-schedules/[id] (detalle con panel agregar)
 - Sidebar: bajo CxP
+- **Exportar a Bancaribe (Ses.150):** botón en el detalle → modal para elegir las facturas que se pagan HOY → Excel para pegar en la celda C14 de la hoja Pagos de la plantilla oficial "Generador de TXT Bancaribe" (hojas Pagos / Afiliacion / Detalle). Bs = neto USD del ítem (con descuento) × tasa BCV de hoy; una fila por proveedor; referencia = número de programación. Solo ítems CxP no pagados de proveedores con datos bancarios válidos. Marca `PaymentScheduleItem.bankExportedAt/bankExportRate/bankExportAmountBs` (badge "Exportado", confirma al re-exportar; NO marca pagado). Datos bancarios en `Supplier.bankAccount` (20 dígitos, validado módulo 11) y `Supplier.bankDocType` (R/C/P). Reglas de la macro portadas en `common/bancaribe.ts`. Service `PaymentScheduleBankExportService`, endpoints `GET|POST /payment-schedules/:id/bank-export`.
 
 ---
 

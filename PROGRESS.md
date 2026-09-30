@@ -17,6 +17,35 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 150 (2026-09-30) — Exportar pagos a Bancaribe (Excel para la plantilla del banco) · vistas móviles · fixes varios
+
+> ### ⚠️ SIN DESPLEGAR — todo en `main` y pusheado (HEAD `9027b03` + commit de docs). Trae **1 migración aditiva** `20260930120000_bancaribe_export` (`Supplier.bankAccount`, `Supplier.bankDocType`, `PaymentScheduleItem.bankExportedAt/bankExportRate/bankExportAmountBs`), con `IF NOT EXISTS` y replicada en `deploy/fix-schema.sql`. Probada en BD local (migrate deploy OK). API y web compilan (`tsc --noEmit`).
+
+### 1) Programación de pagos → Excel para "Generador de TXT Bancaribe"
+- **Contexto:** la empresa paga a proveedores subiendo al banco un TXT que genera la plantilla oficial de Bancaribe (`Generador de TXT Bancaribe ... .xlsm`, macros VBA). Se analizaron sus macros: línea `PAP/<cta débito>//<banco>/<cuenta>/<CTE|AHO>//<monto>/<documento>/<nombre>/<ref>/<correo>/<teléfono>//`, validación módulo 11 de cuenta y RIF. **Decisión:** en vez de generar el TXT desde Trinity (riesgo de formato, p. ej. separador decimal según configuración regional), Trinity arma un **Excel con las columnas en el orden de la plantilla** y el usuario lo pega en la celda **C14** de la hoja Pagos; la plantilla del banco sigue siendo el último filtro. (También se analizó `Macro Pago Proveedores.xls` de Provincial/BBVA, ancho fijo; se descartó porque solo usan Bancaribe.)
+- **Proveedor:** campos nuevos **Cuenta bancaria (20 dígitos)** y **Tipo de documento (R/C/P)** en `/catalog/suppliers/new` y `/catalog/suppliers/[id]`. El API guarda solo dígitos y **rechaza cuentas con dígito verificador inválido** (mismo algoritmo de la macro). Una cuenta por proveedor.
+- **Helper** `apps/api/src/common/bancaribe.ts`: `isValidVeAccount`, `isValidRif`, `cleanBankName` (mayúsculas, sin acentos, Ñ→N, &→Y, máx 64), `cleanBankRef`, `bankDocument`, `supplierBankIssues`. Verificado contra cuentas/RIF reales que la macro marcó OK.
+- **Botón "Exportar a Bancaribe"** en `/payment-schedules/[id]` (no en canceladas) → modal para **elegir las facturas que se pagan HOY** (casilla por proveedor para marcar todas). Muestra neto USD, Bs a la tasa de hoy y total seleccionado.
+- **Reglas:** Bs = **neto USD del ítem (con el descuento de la programación) × tasa BCV de HOY** para todas las facturas (aunque se hayan registrado en Bs, la deuda vive en USD). **Una fila por proveedor** (suma de sus facturas). Referencia = número de la programación sin símbolos (`PSC-0006`→`PSC0006`). Sin tasa de hoy → no deja exportar. No seleccionables: NDC, ítems pagados y proveedores sin cuenta/doc o con cuenta/RIF inválido (con motivo y enlace "Completar datos").
+- **Excel** (`POST /payment-schedules/:id/bank-export`): hojas **Pagos** (Nombre, Monto, Referencia, Cuenta, Tipo, Documento, Teléfono, E-Mail; cuenta/documento como texto), **Afiliacion** (formato del Directorio de la plantilla, para afiliar proveedores nuevos) y **Detalle** (factura, neto USD, tasa, Bs). Preview en `GET /payment-schedules/:id/bank-export`.
+- **Anti doble pago:** al exportar se guarda por ítem `bankExportedAt/bankExportRate/bankExportAmountBs` → badge **"Exportado dd/mm"** en el detalle y confirmación al re-exportar. **Exportar NO marca pagado.**
+- Plan: `docs/superpowers/plans/2026-09-30-exportar-pagos-bancaribe.md`.
+- **Pendiente detectado (no tocado):** la programación **suma** las NDC al total del proveedor en vez de restarlas.
+
+### 2) Vistas móviles (solo diseño, sin cambios de funcionamiento)
+- `/rrhh/notificaciones`, `/bancos`, `/bancos/cuentas`, `/bancos/[id]` y `/settings/users`: tabla en desktop (`hidden md:table`) y **tarjetas en móvil** (`md:hidden`); encabezados y botones apilados; modales con scroll (`max-h-[90vh]`), padding reducido y botones apilados; montos largos con `break-all`. En `/bancos/[id]` y `/settings/users` las acciones por fila se extrajeron a funciones de render compartidas entre tabla y tarjetas.
+
+### 3) Fixes y ajustes
+- **Ajustes de inventario** (`/inventory/adjustments/[id]`): el campo **Cantidad** era `type="number"` + `Number()` por tecla → con locale es-VE el **punto** vaciaba el valor (se borraba todo) y no se podía borrar el **0**. Ahora es texto crudo (como el campo Costo) que acepta punto o coma y se parsea con `qtyOf()` al calcular/guardar/procesar.
+- **Detalle de cotización** (`/quotations/[id]`): el botón Imprimir ahora es igual al del listado — elige **moneda USD/Bs** además de con/sin IVA, y en móvil **comparte el PDF** con el menú nativo (WhatsApp, correo).
+- **Dashboard gerencial, KPI Ganancia:** el texto secundario "Con IVA de notas" ahora dice **"Otros ingresos"** (solo texto; el cálculo no cambia).
+
+## 🗓️ Sesión 149 (2026-09-30) — Columna "Código / Ref. Prov" en notas de crédito/débito
+
+> ### ⚠️ SIN DESPLEGAR (hecho desde la otra PC, commit `640609f`). Sin migraciones.
+- `invoices.service` expone `supplierRef` en los ítems de la factura.
+- `/credit-debit-notes/new`: nueva columna **Código / Ref. Prov** en las tablas de ítems de factura y de orden de compra (devoluciones).
+
 ## 🗓️ Sesión 148 (2026-09-29) — NCV motivo "Error de despacho" · KPI Ganancia sin IVA de notas · Aprobación de traspasos bancarios
 
 > ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-29, deploy de Diego, HEAD `ad06a7f`): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `ad06a7f` = `origin/main`; `migrate status = up to date` en las 7 BDs; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) y `/bancos/summary` + `POST /bancos/movements/:id/approve` responden `401` (ruta existe, no `404`/`500`) en las 7 APIs. Sin errores de schema en los logs.
