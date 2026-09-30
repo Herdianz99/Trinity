@@ -19,7 +19,8 @@
 
 ## 🗓️ Sesión 148 (2026-09-29) — NCV motivo "Error de despacho" · KPI Ganancia sin IVA de notas · Aprobación de traspasos bancarios
 
-> ### ⚠️ SIN DESPLEGAR. 2 migraciones aditivas con `IF NOT EXISTS`: `20260929160000_return_reason_error_despacho` (enum `SalesReturnReason` + `ERROR_DESPACHO`) y `20260929170000_bank_transfer_approval` (enum `DynamicKeyPerm` + `APPROVE_BANK_TRANSFER`, `BankAccount.requiresTransferApproval`, `BankMovement.approvalStatus/approvedAt/approvedById/approvalKeyName/approvalNote`). También añadidas a `deploy/fix-schema.sql`. No se probaron contra una BD local (no había Postgres corriendo); API y web compilan (`tsc --noEmit`) y `prisma validate` OK.
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-29, deploy de Diego, HEAD `ad06a7f`): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `ad06a7f` = `origin/main`; `migrate status = up to date` en las 7 BDs; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) y `/bancos/summary` + `POST /bancos/movements/:id/approve` responden `401` (ruta existe, no `404`/`500`) en las 7 APIs. Sin errores de schema en los logs.
+> 2 migraciones aditivas con `IF NOT EXISTS`: `20260929160000_return_reason_error_despacho` (enum `SalesReturnReason` + `ERROR_DESPACHO`) y `20260929170000_bank_transfer_approval` (enum `DynamicKeyPerm` + `APPROVE_BANK_TRANSFER`, `BankAccount.requiresTransferApproval`, `BankMovement.approvalStatus/approvedAt/approvedById/approvalKeyName/approvalNote`). También añadidas a `deploy/fix-schema.sql`. No se probaron contra una BD local (no había Postgres corriendo); API y web compilan (`tsc --noEmit`) y `prisma validate` OK.
 
 ### 1) Nuevo motivo de devolución de ventas (NCV): "Error de despacho"
 - Enum `SalesReturnReason.ERROR_DESPACHO`; agregado al selector de `/credit-debit-notes/new`, al filtro del listado, al detalle y al PDF (`MOTIVO_LABELS`), y al `@IsIn` del query DTO.
