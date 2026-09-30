@@ -94,7 +94,9 @@ export default function InventoryAdjustmentDetailPage() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Items state
-  const [quantityValues, setQuantityValues] = useState<Record<string, number>>({});
+  // Texto crudo (igual que costValues): acepta punto o coma decimal y permite dejar
+  // la caja vacia mientras se escribe. Se parsea con qtyOf() al usarlo.
+  const [quantityValues, setQuantityValues] = useState<Record<string, string>>({});
   // Se guarda como texto crudo para poder escribir el punto/coma decimal sin que
   // el re-render lo borre (mismo fix que las otras cajas). Se parsea al usarlo.
   const [costValues, setCostValues] = useState<Record<string, string>>({});
@@ -122,9 +124,9 @@ export default function InventoryAdjustmentDetailPage() {
         // al agregar/eliminar un producto se re-consulta el ajuste, pero esos cambios
         // locales todavia no estan en el server. Solo tomamos del server los items nuevos.
         setQuantityValues((prev) => {
-          const vals: Record<string, number> = {};
+          const vals: Record<string, string> = {};
           data.items.forEach((item: AdjustmentItem) => {
-            vals[item.productId] = prev[item.productId] ?? item.quantity;
+            vals[item.productId] = prev[item.productId] ?? String(item.quantity);
           });
           return vals;
         });
@@ -163,10 +165,18 @@ export default function InventoryAdjustmentDetailPage() {
     return it.unitCostUsd ?? effectiveProductCost(it, costMode);
   }
 
+  // Cantidad a usar: la escrita en pantalla (texto con punto o coma) > la guardada.
+  function qtyOf(it: AdjustmentItem): number {
+    const raw = quantityValues[it.productId];
+    if (raw === undefined) return it.quantity;
+    const n = parseFloat(raw.replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
   // ── Costo total del ajuste (mismo calculo que el reporte PDF y la CxC/CxP) ──
   const totalCost = adjustment
     ? adjustment.items.reduce((sum, it) => {
-        const qty = quantityValues[it.productId] ?? it.quantity;
+        const qty = qtyOf(it);
         return sum + qty * resolveItemCost(it, adjustment.costMode);
       }, 0)
     : 0;
@@ -238,7 +248,7 @@ export default function InventoryAdjustmentDetailPage() {
     try {
       const items = adjustment.items.map(item => ({
         productId: item.productId,
-        quantity: Number(quantityValues[item.productId] ?? 0),
+        quantity: qtyOf(item),
         unitCostUsd: Number(resolveItemCost(item, adjustment.costMode)),
       }));
       const res = await fetch(`/api/proxy/inventory-adjustments/${id}/items`, {
@@ -347,7 +357,7 @@ export default function InventoryAdjustmentDetailPage() {
       // Guardar cantidades pendientes antes de procesar
       const items = adjustment.items.map(item => ({
         productId: item.productId,
-        quantity: Number(quantityValues[item.productId] ?? 0),
+        quantity: qtyOf(item),
         unitCostUsd: Number(resolveItemCost(item, adjustment.costMode)),
       }));
       if (items.length > 0) {
@@ -415,7 +425,7 @@ export default function InventoryAdjustmentDetailPage() {
 
   // ── Computed values ────────────────────────────────
   const totalItems = adjustment.items.length;
-  const totalUnits = adjustment.items.reduce((sum, i) => sum + (quantityValues[i.productId] ?? i.quantity), 0);
+  const totalUnits = adjustment.items.reduce((sum, i) => sum + qtyOf(i), 0);
   const isDraft = adjustment.status === 'DRAFT';
   const isProcessed = adjustment.status === 'PROCESSED';
   const isCancelled = adjustment.status === 'CANCELLED';
@@ -534,13 +544,12 @@ export default function InventoryAdjustmentDetailPage() {
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <input
-                            type="number"
-                            min="0"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             value={quantityValues[item.productId] ?? ''}
                             onChange={(e) => setQuantityValues(v => ({
                               ...v,
-                              [item.productId]: Number(e.target.value),
+                              [item.productId]: e.target.value.replace(/[^0-9.,]/g, ''),
                             }))}
                             className="input-field !py-1 text-sm w-24 text-right font-mono"
                             placeholder="0"
