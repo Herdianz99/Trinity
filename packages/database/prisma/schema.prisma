@@ -542,6 +542,8 @@ model Supplier {
   contactName       String?
   // Texto libre: cómo se le paga a este proveedor (ej. "Zelle a X", "Pago móvil 0414...", "Efectivo").
   paymentMethod     String?
+  bankAccount       String?            // cuenta bancaria de 20 digitos (pago por Bancaribe)
+  bankDocType       String?            // R = RIF, C = cedula, P = pasaporte (plantilla Bancaribe)
   creditDays        Int                @default(0)
   isRetentionAgent  Boolean            @default(false)
   supplierType      SupplierType?
@@ -2023,6 +2025,9 @@ model PaymentScheduleItem {
   // (PaymentScheduleSupplierDiscount); un valor (incluso 0) = override explícito para este documento.
   discountPct       Float?
   isPaid            Boolean          @default(false)
+  bankExportedAt     DateTime?        // ultima vez que se exporto al Excel de Bancaribe
+  bankExportRate     Float?           // tasa BCV usada en esa exportacion
+  bankExportAmountBs Float?           // Bs exportados (neto USD x tasa del dia)
   createdAt         DateTime         @default(now())
 }
 

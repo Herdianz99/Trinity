@@ -3045,3 +3045,10 @@ DO $$ BEGIN
   ALTER TABLE "BankMovement" ADD CONSTRAINT "BankMovement_approvedById_fkey"
     FOREIGN KEY ("approvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Session 150: exportacion Bancaribe
+ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankAccount" TEXT;
+ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankDocType" TEXT;
+ALTER TABLE "PaymentScheduleItem" ADD COLUMN IF NOT EXISTS "bankExportedAt" TIMESTAMP(3);
+ALTER TABLE "PaymentScheduleItem" ADD COLUMN IF NOT EXISTS "bankExportRate" DOUBLE PRECISION;
+ALTER TABLE "PaymentScheduleItem" ADD COLUMN IF NOT EXISTS "bankExportAmountBs" DOUBLE PRECISION;
