@@ -289,6 +289,64 @@ export default function UsersPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // Botones de accion por usuario (compartidos entre tabla desktop y tarjetas movil)
+  const renderActions = (user: User) => (
+    <>
+      <button
+        onClick={() => openEdit(user)}
+        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+        title="Editar"
+      >
+        <Pencil size={16} />
+      </button>
+      <button
+        onClick={() => openReset(user)}
+        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+        title="Resetear contrasena"
+      >
+        <KeyRound size={16} />
+      </button>
+      <button
+        onClick={() => handleToggleActive(user)}
+        className={`p-1.5 rounded-lg transition-colors ${
+          user.isActive
+            ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10'
+            : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'
+        }`}
+        title={user.isActive ? 'Desactivar' : 'Activar'}
+      >
+        {user.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+      </button>
+      <button
+        onClick={() => handleToggleRestrictIp(user)}
+        disabled={user.role === 'ADMIN'}
+        className={`p-1.5 rounded-lg transition-colors ${
+          user.role === 'ADMIN'
+            ? 'text-slate-600 cursor-not-allowed'
+            : user.restrictToOnSiteIp
+              ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+              : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10'
+        }`}
+        title={
+          user.role === 'ADMIN'
+            ? 'Los ADMIN no se restringen por IP'
+            : user.restrictToOnSiteIp
+              ? 'Solo en sitio: ACTIVADO — clic para permitir desde cualquier IP'
+              : 'Solo en sitio: desactivado — clic para bloquear fuera de las IPs del local'
+        }
+      >
+        {user.restrictToOnSiteIp ? <MapPin size={16} /> : <MapPinOff size={16} />}
+      </button>
+      <button
+        onClick={() => openDelete(user)}
+        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        title="Eliminar"
+      >
+        <Trash2 size={16} />
+      </button>
+    </>
+  );
+
   return (
     <div>
       {/* Header */}
@@ -302,7 +360,7 @@ export default function UsersPage() {
             <p className="text-sm text-slate-400">Gestionar usuarios del sistema</p>
           </div>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+        <button onClick={openCreate} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
           <Plus size={18} />
           Nuevo usuario
         </button>
@@ -322,7 +380,7 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700/50">
@@ -374,66 +432,47 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(user)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => openReset(user)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                          title="Resetear contrasena"
-                        >
-                          <KeyRound size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleToggleActive(user)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            user.isActive
-                              ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10'
-                              : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'
-                          }`}
-                          title={user.isActive ? 'Desactivar' : 'Activar'}
-                        >
-                          {user.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                        </button>
-                        <button
-                          onClick={() => handleToggleRestrictIp(user)}
-                          disabled={user.role === 'ADMIN'}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            user.role === 'ADMIN'
-                              ? 'text-slate-600 cursor-not-allowed'
-                              : user.restrictToOnSiteIp
-                                ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
-                                : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10'
-                          }`}
-                          title={
-                            user.role === 'ADMIN'
-                              ? 'Los ADMIN no se restringen por IP'
-                              : user.restrictToOnSiteIp
-                                ? 'Solo en sitio: ACTIVADO — clic para permitir desde cualquier IP'
-                                : 'Solo en sitio: desactivado — clic para bloquear fuera de las IPs del local'
-                          }
-                        >
-                          {user.restrictToOnSiteIp ? <MapPin size={16} /> : <MapPinOff size={16} />}
-                        </button>
-                        <button
-                          onClick={() => openDelete(user)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                      <div className="flex items-center justify-end gap-1">{renderActions(user)}</div>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Móvil: tarjetas */}
+        <div className="md:hidden divide-y divide-slate-700/30">
+          {loading ? (
+            <p className="text-center py-12 text-slate-500">Cargando...</p>
+          ) : filteredUsers.length === 0 ? (
+            <p className="text-center py-12 text-slate-500">No se encontraron usuarios</p>
+          ) : (
+            filteredUsers.map((user) => (
+              <div key={user.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-200 break-words">{user.name}</p>
+                    <p className="text-xs text-slate-400 break-all">{user.email}</p>
+                  </div>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold flex-shrink-0 ${
+                    user.isActive
+                      ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                      : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                  }`}>
+                    {user.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[user.role] || 'bg-slate-500/15 text-slate-400'}`}>
+                    {ROLE_LABELS[user.role] || user.role}
+                  </span>
+                  <span className="text-xs text-slate-500">Último acceso: {formatDate(user.lastLoginAt)}</span>
+                </div>
+                <div className="flex items-center justify-end gap-1 mt-2 -mr-1.5">{renderActions(user)}</div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -503,7 +542,7 @@ export default function UsersPage() {
                 placeholder="Dejar vacio para generar"
               />
             </div>
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">
                 Cancelar
               </button>
@@ -602,7 +641,7 @@ export default function UsersPage() {
                 Requiere cargar las IPs del local en Configuracion. Aplica en el proximo inicio de sesion del usuario.
               </p>
             </div>
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button type="button" onClick={() => setShowEdit(false)} className="btn-secondary">
                 Cancelar
               </button>
@@ -625,7 +664,7 @@ export default function UsersPage() {
             <p className="text-sm text-slate-500">
               Se generara una nueva contrasena temporal y el usuario debera cambiarla al iniciar sesion.
             </p>
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button onClick={() => setShowReset(false)} className="btn-secondary">
                 Cancelar
               </button>
@@ -652,7 +691,7 @@ export default function UsersPage() {
             <p className="text-sm text-red-400">
               Esta accion no se puede deshacer.
             </p>
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">
                 Cancelar
               </button>
@@ -676,7 +715,7 @@ export default function UsersPage() {
               La contrasena temporal del usuario es:
             </p>
             <div className="flex items-center gap-2 p-3 rounded-lg bg-slate-800 border border-slate-700">
-              <code className="flex-1 text-lg font-mono text-green-400 select-all">
+              <code className="flex-1 min-w-0 text-lg font-mono text-green-400 select-all break-all">
                 {tempPassword}
               </code>
               <button
@@ -709,7 +748,7 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-white">{title}</h2>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
