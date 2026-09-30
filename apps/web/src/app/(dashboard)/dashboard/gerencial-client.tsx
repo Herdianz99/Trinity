@@ -405,7 +405,7 @@ export default function DashboardGerencialClient() {
               iconBg="bg-lime-500/15 text-lime-400"
               label="Ganancia"
               value={`$${fmt(data.profit.totalUsd)}`}
-              sub={<>Margen {fmt(data.profit.marginPct)}% · <span className="text-purple-300 font-semibold">Prom. ${fmt(data.sales.avgTicketUsd)}</span><span className="block mt-0.5 text-[11px] text-slate-500">Con IVA de notas: <span className="text-lime-300/80 font-semibold">${fmt(data.profit.withNoteIvaUsd ?? data.profit.totalUsd)}</span></span></>}
+              sub={<>Margen {fmt(data.profit.marginPct)}% · <span className="text-purple-300 font-semibold">Prom. ${fmt(data.sales.avgTicketUsd)}</span><span className="block mt-0.5 text-[11px] text-slate-500">Otros ingresos: <span className="text-lime-300/80 font-semibold">${fmt(data.profit.withNoteIvaUsd ?? data.profit.totalUsd)}</span></span></>}
               change={data.profit.vsLastPeriod}
               positiveIsGood
               href={`/reports/profit-margin?from=${fromDate}&to=${toDate}`}
