@@ -12,6 +12,8 @@ import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie,
 } from 'recharts';
+import { MetricsHelpButton } from '@/components/metrics-help-modal';
+import { DASHBOARD_METRIC_KEYS } from '@/lib/metrics-help';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -347,6 +349,8 @@ export default function DashboardGerencialClient() {
             <Calendar size={12} />
             Personalizado
           </button>
+
+          <MetricsHelpButton metricKeys={DASHBOARD_METRIC_KEYS} small />
 
           {period === 'custom' && (
             <>

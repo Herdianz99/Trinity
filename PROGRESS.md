@@ -17,6 +17,17 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 151 (2026-10-01) — Dashboard gerencial: botón "¿Cómo se calcula?" con la definición de cada KPI
+
+> ⏳ **Pendiente de deploy.** Solo frontend (sin migraciones ni cambios de API).
+
+- **Motivo:** el usuario no lograba cuadrar "Ventas (neto)" restando Devoluciones al bruto. Causa: el Neto resta las NC **de las facturas del período** (sin importar la fecha de la NC), mientras la tarjeta "Devoluciones" suma las NC **hechas en el período** (de cualquier factura). Son criterios distintos a propósito; se documentó para no olvidarlo.
+- **Botón "¿Cómo se calcula?"** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard` (gerencial). Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`.
+- `lib/metrics-help.ts`: `MetricHelp` gana campos opcionales `seccion`, `incluye[]` y `ojo`; nuevo bloque `DASHBOARD_HELP` + `DASHBOARD_METRIC_KEYS` con todos los KPI agrupados (Reglas generales, Ventas, Inventario, Cuentas y caja, Gráficas): período y %, fecha de la venta (paidAt, crédito cuenta al emitir), por qué Bruto − Devoluciones ≠ Neto, Ventas neto, Ganancia/margen/Prom./Otros ingresos, contado (resta Cashea/Crediagro), crédito, grupo, Cashea/Crediagro, Devoluciones, Clientes nuevos, Quiebre, Precisión de conteo, CxC/CxP, Resumen de caja, Gastos, timeline, vendedores, top/categorías, fiscal, brecha.
+- `components/metrics-help-modal.tsx`: renderiza encabezados de sección, viñetas y la advertencia (ámbar). Alertas de inventario y Análisis de compras siguen igual.
+- **Regla:** si se cambia un cálculo en `dashboard.service.ts`, actualizar también el texto en `DASHBOARD_HELP`.
+- **Pendiente detectado (no tocado):** KPI **Ganancia** — excluye las facturas `RETURNED` de las ventas pero igual resta la ganancia de sus NC (por `documentDate`), así que una factura devuelta completa en el mismo período **resta dos veces** (ganancia por debajo de la real). Además usa la fecha de la NC, no el anclaje a la factura que usa el Neto.
+
 ## 🗓️ Sesión 150 (2026-09-30) — Exportar pagos a Bancaribe (Excel para la plantilla del banco) · vistas móviles · fixes varios
 
 > ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-09-30, deploy de Diego, HEAD `a94bb83`, junto con la Sesión 149): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `a94bb83` = `origin/main`; migración `20260930120000_bancaribe_export` aplicada y las 5 columnas presentes en las 7 BDs; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) y `GET`/`POST /payment-schedules/:id/bank-export` responden `401` (ruta existe) en las 7 APIs, revisadas en su puerto real (:4000 / :4001 en los co-locados). Sin errores de schema en los logs.
