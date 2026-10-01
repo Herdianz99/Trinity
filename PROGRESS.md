@@ -17,26 +17,54 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 151 (2026-10-01) — Dashboard gerencial: botón "¿Cómo se calcula?" con la definición de cada KPI
+## 🗓️ Sesión 151 (2026-10-01) — Dashboard: ayuda "¿Cómo se calcula?" + fix KPI Ganancia · Reporte de costos: total del grupo · Proveedores inactivos fuera de compras/gastos/CxP · Clientes de mayor (Excel Confía)
 
 > ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-10-01, deploy de Diego, HEAD `b1876b0`): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `b1876b0` = `origin/main`; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) en :4000 y :4001 de cada droplet; `/suppliers?isActive=true` responde `401` (ruta OK); el `dist` compilado de cada API trae el fix de Ganancia (`RETURNED` en getProfit), `totalGroupCost` y el filtro `isActive` de proveedores, y los chunks web traen la ayuda del dashboard y el "— inactivo"; builds de hoy. Logs de error limpios desde el arranque. **Sin migraciones** en esta sesión.
 
+### 1) Dashboard gerencial — botón "¿Cómo se calcula?"
 - **Motivo:** el usuario no lograba cuadrar "Ventas (neto)" restando Devoluciones al bruto. Causa: el Neto resta las NC **de las facturas del período** (sin importar la fecha de la NC), mientras la tarjeta "Devoluciones" suma las NC **hechas en el período** (de cualquier factura). Son criterios distintos a propósito; se documentó para no olvidarlo.
-- **Botón "¿Cómo se calcula?"** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard` (gerencial). Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`: solo el ícono (?) con tooltip, mismo estilo que el botón de refrescar.
-- `lib/metrics-help.ts`: `MetricHelp` gana campos opcionales `seccion`, `incluye[]` y `ojo`; nuevo bloque `DASHBOARD_HELP` + `DASHBOARD_METRIC_KEYS` con todos los KPI agrupados (Reglas generales, Ventas, Inventario, Cuentas y caja, Gráficas): período y %, fecha de la venta (paidAt, crédito cuenta al emitir), por qué Bruto − Devoluciones ≠ Neto, Ventas neto, Ganancia/margen/Prom./Otros ingresos, contado (resta Cashea/Crediagro), crédito, grupo, Cashea/Crediagro, Devoluciones, Clientes nuevos, Quiebre, Precisión de conteo, CxC/CxP, Resumen de caja, Gastos, timeline, vendedores, top/categorías, fiscal, brecha.
+- **Botón (?)** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard`. Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`: solo el ícono con tooltip, mismo estilo que el botón de refrescar.
+- `lib/metrics-help.ts`: `MetricHelp` gana campos opcionales `seccion`, `incluye[]` y `ojo`; bloque `DASHBOARD_HELP` + `DASHBOARD_METRIC_KEYS` con los 21 KPI en 5 secciones (Reglas generales, Ventas, Inventario, Cuentas y caja, Gráficas): período y %, fecha de la venta (paidAt; crédito cuenta al emitir), por qué Bruto − Devoluciones ≠ Neto, Ventas neto, Ganancia/margen/Prom./Otros ingresos, contado (resta Cashea/Crediagro), crédito, grupo, Cashea/Crediagro, Devoluciones, Clientes nuevos, Quiebre, Precisión de conteo, CxC/CxP, Resumen de caja, Gastos, timeline, vendedores, top/categorías, fiscal, brecha.
 - `components/metrics-help-modal.tsx`: renderiza encabezados de sección, viñetas y la advertencia (ámbar). Alertas de inventario y Análisis de compras siguen igual.
 - **Regla:** si se cambia un cálculo en `dashboard.service.ts`, actualizar también el texto en `DASHBOARD_HELP`.
-- **Fix KPI Ganancia** (`dashboard.service.getProfit`, código del 2026-07-31): excluía las facturas `RETURNED` de las ventas pero igual restaba la ganancia de sus NC (filtradas por `documentDate`), así que una factura devuelta completa en el mismo período **restaba dos veces** (en septiembre, en inversiones: 53 facturas / $12.295 en ventas cuya ganancia se restaba de más). Ahora usa el mismo criterio que "Ventas (neto)": facturas `PAID/PARTIAL_RETURN/RETURNED` del período (sin grupo) y se les resta la ganancia de **sus propias** NCV, sin importar la fecha de la NC (costo histórico de la factura). Devuelta completa → 0; parcial → ganancia de lo no devuelto. Texto de ayuda actualizado. API compila (`tsc --noEmit --incremental false`).
-- **KPI "Costo de lo vendido" + "Inventario actual": se hizo (`66d3b41`) y se REVIRTIÓ** a pedido del usuario (no lo quiere en el dashboard). El código queda en el historial por si se retoma.
-- **Reporte "Costo de movimientos de stock"** (`/stock-movements/report/costs`, PDF desde `/inventory/movements`): debajo del COSTO TOTAL ahora muestra **"Total del grupo"** = costo de los movimientos cuyo documento origen es de un cliente empresa del grupo (facturas de venta `SALE_INVOICE` y NC de venta `CREDIT_DEBIT_NOTE` por el cliente de su factura original), con el mismo costo con brecha de cada línea. `getCostReport` devuelve `totalGroupCost`. Verificado en local (sep): filtrado por Venta → total $382.129,40, grupo $11.104,98 (= costo de las facturas al grupo calculado aparte); sin filtro → $910.350,13 / grupo $11.583,52 (incluye las devoluciones del grupo, que el reporte suma igual que el total). "Total sin brecha" quedó para después: las facturas guardan el costo con brecha pero no el % usado.
-- **Proveedores desactivados ya no salen para crear documentos.** Bug: compras/gastos pedían `/suppliers?isActive=true` pero `SuppliersService.findAll` ignoraba el parámetro (desactivar solo cambiaba la etiqueta y liberaba el RIF). Ahora `findAll` respeta `isActive=true|false` (sin el parámetro devuelve todos: listado de proveedores y filtros de reportes).
-  - **Solo activos:** Nueva compra, Editar compra (lista para cambiar), Nueva CxP (`/payables/new`, pedido del usuario).
-  - **Activos + el ya asignado (marcado "— inactivo"):** Editar compra muestra el proveedor de la factura aunque esté inactivo (`billSupplier`); Gastos (al editar un gasto a crédito); fichas de producto (nuevo, editar, modal rápido) — así un producto viejo no aparenta perder su proveedor.
-  - **Todos:** filtro del listado de compras (para encontrar compras viejas de un proveedor inactivo).
-  - Importar factura con IA (`purchase-ai.service`): el auto-match por RIF/nombre solo considera proveedores activos.
-  - Sin tocar (siguen mostrando todos, a propósito): recibos de pago, retenciones IVA/ISLR, programación de pagos, recepciones, etiquetas, ajustes — trabajan sobre deudas/documentos existentes o son filtros.
-  - API y web compilan. No probado en ejecución (servidor local apagado; la BD local no tiene proveedores inactivos).
-- **Pendiente (para después):** mostrar "Ventas sin IVA" (base del margen: sin IVA, sin grupo, neto de devoluciones) y alinear el reporte `/reports/profit-margin`, que hoy calcula con IVA, con grupo y sin restar devoluciones (~29% vs 18,04% del dashboard en sep).
+- Probado en local con Chrome headless (desktop + móvil): 5 secciones, 21 KPI, sin errores JS.
+
+### 2) Fix KPI Ganancia (devolución total restaba dos veces)
+- **Bug** (código del 2026-07-31, `dashboard.service.getProfit`): excluía las facturas `RETURNED` de las ventas pero igual restaba la ganancia de sus NC (filtradas por `documentDate`) → una factura devuelta completa en el mismo período **restaba dos veces**.
+- **Ahora** usa el mismo criterio que "Ventas (neto)": facturas `PAID/PARTIAL_RETURN/RETURNED` del período (sin grupo) y a cada una se le resta la ganancia de **sus propias** NCV, sin importar la fecha de la NC (costo histórico de la factura). Devuelta completa → 0; parcial → ganancia de lo no devuelto. Una devolución de una factura vieja baja la ganancia del mes de la factura, no del actual (igual que el Neto).
+- **Impacto real en inversiones, septiembre** (calculado en prod, solo lectura): de **$84.409,89 → $86.583,77** (+$2.173,88): +$1.998,97 por 53 facturas devueltas completas que restaban dos veces y +$174,91 por anclar las devoluciones a la factura. Margen 18,10% → 18,11%.
+- **Verificado en local** (copia de inversiones, 1–29 sep): API $79.538,56 = cálculo SQL independiente al centavo (criterio viejo daba $77.562,11); las 56 devueltas completas quedan en $0; fiscal+no fiscal y contado+Cashea+Crediagro+crédito+grupo = Ventas (neto).
+- **Margen (explicado al usuario):** Ganancia ÷ ventas sin IVA, sin grupo, netas de devoluciones (sep local: $79.538,56 ÷ $440.823,63 = 18,04%). No es sobre la Ventas (neto) de la tarjeta (15,11%, trae IVA y grupo) ni sobre el costo (22,02% = recargo).
+
+### 3) KPI "Costo de lo vendido" + "Inventario actual" — hecho y REVERTIDO
+- Se implementó (`66d3b41`, verificado: costo $361.285,07 = Ventas sin IVA − Ganancia; inventario con brecha $769.237,68 en 6.331 artículos) y se revirtió (`cb3f5b5`) a pedido del usuario: no lo quiere en el dashboard que todos ven. El código queda en el historial por si se retoma.
+
+### 4) Reporte "Costo de movimientos de stock" — Total del grupo
+- `/stock-movements/report/costs` (PDF desde `/inventory/movements`): debajo del COSTO TOTAL muestra **"Total del grupo"** = costo de los movimientos cuyo documento origen es de un cliente empresa del grupo (`isGroupCompany`): facturas de venta (`SALE_INVOICE`) y NC de venta (`CREDIT_DEBIT_NOTE`, por el cliente de su factura original), con el mismo costo con brecha de cada línea. `getCostReport` devuelve `totalGroupCost`.
+- Verificado en local (sep): filtrado por Venta → total $382.129,40, grupo $11.104,98 (= costo de las facturas al grupo calculado aparte); sin filtro → $910.350,13 / grupo $11.583,52.
+- "El grupo" = clientes con la casilla **Empresa del grupo** (en inversiones: 17, p. ej. Inversiones El Trébol 2017, Aceros Portuguesa (B/D), Ferre Construcciones El Trébol (B/D), Total Tools, Jalil Khir, Autoconsumo, Galpón…).
+
+### 5) Proveedores desactivados ya no salen para crear documentos
+- **Bug:** compras/gastos pedían `/suppliers?isActive=true` pero `SuppliersService.findAll` ignoraba el parámetro (desactivar solo cambiaba la etiqueta y liberaba el RIF para otro proveedor). Ahora `findAll` respeta `isActive=true|false` (sin el parámetro devuelve todos).
+- **Solo activos:** Nueva compra, Editar compra (lista para cambiar), Nueva CxP (`/payables/new`, pedido del usuario).
+- **Activos + el ya asignado (marcado "— inactivo"):** Editar compra muestra el proveedor de la factura aunque esté inactivo (`billSupplier`); Gastos (al editar un gasto a crédito); fichas de producto (nuevo, editar, modal rápido) — así un producto viejo no aparenta perder su proveedor.
+- **Todos:** filtro del listado de compras (para encontrar compras viejas de un proveedor inactivo) y el listado de proveedores (para reactivar).
+- Importar factura con IA (`purchase-ai.service`): el auto-match por RIF/nombre solo considera proveedores activos.
+- Sin tocar (siguen mostrando todos, a propósito): recibos de pago, retenciones IVA/ISLR, programación de pagos, recepciones, etiquetas, ajustes — trabajan sobre deudas/documentos existentes o son filtros.
+- API y web compilan. No probado en ejecución local (la BD local no tiene proveedores inactivos); verificado en el `dist` desplegado.
+
+### 6) Clientes de MAYOR (trebolmayor) desde Excel de Confía — datos en PRODUCCIÓN (sin código)
+- Archivo `CONFIA CLIENTES MAYOR.xlsx` (35 filas). Las 2 columnas "DIRECCION" eran la misma dirección partida en 2 renglones → se unieron en `address`.
+- **30 clientes creados** (CLI-000005 a CLI-000034) con script Prisma en el server: dry-run + una sola transacción, mismo control de RIF duplicado y correlativo `lastCustomerNumber` que `CustomersService.create`; `createdBy` = Diego Hernandez (ADMIN). Nombres tal cual el Excel; sin crédito ni "empresa del grupo" (el usuario pidió montarlos tal cual).
+- **Saltados (5):** 4 ya existían (Moto Cars, El Trébol 2017, Ferre Lubricantes Acarigua, Amplia Lanza) y TOTAL TOOLS LLANO (mismo RIF que TOTAL TOOLS LOS LLANOS CA).
+- **Formato RIF:** letra en `documentType`, `rif` **solo dígitos, sin guion** (convención de Trinity, ~99% de la grande). Primero se cargaron con guion (`41155343-3`) y se corrigió por UPDATE; también se limpiaron CLI-000002 (`J-406336220`) y CLI-000003 (`J408720876`), que tenían la letra dentro del RIF. Mayor queda con 35 clientes activos, correlativo en 34.
+
+### Pendientes
+- **RIF `888888`** de FERRE CONSTRUCCIONES EL TREBOL (CLI-000026) en mayor: inválido, venía así del Excel.
+- **"Ventas sin IVA"** (base del margen) a la vista, y **alinear el reporte `/reports/profit-margin`**: hoy calcula con IVA, con grupo y sin restar devoluciones (~29% vs 18,04% del dashboard en sep).
+- **"Total sin brecha"** en el reporte de costos: `InvoiceItem.costUsd` guarda el costo con brecha pero no el % usado → habría que derivarlo con el % actual (aproximado) o empezar a guardar el costo sin brecha.
+- Reporte de costos **sin filtro de tipo** suma todos los movimientos en positivo (entradas y salidas), así que las devoluciones se suman en vez de restarse; para "costo de lo vendido" filtrar por tipo Venta.
+- Menor: el modal de ayuda no cierra con Escape.
 
 ## 🗓️ Sesión 150 (2026-09-30) — Exportar pagos a Bancaribe (Excel para la plantilla del banco) · vistas móviles · fixes varios
 
