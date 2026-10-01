@@ -85,6 +85,7 @@ export class DashboardService {
       newCustomers,
       prevNewCustomers,
       salesByBrecha,
+      inventoryValue,
     ] = await Promise.all([
       this.getNetInvoiceRows(dateRange),
       this.getNetInvoiceRows(prevDateRange),
@@ -115,6 +116,8 @@ export class DashboardService {
       this.getNewCustomers(prevDateRange),
       // Ventas de productos CON brecha vs SIN brecha (monto y %) del periodo.
       this.getSalesByBrecha(dateRange),
+      // Valor del inventario actual con brecha (foto de hoy, ignora el periodo).
+      this.getInventoryValue(),
     ]);
 
     // Derivados sincronos de las filas netas por factura (sin mas consultas).
@@ -194,6 +197,14 @@ export class DashboardService {
         withNoteIvaUsd: profit.profitWithNoteIvaUsd,
         vsLastPeriod: pctChange(profit.profitUsd, prevProfit.profitUsd),
       },
+      // Costo de lo vendido del periodo (mismo universo que Ganancia) + valor del inventario de hoy.
+      costOfSales: {
+        totalUsd: profit.costUsd,
+        totalBs: profit.costBs,
+        vsLastPeriod: pctChange(profit.costUsd, prevProfit.costUsd),
+        inventoryValueUsd: inventoryValue.valueUsd,
+        productsWithStock: inventoryValue.productsWithStock,
+      },
       groupSales: {
         totalUsd: groupSales.totalUsd,
         totalBs: groupSales.totalBs,
@@ -253,6 +264,38 @@ export class DashboardService {
     const total = rows[0]?.total || 0;
     const agotados = rows[0]?.agotados || 0;
     return { agotados, total, pct: total > 0 ? Math.round((agotados / total) * 100) : 0 };
+  }
+
+  // ── KPI: Valor del inventario actual (con brecha) ──────────────────────────
+  // Foto del stock de HOY (no depende del periodo): Σ stock × costo actual con brecha, sumando
+  // todos los almacenes. Mismo criterio que Alertas de inventario (inventoryValueBregaUsd):
+  // productos ACTIVOS no-servicio, la brecha solo en los que la llevan (resolveBregaPct) y el
+  // stock negativo cuenta como 0.
+  private async getInventoryValue(): Promise<{ valueUsd: number; productsWithStock: number }> {
+    const [rows, catBregaMap, config] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ costUsd: number; bregaApplies: boolean; categoryId: string | null; qty: number }>>`
+        SELECT p."costUsd" AS "costUsd", p."bregaApplies" AS "bregaApplies", p."categoryId" AS "categoryId",
+               SUM(s.quantity)::float8 AS qty
+        FROM "Product" p
+        JOIN "Stock" s ON s."productId" = p.id
+        WHERE p."isActive" = true AND p."isService" = false
+        GROUP BY p.id
+        HAVING SUM(s.quantity) > 0
+      `,
+      buildCategoryBregaMap(this.prisma),
+      this.prisma.companyConfig.findUnique({ where: { id: 'singleton' }, select: { bregaGlobalPct: true } }),
+    ]);
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    let valueUsd = 0;
+    for (const r of rows) {
+      const bregaPct = resolveBregaPct({
+        bregaApplies: r.bregaApplies,
+        categoryBregaPct: r.categoryId ? (catBregaMap.get(r.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      valueUsd += r.qty * effectiveCost(r.costUsd || 0, bregaPct);
+    }
+    return { valueUsd: round2(valueUsd), productsWithStock: rows.length };
   }
 
   // ── KPI: Precisión de conteo (Auditoría) ───────────────────────────────────
@@ -925,7 +968,7 @@ export class DashboardService {
         },
         select: {
           serie: { select: { isFiscal: true } },
-          items: { select: { totalUsd: true, ivaAmount: true, costUsd: true, quantity: true } },
+          items: { select: { totalUsd: true, ivaAmount: true, costUsd: true, costBs: true, quantity: true } },
         },
       }),
       this.prisma.creditDebitNote.findMany({
@@ -940,9 +983,10 @@ export class DashboardService {
           },
         },
         select: {
+          exchangeRate: true,
           serie: { select: { isFiscal: true } },
           items: { select: { productId: true, quantity: true, totalUsd: true, ivaAmount: true } },
-          invoice: { select: { items: { select: { productId: true, costUsd: true } } } },
+          invoice: { select: { items: { select: { productId: true, costUsd: true, costBs: true } } } },
         },
       }),
       this.prisma.companyConfig.findUnique({
@@ -952,13 +996,18 @@ export class DashboardService {
 
     // La cifra principal descuenta SIEMPRE el IVA; el IVA de las notas de entrega (series no
     // fiscales) se acumula aparte (noteIva) para la cifra secundaria "con IVA de notas".
-    let salesProfit = 0, salesRevenue = 0, salesNoteIva = 0;
+    // Costo de lo vendido (USD y Bs historicos guardados en la factura) = el mismo costo que
+    // se resta en la ganancia, para que Ventas sin IVA − Costo = Ganancia cuadre exacto.
+    let salesProfit = 0, salesRevenue = 0, salesNoteIva = 0, salesCost = 0, salesCostBs = 0;
     for (const inv of invoices) {
       const fiscal = !!inv.serie?.isFiscal;
       for (const it of inv.items) {
         const revenue = it.totalUsd - it.ivaAmount;
+        const cost = (it.costUsd || 0) * it.quantity;
         salesRevenue += revenue;
-        salesProfit += revenue - (it.costUsd || 0) * it.quantity;
+        salesProfit += revenue - cost;
+        salesCost += cost;
+        salesCostBs += (it.costBs || 0) * it.quantity;
         if (!fiscal) salesNoteIva += it.ivaAmount;
       }
     }
@@ -966,20 +1015,23 @@ export class DashboardService {
     // Resolver el costo de lo devuelto. 1ro el costo historico de la factura original; lo que
     // no se halle ahi se junta para un unico fallback al costo actual del producto (con brecha).
     const bregaPct = config?.bregaGlobalPct || 0;
-    const pending: { productId: string | null; quantity: number; revenue: number; noteIva: number; histCost?: number }[] = [];
+    const pending: {
+      productId: string | null; quantity: number; revenue: number; noteIva: number;
+      histCost?: { usd: number; bs: number }; rate: number;
+    }[] = [];
     const missing = new Set<string>();
     for (const note of notes) {
       const fiscal = !!note.serie?.isFiscal;
-      const costMap = new Map<string, number>();
+      const costMap = new Map<string, { usd: number; bs: number }>();
       for (const ii of note.invoice?.items ?? []) {
-        if (ii.productId) costMap.set(ii.productId, ii.costUsd || 0);
+        if (ii.productId) costMap.set(ii.productId, { usd: ii.costUsd || 0, bs: ii.costBs || 0 });
       }
       for (const it of note.items) {
         const revenue = it.totalUsd - it.ivaAmount;
         const noteIva = fiscal ? 0 : it.ivaAmount;
         const histCost = it.productId ? costMap.get(it.productId) : undefined;
         if (histCost === undefined && it.productId) missing.add(it.productId);
-        pending.push({ productId: it.productId, quantity: it.quantity, revenue, noteIva, histCost });
+        pending.push({ productId: it.productId, quantity: it.quantity, revenue, noteIva, histCost, rate: note.exchangeRate || 0 });
       }
     }
     const fallbackCost = new Map<string, number>();
@@ -999,14 +1051,18 @@ export class DashboardService {
       }
     }
 
-    let returnsProfit = 0, returnsRevenue = 0, returnsNoteIva = 0;
+    let returnsProfit = 0, returnsRevenue = 0, returnsNoteIva = 0, returnsCost = 0, returnsCostBs = 0;
     for (const r of pending) {
+      // Fallback (sin costo historico): costo actual con brecha; en Bs a la tasa de la NC.
       const unitCost = r.histCost !== undefined
-        ? r.histCost
+        ? r.histCost.usd
         : (r.productId ? fallbackCost.get(r.productId) || 0 : 0);
+      const unitCostBs = r.histCost !== undefined ? r.histCost.bs : unitCost * r.rate;
       returnsRevenue += r.revenue;
       returnsProfit += r.revenue - unitCost * r.quantity;
       returnsNoteIva += r.noteIva;
+      returnsCost += unitCost * r.quantity;
+      returnsCostBs += unitCostBs * r.quantity;
     }
 
     const netProfit = salesProfit - returnsProfit;
@@ -1017,6 +1073,9 @@ export class DashboardService {
       marginPct: netRevenue > 0 ? round2((netProfit / netRevenue) * 100) : 0,
       // Ganancia contando el IVA de las notas de entrega (criterio anterior del KPI)
       profitWithNoteIvaUsd: round2(netProfit + netNoteIva),
+      // Costo de lo vendido neto de devoluciones (KPI "Costo de lo vendido")
+      costUsd: round2(salesCost - returnsCost),
+      costBs: round2(salesCostBs - returnsCostBs),
     };
   }
 

@@ -155,6 +155,18 @@ const DASHBOARD_HELP: MetricHelp[] = [
     ],
   },
   {
+    key: 'dashCostoVendido',
+    seccion: 'Ventas',
+    titulo: 'Costo de lo vendido',
+    formula: 'Σ por factura: costo con brecha × cantidad − costo de lo que se devolvió de ESA factura',
+    explicacion: 'Lo que costó la mercancía que se vendió en el período. Usa el costo guardado en cada factura al vender (ya con brecha), no el costo de hoy.',
+    incluye: [
+      'Mismas facturas que Ganancia: sin empresas del grupo, devoluciones ancladas a la factura.',
+      'Ventas sin IVA − Costo de lo vendido = Ganancia.',
+      'El % se muestra en gris: más costo vendido normalmente significa más venta, no es bueno ni malo por sí solo.',
+    ],
+  },
+  {
     key: 'dashContado',
     seccion: 'Ventas',
     titulo: 'Ventas de contado',
@@ -215,6 +227,18 @@ const DASHBOARD_HELP: MetricHelp[] = [
     titulo: 'Quiebre de inventario',
     formula: 'productos con stock ≤ 0 ÷ productos activos × 100',
     explicacion: 'Foto del stock actual sumando todos los almacenes. No incluye servicios ni productos inactivos.',
+  },
+  {
+    key: 'dashInventarioActual',
+    seccion: 'Inventario (no dependen del período)',
+    titulo: 'Inventario actual',
+    formula: 'Σ stock × costo actual × (1 + % brecha si el artículo lleva brecha)',
+    explicacion: 'El dinero que tienes hoy en mercancía, sumando todos los almacenes. Mismo criterio que Alertas de inventario.',
+    incluye: [
+      'Solo productos activos y que no son servicios.',
+      'El stock negativo (sobrevendido) cuenta como 0.',
+      'La brecha es la de la categoría raíz del producto o, si no tiene, la global.',
+    ],
   },
   {
     key: 'dashPrecision',
