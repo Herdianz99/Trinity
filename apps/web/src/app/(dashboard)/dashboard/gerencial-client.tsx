@@ -6,7 +6,7 @@ import {
   DollarSign, RotateCcw, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw, Calendar, ChevronDown, Package, PackageX,
   Wallet, ArrowUpRight, ArrowDownRight, CreditCard, Landmark, Banknote, HandCoins,
-  Building2, PiggyBank, ClipboardCheck, UserPlus, Layers, Boxes,
+  Building2, PiggyBank, ClipboardCheck, UserPlus, Layers,
 } from 'lucide-react';
 import {
   AreaChart, Area, ComposedChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -129,13 +129,6 @@ interface DashboardData {
     marginPct: number;
     withNoteIvaUsd: number;
     vsLastPeriod: number | null;
-  };
-  costOfSales: {
-    totalUsd: number;
-    totalBs: number;
-    vsLastPeriod: number | null;
-    inventoryValueUsd: number;
-    productsWithStock: number;
   };
   groupSales: {
     totalUsd: number;
@@ -481,7 +474,7 @@ export default function DashboardGerencialClient() {
               positiveIsGood
               href={`/receivables?type=FINANCING_PLATFORM&from=${fromDate}&to=${toDate}`}
             />
-            {/* Panel de media fila: Clientes nuevos + desglose compraron/sin comprar,
+            {/* Panel ancho (llena la fila): Clientes nuevos + desglose compraron/sin comprar,
                 cada segmento clickeable a la lista filtrada (purchased=true|false). */}
             {(() => {
               const nc = data.newCustomers;
@@ -489,7 +482,7 @@ export default function DashboardGerencialClient() {
               const pctBought = nc.count > 0 ? Math.round((nc.purchasedCount / nc.count) * 100) : 0;
               const baseUrl = `/sales/customers?createdFrom=${fromDate}&createdTo=${toDate}`;
               return (
-                <div className="sm:col-span-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+                <div className="col-span-full bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400"><UserPlus size={20} /></div>
@@ -531,37 +524,6 @@ export default function DashboardGerencialClient() {
                 </div>
               );
             })()}
-
-            {/* Costo de lo vendido (periodo, mismo universo que Ganancia) + valor del inventario
-                actual con brecha (foto de hoy). El % se muestra neutro: mas costo = mas venta. */}
-            {data.costOfSales && (
-              <div className="sm:col-span-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Costo de lo vendido</span>
-                  <div className="p-2 rounded-lg bg-violet-500/15 text-violet-400"><Boxes size={20} /></div>
-                </div>
-                <div className="flex items-end justify-between gap-2">
-                  <p className="text-2xl font-bold text-white tabular-nums">${fmt(data.costOfSales.totalUsd)}</p>
-                  {data.costOfSales.vsLastPeriod !== null && data.costOfSales.vsLastPeriod !== 0 ? (
-                    <span className="text-xs font-medium flex items-center gap-0.5 text-slate-400 mb-1">
-                      {data.costOfSales.vsLastPeriod > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {data.costOfSales.vsLastPeriod > 0 ? '+' : ''}{data.costOfSales.vsLastPeriod}%
-                    </span>
-                  ) : <span className="text-xs text-slate-600 mb-1">--</span>}
-                </div>
-                <span className="text-xs text-slate-500">Bs {fmt(data.costOfSales.totalBs)} · costo con brecha, sin grupo</span>
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">Inventario actual</span>
-                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-400 font-medium">TIEMPO REAL</span>
-                  </div>
-                  <p className="text-lg font-semibold text-violet-300 tabular-nums mt-0.5">${fmt(data.costOfSales.inventoryValueUsd)}</p>
-                  <span className="text-[11px] text-slate-500">
-                    {data.costOfSales.productsWithStock.toLocaleString()} artículos con existencia · a costo con brecha
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* ═══ Indicadores de inventario (Compras + Auditoría) ═══ */}
