@@ -905,17 +905,21 @@ export class DashboardService {
   // ── Ganancia (neta de devoluciones) ───────────────────────────────────────
   // Ganancia por linea = ingreso - costo con brecha. El ingreso descuenta IVA solo si la
   // serie es fiscal (en notas/no-fiscales el IVA cuenta como ganancia; regla de negocio en
-  // CLAUDE.md). El costo con brecha YA viene guardado en InvoiceItem.costUsd. Se resta la
-  // ganancia de lo devuelto (NCV POSTED) del periodo, con el costo historico de la factura
-  // original (fallback: costo actual del producto, con brecha).
+  // CLAUDE.md). El costo con brecha YA viene guardado en InvoiceItem.costUsd. A cada factura
+  // del periodo se le resta la ganancia de SUS devoluciones (NCV POSTED), con el costo
+  // historico de la factura original (fallback: costo actual del producto, con brecha).
+  // Mismo criterio que "Ventas (neto)" (getNetInvoiceRows): las devoluciones se anclan a la
+  // factura, no a la fecha de la NC. Por eso entran las RETURNED: su venta y su NC se cancelan
+  // (antes se excluia la factura pero igual se restaba su NC -> la devolucion restaba dos veces).
   private async getProfit(dateRange: { gte: Date; lte: Date }) {
+    const estados: ('PAID' | 'PARTIAL_RETURN' | 'RETURNED')[] = ['PAID', 'PARTIAL_RETURN', 'RETURNED'];
     const [invoices, notes, config] = await Promise.all([
       this.prisma.invoice.findMany({
         // Excluye ventas a empresas del grupo (isGroupCompany). El NOT preserva las facturas
         // sin cliente (mostrador/contado), que con `customer: { isGroupCompany: false }` se
         // perderian por ser customerId nulo.
         where: {
-          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          status: { in: estados },
           paidAt: dateRange,
           NOT: { customer: { isGroupCompany: true } },
         },
@@ -925,10 +929,15 @@ export class DashboardService {
         },
       }),
       this.prisma.creditDebitNote.findMany({
-        // Misma exclusion: se descartan las NCV cuya factura original fue a una empresa del grupo.
+        // NCV de las facturas de ARRIBA (mismo filtro sobre la factura original, incluida la
+        // exclusion del grupo), sin importar cuando se hizo la NC.
         where: {
-          type: 'NCV', status: 'POSTED', documentDate: dateRange,
-          NOT: { invoice: { customer: { isGroupCompany: true } } },
+          type: 'NCV', status: 'POSTED',
+          invoice: {
+            status: { in: estados },
+            paidAt: dateRange,
+            NOT: { customer: { isGroupCompany: true } },
+          },
         },
         select: {
           serie: { select: { isFiscal: true } },
