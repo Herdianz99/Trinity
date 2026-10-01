@@ -12,13 +12,14 @@ export function MetricsHelpButton({ metricKeys, small }: { metricKeys: string[];
     <>
       <button
         onClick={() => setOpen(true)}
-        title="Cómo se calcula cada indicador"
+        title="¿Cómo se calcula?"
+        aria-label="¿Cómo se calcula?"
         className={small
-          ? 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700 border border-slate-700/50 transition-colors'
+          ? 'p-1.5 rounded-lg bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors'
           : 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 border border-slate-700 transition-colors'}
       >
-        <HelpCircle size={small ? 13 : 16} className="text-emerald-400" />
-        ¿Cómo se calcula?
+        <HelpCircle size={16} className={small ? '' : 'text-emerald-400'} />
+        {!small && '¿Cómo se calcula?'}
       </button>
 
       {open && (

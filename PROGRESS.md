@@ -22,7 +22,7 @@
 > ⏳ **Pendiente de deploy.** Solo frontend (sin migraciones ni cambios de API).
 
 - **Motivo:** el usuario no lograba cuadrar "Ventas (neto)" restando Devoluciones al bruto. Causa: el Neto resta las NC **de las facturas del período** (sin importar la fecha de la NC), mientras la tarjeta "Devoluciones" suma las NC **hechas en el período** (de cualquier factura). Son criterios distintos a propósito; se documentó para no olvidarlo.
-- **Botón "¿Cómo se calcula?"** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard` (gerencial). Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`.
+- **Botón "¿Cómo se calcula?"** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard` (gerencial). Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`: solo el ícono (?) con tooltip, mismo estilo que el botón de refrescar.
 - `lib/metrics-help.ts`: `MetricHelp` gana campos opcionales `seccion`, `incluye[]` y `ojo`; nuevo bloque `DASHBOARD_HELP` + `DASHBOARD_METRIC_KEYS` con todos los KPI agrupados (Reglas generales, Ventas, Inventario, Cuentas y caja, Gráficas): período y %, fecha de la venta (paidAt, crédito cuenta al emitir), por qué Bruto − Devoluciones ≠ Neto, Ventas neto, Ganancia/margen/Prom./Otros ingresos, contado (resta Cashea/Crediagro), crédito, grupo, Cashea/Crediagro, Devoluciones, Clientes nuevos, Quiebre, Precisión de conteo, CxC/CxP, Resumen de caja, Gastos, timeline, vendedores, top/categorías, fiscal, brecha.
 - `components/metrics-help-modal.tsx`: renderiza encabezados de sección, viñetas y la advertencia (ámbar). Alertas de inventario y Análisis de compras siguen igual.
 - **Regla:** si se cambia un cálculo en `dashboard.service.ts`, actualizar también el texto en `DASHBOARD_HELP`.
