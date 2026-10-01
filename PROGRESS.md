@@ -19,7 +19,7 @@
 
 ## 🗓️ Sesión 151 (2026-10-01) — Dashboard gerencial: botón "¿Cómo se calcula?" con la definición de cada KPI
 
-> ⏳ **Pendiente de deploy.** Solo frontend (sin migraciones ni cambios de API).
+> ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-10-01, deploy de Diego, HEAD `b1876b0`): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `b1876b0` = `origin/main`; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) en :4000 y :4001 de cada droplet; `/suppliers?isActive=true` responde `401` (ruta OK); el `dist` compilado de cada API trae el fix de Ganancia (`RETURNED` en getProfit), `totalGroupCost` y el filtro `isActive` de proveedores, y los chunks web traen la ayuda del dashboard y el "— inactivo"; builds de hoy. Logs de error limpios desde el arranque. **Sin migraciones** en esta sesión.
 
 - **Motivo:** el usuario no lograba cuadrar "Ventas (neto)" restando Devoluciones al bruto. Causa: el Neto resta las NC **de las facturas del período** (sin importar la fecha de la NC), mientras la tarjeta "Devoluciones" suma las NC **hechas en el período** (de cualquier factura). Son criterios distintos a propósito; se documentó para no olvidarlo.
 - **Botón "¿Cómo se calcula?"** al lado de Hoy / Esta semana / Este mes / Personalizado en `/dashboard` (gerencial). Reutiliza `MetricsHelpButton` (Sesión 69b) con variante `small`: solo el ícono (?) con tooltip, mismo estilo que el botón de refrescar.
