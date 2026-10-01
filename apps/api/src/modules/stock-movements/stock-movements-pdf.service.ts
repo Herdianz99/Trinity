@@ -82,6 +82,7 @@ export class StockMovementsPdfService {
     }[],
     summary: Summary,
     totalCost: number,
+    totalGroupCost = 0,
   ): Promise<Buffer> {
     const company = await this.getCompanyName();
     const doc = new PDFDocument({
@@ -177,12 +178,15 @@ export class StockMovementsPdfService {
       y += rowHeight;
     }
 
-    // ── Total general ──
-    ensureSpace(30);
+    // ── Total general + total del grupo (ventas/NC a clientes empresa del grupo) ──
+    ensureSpace(46);
     doc.moveTo(30, y).lineTo(pageRight, y).stroke('#94a3b8');
     y += 5;
     doc.fontSize(10).font('Helvetica-Bold').fillColor('#0f766e');
     doc.text(`COSTO TOTAL:  $${m$(totalCost)}`, 30, y, { width: pageRight - 30, align: 'right' });
+    y += 15;
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#4338ca');
+    doc.text(`Total del grupo:  $${m$(totalGroupCost)}`, 30, y, { width: pageRight - 30, align: 'right' });
     doc.fillColor('#000');
 
     if (rows.length === 0) {

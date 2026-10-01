@@ -361,6 +361,31 @@ export class StockMovementsService {
       for (const it of items) histCostByKey.set(`${it.invoiceId}|${it.productId}`, it.costUsd);
     }
 
+    // "Total del grupo": movimientos cuyo documento origen es de un cliente empresa del grupo
+    // (isGroupCompany) — facturas de venta y NC de venta (por el cliente de su factura original).
+    const noteIds = [
+      ...new Set(
+        movements
+          .filter((m) => m.sourceType === 'CREDIT_DEBIT_NOTE' && m.sourceId)
+          .map((m) => m.sourceId as string),
+      ),
+    ];
+    const [groupInvoices, groupNotes] = await Promise.all([
+      saleInvoiceIds.length
+        ? this.prisma.invoice.findMany({
+            where: { id: { in: saleInvoiceIds }, customer: { isGroupCompany: true } },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+      noteIds.length
+        ? this.prisma.creditDebitNote.findMany({
+            where: { id: { in: noteIds }, invoice: { customer: { isGroupCompany: true } } },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const groupSourceIds = new Set([...groupInvoices, ...groupNotes].map((d) => d.id));
+
     const r2 = (n: number) => Math.round(n * 100) / 100;
 
     const rows = movements.map((m) => {
@@ -388,10 +413,12 @@ export class StockMovementsService {
         quantity: qty,
         unitCost: r2(unitCost),
         lineCost: r2(qty * unitCost),
+        isGroup: !!m.sourceId && groupSourceIds.has(m.sourceId),
       };
     });
 
     const totalCost = r2(rows.reduce((s, r) => s + r.lineCost, 0));
+    const totalGroupCost = r2(rows.reduce((s, r) => s + (r.isGroup ? r.lineCost : 0), 0));
 
     const [warehouse, supplier, product] = await Promise.all([
       filters.warehouseId
@@ -408,6 +435,7 @@ export class StockMovementsService {
     return {
       rows,
       totalCost,
+      totalGroupCost,
       totalCount: movements.length,
       summary: {
         from: filters.from || null,

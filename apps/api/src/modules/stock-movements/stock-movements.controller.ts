@@ -126,7 +126,7 @@ export class StockMovementsController {
     @Query('to') to?: string,
     @Query('serie') serie?: string,
   ) {
-    const { rows, summary, totalCost } = await this.stockMovementsService.getCostReport({
+    const { rows, summary, totalCost, totalGroupCost } = await this.stockMovementsService.getCostReport({
       productId,
       warehouseId,
       type,
@@ -136,7 +136,7 @@ export class StockMovementsController {
       to,
       serie,
     });
-    const buffer = await this.stockMovementsPdf.generateCostReport(rows as any, summary, totalCost);
+    const buffer = await this.stockMovementsPdf.generateCostReport(rows as any, summary, totalCost, totalGroupCost);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="costo-movimientos.pdf"',
