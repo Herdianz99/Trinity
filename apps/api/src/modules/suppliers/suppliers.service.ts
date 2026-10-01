@@ -56,8 +56,12 @@ export class SuppliersService {
     return this.prisma.supplier.create({ data: { ...dto, bankAccount } });
   }
 
-  async findAll(query?: { search?: string; isRetentionAgent?: string; limit?: string }) {
+  // isActive='true' -> solo activos (selectores para crear compras/gastos/CxP); 'false' -> solo
+  // inactivos; sin el parametro -> todos (listado de proveedores, filtros de reportes).
+  async findAll(query?: { search?: string; isRetentionAgent?: string; isActive?: string; limit?: string }) {
     const where: any = {};
+    if (query?.isActive === 'true') where.isActive = true;
+    if (query?.isActive === 'false') where.isActive = false;
 
     if (query?.search) {
       where.OR = [

@@ -78,9 +78,9 @@ export default function PurchasesPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch suppliers for filter dropdown
+  // Proveedores para el filtro: TODOS (incluye inactivos, para encontrar sus compras viejas).
   useEffect(() => {
-    fetch('/api/proxy/suppliers?isActive=true')
+    fetch('/api/proxy/suppliers')
       .then(r => r.json())
       .then(data => {
         setSuppliers(Array.isArray(data) ? data : data.data || []);

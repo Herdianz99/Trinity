@@ -166,14 +166,14 @@ export class PurchaseAiService {
     if (rif) {
       const cleaned = rif.replace(/[^0-9a-zA-Z]/g, '');
       const byRif = await this.prisma.supplier.findFirst({
-        where: { rif: { contains: cleaned.length >= 6 ? cleaned.slice(1) : cleaned, mode: 'insensitive' } },
+        where: { isActive: true, rif: { contains: cleaned.length >= 6 ? cleaned.slice(1) : cleaned, mode: 'insensitive' } },
         select: { id: true, name: true, rif: true },
       });
       if (byRif) return byRif;
     }
     if (name && name.length >= 3) {
       const byName = await this.prisma.supplier.findFirst({
-        where: { name: { contains: name.split(/\s+/)[0], mode: 'insensitive' } },
+        where: { isActive: true, name: { contains: name.split(/\s+/)[0], mode: 'insensitive' } },
         select: { id: true, name: true, rif: true },
       });
       if (byName) return byName;

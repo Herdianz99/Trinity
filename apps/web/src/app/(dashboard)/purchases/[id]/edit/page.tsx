@@ -139,6 +139,9 @@ export default function EditPurchaseBillPage() {
 
   // ---- Form header state ----
   const [supplierId, setSupplierId] = useState('');
+  // Proveedor guardado en la factura: se muestra aunque ya este desactivado (la lista de
+  // `suppliers` solo trae activos, para elegir otro).
+  const [billSupplier, setBillSupplier] = useState<Supplier | null>(null);
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
   // Indice resaltado para navegar el dropdown de proveedores con el teclado (flechas + Enter)
@@ -274,6 +277,7 @@ export default function EditPurchaseBillPage() {
 
         // Populate form state from loaded bill
         setSupplierId(bill.supplierId);
+        setBillSupplier(bill.supplier || null);
         setSupplierSerialNumber(bill.supplierSerialNumber || '');
         setSupplierControlNumber(bill.supplierControlNumber || '');
         setSupplierInvoiceNumber(bill.supplierInvoiceNumber || '');
@@ -332,8 +336,9 @@ export default function EditPurchaseBillPage() {
 
   // ---- Selected supplier ----
   const selectedSupplier = useMemo(
-    () => suppliers.find((s) => s.id === supplierId) || null,
-    [suppliers, supplierId],
+    () => suppliers.find((s) => s.id === supplierId)
+      || (billSupplier?.id === supplierId ? billSupplier : null),
+    [suppliers, supplierId, billSupplier],
   );
 
   // NOTA: a diferencia del form de creacion, aqui NO auto-rellenamos las condiciones

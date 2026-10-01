@@ -18,7 +18,7 @@ export class SuppliersController {
   }
 
   @Get()
-  findAll(@Query() query: { search?: string; isRetentionAgent?: string; limit?: string }) {
+  findAll(@Query() query: { search?: string; isRetentionAgent?: string; isActive?: string; limit?: string }) {
     return this.suppliersService.findAll(query);
   }
 

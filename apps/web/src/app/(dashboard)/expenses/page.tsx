@@ -47,6 +47,7 @@ interface Expense {
 
 interface SupplierOption {
   id: string;
+  isActive: boolean;
   name: string;
   rif: string | null;
   creditDays?: number;
@@ -196,7 +197,8 @@ export default function ExpensesPage() {
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setPaymentMethods(data); })
       .catch(() => {});
-    fetch('/api/proxy/suppliers?isActive=true')
+    // Todos (activos e inactivos): el selector muestra solo activos + el del gasto en edicion.
+    fetch('/api/proxy/suppliers')
       .then(r => r.json())
       .then(data => { const list = Array.isArray(data) ? data : data.data || []; setSuppliers(list); })
       .catch(() => {});
@@ -831,8 +833,8 @@ export default function ExpensesPage() {
                             className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm disabled:opacity-60"
                           >
                             <option value="">Seleccionar...</option>
-                            {suppliers.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}{s.rif ? ` (${s.rif})` : ''}</option>
+                            {suppliers.filter(s => s.isActive || s.id === formData.supplierId).map(s => (
+                              <option key={s.id} value={s.id}>{s.name}{s.rif ? ` (${s.rif})` : ''}{s.isActive ? '' : ' — inactivo'}</option>
                             ))}
                           </select>
                         </div>

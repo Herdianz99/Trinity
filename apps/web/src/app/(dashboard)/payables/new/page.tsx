@@ -99,7 +99,7 @@ export default function NewPayablePage() {
       try {
         const [rateRes, supRes, seriesRes, configRes, profileRes] = await Promise.all([
           fetch('/api/proxy/exchange-rate/today'),
-          fetch('/api/proxy/suppliers?limit=1000'),
+          fetch('/api/proxy/suppliers?isActive=true&limit=1000'),
           fetch('/api/proxy/series?type=PURCHASES'),
           fetch('/api/proxy/company-config'),
           fetch('/api/auth/me'),
@@ -140,7 +140,7 @@ export default function NewPayablePage() {
   // Tras crear/editar un proveedor: refrescar la lista y seleccionar el guardado.
   async function handleSupplierSaved(saved: any) {
     try {
-      const res = await fetch('/api/proxy/suppliers?limit=1000');
+      const res = await fetch('/api/proxy/suppliers?isActive=true&limit=1000');
       if (res.ok) { const d = await res.json(); setSuppliers(Array.isArray(d.data) ? d.data : Array.isArray(d) ? d : []); }
     } catch { /* ignore */ }
     if (saved?.id) { setSupplierId(saved.id); setSupplierSearch(''); setSupplierDropdownOpen(false); }

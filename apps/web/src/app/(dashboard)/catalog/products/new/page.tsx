@@ -8,7 +8,7 @@ import ProductNameSuggest from '@/components/product-name-suggest';
 
 interface Category { id: string; name: string; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
-interface Supplier { id: string; name: string; }
+interface Supplier { id: string; name: string; isActive: boolean; }
 
 const IVA_OPTIONS = [
   { value: 'EXEMPT', label: 'Exento (0%)' },
@@ -248,7 +248,7 @@ export default function NewProductPage() {
               <label className="block text-xs font-medium text-slate-400 mb-1">Proveedor principal</label>
               <select value={form.supplierId} onChange={e => setForm(f => ({ ...f, supplierId: e.target.value }))} className="input-field !py-2 text-sm">
                 <option value="">Sin proveedor</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {suppliers.filter(s => s.isActive || s.id === form.supplierId).map(s => <option key={s.id} value={s.id}>{s.name}{s.isActive ? '' : ' — inactivo'}</option>)}
               </select>
             </div>
           </div>

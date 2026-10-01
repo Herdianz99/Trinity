@@ -52,7 +52,7 @@ interface Product {
 }
 interface Category { id: string; name: string; bregaPct?: number; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
-interface Supplier { id: string; name: string; }
+interface Supplier { id: string; name: string; isActive: boolean; }
 interface Movement {
   id: string; type: string; quantity: number; costUsd: number; stockAfter: number;
   reason: string | null; reference: string | null; createdAt: string; createdById: string;
@@ -707,7 +707,7 @@ export default function ProductDetailPage() {
                   <label className="block text-xs font-medium text-slate-400 mb-1">Proveedor principal</label>
                   <select value={form.supplierId || ''} onChange={e => setForm((f: any) => ({ ...f, supplierId: e.target.value }))} className="input-field !py-2 text-sm">
                     <option value="">Sin proveedor</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {suppliers.filter(s => s.isActive || s.id === form.supplierId).map(s => <option key={s.id} value={s.id}>{s.name}{s.isActive ? '' : ' — inactivo'}</option>)}
                   </select>
                 </div>
               </div>
