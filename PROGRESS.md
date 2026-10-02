@@ -17,6 +17,28 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 152 (2026-10-02) — Reporte "Margen de ganancia" cuadra con el KPI Ganancia del dashboard + botón "¿Cómo se calcula?"
+
+> ### ⏳ PUSHEADO, SIN DESPLEGAR (HEAD `58e213a`). Sin migraciones → deploy seguro. Falta correr `deploy.sh` en las instancias (y `/opt/deploy-trinity-mayor.sh` para mayor).
+
+### 1) Fix cálculo del reporte `/reports/profit-margin` (no cuadraba con el dashboard)
+- **Problema (reportado por el usuario):** el total de ganancia del reporte no coincidía con el KPI "Ganancia" del dashboard para el mismo rango.
+- **Causa:** `reports.service.profitMargin()` calculaba distinto a `dashboard.service.getProfit()`: (1) sumaba el IVA a las ventas en vez de restarlo, (2) no restaba las devoluciones (NCV), (3) no excluía ventas a empresas del grupo.
+- **Fix:** se reescribió `profitMargin()` replicando `getProfit()`: ingreso **neto de IVA** (`totalUsd − ivaAmount`) siempre; **resta las NCV POSTED** de las facturas del período al **costo histórico** de la factura original (o costo efectivo con brecha como respaldo vía `resolveBregaPct`/`effectiveCost`/`buildCategoryBregaMap`); **excluye** `isGroupCompany`; totales desde valores crudos (redondeo único) para cuadrar al centavo. Corrige también el **PDF** (reutiliza el mismo método).
+- **Verificado en local** (grande_db): script que replica ambas fórmulas → `dashboard.profitUsd == report.totalProfitUsd` con **diff 0** en todas las fechas con datos (14/09 $4.335,18, 15/09 $3.901,71, 16/09 $210,16, 28/09 $0,22). Typecheck API OK.
+- Columnas por producto (Ventas/Costo USD) ahora también netas de IVA y de devoluciones.
+
+### 2) Botón "¿Cómo se calcula?" en el reporte
+- Reutiliza `MetricsHelpButton` (Sesión 151) en la cabecera de `/reports/profit-margin`.
+- `lib/metrics-help.ts`: sección nueva "Reporte de margen de ganancia" con `pmVentas`, `pmCosto`, `pmGanancia`, `pmMargen` (fórmulas + viñetas: IVA siempre descontado, excluye grupo, resta devoluciones, costo histórico/brecha) + export `PROFIT_MARGIN_METRIC_KEYS`.
+- **Regla:** si cambia `reports.service.profitMargin()`, actualizar el texto en `PROFIT_MARGIN_HELP`.
+- Web compila (`✓ Compiled`), typecheck de los 2 archivos tocados sin errores.
+
+### Operaciones por BD en esta sesión (sin código)
+- **mayor (trebolmayor_db):** reactivada la cotización **COT-0002** (EXPIRED → APPROVED, `expiresAt` +15 días) para poder facturarla. OJO: al convertir, los Bs se recalculan con la tasa BCV de hoy.
+- **grande (trinity_db):** CxP **CXP/26-000340** y **CXP/26-000342** → campo "Serie (factura proveedor)" = **"A"** (`Payable.serieProveedor` + sincronizado `PurchaseBookEntry.supplierSerie` del libro de compras, en una transacción).
+- **Local:** la BD del API la decide el **`.env` de la RAÍZ** del repo (no apps/api/.env ni packages/database/.env) — estaba en `trebolmayor_db` (4 facturas); se alinearon los 3 `.env` a `grande_db`. Además `grande_db` (restore de agosto) estaba atrasado en migraciones → se aplicaron todas (incl. bancaribe) + `fix-schema.sql`; se resolvió el 500 de product-detail/suppliers por `Supplier.bankAccount` faltante.
+
 ## 🗓️ Sesión 151 (2026-10-01) — Dashboard: ayuda "¿Cómo se calcula?" + fix KPI Ganancia · Reporte de costos: total del grupo · Proveedores inactivos fuera de compras/gastos/CxP · Clientes de mayor (Excel Confía)
 
 > ### ✅ DESPLEGADO EN LAS 7 INSTANCIAS (2026-10-01, deploy de Diego, HEAD `b1876b0`): inversiones, trebolmayor, eltrebol/ferre, total, totalturen, aceros, acerosmayor. Verificado por SSH: las 7 en `b1876b0` = `origin/main`; PM2 api+web `online` en los 4 droplets; `/health` ok (database ok) en :4000 y :4001 de cada droplet; `/suppliers?isActive=true` responde `401` (ruta OK); el `dist` compilado de cada API trae el fix de Ganancia (`RETURNED` en getProfit), `totalGroupCost` y el filtro `isActive` de proveedores, y los chunks web traen la ayuda del dashboard y el "— inactivo"; builds de hoy. Logs de error limpios desde el arranque. **Sin migraciones** en esta sesión.

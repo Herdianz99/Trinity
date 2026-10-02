@@ -99,6 +99,11 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 152 (2026-10-02) — Reporte "Margen de ganancia" alineado al KPI Ganancia del dashboard
+- `reports.service.profitMargin()` ahora replica `dashboard.service.getProfit()`: ingreso **neto de IVA** siempre, **resta devoluciones** (NCV, costo histórico o efectivo con brecha) y **excluye empresas del grupo**. Antes sumaba el IVA y no restaba devoluciones ni grupo → no cuadraba con el dashboard. Corrige también el PDF. Verificado vs `getProfit` en datos reales: diff 0.
+- **Regla de negocio reforzada:** el total del reporte profit-margin debe coincidir con el KPI "Ganancia" del dashboard para el mismo rango.
+- Botón **"¿Cómo se calcula?"** en `/reports/profit-margin` (reutiliza `MetricsHelpButton`; sección "Reporte de margen de ganancia" en `metrics-help.ts`). **Sin migraciones. Pusheado (`58e213a`), sin desplegar.**
+
 #### Sesión 121 (2026-09-06) — Módulo "Pedidos a proveedor" (lista compartida compras↔ventas)
 - Módulo **nuevo e independiente** (`modules/purchase-requests/` + página `/pedidos`) para que ventas consulte lo que compras ya pidió al proveedor. **No** es la factura de compra: no mueve inventario, costos ni CxP.
 - Tabla plana `SupplierOrderItem` (migración `20260906120000_supplier_order_items`, idempotente); carga desde Excel (formato `CODIGO/CANTIDAD/COSTO/DESCRIPCION`) con preview, registro manual, `observation` editable, buscador y tabs `Todos/En tránsito/Recibidos`.
