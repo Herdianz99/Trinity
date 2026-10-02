@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BarChart3, Loader2, Download, Calendar, Percent, DollarSign, TrendingUp, ShoppingCart, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { MetricsHelpButton } from '@/components/metrics-help-modal';
+import { PROFIT_MARGIN_METRIC_KEYS } from '@/lib/metrics-help';
 
 /* ---------- Types ---------- */
 
@@ -158,14 +160,17 @@ export default function ProfitMarginReportPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-          <Percent className="text-emerald-400" size={24} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <Percent className="text-emerald-400" size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">Margen de Ganancia</h1>
+            <p className="text-sm text-slate-400">Analisis de rentabilidad por producto</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Margen de Ganancia</h1>
-          <p className="text-sm text-slate-400">Analisis de rentabilidad por producto</p>
-        </div>
+        <MetricsHelpButton metricKeys={PROFIT_MARGIN_METRIC_KEYS} />
       </div>
 
       {/* Error */}

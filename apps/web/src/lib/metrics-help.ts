@@ -298,6 +298,54 @@ for (const m of DASHBOARD_HELP) METRICS_HELP[m.key] = m;
 
 export const DASHBOARD_METRIC_KEYS = DASHBOARD_HELP.map((m) => m.key);
 
+// ── Reporte de margen de ganancia (/reports/profit-margin) ───────────────────
+// Refleja apps/api/src/modules/reports/reports.service.ts -> profitMargin(). Usa el MISMO
+// criterio que el KPI "Ganancia" del dashboard (getProfit): ingreso neto de IVA, resta de
+// devoluciones y exclusión de empresas del grupo. Si cambia el backend, actualizar este texto.
+const PROFIT_MARGIN_HELP: MetricHelp[] = [
+  {
+    key: 'pmVentas',
+    seccion: 'Reporte de margen de ganancia',
+    titulo: 'Total Ventas',
+    formula: 'Σ (total − IVA) de lo vendido − Σ (total − IVA) de lo devuelto',
+    explicacion: 'Venta neta en USD del período: cada renglón sin IVA, menos las devoluciones. El IVA se descuenta SIEMPRE (fiscal y no fiscal), por eso cuadra con el KPI "Ganancia" del dashboard.',
+    incluye: [
+      'Facturas procesadas por caja (pagadas, con devolución parcial y devueltas) con fecha de proceso en el rango.',
+      'Excluye las ventas a empresas del grupo (autoconsumo).',
+      'Resta las notas de crédito (devoluciones) de esas facturas.',
+    ],
+  },
+  {
+    key: 'pmCosto',
+    seccion: 'Reporte de margen de ganancia',
+    titulo: 'Total Costo',
+    formula: 'Σ (costo × cantidad) de lo vendido − Σ (costo × cantidad) de lo devuelto',
+    explicacion: 'Costo de la mercancía vendida. El costo es el que quedó congelado en la factura al momento de vender (ya incluye la brecha).',
+    incluye: [
+      'La devolución descuenta el costo histórico de la factura original.',
+      'Si no se encuentra el costo histórico, usa el costo actual del producto + brecha.',
+    ],
+  },
+  {
+    key: 'pmGanancia',
+    seccion: 'Reporte de margen de ganancia',
+    titulo: 'Ganancia (Total Ventas − Total Costo)',
+    formula: 'ganancia = Total Ventas − Total Costo',
+    explicacion: 'Coincide con el KPI "Ganancia" del dashboard para el mismo rango de fechas.',
+  },
+  {
+    key: 'pmMargen',
+    seccion: 'Reporte de margen de ganancia',
+    titulo: 'Margen %',
+    formula: 'margen % = ganancia ÷ Total Ventas × 100',
+    explicacion: 'Margen sobre la venta (sin IVA), no sobre el costo. Ej: costo 0.50 y venta 1.00 → 50%.',
+  },
+];
+
+for (const m of PROFIT_MARGIN_HELP) METRICS_HELP[m.key] = m;
+
+export const PROFIT_MARGIN_METRIC_KEYS = PROFIT_MARGIN_HELP.map((m) => m.key);
+
 export function getMetrics(keys: string[]): MetricHelp[] {
   return keys.map((k) => METRICS_HELP[k]).filter(Boolean);
 }

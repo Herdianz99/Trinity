@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoiceStatus, Prisma } from '@prisma/client';
 import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { resolveBregaPct, effectiveCost } from '../../common/pricing';
+import { buildCategoryBregaMap } from '../../common/category-brega';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -554,67 +556,121 @@ export class ReportsService {
   async profitMargin(fromStr: string, toStr: string, categoryId?: string) {
     const { from, to } = parseDateRange(fromStr, toStr);
 
-    // Get product IDs for category filter
-    let productIds: string[] | undefined;
+    // Filtro por categoria -> set de productIds permitidos
+    let productIds: Set<string> | undefined;
     if (categoryId) {
       const products = await this.prisma.product.findMany({
         where: { categoryId },
         select: { id: true },
       });
-      productIds = products.map(p => p.id);
+      productIds = new Set(products.map(p => p.id));
     }
+    const allowed = (pid: string | null) => !productIds || (pid != null && productIds.has(pid));
 
-    const invoices = await this.prisma.invoice.findMany({
-      where: {
-        status: { in: PAID_STATUSES },
-        paidAt: { gte: from, lte: to },
-      },
-      include: { items: true },
-    });
+    // Mismo criterio que el KPI "Ganancia" del dashboard (DashboardService.getProfit):
+    //  - estados PAID/PARTIAL_RETURN/RETURNED, EXCLUYE ventas al grupo (autoconsumo, isGroupCompany)
+    //  - ingreso SIEMPRE neto de IVA (totalUsd - ivaAmount)
+    //  - RESTA las devoluciones (notas de credito NCV POSTED de facturas del periodo) al costo
+    //    historico de la factura original, con el costo efectivo actual (con brecha) como respaldo
+    // De este modo el total del reporte cuadra con la tarjeta "Ganancia" del dashboard.
+    const [invoices, notes, config] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: {
+          status: { in: PAID_STATUSES },
+          paidAt: { gte: from, lte: to },
+          NOT: { customer: { isGroupCompany: true } },
+        },
+        select: {
+          items: { select: { productId: true, productName: true, quantity: true, totalUsd: true, ivaAmount: true, costUsd: true } },
+        },
+      }),
+      this.prisma.creditDebitNote.findMany({
+        where: {
+          type: 'NCV', status: 'POSTED',
+          invoice: {
+            status: { in: PAID_STATUSES },
+            paidAt: { gte: from, lte: to },
+            NOT: { customer: { isGroupCompany: true } },
+          },
+        },
+        select: {
+          items: { select: { productId: true, productCode: true, productName: true, quantity: true, totalUsd: true, ivaAmount: true } },
+          invoice: { select: { items: { select: { productId: true, costUsd: true } } } },
+        },
+      }),
+      this.prisma.companyConfig.findUnique({ where: { id: 'singleton' }, select: { bregaGlobalPct: true } }),
+    ]);
 
-    // Build product info lookup
-    const allProductIds = new Set<string>();
-    for (const inv of invoices) {
-      for (const item of inv.items) {
-        if (!productIds || productIds.includes(item.productId)) {
-          allProductIds.add(item.productId);
-        }
-      }
-    }
+    // Lookup de codigo/categoria por producto (para los productos con movimiento en el periodo)
+    const pidSet = new Set<string>();
+    for (const inv of invoices) for (const it of inv.items) if (it.productId && allowed(it.productId)) pidSet.add(it.productId);
+    for (const n of notes) for (const it of n.items) if (it.productId && allowed(it.productId)) pidSet.add(it.productId);
     const productLookup = await this.prisma.product.findMany({
-      where: { id: { in: Array.from(allProductIds) } },
+      where: { id: { in: Array.from(pidSet) } },
       select: { id: true, code: true, category: { select: { name: true } } },
     });
     const prodInfo = new Map(productLookup.map(p => [p.id, { code: p.code, category: p.category?.name || 'Sin categoria' }]));
 
-    const prodMap = new Map<string, {
-      productCode: string;
-      productName: string;
-      category: string;
-      unitsSold: number;
-      salesUsd: number;
-      costUsd: number;
-    }>();
-
-    for (const inv of invoices) {
-      for (const item of inv.items) {
-        if (productIds && !productIds.includes(item.productId)) continue;
-        if (!prodMap.has(item.productId)) {
-          const info = prodInfo.get(item.productId);
-          prodMap.set(item.productId, {
-            productCode: info?.code || '',
-            productName: item.productName,
-            category: info?.category || 'Sin categoria',
-            unitsSold: 0,
-            salesUsd: 0,
-            costUsd: 0,
-          });
-        }
-        const p = prodMap.get(item.productId)!;
-        p.unitsSold += item.quantity;
-        p.salesUsd += item.totalUsd;
-        p.costUsd += (item.costUsd || 0) * item.quantity;
+    type Row = { productCode: string; productName: string; category: string; unitsSold: number; salesUsd: number; costUsd: number };
+    const prodMap = new Map<string, Row>();
+    const ensureRow = (pid: string | null, code: string, name: string): Row => {
+      const key = pid ?? `__np__:${code}`;
+      let r = prodMap.get(key);
+      if (!r) {
+        const info = pid ? prodInfo.get(pid) : undefined;
+        r = { productCode: info?.code || code || '', productName: name, category: info?.category || 'Sin categoria', unitsSold: 0, salesUsd: 0, costUsd: 0 };
+        prodMap.set(key, r);
       }
+      return r;
+    };
+
+    // Ventas (ingreso neto de IVA, costo historico del renglon)
+    for (const inv of invoices) {
+      for (const it of inv.items) {
+        if (!allowed(it.productId)) continue;
+        const r = ensureRow(it.productId, '', it.productName);
+        r.unitsSold += it.quantity;
+        r.salesUsd += it.totalUsd - it.ivaAmount;
+        r.costUsd += (it.costUsd || 0) * it.quantity;
+      }
+    }
+
+    // Devoluciones: costo historico de la factura original; lo que falte -> costo efectivo actual (con brecha)
+    const bregaPct = config?.bregaGlobalPct || 0;
+    const pendingReturns: { pid: string | null; code: string; name: string; qty: number; revenue: number; histCost?: number }[] = [];
+    const missing = new Set<string>();
+    for (const note of notes) {
+      const costMap = new Map<string, number>();
+      for (const ii of note.invoice?.items ?? []) if (ii.productId) costMap.set(ii.productId, ii.costUsd || 0);
+      for (const it of note.items) {
+        if (!allowed(it.productId)) continue;
+        const histCost = it.productId ? costMap.get(it.productId) : undefined;
+        if (histCost === undefined && it.productId) missing.add(it.productId);
+        pendingReturns.push({ pid: it.productId, code: it.productCode, name: it.productName, qty: it.quantity, revenue: it.totalUsd - it.ivaAmount, histCost });
+      }
+    }
+    const fallbackCost = new Map<string, number>();
+    if (missing.size > 0) {
+      const catBregaMap = await buildCategoryBregaMap(this.prisma);
+      const prods = await this.prisma.product.findMany({
+        where: { id: { in: Array.from(missing) } },
+        select: { id: true, costUsd: true, bregaApplies: true, categoryId: true },
+      });
+      for (const p of prods) {
+        const effBrega = resolveBregaPct({
+          bregaApplies: p.bregaApplies,
+          categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+          bregaGlobalPct: bregaPct,
+        });
+        fallbackCost.set(p.id, effectiveCost(p.costUsd, effBrega));
+      }
+    }
+    for (const r of pendingReturns) {
+      const unitCost = r.histCost !== undefined ? r.histCost : (r.pid ? fallbackCost.get(r.pid) || 0 : 0);
+      const row = ensureRow(r.pid, r.code, r.name);
+      row.unitsSold -= r.qty;
+      row.salesUsd -= r.revenue;
+      row.costUsd -= unitCost * r.qty;
     }
 
     const rows = Array.from(prodMap.values()).map(p => {
@@ -632,8 +688,10 @@ export class ReportsService {
       };
     }).sort((a, b) => b.marginPct - a.marginPct);
 
-    const totalSales = rows.reduce((s, r) => s + r.salesUsd, 0);
-    const totalCost = rows.reduce((s, r) => s + r.costUsd, 0);
+    // Totales a partir de los valores crudos (no de los redondeados por fila) para que el
+    // total de ganancia cuadre exactamente con el KPI del dashboard.
+    let totalSales = 0, totalCost = 0;
+    for (const p of prodMap.values()) { totalSales += p.salesUsd; totalCost += p.costUsd; }
     const totalProfit = round2(totalSales - totalCost);
     const avgMargin = totalSales > 0 ? round2((totalProfit / totalSales) * 100) : 0;
 
