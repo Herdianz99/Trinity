@@ -19,7 +19,8 @@
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
 
-> ### ⏳ PUSHEADO, SIN DESPLEGAR. Sin migraciones → deploy seguro.
+> ### ⏳ PUSHEADO, SIN DESPLEGAR (HEAD `bab9698`). Sin migraciones → deploy seguro. Falta `deploy.sh` en las instancias (y `/opt/deploy-trinity-mayor.sh` para mayor, donde se reportó el PDF).
+> Levantado en local (grande_db, restore de agosto) para prueba manual del usuario: PDF de compra + filtro por vencimiento en `/payables`.
 
 ### 1) Fix PDF factura de compra (`purchase-orders-pdf.service.ts`)
 - **Problema (reportado en mayor, FC-00129):** nombre/dirección del proveedor largos se partían y la 2da línea se montaba sobre el campo de abajo / se salía del recuadro.
