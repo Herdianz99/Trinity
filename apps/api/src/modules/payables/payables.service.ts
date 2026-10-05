@@ -512,14 +512,16 @@ export class PayablesService {
     if (query.status) {
       where.status = query.status;
     }
+    // Desde/Hasta filtra por FECHA DE VENCIMIENTO (para planificar pagos), no por creacion.
+    // Rango por dia-UTC: el front muestra dueDate con timeZone 'UTC', asi el filtro coincide
+    // con la fecha visible en la columna "Vence" (dueDate es fecha de negocio, no se ancla a
+    // Caracas). Va en AND para combinarse con "Solo vencidas"/"Proximas a vencer" sin pisarse.
+    // Las CxP sin dueDate (contado) quedan fuera al filtrar por fecha.
     if (query.from || query.to) {
-      where.createdAt = {};
-      if (query.from) {
-        where.createdAt.gte = caracasDayStart(query.from);
-      }
-      if (query.to) {
-        where.createdAt.lte = caracasDayEnd(query.to);
-      }
+      const dueRange: any = {};
+      if (query.from) dueRange.gte = new Date(`${query.from.slice(0, 10)}T00:00:00.000Z`);
+      if (query.to) dueRange.lte = new Date(`${query.to.slice(0, 10)}T23:59:59.999Z`);
+      where.AND = [...(where.AND || []), { dueDate: dueRange }];
     }
     if (query.overdue) {
       // Vencida = fecha pasada y aun no pagada. Incluye OVERDUE (ya marcada por el cron)

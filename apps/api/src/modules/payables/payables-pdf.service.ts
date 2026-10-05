@@ -153,7 +153,7 @@ export class PayablesPdfService {
     }
     const filtros: string[] = [modo];
     if (query.status) filtros.push(`Estado: ${STATUS_LABELS[query.status] || query.status}`);
-    if (query.from || query.to) filtros.push(`Fechas: ${query.from || '...'} a ${query.to || '...'}`);
+    if (query.from || query.to) filtros.push(`Vencimiento: ${query.from || '...'} a ${query.to || '...'}`);
     filtros.push('Solo con saldo pendiente');
     doc.fontSize(9).font('Helvetica').fillColor('#334155');
     doc.text(filtros.join('     '), 40, 80, { width: RIGHT - 40 });

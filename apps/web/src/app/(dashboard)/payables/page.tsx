@@ -550,12 +550,12 @@ export default function PayablesPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Desde</label>
+            <label className="text-xs text-slate-400 mb-1 block" title="Filtra por fecha de vencimiento">Vence desde</label>
             <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }}
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Hasta</label>
+            <label className="text-xs text-slate-400 mb-1 block" title="Filtra por fecha de vencimiento">Vence hasta</label>
             <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }}
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" />
           </div>
