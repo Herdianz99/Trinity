@@ -1296,3 +1296,6 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
   - Debe incluir **Reportes Z** (resumen de ventas por caja/día)
 ## Convención PDFs (pdfkit) — Sesión 153
 - En pdfkit `lineBreak: false` **NO evita el salto de línea si se pasa `width`** (solo omite el ancho por defecto). Para campos de 1 línea con Y fija usar el helper `fitText()` de `purchase-orders-pdf.service.ts` (reduce fuente y recorta con "..."), o `height` + `ellipsis: true` para N líneas.
+
+## CxP — filtro de fechas (Sesión 153)
+- En `/payables` (lista, PDF y Excel) los parámetros `from`/`to` filtran **`Payable.dueDate`** por día UTC (como se muestra la columna "Vence"), no `createdAt`. Se combinan en `AND` con `overdue`/`dueWithinDays`.
