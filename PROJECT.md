@@ -1294,3 +1294,5 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - [ ] **Libro de Ventas** — Reporte fiscal obligatorio con todas las ventas del período
   - Debe incluir **formato detallado** (desglose por factura)
   - Debe incluir **Reportes Z** (resumen de ventas por caja/día)
+## Convención PDFs (pdfkit) — Sesión 153
+- En pdfkit `lineBreak: false` **NO evita el salto de línea si se pasa `width`** (solo omite el ancho por defecto). Para campos de 1 línea con Y fija usar el helper `fitText()` de `purchase-orders-pdf.service.ts` (reduce fuente y recorta con "..."), o `height` + `ellipsis: true` para N líneas.

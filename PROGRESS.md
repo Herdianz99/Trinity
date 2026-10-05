@@ -17,6 +17,21 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
+
+> ### ⏳ PUSHEADO, SIN DESPLEGAR. Sin migraciones → deploy seguro.
+
+### 1) Fix PDF factura de compra (`purchase-orders-pdf.service.ts`)
+- **Problema (reportado en mayor, FC-00129):** nombre/dirección del proveedor largos se partían y la 2da línea se montaba sobre el campo de abajo / se salía del recuadro.
+- **Causa:** en pdfkit `lineBreak: false` **NO evita el salto si se pasa `width`** (solo omite el ancho por defecto). `labelValue` pasaba `width` → wrap con Y fija.
+- **Fix:** helper `fitText()` (1 línea: reduce fuente hasta `minSize` y si no cabe recorta con "..."). `labelValue` lo usa (proveedor + cuadro de info). **Dirección del proveedor** hasta 2 líneas con elipsis y el recuadro crece. También código/descripción de ítems, nombre/RIF/dirección de la empresa (sin logo) y Observaciones (ahora wrap real sumando su alto).
+- Verificado renderizando con datos reales de FC-00129 y un caso extremo (nombre 90 car., dirección 160 car., nota larga).
+- **Pendiente:** `islr-retention-vouchers-pdf` y `retention-vouchers-pdf` tienen el mismo `labelValue` con el mismo bug.
+
+### Operaciones por BD (sin código)
+- **Usuario `trebolnk@gmail.com`:** clave de la grande copiada (hash) a chica, total y aceros (totalturen ya la tenía; mayor y acerosmayor no tienen el usuario). En chica `mustChangePassword` → false.
+- **grande:** eliminada la factura de compra **FC-00573** (VENCERAMICA, $16.853,72, crédito, no fiscal, PROCESSED): stock revertido en Almacén Principal, borrados sus 4 `StockMovement`, la CxP (sin pagos), ítems y la factura. Costos/precios de los 4 productos se dejaron como los puso la FC (pedido del usuario). Queda hueco en el correlativo.
+
 ## 🗓️ Sesión 152 (2026-10-02) — Reporte "Margen de ganancia" cuadra con el KPI Ganancia del dashboard + botón "¿Cómo se calcula?"
 
 > ### ⏳ PUSHEADO, SIN DESPLEGAR (HEAD `58e213a`). Sin migraciones → deploy seguro. Falta correr `deploy.sh` en las instancias (y `/opt/deploy-trinity-mayor.sh` para mayor).

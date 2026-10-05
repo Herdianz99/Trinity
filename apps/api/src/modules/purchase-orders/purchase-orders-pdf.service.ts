@@ -33,11 +33,36 @@ function fmtDateTime(d: Date | string): string {
   return `${dd}/${mm}/${yyyy} ${h.toString().padStart(2, '0')}:${min} ${ampm}`;
 }
 
-/** Helper: write bold label + normal value in a single text call */
+/**
+ * Escribe texto en UNA sola linea dentro de `w`. OJO: en pdfkit `lineBreak: false` NO evita
+ * el salto cuando se pasa `width` (solo omite el ancho por defecto), por eso un nombre largo
+ * se partia y la 2da linea se montaba sobre el campo de abajo. Aqui se reduce la fuente hasta
+ * `minSize` y, si aun no cabe, se recorta con "...". Restaura el tamaño de fuente original.
+ */
+function fitText(
+  doc: PDFKit.PDFDocument, text: string, x: number, y: number, w: number,
+  opts: { font?: string; minSize?: number; align?: 'left' | 'right' | 'center' } = {},
+) {
+  const font = opts.font || 'Helvetica';
+  const baseSize = (doc as any)._fontSize as number;
+  const minSize = Math.min(opts.minSize ?? baseSize - 1.5, baseSize);
+  doc.font(font);
+  let size = baseSize;
+  while (size > minSize && doc.fontSize(size).widthOfString(text) > w) size -= 0.25;
+  let out = text;
+  if (doc.widthOfString(out) > w) {
+    while (out.length > 0 && doc.widthOfString(out.trimEnd() + '...') > w) out = out.slice(0, -1);
+    out = out.trimEnd() + '...';
+  }
+  doc.text(out, x, y, { width: w, align: opts.align || 'left', lineBreak: false, height: size * 1.3 });
+  doc.fontSize(baseSize);
+}
+
+/** Helper: write bold label + normal value on a single line (shrinks/truncates the value to fit) */
 function labelValue(doc: PDFKit.PDFDocument, label: string, value: string, x: number, y: number, w: number) {
   const labelW = doc.font('Helvetica-Bold').widthOfString(label);
   doc.font('Helvetica-Bold').text(label, x, y, { lineBreak: false });
-  doc.font('Helvetica').text(value, x + labelW, y, { width: w - labelW, lineBreak: false });
+  fitText(doc, value, x + labelW, y, w - labelW);
 }
 
 @Injectable()
@@ -93,6 +118,11 @@ export class PurchaseOrdersPdfService {
       // HEADER — Logo (left) + Supplier info (right)
       // ═══════════════════════════════════════════════════════════════════
 
+      // Right: Supplier box geometry (se usa tambien para limitar el ancho del bloque izquierdo)
+      const supplierBoxW = 240;
+      const supplierBoxX = R - supplierBoxW;
+      const leftW = supplierBoxX - L - 10;
+
       let logoBottomY = y;
       if (config?.logo) {
         try {
@@ -105,24 +135,31 @@ export class PurchaseOrdersPdfService {
           logoBottomY = y + 18;
         }
       } else {
-        doc.fontSize(13).font('Helvetica-Bold').text(config?.companyName || 'Trinity ERP', L, y, { lineBreak: false });
+        doc.fontSize(13);
+        fitText(doc, config?.companyName || 'Trinity ERP', L, y, leftW, { font: 'Helvetica-Bold', minSize: 9 });
         logoBottomY = y + 18;
         doc.fontSize(8).font('Helvetica');
-        if (config?.rif) { doc.text(`RIF: ${config.rif}`, L, logoBottomY, { lineBreak: false }); logoBottomY += 11; }
-        if (config?.address) { doc.text(config.address, L, logoBottomY, { lineBreak: false }); logoBottomY += 11; }
+        if (config?.rif) { fitText(doc, `RIF: ${config.rif}`, L, logoBottomY, leftW); logoBottomY += 11; }
+        if (config?.address) { fitText(doc, config.address, L, logoBottomY, leftW, { minSize: 6.5 }); logoBottomY += 11; }
       }
 
-      // Right: Supplier info box
-      const supplierBoxW = 240;
-      const supplierBoxX = R - supplierBoxW;
+      // Right: Supplier info box — Nombre/RIF en 1 linea; la direccion hasta 2 lineas
+      // y el recuadro crece para contenerla (antes se salia del borde inferior).
       const supplierBoxY = y;
-      const supplierBoxH = 52;
+      const sbx = supplierBoxX + 6;
+      const sbw = supplierBoxW - 12;
+      const supplierAddress = (order.supplier.address || '').replace(/\s+/g, ' ').trim();
+      doc.fontSize(7.5);
+      const dirLabelW = doc.font('Helvetica-Bold').widthOfString('Dir: ');
+      const addrLineH = doc.font('Helvetica').currentLineHeight(true);
+      const addrLines = supplierAddress
+        ? Math.min(2, Math.ceil(doc.heightOfString(supplierAddress, { width: sbw - dirLabelW }) / addrLineH))
+        : 0;
+      const supplierBoxH = Math.max(52, 16 + 11 * 2 + addrLines * addrLineH + 6);
 
       doc.rect(supplierBoxX, supplierBoxY, supplierBoxW, supplierBoxH)
         .lineWidth(0.5).stroke('#333333');
 
-      const sbx = supplierBoxX + 6;
-      const sbw = supplierBoxW - 12;
       doc.fontSize(8).font('Helvetica-Bold')
         .text('PROVEEDOR', sbx, supplierBoxY + 5, { lineBreak: false });
       doc.fontSize(7.5);
@@ -131,8 +168,11 @@ export class PurchaseOrdersPdfService {
       sy += 11;
       labelValue(doc, 'RIF: ', order.supplier.rif || 'N/A', sbx, sy, sbw);
       sy += 11;
-      if (order.supplier.address) {
-        labelValue(doc, 'Dir: ', order.supplier.address.substring(0, 55), sbx, sy, sbw);
+      if (supplierAddress) {
+        doc.font('Helvetica-Bold').text('Dir: ', sbx, sy, { lineBreak: false });
+        doc.font('Helvetica').text(supplierAddress, sbx + dirLabelW, sy, {
+          width: sbw - dirLabelW, height: addrLines * addrLineH, ellipsis: true,
+        });
       }
 
       y = Math.max(logoBottomY, supplierBoxY + supplierBoxH) + 8;
@@ -237,8 +277,8 @@ export class PurchaseOrdersPdfService {
         const altTotal = isBs ? item.totalUsd : item.totalBs;
 
         doc.font('Helvetica').fontSize(7);
-        doc.text(item.product.code, cols[0].x + 2, cellY, { width: cols[0].w - 4, align: 'left', lineBreak: false });
-        doc.text(item.product.name.substring(0, 40), cols[1].x + 2, cellY, { width: cols[1].w - 4, align: 'left', lineBreak: false });
+        fitText(doc, item.product.code, cols[0].x + 2, cellY, cols[0].w - 4, { minSize: 6 });
+        fitText(doc, item.product.name, cols[1].x + 2, cellY, cols[1].w - 4, { minSize: 6 });
         doc.text(String(item.quantity), cols[2].x + 2, cellY, { width: cols[2].w - 4, align: 'right', lineBreak: false });
         doc.text(fmtNum(cost), cols[3].x + 2, cellY, { width: cols[3].w - 4, align: 'right', lineBreak: false });
         doc.text(item.discountPct > 0 ? `${item.discountPct}%` : '', cols[4].x + 2, cellY, { width: cols[4].w - 4, align: 'right', lineBreak: false });
@@ -339,8 +379,10 @@ export class PurchaseOrdersPdfService {
       if (order.notes) {
         doc.fontSize(7).font('Helvetica-Bold').text('Observaciones:', L, y, { lineBreak: false });
         y += 10;
-        doc.font('Helvetica').text(order.notes, L, y, { width: pageWidth, lineBreak: false });
-        y += 16;
+        doc.font('Helvetica');
+        const notesH = doc.heightOfString(order.notes, { width: pageWidth });
+        doc.text(order.notes, L, y, { width: pageWidth });
+        y += notesH + 6;
       }
 
       // ═══════════════════════════════════════════════════════════════════
