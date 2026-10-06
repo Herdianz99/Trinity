@@ -19,8 +19,7 @@
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
 
-> ### ⏳ PUSHEADO, SIN DESPLEGAR (HEAD `bab9698`). Sin migraciones → deploy seguro. Falta `deploy.sh` en las instancias (y `/opt/deploy-trinity-mayor.sh` para mayor, donde se reportó el PDF).
-> Levantado en local (grande_db, restore de agosto) para prueba manual del usuario: PDF de compra + filtro por vencimiento en `/payables`.
+> ### ✅ DESPLEGADO Y VERIFICADO (2026-10-05 ~20:10 Caracas) en las 7 instancias: grande, mayor, chica, total, turen, aceros, acerosmayor — todas en HEAD `0238021`, PM2 online, `/health` ok con BD, web responde. Sin errores nuevos en logs post-deploy (incluye también la Sesión 152).
 
 ### 1) Fix PDF factura de compra (`purchase-orders-pdf.service.ts`)
 - **Problema (reportado en mayor, FC-00129):** nombre/dirección del proveedor largos se partían y la 2da línea se montaba sobre el campo de abajo / se salía del recuadro.
@@ -35,7 +34,7 @@
 
 ## 🗓️ Sesión 152 (2026-10-02) — Reporte "Margen de ganancia" cuadra con el KPI Ganancia del dashboard + botón "¿Cómo se calcula?"
 
-> ### ⏳ PUSHEADO, SIN DESPLEGAR (HEAD `58e213a`). Sin migraciones → deploy seguro. Falta correr `deploy.sh` en las instancias (y `/opt/deploy-trinity-mayor.sh` para mayor).
+> ### ✅ DESPLEGADO junto con la Sesión 153 (2026-10-05) en las 7 instancias.
 
 ### 1) Fix cálculo del reporte `/reports/profit-margin` (no cuadraba con el dashboard)
 - **Problema (reportado por el usuario):** el total de ganancia del reporte no coincidía con el KPI "Ganancia" del dashboard para el mismo rango.
