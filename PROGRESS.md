@@ -31,6 +31,11 @@
 - **Verificado contra la BD de la grande, septiembre 2026:**
   - Cashea: 2.099 facturas de 7.389, $283.541 facturado, $211.182 financiado, $73.620 de cuota inicial.
   - Crediagro: 40 facturas, $7.772 facturado, $2.499 financiado, $5.273 de cuota inicial.
+- **Fix (reportado por el usuario en local):** Financiado + Cuota inicial no daba el Facturado (Cashea, 12 meses local: −$2.437,86).
+  - **Causa:** 29 CxC de facturas RETURNED (cambios de producto) contaban en el financiado pero no en el facturado ni en la cuota inicial, que filtraban solo facturas vigentes.
+  - **Solución:** la consulta G usa el MISMO conjunto que el financiado (CxC por `createdAt`, factura en cualquier estado). Ahora cuadra al centavo; verificado vía API en 12 meses, septiembre y octubre.
+  - **Porcentajes:** financiado% e inicial% ahora son sobre el facturado (suman 100%, antes "promedio" no cuadraba) y se muestran en etiquetas de color.
+  - **Ojo:** las cifras de septiembre de arriba eran con el criterio anterior; el facturado y la cuota inicial de Cashea ahora suben un poco al incluir las facturas devueltas.
 - **`/rrhh/notificaciones` — selector de empleados nuevo** (reemplaza el `<select multiple>` nativo, que obligaba a usar Ctrl y era inusable en el teléfono):
   - Componente `EmployeePicker`: buscador sin tildes por nombre o código, chips de departamento, "Marcar/Desmarcar los N visibles", filas tocables completas y los elegidos arriba como etiquetas con ✕.
   - También se usa en "A un empleado", con selección única.

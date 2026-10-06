@@ -705,9 +705,12 @@ export class ReceivablesService {
         AND i."paidAt" >= ${start} AND i."paidAt" <= ${end}`;
 
     // G) Valor completo de las FACTURAS que usaron cada plataforma (no el financiado, sino
-    // la venta entera). Misma definición que F (paidAt, PAID/PARTIAL_RETURN) para que el share
-    // sea consistente. Agrupado por factura para no duplicar si tuviera 2 CxC de la plataforma.
-    // Cuota inicial = lo que el cliente pagó en caja = total de la factura − lo financiado en ella.
+    // la venta entera) + cuota inicial (lo que el cliente pagó en caja = total − financiado).
+    // MISMO conjunto que A (CxC de la plataforma por createdAt, cualquier estado de factura)
+    // para que Facturado = Financiado + Cuota inicial cuadre al centavo. Incluye facturas
+    // RETURNED: con plataforma la "devolución" es un cambio de producto que se re-factura con
+    // saldo a favor y la CxC sigue viva (regla de negocio). Una CxC sin factura cuenta su
+    // propio monto como facturado (cuota inicial 0). Agrupado por factura (no duplica 2 CxC).
     const share = await this.prisma.$queryRaw<any[]>`
       SELECT platform,
         COUNT(*)::int AS "invoicesCount",
@@ -716,15 +719,16 @@ export class ReceivablesService {
         COALESCE(SUM(GREATEST("totalUsd" - "financedUsd", 0)), 0)::float8 AS "initialUsd",
         COALESCE(SUM(GREATEST("totalBs" - "financedBs", 0)), 0)::float8 AS "initialBs"
       FROM (
-        SELECT UPPER(r."platformName") AS platform, i.id, i."totalUsd", i."totalBs",
+        SELECT UPPER(r."platformName") AS platform, COALESCE(i.id, r.id) AS k,
+          COALESCE(MAX(i."totalUsd"), SUM(r."amountUsd")) AS "totalUsd",
+          COALESCE(MAX(i."totalBs"), SUM(r."amountBs")) AS "totalBs",
           SUM(r."amountUsd") AS "financedUsd", SUM(r."amountBs") AS "financedBs"
         FROM "Receivable" r
-        JOIN "Invoice" i ON i.id = r."invoiceId"
+        LEFT JOIN "Invoice" i ON i.id = r."invoiceId"
         WHERE r.type = 'FINANCING_PLATFORM'
           AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
-          AND i.status IN ('PAID', 'PARTIAL_RETURN')
-          AND i."paidAt" >= ${start} AND i."paidAt" <= ${end}
-        GROUP BY UPPER(r."platformName"), i.id, i."totalUsd", i."totalBs"
+          AND r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+        GROUP BY UPPER(r."platformName"), COALESCE(i.id, r.id)
       ) t GROUP BY platform`;
 
     const company = {

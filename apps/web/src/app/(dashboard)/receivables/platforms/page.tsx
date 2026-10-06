@@ -87,6 +87,23 @@ const PLAT_STYLE: Record<string, { label: string; card: string; iconBox: string;
 };
 const PLAT_ORDER = ['CASHEA', 'CREDIAGRO'];
 
+// % de `part` sobre `whole`, a 1 decimal
+const pctOf = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0);
+
+// Porcentaje resaltado en los KPIs (sky = facturas, amber = financiado, emerald = cuota inicial)
+const PCT_TONE: Record<'sky' | 'amber' | 'emerald', string> = {
+  sky: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+  amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  emerald: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+};
+function PctBadge({ value, tone }: { value: number; tone: keyof typeof PCT_TONE }) {
+  return (
+    <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold tabular-nums ${PCT_TONE[tone]}`}>
+      {value}%
+    </span>
+  );
+}
+
 function emptyStat(platform: string): PlatformStat {
   return {
     platform, salesCount: 0, salesUsd: 0, salesBs: 0, collectedUsd: 0, collectedBs: 0,
@@ -183,7 +200,8 @@ function PlatformAnalytics() {
                     <h3 className="font-semibold text-slate-100">{st.label}</h3>
                   </div>
 
-                  {/* KPIs del período: facturado = financiado + cuota inicial */}
+                  {/* KPIs del período: facturado = financiado + cuota inicial (mismo conjunto de
+                      facturas), así que financiado% + inicial% = 100% sobre el facturado */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-slate-900/50 rounded-lg p-3">
                       <p className="text-xs text-slate-400 mb-1">Facturado total</p>
@@ -191,21 +209,30 @@ function PlatformAnalytics() {
                       <p className="text-[11px] text-slate-500">Bs {fmtNum(s.invoiceValueBs)}</p>
                     </div>
                     <div className="bg-slate-900/50 rounded-lg p-3">
-                      <p className="text-xs text-slate-400 mb-1">Facturas con {st.label}</p>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs text-slate-400">Facturas con {st.label}</p>
+                        <PctBadge value={s.shareByCount} tone="sky" />
+                      </div>
                       <p className="text-xl font-bold text-slate-100">
                         {s.invoicesCount} <span className="text-sm font-normal text-slate-500">de {company.totalInvoices}</span>
                       </p>
-                      <p className="text-[11px] text-slate-500">{s.shareByCount}% del total de facturas</p>
+                      <p className="text-[11px] text-slate-500">del total de facturas</p>
                     </div>
                     <div className="bg-slate-900/50 rounded-lg p-3">
-                      <p className="text-xs text-slate-400 mb-1">Financiado por {st.label}</p>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs text-slate-400">Financiado por {st.label}</p>
+                        <PctBadge value={pctOf(s.salesUsd, s.invoiceValueUsd)} tone="amber" />
+                      </div>
                       <p className="text-xl font-bold text-slate-100">${fmtNum(s.salesUsd)}</p>
-                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.salesBs)} · {s.weightedFinancedPct}% de la venta</p>
+                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.salesBs)} · de la venta</p>
                     </div>
                     <div className="bg-slate-900/50 rounded-lg p-3">
-                      <p className="text-xs text-slate-400 mb-1">Cuota inicial (pagó el cliente)</p>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs text-slate-400">Cuota inicial (pagó el cliente)</p>
+                        <PctBadge value={pctOf(s.initialUsd, s.invoiceValueUsd)} tone="emerald" />
+                      </div>
                       <p className="text-xl font-bold text-slate-100">${fmtNum(s.initialUsd)}</p>
-                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.initialBs)} · promedio {s.avgInitialPct}%</p>
+                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.initialBs)} · de la venta</p>
                     </div>
                   </div>
 

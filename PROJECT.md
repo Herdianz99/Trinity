@@ -1074,7 +1074,13 @@ model QuotationItem {
 **Búsqueda:** PostgreSQL tsvector con trigger automático. Búsqueda por nombre, código, barcode, referencia proveedor.
 
 **Plataformas de financiamiento (Cashea/Crediagro):** Son métodos de pago con `createsReceivable: true` en la tabla PaymentMethod. Al cobrar con ellos se crea CxC automáticamente. Para agregar nuevas plataformas basta crear un nuevo método con ese flag activado desde /settings/payment-methods.
-- **Análisis `/receivables/platforms`** (`platformAnalytics`): cada tarjeta muestra 4 KPIs que siguen el rango de fechas elegido: **Facturado total** (valor completo de las facturas vigentes PAID/PARTIAL_RETURN con CxC de la plataforma, filtrado por `paidAt`), **Facturas con la plataforma / total de facturas de la empresa**, **Financiado** (suma de las CxC de la plataforma por `createdAt`, INCLUYENDO las de facturas RETURNED) y **Cuota inicial** (`initialUsd/Bs`: total de la factura − lo financiado en ella).
+- **Análisis `/receivables/platforms`** (`platformAnalytics`): cada tarjeta muestra 4 KPIs que siguen el rango de fechas elegido.
+  - **Base común:** Facturado, Financiado y Cuota inicial salen del MISMO conjunto, las CxC de la plataforma por `createdAt` con su factura en cualquier estado, INCLUIDAS las RETURNED (cambios de producto). Por eso **Facturado = Financiado + Cuota inicial** al centavo, y financiado% + inicial% = 100%, calculados sobre el facturado.
+  - **Facturado total:** valor completo de esas facturas; una CxC sin factura cuenta su propio monto.
+  - **Facturas con la plataforma / total de facturas de la empresa:** el total de la empresa usa PAID/PARTIAL_RETURN por `paidAt`, así que el % de peso puede diferir mínimamente por las devueltas.
+  - **Financiado:** Σ CxC.
+  - **Cuota inicial:** `initialUsd/Bs` = total de la factura − lo financiado en ella.
+  - **Porcentajes:** se muestran en etiquetas de color (azul facturas, ámbar financiado, verde cuota inicial).
 - **Devoluciones con plataforma:** si se devuelve una factura pagada con Cashea/Crediagro, la CxC de la plataforma **se deja abierta a propósito**. En la práctica es un cambio de producto: se re-factura usando el saldo a favor y la plataforma igual cobra al cliente. No es un bug; esas CxC cuentan como financiado y pendiente.
 
 **Traslados entre empresas socias (`/catalog/partner-transfers`, `integration/partner-transfers.service`):**
