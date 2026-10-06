@@ -17,6 +17,22 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs de facturado, financiado, cuota inicial y facturas
+
+> ### ⏳ Commiteado y pusheado; FALTA DEPLOY.
+
+- **`/receivables/platforms` (vista de análisis):** cada tarjeta de Cashea/Crediagro ahora muestra 4 KPIs que siguen el filtro Desde/Hasta:
+  - **Facturado total:** el valor completo de las facturas.
+  - **Facturas con la plataforma:** "N de M" y el % sobre el total de facturas de la empresa.
+  - **Financiado por la plataforma:** el $ y el % ponderado de la venta.
+  - **Cuota inicial pagada por el cliente:** el $ y el % promedio.
+- Estos KPIs reemplazan el número grande de la cabecera, que era el financiado aunque decía "ventas", y los 2 recuadros que solo mostraban porcentajes.
+- **Backend** (`receivables.service.platformAnalytics`, consulta G): ahora agrupa por factura y devuelve `initialUsd`/`initialBs` = Σ(total de la factura − CxC de la plataforma en esa factura).
+- **Verificado contra la BD de la grande, septiembre 2026:**
+  - Cashea: 2.099 facturas de 7.389, $283.541 facturado, $211.182 financiado, $73.620 de cuota inicial.
+  - Crediagro: 40 facturas, $7.772 facturado, $2.499 financiado, $5.273 de cuota inicial.
+- **Regla de negocio aclarada con el usuario:** las CxC de plataforma de facturas RETURNED se dejan abiertas a propósito (es un cambio de producto que se re-factura con el saldo a favor). Se cuentan como financiado y pendiente. Ver PROJECT.md.
+
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
 
 > ### ✅ DESPLEGADO Y VERIFICADO (2026-10-05 ~20:10 Caracas) en las 7 instancias: grande, mayor, chica, total, turen, aceros, acerosmayor — todas en HEAD `0238021`, PM2 online, `/health` ok con BD, web responde. Sin errores nuevos en logs post-deploy (incluye también la Sesión 152).

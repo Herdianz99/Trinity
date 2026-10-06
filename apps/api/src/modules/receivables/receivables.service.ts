@@ -706,20 +706,25 @@ export class ReceivablesService {
 
     // G) Valor completo de las FACTURAS que usaron cada plataforma (no el financiado, sino
     // la venta entera). Misma definición que F (paidAt, PAID/PARTIAL_RETURN) para que el share
-    // sea consistente. DISTINCT por factura para no duplicar si tuviera 2 CxC de la plataforma.
+    // sea consistente. Agrupado por factura para no duplicar si tuviera 2 CxC de la plataforma.
+    // Cuota inicial = lo que el cliente pagó en caja = total de la factura − lo financiado en ella.
     const share = await this.prisma.$queryRaw<any[]>`
       SELECT platform,
         COUNT(*)::int AS "invoicesCount",
         COALESCE(SUM("totalUsd"), 0)::float8 AS "invoiceValueUsd",
-        COALESCE(SUM("totalBs"), 0)::float8 AS "invoiceValueBs"
+        COALESCE(SUM("totalBs"), 0)::float8 AS "invoiceValueBs",
+        COALESCE(SUM(GREATEST("totalUsd" - "financedUsd", 0)), 0)::float8 AS "initialUsd",
+        COALESCE(SUM(GREATEST("totalBs" - "financedBs", 0)), 0)::float8 AS "initialBs"
       FROM (
-        SELECT DISTINCT UPPER(r."platformName") AS platform, i.id, i."totalUsd", i."totalBs"
+        SELECT UPPER(r."platformName") AS platform, i.id, i."totalUsd", i."totalBs",
+          SUM(r."amountUsd") AS "financedUsd", SUM(r."amountBs") AS "financedBs"
         FROM "Receivable" r
         JOIN "Invoice" i ON i.id = r."invoiceId"
         WHERE r.type = 'FINANCING_PLATFORM'
           AND UPPER(r."platformName") IN ('CASHEA', 'CREDIAGRO')
           AND i.status IN ('PAID', 'PARTIAL_RETURN')
           AND i."paidAt" >= ${start} AND i."paidAt" <= ${end}
+        GROUP BY UPPER(r."platformName"), i.id, i."totalUsd", i."totalBs"
       ) t GROUP BY platform`;
 
     const company = {
@@ -776,6 +781,8 @@ export class ReceivablesService {
         invoicesCount,
         invoiceValueUsd: r2(invoiceValueUsd),
         invoiceValueBs: r2(sh ? sh.invoiceValueBs : 0),
+        initialUsd: r2(sh ? sh.initialUsd : 0),
+        initialBs: r2(sh ? sh.initialBs : 0),
         shareByCount: company.totalInvoices > 0 ? r1((invoicesCount / company.totalInvoices) * 100) : 0,
         shareByValue: company.totalSalesUsd > 0 ? r1((invoiceValueUsd / company.totalSalesUsd) * 100) : 0,
       };

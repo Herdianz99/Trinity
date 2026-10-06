@@ -1067,6 +1067,8 @@ model QuotationItem {
 **Búsqueda:** PostgreSQL tsvector con trigger automático. Búsqueda por nombre, código, barcode, referencia proveedor.
 
 **Plataformas de financiamiento (Cashea/Crediagro):** Son métodos de pago con `createsReceivable: true` en la tabla PaymentMethod. Al cobrar con ellos se crea CxC automáticamente. Para agregar nuevas plataformas basta crear un nuevo método con ese flag activado desde /settings/payment-methods.
+- **Análisis `/receivables/platforms`** (`platformAnalytics`): cada tarjeta muestra 4 KPIs que siguen el rango de fechas elegido: **Facturado total** (valor completo de las facturas vigentes PAID/PARTIAL_RETURN con CxC de la plataforma, filtrado por `paidAt`), **Facturas con la plataforma / total de facturas de la empresa**, **Financiado** (suma de las CxC de la plataforma por `createdAt`, INCLUYENDO las de facturas RETURNED) y **Cuota inicial** (`initialUsd/Bs`: total de la factura − lo financiado en ella).
+- **Devoluciones con plataforma:** si se devuelve una factura pagada con Cashea/Crediagro, la CxC de la plataforma **se deja abierta a propósito**. En la práctica es un cambio de producto: se re-factura usando el saldo a favor y la plataforma igual cobra al cliente. No es un bug; esas CxC cuentan como financiado y pendiente.
 
 **Crédito a clientes:** Requiere `creditAuthPassword` (bcrypt). Al aprobar → crea CxC, descuenta cupo.
 

@@ -71,6 +71,7 @@ interface PlatformStat {
   avgDaysToFull: number | null; paidCount: number;
   aging: { d0_30: number; d31_60: number; d61_90: number; d90plus: number };
   invoicesCount: number; invoiceValueUsd: number; invoiceValueBs: number;
+  initialUsd: number; initialBs: number;
   shareByCount: number; shareByValue: number;
 }
 interface AnalyticsData {
@@ -92,7 +93,8 @@ function emptyStat(platform: string): PlatformStat {
     pendingUsd: 0, pendingBs: 0, collectionRatio: 0, avgFinancedPct: 0, weightedFinancedPct: 0,
     avgInitialPct: 0, avgDaysToFirst: null, withPaymentCount: 0, avgDaysToFull: null, paidCount: 0,
     aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 },
-    invoicesCount: 0, invoiceValueUsd: 0, invoiceValueBs: 0, shareByCount: 0, shareByValue: 0,
+    invoicesCount: 0, invoiceValueUsd: 0, invoiceValueBs: 0, initialUsd: 0, initialBs: 0,
+    shareByCount: 0, shareByValue: 0,
   };
 }
 
@@ -176,31 +178,34 @@ function PlatformAnalytics() {
               const st = PLAT_STYLE[s.platform];
               return (
                 <div key={s.platform} className={`bg-slate-800/50 border ${st.card} rounded-xl p-5`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`p-2 rounded-lg ${st.iconBox}`}><CreditCard size={18} /></div>
-                      <div>
-                        <h3 className="font-semibold text-slate-100">{st.label}</h3>
-                        <p className="text-xs text-slate-500">{s.salesCount} ventas en el período</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-xl font-bold ${st.accent}`}>${fmtNum(s.salesUsd)}</p>
-                      <p className="text-xs text-slate-500">Bs {fmtNum(s.salesBs)}</p>
-                    </div>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className={`p-2 rounded-lg ${st.iconBox}`}><CreditCard size={18} /></div>
+                    <h3 className="font-semibold text-slate-100">{st.label}</h3>
                   </div>
 
-                  {/* % financiado vs cuota inicial */}
+                  {/* KPIs del período: facturado = financiado + cuota inicial */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-slate-900/50 rounded-lg p-3">
-                      <p className="text-xs text-slate-400 mb-1">Financiado (promedio)</p>
-                      <p className={`text-2xl font-bold ${st.accent}`}>{s.avgFinancedPct}%</p>
-                      <p className="text-[11px] text-slate-500">ponderado {s.weightedFinancedPct}%</p>
+                      <p className="text-xs text-slate-400 mb-1">Facturado total</p>
+                      <p className={`text-xl font-bold ${st.accent}`}>${fmtNum(s.invoiceValueUsd)}</p>
+                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.invoiceValueBs)}</p>
                     </div>
                     <div className="bg-slate-900/50 rounded-lg p-3">
-                      <p className="text-xs text-slate-400 mb-1">Cuota inicial (promedio)</p>
-                      <p className="text-2xl font-bold text-slate-200">{s.avgInitialPct}%</p>
-                      <p className="text-[11px] text-slate-500">lo que pone el cliente</p>
+                      <p className="text-xs text-slate-400 mb-1">Facturas con {st.label}</p>
+                      <p className="text-xl font-bold text-slate-100">
+                        {s.invoicesCount} <span className="text-sm font-normal text-slate-500">de {company.totalInvoices}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500">{s.shareByCount}% del total de facturas</p>
+                    </div>
+                    <div className="bg-slate-900/50 rounded-lg p-3">
+                      <p className="text-xs text-slate-400 mb-1">Financiado por {st.label}</p>
+                      <p className="text-xl font-bold text-slate-100">${fmtNum(s.salesUsd)}</p>
+                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.salesBs)} · {s.weightedFinancedPct}% de la venta</p>
+                    </div>
+                    <div className="bg-slate-900/50 rounded-lg p-3">
+                      <p className="text-xs text-slate-400 mb-1">Cuota inicial (pagó el cliente)</p>
+                      <p className="text-xl font-bold text-slate-100">${fmtNum(s.initialUsd)}</p>
+                      <p className="text-[11px] text-slate-500">Bs {fmtNum(s.initialBs)} · promedio {s.avgInitialPct}%</p>
                     </div>
                   </div>
 
