@@ -1089,6 +1089,15 @@ model QuotationItem {
   - **Costo manual:** no se toca. **Precio manual:** cambia el costo pero conserva el precio.
   - Los traslados sin `baseCost` (viejos, o de un socio sin esta versión) se reciben como antes, sin la pantalla.
 
+**Etiquetas (`/inventory/etiquetas`, módulo `labels`):** dos pestañas.
+- **Productos:** etiqueta interna con código de barras (`POST labels/pdf`).
+- **Cajas por cliente** (Ses.154, `POST labels/boxes/pdf`, componente `box-labels.tsx`): marca las cajas de las ventas al mayor que van juntas en un camión.
+  - **Etiqueta:** "CAJA n/N" invertido arriba a la derecha y referencia + fecha a la izquierda. Debajo, el CLIENTE grande (auto-ajuste) y el RIF, una línea y el contenido. Al pie, la dirección opcional.
+  - **Cliente:** se carga buscando por N° de factura o nombre del cliente (trae RIF con `documentType` y dirección), o se escribe a mano.
+  - **Cajas:** filas de contenido × cantidad de cajas, numeradas en un solo correlativo.
+  - **Fecha:** la arma el frontend en hora local.
+  - **PDF:** texto libre, no toca la BD; tope de 500 cajas por lote. Hay vista previa aproximada en HTML.
+
 **Crédito a clientes:** Requiere `creditAuthPassword` (bcrypt). Al aprobar → crea CxC, descuenta cupo.
 
 **Transferencias:** WAREHOUSE crea → SUPERVISOR aprueba → stock se mueve en transacción Prisma.

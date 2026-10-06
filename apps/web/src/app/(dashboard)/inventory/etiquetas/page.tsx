@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Tags, Search, Loader2, Trash2, Printer, Plus, X, ShoppingCart, Layers } from 'lucide-react';
+import { Tags, Search, Loader2, Trash2, Printer, Plus, X, ShoppingCart, Layers, Package } from 'lucide-react';
+import BoxLabels from './box-labels';
 
 interface StockRow { quantity: number; }
 interface Product {
@@ -17,6 +18,7 @@ interface PurchaseLite {
 const totalStock = (p: Product) => (p.stock || []).reduce((s, r) => s + r.quantity, 0);
 
 export default function LabelsPage() {
+  const [tab, setTab] = useState<'products' | 'boxes'>('products');
   const [rows, setRows] = useState<LabelRow[]>([]);
   const [widthMm, setWidthMm] = useState('57');
   const [heightMm, setHeightMm] = useState('40');
@@ -178,16 +180,32 @@ export default function LabelsPage() {
           <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20"><Tags className="text-green-400" size={22} /></div>
           <div>
             <h1 className="text-2xl font-bold text-white">Etiquetas</h1>
-            <p className="text-slate-400 text-sm">Etiquetas internas con codigo de barras (nombre, codigo, ref. proveedor)</p>
+            <p className="text-slate-400 text-sm">
+              {tab === 'products'
+                ? 'Etiquetas internas con codigo de barras (nombre, codigo, ref. proveedor)'
+                : 'Una etiqueta por caja para marcar a qué cliente va en el camión'}
+            </p>
           </div>
         </div>
-        <button onClick={() => setShowImport(true)} className="btn-secondary !py-2 text-sm flex items-center gap-2">
-          <ShoppingCart size={16} /> Importar de una compra
+        {tab === 'products' && (
+          <button onClick={() => setShowImport(true)} className="btn-secondary !py-2 text-sm flex items-center gap-2">
+            <ShoppingCart size={16} /> Importar de una compra
+          </button>
+        )}
+      </div>
+
+      {/* Pestañas */}
+      <div className="inline-flex gap-1 bg-slate-800/60 border border-slate-700/50 rounded-lg p-1 mb-4">
+        <button onClick={() => setTab('products')} className={`px-3.5 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${tab === 'products' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <Tags size={14} /> Productos
+        </button>
+        <button onClick={() => setTab('boxes')} className={`px-3.5 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${tab === 'boxes' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <Package size={14} /> Cajas por cliente
         </button>
       </div>
 
-      {error && <div className="mb-4 p-3 rounded-lg border text-sm bg-red-500/10 border-red-500/20 text-red-400">{error}</div>}
-      {msg && <div className="mb-4 p-3 rounded-lg border text-sm bg-green-500/10 border-green-500/20 text-green-400">{msg}</div>}
+      {tab === 'products' && error && <div className="mb-4 p-3 rounded-lg border text-sm bg-red-500/10 border-red-500/20 text-red-400">{error}</div>}
+      {tab === 'products' && msg && <div className="mb-4 p-3 rounded-lg border text-sm bg-green-500/10 border-green-500/20 text-green-400">{msg}</div>}
 
       {/* Opciones */}
       <div className="card p-4 mb-4 flex flex-wrap items-end gap-4">
@@ -202,8 +220,8 @@ export default function LabelsPage() {
         </div>
         <p className="text-xs text-slate-500 pb-2">Default 57 × 40 mm.</p>
 
-        {/* Toggle: cantidad = existencias (a la derecha) */}
-        <div
+        {/* Toggle: cantidad = existencias (a la derecha) — solo aplica a productos */}
+        {tab === 'products' && <div
           onClick={() => setQtyFromStock(v => !v)}
           role="switch"
           aria-checked={qtyFromStock}
@@ -213,9 +231,12 @@ export default function LabelsPage() {
           <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${qtyFromStock ? 'bg-green-500' : 'bg-slate-600'}`}>
             <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${qtyFromStock ? 'translate-x-6' : 'translate-x-1'}`} />
           </div>
-        </div>
+        </div>}
       </div>
 
+      {tab === 'boxes' && <BoxLabels widthMm={widthMm} heightMm={heightMm} />}
+
+      {tab === 'products' && (<>
       {/* Filtros + buscador */}
       <div className="card p-4 mb-4">
         <p className="text-xs font-medium text-slate-400 mb-3">Buscar / filtrar productos</p>
@@ -328,6 +349,7 @@ export default function LabelsPage() {
           </button>
         </div>
       )}
+      </>)}
 
       {showImport && <ImportPurchaseModal onClose={() => setShowImport(false)} onImport={importPurchaseItems} />}
     </div>

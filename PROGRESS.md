@@ -17,7 +17,7 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs · Selector de empleados en notificaciones · Traslados: tomar costo base del socio
+## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs · Selector de empleados en notificaciones · Traslados: tomar costo base del socio · Etiquetas de cajas por cliente
 
 > ### ⏳ Commiteado y pusheado; FALTA DEPLOY.
 
@@ -45,6 +45,11 @@
   - **Probado en local** sobre una copia desechable de la BD (grande_test) con 6 casos: sube, baja, mismo costo, costo manual, precio manual y sin baseCost. Lo guardado coincidió exactamente con la vista previa; la CxP y los movimientos quedaron igual que antes.
   - **No probado:** el envío real entre dos instancias (no hay socio en local).
   - **Deploy:** hace falta en ambos lados (total+totalturen, aceros+acerosmayor). Si solo se actualiza el que recibe, no aparece la pantalla porque no llega `baseCost`.
+- **Etiquetas — pestaña nueva "Cajas por cliente"** en `/inventory/etiquetas`:
+  - **Para qué:** marcar las cajas de las ventas al mayor que van en un mismo camión para varios clientes (ej. "FERREAGRO LA SABANITA, C.A. · 24 UND").
+  - **Cómo:** se busca por factura o cliente (autocompleta nombre, RIF y dirección) o se escribe a mano. Las cajas se cargan como filas de contenido × cantidad, y sale una etiqueta por caja con "CAJA n/N", factura y fecha. Hay vista previa en vivo.
+  - **Endpoint:** `POST labels/boxes/pdf` (DTO `GenerateBoxLabelsDto`).
+  - **Probado en local:** búsqueda de factura real, PDF de 4 cajas y casos límite (nombre y contenido muy largos, sin contenido ni numeración, etiqueta de 100×75 mm, cliente vacío → 400). Los PDF se renderizaron a imagen para revisarlos, y la pantalla se probó en PC y en teléfono.
 - **Regla de negocio aclarada con el usuario:** las CxC de plataforma de facturas RETURNED se dejan abiertas a propósito (es un cambio de producto que se re-factura con el saldo a favor). Se cuentan como financiado y pendiente. Ver PROJECT.md.
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
