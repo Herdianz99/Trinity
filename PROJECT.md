@@ -1039,6 +1039,13 @@ model QuotationItem {
 - Modales full-screen en mobile, centrados en desktop
 - Layout responsive con padding adaptativo
 - Ses.150: mismo patrón (tabla `hidden md:table` + tarjetas `md:hidden`) en /rrhh/notificaciones, /bancos, /bancos/cuentas, /bancos/[id] y /settings/users
+- Ses.154: en /rrhh/notificaciones, el modal "Nueva notificación" es full-screen en el teléfono (cabecera y botones fijos) y usa `EmployeePicker` en vez del `<select multiple>` nativo:
+  - Buscador sin tildes por nombre o código.
+  - Chips de departamento y "Marcar/Desmarcar los N visibles".
+  - Filas tocables completas; los elegidos quedan arriba como etiquetas con ✕.
+  - El botón dice "Enviar a N".
+  - "A un empleado" usa el mismo selector con selección única.
+  - `onChange` recibe un updater para que varios toques rápidos no se pisen.
 
 ### FASE 6 — Integraciones de Hardware y POS Avanzado
 - **POS Electron + Máquina Fiscal:** Migrar el POS a Electron para acceso nativo a puertos COM. El agente Electron se comunica con la máquina fiscal por puerto COM, recibe el número fiscal y lo guarda en Invoice.fiscalNumber. También habilita modo offline con sincronización posterior

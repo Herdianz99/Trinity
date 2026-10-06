@@ -17,7 +17,7 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs de facturado, financiado, cuota inicial y facturas
+## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs de facturado, financiado, cuota inicial y facturas · Selector de empleados en notificaciones
 
 > ### ⏳ Commiteado y pusheado; FALTA DEPLOY.
 
@@ -31,6 +31,12 @@
 - **Verificado contra la BD de la grande, septiembre 2026:**
   - Cashea: 2.099 facturas de 7.389, $283.541 facturado, $211.182 financiado, $73.620 de cuota inicial.
   - Crediagro: 40 facturas, $7.772 facturado, $2.499 financiado, $5.273 de cuota inicial.
+- **`/rrhh/notificaciones` — selector de empleados nuevo** (reemplaza el `<select multiple>` nativo, que obligaba a usar Ctrl y era inusable en el teléfono):
+  - Componente `EmployeePicker`: buscador sin tildes por nombre o código, chips de departamento, "Marcar/Desmarcar los N visibles", filas tocables completas y los elegidos arriba como etiquetas con ✕.
+  - También se usa en "A un empleado", con selección única.
+  - El modal es full-screen en el teléfono, con cabecera y botones Cancelar/"Enviar a N" fijos.
+  - Valida que haya destinatario o departamento antes de enviar.
+  - Probado en local con Chrome automatizado, en escritorio y a 390 px (con datos de la grande). La prueba detectó que varios toques rápidos se pisaban; se corrigió con un updater funcional.
 - **Regla de negocio aclarada con el usuario:** las CxC de plataforma de facturas RETURNED se dejan abiertas a propósito (es un cambio de producto que se re-factura con el saldo a favor). Se cuentan como financiado y pendiente. Ver PROJECT.md.
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
