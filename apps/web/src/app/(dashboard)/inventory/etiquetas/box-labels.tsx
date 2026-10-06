@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Trash2, Printer, Plus, X, FileText, User, Package } from 'lucide-react';
 
 // ════════════════════════════════════════════════════════════
@@ -26,6 +26,9 @@ function todayLabel(): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+// Fecha de la factura en hora local del navegador (dd/mm/aaaa)
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
 let nextId = 1;
 const newGroup = (content = '', count = '1'): BoxGroup => ({ id: nextId++, content, count });
 
@@ -47,6 +50,17 @@ export default function BoxLabels({ widthMm, heightMm }: { widthMm: string; heig
   const [customerHits, setCustomerHits] = useState<CustomerHit[]>([]);
   const [open, setOpen] = useState(false);
   const [loadingPick, setLoadingPick] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar la lista al tocar/clic fuera del buscador
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
 
   useEffect(() => {
     const q = query.trim();
@@ -109,15 +123,29 @@ export default function BoxLabels({ widthMm, heightMm }: { widthMm: string; heig
   }
 
   const totalBoxes = groups.reduce((s, g) => s + Math.max(0, Math.floor(Number(g.count) || 0)), 0);
-  const firstContent = groups.find((g) => g.content.trim())?.content.trim() || '';
   const date = todayLabel();
 
-  const handleGenerate = useCallback(async () => {
+  // Mismo cuerpo para la vista previa y el PDF final (asi no pueden diferir)
+  const boxes = groups
+    .map((g) => ({ content: g.content.trim() || undefined, count: Math.floor(Number(g.count) || 0) }))
+    .filter((b) => b.count > 0);
+  const buildPayload = (previewOnly: boolean) => ({
+    customerName: customerName.trim() || 'NOMBRE DEL CLIENTE',
+    customerRif: customerRif.trim() || undefined,
+    address: showAddress && address.trim() ? address.trim() : undefined,
+    reference: reference.trim() || undefined,
+    date,
+    numbered,
+    boxes: boxes.length ? boxes : [{ count: 1 }],
+    widthMm: Number(widthMm) >= 10 ? Number(widthMm) : 57,
+    heightMm: Number(heightMm) >= 10 ? Number(heightMm) : 40,
+    ...(previewOnly ? { previewOnly: true } : {}),
+  });
+  const previewPayload = JSON.stringify(buildPayload(true));
+
+  const handleGenerate = async () => {
     setError('');
     if (!customerName.trim()) { setError('Escribe el cliente (o búscalo por factura)'); return; }
-    const boxes = groups
-      .map((g) => ({ content: g.content.trim() || undefined, count: Math.floor(Number(g.count) || 0) }))
-      .filter((b) => b.count > 0);
     if (boxes.length === 0) { setError('Indica al menos una caja'); return; }
     const w = Number(widthMm), h = Number(heightMm);
     if (!(w >= 10) || !(h >= 10)) { setError('El tamaño de la etiqueta debe ser de al menos 10mm'); return; }
@@ -125,17 +153,7 @@ export default function BoxLabels({ widthMm, heightMm }: { widthMm: string; heig
     try {
       const res = await fetch('/api/proxy/labels/boxes/pdf', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: customerName.trim(),
-          customerRif: customerRif.trim() || undefined,
-          address: showAddress && address.trim() ? address.trim() : undefined,
-          reference: reference.trim() || undefined,
-          date,
-          numbered,
-          boxes,
-          widthMm: w,
-          heightMm: h,
-        }),
+        body: JSON.stringify(buildPayload(false)),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(Array.isArray(e.message) ? e.message.join(', ') : e.message || 'Error al generar etiquetas'); }
       const blob = await res.blob();
@@ -147,55 +165,68 @@ export default function BoxLabels({ widthMm, heightMm }: { widthMm: string; heig
     } finally {
       setGenerating(false);
     }
-  }, [customerName, customerRif, address, showAddress, reference, date, numbered, groups, widthMm, heightMm]);
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
       <div className="space-y-4 min-w-0">
         {error && <div className="p-3 rounded-lg border text-sm bg-red-500/10 border-red-500/20 text-red-400">{error}</div>}
 
-        {/* Cliente */}
-        <div className="card p-4 space-y-3">
+        {/* Cliente. relative z-30: .card usa backdrop-blur (crea su propio contexto de apilado),
+            sin esto la tarjeta "Cajas" de abajo tapa la lista desplegable */}
+        <div className="card p-4 space-y-3 relative z-30">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-slate-400 flex items-center gap-1.5"><User size={13} /> Cliente destino</p>
             <button onClick={clearAll} className="text-xs text-slate-400 hover:text-red-400">Limpiar todo</button>
           </div>
 
-          <div className="relative">
+          <div className="relative" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => (invoiceHits.length || customerHits.length) && setOpen(true)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
               placeholder="Buscar por N° de factura o nombre del cliente…"
               className="input-field pl-9 pr-9 !py-2.5 text-sm w-full"
               autoComplete="off"
             />
             {(searching || loadingPick) && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-500" size={15} />}
+            {open && !searching && query.trim().length >= 2 && invoiceHits.length === 0 && customerHits.length === 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl px-3 py-3 text-sm text-slate-400">
+                Sin resultados. Puedes escribir el nombre a mano abajo.
+              </div>
+            )}
             {open && (invoiceHits.length > 0 || customerHits.length > 0) && (
-              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700/50 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl max-h-80 overflow-y-auto overscroll-contain">
                 {invoiceHits.length > 0 && (
                   <>
-                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Facturas</p>
+                    <p className="sticky top-0 bg-slate-800 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Facturas</p>
                     {invoiceHits.map((inv) => (
                       <button key={inv.id} onClick={() => pickInvoice(inv)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-700/50 flex items-center gap-2">
-                        <FileText size={13} className="text-slate-500 flex-shrink-0" />
-                        <span className="font-mono text-green-400 text-xs flex-shrink-0">{inv.number}</span>
-                        <span className="text-white truncate">{inv.customer?.name || '—'}</span>
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700/60 active:bg-slate-700 flex items-start gap-2.5 border-t border-slate-700/40 first-of-type:border-t-0">
+                        <FileText size={14} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-white break-words leading-snug">{inv.customer?.name || '—'}</span>
+                          <span className="block text-[11px] text-slate-500 mt-0.5">
+                            <span className="font-mono text-green-400">{inv.number}</span> · {fmtDate(inv.createdAt)}
+                          </span>
+                        </span>
                       </button>
                     ))}
                   </>
                 )}
                 {customerHits.length > 0 && (
                   <>
-                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Clientes</p>
+                    <p className="sticky top-0 bg-slate-800 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 border-t border-slate-700/60">Clientes</p>
                     {customerHits.map((c) => (
                       <button key={c.id} onClick={() => pickCustomer(c)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-700/50 flex items-center gap-2">
-                        <User size={13} className="text-slate-500 flex-shrink-0" />
-                        <span className="text-white truncate flex-1">{c.name}</span>
-                        <span className="text-xs text-slate-500 flex-shrink-0">{formatRif(c)}</span>
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700/60 active:bg-slate-700 flex items-start gap-2.5 border-t border-slate-700/40">
+                        <User size={14} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-white break-words leading-snug">{c.name}</span>
+                          {formatRif(c) && <span className="block text-[11px] text-slate-500 font-mono mt-0.5">{formatRif(c)}</span>}
+                        </span>
                       </button>
                     ))}
                   </>
@@ -291,83 +322,70 @@ export default function BoxLabels({ widthMm, heightMm }: { widthMm: string; heig
       {/* Vista previa */}
       <div className="card p-4 lg:sticky lg:top-4">
         <p className="text-xs font-medium text-slate-400 mb-3">Vista previa · caja 1 ({widthMm} × {heightMm} mm)</p>
-        <BoxLabelPreview
-          widthMm={Number(widthMm) || 57}
-          heightMm={Number(heightMm) || 40}
-          customer={customerName.trim() || 'NOMBRE DEL CLIENTE'}
-          rif={customerRif.trim()}
-          address={showAddress ? address.trim() : ''}
-          meta={[reference.trim(), date].filter(Boolean).join(' · ')}
-          tag={numbered ? `CAJA 1/${totalBoxes || 1}` : ''}
-          content={firstContent}
-          placeholder={!customerName.trim()}
-        />
-        <p className="text-[11px] text-slate-500 mt-3">Vista aproximada; el PDF ajusta el tamaño de letra para llenar la etiqueta.</p>
+        <PdfLabelPreview payload={previewPayload} />
+        <p className="text-[11px] text-slate-500 mt-3">Es la etiqueta real del PDF: así sale impresa.</p>
       </div>
     </div>
   );
 }
 
-// Texto que se achica hasta caber en su caja (aproxima el auto-ajuste del PDF)
-function FitText({ text, max, min, className }: { text: string; max: number; min: number; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState(max);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let s = max;
-    el.style.fontSize = `${s}px`;
-    while (s > min && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
-      s -= 0.5;
-      el.style.fontSize = `${s}px`;
-    }
-    setSize(s);
-  }, [text, max, min]);
-  return (
-    <div ref={ref} className={`h-full w-full flex items-center justify-center text-center overflow-hidden break-words leading-tight ${className || ''}`} style={{ fontSize: size }}>
-      <span className="max-h-full">{text}</span>
-    </div>
-  );
-}
+// Vista previa EXACTA: pide al servidor el PDF de la 1ra etiqueta (previewOnly) y lo dibuja
+// con pdf.js, así lo que se ve es lo que se imprime. pdf.js se carga solo al usar la pestaña.
+function PdfLabelPreview({ payload }: { payload: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-function BoxLabelPreview({ widthMm, heightMm, customer, rif, address, meta, tag, content, placeholder }: {
-  widthMm: number; heightMm: number; customer: string; rif: string; address: string;
-  meta: string; tag: string; content: string; placeholder: boolean;
-}) {
-  // Escala: el lado mas restrictivo ocupa el ancho disponible (~300px) o 220px de alto
-  const pxPerMm = Math.min(300 / widthMm, 220 / heightMm);
-  const w = widthMm * pxPerMm;
-  const h = heightMm * pxPerMm;
-  const k = Math.min(widthMm / 57, heightMm / 40) * (pxPerMm / 2.8346); // pt -> px aprox
-  const small = Math.max(7, 6.5 * k);
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/proxy/labels/boxes/pdf', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
+        });
+        if (!res.ok) throw new Error('preview');
+        const data = new Uint8Array(await res.arrayBuffer());
+        const pdfjs = await import('pdfjs-dist');
+        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+          // El worker se sirve desde /public (empaquetarlo rompe el build de Next 14: el
+          // minificador no lo parsea). Si se actualiza pdfjs-dist, copiar el worker nuevo:
+          // node_modules/pdfjs-dist/build/pdf.worker.min.mjs -> public/pdfjs/pdf.worker-<version>.min.mjs
+          pdfjs.GlobalWorkerOptions.workerSrc = `/pdfjs/pdf.worker-${pdfjs.version}.min.mjs`;
+        }
+        const doc = await pdfjs.getDocument({ data }).promise;
+        const page = await doc.getPage(1);
+        if (cancelled) return;
+        // Ancho disponible (max 300px) y nitidez segun la pantalla
+        const base = page.getViewport({ scale: 1 });
+        const maxW = Math.min(300, boxRef.current?.clientWidth || 300);
+        const cssScale = Math.min(maxW / base.width, 220 / base.height);
+        const dpr = window.devicePixelRatio || 1;
+        const vp = page.getViewport({ scale: cssScale * dpr });
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = Math.floor(vp.width);
+        canvas.height = Math.floor(vp.height);
+        canvas.style.width = `${Math.floor(vp.width / dpr)}px`;
+        canvas.style.height = `${Math.floor(vp.height / dpr)}px`;
+        await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp }).promise;
+        doc.destroy();
+        if (!cancelled) setFailed(false);
+      } catch {
+        if (!cancelled) setFailed(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [payload]);
 
   return (
-    <div className="flex justify-center">
-      <div className="bg-white text-black flex flex-col shadow-lg" style={{ width: w, height: h, padding: 3 * k, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-        <div className="flex-1 min-h-0 flex flex-col" style={{ border: `${Math.max(1, 1.2 * k)}px solid #000`, padding: `${3 * k}px ${4 * k}px` }}>
-          {/* Franja superior */}
-          <div className="flex items-center justify-between gap-1 flex-shrink-0" style={{ height: Math.max(12, 13 * k) }}>
-            <span className="truncate" style={{ fontSize: small }}>{meta}</span>
-            {tag && (
-              <span className="bg-black text-white font-bold whitespace-nowrap flex items-center h-full" style={{ fontSize: Math.max(8, 9 * k), padding: `0 ${4 * k}px` }}>{tag}</span>
-            )}
-          </div>
-          {/* Cliente */}
-          <div className="min-h-0" style={{ flex: content ? 55 : 100, marginTop: 3 * k }}>
-            <FitText text={customer} max={22 * k} min={7} className={`font-bold ${placeholder ? 'text-gray-300' : ''}`} />
-          </div>
-          {rif && <div className="text-center flex-shrink-0 truncate" style={{ fontSize: small }}>{rif}</div>}
-          {content && (
-            <>
-              <div className="flex-shrink-0 bg-black" style={{ height: Math.max(1, 0.6 * k), margin: `${1 * k}px 0` }} />
-              <div className="min-h-0" style={{ flex: 45 }}>
-                <FitText text={content} max={16 * k} min={6} className="font-bold" />
-              </div>
-            </>
-          )}
-          {address && <div className="flex-shrink-0 line-clamp-2 leading-tight" style={{ fontSize: small }}>{address}</div>}
-        </div>
-      </div>
+    <div ref={boxRef} className="relative flex justify-center min-h-[120px]">
+      <canvas ref={canvasRef} className={`bg-white shadow-lg transition-opacity ${loading ? 'opacity-60' : ''} ${failed ? 'hidden' : ''}`} />
+      {loading && <Loader2 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-slate-400" size={20} />}
+      {failed && !loading && <p className="text-xs text-slate-500 self-center">No se pudo generar la vista previa.</p>}
     </div>
   );
 }

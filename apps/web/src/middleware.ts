@@ -104,6 +104,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    // pdfjs: worker de pdf.js servido desde /public (estático, sin datos; no requiere sesión)
+    '/((?!_next/static|_next/image|favicon.ico|public|pdfjs).*)',
   ],
 };

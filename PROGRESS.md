@@ -55,6 +55,11 @@
   - **Cómo:** se busca por factura o cliente (autocompleta nombre, RIF y dirección) o se escribe a mano. Las cajas se cargan como filas de contenido × cantidad, y sale una etiqueta por caja con "CAJA n/N", factura y fecha. Hay vista previa en vivo.
   - **Endpoint:** `POST labels/boxes/pdf` (DTO `GenerateBoxLabelsDto`).
   - **Probado en local:** búsqueda de factura real, PDF de 4 cajas y casos límite (nombre y contenido muy largos, sin contenido ni numeración, etiqueta de 100×75 mm, cliente vacío → 400). Los PDF se renderizaron a imagen para revisarlos, y la pantalla se probó en PC y en teléfono.
+- **Etiquetas de cajas — fixes reportados por el usuario en local:**
+  - **Vista previa ≠ PDF:** el preview HTML aproximaba el auto-ajuste con otro interlineado y otro reparto de alto, así que mostraba el nombre en 1 línea y el PDF en 2. Ahora el preview ES el PDF real (endpoint con `previewOnly`, dibujado con pdf.js); verificado idéntico en PC y teléfono con "AGROINDUSTRIAS EL INTENTO, C.A".
+  - **Build:** el worker de pdf.js va en `public/pdfjs/` (empaquetado rompía `next build`) y se agregó `pdfjs` al `matcher` del middleware. `next build` OK y probado con `next start`: el worker responde 200 `application/javascript` y la vista previa se dibuja.
+  - **PDF:** la dirección ahora sí ocupa hasta 2 líneas (antes se cortaba en 1 por calcular el tope sin interlineado). Una palabra larga ya no se parte (`fit` revisa el ancho de la palabra más larga). La línea de factura/fecha ya no salta de línea en etiquetas angostas.
+  - **Lista "Cliente destino":** quedaba DETRÁS de la tarjeta "Cajas" (el `backdrop-blur` de `.card` crea su propio contexto de apilado; se arregló con `relative z-30`). Ahora muestra el nombre completo con N° de factura + fecha debajo (antes se cortaba en el teléfono), se cierra al tocar fuera o con Escape, y avisa "Sin resultados".
 - **Regla de negocio aclarada con el usuario:** las CxC de plataforma de facturas RETURNED se dejan abiertas a propósito (es un cambio de producto que se re-factura con el saldo a favor). Se cuentan como financiado y pendiente. Ver PROJECT.md.
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD

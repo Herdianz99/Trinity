@@ -66,6 +66,11 @@ export class GenerateBoxLabelsDto {
   @IsBoolean()
   numbered?: boolean;
 
+  @ApiProperty({ required: false, description: 'Vista previa: solo la 1ra etiqueta (con la numeracion real)' })
+  @IsOptional()
+  @IsBoolean()
+  previewOnly?: boolean;
+
   @ApiProperty({ type: [BoxGroupDto] })
   @IsArray()
   @ArrayMinSize(1)

@@ -1102,7 +1102,10 @@ model QuotationItem {
   - **Cliente:** se carga buscando por N° de factura o nombre del cliente (trae RIF con `documentType` y dirección), o se escribe a mano.
   - **Cajas:** filas de contenido × cantidad de cajas, numeradas en un solo correlativo.
   - **Fecha:** la arma el frontend en hora local.
-  - **PDF:** texto libre, no toca la BD; tope de 500 cajas por lote. Hay vista previa aproximada en HTML.
+  - **PDF:** texto libre, no toca la BD; tope de 500 cajas por lote.
+  - **Vista previa EXACTA:** se pide el PDF real con `previewOnly: true` (solo la 1ra etiqueta, con la numeración real) y se dibuja con pdf.js (`pdfjs-dist`, import dinámico). La vista previa y "Generar PDF" usan el mismo `buildPayload`.
+  - **Worker de pdf.js:** se sirve desde `public/pdfjs/pdf.worker-<version>.min.mjs`, porque empaquetarlo rompe `next build` en Next 14 (el minificador no lo parsea). Está excluido del `matcher` del middleware. **Al actualizar `pdfjs-dist`, copiar el worker nuevo con su versión.**
+  - **Ajuste de letra (`fit`):** exige que entre a lo alto Y que la palabra más larga quepa a lo ancho, para que pdfkit no parta palabras. La línea de factura/fecha se achica a una sola línea (en pdfkit, `lineBreak:false` con `width` igual salta de línea).
 
 **Crédito a clientes:** Requiere `creditAuthPassword` (bcrypt). Al aprobar → crea CxC, descuenta cupo.
 

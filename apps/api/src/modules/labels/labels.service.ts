@@ -195,13 +195,15 @@ export class LabelsService {
       // Escala de fuentes respecto a la etiqueta default (40mm de alto)
       const k = Math.min(w / (57 * MM), h / (40 * MM));
 
-      // Mayor tamano (entre max y min) con el que el texto entra en el alto dado
+      // Mayor tamano (entre max y min) con el que el texto entra en el alto dado Y su palabra
+      // mas larga cabe a lo ancho (si no, pdfkit la parte por la mitad: "AGROINDUSTRI/AS")
       const fit = (text: string, font: string, max: number, min: number, maxH: number) => {
         doc.font(font);
+        const longest = text.split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), '');
         let size = max;
         while (size > min) {
           doc.fontSize(size);
-          if (doc.heightOfString(text, { width: innerW }) <= maxH) break;
+          if (doc.widthOfString(longest) <= innerW && doc.heightOfString(text, { width: innerW }) <= maxH) break;
           size -= 0.5;
         }
         return Math.max(size, min);
@@ -217,6 +219,7 @@ export class LabelsService {
       for (const group of boxes) {
         const content = group.content?.trim() || '';
         for (let c = 0; c < group.count; c++) {
+          if (dto.previewOnly && n >= 1) break; // vista previa: solo la 1ra etiqueta
           n++;
           if (n > 1) doc.addPage({ size: [w, h], margin: 0 });
 
@@ -238,8 +241,15 @@ export class LabelsService {
             metaW = innerW - tagW - 4;
           }
           if (meta) {
-            doc.font('Helvetica').fontSize(Math.max(5.5, 6.5 * k)).fillColor('#000000');
-            doc.text(meta, pad, topY + (topH - doc.currentLineHeight()) / 2, { width: metaW, lineBreak: false, ellipsis: true });
+            // UNA sola linea: en pdfkit lineBreak:false NO evita el salto si se pasa width, asi
+            // que se achica la letra hasta caber y, si ni al minimo cabe, se recorta con "…"
+            doc.font('Helvetica');
+            let size = Math.max(5.5, 6.5 * k);
+            doc.fontSize(size);
+            while (size > 4.5 && doc.widthOfString(meta) > metaW) { size -= 0.25; doc.fontSize(size); }
+            let line = meta;
+            while (line.length > 1 && doc.widthOfString(line) > metaW) line = line.slice(0, -2) + '…';
+            doc.fillColor('#000000').text(line, pad, topY + (topH - doc.currentLineHeight()) / 2, { lineBreak: false });
           }
           let y = topY + topH + 3;
 
@@ -248,8 +258,8 @@ export class LabelsService {
           let addrH = 0;
           if (address) {
             doc.font('Helvetica').fontSize(Math.max(5.5, 6.5 * k));
-            addrH = Math.min(doc.heightOfString(address, { width: innerW }), doc.currentLineHeight() * 2);
-            // +1 de holgura: pdfkit descarta la 2da linea si el alto queda justo
+            // Tope de 2 lineas: currentLineHeight(true) incluye el interlineado (sin el, solo cabia 1)
+            addrH = Math.min(doc.heightOfString(address, { width: innerW }), doc.currentLineHeight(true) * 2);
             doc.fillColor('#000000').text(address, pad, bottom - addrH, { width: innerW, height: addrH + 1, ellipsis: true });
             addrH += 2;
           }
