@@ -195,18 +195,25 @@ export class LabelsService {
       // Escala de fuentes respecto a la etiqueta default (40mm de alto)
       const k = Math.min(w / (57 * MM), h / (40 * MM));
 
-      // Mayor tamano (entre max y min) con el que el texto entra en el alto dado Y su palabra
-      // mas larga cabe a lo ancho (si no, pdfkit la parte por la mitad: "AGROINDUSTRI/AS")
-      const fit = (text: string, font: string, max: number, min: number, maxH: number) => {
+      // Mayor tamano (entre max y min) con el que el texto:
+      //  - entra en el alto dado,
+      //  - ocupa como mucho `maxLines` lineas (asi la letra depende del LARGO del texto: un nombre
+      //    corto sale grande y uno largo se achica, en vez de estirarse en 4 lineas y llenar todo),
+      //  - y su palabra mas larga cabe a lo ancho (si no, pdfkit la parte: "AGROINDUSTRI/AS").
+      // Si ni al minimo cabe en maxLines, se permite 1 linea mas.
+      const fit = (text: string, font: string, max: number, min: number, maxH: number, maxLines: number) => {
         doc.font(font);
         const longest = text.split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), '');
-        let size = max;
-        while (size > min) {
-          doc.fontSize(size);
-          if (doc.widthOfString(longest) <= innerW && doc.heightOfString(text, { width: innerW }) <= maxH) break;
-          size -= 0.5;
+        for (const lines of [maxLines, maxLines + 1]) {
+          for (let size = max; size >= min; size -= 0.5) {
+            doc.fontSize(size);
+            const th = doc.heightOfString(text, { width: innerW });
+            if (doc.widthOfString(longest) <= innerW && th <= maxH && th <= doc.currentLineHeight(true) * lines + 0.5) {
+              return size;
+            }
+          }
         }
-        return Math.max(size, min);
+        return min;
       };
       // Texto centrado verticalmente en su franja; recorta con "..." si no cabe ni al minimo
       const block = (text: string, font: string, size: number, y: number, boxH: number, align: 'center' | 'left' = 'center') => {
@@ -268,9 +275,19 @@ export class LabelsService {
           // ── Cliente (lo mas grande) + RIF; el contenido se lleva el resto ──
           const rifH = rif ? Math.max(7, 8 * k) : 0;
           const nameH = (content ? avail * 0.55 : avail) - rifH;
-          const nameSize = fit(customer, 'Helvetica-Bold', 22 * k, 7, nameH);
-          block(customer, 'Helvetica-Bold', nameSize, y, nameH);
-          y += nameH;
+          const nameSize = fit(customer, 'Helvetica-Bold', 22 * k, 7, nameH, 2);
+          if (!content) {
+            // Sin contenido: nombre + RIF van juntos, centrados en todo el alto libre
+            // (si no, el RIF queda pegado abajo, lejos del nombre)
+            doc.font('Helvetica-Bold').fontSize(nameSize);
+            const th = Math.min(doc.heightOfString(customer, { width: innerW }), nameH);
+            y += (avail - th - rifH) / 2;
+            block(customer, 'Helvetica-Bold', nameSize, y, th);
+            y += th + (rif ? 2 : 0);
+          } else {
+            block(customer, 'Helvetica-Bold', nameSize, y, nameH);
+            y += nameH;
+          }
           if (rif) {
             doc.font('Helvetica').fontSize(Math.max(5.5, 6.5 * k)).fillColor('#000000');
             doc.text(rif, pad, y, { width: innerW, align: 'center', lineBreak: false });
@@ -281,7 +298,7 @@ export class LabelsService {
             doc.moveTo(pad, y + 1).lineTo(pad + innerW, y + 1).lineWidth(0.6).strokeColor('#000000').stroke();
             y += 3;
             const contentH = bottom - addrH - y;
-            const contentSize = fit(content, 'Helvetica-Bold', 16 * k, 6, contentH);
+            const contentSize = fit(content, 'Helvetica-Bold', 16 * k, 6, contentH, 3);
             block(content, 'Helvetica-Bold', contentSize, y, contentH);
           }
         }
