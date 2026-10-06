@@ -158,11 +158,18 @@ export class IntegrationController {
     return this.transfers.reject(id);
   }
 
+  // Qué costos/precios cambiarían si al recibir se toma el costo base del socio.
+  @Get('transfers/:id/cost-preview')
+  @UseGuards(AuthGuard('jwt'))
+  transferCostPreview(@Param('id') id: string) {
+    return this.transfers.costPreview(id);
+  }
+
   @Post('transfers/:id/receive')
   @UseGuards(AuthGuard('jwt'))
   receiveTransfer(
     @Param('id') id: string,
-    @Body() body: { toWarehouseId: string },
+    @Body() body: { toWarehouseId: string; applyPartnerCosts?: boolean },
     @CurrentUser('id') userId: string,
   ) {
     return this.transfers.receive(id, body, userId);

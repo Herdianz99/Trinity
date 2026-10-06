@@ -1077,6 +1077,18 @@ model QuotationItem {
 - **Análisis `/receivables/platforms`** (`platformAnalytics`): cada tarjeta muestra 4 KPIs que siguen el rango de fechas elegido: **Facturado total** (valor completo de las facturas vigentes PAID/PARTIAL_RETURN con CxC de la plataforma, filtrado por `paidAt`), **Facturas con la plataforma / total de facturas de la empresa**, **Financiado** (suma de las CxC de la plataforma por `createdAt`, INCLUYENDO las de facturas RETURNED) y **Cuota inicial** (`initialUsd/Bs`: total de la factura − lo financiado en ella).
 - **Devoluciones con plataforma:** si se devuelve una factura pagada con Cashea/Crediagro, la CxC de la plataforma **se deja abierta a propósito**. En la práctica es un cambio de producto: se re-factura usando el saldo a favor y la plataforma igual cobra al cliente. No es un bug; esas CxC cuentan como financiado y pendiente.
 
+**Traslados entre empresas socias (`/catalog/partner-transfers`, `integration/partner-transfers.service`):**
+- **Pares conectados:** total↔totalturen y aceros↔acerosmayor (env `PARTNER_API_URL`). El cambio debe desplegarse en AMBOS lados de cada par.
+- **Snapshot de cada ítem:** `{code, name, quantity, unitCost, baseCost?}`.
+  - `unitCost` es costo o costo + brecha, según `costBasis`; valora la CxC/CxP y los movimientos de inventario.
+  - `baseCost` (Ses.154) es el `costUsd` puro del que envía, sin redondear. Viaja tanto al enviar como al aprobar una solicitud.
+- **Tomar costos del socio al recibir:**
+  - `GET transfers/:id/cost-preview` devuelve los productos cuyo `baseCost` difiere del costo local, con el precio detal/mayor recalculado (misma fórmula que procesar compra, mantiene el % de ganancia).
+  - La pantalla muestra esa tabla con colores (rojo sube, verde baja) y las opciones "Sí, tomar costos y recibir" o "No, solo recibir".
+  - Con `applyPartnerCosts: true`, `receive` actualiza costo y precios en la misma transacción (usando el mismo cálculo que la vista previa).
+  - **Costo manual:** no se toca. **Precio manual:** cambia el costo pero conserva el precio.
+  - Los traslados sin `baseCost` (viejos, o de un socio sin esta versión) se reciben como antes, sin la pantalla.
+
 **Crédito a clientes:** Requiere `creditAuthPassword` (bcrypt). Al aprobar → crea CxC, descuenta cupo.
 
 **Transferencias:** WAREHOUSE crea → SUPERVISOR aprueba → stock se mueve en transacción Prisma.

@@ -1,10 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { IvaType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PartnerClient } from './partner-client.service';
 import { getIntegrationConfig } from './integration.config';
 import { caracasDateKey } from '../../common/timezone';
-import { resolveBregaPct, effectiveCost, round2 } from '../../common/pricing';
+import { resolveBregaPct, effectiveCost, computeSellingPrices, round2 } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+
+const IVA_MULTIPLIERS: Record<IvaType, number> = {
+  EXEMPT: 1,
+  REDUCED: 1.08,
+  GENERAL: 1.16,
+  SPECIAL: 1.31,
+};
 
 interface ItemInput {
   code: string;
@@ -15,6 +23,30 @@ interface ItemSnapshot {
   name: string;
   quantity: number;
   unitCost: number;
+  // Costo BASE del producto en la empresa que envía (costUsd puro, sin brecha ni redondeo).
+  // El que recibe puede adoptarlo al recibir para que ambas tengan el mismo costo.
+  // Ausente en traslados viejos o enviados por una instancia sin esta versión.
+  baseCost?: number;
+}
+
+// Una fila de la pantalla "tomar costos del socio" (misma idea que la de procesar compra).
+export interface CostPreviewRow {
+  productId: string;
+  code: string;
+  name: string;
+  currentCost: number;
+  partnerCost: number;
+  newCost: number; // = partnerCost, salvo costo manual (se queda el actual)
+  manualCost: boolean; // costo congelado: NO se cambia
+  manualPrice: boolean; // precio manual: cambia el costo pero conserva el precio
+  bregaPct: number;
+  gananciaPct: number;
+  gananciaMayorPct: number;
+  ivaMultiplier: number;
+  currentPriceDetal: number;
+  newPriceDetal: number;
+  currentPriceMayor: number;
+  newPriceMayor: number;
 }
 
 // Traslados de inventario ENTRE EMPRESAS socias. Cada instancia mueve SOLO su propio
@@ -153,7 +185,10 @@ export class PartnerTransfersService {
             })
           : 0;
       const unitCost = round2(effectiveCost(p.costUsd, bregaPct));
-      out.push({ productId: p.id, snap: { code: p.code, name: p.name, quantity: it.quantity, unitCost } });
+      out.push({
+        productId: p.id,
+        snap: { code: p.code, name: p.name, quantity: it.quantity, unitCost, baseCost: p.costUsd },
+      });
     }
     return out;
   }
@@ -352,6 +387,7 @@ export class PartnerTransfersService {
     // Solo las lineas con cantidad > 0 se resuelven (costo/nombre) y descuentan.
     const resolved = await this.resolveItems(toSend.map((x) => ({ code: x.code, quantity: x.send })), dto.costBasis);
     const costMap = new Map(resolved.map((r) => [r.snap.code, r.snap.unitCost]));
+    const baseCostMap = new Map(resolved.map((r) => [r.snap.code, r.snap.baseCost]));
 
     // Validar stock disponible por linea (tope = stock; sin negativos).
     for (const r of resolved) {
@@ -374,6 +410,7 @@ export class PartnerTransfersService {
         requestedQuantity: reqMap.get(i.code) ?? i.quantity,
         quantity: send,
         unitCost: send > 0 ? (costMap.get(i.code) ?? 0) : 0,
+        ...(send > 0 && baseCostMap.get(i.code) != null ? { baseCost: baseCostMap.get(i.code) } : {}),
       };
     });
 
@@ -436,8 +473,77 @@ export class PartnerTransfersService {
     return updated;
   }
 
+  // Productos del traslado cuyo costo base del socio difiere del mío, con el precio de venta
+  // resultante (misma fórmula que procesar una compra: se mantiene el % de ganancia).
+  // Se usa tanto para la vista previa como al aplicar, así lo que se ve es lo que se guarda.
+  private async costChanges(db: any, items: ItemSnapshot[]): Promise<CostPreviewRow[]> {
+    const withBase = items.filter((i) => i.quantity > 0 && typeof i.baseCost === 'number' && i.baseCost >= 0);
+    if (withBase.length === 0) return [];
+    const config = await db.companyConfig.findUnique({ where: { id: 'singleton' } });
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(db);
+    const rows: CostPreviewRow[] = [];
+    for (const it of withBase) {
+      const p = await db.product.findUnique({
+        where: { code: it.code },
+        select: {
+          id: true, code: true, name: true, costUsd: true, manualCost: true, manualPrice: true,
+          priceDetal: true, priceMayor: true, gananciaPct: true, gananciaMayorPct: true,
+          ivaType: true, bregaApplies: true, categoryId: true,
+        },
+      });
+      if (!p) continue;
+      const partnerCost = it.baseCost as number;
+      if (Math.abs(partnerCost - p.costUsd) < 0.000001) continue;
+      const newCost = p.manualCost ? p.costUsd : partnerCost;
+      const bregaPct = resolveBregaPct({
+        bregaApplies: p.bregaApplies,
+        categoryBregaPct: p.categoryId ? (catBregaMap.get(p.categoryId) ?? 0) : 0,
+        bregaGlobalPct,
+      });
+      const ivaMultiplier = IVA_MULTIPLIERS[p.ivaType as IvaType];
+      const prices = p.manualPrice || p.manualCost
+        ? { priceDetal: p.priceDetal, priceMayor: p.priceMayor }
+        : computeSellingPrices({
+            costUsd: newCost,
+            gananciaPct: p.gananciaPct,
+            gananciaMayorPct: p.gananciaMayorPct,
+            ivaMultiplier,
+            bregaPct,
+          });
+      rows.push({
+        productId: p.id,
+        code: p.code,
+        name: p.name,
+        currentCost: p.costUsd,
+        partnerCost,
+        newCost,
+        manualCost: p.manualCost,
+        manualPrice: p.manualPrice,
+        bregaPct,
+        gananciaPct: p.gananciaPct,
+        gananciaMayorPct: p.gananciaMayorPct,
+        ivaMultiplier,
+        currentPriceDetal: p.priceDetal,
+        newPriceDetal: prices.priceDetal,
+        currentPriceMayor: p.priceMayor,
+        newPriceMayor: prices.priceMayor,
+      });
+    }
+    return rows;
+  }
+
+  // Vista previa para la pantalla de recibir: qué costos/precios cambiarían.
+  async costPreview(id: string): Promise<CostPreviewRow[]> {
+    const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
+    if (!rec) throw new NotFoundException('Traslado no encontrado');
+    if (rec.status !== 'PENDING_RECEIPT') return [];
+    return this.costChanges(this.prisma, rec.items as unknown as ItemSnapshot[]);
+  }
+
   // ── RECIBIR: suma MI stock y avisa al socio (ack) ──
-  async receive(id: string, dto: { toWarehouseId: string }, userId: string) {
+  // applyPartnerCosts: el usuario aceptó tomar el costo base del socio (y recalcular precios).
+  async receive(id: string, dto: { toWarehouseId: string; applyPartnerCosts?: boolean }, userId: string) {
     const rec = await this.prisma.partnerTransfer.findUnique({ where: { id } });
     if (!rec) throw new NotFoundException('Traslado no encontrado');
     if (rec.status !== 'PENDING_RECEIPT') throw new BadRequestException('El traslado no esta por recibir');
@@ -480,6 +586,16 @@ export class PartnerTransfersService {
           },
         });
       }
+      if (dto.applyPartnerCosts) {
+        const changes = await this.costChanges(tx, items);
+        for (const c of changes) {
+          if (c.manualCost) continue; // costo congelado: no se toca
+          await tx.product.update({
+            where: { id: c.productId },
+            data: { costUsd: c.newCost, priceDetal: c.newPriceDetal, priceMayor: c.newPriceMayor },
+          });
+        }
+      }
       await tx.partnerTransfer.update({
         where: { id },
         data: { status: 'RECEIVED', toWarehouseId: dto.toWarehouseId },
@@ -490,7 +606,7 @@ export class PartnerTransfersService {
         amountUsd: items.reduce((s, i) => s + (i.unitCost || 0) * i.quantity, 0),
         userId,
       });
-    });
+    }, { timeout: 30000 }); // con applyPartnerCosts recorre cada producto 2 veces
 
     await this.partner.post(`/integration/transfers/${encodeURIComponent(rec.number)}/ack`, {});
     return this.prisma.partnerTransfer.findUnique({ where: { id } });

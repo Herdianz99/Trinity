@@ -17,7 +17,7 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs de facturado, financiado, cuota inicial y facturas · Selector de empleados en notificaciones
+## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs · Selector de empleados en notificaciones · Traslados: tomar costo base del socio
 
 > ### ⏳ Commiteado y pusheado; FALTA DEPLOY.
 
@@ -37,6 +37,14 @@
   - El modal es full-screen en el teléfono, con cabecera y botones Cancelar/"Enviar a N" fijos.
   - Valida que haya destinatario o departamento antes de enviar.
   - Probado en local con Chrome automatizado, en escritorio y a 390 px (con datos de la grande). La prueba detectó que varios toques rápidos se pisaban; se corrigió con un updater funcional.
+- **Traslados entre empresas — tomar el costo base del socio al recibir:**
+  - **Al enviar** (send/approve), cada ítem lleva además `baseCost`, el `costUsd` puro (sin brecha) del que envía.
+  - **Al recibir**, si hay productos con costo distinto, se abre una pantalla estilo "procesar compra": costo anterior → nuevo, brecha, % de ganancia y precio detal/mayor actual → nuevo, en rojo si sube y verde si baja, con el % de cambio. Es tabla en PC y tarjetas en el teléfono.
+  - **"Sí, tomar costos y recibir"** actualiza el costo y recalcula los precios manteniendo el % de ganancia (decisión del usuario). Costo manual = no se toca; precio manual = cambia el costo y conserva el precio.
+  - **"No, solo recibir"** = comportamiento anterior.
+  - **Probado en local** sobre una copia desechable de la BD (grande_test) con 6 casos: sube, baja, mismo costo, costo manual, precio manual y sin baseCost. Lo guardado coincidió exactamente con la vista previa; la CxP y los movimientos quedaron igual que antes.
+  - **No probado:** el envío real entre dos instancias (no hay socio en local).
+  - **Deploy:** hace falta en ambos lados (total+totalturen, aceros+acerosmayor). Si solo se actualiza el que recibe, no aparece la pantalla porque no llega `baseCost`.
 - **Regla de negocio aclarada con el usuario:** las CxC de plataforma de facturas RETURNED se dejan abiertas a propósito (es un cambio de producto que se re-factura con el saldo a favor). Se cuentan como financiado y pendiente. Ver PROJECT.md.
 
 ## 🗓️ Sesión 153 (2026-10-05) — PDF de factura de compra: textos largos ya no se montan · operaciones en BD
