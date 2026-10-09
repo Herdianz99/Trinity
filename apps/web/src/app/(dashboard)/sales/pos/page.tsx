@@ -235,6 +235,15 @@ function MoneyInput({
   );
 }
 
+// RIF/cedula para mostrar con su letra: el cliente guarda la letra en documentType y solo
+// digitos en rif (ej. V-17328728). Si un rif viejo ya trae la letra, se respeta tal cual.
+function fmtCustomerRif(c?: { rif?: string | null; documentType?: string | null } | null): string {
+  const rif = (c?.rif || '').trim();
+  if (!rif) return '';
+  if (/^[A-Za-z]/.test(rif)) return rif.toUpperCase();
+  return `${(c?.documentType || 'V').toUpperCase()}-${rif}`;
+}
+
 export default function POSPage() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get('invoiceId');
@@ -686,7 +695,7 @@ export default function POSPage() {
           if (data.customer) {
             setCustomerId(data.customer.id);
             setCustomerName(data.customer.name);
-            setCustomerRif(data.customer.rif || '');
+            setCustomerRif(fmtCustomerRif(data.customer));
           }
           if (data.exchangeRate) setExchangeRate(data.exchangeRate);
         }
@@ -958,7 +967,7 @@ export default function POSPage() {
   function pickCustomer(c: any) {
     setCustomerId(c.id);
     setCustomerName(c.name);
-    setCustomerRif(c.rif || '');
+    setCustomerRif(fmtCustomerRif(c));
     setCustomerSearch('');
     setCustomerResults([]);
     setShowCustomerSearch(false);
@@ -1217,7 +1226,7 @@ export default function POSPage() {
   function goAssignCustomer() {
     setShowCustomerReminder(false);
     setCustomerId(null);
-    setCustomerName('');
+    setCustomerName(''); setCustomerRif('');
     setShowCustomerSearch(true);
     // En PC el buscador del carrito queda visible al limpiar el cliente: lo enfocamos
     // (en movil/tablet el modal full-screen ya hace autoFocus). El timeout deja
@@ -1268,7 +1277,7 @@ export default function POSPage() {
       const data = await res.json();
       setCart([]);
       setCustomerId(null);
-      setCustomerName('');
+      setCustomerName(''); setCustomerRif('');
       setExistingInvoiceId(null);
       // Volver al vendedor propio: si esta factura era retomada de otro vendedor, su
       // sellerId quedo "pegado" en la sesion; sin este reset se colaria a la proxima venta.
@@ -1315,7 +1324,7 @@ export default function POSPage() {
       if (confirm('¿Limpiar carrito para nueva venta?')) {
         setCart([]);
         setCustomerId(null);
-        setCustomerName('');
+        setCustomerName(''); setCustomerRif('');
         setExistingInvoiceId(null);
         setSelectedSellerId(mySellerId);
         setOnlineOrderInfo(null);
@@ -1474,7 +1483,7 @@ export default function POSPage() {
 
       setCart([]);
       setCustomerId(null);
-      setCustomerName('');
+      setCustomerName(''); setCustomerRif('');
       setCreditModalOpen(false);
       setExistingInvoiceId(null);
       setSelectedSellerId(mySellerId);
@@ -1676,7 +1685,7 @@ export default function POSPage() {
 
       setCart([]);
       setCustomerId(null);
-      setCustomerName('');
+      setCustomerName(''); setCustomerRif('');
       setPayments([]);
       setChangeMethodId(null);
       setChangeUsdCash(0);
@@ -1745,7 +1754,7 @@ export default function POSPage() {
       const data = await res.json();
       setCustomerId(data.id);
       setCustomerName(data.name);
-      setCustomerRif(data.rif || '');
+      setCustomerRif(fmtCustomerRif(data));
       setShowCreateClient(false);
       setShowEditClient(false);
     } catch (err: any) {
@@ -1807,10 +1816,10 @@ export default function POSPage() {
       if (fullInvoice.customer) {
         setCustomerId(fullInvoice.customer.id);
         setCustomerName(fullInvoice.customer.name);
-        setCustomerRif(fullInvoice.customer.rif || '');
+        setCustomerRif(fmtCustomerRif(fullInvoice.customer));
       } else {
         setCustomerId(null);
-        setCustomerName('');
+        setCustomerName(''); setCustomerRif('');
       }
       // Preserve the original seller so commissions stay with whoever sold it
       setSelectedSellerId(fullInvoice.seller?.id ?? null);
@@ -2262,7 +2271,7 @@ export default function POSPage() {
                   <button onClick={openEditClient} className="text-xs text-blue-400 flex items-center gap-1" title="Editar cliente">
                     <Pencil size={13} /> Editar
                   </button>
-                  <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="text-xs text-red-400">Quitar</button>
+                  <button onClick={() => { setCustomerId(null); setCustomerName(''); setCustomerRif(''); }} className="text-xs text-red-400">Quitar</button>
                 </div>
               </div>
             ) : (
@@ -2591,9 +2600,9 @@ export default function POSPage() {
             {/* Franja con el cliente: el RIF es lo que importa (va fijo, sin recortar) y el
                 nombre se trunca para que nunca ocupe 2 lineas en el modal. */}
             {(customerRif || customerName) && (
-              <div className="px-4 md:px-6 py-2 bg-slate-900/60 border-b border-slate-700/50 flex items-center gap-1.5 text-sm">
-                <span className="font-mono font-semibold text-white shrink-0">{customerRif || 'Sin RIF'}</span>
-                {customerName && <span className="text-slate-400 truncate">- {customerName}</span>}
+              <div className="px-4 md:px-6 py-2.5 bg-slate-900/60 border-b border-slate-700/50 flex items-center gap-2">
+                <span className="font-mono font-bold text-white text-base md:text-lg tracking-wide shrink-0">{customerRif || 'Sin RIF'}</span>
+                {customerName && <span className="text-sm text-slate-300 font-medium truncate">- {customerName}</span>}
               </div>
             )}
 
@@ -3069,7 +3078,7 @@ export default function POSPage() {
                         onClick={() => {
                           setCustomerId(clientRifMatch.id);
                           setCustomerName(clientRifMatch.name);
-                          setCustomerRif(clientRifMatch.rif || '');
+                          setCustomerRif(fmtCustomerRif(clientRifMatch));
                           setShowCreateClient(false);
                           setShowCustomerSearch(false);
                           setCustomerSearch('');
@@ -3837,7 +3846,7 @@ export default function POSPage() {
                     <button onClick={openEditClient} className="p-1 rounded hover:bg-slate-600 text-slate-400 hover:text-blue-400" title="Editar cliente">
                       <Pencil size={13} />
                     </button>
-                    <button onClick={() => { setCustomerId(null); setCustomerName(''); }} className="p-1 rounded hover:bg-slate-600 text-slate-500 hover:text-red-400">
+                    <button onClick={() => { setCustomerId(null); setCustomerName(''); setCustomerRif(''); }} className="p-1 rounded hover:bg-slate-600 text-slate-500 hover:text-red-400">
                       <X size={14} />
                     </button>
                   </div>
