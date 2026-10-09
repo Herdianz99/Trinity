@@ -26,7 +26,7 @@
 > - Costo: ~$35–60/mes. Plan: 4–6 semanas; primero la Fase 1 (sinónimos).
 > - No hay código de pruebas en Trinity: el usuario lo pidió así.
 
-## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías · Fix reporte Ventas por producto
+## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías y stock · Editar recibos en borrador · RIF en el POS · Fix reporte Ventas por producto · Fotos Vencerámica en mayor
 
 > ### ✅ DESPLEGADO Y VERIFICADO (2026-10-09, por el usuario) en las 7 instancias: grande, mayor, chica, total, turen, aceros y acerosmayor. Todas en HEAD `642d678`, migración aplicada, `/health` 200. **Avisar en cada empresa que dejen de cargar la nómina a mano en Gastos** (ahora se genera sola al cerrar la corrida).
 > - Probado antes en local contra una copia de la BD de la grande. Trae una migración (`20261009120000_offer_sales_payroll_expense`, aditiva e idempotente; también en `deploy/fix-schema.sql`).
@@ -37,6 +37,9 @@
   - Filtro **"Solo artículos en oferta"** en `/reports/sales-product`, en pantalla y en el PDF (título "Articulos en Oferta Vendidos").
   - Solo cuenta ventas desde el deploy (decisión del usuario: guardar desde hoy).
   - El PDF de Ventas por producto (normal y de ofertas) pasó a **carta vertical** y **sin la columna Categoría**. Se agregó el parámetro `size` a `createDoc`; los demás reportes siguen en A4.
+  - La columna de costo se llama **"Costo + brecha"** (PDF y tabla en pantalla).
+    - El costo ya incluía la brecha: es el `InvoiceItem.costUsd` histórico, que guarda `effectiveCost` desde la Sesión 17. Solo cambió el título.
+    - Verificado con datos reales: ELE14028 $458,32 → $549,99 en la factura (+20% global).
 - **Gasto automático al cerrar la nómina:**
   - Se crea por el **total bruto**, sin restar deducciones, en la categoría "Nomina", dentro de la misma transacción que el cierre.
   - Modal de cierre nuevo para elegir de dónde sale el dinero: caja abierta + método, a crédito o sin caja.
@@ -62,6 +65,26 @@
 - **POS, modal "Cobrar Factura":**
   - El RIF/cédula del cliente sale en blanco, negrita y más grande, con su letra (`V-`/`J-`/`E-`, helper `fmtCustomerRif`); también en la cabecera del POS.
   - Fix: al quitar el cliente o limpiar la venta ahora también se borra el RIF (antes podía quedar el del cliente anterior).
+- **Operaciones en BD de producción (sin código):**
+  - **Usuarios de seguridad iguales a la grande:**
+    - Total: HERBERT pasó a `hebert@gmail.com` con la clave de la grande, y se corrigió el nombre a **HEBERT** en el usuario y la ficha.
+    - Aceros: LUIS ALEJO (`luis@gmail.com`) recibió la clave de la grande; se emparejó por cédula 18731773.
+    - En ambos no se tocó el rol.
+  - **Fotos Vencerámica en mayor:**
+    - Se extrajeron fotos de 9 PDFs de listas de precios Vencerámica con `mupdf`.
+    - Se cruzaron por ref. proveedor: modelo de 8 caracteres + terminación, ignorando el color.
+    - Se subieron por `POST /products/:id/images` desde el propio servidor.
+    - **Quedaron 29 de 35** productos Vencerámica con foto. Las 6 variantes de color usan la foto blanca de referencia.
+    - Las 2 fotos recortadas a mano (Llave temporizada PLO00026 y Urinario Sidney PLO00042) se borraron porque al usuario no le gustaron.
+    - Sin foto: esas 2 y los 4 combos "Poceta c/accesorio", que no tienen ref. proveedor.
+    - Procedimiento en memoria (`fotos-desde-pdf-proveedor`).
+- **⏳ Pendiente (detectado, NO corregido):**
+  - En el detalle de un recibo en borrador (`receipts/[id]/page.tsx`), el botón **"Procesar"** no envía `cashSessionId`, así que el cobro no queda en la caja ni en el arqueo, solo en el banco.
+  - Además, calcula los Bs con la **tasa de hoy** y no con `receipt.exchangeRate`.
+  - El "Procesar recibo" del formulario de edición sí lo hace bien. Esperando decisión del usuario.
+- **Deploy:**
+  - Mayor se desplegó primero (≈3:03 PM, HEAD `7460ac8`, fuera de esta conversación).
+  - Luego el usuario desplegó las 7 instancias a `642d678`.
 - **Verificado en local** (copia `grande_test`, ya borrada):
   - El reporte con y sin filtro de oferta cuadra contra SQL.
   - Una factura nueva guarda `wasOnSale` true/false según el producto.
