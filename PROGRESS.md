@@ -46,6 +46,7 @@
   - El modal ahora lista todas las categorías tildadas, más "Sin categoria", con "Marcar/Desmarcar todas". Las destildadas no salen.
   - La selección se recuerda en el navegador. Parámetro nuevo `excludeCategoryIds`.
   - El catálogo en tabla no cambia (decisión del usuario).
+  - Cada tarjeta muestra **"Stock: N"** (suma de almacenes) a la derecha del precio. Los productos agotados siguen mostrando "AGOTADO" sin precio ni stock.
 - **Editar recibos (cobro/pago) en BORRADOR:**
   - Nuevo `PATCH /receipts/:id` (`ReceiptsService.update`).
     - Usa el mismo cálculo que crear (lógica extraída a `buildDraft` / `draftData`).

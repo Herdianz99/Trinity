@@ -244,6 +244,10 @@ export class ProductsCatalogPhotosReportService {
       if (it.stock > 0) {
         const priceUsd = `$${this.fmtNum(it.priceDetal)}`;
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d').text(priceUsd, x + padX, ty, { width: photoBoxW, lineBreak: false });
+        // Existencia total (suma de almacenes) a la derecha del precio
+        const stockTxt = `Stock: ${this.fmtNum(it.stock, Number.isInteger(it.stock) ? 0 : 2)}`;
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#334155')
+          .text(stockTxt, x + padX, ty + 1.5, { width: photoBoxW, align: 'right', lineBreak: false });
       } else {
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#dc2626').text('AGOTADO', x + padX, ty, { width: photoBoxW, lineBreak: false });
       }
