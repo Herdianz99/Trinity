@@ -48,6 +48,9 @@
     - "Guardar cambios" y "Procesar recibo" actualizan ESE borrador (PATCH) en vez de crear otro.
     - Botón **Editar** en el detalle del borrador e ícono de lápiz en las listas de cobro y pago.
   - Probado en local (API + Chrome) con borradores de prueba, ya eliminados.
+- **POS, modal "Cobrar Factura":**
+  - El RIF/cédula del cliente sale en blanco, negrita y más grande, con su letra (`V-`/`J-`/`E-`, helper `fmtCustomerRif`); también en la cabecera del POS.
+  - Fix: al quitar el cliente o limpiar la venta ahora también se borra el RIF (antes podía quedar el del cliente anterior).
 - **Verificado en local** (copia `grande_test`, ya borrada):
   - El reporte con y sin filtro de oferta cuadra contra SQL.
   - Una factura nueva guarda `wasOnSale` true/false según el producto.
