@@ -37,6 +37,17 @@
   - El modal ahora lista todas las categorías tildadas, más "Sin categoria", con "Marcar/Desmarcar todas". Las destildadas no salen.
   - La selección se recuerda en el navegador. Parámetro nuevo `excludeCategoryIds`.
   - El catálogo en tabla no cambia (decisión del usuario).
+- **Editar recibos (cobro/pago) en BORRADOR:**
+  - Nuevo `PATCH /receipts/:id` (`ReceiptsService.update`).
+    - Usa el mismo cálculo que crear (lógica extraída a `buildDraft` / `draftData`).
+    - Bloquea la fila con `FOR UPDATE` como el `post`.
+    - Solo DRAFT, sin cambiar el tipo; conserva número y creador; reemplaza los items y recalcula totales y diferencial.
+  - `pending-documents` acepta `excludeReceiptId` para que el borrador editado no oculte sus propios documentos.
+  - Front:
+    - `/receipts/new?type=…&draftId=<id>` abre el formulario en modo edición, precargado con cliente/plataforma/proveedor, vendedor, notas, fecha, tasa y documentos con sus montos.
+    - "Guardar cambios" y "Procesar recibo" actualizan ESE borrador (PATCH) en vez de crear otro.
+    - Botón **Editar** en el detalle del borrador e ícono de lápiz en las listas de cobro y pago.
+  - Probado en local (API + Chrome) con borradores de prueba, ya eliminados.
 - **Verificado en local** (copia `grande_test`, ya borrada):
   - El reporte con y sin filtro de oferta cuadra contra SQL.
   - Una factura nueva guarda `wasOnSale` true/false según el producto.

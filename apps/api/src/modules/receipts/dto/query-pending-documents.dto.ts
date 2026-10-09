@@ -26,4 +26,10 @@ export class QueryPendingDocumentsDto {
   @IsOptional()
   @IsString()
   entityId?: string;
+
+  // Editar borrador: no ocultar los documentos que ya estan en ESTE recibo
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  excludeReceiptId?: string;
 }

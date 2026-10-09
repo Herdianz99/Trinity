@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronDown, Plus, Eye, Trash2, X, ListTree, FileSpreadsheet,
+  FileText, Search, Loader2, ChevronLeft, ChevronRight, ChevronDown, Plus, Eye, Pencil, Trash2, X, ListTree, FileSpreadsheet,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -308,6 +308,15 @@ export default function ReceiptsCollectionPage() {
                         >
                           <Eye size={16} />
                         </button>
+                        {r.status === 'DRAFT' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/receipts/new?type=COLLECTION&draftId=${r.id}`); }}
+                            className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-amber-400"
+                            title="Editar borrador"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
                         {(r.status === 'DRAFT' || r.status === 'CANCELLED') && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(r.id, r.number); }}

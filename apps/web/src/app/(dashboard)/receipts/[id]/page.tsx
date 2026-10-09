@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { fmtRate } from '@/lib/format';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X, Trash2, AlertTriangle,
+  ArrowLeft, FileText, Loader2, Printer, XCircle, CreditCard, X, Trash2, AlertTriangle, Pencil,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
@@ -385,6 +385,13 @@ export default function ReceiptDetailPage() {
         <div className="flex items-center gap-2">
           {receipt.status === 'DRAFT' && (
             <>
+              <button
+                onClick={() => router.push(`/receipts/new?type=${receipt.type}&draftId=${id}`)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                <Pencil size={16} />
+                Editar
+              </button>
               <button
                 onClick={openPayModal}
                 className={`flex items-center gap-2 px-4 py-2.5 text-white rounded-lg font-medium transition-colors ${

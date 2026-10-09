@@ -125,6 +125,12 @@ export class ReceiptsController {
     return this.receiptsService.create(dto, userId);
   }
 
+  // Editar un borrador (mismo body que crear)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: CreateReceiptDto) {
+    return this.receiptsService.update(id, dto);
+  }
+
   @Post(':id/post')
   post(
     @Param('id') id: string,

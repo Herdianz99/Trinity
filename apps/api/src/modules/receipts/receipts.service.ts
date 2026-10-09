@@ -184,7 +184,9 @@ export class ReceiptsService {
     return { ...receipt, platformName, createdBy: creator, cashRegister };
   }
 
-  async create(dto: CreateReceiptDto, userId: string) {
+  // Valida los documentos y arma items + totales + diferencial de un recibo BORRADOR.
+  // Compartido por create() y update() (editar borrador) para que ambos calculen igual.
+  private async buildDraft(dto: CreateReceiptDto) {
     // Validate entity
     if (dto.type === 'COLLECTION' && !dto.customerId && !dto.platformName) {
       throw new BadRequestException('Se requiere un cliente o plataforma para recibos de cobro');
@@ -454,6 +456,60 @@ export class ReceiptsService {
       });
     }
 
+    return { items, totalUsd, totalBsHistoric, totalBsToday, differentialBs, hasDifferential, effectiveRate };
+  }
+
+  // Cabecera + items (create anidado) de un borrador, a partir de lo que arma buildDraft().
+  private draftData(dto: CreateReceiptDto, d: Awaited<ReturnType<ReceiptsService['buildDraft']>>) {
+    return {
+      customerId: dto.customerId || null,
+      supplierId: dto.supplierId || null,
+      sellerId: dto.type === 'COLLECTION' ? (dto.sellerId || null) : null,
+      totalUsd: d.totalUsd,
+      totalBsHistoric: d.totalBsHistoric,
+      totalBsToday: d.totalBsToday,
+      exchangeRate: d.effectiveRate,
+      differentialBs: d.differentialBs,
+      hasDifferential: d.hasDifferential,
+      notes: dto.notes || null,
+      documentDate: caracasDateKey(dto.date), // fecha elegida (o hoy) a medianoche UTC de la fecha-Caracas
+      items: {
+        create: d.items.map((item) => ({
+          itemType: item.itemType,
+          receivableId: item.receivableId || null,
+          payableId: item.payableId || null,
+          creditDebitNoteId: item.creditDebitNoteId || null,
+          ivaRetentionId: item.ivaRetentionId || null,
+          customerIvaRetentionId: item.customerIvaRetentionId || null,
+          retentionVoucherId: item.retentionVoucherId || null,
+          islrRetentionVoucherId: item.islrRetentionVoucherId || null,
+          customerAdvanceId: item.customerAdvanceId || null,
+          supplierAdvanceId: item.supplierAdvanceId || null,
+          description: item.description,
+          amountUsd: item.amountUsd,
+          amountBsHistoric: item.amountBsHistoric,
+          amountBsToday: item.amountBsToday,
+          differentialBs: item.differentialBs,
+          sign: item.sign,
+        })),
+      },
+    };
+  }
+
+  private readonly draftInclude = {
+    customer: true,
+    supplier: true,
+    items: {
+      include: {
+        receivable: { select: { id: true, invoice: { select: { number: true } } } },
+        payable: { select: { id: true, purchaseOrder: { select: { number: true } } } },
+      },
+    },
+  } as const;
+
+  async create(dto: CreateReceiptDto, userId: string) {
+    const d = await this.buildDraft(dto);
+
     // Generate receipt number
     const prefix = dto.type === 'COLLECTION' ? 'RCB' : 'RPG';
     const lastReceipt = await this.prisma.receipt.findFirst({
@@ -475,54 +531,41 @@ export class ReceiptsService {
         data: {
           number,
           type: dto.type,
-          customerId: dto.customerId || null,
-          supplierId: dto.supplierId || null,
-          sellerId: dto.type === 'COLLECTION' ? (dto.sellerId || null) : null,
           status: 'DRAFT',
-          totalUsd,
-          totalBsHistoric,
-          totalBsToday,
-          exchangeRate: effectiveRate,
-          differentialBs,
-          hasDifferential,
-          notes: dto.notes || null,
-          documentDate: caracasDateKey(dto.date), // fecha elegida (o hoy) a medianoche UTC de la fecha-Caracas
           createdById: userId,
-          items: {
-            create: items.map((item) => ({
-              itemType: item.itemType,
-              receivableId: item.receivableId || null,
-              payableId: item.payableId || null,
-              creditDebitNoteId: item.creditDebitNoteId || null,
-              ivaRetentionId: item.ivaRetentionId || null,
-              customerIvaRetentionId: item.customerIvaRetentionId || null,
-              retentionVoucherId: item.retentionVoucherId || null,
-              islrRetentionVoucherId: item.islrRetentionVoucherId || null,
-              customerAdvanceId: item.customerAdvanceId || null,
-              supplierAdvanceId: item.supplierAdvanceId || null,
-              description: item.description,
-              amountUsd: item.amountUsd,
-              amountBsHistoric: item.amountBsHistoric,
-              amountBsToday: item.amountBsToday,
-              differentialBs: item.differentialBs,
-              sign: item.sign,
-            })),
-          },
+          ...this.draftData(dto, d),
         },
-        include: {
-          customer: true,
-          supplier: true,
-          items: {
-            include: {
-              receivable: { select: { id: true, invoice: { select: { number: true } } } },
-              payable: { select: { id: true, purchaseOrder: { select: { number: true } } } },
-            },
-          },
-        },
+        include: this.draftInclude,
       });
     });
 
     return receipt;
+  }
+
+  // Editar un recibo BORRADOR: re-valida los documentos, reemplaza los items y recalcula
+  // totales/diferencial con la misma logica que create(). Conserva numero, tipo y creador.
+  // Un borrador no tiene efectos (pagos, caja, banco); esos solo ocurren al procesarlo (post).
+  async update(id: string, dto: CreateReceiptDto) {
+    const d = await this.buildDraft(dto);
+    return this.prisma.$transaction(async (tx) => {
+      // Mismo candado que post(): evita editar un recibo que se esta procesando a la vez.
+      const locked = await tx.$queryRaw<{ status: string; type: string }[]>`
+        SELECT "status", "type" FROM "Receipt" WHERE id = ${id} FOR UPDATE
+      `;
+      if (!locked.length) throw new NotFoundException('Recibo no encontrado');
+      if (locked[0].status !== 'DRAFT') {
+        throw new BadRequestException('Solo se pueden editar recibos en borrador');
+      }
+      if (locked[0].type !== dto.type) {
+        throw new BadRequestException('No se puede cambiar el tipo del recibo');
+      }
+      await tx.receiptItem.deleteMany({ where: { receiptId: id } });
+      return tx.receipt.update({
+        where: { id },
+        data: this.draftData(dto, d),
+        include: this.draftInclude,
+      });
+    });
   }
 
   async post(id: string, dto: PostReceiptDto, userId: string) {
@@ -1064,6 +1107,8 @@ export class ReceiptsService {
   }
 
   async getPendingDocuments(query: QueryPendingDocumentsDto) {
+    // Al EDITAR un borrador, sus propios documentos no deben ocultarse (si no, desaparecen del formulario).
+    const draftScope = query.excludeReceiptId ? { id: { not: query.excludeReceiptId } } : {};
     // Legacy support: type=PAYMENT + entityId → flat array of payables + notes
     if (query.type === 'PAYMENT' && query.entityId) {
       const where: any = {
@@ -1115,7 +1160,7 @@ export class ReceiptsService {
       // Excluir payables que ya estan en un recibo en BORRADOR (evita crear borradores
       // duplicados del mismo documento, como paso con RPG-0001/2/3 al mismo doc).
       const draftPayableItems = await this.prisma.receiptItem.findMany({
-        where: { payableId: { in: payables.map((p) => p.id) }, receipt: { status: 'DRAFT' } },
+        where: { payableId: { in: payables.map((p) => p.id) }, receipt: { status: 'DRAFT', ...draftScope } },
         select: { payableId: true },
       });
       const draftPayableIds = new Set(
@@ -1292,7 +1337,7 @@ export class ReceiptsService {
 
     // Excluir receivables que ya estan en un recibo en BORRADOR (evita borradores duplicados)
     const draftReceivableItems = await this.prisma.receiptItem.findMany({
-      where: { receivableId: { in: receivables.map((r) => r.id) }, receipt: { status: 'DRAFT' } },
+      where: { receivableId: { in: receivables.map((r) => r.id) }, receipt: { status: 'DRAFT', ...draftScope } },
       select: { receivableId: true },
     });
     const draftReceivableIds = new Set(

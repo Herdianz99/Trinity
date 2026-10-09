@@ -91,6 +91,10 @@ export default function NewReceiptPage() {
   const type = (searchParams.get('type') || 'COLLECTION') as 'COLLECTION' | 'PAYMENT';
   const preselectedReceivableId = searchParams.get('receivableId') || '';
   const preselectedPayableId = searchParams.get('payableId') || '';
+  // Modo edicion de un recibo en BORRADOR: /receipts/new?type=...&draftId=<id>
+  const editId = searchParams.get('draftId') || '';
+  const [editNumber, setEditNumber] = useState('');
+  const [editLoaded, setEditLoaded] = useState(!editId);
   const isCollection = type === 'COLLECTION';
 
   // Source tab for COLLECTION type
@@ -155,7 +159,11 @@ export default function NewReceiptPage() {
 
   const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  useEffect(() => { document.title = `Nuevo Recibo de ${isCollection ? 'Cobro' : 'Pago'} | Trinity ERP`; }, [isCollection]);
+  useEffect(() => {
+    document.title = editId
+      ? `Editar ${editNumber || 'Recibo'} | Trinity ERP`
+      : `Nuevo Recibo de ${isCollection ? 'Cobro' : 'Pago'} | Trinity ERP`;
+  }, [isCollection, editId, editNumber]);
 
   // Vendedores (solo cobro) para el campo opcional "Vendedor"
   useEffect(() => {
@@ -395,6 +403,8 @@ export default function NewReceiptPage() {
     }
 
     if (search) params.set('search', search);
+    // Editando: que el borrador no oculte sus propios documentos
+    if (editId) params.set('excludeReceiptId', editId);
 
     setLoadingDocs(true);
     try {
@@ -416,7 +426,75 @@ export default function NewReceiptPage() {
       }
     } catch { /* ignore */ }
     setLoadingDocs(false);
-  }, [isCollection, sourceTab, selectedPlatform, entityId]);
+  }, [isCollection, sourceTab, selectedPlatform, entityId, editId]);
+
+  // Editar borrador: cargar el recibo y precargar el formulario (cliente/plataforma/proveedor,
+  // vendedor, notas, fecha, tasa y documentos con sus montos). Los documentos se toman de
+  // pending-documents (con excludeReceiptId) para tener su saldo ACTUAL.
+  useEffect(() => {
+    if (!editId || editLoaded || rateLoading) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/proxy/receipts/${editId}`);
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.message || 'No se pudo cargar el recibo');
+        if (r.status !== 'DRAFT') throw new Error(`El recibo ${r.number} ya no está en borrador y no se puede editar`);
+        setEditNumber(r.number);
+
+        const params = new URLSearchParams({ excludeReceiptId: editId });
+        if (r.type === 'PAYMENT') {
+          params.set('type', 'PAYMENT');
+          params.set('entityId', r.supplierId);
+        } else if (r.customerId) {
+          params.set('customerId', r.customerId);
+        } else if (r.platformName) {
+          params.set('platformName', r.platformName);
+        }
+        const docsRes = await fetch(`/api/proxy/receipts/pending-documents?${params}`);
+        const json = await docsRes.json();
+        const allDocs: PendingDoc[] = Array.isArray(json)
+          ? json
+          : [...(json.receivables || []), ...(json.notes || []), ...(json.retentions || []), ...(json.advances || [])];
+
+        const effRate = r.exchangeRate || rate;
+        const FKS = ['receivableId', 'payableId', 'creditDebitNoteId', 'ivaRetentionId', 'customerIvaRetentionId',
+          'retentionVoucherId', 'islrRetentionVoucherId', 'customerAdvanceId', 'supplierAdvanceId'] as const;
+        const selected: SelectedDoc[] = [];
+        const missing: string[] = [];
+        for (const it of r.items || []) {
+          if (it.itemType === 'DIFFERENTIAL') continue; // lo recalcula el servidor
+          const fk = FKS.find((k) => it[k]);
+          const doc = fk ? allDocs.find((d) => d[fk] === it[fk]) : undefined;
+          if (!doc) { missing.push(it.description); continue; }
+          const amt = Math.min(it.amountUsd, doc.balanceUsd);
+          selected.push({ ...doc, sign: it.sign, selectedAmountUsd: amt, amountBsToday: Math.round(amt * effRate * 100) / 100 });
+        }
+
+        // Primero la seleccion (y su ref) para que el fetch de pendientes no la duplique
+        selectedDocsRef.current = selected;
+        setSelectedDocs(selected);
+        setRate(effRate);
+        if (r.documentDate) setRateDate(String(r.documentDate).slice(0, 10)); // date-only a medianoche UTC
+        setNotes(r.notes || '');
+        setSellerId(r.sellerId || '');
+        if (r.type === 'PAYMENT' || r.customerId) {
+          const ent = r.supplier || r.customer;
+          setEntityId(ent?.id || r.supplierId || r.customerId);
+          setEntityName(ent?.name || '');
+        } else if (r.platformName) {
+          setSourceTab('platform');
+          setSelectedPlatform(r.platformName);
+        }
+        if (missing.length) {
+          setMessage({ type: 'error', text: `Estos documentos ya no están pendientes y se quitaron del recibo: ${missing.join(', ')}` });
+        }
+      } catch (err: any) {
+        setMessage({ type: 'error', text: err.message });
+      }
+      setEditLoaded(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, editLoaded, rateLoading]);
 
   // Debounced fetch (triggers on entity/platform/search changes)
   useEffect(() => {
@@ -520,14 +598,15 @@ export default function NewReceiptPage() {
         body.supplierId = entityId;
       }
       if (isCollection && sellerId) body.sellerId = sellerId;
-      const res = await fetch('/api/proxy/receipts', {
-        method: 'POST',
+      // Editando un borrador: se actualiza ESE recibo (mismo numero), no se crea otro
+      const res = await fetch(editId ? `/api/proxy/receipts/${editId}` : '/api/proxy/receipts', {
+        method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error al crear recibo');
-      setMessage({ type: 'success', text: `Recibo ${json.number} creado en borrador` });
+      if (!res.ok) throw new Error(json.message || (editId ? 'Error al guardar el recibo' : 'Error al crear recibo'));
+      setMessage({ type: 'success', text: editId ? `Recibo ${json.number} actualizado (borrador)` : `Recibo ${json.number} creado en borrador` });
       setTimeout(() => router.push(`/receipts/${json.id}`), 1500);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
@@ -585,8 +664,9 @@ export default function NewReceiptPage() {
         body.supplierId = entityId;
       }
       if (isCollection && sellerId) body.sellerId = sellerId;
-      const res = await fetch('/api/proxy/receipts', {
-        method: 'POST',
+      // Editando un borrador: se actualiza ESE recibo (mismo numero), no se crea otro
+      const res = await fetch(editId ? `/api/proxy/receipts/${editId}` : '/api/proxy/receipts', {
+        method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -830,7 +910,9 @@ export default function NewReceiptPage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-white">
-            Nuevo {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'}
+            {editId
+              ? <>Editar {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'} <span className="font-mono text-slate-300">{editNumber}</span> <span className="ml-1 align-middle px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-500/15 text-amber-400 border-amber-500/30">Borrador</span></>
+              : <>Nuevo {isCollection ? 'Recibo de Cobro' : 'Recibo de Pago'}</>}
           </h1>
           <div className="text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <label className="flex items-center gap-2">
@@ -1261,15 +1343,15 @@ export default function NewReceiptPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={saveDraft}
-              disabled={saving}
+              disabled={saving || !editLoaded}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
             >
               {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-              Guardar borrador
+              {editId ? 'Guardar cambios' : 'Guardar borrador'}
             </button>
             <button
               onClick={openPayModal}
-              disabled={saving}
+              disabled={saving || !editLoaded}
               className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-lg font-medium transition-colors disabled:opacity-50 ${
                 isCollection
                   ? 'bg-green-600 hover:bg-green-500'
