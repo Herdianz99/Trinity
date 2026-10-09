@@ -28,7 +28,8 @@
 
 ## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías · Fix reporte Ventas por producto
 
-> ### ⏳ Commiteado y pusheado; FALTA DEPLOY (el usuario pidió explícitamente NO desplegar todavía). Probado en local contra una copia de la BD de la grande. Trae una migración (`20261009120000_offer_sales_payroll_expense`, aditiva e idempotente; también en `deploy/fix-schema.sql`).
+> ### ✅ DESPLEGADO Y VERIFICADO (2026-10-09, por el usuario) en las 7 instancias: grande, mayor, chica, total, turen, aceros y acerosmayor. Todas en HEAD `642d678`, migración aplicada, `/health` 200. **Avisar en cada empresa que dejen de cargar la nómina a mano en Gastos** (ahora se genera sola al cerrar la corrida).
+> - Probado antes en local contra una copia de la BD de la grande. Trae una migración (`20261009120000_offer_sales_payroll_expense`, aditiva e idempotente; también en `deploy/fix-schema.sql`).
 
 - **Fix `/reports/sales-product` ("Application error" al generar):** la pantalla leía campos con nombres distintos a los que devuelve la API (`totals.units`/`row.name`/`marginPct`… vs `totalUnits`/`productName`/`grossMarginPct`…). Se alineó la pantalla con la API, que ya usaba el PDF.
 - **Artículos en oferta vendidos:**
