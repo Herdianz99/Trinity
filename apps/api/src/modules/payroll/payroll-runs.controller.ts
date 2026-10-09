@@ -12,6 +12,7 @@ import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
 import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
 import { SendReceiptsDto } from './dto/send-receipts.dto';
+import { ClosePayrollRunDto } from './dto/close-payroll-run.dto';
 
 @ApiTags('Payroll - Runs')
 @ApiBearerAuth()
@@ -56,8 +57,12 @@ export class PayrollRunsController {
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string, @CurrentUser() user: { id: string; email: string; role: UserRole }) {
-    return this.service.close(id, user.id);
+  close(
+    @Param('id') id: string,
+    @Body() dto: ClosePayrollRunDto,
+    @CurrentUser() user: { id: string; email: string; role: UserRole },
+  ) {
+    return this.service.close(id, user.id, dto ?? {});
   }
 
   @Delete(':id')

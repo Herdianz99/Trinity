@@ -467,6 +467,26 @@ export class ProductsService {
         where.categoryId = { in: [query.categoryId, ...children.map((c) => c.id)] };
       }
     }
+    // Categorias destildadas en el modal del catalogo con fotos. notIn de SQL descarta los
+    // NULL, por eso los productos sin categoria se incluyen explicitamente salvo que se
+    // haya destildado "__none__".
+    if (where && query.excludeCategoryIds) {
+      const ids = query.excludeCategoryIds.split(',').map((s) => s.trim()).filter(Boolean);
+      const excludeNone = ids.includes('__none__');
+      const catIds = ids.filter((id) => id !== '__none__');
+      const conds: any[] = [];
+      if (catIds.length) {
+        conds.push(excludeNone
+          ? { categoryId: { notIn: catIds } }
+          : { OR: [{ categoryId: null }, { categoryId: { notIn: catIds } }] });
+      } else if (excludeNone) {
+        conds.push({ categoryId: { not: null } });
+      }
+      if (conds.length) {
+        const prev = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+        where.AND = [...prev, ...conds];
+      }
+    }
     const today = caracasDateKey();
     const [rateRow, config, catBregaMap, products] = await Promise.all([
       this.prisma.exchangeRate.findUnique({ where: { date: today } }),

@@ -392,7 +392,8 @@ export class ReportsService {
   // ──────────────────────────────────────────────────────
   // 4. Sales by Product
   // ──────────────────────────────────────────────────────
-  async salesByProduct(fromStr: string, toStr: string, categoryId?: string) {
+  // onlyOnSale: solo lineas facturadas mientras el producto estaba en oferta (InvoiceItem.wasOnSale)
+  async salesByProduct(fromStr: string, toStr: string, categoryId?: string, onlyOnSale = false) {
     const { from, to } = parseDateRange(fromStr, toStr);
 
     // Get product IDs for category filter
@@ -411,7 +412,7 @@ export class ReportsService {
         paidAt: { gte: from, lte: to },
       },
       include: {
-        items: true,
+        items: onlyOnSale ? { where: { wasOnSale: true } } : true,
       },
     });
 

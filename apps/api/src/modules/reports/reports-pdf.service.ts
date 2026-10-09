@@ -15,9 +15,9 @@ export class ReportsPdfService {
     return config?.companyName || 'Trinity ERP';
   }
 
-  private createDoc(landscape = true): typeof PDFDocument {
+  private createDoc(landscape = true, size: 'A4' | 'LETTER' = 'A4'): typeof PDFDocument {
     return new PDFDocument({
-      size: 'A4',
+      size,
       layout: landscape ? 'landscape' : 'portrait',
       margins: { top: 40, bottom: 40, left: 40, right: 40 },
     });
@@ -192,20 +192,22 @@ export class ReportsPdfService {
   }
 
   // ── Sales by Product PDF ──────────────────────────────
-  async generateSalesByProductPdf(data: any, from: string, to: string): Promise<Buffer> {
+  async generateSalesByProductPdf(data: any, from: string, to: string, onlyOnSale = false): Promise<Buffer> {
     const company = await this.getCompanyName();
-    const doc = this.createDoc();
-    let y = this.drawHeader(doc, 'Ventas por Producto', company, `${from} al ${to}`);
+    const doc = this.createDoc(false, 'LETTER'); // vertical, tamaño carta
+    const title = onlyOnSale ? 'Articulos en Oferta Vendidos' : 'Ventas por Producto';
+    let y = this.drawHeader(doc, title, company, `${from} al ${to}`);
 
+    // Ancho util carta vertical: 40 -> 572 pt (sin columna Categoria).
+    // El costo es el historico guardado en la factura (InvoiceItem.costUsd), que ya incluye la brecha.
     const cols = [
-      { label: 'Codigo', x: 40, width: 70 },
-      { label: 'Producto', x: 110, width: 150 },
-      { label: 'Categoria', x: 260, width: 100 },
-      { label: 'Unidades', x: 370, width: 60, align: 'right' },
-      { label: 'Total USD', x: 440, width: 80, align: 'right' },
-      { label: 'Costo USD', x: 530, width: 80, align: 'right' },
-      { label: 'Ganancia', x: 620, width: 70, align: 'right' },
-      { label: 'Margen%', x: 700, width: 50, align: 'right' },
+      { label: 'Codigo', x: 40, width: 62 },
+      { label: 'Producto', x: 104, width: 164 },
+      { label: 'Unidades', x: 270, width: 46, align: 'right' },
+      { label: 'Total USD', x: 320, width: 60, align: 'right' },
+      { label: 'Costo + brecha', x: 384, width: 72, align: 'right' },
+      { label: 'Ganancia', x: 460, width: 60, align: 'right' },
+      { label: 'Margen%', x: 524, width: 48, align: 'right' },
     ];
 
     y = this.drawTableHeader(doc, y, cols);
@@ -213,7 +215,7 @@ export class ReportsPdfService {
     for (const row of data.rows) {
       y = this.checkPage(doc, y);
       y = this.drawTableRow(doc, y, cols, [
-        row.productCode, row.productName, row.category,
+        row.productCode, row.productName,
         String(row.unitsSold), `$${this.fmt(row.totalUsd)}`,
         `$${this.fmt(row.costUsd)}`, `$${this.fmt(row.grossProfitUsd)}`,
         `${row.grossMarginPct}%`,

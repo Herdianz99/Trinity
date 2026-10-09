@@ -1338,3 +1338,13 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 
 ## CxP — filtro de fechas (Sesión 153)
 - En `/payables` (lista, PDF y Excel) los parámetros `from`/`to` filtran **`Payable.dueDate`** por día UTC (como se muestra la columna "Vence"), no `createdAt`. Se combinan en `AND` con `overdue`/`dueWithinDays`.
+
+## Ofertas vendidas (Sesión 155)
+- `Product.isOnSale` es solo una marca (no cambia precio). Al facturar se guarda el **snapshot** en `InvoiceItem.wasOnSale` (en los 2 puntos de `invoices.service` que arman `itemsData`). El reporte `/reports/sales-product` tiene filtro **"Solo artículos en oferta"** (`onlyOnSale=true` en `GET reports/sales-by-product` y su `/pdf`), que filtra por ese snapshot — **solo cuenta ventas desde el deploy de la Sesión 155**; nunca usar la marca actual del producto para ventas pasadas.
+
+## Nómina → gasto automático (Sesión 155)
+- Al **cerrar** una corrida (`POST payroll-runs/:id/close`, body `ClosePayrollRunDto`) se crea, en la MISMA transacción, un `Expense` en la categoría **"Nomina"** (se reutiliza por nombre; las empresas ya la tenían) por el **TOTAL BRUTO** (`totalGrossBs`, USD = bruto / tasa de la corrida). Las deducciones solo afectan lo que cobra el empleado. `Expense.payrollRunId` (único) enlaza el gasto con la corrida.
+- De dónde sale el dinero se elige en el modal de cierre, con las mismas opciones que un gasto manual: caja abierta (+ método), a crédito (CxP a un proveedor) o sin caja. Reutiliza `ExpensesService.createInTx(tx, dto, userId, { payrollRunId })` (el `create()` normal es un envoltorio que abre la transacción). **Reemplaza la carga manual del gasto de nómina**: hay que avisar a las empresas que dejen de cargarlo a mano en Gastos.
+
+## Catálogo con fotos — categorías (Sesión 155)
+- El modal del catálogo con fotos lista todas las categorías tildadas (+ "Sin categoria") y manda las destildadas en `excludeCategoryIds` (ids separados por coma; `__none__` = sin categoría). En `catalogReportList`, el `notIn` se combina con `categoryId IS NULL` porque el `NOT IN` de SQL descarta los NULL. La selección se recuerda en el `localStorage` del navegador (`catalogPhotos.excludedCategories`). El catálogo en tabla (PDF/Excel) no cambia.

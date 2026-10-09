@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { caracasDateKey } from '../../common/timezone';
+import { caracasDateKey, caracasToday } from '../../common/timezone';
+import { ExpensesService } from '../expenses/expenses.service';
+import { ClosePayrollRunDto } from './dto/close-payroll-run.dto';
 import { computePayrollLine, buildEngineParams, DEFAULT_PAYROLL_PARAM } from './payroll-calc';
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
 import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
@@ -28,6 +30,7 @@ export class PayrollRunsService {
     private prisma: PrismaService,
     private pdf: PayrollPdfService,
     private mail: MailService,
+    private expenses: ExpensesService,
   ) {}
 
   private async generateNumber(): Promise<string> {
@@ -141,6 +144,14 @@ export class PayrollRunsService {
       where: { id },
       include: {
         lines: { include: LINE_INCLUDE, orderBy: { employee: { code: 'asc' } } },
+        expense: {
+          select: {
+            id: true, amountUsd: true, amountBs: true, isCredit: true,
+            cashSession: { select: { cashRegister: { select: { name: true, code: true } } } },
+            method: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
       },
     });
     if (!run) throw new NotFoundException('Corrida no encontrada');
@@ -267,7 +278,19 @@ export class PayrollRunsService {
     return this.findOne(id);
   }
 
-  async close(id: string, userId: string) {
+  // Categoría de gasto de la nómina. Las empresas ya usan "Nomina" (carga manual); se reutiliza
+  // por nombre (@unique) y solo se crea si no existe. Corre dentro de la tx del cierre.
+  private async getNominaCategoryId(tx: any): Promise<string> {
+    const cat = await tx.expenseCategory.upsert({
+      where: { name: 'Nomina' },
+      update: {},
+      create: { name: 'Nomina', description: 'Pago de nómina al personal.', expenseType: 'FIXED' },
+      select: { id: true },
+    });
+    return cat.id;
+  }
+
+  async close(id: string, userId: string, pay: ClosePayrollRunDto = {}) {
     const run = await this.prisma.payrollRun.findUnique({ where: { id } });
     if (!run) throw new NotFoundException('Corrida no encontrada');
     if (run.status !== 'DRAFT') throw new BadRequestException('La corrida ya está cerrada');
@@ -323,6 +346,36 @@ export class PayrollRunsService {
             `${line.employee.customer.name}: la deducción de crédito ($${r2(line.creditDeductionBs / run.exchangeRate).toFixed(2)}) supera su deuda pendiente por $${remainingUsd.toFixed(2)}. Ajuste el monto antes de cerrar.`,
           );
         }
+      }
+
+      // Gasto de la nómina por el TOTAL BRUTO: las deducciones (IVSS, FAOV, crédito, manuales)
+      // solo reducen lo que cobra el empleado; para la empresa el costo es el bruto completo.
+      // Reemplaza la carga manual del gasto. Se crea con la tasa de la corrida y sale de la
+      // caja/método o queda a crédito según lo elegido al cerrar (mismo flujo que un gasto).
+      const totals = await tx.payrollRun.findUniqueOrThrow({ where: { id }, select: { totalGrossBs: true } });
+      if (totals.totalGrossBs > 0.001) {
+        const fmtD = (d: Date) =>
+          `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+        await this.expenses.createInTx(
+          tx,
+          {
+            categoryId: await this.getNominaCategoryId(tx),
+            description: ['Nomina', run.number, `(${fmtD(run.periodFrom)} al ${fmtD(run.periodTo)})`].filter(Boolean).join(' '),
+            reference: run.number ?? undefined,
+            amountBs: r2(totals.totalGrossBs),
+            amountUsd: r2(totals.totalGrossBs / run.exchangeRate),
+            exchangeRate: run.exchangeRate,
+            date: caracasToday(),
+            notes: 'Generado automáticamente al cerrar la nómina (total bruto, sin restar deducciones).',
+            cashSessionId: pay.isCredit ? undefined : pay.cashSessionId || undefined,
+            methodId: pay.isCredit ? undefined : pay.methodId || undefined,
+            isCredit: !!pay.isCredit,
+            supplierId: pay.isCredit ? pay.supplierId : undefined,
+            creditDays: pay.isCredit ? pay.creditDays : undefined,
+          },
+          userId,
+          { payrollRunId: id },
+        );
       }
 
       await tx.payrollRun.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date() } });

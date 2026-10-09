@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { caracasDateKey, caracasDayStart } from '../../common/timezone';
@@ -200,6 +200,18 @@ export class ExpensesService {
   }
 
   async create(dto: CreateExpenseDto, userId: string) {
+    return this.prisma.$transaction((tx) => this.createInTx(tx, dto, userId));
+  }
+
+  // Cuerpo de create() reutilizable dentro de otra transaccion (ej. cierre de nomina, que
+  // genera su gasto en la misma tx para que cierre + gasto + caja sean atomicos).
+  // link.payrollRunId enlaza el gasto a la corrida (unico: evita gastos duplicados).
+  async createInTx(
+    tx: Prisma.TransactionClient,
+    dto: CreateExpenseDto,
+    userId: string,
+    link: { payrollRunId?: string } = {},
+  ) {
     // Tasa del gasto: la editada por el usuario tiene prioridad; si no, la del
     // dia de la FECHA del gasto (no la de hoy). Asi un gasto de otro dia usa su
     // tasa real, y los dias sin tasa guardada se cubren con la tasa manual.
@@ -216,6 +228,11 @@ export class ExpensesService {
       throw new BadRequestException('Debe proporcionar al menos un monto (USD o Bs)');
     }
 
+    const include = {
+      category: { select: { name: true } },
+      createdBy: { select: { name: true } },
+    } as const;
+
     // Gasto A CREDITO: se le debe a un proveedor. No mueve la caja ahora; genera
     // una CxP (Payable) que luego se paga con un recibo de pago (como una compra
     // a credito). El pago del recibo, atado a una caja, es el que mueve la gaveta.
@@ -223,61 +240,57 @@ export class ExpensesService {
       if (!dto.supplierId) {
         throw new BadRequestException('Un gasto a credito requiere un proveedor (a quien se le debe)');
       }
-      const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.supplierId } });
+      const supplier = await tx.supplier.findUnique({ where: { id: dto.supplierId } });
       if (!supplier) throw new BadRequestException('Proveedor no encontrado');
 
       const dueDate = new Date(dto.date);
       dueDate.setDate(dueDate.getDate() + (dto.creditDays || 0));
 
-      return this.prisma.$transaction(async (tx) => {
-        const expense = await tx.expense.create({
-          data: {
-            categoryId: dto.categoryId,
-            description: dto.description,
-            reference: dto.reference,
-            amountUsd: amountUsd!,
-            amountBs: amountBs!,
-            exchangeRate: rateVal,
-            // caracasDayStart (medianoche Caracas, no new Date(dto.date)=medianoche UTC=8PM
-            // dia anterior): el dashboard filtra Expense.date con caracasDayStart/End y
-            // contaria el gasto en el dia equivocado. Mismo bug que documentDate en las NC.
-            date: caracasDayStart(dto.date),
-            notes: dto.notes,
-            isCredit: true,
-            creditDays: dto.creditDays,
-            supplierId: dto.supplierId,
-            createdById: userId,
-          },
-          include: {
-            category: { select: { name: true } },
-            createdBy: { select: { name: true } },
-          },
-        });
-
-        await tx.payable.create({
-          data: {
-            supplierId: dto.supplierId!,
-            expenseId: expense.id,
-            description: `Gasto: ${dto.description}`,
-            documentNumber: dto.reference,
-            amountUsd: amountUsd!,
-            amountBs: amountBs!,
-            exchangeRate: rateVal,
-            netPayableUsd: amountUsd!,
-            netPayableBs: amountBs!,
-            dueDate,
-            status: 'PENDING',
-            currency: dto.amountUsd ? 'USD' : 'BS',
-          },
-        });
-
-        return expense;
+      const expense = await tx.expense.create({
+        data: {
+          categoryId: dto.categoryId,
+          description: dto.description,
+          reference: dto.reference,
+          amountUsd: amountUsd!,
+          amountBs: amountBs!,
+          exchangeRate: rateVal,
+          // caracasDayStart (medianoche Caracas, no new Date(dto.date)=medianoche UTC=8PM
+          // dia anterior): el dashboard filtra Expense.date con caracasDayStart/End y
+          // contaria el gasto en el dia equivocado. Mismo bug que documentDate en las NC.
+          date: caracasDayStart(dto.date),
+          notes: dto.notes,
+          isCredit: true,
+          creditDays: dto.creditDays,
+          supplierId: dto.supplierId,
+          payrollRunId: link.payrollRunId,
+          createdById: userId,
+        },
+        include,
       });
+
+      await tx.payable.create({
+        data: {
+          supplierId: dto.supplierId!,
+          expenseId: expense.id,
+          description: `Gasto: ${dto.description}`,
+          documentNumber: dto.reference,
+          amountUsd: amountUsd!,
+          amountBs: amountBs!,
+          exchangeRate: rateVal,
+          netPayableUsd: amountUsd!,
+          netPayableBs: amountBs!,
+          dueDate,
+          status: 'PENDING',
+          currency: dto.amountUsd ? 'USD' : 'BS',
+        },
+      });
+
+      return expense;
     }
 
     // If cashSessionId provided, validate session is OPEN and create CashMovement
     if (dto.cashSessionId) {
-      const session = await this.prisma.cashSession.findUnique({
+      const session = await tx.cashSession.findUnique({
         where: { id: dto.cashSessionId },
       });
       if (!session) throw new BadRequestException('Sesion de caja no encontrada');
@@ -288,78 +301,74 @@ export class ExpensesService {
       // (el front autocompleta ambos montos) y el arqueo restaba del efectivo USD aunque se pagara
       // en Bs -> descuadre. Fallback al monto solo si no hay método.
       const method = dto.methodId
-        ? await this.prisma.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true, isCash: true, bankAccountId: true } })
+        ? await tx.paymentMethod.findUnique({ where: { id: dto.methodId }, select: { isDivisa: true, isCash: true, bankAccountId: true } })
         : null;
       const movCurrency = method ? (method.isDivisa ? 'USD' : 'BS') : (dto.amountUsd ? 'USD' : 'BS');
       // ¿Sale de la gaveta física? Solo si el método es efectivo. Un gasto por transferencia/
       // Pago Móvil/Punto NO debe restar del efectivo del arqueo.
       const movIsCash = method ? method.isCash : true;
 
-      return this.prisma.$transaction(async (tx) => {
-        const expense = await tx.expense.create({
-          data: {
-            categoryId: dto.categoryId,
-            description: dto.description,
-            reference: dto.reference,
-            amountUsd: amountUsd!,
-            amountBs: amountBs!,
-            exchangeRate: rateVal,
-            date: caracasDayStart(dto.date),
-            notes: dto.notes,
-            createdById: userId,
-            cashSessionId: dto.cashSessionId,
-            methodId: dto.methodId,
-          },
-          include: {
-            category: { select: { name: true } },
-            createdBy: { select: { name: true } },
-          },
-        });
-
-        await tx.cashMovement.create({
-          data: {
-            cashSessionId: dto.cashSessionId!,
-            type: 'EXPENSE',
-            amountUsd: amountUsd!,
-            amountBs: amountBs!,
-            exchangeRate: rateVal,
-            currency: movCurrency,
-            isCash: movIsCash,
-            reason: `Gasto: ${dto.description}`,
-            isManual: false,
-            expenseId: expense.id,
-            createdById: userId,
-          },
-        });
-
-        await writeCashLedger(tx, {
-          cashSessionId: dto.cashSessionId!,
-          direction: 'OUT',
-          amountUsd: amountUsd!, amountBs: amountBs!, currency: movCurrency as 'USD' | 'BS',
+      const expense = await tx.expense.create({
+        data: {
+          categoryId: dto.categoryId,
+          description: dto.description,
+          reference: dto.reference,
+          amountUsd: amountUsd!,
+          amountBs: amountBs!,
           exchangeRate: rateVal,
-          methodId: dto.methodId || null, isCash: movIsCash,
-          sourceType: 'EXPENSE', sourceId: expense.id,
-          reason: `Gasto: ${dto.description}`, createdById: userId,
-        });
-
-        // Espejo en el libro banco (gasto de contado por medio electrónico)
-        const cfgBank = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
-        await recordPaymentToBank(tx, {
-          bancosEnabled: !!cfgBank?.bancosEnabled,
-          method: { bankAccountId: method?.bankAccountId ?? null },
-          direction: 'OUT',
-          amountUsd: amountUsd!, amountBs: amountBs!, exchangeRate: rateVal,
-          date: new Date(), type: 'PAGO',
-          sourceType: 'EXPENSE', sourceId: expense.id,
-          reference: dto.reference ?? null, description: `Gasto: ${dto.description}`,
+          date: caracasDayStart(dto.date),
+          notes: dto.notes,
           createdById: userId,
-        });
-
-        return expense;
+          cashSessionId: dto.cashSessionId,
+          methodId: dto.methodId,
+          payrollRunId: link.payrollRunId,
+        },
+        include,
       });
+
+      await tx.cashMovement.create({
+        data: {
+          cashSessionId: dto.cashSessionId!,
+          type: 'EXPENSE',
+          amountUsd: amountUsd!,
+          amountBs: amountBs!,
+          exchangeRate: rateVal,
+          currency: movCurrency,
+          isCash: movIsCash,
+          reason: `Gasto: ${dto.description}`,
+          isManual: false,
+          expenseId: expense.id,
+          createdById: userId,
+        },
+      });
+
+      await writeCashLedger(tx, {
+        cashSessionId: dto.cashSessionId!,
+        direction: 'OUT',
+        amountUsd: amountUsd!, amountBs: amountBs!, currency: movCurrency as 'USD' | 'BS',
+        exchangeRate: rateVal,
+        methodId: dto.methodId || null, isCash: movIsCash,
+        sourceType: 'EXPENSE', sourceId: expense.id,
+        reason: `Gasto: ${dto.description}`, createdById: userId,
+      });
+
+      // Espejo en el libro banco (gasto de contado por medio electrónico)
+      const cfgBank = await tx.companyConfig.findFirst({ select: { bancosEnabled: true } });
+      await recordPaymentToBank(tx, {
+        bancosEnabled: !!cfgBank?.bancosEnabled,
+        method: { bankAccountId: method?.bankAccountId ?? null },
+        direction: 'OUT',
+        amountUsd: amountUsd!, amountBs: amountBs!, exchangeRate: rateVal,
+        date: new Date(), type: 'PAGO',
+        sourceType: 'EXPENSE', sourceId: expense.id,
+        reference: dto.reference ?? null, description: `Gasto: ${dto.description}`,
+        createdById: userId,
+      });
+
+      return expense;
     }
 
-    return this.prisma.expense.create({
+    return tx.expense.create({
       data: {
         categoryId: dto.categoryId,
         description: dto.description,
@@ -370,15 +379,12 @@ export class ExpensesService {
         date: caracasDayStart(dto.date),
         notes: dto.notes,
         createdById: userId,
+        payrollRunId: link.payrollRunId,
       },
-      include: {
-        category: { select: { name: true } },
-        createdBy: { select: { name: true } },
-      },
+      include,
     });
   }
 
-  // Resuelve la tasa de un gasto: prioriza la editada por el usuario; si no,
   // busca la tasa guardada del dia de la FECHA del gasto. Lanza si no hay ninguna.
   private async resolveExpenseRate(edited: number | undefined, dateStr: string): Promise<number> {
     if (edited && edited > 0) return edited;

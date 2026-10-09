@@ -428,6 +428,7 @@ export class InvoicesService {
         costUsd,
         costBs,
         priceOverridden: item.priceOverridden || (item.unitPrice != null && Math.abs(item.unitPrice - product.priceDetal) > 0.001),
+        wasOnSale: product.isOnSale, // snapshot: el reporte de ofertas vendidas no depende de la marca actual
       });
     }
 
@@ -1656,6 +1657,7 @@ export class InvoicesService {
         costUsd,
         costBs,
         priceOverridden: item.priceOverridden || (item.unitPrice != null && Math.abs(item.unitPrice - product.priceDetal) > 0.001),
+        wasOnSale: product.isOnSale, // snapshot: el reporte de ofertas vendidas no depende de la marca actual
       });
     }
 

@@ -8,5 +8,6 @@ import { ExpensePdfService } from './expense-pdf.service';
 @Module({
   controllers: [ExpensesController],
   providers: [ExpensesService, ExpenseReportPdfService, ExpenseReportExcelService, ExpensePdfService],
+  exports: [ExpensesService],
 })
 export class ExpensesModule {}

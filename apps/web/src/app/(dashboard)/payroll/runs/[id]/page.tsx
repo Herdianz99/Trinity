@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files, Mail, Check, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Lock, Loader2, RefreshCw, Users, FileText, Files, Mail, Check, X, ChevronDown, Receipt } from 'lucide-react';
+import CloseRunModal, { type ClosePayload } from './close-run-modal';
 
 interface Line {
   id: string;
@@ -40,6 +41,16 @@ interface Run {
   totalDeductionsBs: number;
   totalNetBs: number;
   lines: Line[];
+  // Gasto "Nomina" generado al cerrar (total bruto)
+  expense?: {
+    id: string;
+    amountUsd: number;
+    amountBs: number;
+    isCredit: boolean;
+    cashSession: { cashRegister: { name: string | null; code: string } | null } | null;
+    method: { name: string } | null;
+    supplier: { name: string } | null;
+  } | null;
 }
 
 const TYPE_LABEL: Record<string, string> = { WEEKLY: 'Semanal', BIWEEKLY: 'Quincenal' };
@@ -57,6 +68,7 @@ export default function PayrollRunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   // Popover de deducción de crédito por % de la deuda (por línea)
@@ -229,16 +241,23 @@ export default function PayrollRunDetailPage() {
     setSyncing(false);
   }
 
-  async function handleClose() {
-    if (!confirm('¿Cerrar la corrida? No podrá editarse después.')) return;
+  async function handleClose(payload: ClosePayload) {
     setClosing(true); setMessage(null);
     try {
-      const res = await fetch(`/api/proxy/payroll-runs/${id}/close`, { method: 'POST' });
+      const res = await fetch(`/api/proxy/payroll-runs/${id}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
       setRun(data);
-      setMessage({ type: 'success', text: 'Corrida cerrada' });
-    } catch (err: any) { setMessage({ type: 'error', text: err.message }); }
+      setCloseOpen(false);
+      setMessage({ type: 'success', text: 'Corrida cerrada y gasto de nómina registrado' });
+    } catch (err: any) {
+      setCloseOpen(false);
+      setMessage({ type: 'error', text: err.message });
+    }
     setClosing(false);
   }
 
@@ -304,7 +323,7 @@ export default function PayrollRunDetailPage() {
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />} Guardar y recalcular
               </button>
-              <button onClick={handleClose} disabled={closing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
+              <button onClick={() => setCloseOpen(true)} disabled={closing} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
                 {closing ? <Loader2 className="animate-spin" size={15} /> : <Lock size={15} />} Cerrar corrida
               </button>
             </>
@@ -314,6 +333,23 @@ export default function PayrollRunDetailPage() {
 
       {message && (
         <div className={`p-3 rounded-lg border text-sm ${message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>{message.text}</div>
+      )}
+
+      {run.expense && (
+        <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border border-slate-700/50 bg-slate-800/40 text-sm text-slate-300">
+          <Receipt size={15} className="text-slate-400" />
+          <span>
+            Gasto de nómina registrado: <span className="font-semibold text-white tabular-nums">Bs {fmt(run.expense.amountBs)}</span>
+            <span className="text-slate-400 tabular-nums"> (${fmt(run.expense.amountUsd)})</span>
+          </span>
+          <span className="text-slate-400">
+            · {run.expense.isCredit
+              ? `A crédito${run.expense.supplier ? ` — ${run.expense.supplier.name}` : ''}`
+              : run.expense.cashSession
+                ? `${run.expense.cashSession.cashRegister?.name || `Caja ${run.expense.cashSession.cashRegister?.code ?? ''}`}${run.expense.method ? ` · ${run.expense.method.name}` : ''}`
+                : 'Sin caja'}
+          </span>
+        </div>
       )}
 
       {/* Tasa de cambio (editable) — la fecha es aparte del período porque a veces la tasa se registra al día siguiente */}
@@ -484,6 +520,17 @@ export default function PayrollRunDetailPage() {
       </div>
 
       {/* Preguntar: recibo con o sin horas extra */}
+      {closeOpen && (
+        <CloseRunModal
+          runNumber={run.number}
+          totalGrossBs={run.totalGrossBs}
+          exchangeRate={run.exchangeRate}
+          closing={closing}
+          onCancel={() => setCloseOpen(false)}
+          onConfirm={handleClose}
+        />
+      )}
+
       {otAsk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOtAsk(null)} />

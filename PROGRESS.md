@@ -17,6 +17,34 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías · Fix reporte Ventas por producto
+
+> ### ⏳ Commiteado y pusheado; FALTA DEPLOY (el usuario pidió explícitamente NO desplegar todavía). Probado en local contra una copia de la BD de la grande. Trae una migración (`20261009120000_offer_sales_payroll_expense`, aditiva e idempotente; también en `deploy/fix-schema.sql`).
+
+- **Fix `/reports/sales-product` ("Application error" al generar):** la pantalla leía campos con nombres distintos a los que devuelve la API (`totals.units`/`row.name`/`marginPct`… vs `totalUnits`/`productName`/`grossMarginPct`…). Se alineó la pantalla con la API, que ya usaba el PDF.
+- **Artículos en oferta vendidos:**
+  - Nuevo campo `InvoiceItem.wasOnSale`: copia de `Product.isOnSale` al facturar.
+  - Filtro **"Solo artículos en oferta"** en `/reports/sales-product`, en pantalla y en el PDF (título "Articulos en Oferta Vendidos").
+  - Solo cuenta ventas desde el deploy (decisión del usuario: guardar desde hoy).
+  - El PDF de Ventas por producto (normal y de ofertas) pasó a **carta vertical** y **sin la columna Categoría**. Se agregó el parámetro `size` a `createDoc`; los demás reportes siguen en A4.
+- **Gasto automático al cerrar la nómina:**
+  - Se crea por el **total bruto**, sin restar deducciones, en la categoría "Nomina", dentro de la misma transacción que el cierre.
+  - Modal de cierre nuevo para elegir de dónde sale el dinero: caja abierta + método, a crédito o sin caja.
+  - Después de cerrar, la corrida muestra el gasto registrado.
+  - `ExpensesService.create` se separó en `createInTx` para reutilizarlo.
+  - Contexto: las 3 empresas ya cargaban la nómina a mano en "Nomina", la mayoría saliendo de caja. **Al desplegar, avisar que dejen de cargarla a mano**, porque si no se duplica.
+- **Catálogo con fotos:**
+  - El modal ahora lista todas las categorías tildadas, más "Sin categoria", con "Marcar/Desmarcar todas". Las destildadas no salen.
+  - La selección se recuerda en el navegador. Parámetro nuevo `excludeCategoryIds`.
+  - El catálogo en tabla no cambia (decisión del usuario).
+- **Verificado en local** (copia `grande_test`, ya borrada):
+  - El reporte con y sin filtro de oferta cuadra contra SQL.
+  - Una factura nueva guarda `wasOnSale` true/false según el producto.
+  - Cierre de nómina con caja (crea gasto, movimiento de caja y libro de caja), a crédito (gasto + CxP), sin caja, y con caja inválida (se revierte todo y la corrida queda en borrador).
+  - Los gastos manuales siguen funcionando igual por sus 3 caminos.
+  - El catálogo excluye categorías: 1.110 → 878 páginas al quitar la más grande, y 1 categoría sola sale correcta.
+  - Las 3 pantallas probadas con Chrome sin errores de consola.
+
 ## 🗓️ Sesión 154 (2026-10-06) — Plataformas: KPIs · Selector de empleados en notificaciones · Traslados: tomar costo base del socio · Etiquetas de cajas por cliente
 
 > ### ⏳ Commiteado y pusheado; FALTA DEPLOY.

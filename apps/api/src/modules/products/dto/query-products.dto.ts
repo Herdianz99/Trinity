@@ -14,6 +14,13 @@ export class QueryProductsDto {
   @IsString()
   categoryId?: string;
 
+  // Catalogo con fotos: categorias destildadas en el modal (ids separados por coma).
+  // '__none__' = productos sin categoria. Las categorias nuevas salen por defecto.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  excludeCategoryIds?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

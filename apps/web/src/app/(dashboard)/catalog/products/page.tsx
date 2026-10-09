@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+const CATALOG_EXCLUDED_KEY = 'catalogPhotos.excludedCategories';
+const NO_CATEGORY = '__none__'; // productos sin categoria (el backend lo entiende igual)
+
 interface Product {
   id: string;
   code: string;
@@ -58,7 +61,9 @@ export default function ProductsPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   // Modal del catalogo con fotos: pregunta la categoria a exportar. '' = todas (segmentado).
   const [showCatalogModal, setShowCatalogModal] = useState(false);
-  const [catalogCategory, setCatalogCategory] = useState('');
+  // Catalogo con fotos: categorias DESTILDADAS (no salen). Se guarda en localStorage para
+  // recordar la ultima seleccion; las categorias nuevas salen tildadas por defecto.
+  const [catalogExcluded, setCatalogExcluded] = useState<Set<string>>(new Set());
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -136,19 +141,35 @@ export default function ProductsPage() {
   }
 
   // Catalogo visual con fotos: logo de la empresa + cuadricula de 3 columnas (foto, codigo, precio).
-  // Abre un modal que pregunta que categoria sacar; por defecto usa la categoria del filtro de la tabla.
+  // Abre un modal con todas las categorias tildadas; las que se destilden no salen.
   function openPhotoCatalog() {
-    setCatalogCategory(filterCategory);
+    try {
+      const saved = JSON.parse(localStorage.getItem(CATALOG_EXCLUDED_KEY) || '[]');
+      if (Array.isArray(saved)) setCatalogExcluded(new Set(saved));
+    } catch { /* sin storage: todas tildadas */ }
     setShowCatalogModal(true);
   }
 
-  // Genera el catalogo con fotos para la categoria elegida en el modal. Si no se elige ninguna,
-  // el backend saca TODO segmentado por categorias. La eleccion del modal manda sobre el filtro
-  // de la tabla (para poder sacar cualquier categoria sin cambiar la vista).
+  // Tildar/destildar una categoria. Una categoria principal arrastra a sus subcategorias.
+  function toggleCatalogCategory(id: string) {
+    setCatalogExcluded(prev => {
+      const next = new Set(prev);
+      const parent = categories.find(c => c.id === id);
+      const ids = [id, ...(parent?.children?.map(ch => ch.id) ?? [])];
+      if (next.has(id)) ids.forEach(x => next.delete(x));
+      else ids.forEach(x => next.add(x));
+      return next;
+    });
+  }
+
+  // Genera el catalogo con fotos (segmentado por categorias) sin las categorias destildadas.
+  // La seleccion del modal manda sobre el filtro de categoria de la tabla.
   function generatePhotoCatalog() {
     const params = reportParams();
-    if (catalogCategory) params.set('categoryId', catalogCategory);
-    else params.delete('categoryId');
+    params.delete('categoryId');
+    const excluded = Array.from(catalogExcluded);
+    if (excluded.length) params.set('excludeCategoryIds', excluded.join(','));
+    try { localStorage.setItem(CATALOG_EXCLUDED_KEY, JSON.stringify(excluded)); } catch { /* ignore */ }
     window.open(`/api/proxy/products/report/catalog-photos/pdf?${params}`, '_blank');
     setShowCatalogModal(false);
   }
@@ -456,27 +477,50 @@ export default function ProductsPage() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white">Catalogo con fotos</h2>
-                <p className="text-sm text-slate-400">Elige que categoria exportar</p>
+                <p className="text-sm text-slate-400">Destilda las categorias que no quieres que salgan</p>
               </div>
             </div>
 
-            <label className="block text-sm text-slate-400 mb-1.5">Categoria</label>
-            <select
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value)}
-              className="input-field !py-2.5 text-sm w-full"
-              autoFocus
-            >
-              <option value="">Todas las categorias (segmentado)</option>
-              {allCategories.map(c => (
-                <option key={c.id} value={c.id}>{c.isChild ? `└ ${c.name.trim()}` : c.name}</option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">
-              {catalogCategory
-                ? 'Sale solo la categoria elegida (con sus subcategorias si es una categoria principal).'
-                : 'Si no eliges categoria, sale el catalogo completo agrupado por categorias.'}
-            </p>
+            {(() => {
+              const options = [...allCategories, { id: NO_CATEGORY, name: 'Sin categoria', isChild: false }];
+              const included = options.filter(c => !catalogExcluded.has(c.id)).length;
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 tabular-nums">{included} de {options.length} seleccionadas</span>
+                    <div className="flex gap-3 text-xs">
+                      <button type="button" onClick={() => setCatalogExcluded(new Set())} className="text-indigo-400 hover:text-indigo-300">
+                        Marcar todas
+                      </button>
+                      <button type="button" onClick={() => setCatalogExcluded(new Set(options.map(c => c.id)))} className="text-slate-400 hover:text-slate-200">
+                        Desmarcar todas
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-slate-700/60 divide-y divide-slate-800">
+                    {options.map(c => (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-2.5 py-2 pr-3 cursor-pointer hover:bg-slate-800/60 select-none ${c.isChild ? 'pl-8' : 'pl-3'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!catalogExcluded.has(c.id)}
+                          onChange={() => toggleCatalogCategory(c.id)}
+                          className="rounded border-slate-600 bg-slate-700 accent-indigo-500"
+                        />
+                        <span className={`text-sm ${c.id === NO_CATEGORY ? 'italic text-slate-400' : c.isChild ? 'text-slate-300' : 'text-slate-200'}`}>
+                          {c.name.trim()}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {included === 0 && (
+                    <p className="mt-2 text-xs text-amber-400">Selecciona al menos una categoria.</p>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -487,7 +531,8 @@ export default function ProductsPage() {
               </button>
               <button
                 onClick={generatePhotoCatalog}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                disabled={catalogExcluded.has(NO_CATEGORY) && allCategories.every(c => catalogExcluded.has(c.id))}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText size={16} /> Generar PDF
               </button>

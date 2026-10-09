@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, Loader2, Download, Calendar, Package, Hash, DollarSign, TrendingUp, Award } from 'lucide-react';
+import { BarChart3, Loader2, Download, Calendar, Package, Hash, DollarSign, TrendingUp, Award, Tag } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 /* ---------- Types ---------- */
@@ -11,28 +11,29 @@ interface Category {
   name: string;
 }
 
+// Mismos nombres que devuelve GET /reports/sales-by-product (ReportsService.salesByProduct)
 interface ProductRow {
-  code: string;
-  name: string;
-  categoryName: string;
-  units: number;
+  productCode: string;
+  productName: string;
+  category: string;
+  unitsSold: number;
   totalUsd: number;
   costUsd: number;
-  profitUsd: number;
-  marginPct: number;
+  grossProfitUsd: number;
+  grossMarginPct: number;
 }
 
 interface Totals {
   products: number;
-  units: number;
+  totalUnits: number;
   totalUsd: number;
-  costUsd: number;
-  profitUsd: number;
+  totalCostUsd: number;
+  totalProfitUsd: number;
 }
 
 interface SalesProductReport {
   totals: Totals;
-  topProduct: { name: string; totalUsd: number } | null;
+  topProduct: string;
   rows: ProductRow[];
 }
 
@@ -60,6 +61,7 @@ export default function SalesProductReportPage() {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [categoryId, setCategoryId] = useState('');
+  const [onlyOnSale, setOnlyOnSale] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [report, setReport] = useState<SalesProductReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +89,7 @@ export default function SalesProductReportPage() {
     try {
       const params = new URLSearchParams({ from, to });
       if (categoryId) params.set('categoryId', categoryId);
+      if (onlyOnSale) params.set('onlyOnSale', 'true');
       const res = await fetch(`/api/proxy/reports/sales-by-product?${params}`);
       if (!res.ok) throw new Error('Error al cargar reporte');
       const data: SalesProductReport = await res.json();
@@ -97,12 +100,13 @@ export default function SalesProductReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, categoryId]);
+  }, [from, to, categoryId, onlyOnSale]);
 
   /* Export PDF */
   const exportPdf = () => {
     const params = new URLSearchParams({ from, to });
     if (categoryId) params.set('categoryId', categoryId);
+    if (onlyOnSale) params.set('onlyOnSale', 'true');
     window.open(`/api/proxy/reports/sales-by-product/pdf?${params}`, '_blank');
   };
 
@@ -112,7 +116,7 @@ export default function SalesProductReportPage() {
         .sort((a, b) => b.totalUsd - a.totalUsd)
         .slice(0, 10)
         .map(r => ({
-          name: r.name.length > 25 ? r.name.substring(0, 22) + '...' : r.name,
+          name: r.productName.length > 25 ? r.productName.substring(0, 22) + '...' : r.productName,
           totalUsd: r.totalUsd,
         }))
         .reverse()
@@ -172,6 +176,19 @@ export default function SalesProductReportPage() {
               ))}
             </select>
           </div>
+          <label
+            className="flex items-center gap-2 h-[42px] px-3 rounded-lg border border-slate-700/50 bg-slate-900/40 text-sm text-slate-300 cursor-pointer select-none"
+            title="Solo lineas vendidas mientras el producto estaba marcado como Oferta (se registra desde el 09/10/2026)"
+          >
+            <input
+              type="checkbox"
+              checked={onlyOnSale}
+              onChange={e => setOnlyOnSale(e.target.checked)}
+              className="accent-amber-500"
+            />
+            <Tag size={14} className="text-amber-400" />
+            Solo articulos en oferta
+          </label>
           <button
             onClick={fetchReport}
             disabled={loading}
@@ -213,7 +230,7 @@ export default function SalesProductReportPage() {
                 <Hash className="text-purple-400" size={16} />
                 <span className="text-xs text-slate-400 font-medium">Unidades</span>
               </div>
-              <p className="text-xl font-bold text-purple-400 tabular-nums">{report.totals.units.toLocaleString('es-VE')}</p>
+              <p className="text-xl font-bold text-purple-400 tabular-nums">{report.totals.totalUnits.toLocaleString('es-VE')}</p>
             </div>
             <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4 border-t-2 border-t-emerald-500">
               <div className="flex items-center gap-2 mb-2">
@@ -227,14 +244,14 @@ export default function SalesProductReportPage() {
                 <DollarSign className="text-orange-400" size={16} />
                 <span className="text-xs text-slate-400 font-medium">Costo Total</span>
               </div>
-              <p className="text-xl font-bold text-orange-400 tabular-nums">${fmt(report.totals.costUsd)}</p>
+              <p className="text-xl font-bold text-orange-400 tabular-nums">${fmt(report.totals.totalCostUsd)}</p>
             </div>
             <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4 border-t-2 border-t-green-500">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="text-green-400" size={16} />
                 <span className="text-xs text-slate-400 font-medium">Ganancia Total</span>
               </div>
-              <p className="text-xl font-bold text-green-400 tabular-nums">${fmt(report.totals.profitUsd)}</p>
+              <p className="text-xl font-bold text-green-400 tabular-nums">${fmt(report.totals.totalProfitUsd)}</p>
             </div>
             {report.topProduct && (
               <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-4 border-t-2 border-t-yellow-500">
@@ -242,10 +259,10 @@ export default function SalesProductReportPage() {
                   <Award className="text-yellow-400" size={16} />
                   <span className="text-xs text-slate-400 font-medium">Top Producto</span>
                 </div>
-                <p className="text-sm font-semibold text-yellow-400 truncate" title={report.topProduct.name}>
-                  {report.topProduct.name}
+                <p className="text-sm font-semibold text-yellow-400 truncate" title={report.topProduct}>
+                  {report.topProduct}
                 </p>
-                <p className="text-xs text-slate-500">${fmt(report.topProduct.totalUsd)}</p>
+                <p className="text-xs text-slate-500">${fmt(report.rows[0]?.totalUsd ?? 0)}</p>
               </div>
             )}
           </div>
@@ -284,7 +301,7 @@ export default function SalesProductReportPage() {
                     <th className="text-left text-xs text-slate-400 font-medium px-4 py-3">Categoria</th>
                     <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Unidades</th>
                     <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Total USD</th>
-                    <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Costo USD</th>
+                    <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Costo + brecha</th>
                     <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Ganancia</th>
                     <th className="text-right text-xs text-slate-400 font-medium px-4 py-3">Margen%</th>
                   </tr>
@@ -299,16 +316,16 @@ export default function SalesProductReportPage() {
                   ) : (
                     report.rows.map((row, i) => (
                       <tr key={i} className="border-b border-slate-700/30 hover:bg-slate-800/40">
-                        <td className="px-4 py-3 text-sm text-slate-300 font-mono">{row.code}</td>
-                        <td className="px-4 py-3 text-sm text-slate-200">{row.name}</td>
-                        <td className="px-4 py-3 text-sm text-slate-400">{row.categoryName}</td>
-                        <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">{row.units}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300 font-mono">{row.productCode}</td>
+                        <td className="px-4 py-3 text-sm text-slate-200">{row.productName}</td>
+                        <td className="px-4 py-3 text-sm text-slate-400">{row.category}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">{row.unitsSold}</td>
                         <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">${fmt(row.totalUsd)}</td>
                         <td className="px-4 py-3 text-sm text-slate-300 text-right tabular-nums">${fmt(row.costUsd)}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums">${fmt(row.profitUsd)}</td>
+                        <td className="px-4 py-3 text-sm text-emerald-400 text-right tabular-nums">${fmt(row.grossProfitUsd)}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className={`inline-block px-2 py-0.5 rounded text-sm font-semibold tabular-nums ${marginColor(row.marginPct)} ${marginBg(row.marginPct)}`}>
-                            {row.marginPct.toFixed(1)}%
+                          <span className={`inline-block px-2 py-0.5 rounded text-sm font-semibold tabular-nums ${marginColor(row.grossMarginPct)} ${marginBg(row.grossMarginPct)}`}>
+                            {row.grossMarginPct.toFixed(1)}%
                           </span>
                         </td>
                       </tr>

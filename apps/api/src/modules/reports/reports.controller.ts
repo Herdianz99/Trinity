@@ -95,8 +95,9 @@ export class ReportsController {
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('categoryId') categoryId?: string,
+    @Query('onlyOnSale') onlyOnSale?: string,
   ) {
-    return this.service.salesByProduct(from, to, categoryId);
+    return this.service.salesByProduct(from, to, categoryId, onlyOnSale === 'true');
   }
 
   @Get('sales-by-product/pdf')
@@ -104,13 +105,15 @@ export class ReportsController {
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('categoryId') categoryId: string | undefined,
+    @Query('onlyOnSale') onlyOnSale: string | undefined,
     @Res() res: Response,
   ) {
-    const data = await this.service.salesByProduct(from, to, categoryId);
-    const buffer = await this.pdfService.generateSalesByProductPdf(data, from, to);
+    const onSale = onlyOnSale === 'true';
+    const data = await this.service.salesByProduct(from, to, categoryId, onSale);
+    const buffer = await this.pdfService.generateSalesByProductPdf(data, from, to, onSale);
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="ventas-por-producto.pdf"`,
+      'Content-Disposition': `inline; filename="${onSale ? 'ofertas-vendidas' : 'ventas-por-producto'}.pdf"`,
       'Content-Length': buffer.length,
     });
     res.end(buffer);

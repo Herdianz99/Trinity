@@ -39,6 +39,7 @@ export class ProductsCatalogPhotosReportService {
     if (query.inStock) f.push('Solo con existencia');
     if (query.isActive === false) f.push('Solo desactivados');
     if (query.saleBlocked) f.push('Solo bloqueados para la venta');
+    if (query.excludeCategoryIds) f.push('Categorias seleccionadas (segmentado por categoria)');
     if (f.length === 0) return 'Todos los articulos (segmentado por categoria)';
     return f.join('  |  ');
   }

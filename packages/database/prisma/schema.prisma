@@ -1511,6 +1511,8 @@ model InvoiceItem {
   costBs                Float   @default(0)
   priceOverridden       Boolean @default(false)
   returnedQty           Float   @default(0)
+  // Snapshot de Product.isOnSale al facturar (reporte de articulos en oferta vendidos)
+  wasOnSale             Boolean @default(false)
 
   @@index([invoiceId])
 }
@@ -2077,6 +2079,9 @@ model Expense {
   // Enlaza la factura de origen para poder reversar/recalcular el gasto si se devuelve.
   invoiceId     String?
   invoice       Invoice?        @relation("InvoiceAutoConsumo", fields: [invoiceId], references: [id])
+  // Nomina: gasto generado automaticamente al cerrar la corrida (total bruto). Uno por corrida.
+  payrollRunId  String?         @unique
+  payrollRun    PayrollRun?     @relation(fields: [payrollRunId], references: [id])
   createdById   String
   createdBy     User            @relation(fields: [createdById], references: [id])
   createdAt     DateTime        @default(now())
@@ -2634,6 +2639,7 @@ model PayrollRun {
   totalDeductionsBs Float    @default(0)
   totalNetBs        Float    @default(0)
   lines             PayrollRunLine[]
+  expense           Expense?
   createdById       String
   closedAt          DateTime?
   createdAt         DateTime @default(now())
