@@ -17,6 +17,15 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
+### 🤖 Chatbot de ventas para WhatsApp/redes (investigación terminada 2026-10-09, NO iniciado)
+
+> **Estado: factibilidad y prueba real hechas; esperando decisión con el reporte de costos.** Todo el detalle está en `docs/CHATBOT-WHATSAPP-FACTIBILIDAD.md`.
+> - Decisión: **Claude Haiku 5.5** vía OpenRouter. En la prueba con el catálogo de producción fue el único de 5 modelos que no inventó datos.
+> - Arquitectura: Chatwoot self-hosted (servidor aparte) + WhatsApp Cloud API + módulo chatbot en el API con herramientas de solo lectura.
+> - Pieza clave: **tabla de sinónimos con alcance por categoría**. También mejora el buscador del POS y de la tienda.
+> - Costo: ~$35–60/mes. Plan: 4–6 semanas; primero la Fase 1 (sinónimos).
+> - No hay código de pruebas en Trinity: el usuario lo pidió así.
+
 ## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías · Fix reporte Ventas por producto
 
 > ### ⏳ Commiteado y pusheado; FALTA DEPLOY (el usuario pidió explícitamente NO desplegar todavía). Probado en local contra una copia de la BD de la grande. Trae una migración (`20261009120000_offer_sales_payroll_expense`, aditiva e idempotente; también en `deploy/fix-schema.sql`).
