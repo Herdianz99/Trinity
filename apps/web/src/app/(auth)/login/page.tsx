@@ -41,7 +41,7 @@ export default function LoginPage() {
         router.push('/change-password');
       } else {
         const role = data.user?.role ?? data.role;
-        router.push(role === 'EMPLOYEE' ? '/mi-perfil' : '/dashboard');
+        router.push(role === 'EMPLOYEE' ? '/mi-perfil' : role === 'CLIENT' ? '/portal' : '/dashboard');
       }
       router.refresh();
     } catch (err: any) {

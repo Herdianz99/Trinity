@@ -13,6 +13,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/catalog/photo-session', ['catalog', 'inventory', 'inventory-consult']],
   ['/catalog/barcode-session', ['catalog', 'inventory', 'inventory-consult']],
   ['/quotations', ['sales']],
+  ['/sales/pedidos-clientes', ['pedidos-clientes']],
   ['/sales', ['sales']],
   ['/catalog', ['catalog']],
   // Paginas de inventario de SOLO CONSULTA: tambien las puede ver 'inventory-consult'
@@ -82,6 +83,18 @@ export function middleware(request: NextRequest) {
   // If mustChangePassword and not already on /change-password, redirect
   if (payload.mustChangePassword && !pathname.startsWith('/change-password') && !pathname.startsWith('/api/')) {
     return NextResponse.redirect(new URL('/change-password', request.url));
+  }
+
+  // Portal de clientes: un usuario CLIENT solo navega su portal (y cambiar clave); cualquier
+  // otra pantalla lo manda a /portal. Al reves, el personal no usa /portal.
+  if (!pathname.startsWith('/api/')) {
+    const isClient = payload.role === 'CLIENT';
+    if (isClient && !pathname.startsWith('/portal') && !pathname.startsWith('/change-password')) {
+      return NextResponse.redirect(new URL('/portal', request.url));
+    }
+    if (!isClient && pathname.startsWith('/portal')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
   }
 
   // Check route permissions (skip for API routes, dashboard, change-password, and 403)
