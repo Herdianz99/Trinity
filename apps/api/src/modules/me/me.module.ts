@@ -8,5 +8,6 @@ import { InvoicesModule } from '../invoices/invoices.module';
   imports: [PayrollModule, InvoicesModule],
   controllers: [MeController],
   providers: [MeService],
+  exports: [MeService],
 })
 export class MeModule {}

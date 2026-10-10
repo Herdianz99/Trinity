@@ -52,9 +52,9 @@ export class MeService {
     });
   }
 
-  async getCxc(userId: string) {
-    const { customerId } = await this.resolveEmployee(userId);
-    if (!customerId) return [];
+  // ---- Vistas por cliente (las usan /me del empleado y /portal del cliente) ----
+
+  async customerCxc(customerId: string) {
     const rows = await this.prisma.receivable.findMany({
       // Solo las pendientes (mismo filtro que el saldo del resumen): las pagadas/anuladas no se muestran
       where: { customerId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
@@ -68,11 +68,10 @@ export class MeService {
     return rows.map((r) => ({ ...r, saldoUsd: r2(r.amountUsd - r.paidAmountUsd) }));
   }
 
-  async getFacturas(userId: string) {
-    const { customerId } = await this.resolveEmployee(userId);
-    if (!customerId) return [];
+  // excludePending: el portal muestra los pedidos en espera aparte ("Mis pedidos").
+  async customerFacturas(customerId: string, opts: { excludePending?: boolean } = {}) {
     const rows = await this.prisma.invoice.findMany({
-      where: { customerId },
+      where: { customerId, ...(opts.excludePending ? { status: { not: 'PENDING' as const } } : {}) },
       select: {
         id: true, number: true, fiscalNumber: true, status: true,
         totalUsd: true, totalBs: true, totalPaidUsd: true,
@@ -82,6 +81,30 @@ export class MeService {
       take: 200,
     });
     return rows.map((i) => ({ ...i, saldoUsd: r2(i.totalUsd - i.totalPaidUsd) }));
+  }
+
+  async customerFacturaPdf(customerId: string, invoiceId: string): Promise<Buffer> {
+    // Permiso: solo facturas de ESE cliente.
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, customerId: true },
+    });
+    if (!invoice || invoice.customerId !== customerId) {
+      throw new ForbiddenException('Factura no disponible.');
+    }
+    return this.invoicePdf.generatePdf(invoiceId);
+  }
+
+  async getCxc(userId: string) {
+    const { customerId } = await this.resolveEmployee(userId);
+    if (!customerId) return [];
+    return this.customerCxc(customerId);
+  }
+
+  async getFacturas(userId: string) {
+    const { customerId } = await this.resolveEmployee(userId);
+    if (!customerId) return [];
+    return this.customerFacturas(customerId);
   }
 
   async getRecibos(userId: string) {
@@ -143,13 +166,7 @@ export class MeService {
   async getFacturaPdf(userId: string, invoiceId: string): Promise<Buffer> {
     const { customerId } = await this.resolveEmployee(userId);
     // Permiso: el usuario solo puede abrir facturas de SU cliente vinculado.
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      select: { id: true, customerId: true },
-    });
-    if (!customerId || !invoice || invoice.customerId !== customerId) {
-      throw new ForbiddenException('Factura no disponible.');
-    }
-    return this.invoicePdf.generatePdf(invoiceId);
+    if (!customerId) throw new ForbiddenException('Factura no disponible.');
+    return this.customerFacturaPdf(customerId, invoiceId);
   }
 }
