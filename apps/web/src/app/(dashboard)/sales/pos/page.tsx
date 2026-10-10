@@ -36,6 +36,7 @@ import { useNavGuard } from '@/components/nav-guard';
 import SeniatModal from '@/components/seniat-modal';
 import { LostSaleModal } from '@/components/lost-sale-modal';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
+import QtyInput from '@/components/qty-input';
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -115,55 +116,6 @@ interface RefDupMatch {
   amountUsd: number;
   amountBs: number;
   createdAt: string;
-}
-
-// Input de cantidad que permite borrar, escribir decimales (0.25) y el punto en movil.
-// Mantiene el texto crudo mientras se edita y confirma al salir; revierte si queda invalido/0.
-function QtyInput({
-  value,
-  onCommit,
-  className,
-}: {
-  value: number;
-  onCommit: (qty: number) => void;
-  className?: string;
-}) {
-  const [text, setText] = useState<string>(String(value));
-  const [editing, setEditing] = useState(false);
-
-  // Si el valor cambia desde afuera (botones +/-), refrescar el texto cuando no se esta editando.
-  useEffect(() => {
-    if (!editing) setText(String(value));
-  }, [value, editing]);
-
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={text}
-      onFocus={(e) => {
-        setEditing(true);
-        e.currentTarget.select();
-      }}
-      onChange={(e) => {
-        // permitir solo digitos y un punto
-        let v = e.target.value.replace(/[^0-9.]/g, '');
-        const parts = v.split('.');
-        if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
-        setText(v);
-      }}
-      onBlur={() => {
-        setEditing(false);
-        const n = parseFloat(text);
-        if (!isNaN(n) && n > 0) onCommit(n);
-        else setText(String(value)); // revertir: nunca queda en vacio/0/negativo
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-      }}
-      className={className}
-    />
-  );
 }
 
 // Input de monto (USD/Bs) que permite escribir el punto decimal sin que se borre.
