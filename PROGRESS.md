@@ -28,7 +28,7 @@
 
 ## 🗓️ Sesión 156 (2026-10-10) — Catálogo con fotos: checkbox "Condiciones" + compartir en móvil
 
-> ⏳ **Pendiente de deploy** (solo frontend + backend, sin migraciones).
+> ✅ **Desplegado solo en MAYOR** (2026-10-10, `7d97180`, API health OK). ⏳ Pendiente en las otras 6 instancias (solo frontend + backend, sin migraciones).
 - Modal del catálogo con fotos: checkbox **"Condiciones"**; si está tildado sale la contraportada (condiciones de pago), si no, no. Backend: nuevo param `withConditions` en `QueryProductsDto`; la paginación al pie ya no descuenta la contraportada cuando no se incluye.
 - En teléfonos, "Generar PDF" baja el PDF y abre el menú de compartir del sistema (WhatsApp, correo…), igual que en cotizaciones. Botón con spinner "Generando..." mientras se arma.
 
