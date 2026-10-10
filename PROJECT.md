@@ -1351,5 +1351,16 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - Checkbox **"Condiciones"** (Sesión 156): la contraportada con las condiciones de pago solo sale si se manda `withConditions=true` (sin el param no sale). Se recuerda en `localStorage` (`catalogPhotos.withConditions`, tildado por defecto).
 - En **móvil** el PDF se baja y se abre el menú nativo de compartir (`navigator.share`: WhatsApp, correo, etc.), igual que cotizaciones; en desktop abre pestaña nueva.
 
+## Portal de pedidos para clientes (Sesión 156)
+- **Rol `CLIENT`** + `User.customerId` (único). El acceso se crea/activa/reinicia desde la ficha del cliente (`/customers/:id/portal-access`, ADMIN/SUPERVISOR); los usuarios cliente NO se crean en Configuración → Usuarios.
+- **Lista blanca:** `common/guards/client-portal.guard.ts` es APP_GUARD (corre antes del `AuthGuard('jwt')`, por eso verifica el JWT él mismo). Para rol CLIENT solo pasan rutas con `@PortalAllowed()` (`common/decorators/portal-allowed.decorator.ts`): todo `PortalController` y `AuthController`. Con `CompanyConfig.clientPortalEnabled=false` → 403 en todo y el login lo rechaza. Ningún otro rol se ve afectado. **Si se agrega un endpoint que el portal necesite, marcarlo con `@PortalAllowed()` y acotarlo con `PortalService.resolveCustomer`.**
+- **API portal** (`modules/portal`): `GET /portal/me|products|orders|orders/:id|cuenta/cxc|cuenta/facturas|cuenta/facturas/:id/pdf`, `POST/PATCH/DELETE /portal/orders`. La búsqueda reutiliza `ProductsService.findAll` (misma del POS) y mapea a un DTO sin costos. Los pedidos reutilizan `InvoicesService.create/updateItems` (parámetros `extra` y `rejectIfLocked`), con precio de lista y descuento 0.
+- **Pedido = factura PENDING** con `fromPortal`, `portalNote`, `clientUpdatedAt`, `staffSeenAt`; `sellerId` = `Customer.sellerId`. "Sin ver" = `staffSeenAt` nulo o `< clientUpdatedAt`. `retake` marca `staffSeenAt`. Helper `isLockActive()` exportado de `invoices.service.ts`.
+- **API empresa** (`modules/client-orders`, módulo `pedidos-clientes`): lista (`mine`, `sellerId`), detalle, `PATCH :id/seen`, `unseen-count` (el SELLER cuenta solo los suyos).
+- **Web:** grupo `app/(portal)` con layout propio (sin sidebar); el middleware encierra al CLIENT en `/portal` y saca al personal de ahí. `/sales/pedidos-clientes` + badge en el sidebar (evento `trinity-client-orders-changed`). POS: `?retake=<id>` retoma y bloquea; etiquetas Cliente/Modificado en el cajón.
+- **`keepPendingInvoices`:** el cron de medianoche (`deleteOldPendingInvoices`) no borra y `findPending(today)` ignora el filtro de hoy.
+- **Compartido:** `components/qty-input.tsx` (POS y portal; acepta coma). `common/temp-password.ts`. `MeService.customerCxc/customerFacturas/customerFacturaPdf` (por cliente).
+- **Seguridad general:** `GET /config` oculta `creditAuthPassword`/`allowedIps` a no-ADMIN; login con límite 10 fallos/15 min por IP+correo (Redis `login-fail:*`); refresh conserva `restrictToOnSiteIp`.
+
 ## Mi Perfil — Reglamento interno (Sesión 156)
 - Botón "Reglamento interno" en la tarjeta "Mis datos" de `/mi-perfil`: descarga el PDF estático `apps/web/public/docs/reglamento-interno-grupo-trebol.pdf` (mismo archivo en todas las instancias; requiere sesión por el middleware). Para actualizarlo se reemplaza el archivo y se redeploya.

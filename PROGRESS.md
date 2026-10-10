@@ -26,7 +26,21 @@
 > - Costo: ~$35–60/mes. Plan: 4–6 semanas; primero la Fase 1 (sinónimos).
 > - No hay código de pruebas en Trinity: el usuario lo pidió así.
 
-## 🗓️ Sesión 156 (2026-10-10) — Catálogo con fotos: checkbox "Condiciones" + compartir en móvil
+## 🗓️ Sesión 156 (2026-10-10) — Portal de pedidos para clientes (mayorista) · Catálogo con fotos: checkbox "Condiciones" + compartir en móvil · Reglamento en Mi Perfil
+
+### 🛒 Portal de pedidos para clientes — ✅ CÓDIGO TERMINADO Y VERIFICADO EN LOCAL, ⏳ PENDIENTE DE DEPLOY (solo MAYOR)
+> Spec `docs/superpowers/specs/2026-10-10-portal-pedidos-clientes-design.md` · plan `docs/superpowers/plans/2026-10-10-portal-pedidos-clientes.md` (19 tareas, todas hechas). **Trae migración** (`20261010120000_portal_pedidos_clientes`, aditiva, también en `fix-schema.sql`).
+> **Tras el deploy en mayor:** en `/config` activar "Pedidos de clientes en línea" y "Conservar facturas en espera"; asignar vendedor y crear el acceso desde la ficha de cada cliente seleccionado (la clave temporal se muestra una sola vez). Las otras 6 empresas reciben el código con las opciones apagadas.
+- Rol nuevo **CLIENT** vinculado a su ficha (`User.customerId`). Pantalla propia `/portal` (no el POS): "Mis pedidos" (varios abiertos, nota por pedido, borrar si está abierto) y "Mi cuenta" (estado de cuenta CxC + facturas con PDF). Editor `/portal/pedido/[id]`: misma búsqueda del POS (500 resultados, ofertas primero, mismo motor), foto, precio USD/Bs, stock y disponible, aviso suave al superar el disponible, `QtyInput` compartido.
+- **Seguridad:** `ClientPortalGuard` global = lista blanca (un CLIENT solo llama `@PortalAllowed()`: `/portal/*` + auth); el cliente sale de la BD, nunca del body. `/portal/products` no devuelve costo/margen/proveedor/precio mayor. El DTO del pedido no acepta precio ni descuento (400). Portal apagado → 403 y login rechazado.
+- Pedido = factura en espera normal (`fromPortal`, `portalNote`, `clientUpdatedAt`, `staffSeenAt`), con el **vendedor asignado** del cliente (`Customer.sellerId`, nuevo campo en la ficha). Si la empresa lo retoma en el POS queda "En proceso" para el cliente (409 al guardar, re-chequeo `FOR UPDATE`). Se factura al precio/tasa del día del despacho (el POS ya recalcula al retomar).
+- Empresa: pantalla **Ventas → Pedidos de clientes** (permiso `pedidos-clientes`, por defecto ADMIN/SUPERVISOR/CAJERO/VENDEDOR; el vendedor arranca en "Mis clientes"), contador en el menú (nuevos/modificados sin ver), "Abrir en el POS" (`/sales/pos?retake=`, bloquea). En el cajón de facturas en espera: etiquetas "Cliente · nota" y "Modificado".
+- `/config`: **"Conservar facturas en espera"** → el cron de medianoche no borra y el cajón del POS muestra todos los días.
+- Huecos cerrados (todas las empresas): `GET /config` ya no entrega `creditAuthPassword`/`allowedIps` a no-ADMIN; límite de login 10 fallos por **IP+correo** cada 15 min (429); el refresh del token conserva el IP-lock. `QtyInput` del POS ahora acepta coma.
+- Verificado en local (API con curl + navegador con puppeteer): lista blanca 403, búsqueda = POS (474 − 13 bloqueados/sin precio = 461), sin tasa → mensaje amigable, bloqueo EN_USO, contador, PDF propio sí / ajeno 403, conservar en espera, 429 al intento 11, coma en POS y portal. **No probado:** cobrar un pedido del portal hasta el final (usa el flujo de cobro existente sin cambios).
+- Huecos A (cualquiera borra facturas en espera ajenas) y B (el servidor no valida precio editado del POS) se dejaron como están, por decisión del usuario.
+
+### Catálogo con fotos y Mi Perfil
 
 > ✅ **Desplegado solo en MAYOR** (2026-10-10, `7d97180`, API health OK). ⏳ Pendiente en las otras 6 instancias (solo frontend + backend, sin migraciones).
 - Modal del catálogo con fotos: checkbox **"Condiciones"**; si está tildado sale la contraportada (condiciones de pago), si no, no. Backend: nuevo param `withConditions` en `QueryProductsDto`; la paginación al pie ya no descuenta la contraportada cuando no se incluye.
