@@ -31,6 +31,7 @@ import {
   Image as ImageIcon,
   AlertTriangle,
   Store,
+  ShoppingBag,
 } from 'lucide-react';
 import { useNavGuard } from '@/components/nav-guard';
 import SeniatModal from '@/components/seniat-modal';
@@ -199,6 +200,7 @@ function fmtCustomerRif(c?: { rif?: string | null; documentType?: string | null 
 export default function POSPage() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get('invoiceId');
+  const retakeParam = searchParams.get('retake');
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -673,6 +675,13 @@ export default function POSPage() {
       }
     } catch {}
   }, []);
+
+  // Desde "Pedidos de clientes" -> "Abrir en el POS": retomar (y BLOQUEAR) esa factura en espera.
+  useEffect(() => {
+    if (!retakeParam) return;
+    retakeInvoice({ id: retakeParam });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retakeParam]);
 
   useEffect(() => {
     fetchPending();
@@ -3394,6 +3403,17 @@ export default function POSPage() {
                     <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 w-fit font-medium">
                       <Store size={11} />
                       Tienda online · {inv.onlineOrderNumber}
+                    </div>
+                  )}
+                  {inv.fromPortal && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 w-fit font-medium">
+                        <ShoppingBag size={11} />
+                        Cliente{inv.portalNote ? ` · ${inv.portalNote}` : ''}
+                      </span>
+                      {(!inv.staffSeenAt || (inv.clientUpdatedAt && new Date(inv.clientUpdatedAt) > new Date(inv.staffSeenAt))) && (
+                        <span className="text-xs px-2 py-1 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/20 font-medium">Modificado</span>
+                      )}
                     </div>
                   )}
                   <div className="text-xs text-slate-500">
