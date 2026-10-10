@@ -28,7 +28,8 @@
 
 ## 🗓️ Sesión 156 (2026-10-10) — Portal de pedidos para clientes (mayorista) · Catálogo con fotos: checkbox "Condiciones" + compartir en móvil · Reglamento en Mi Perfil
 
-### 🛒 Portal de pedidos para clientes — ✅ CÓDIGO TERMINADO Y VERIFICADO EN LOCAL, ⏳ PENDIENTE DE DEPLOY (solo MAYOR)
+### 🛒 Portal de pedidos para clientes — ✅ DESPLEGADO Y VERIFICADO EN LAS 7 INSTANCIAS (2026-10-10, por el usuario)
+> Verificado por SSH: grande, mayor, chica, total, turen, aceros y acerosmayor en HEAD `3d73524`; PM2 API+Web online; `/health` 200; rutas `/portal/*` y `/client-orders/*` mapeadas (401 sin token); migración `portal_pedidos_clientes` aplicada en las 7 BD (8 columnas, enum `CLIENT`, módulo `pedidos-clientes` en ADMIN/SUPERVISOR/CASHIER/SELLER); flags apagados en todas; sin errores nuevos en los logs. **Falta (lo hace el usuario):** activar las opciones en `/config` de la mayorista y crear los accesos de los clientes.
 > Spec `docs/superpowers/specs/2026-10-10-portal-pedidos-clientes-design.md` · plan `docs/superpowers/plans/2026-10-10-portal-pedidos-clientes.md` (19 tareas, todas hechas). **Trae migración** (`20261010120000_portal_pedidos_clientes`, aditiva, también en `fix-schema.sql`).
 > **Tras el deploy en mayor:** en `/config` activar "Pedidos de clientes en línea" y "Conservar facturas en espera"; asignar vendedor y crear el acceso desde la ficha de cada cliente seleccionado (la clave temporal se muestra una sola vez). Las otras 6 empresas reciben el código con las opciones apagadas.
 - Rol nuevo **CLIENT** vinculado a su ficha (`User.customerId`). Pantalla propia `/portal` (no el POS): "Mis pedidos" (varios abiertos, nota por pedido, borrar si está abierto) y "Mi cuenta" (estado de cuenta CxC + facturas con PDF). Editor `/portal/pedido/[id]`: misma búsqueda del POS (500 resultados, ofertas primero, mismo motor), foto, precio USD/Bs, stock y disponible, aviso suave al superar el disponible, `QtyInput` compartido.
