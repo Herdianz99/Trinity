@@ -18,7 +18,19 @@ import { UserRole } from '@prisma/client';
 import { caracasDateKey, caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { buildPrintAreaGroups } from '../print-jobs/print-area-grouping';
 
-const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+export const LOCK_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+// true si la factura esta tomada (retomada en el POS) y el bloqueo no ha vencido.
+export function isLockActive(lockedById: string | null, lockedAt: Date | null): boolean {
+  return !!lockedById && !!lockedAt && Date.now() - new Date(lockedAt).getTime() < LOCK_EXPIRY_MS;
+}
+
+// Datos extra que el portal de clientes graba junto con la factura en espera.
+export interface PortalInvoiceExtra {
+  fromPortal?: boolean;
+  portalNote?: string | null;
+  clientUpdatedAt?: Date;
+}
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -120,6 +132,16 @@ export class InvoicesService {
   }
 
   async findPending(todayOnly = false) {
+    // Con "Conservar facturas en espera" el cajon del POS muestra TODAS (no solo las de hoy),
+    // porque ya no se borran a medianoche y los pedidos duran varios dias.
+    if (todayOnly) {
+      const cfg = await this.prisma.companyConfig.findUnique({
+        where: { id: 'singleton' },
+        select: { keepPendingInvoices: true },
+      });
+      if (cfg?.keepPendingInvoices) todayOnly = false;
+    }
+
     const where: any = { status: 'PENDING' };
 
     if (todayOnly) {
@@ -272,6 +294,7 @@ export class InvoicesService {
   async create(
     dto: CreateInvoiceDto,
     user: { id: string; role: UserRole },
+    extra?: PortalInvoiceExtra,
   ) {
     // Get today's exchange rate
     const today = caracasDateKey();
@@ -454,6 +477,7 @@ export class InvoicesService {
         intendedPaymentMethodId: dto.intendedPaymentMethodId || null,
         createdById: user.id,
         sellerId,
+        ...(extra ?? {}),
         items: { create: itemsData },
       },
       include: {
@@ -1502,7 +1526,12 @@ export class InvoicesService {
     // Lock it
     await this.prisma.invoice.update({
       where: { id },
-      data: { lockedById: user.id, lockedAt: new Date() },
+      data: {
+        lockedById: user.id,
+        lockedAt: new Date(),
+        // Pedido del portal: retomarlo en el POS cuenta como "visto" por la empresa.
+        ...(invoice.fromPortal ? { staffSeenAt: new Date() } : {}),
+      },
     });
 
     // Enrich items with product's current priceDetal so the POS can
@@ -1535,6 +1564,7 @@ export class InvoicesService {
     id: string,
     dto: CreateInvoiceDto,
     user: { id: string; role: UserRole },
+    opts?: { extra?: PortalInvoiceExtra; rejectIfLocked?: boolean },
   ) {
     const invoice = await this.prisma.invoice.findUnique({ where: { id } });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
@@ -1666,6 +1696,20 @@ export class InvoicesService {
 
     // Update in transaction: delete old items, create new, update totals, release lock
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Portal: re-chequear con la fila BLOQUEADA (FOR UPDATE) que nadie de la empresa la
+      // haya tomado ni cobrado entre la validacion y el guardado.
+      if (opts?.rejectIfLocked) {
+        const rows = await tx.$queryRaw<{ status: string; lockedById: string | null; lockedAt: Date | null }[]>`
+          SELECT status::text AS status, "lockedById", "lockedAt" FROM "Invoice" WHERE id = ${id} FOR UPDATE`;
+        const row = rows[0];
+        if (!row || row.status !== 'PENDING') {
+          throw new ConflictException('Este pedido ya fue procesado por la empresa.');
+        }
+        if (isLockActive(row.lockedById, row.lockedAt)) {
+          throw new ConflictException('El pedido está siendo procesado por la empresa y no se puede modificar.');
+        }
+      }
+
       await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
 
       return tx.invoice.update({
@@ -1684,6 +1728,7 @@ export class InvoicesService {
           intendedPaymentMethodId: dto.intendedPaymentMethodId ?? invoice.intendedPaymentMethodId,
           lockedById: null,
           lockedAt: null,
+          ...(opts?.extra ?? {}),
           items: { create: itemsData },
         },
         include: {

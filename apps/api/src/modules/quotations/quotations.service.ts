@@ -436,6 +436,13 @@ export class QuotationsService {
   // no mueven stock ni generan CxC, asi que borrarlas no deja huecos ni descuadres.
   // Se borran items + pagos + factura en transaccion (igual que el delete manual).
   async deleteOldPendingInvoices() {
+    // Opcion de empresa: conservar las facturas en espera (pedidos de varios dias).
+    const cfg = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { keepPendingInvoices: true },
+    });
+    if (cfg?.keepPendingInvoices) return 0;
+
     const today = caracasDayStart();
 
     const stale = await this.prisma.invoice.findMany({
