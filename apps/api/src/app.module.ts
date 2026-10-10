@@ -81,6 +81,7 @@ import { ExhibitionModule } from './modules/exhibition/exhibition.module';
 import { MeModule } from './modules/me/me.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PortalModule } from './modules/portal/portal.module';
+import { ClientOrdersModule } from './modules/client-orders/client-orders.module';
 
 @Module({
   imports: [
@@ -164,6 +165,7 @@ import { PortalModule } from './modules/portal/portal.module';
     MeModule,
     NotificationsModule,
     PortalModule,
+    ClientOrdersModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
 })
