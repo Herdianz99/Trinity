@@ -106,6 +106,8 @@ interface CompanyConfig {
   igtfPct: number;
   allowNegativeStock: boolean;
   requireCustomerAddress: boolean;
+  clientPortalEnabled: boolean;
+  keepPendingInvoices: boolean;
   useScanDispatch: boolean;
   useAlmacenOps: boolean;
   bancosEnabled: boolean;
@@ -147,6 +149,8 @@ export default function ConfigPage() {
     igtfPct: 3,
     allowNegativeStock: true,
     requireCustomerAddress: false,
+    clientPortalEnabled: false,
+    keepPendingInvoices: false,
     useScanDispatch: false,
     useAlmacenOps: false,
     bancosEnabled: false,
@@ -313,6 +317,8 @@ export default function ConfigPage() {
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
           requireCustomerAddress: data.requireCustomerAddress ?? false,
+          clientPortalEnabled: data.clientPortalEnabled ?? false,
+          keepPendingInvoices: data.keepPendingInvoices ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
           useAlmacenOps: data.useAlmacenOps ?? false,
           bancosEnabled: data.bancosEnabled ?? false,
@@ -405,6 +411,8 @@ export default function ConfigPage() {
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
           requireCustomerAddress: config.requireCustomerAddress,
+          clientPortalEnabled: config.clientPortalEnabled,
+          keepPendingInvoices: config.keepPendingInvoices,
           useScanDispatch: config.useScanDispatch,
           useAlmacenOps: config.useAlmacenOps,
           bancosEnabled: config.bancosEnabled,
@@ -1168,6 +1176,30 @@ export default function ConfigPage() {
                 <div>
                   <span className="text-sm text-white">Direccion del cliente obligatoria</span>
                   <p className="text-xs text-slate-500">Si esta activado, al elegir un cliente sin direccion en el POS aparece un aviso para agregarla</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.clientPortalEnabled}
+                  onChange={(e) => handleChange('clientPortalEnabled', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Pedidos de clientes en línea</span>
+                  <p className="text-xs text-slate-500">Clientes seleccionados entran con su usuario a montar sus pedidos (quedan como facturas en espera). El acceso se crea desde la ficha del cliente</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.keepPendingInvoices}
+                  onChange={(e) => handleChange('keepPendingInvoices', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Conservar facturas en espera</span>
+                  <p className="text-xs text-slate-500">No se borran a medianoche y el POS muestra las de todos los días (para pedidos que se arman durante varios días)</p>
                 </div>
               </label>
             </div>
