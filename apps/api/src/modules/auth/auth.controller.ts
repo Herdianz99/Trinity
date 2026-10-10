@@ -6,8 +6,11 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PortalAllowed } from '../../common/decorators/portal-allowed.decorator';
 
 @ApiTags('Auth')
+// El CLIENT (portal) puede usar login, refresh, me y cambio de clave.
+@PortalAllowed()
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ClientPortalGuard } from './common/guards/client-portal.guard';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
@@ -161,5 +163,6 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     MeModule,
     NotificationsModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
 })
 export class AppModule {}
