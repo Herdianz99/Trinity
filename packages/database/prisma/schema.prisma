@@ -23,6 +23,7 @@ enum UserRole {
   RRHH
   SEGURIDAD
   EMPLOYEE
+  CLIENT
 }
 
 enum IvaType {
@@ -284,6 +285,10 @@ model CompanyConfig {
   // Si true, al elegir un cliente sin direccion en el POS se muestra un aviso (patron del telefono).
   // Opt-in por empresa (default false = sin cambios para las demas).
   requireCustomerAddress  Boolean  @default(false)
+  // Portal de pedidos para clientes (rol CLIENT). Apagado = los CLIENT no pueden entrar.
+  clientPortalEnabled     Boolean  @default(false)
+  // No borrar las facturas en espera a medianoche (pedidos que duran varios dias).
+  keepPendingInvoices     Boolean  @default(false)
   defaultCustomerId       String?
   logo                    String?  @db.Text
   stampImage              String?  @db.Text
@@ -349,6 +354,9 @@ model User {
   restrictToOnSiteIp  Boolean             @default(false)
   employeeId          String?             @unique
   employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
+  // Portal de pedidos (rol CLIENT): ficha de cliente vinculada a este usuario.
+  customerId          String?             @unique
+  customer            Customer?           @relation("CustomerPortalUser", fields: [customerId], references: [id], onDelete: SetNull)
   lastLoginAt         DateTime?
   permissions         UserPermission[]
   sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
@@ -463,6 +471,7 @@ model Seller {
   invoices        Invoice[]
   quotations      Quotation[]
   receipts        Receipt[]
+  customers       Customer[] @relation("CustomerAssignedSeller")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -1156,10 +1165,16 @@ model Customer {
   ivaRetentions         CustomerIvaRetention[]
   lostSales             LostSale[]
   employee              Employee?
+  // Vendedor asignado: los pedidos que el cliente monta en el portal llevan este vendedor.
+  sellerId              String?
+  seller                Seller?              @relation("CustomerAssignedSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  portalUser            User?                @relation("CustomerPortalUser")
   createdById  String?                              // Usuario que registro el cliente (null en clientes previos al backfill)
   createdBy    User?        @relation("CustomerCreator", fields: [createdById], references: [id])
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+
+  @@index([sellerId])
 }
 
 // ============================================
@@ -1484,10 +1499,16 @@ model Invoice {
   cashier             User?              @relation("InvoiceCashier", fields: [cashierId], references: [id])
   lockedById          String?
   lockedAt            DateTime?
+  // Portal de clientes: pedido montado por el propio cliente (rol CLIENT).
+  fromPortal          Boolean            @default(false)
+  portalNote          String?            // nota del cliente para identificar el pedido ("Obra Los Pinos")
+  clientUpdatedAt     DateTime?          // ultima modificacion hecha por el cliente
+  staffSeenAt         DateTime?          // ultima vez que alguien de la empresa lo vio
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
   @@index([status])
+  @@index([fromPortal, status])
 }
 
 model InvoiceItem {
