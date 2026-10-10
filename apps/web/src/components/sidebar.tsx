@@ -78,6 +78,10 @@ interface MenuItem {
   scanDispatchOnly?: boolean;
   // Solo visible si la empresa activó el flag useAlmacenOps (opt-in por empresa).
   almacenOpsOnly?: boolean;
+  // Solo visible si la empresa activó el portal de clientes (clientPortalEnabled).
+  clientPortalOnly?: boolean;
+  // Exige SU permiso propio aunque el usuario tenga el de la sección.
+  strictPermission?: boolean;
 }
 
 interface MenuSection {
@@ -96,6 +100,7 @@ const menuSections: MenuSection[] = [
     permission: 'sales',
     items: [
       { label: 'POS', href: '/sales/pos', icon: <Monitor size={18} /> },
+      { label: 'Pedidos de clientes', href: '/sales/pedidos-clientes', icon: <ClipboardList size={18} />, permission: 'pedidos-clientes', clientPortalOnly: true, strictPermission: true },
       { label: 'Facturas', href: '/sales/invoices', icon: <FileText size={18} /> },
       { label: 'Cotizaciones', href: '/quotations', icon: <FileCheck size={18} /> },
       { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=sale', icon: <FileX2 size={18} /> },
@@ -398,6 +403,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [integrationOn, setIntegrationOn] = useState(false);
   const [scanDispatchOn, setScanDispatchOn] = useState(false);
   const [almacenOpsOn, setAlmacenOpsOn] = useState(false);
+  const [clientPortalOn, setClientPortalOn] = useState(false);
+  const [clientOrdersUnseen, setClientOrdersUnseen] = useState(0);
   const [companyName, setCompanyName] = useState('');
   // Pendientes en "Mi Perfil" (notificaciones sin acuse, incl. amonestaciones que generan notif).
   const [miPerfilPending, setMiPerfilPending] = useState(0);
@@ -422,9 +429,24 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   useEffect(() => {
     fetch('/api/proxy/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); })
+      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); setClientPortalOn(!!d?.clientPortalEnabled); })
       .catch(() => {});
   }, []);
+
+  // Contador de pedidos de clientes nuevos/modificados sin ver (cada 60 s, al cambiar de
+  // ruta y cuando la pantalla de pedidos marca uno como visto).
+  const canClientOrders = clientPortalOn && hasPermission(permissions, 'pedidos-clientes');
+  useEffect(() => {
+    if (!canClientOrders) { setClientOrdersUnseen(0); return; }
+    const load = () => fetch('/api/proxy/client-orders/unseen-count')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setClientOrdersUnseen(d?.count ?? 0))
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    window.addEventListener('trinity-client-orders-changed', load);
+    return () => { clearInterval(t); window.removeEventListener('trinity-client-orders-changed', load); };
+  }, [canClientOrders, pathname]);
 
   // Conteo de pendientes de "Mi Perfil". Se refresca al cambiar de ruta (p.ej. tras
   // dar acuse en /mi-perfil y volver a otra pantalla). Si el usuario no tiene perfil, 0.
@@ -497,7 +519,10 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   // ve todos; si no, solo los items que tengan su propio permiso y el usuario lo tenga.
   const visibleItemsFor = (section: MenuSection): MenuItem[] => {
     const gate = (items: MenuItem[]) =>
-      items.filter((it) => (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn));
+      items.filter((it) =>
+        (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn) &&
+        (!it.clientPortalOnly || clientPortalOn) &&
+        (!it.strictPermission || (!!it.permission && hasPermission(permissions, it.permission))));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
     // "Mi Perfil" se muestra a cualquier usuario con empleado vinculado (cajero, vendedor,
     // etc.) o al rol EMPLOYEE (que trae el permiso mi-perfil). Sin empleado vinculado, no sale.
@@ -665,6 +690,11 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
                       >
                         <span className={isActive ? 'text-green-400' : ''}>{item.icon}</span>
                         <span>{item.label}</span>
+                        {item.href === '/sales/pedidos-clientes' && clientOrdersUnseen > 0 && (
+                          <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                            {clientOrdersUnseen > 9 ? '9+' : clientOrdersUnseen}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

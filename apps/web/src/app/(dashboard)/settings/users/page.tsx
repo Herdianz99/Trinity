@@ -61,6 +61,7 @@ const ROLE_LABELS: Record<string, string> = {
   RRHH: 'Recursos Humanos',
   SEGURIDAD: 'Seguridad',
   EMPLOYEE: 'Empleado (portal)',
+  CLIENT: 'Cliente (portal)',
 };
 
 const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD', 'EMPLOYEE'];
