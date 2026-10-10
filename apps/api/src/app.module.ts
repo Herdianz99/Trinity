@@ -80,6 +80,7 @@ import { GoodsReceiptsModule } from './modules/goods-receipts/goods-receipts.mod
 import { ExhibitionModule } from './modules/exhibition/exhibition.module';
 import { MeModule } from './modules/me/me.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PortalModule } from './modules/portal/portal.module';
 
 @Module({
   imports: [
@@ -162,6 +163,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ExhibitionModule,
     MeModule,
     NotificationsModule,
+    PortalModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
 })
