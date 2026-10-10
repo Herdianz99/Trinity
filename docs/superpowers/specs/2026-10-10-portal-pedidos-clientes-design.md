@@ -79,7 +79,9 @@ Un pedido "nuevo/modificado sin ver" = `fromPortal AND status = PENDING AND
   isOnSale, stock (suma de almacenes), available (stock − reservado en espera)`. **Nunca**
   devuelve costo, % de ganancia, proveedor, precio mayor ni stock por almacén. El precio es el
   mismo que pondría el POS (misma lógica de oferta/precio).
-- `GET /portal/orders` — sus pedidos en espera (`customerId` propio, `status PENDING`), con
+- `GET /portal/orders` — sus pedidos en espera **creados desde el portal** (`customerId` propio,
+  `fromPortal`, `status PENDING`; las facturas en espera que el personal le arme en el POS no
+  salen aquí), con
   estado derivado: `ABIERTO` o `EN_USO` (lock vigente de otro usuario).
 - `GET /portal/orders/:id` — detalle (solo si es suyo).
 - `POST /portal/orders` — crea pedido: `{ portalNote?, items: [{productId, quantity}] }`.
@@ -107,7 +109,10 @@ Un pedido "nuevo/modificado sin ver" = `fromPortal AND status = PENDING AND
 
 **Huecos existentes que se cierran (afectan a todos, sin cambio visible):**
 1. `GET /config`: a no-ADMIN no se le devuelven `creditAuthPassword` ni `allowedIps`.
-2. Límite de intentos de login: 10 fallidos por IP cada 15 min (respuesta 429 con mensaje claro).
+2. Límite de intentos de login: 10 fallidos por **IP + correo** cada 15 min (respuesta 429 con
+   mensaje claro). Por IP + correo y no solo por IP porque los empleados del local comparten la
+   IP pública: un límite solo por IP bloquearía a todos por los errores de uno. Contador en Redis
+   (con el fallback en memoria del `RedisService`).
 3. El refresh token incluye `restrictToOnSiteIp` (hoy se pierde al refrescar y el candado IP deja
    de aplicar).
 
