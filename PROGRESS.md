@@ -29,9 +29,14 @@
 ## 🗓️ Sesión 156 (2026-10-10) — Portal de pedidos para clientes (mayorista) · Catálogo con fotos: checkbox "Condiciones" + compartir en móvil · Reglamento en Mi Perfil
 
 ### 🛒 Portal de pedidos para clientes — ✅ DESPLEGADO Y VERIFICADO EN LAS 7 INSTANCIAS (2026-10-10, por el usuario)
-> Verificado por SSH: grande, mayor, chica, total, turen, aceros y acerosmayor en HEAD `3d73524`; PM2 API+Web online; `/health` 200; rutas `/portal/*` y `/client-orders/*` mapeadas (401 sin token); migración `portal_pedidos_clientes` aplicada en las 7 BD (8 columnas, enum `CLIENT`, módulo `pedidos-clientes` en ADMIN/SUPERVISOR/CASHIER/SELLER); flags apagados en todas; sin errores nuevos en los logs. **Falta (lo hace el usuario):** activar las opciones en `/config` de la mayorista y crear los accesos de los clientes.
-> Spec `docs/superpowers/specs/2026-10-10-portal-pedidos-clientes-design.md` · plan `docs/superpowers/plans/2026-10-10-portal-pedidos-clientes.md` (19 tareas, todas hechas). **Trae migración** (`20261010120000_portal_pedidos_clientes`, aditiva, también en `fix-schema.sql`).
-> **Tras el deploy en mayor:** en `/config` activar "Pedidos de clientes en línea" y "Conservar facturas en espera"; asignar vendedor y crear el acceso desde la ficha de cada cliente seleccionado (la clave temporal se muestra una sola vez). Las otras 6 empresas reciben el código con las opciones apagadas.
+> Verificado por SSH: grande, mayor, chica, total, turen, aceros y acerosmayor en HEAD `3d73524`; PM2 API+Web online; `/health` 200; rutas `/portal/*` y `/client-orders/*` mapeadas (401 sin token); migración `portal_pedidos_clientes` aplicada en las 7 BD (8 columnas, enum `CLIENT`, módulo `pedidos-clientes` en ADMIN/SUPERVISOR/CASHIER/SELLER); flags apagados en todas (el portal no se ve en ninguna empresa hasta activarlo); sin errores nuevos en los logs.
+> Spec `docs/superpowers/specs/2026-10-10-portal-pedidos-clientes-design.md` · plan `docs/superpowers/plans/2026-10-10-portal-pedidos-clientes.md` (19 tareas, todas hechas). Migración `20261010120000_portal_pedidos_clientes` (aditiva, también en `fix-schema.sql`).
+
+**⏳ Pendientes (los hace el usuario en la MAYORISTA, `mayor.eltrebol.app`):**
+1. `/config` → activar **"Pedidos de clientes en línea"** y **"Conservar facturas en espera"**.
+2. Ficha de cada cliente seleccionado → elegir **"Vendedor asignado"** y tocar **"Crear acceso"** (correo; si no tiene, uno inventado tipo `rif@mayor.eltrebol.app`). La clave temporal sale **una sola vez**; el cliente la cambia en su primer ingreso y cae en `/portal`.
+3. Cobrar con calma el **primer pedido real** del portal en caja: el cobro de punta a punta no se pudo probar en local (usa el flujo de cobro existente sin cambios).
+4. (Opcional) Ajustar en Configuración → Permisos por rol quién ve "Pedidos de clientes" (por defecto ADMIN/SUPERVISOR/CAJERO/VENDEDOR).
 - Rol nuevo **CLIENT** vinculado a su ficha (`User.customerId`). Pantalla propia `/portal` (no el POS): "Mis pedidos" (varios abiertos, nota por pedido, borrar si está abierto) y "Mi cuenta" (estado de cuenta CxC + facturas con PDF). Editor `/portal/pedido/[id]`: misma búsqueda del POS (500 resultados, ofertas primero, mismo motor), foto, precio USD/Bs, stock y disponible, aviso suave al superar el disponible, `QtyInput` compartido.
 - **Seguridad:** `ClientPortalGuard` global = lista blanca (un CLIENT solo llama `@PortalAllowed()`: `/portal/*` + auth); el cliente sale de la BD, nunca del body. `/portal/products` no devuelve costo/margen/proveedor/precio mayor. El DTO del pedido no acepta precio ni descuento (400). Portal apagado → 403 y login rechazado.
 - Pedido = factura en espera normal (`fromPortal`, `portalNote`, `clientUpdatedAt`, `staffSeenAt`), con el **vendedor asignado** del cliente (`Customer.sellerId`, nuevo campo en la ficha). Si la empresa lo retoma en el POS queda "En proceso" para el cliente (409 al guardar, re-chequeo `FOR UPDATE`). Se factura al precio/tasa del día del despacho (el POS ya recalcula al retomar).
@@ -43,7 +48,7 @@
 
 ### Catálogo con fotos y Mi Perfil
 
-> ✅ **Desplegado solo en MAYOR** (2026-10-10, `7d97180`, API health OK). ⏳ Pendiente en las otras 6 instancias (solo frontend + backend, sin migraciones).
+> ✅ **Desplegado en las 7 instancias** (primero en mayor con `7d97180`; luego en todas junto con el portal, HEAD `3d73524`). El reglamento de Mi Perfil es el mismo PDF en todas las empresas.
 - Modal del catálogo con fotos: checkbox **"Condiciones"**; si está tildado sale la contraportada (condiciones de pago), si no, no. Backend: nuevo param `withConditions` en `QueryProductsDto`; la paginación al pie ya no descuenta la contraportada cuando no se incluye.
 - **Mi Perfil:** botón "Reglamento interno" (tarjeta "Mis datos") que descarga `REGLAMENTO INTERNO GRUPO TREBOL.pdf`, servido estático desde `apps/web/public/docs/reglamento-interno-grupo-trebol.pdf` (pasa por el middleware → requiere sesión). Para cambiarlo, reemplazar ese archivo y redeployar.
 - En teléfonos, "Generar PDF" baja el PDF y abre el menú de compartir del sistema (WhatsApp, correo…), igual que en cotizaciones. Botón con spinner "Generando..." mientras se arma.
