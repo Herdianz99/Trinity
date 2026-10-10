@@ -282,11 +282,13 @@ export class ProductsCatalogPhotosReportService {
     // Contraportada: pagina final a todo el ancho (condiciones + promociones). Se agrega ANTES
     // del loop de paginacion (justo tras la cuadricula, sin switchToPage de por medio) para que
     // su contenido quede asociado a su propia pagina; el loop luego la excluye del numerado.
-    this.drawBackCover(doc, company);
+    // Solo si se tildo "Condiciones" en el modal.
+    const withConditions = !!query.withConditions;
+    if (withConditions) this.drawBackCover(doc, company);
 
     // Paginacion al pie: numera solo las paginas de productos (excluye la contraportada = ultima).
     const range = doc.bufferedPageRange();
-    const numberedPages = range.count - 1; // -1: la contraportada no lleva numero
+    const numberedPages = range.count - (withConditions ? 1 : 0); // la contraportada no lleva numero
     for (let i = 0; i < numberedPages; i++) {
       doc.switchToPage(range.start + i);
       const oldBottom = doc.page.margins.bottom;

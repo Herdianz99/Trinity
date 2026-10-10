@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 
 const CATALOG_EXCLUDED_KEY = 'catalogPhotos.excludedCategories';
+const CATALOG_CONDITIONS_KEY = 'catalogPhotos.withConditions';
 const NO_CATEGORY = '__none__'; // productos sin categoria (el backend lo entiende igual)
 
 interface Product {
@@ -64,6 +65,9 @@ export default function ProductsPage() {
   // Catalogo con fotos: categorias DESTILDADAS (no salen). Se guarda en localStorage para
   // recordar la ultima seleccion; las categorias nuevas salen tildadas por defecto.
   const [catalogExcluded, setCatalogExcluded] = useState<Set<string>>(new Set());
+  // Checkbox "Condiciones": incluye la contraportada con las condiciones de pago (se recuerda).
+  const [catalogWithConditions, setCatalogWithConditions] = useState(true);
+  const [catalogGenerating, setCatalogGenerating] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -147,6 +151,7 @@ export default function ProductsPage() {
       const saved = JSON.parse(localStorage.getItem(CATALOG_EXCLUDED_KEY) || '[]');
       if (Array.isArray(saved)) setCatalogExcluded(new Set(saved));
     } catch { /* sin storage: todas tildadas */ }
+    try { setCatalogWithConditions(localStorage.getItem(CATALOG_CONDITIONS_KEY) !== 'false'); } catch { /* ignore */ }
     setShowCatalogModal(true);
   }
 
@@ -164,14 +169,49 @@ export default function ProductsPage() {
 
   // Genera el catalogo con fotos (segmentado por categorias) sin las categorias destildadas.
   // La seleccion del modal manda sobre el filtro de categoria de la tabla.
-  function generatePhotoCatalog() {
+  async function generatePhotoCatalog() {
     const params = reportParams();
     params.delete('categoryId');
     const excluded = Array.from(catalogExcluded);
     if (excluded.length) params.set('excludeCategoryIds', excluded.join(','));
-    try { localStorage.setItem(CATALOG_EXCLUDED_KEY, JSON.stringify(excluded)); } catch { /* ignore */ }
-    window.open(`/api/proxy/products/report/catalog-photos/pdf?${params}`, '_blank');
-    setShowCatalogModal(false);
+    if (catalogWithConditions) params.set('withConditions', 'true');
+    try {
+      localStorage.setItem(CATALOG_EXCLUDED_KEY, JSON.stringify(excluded));
+      localStorage.setItem(CATALOG_CONDITIONS_KEY, String(catalogWithConditions));
+    } catch { /* ignore */ }
+    const url = `/api/proxy/products/report/catalog-photos/pdf?${params}`;
+    const filename = 'Catalogo.pdf';
+
+    // En desktop (o navegadores sin Web Share): abrir el PDF en pestana nueva para ver/imprimir.
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile || !navigator.canShare) {
+      window.open(url, '_blank');
+      setShowCatalogModal(false);
+      return;
+    }
+
+    // En movil: bajar el PDF y abrir el menu nativo de compartir (WhatsApp, correo, etc.)
+    setCatalogGenerating(true);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch');
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename, text: 'Catalogo' });
+      } else {
+        // soporta compartir pero no archivos: abrir el PDF
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+    } catch (err: any) {
+      // Si el usuario cancela el menu de compartir, no hacer nada
+      if (err?.name !== 'AbortError') window.open(url, '_blank'); // fallback
+    } finally {
+      setCatalogGenerating(false);
+      setShowCatalogModal(false);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -518,6 +558,16 @@ export default function ProductsPage() {
                   {included === 0 && (
                     <p className="mt-2 text-xs text-amber-400">Selecciona al menos una categoria.</p>
                   )}
+                  <label className="mt-4 flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={catalogWithConditions}
+                      onChange={(e) => setCatalogWithConditions(e.target.checked)}
+                      className="rounded border-slate-600 bg-slate-700 accent-indigo-500"
+                    />
+                    <span className="text-sm text-slate-200">Condiciones</span>
+                    <span className="text-xs text-slate-500">(contraportada con condiciones de pago)</span>
+                  </label>
                 </>
               );
             })()}
@@ -531,10 +581,11 @@ export default function ProductsPage() {
               </button>
               <button
                 onClick={generatePhotoCatalog}
-                disabled={catalogExcluded.has(NO_CATEGORY) && allCategories.every(c => catalogExcluded.has(c.id))}
+                disabled={catalogGenerating || (catalogExcluded.has(NO_CATEGORY) && allCategories.every(c => catalogExcluded.has(c.id)))}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FileText size={16} /> Generar PDF
+                {catalogGenerating ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                {catalogGenerating ? 'Generando...' : 'Generar PDF'}
               </button>
             </div>
           </div>

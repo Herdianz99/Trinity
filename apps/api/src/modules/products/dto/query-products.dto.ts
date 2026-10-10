@@ -21,6 +21,13 @@ export class QueryProductsDto {
   @IsString()
   excludeCategoryIds?: string;
 
+  // Catalogo con fotos: incluir la contraportada con las condiciones de pago (checkbox del modal).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(toBool)
+  @IsBoolean()
+  withConditions?: boolean;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
