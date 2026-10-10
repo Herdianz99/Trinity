@@ -176,7 +176,8 @@ export default function PortalOrderPage() {
       }
       if (!res.ok) throw new Error(msg || 'No se pudo guardar el pedido');
       applyOrder(data);
-      if (!orderId) router.replace(`/portal/pedido/${data.id}`);
+      // Pedido nuevo: solo actualizar la URL (sin remontar la pagina, para no perder el aviso).
+      if (!orderId) window.history.replaceState(null, '', `/portal/pedido/${data.id}`);
       setMessage({ type: 'success', text: 'Pedido guardado' });
       return true;
     } catch (e: any) {
