@@ -30,6 +30,7 @@
 
 > ✅ **Desplegado solo en MAYOR** (2026-10-10, `7d97180`, API health OK). ⏳ Pendiente en las otras 6 instancias (solo frontend + backend, sin migraciones).
 - Modal del catálogo con fotos: checkbox **"Condiciones"**; si está tildado sale la contraportada (condiciones de pago), si no, no. Backend: nuevo param `withConditions` en `QueryProductsDto`; la paginación al pie ya no descuenta la contraportada cuando no se incluye.
+- **Mi Perfil:** botón "Reglamento interno" (tarjeta "Mis datos") que descarga `REGLAMENTO INTERNO GRUPO TREBOL.pdf`, servido estático desde `apps/web/public/docs/reglamento-interno-grupo-trebol.pdf` (pasa por el middleware → requiere sesión). Para cambiarlo, reemplazar ese archivo y redeployar.
 - En teléfonos, "Generar PDF" baja el PDF y abre el menú de compartir del sistema (WhatsApp, correo…), igual que en cotizaciones. Botón con spinner "Generando..." mientras se arma.
 
 ## 🗓️ Sesión 155 (2026-10-09) — Ofertas vendidas · Gasto automático de nómina · Catálogo con fotos por categorías y stock · Editar recibos en borrador · RIF en el POS · Fix reporte Ventas por producto · Fotos Vencerámica en mayor

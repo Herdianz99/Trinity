@@ -1350,3 +1350,6 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - El modal del catálogo con fotos lista todas las categorías tildadas (+ "Sin categoria") y manda las destildadas en `excludeCategoryIds` (ids separados por coma; `__none__` = sin categoría). En `catalogReportList`, el `notIn` se combina con `categoryId IS NULL` porque el `NOT IN` de SQL descarta los NULL. La selección se recuerda en el `localStorage` del navegador (`catalogPhotos.excludedCategories`). El catálogo en tabla (PDF/Excel) no cambia.
 - Checkbox **"Condiciones"** (Sesión 156): la contraportada con las condiciones de pago solo sale si se manda `withConditions=true` (sin el param no sale). Se recuerda en `localStorage` (`catalogPhotos.withConditions`, tildado por defecto).
 - En **móvil** el PDF se baja y se abre el menú nativo de compartir (`navigator.share`: WhatsApp, correo, etc.), igual que cotizaciones; en desktop abre pestaña nueva.
+
+## Mi Perfil — Reglamento interno (Sesión 156)
+- Botón "Reglamento interno" en la tarjeta "Mis datos" de `/mi-perfil`: descarga el PDF estático `apps/web/public/docs/reglamento-interno-grupo-trebol.pdf` (mismo archivo en todas las instancias; requiere sesión por el middleware). Para actualizarlo se reemplaza el archivo y se redeploya.

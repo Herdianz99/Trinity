@@ -244,6 +244,11 @@ export default function MiPerfilPage() {
               <Info icon={<CalendarClock size={15} />} label="Días de crédito" value={c.creditDays} />
             </div>
             <p className="mt-4 text-[11px] text-slate-500 border-t border-slate-700/50 pt-3">Si algún dato está incorrecto, contacta a Recursos Humanos.</p>
+            {/* PDF estatico en apps/web/public/docs */}
+            <a href="/docs/reglamento-interno-grupo-trebol.pdf" download="Reglamento Interno Grupo Trebol.pdf"
+              className="mt-4 w-full btn-secondary !py-2 text-sm flex items-center justify-center gap-2">
+              <FileDown size={15} className="text-emerald-400" /> Reglamento interno
+            </a>
           </div>
         </Reveal>
 
