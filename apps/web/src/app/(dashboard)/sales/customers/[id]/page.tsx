@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import SeniatModal from '@/components/seniat-modal';
+import CustomerPortalAccess from '@/components/customer-portal-access';
 
 interface Customer {
   id: string; code: string | null; name: string; documentType: string; rif: string | null;
@@ -94,6 +95,14 @@ export default function CustomerDetailPage() {
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Vendedores para "Vendedor asignado" (los pedidos del portal del cliente llevan ese vendedor).
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/proxy/sellers?isActive=true')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setSellers(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
 
   // Invoices pagination (server-side)
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -153,6 +162,7 @@ export default function CustomerDetailPage() {
         isGroupCompany: data.isGroupCompany ?? false,
         isEmployee: data.isEmployee ?? false,
         creditAuthorizedBy: data.creditAuthorizedBy || '',
+        sellerId: data.sellerId || '',
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -224,7 +234,7 @@ export default function CustomerDetailPage() {
       const res = await fetch(`/api/proxy/customers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, creditLimit: Number(form.creditLimit), creditDays: Number(form.creditDays) }),
+        body: JSON.stringify({ ...form, sellerId: form.sellerId || null, creditLimit: Number(form.creditLimit), creditDays: Number(form.creditDays) }),
       });
       if (res.ok) {
         setSaveMsg({ type: 'success', text: 'Cliente actualizado' });
@@ -414,6 +424,14 @@ export default function CustomerDetailPage() {
             {!canEditCredit && (
               <p className="text-xs text-amber-400">Solo administracion puede editar el credito del cliente.</p>
             )}
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Vendedor asignado</label>
+              <select value={form.sellerId || ''} onChange={e => setForm((f: any) => ({ ...f, sellerId: e.target.value }))} className="input-field !py-2 text-sm">
+                <option value="">Sin vendedor asignado</option>
+                {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">Los pedidos que el cliente monte en el portal llevan este vendedor.</p>
+            </div>
             <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
               <input
                 type="checkbox"
@@ -459,6 +477,7 @@ export default function CustomerDetailPage() {
             </div>
             </fieldset>
           </form>
+          <CustomerPortalAccess customerId={id} defaultEmail={customer.email} />
         </TabsContent>
 
         {/* ═══ TAB: Ventas ═══ */}
