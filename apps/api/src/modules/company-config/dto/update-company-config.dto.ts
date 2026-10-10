@@ -99,6 +99,18 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   requireCustomerAddress?: boolean;
 
+  // Portal de pedidos para clientes (rol CLIENT).
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  clientPortalEnabled?: boolean;
+
+  // No borrar las facturas en espera a medianoche.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  keepPendingInvoices?: boolean;
+
   // Interruptor del libro mayor de caja (arqueo lee del CashLedgerEntry). Reversa instantánea.
   @ApiProperty({ required: false })
   @IsOptional()
