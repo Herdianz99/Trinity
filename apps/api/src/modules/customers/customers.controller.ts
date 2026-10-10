@@ -15,13 +15,21 @@ import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { UserRole } from '@prisma/client';
+import { CustomerPortalAccessService } from './customer-portal-access.service';
+import { CreatePortalAccessDto, UpdatePortalAccessDto } from './dto/portal-access.dto';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'))
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly service: CustomersService) {}
+  constructor(
+    private readonly service: CustomersService,
+    private readonly portalAccess: CustomerPortalAccessService,
+  ) {}
 
   @Post('seniat-parse')
   parseSeniat(@Body() body: { html: string }) {
@@ -74,5 +82,27 @@ export class CustomersController {
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.service.remove(id, userId);
+  }
+
+  // ---- Acceso al portal de pedidos (usuario rol CLIENT de este cliente) ----
+  @Get(':id/portal-access')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  getPortalAccess(@Param('id') id: string) {
+    return this.portalAccess.get(id);
+  }
+
+  @Post(':id/portal-access')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  createPortalAccess(@Param('id') id: string, @Body() dto: CreatePortalAccessDto) {
+    return this.portalAccess.create(id, dto);
+  }
+
+  @Patch(':id/portal-access')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERVISOR)
+  updatePortalAccess(@Param('id') id: string, @Body() dto: UpdatePortalAccessDto) {
+    return this.portalAccess.update(id, dto);
   }
 }

@@ -64,4 +64,10 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   creditAuthorizedBy?: string;
+
+  // Vendedor asignado (los pedidos del portal llevan este vendedor). null = sin vendedor.
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  sellerId?: string | null;
 }

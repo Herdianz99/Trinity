@@ -4,17 +4,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PermissionKey } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
 import { normalizeEmail } from '../../common/email';
-
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let password = '';
-  for (let i = 0; i < 10; i++) {
-    password += chars.charAt(crypto.randomInt(chars.length));
-  }
-  return password;
-}
+import { generateTempPassword } from '../../common/temp-password';
 
 @Injectable()
 export class UsersService {
