@@ -99,6 +99,15 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 157 (2026-10-11) — Sinónimos de búsqueda de productos (Fase 1 del chatbot)
+- Spec `docs/superpowers/specs/2026-10-11-sinonimos-busqueda-design.md`. Migración `20261011120000_search_synonyms` (aditiva; también en `fix-schema.sql`).
+- **Modelo:** `SearchSynonym` (`terms[]` = lo que escribe el cliente, `matchTerms` = palabras EXACTAS que debe tener el nombre, `categoryIds[]` vacío = todas, `isActive`). `Product.searchKeywords` = palabras de las reglas activas que le tocan.
+- **Mecanismo (opción A, en la BD):** el trigger `update_product_search_vector` recalcula `searchKeywords` solo en INSERT o si cambia `name`/`categoryId` (función `product_synonym_keywords`, config `simple` = palabra exacta: "pego" no toca "pega") y arma `searchVector` = nombre + códigos + keywords con `product_search_normalize`. Al crear/editar/activar/borrar reglas, `SearchSynonymsService.refreshKeywords` recalcula solo los productos afectados (vieja ∪ nueva definición). **Las búsquedas (POS, artículos, compras, ajustes, conteos, exhibición, portal) no cambiaron.**
+- **Fracciones:** el índice guarda `3/8` como `3 8 3f8`; `productSearchTsQuery` convierte "3/8" → `3f8`. "1/2" ya no trae "2 X 1"/"12"; escribir "1 2" sigue igual. Verificado: 137 búsquedas antes/después en copia de la grande, 0 resultados perdidos salvo ruido de fracciones.
+- **API** `/search-synonyms` (permiso `catalog`): GET (con `productCount`), POST `preview`, POST, PATCH, DELETE, POST `activate` (lote). **Pantalla** `/catalog/synonyms` (Catálogo → Sinónimos de búsqueda) con pestañas Pendientes/Activas/Todas, activar en lote y vista previa en vivo. Ficha de producto: "También se encuentra como".
+- **Tienda:** el snapshot exporta `keywords` por producto (el buscador de la tienda aún no lo usa).
+- **Carga inicial:** `deploy/synonyms/initial-synonyms.json` (106 reglas, entran PENDIENTES) + `build-synonyms-sql.js` (genera SQL idempotente; resuelve categorías por nombre y omite reglas cuyas categorías no existan).
+
 #### Sesión 152 (2026-10-02) — Reporte "Margen de ganancia" alineado al KPI Ganancia del dashboard
 - `reports.service.profitMargin()` ahora replica `dashboard.service.getProfit()`: ingreso **neto de IVA** siempre, **resta devoluciones** (NCV, costo histórico o efectivo con brecha) y **excluye empresas del grupo**. Antes sumaba el IVA y no restaba devoluciones ni grupo → no cuadraba con el dashboard. Corrige también el PDF. Verificado vs `getProfit` en datos reales: diff 0.
 - **Regla de negocio reforzada:** el total del reporte profit-margin debe coincidir con el KPI "Ganancia" del dashboard para el mismo rango.

@@ -20,6 +20,7 @@ export interface StoreProduct {
   brandSlug: string | null;
   featured: boolean;
   offer: boolean; // isOnSale en Trinity: producto marcado "en oferta"
+  keywords: string; // sinonimos de busqueda activos ("cabilla, 3/8"); el buscador de la tienda puede usarlos
 }
 
 /** Forma cruda de producto que espera el builder (subset del select de Prisma). */
@@ -27,6 +28,7 @@ export interface RawProduct {
   code: string;
   name: string;
   description: string | null;
+  searchKeywords: string;
   priceDetal: number;
   storeFeatured: boolean;
   isOnSale: boolean;
@@ -137,6 +139,7 @@ export function buildSnapshotData(
       brandSlug,
       featured: p.storeFeatured,
       offer: p.isOnSale,
+      keywords: p.searchKeywords,
     };
   });
 

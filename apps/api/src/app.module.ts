@@ -82,6 +82,7 @@ import { MeModule } from './modules/me/me.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { ClientOrdersModule } from './modules/client-orders/client-orders.module';
+import { SearchSynonymsModule } from './modules/search-synonyms/search-synonyms.module';
 
 @Module({
   imports: [
@@ -166,6 +167,7 @@ import { ClientOrdersModule } from './modules/client-orders/client-orders.module
     NotificationsModule,
     PortalModule,
     ClientOrdersModule,
+    SearchSynonymsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
 })

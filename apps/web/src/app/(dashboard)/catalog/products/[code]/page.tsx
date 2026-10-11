@@ -19,6 +19,7 @@ interface Product {
   supplierRef: string | null;
   otherCode: string | null;
   name: string;
+  searchKeywords?: string; // sinonimos de busqueda activos (solo lectura)
   description: string | null;
   categoryId: string | null;
   brandId: string | null;
@@ -677,6 +678,12 @@ export default function ProductDetailPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Nombre *</label>
                   <input type="text" value={form.name || ''} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} className="input-field !py-2 text-sm" required />
+                  {product.searchKeywords && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Tambien se encuentra como: <span className="text-cyan-400">{product.searchKeywords}</span>
+                      {' '}<a href="/catalog/synonyms" className="underline hover:text-slate-300">(sinonimos)</a>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Descripcion</label>

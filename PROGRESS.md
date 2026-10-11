@@ -25,6 +25,24 @@
 > - Pieza clave: **tabla de sinónimos con alcance por categoría**. También mejora el buscador del POS y de la tienda.
 > - Costo: ~$35–60/mes. Plan: 4–6 semanas; primero la Fase 1 (sinónimos).
 > - No hay código de pruebas en Trinity: el usuario lo pidió así.
+> - **2026-10-11: Fase 1 (sinónimos) PROGRAMADA, sin desplegar** → ver Sesión 157. Número de WhatsApp: la empresa usa WhatsApp Business → se intentará coexistencia (si no, migrar el número a la API o línea nueva). Plan acordado: programar las fases 1→2→3 y que al final WhatsApp sea configuración en Chatwoot.
+
+## 🗓️ Sesión 157 (2026-10-11) — Sinónimos de búsqueda (Fase 1 del chatbot)
+
+> **Estado: probado en local, NO desplegado.** Spec `docs/superpowers/specs/2026-10-11-sinonimos-busqueda-design.md`. Migración `20261011120000_search_synonyms` (aditiva; en `fix-schema.sql`).
+
+- Pantalla **Catálogo → Sinónimos de búsqueda** (`/catalog/synonyms`, permiso `catalog` = ADMIN/SUPERVISOR/COMPRADOR): reglas "el cliente escribe X → productos cuyo nombre dice Y (en estas categorías)", vista previa en vivo de los productos afectados, pendientes/activas, activar en lote.
+- Las palabras se agregan al índice de búsqueda: funciona en POS, artículos, compras, ajustes, conteos, exhibición y portal sin tocar esas búsquedas. La ficha del producto muestra "También se encuentra como".
+- Fracciones exactas: "llave 1/2" ya no trae "2 X 1" ni "12".
+- Verificado en copia de la grande: 137 búsquedas antes/después, **ningún resultado perdido** (salvo el ruido de fracciones, revisado a mano). "cabilla 3/8" → BARRA CON RESALTE 10MM; "cabilla media" → 12MM.
+- Tienda: el snapshot exporta `keywords` por producto (falta que el buscador de la tienda lo use).
+
+**⏳ Pendientes:**
+1. **Desplegar** (las 7 instancias; migración aditiva). Recalcula el índice de todos los productos una vez (segundos).
+2. **Cargar las 106 reglas iniciales como PENDIENTES** en la grande (y en las demás si se quiere; las categorías se resuelven por nombre):
+   `node deploy/synonyms/build-synonyms-sql.js > /tmp/synonyms.sql` y `psql <db> -v ON_ERROR_STOP=1 -f /tmp/synonyms.sql`.
+3. **Encargado de ventas revisa y activa** las reglas. Las marcadas "CONFIRMAR" (3/8 = 9 mm, H.P = hierro pulido, malla ciclón = alfajol, alambre de amarre, taco = breaker, tobo = batea, aguarrás) solo si ventas lo confirma.
+4. Siguiente: Fase 2 (bot en Trinity), con su propio diseño.
 
 ## 🗓️ Sesión 156 (2026-10-10) — Portal de pedidos para clientes (mayorista) · Catálogo con fotos: checkbox "Condiciones" + compartir en móvil · Reglamento en Mi Perfil
 

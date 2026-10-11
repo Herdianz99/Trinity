@@ -362,6 +362,7 @@ model User {
   sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
   sessionsClosed      CashSession[]       @relation("SessionClosedBy")
   bankMovementsCreated    BankMovement[]  @relation("BankMovementCreator")
+  searchSynonymsCreated   SearchSynonym[] @relation("SearchSynonymCreatedBy")
   bankMovementsReconciled BankMovement[]  @relation("BankMovementReconciler")
   bankMovementsApproved   BankMovement[]  @relation("BankMovementApprover")
   seller              Seller?
@@ -617,6 +618,7 @@ model Product {
   exhibitedSince     DateTime?
   exhibitionLocation String?
   searchVector     Unsupported("tsvector")?
+  searchKeywords   String                   @default("") // palabras de los sinonimos activos (las mantiene el trigger y SearchSynonymsService)
   stock            Stock[]
   movements        StockMovement[]
   purchaseItems    PurchaseOrderItem[]
@@ -635,6 +637,23 @@ model Product {
   primaryImageMediumUrl String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+}
+
+// Sinonimo de busqueda: los productos cuyo NOMBRE contiene matchTerms (dentro de categoryIds; vacio = todas)
+// tambien se encuentran con terms. Ver migracion 20261011120000_search_synonyms.
+model SearchSynonym {
+  id          String   @id @default(cuid())
+  terms       String[] @default([])
+  matchTerms  String
+  categoryIds String[] @default([])
+  isActive    Boolean  @default(false)
+  notes       String?
+  createdById String?
+  createdBy   User?    @relation("SearchSynonymCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 model ProductImage {
