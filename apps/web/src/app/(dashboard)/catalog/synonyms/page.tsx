@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { BookA, Plus, Pencil, Trash2, Loader2, X, Search, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { BookA, Plus, Pencil, Trash2, Loader2, X, Search, ArrowRight, CheckCircle2, Power } from 'lucide-react';
 
 interface Synonym {
   id: string;
@@ -50,13 +50,15 @@ export default function SynonymsPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
 
   useEffect(() => { document.title = 'Sinónimos de búsqueda | Trinity ERP'; }, []);
 
-  async function fetchRules() {
-    setLoading(true);
+  // silent: refresca sin el spinner (al activar una regla la tabla no parpadea ni pierde el scroll).
+  async function fetchRules(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/proxy/search-synonyms?status=all');
       if (res.ok) setRules(await res.json());
@@ -130,7 +132,7 @@ export default function SynonymsPage() {
         const { updated } = await res.json();
         setMessage({ type: 'success', text: `${updated} regla(s) ${isActive ? 'activada(s)' : 'desactivada(s)'}` });
         setSelected(new Set());
-        await fetchRules();
+        await fetchRules(true);
       } else {
         const err = await res.json().catch(() => ({}));
         setMessage({ type: 'error', text: err.message || 'Error' });
@@ -147,7 +149,7 @@ export default function SynonymsPage() {
     const res = await fetch(`/api/proxy/search-synonyms/${rule.id}`, { method: 'DELETE' });
     if (res.ok) {
       setMessage({ type: 'success', text: 'Regla eliminada' });
-      fetchRules();
+      fetchRules(true);
     } else {
       const err = await res.json().catch(() => ({}));
       setMessage({ type: 'error', text: err.message || 'Error al eliminar' });
@@ -235,7 +237,7 @@ export default function SynonymsPage() {
               <th className="text-left px-3 py-3 text-slate-400 font-medium">Categorías</th>
               <th className="text-center px-3 py-3 text-slate-400 font-medium">Productos</th>
               <th className="text-center px-3 py-3 text-slate-400 font-medium">Estado</th>
-              <th className="text-center px-3 py-3 text-slate-400 font-medium w-24">Acciones</th>
+              <th className="text-center px-3 py-3 text-slate-400 font-medium w-48">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -269,19 +271,25 @@ export default function SynonymsPage() {
                   {r.productCount}
                 </td>
                 <td className="px-3 py-3 text-center">
-                  <button
-                    onClick={() => setActive([r.id], !r.isActive)}
-                    disabled={busy}
-                    title={r.isActive ? 'Desactivar' : 'Activar'}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${r.isActive
-                      ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
-                      : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'}`}
-                  >
+                  <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium border ${r.isActive
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
                     {r.isActive ? 'Activa' : 'Pendiente'}
-                  </button>
+                  </span>
                 </td>
                 <td className="px-3 py-3 text-center">
-                  <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={async () => { setTogglingId(r.id); await setActive([r.id], !r.isActive); setTogglingId(null); }}
+                      disabled={busy}
+                      title={r.isActive ? 'Desactivar regla' : 'Activar regla'}
+                      className={`w-24 flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${r.isActive
+                        ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                        : 'border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}
+                    >
+                      {togglingId === r.id ? <Loader2 className="animate-spin" size={12} /> : <Power size={12} />}
+                      {r.isActive ? 'Desactivar' : 'Activar'}
+                    </button>
                     <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar">
                       <Pencil size={14} />
                     </button>
@@ -301,7 +309,7 @@ export default function SynonymsPage() {
           initial={form}
           categories={categories}
           onClose={() => setForm(null)}
-          onSaved={(text) => { setForm(null); setMessage({ type: 'success', text }); fetchRules(); }}
+          onSaved={(text) => { setForm(null); setMessage({ type: 'success', text }); fetchRules(true); }}
         />
       )}
     </div>
