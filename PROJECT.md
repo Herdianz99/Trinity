@@ -99,6 +99,13 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 157b (2026-10-11) — Chatbot de ventas (Fase 2: el bot dentro de Trinity)
+- Spec `docs/superpowers/specs/2026-10-11-chatbot-bot-trinity-design.md`. Migraciones `20261011150000_chatbot` y `20261011170000_chatbot_rating` (aditivas; en `fix-schema.sql`). Dependencia `@anthropic-ai/sdk` (API). Clave en `ANTHROPIC_API_KEY` (.env del API, nunca en BD).
+- **Modelos:** `ChatbotConfig` (fila única: `enabled` default false, modelo/esfuerzo, textos editables, `divisaDiscountPct`, excepciones por categoría/producto, `monthlyBudgetUsd`), `ChatbotConversation` (`channel` TEST/WHATSAPP/…, `status` BOT/ESCALATED/CLOSED, resumen de escalado, costo), `ChatbotMessage` (texto, fotos del cliente, `productImages`, `toolCalls` de diagnóstico, `apiContent` = turnos crudos para reconstruir el historial append-only, tokens, costo, `rating` 1/-1), `ChatbotSearchLog` (reporte de búsquedas sin resultado).
+- **`modules/chatbot/`:** `ChatbotService.reply()` = bucle manual con Claude (máx. 6 vueltas) y herramientas de solo lectura `buscar_productos` / `enviar_foto` / `calcular_bolivares` (tasa guardada `caracasDateKey`) / `escalar_a_asesor`; un `escalar_a_asesor` en paralelo con otras herramientas se ignora (Haiku lo emitía basura). Tope de gasto mensual (mes Caracas) y error/refusal/max_tokens → mensaje "te paso con un asesor" + ESCALATED. `ChatbotToolsService.searchProducts` = motor del POS (`productSearchTsQuery` + sinónimos) sin relleno, orden: nombre que empieza por lo buscado → normal antes que (ROTO)/(SEGUNDA) → más vendido (nº facturas 90 días) → disponible (vendible − apartado) → `ts_rank`; bloqueados para la venta = no disponibles sin precio. `chatbot-prompt.ts` = reglas + textos de la config (cacheado). `GET /chatbot/image.png?url=` convierte fotos del CDN propio a PNG para el portapapeles.
+- **Permisos:** `chatbot` (usar el bot, conversaciones, búsquedas sin resultado) y `chatbot-config` (PATCH de la configuración); ADMIN por `*`.
+- **Web (menú CHATBOT):** `/chatbot` Probar bot (chat con fotos, Copiar / Copiar foto / 👍👎, panel de diagnóstico y buscador sin IA), `/chatbot/conversations` (historial + costo + % de acierto), `/chatbot/missed` (→ `/catalog/synonyms?nuevo=`), `/chatbot/config`.
+
 #### Sesión 157 (2026-10-11) — Sinónimos de búsqueda de productos (Fase 1 del chatbot)
 - Spec `docs/superpowers/specs/2026-10-11-sinonimos-busqueda-design.md`. Migración `20261011120000_search_synonyms` (aditiva; también en `fix-schema.sql`).
 - **Modelo:** `SearchSynonym` (`terms[]` = lo que escribe el cliente, `matchTerms` = palabras EXACTAS que debe tener el nombre, `categoryIds[]` vacío = todas, `isActive`). `Product.searchKeywords` = palabras de las reglas activas que le tocan.

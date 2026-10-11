@@ -17,17 +17,29 @@
 - **WiFi sí, datos móviles no:** "estar en el local" = estar en el **WiFi** del local. Con datos móviles (4G/5G) la IP es de la operadora y NO coincide (normalmente es lo deseado, pero hay que decirlo).
 - **Riesgo residual inevitable:** mientras el vendedor pueda VER precios/stock para trabajar, siempre podrá sacarle **foto** a la pantalla. Ningún software lo evita. Los 2 candados suben mucho el esfuerzo y matan la fuga fácil (lista completa / acceso remoto), pero no es hermético.
 
-### 🤖 Chatbot de ventas para WhatsApp/redes (investigación terminada 2026-10-09, NO iniciado)
+### 🤖 Chatbot de ventas para WhatsApp/redes — 📍 DÓNDE QUEDAMOS (2026-10-11)
 
-> **Estado: factibilidad y prueba real hechas; esperando decisión con el reporte de costos.** Todo el detalle está en `docs/CHATBOT-WHATSAPP-FACTIBILIDAD.md`.
-> - Decisión: **Claude Haiku 5.5** vía OpenRouter. En la prueba con el catálogo de producción fue el único de 5 modelos que no inventó datos.
-> - Arquitectura: Chatwoot self-hosted (servidor aparte) + WhatsApp Cloud API + módulo chatbot en el API con herramientas de solo lectura.
-> - Pieza clave: **tabla de sinónimos con alcance por categoría**. También mejora el buscador del POS y de la tienda.
-> - Costo: ~$35–60/mes. Plan: 4–6 semanas; primero la Fase 1 (sinónimos).
-> - No hay código de pruebas en Trinity: el usuario lo pidió así.
-> - **2026-10-11: Fase 1 (sinónimos) DESPLEGADA en las 7** (reglas pendientes en la grande) → ver Sesión 157. Número de WhatsApp: la empresa usa WhatsApp Business → se intentará coexistencia (si no, migrar el número a la API o línea nueva). Plan acordado: programar las fases 1→2→3 y que al final WhatsApp sea configuración en Chatwoot.
+> Detalle: `docs/CHATBOT-WHATSAPP-FACTIBILIDAD.md` (factibilidad) · Sesiones 157 y 157b abajo · specs `docs/superpowers/specs/2026-10-11-sinonimos-busqueda-design.md` y `2026-10-11-chatbot-bot-trinity-design.md`.
 
-## 🗓️ Sesión 157b (2026-10-11) — Chatbot Fase 2: el bot dentro de Trinity (EN PROGRESO, solo local)
+| Fase | Estado |
+|---|---|
+| 1. Sinónimos de búsqueda | ✅ **Desplegada en las 7.** En la grande: 98 reglas activas (3.433 productos), 8 pendientes con nota CONFIRMAR. |
+| 2. Bot dentro de Trinity | ✅ **Desplegado SOLO en la grande** (HEAD `5e97c27`), con `ANTHROPIC_API_KEY` de producción (`trinity-produccion`) ya en `/opt/Trinity/apps/api/.env` y verificada contra Anthropic. **Bot APAGADO** hasta que el usuario lo configure. Las otras 6 lo reciben inerte en su próximo deploy. |
+| 2b. Piloto "modo sugerencia manual" | ⏳ **Arranca 2026-10-12**: quien atiende el WhatsApp copia la pregunta del cliente en Chatbot → Probar bot, copia/pega la respuesta (y la foto) en WhatsApp y califica 👍/👎. % de acierto en Chatbot → Conversaciones. |
+| 2c. Venta cruzada | ⏳ Por programar (aprobado): "qué se compra junto" desde las facturas (con lift), lista de exclusión, y "¿qué estás construyendo?" para el cemento. Datos ya analizados: cabilla→cemento 54%/alambre 42%; esmeril→discos 24%; poceta→lavamanos 27%. |
+| 3. Chatwoot + WhatsApp | ⏳ Pendiente: servidor nuevo + verificación de Meta Business. |
+
+**Decisiones vigentes:** API directa de Anthropic (no OpenRouter; OpenRouter sigue solo para lectura de facturas con Gemini), modelo `claude-haiku-5-5` esfuerzo `low`. Los **USD 100/mes en créditos de API del plan Max** del usuario (org "Diego's Individual Org") pagan el bot (~$0.0005 por conversación); vencen cada mes y no cubren Claude Code. Número de WhatsApp: el actual (WhatsApp Business) por **coexistencia**; si no se puede, migrar ese número a la API (no hace falta comprar línea). Excepciones al −10% en divisas → "lo confirma un asesor". Bs solo si los piden. Foto automática si cotiza 1 producto. Cada respuesta cierra con una pregunta.
+
+**⏳ PENDIENTES (en orden):**
+1. **Usuario (2026-10-12):** en la grande → Chatbot → Configuración: encender el bot, llenar dirección/horario/delivery/pagos/aliados/info extra, agregar el **CEMENTO GRIS (42.5KG) SELLADO (B)/(D)** como producto de excepción en divisas (no está en la categoría CEMENTO). Probar él mismo en Probar bot.
+2. **Usuario:** Configuración → Permisos por rol → marcar **"Chatbot de ventas (probar y conversaciones)"** en el rol de quien atiende el WhatsApp (NO "Chatbot: configuración"). Enseñarle: **"Nueva conversación" por cada cliente**, Copiar/Copiar foto, 👍/👎.
+3. **Ventas:** revisar los 8 sinónimos pendientes (CONFIRMAR) y explicar qué son los productos con **(B)** y **(D)** (ej. el cemento que más se vende es "SELLADO (B)").
+4. **Programar venta cruzada** (Claude, cuando el usuario diga).
+5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
+6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
+
+## 🗓️ Sesión 157b (2026-10-11) — Chatbot Fase 2: el bot dentro de Trinity (piloto desplegado en la grande, bot apagado hasta configurarlo)
 
 > **Estado: programado y PROBADO CON IA REAL en local (2026-10-11)**: 17 conversaciones de la prueba de factibilidad, 0 datos inventados, escaladas correctas (horario, regateo, técnica), resistió la manipulación del precio, reconoció la foto del pego Maplex. ~3–4 s por respuesta, **~$0.0005 por conversación** (17 conv = $0.009). Créditos: el plan Max del usuario trae **USD 100/mes en créditos de API** (organización "Diego's Individual Org"; vencen cada mes; no cubren Claude Code) → cubren el bot de sobra. Clave local `trinity-local-pruebas` (90 días) en `apps/api/.env`. NO desplegar a propósito: si se despliega otra cosa, el bot viaja **apagado** (`ChatbotConfig.enabled=false`) y **sin clave** (`ANTHROPIC_API_KEY` no existe en los servidores) → no hace nada; solo ADMIN ve el menú CHATBOT. Spec `docs/superpowers/specs/2026-10-11-chatbot-bot-trinity-design.md` · plan `docs/superpowers/plans/2026-10-11-chatbot-bot-trinity.md`. Migración `20261011150000_chatbot` (aditiva; en `fix-schema.sql`). Dependencia nueva `@anthropic-ai/sdk` en el API.
 
