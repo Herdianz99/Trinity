@@ -38,8 +38,12 @@
 - Bloqueados para la venta: el bot los ve como "no disponible" y sin precio (no dice "no lo tenemos" ni manda a los aliados). Trato de "tú" siempre.
 - **Verificado en local:** typecheck API/Web; buscador con consultas reales (cemento, pego, plantas, cable); bot apagado → 409; clave inválida → 401 manejado (escala con `error_ia_401`, no se rompe el historial); navegador sin errores en las 4 pantallas.
 
+**🧪 PILOTO (modo sugerencia manual) — ✅ DESPLEGADO SOLO EN LA GRANDE (2026-10-11, HEAD `5e97c27`)**: migraciones `20261011150000_chatbot` + `20261011170000_chatbot_rating` aplicadas; sin `ANTHROPIC_API_KEY` en el servidor todavía (el bot no responde hasta que se cargue). Las otras 6 instancias recibirán el código en su próximo deploy (inerte: apagado, sin clave). Flujo: quien atiende el WhatsApp copia la pregunta del cliente en **Chatbot → Probar bot**, revisa la respuesta, usa **Copiar / Copiar foto** y la pega en WhatsApp, y califica 👍 (la usó tal cual) / 👎 (la corrigió). El % de acierto sale en **Chatbot → Conversaciones**. Permisos: `chatbot` (usar el bot) se le da al rol de quien atiende; `chatbot-config` (precios/textos/tope) solo ADMIN.
+- Ajustes por la prueba: el bot cierra cada respuesta con una pregunta ("¿Buscas algún otro producto?"); con 1 producto manda la foto sin preguntar; no escala por preguntas de precio; **se ignora un `escalar_a_asesor` que venga en paralelo con otras herramientas** (Haiku lo mandaba basura: motivo "prueba", resumen "PLACEHOLDER"). Regresión de 19 conversaciones: escaladas solo las correctas, ~$0.01 en total.
+- Siguiente: **venta cruzada por datos de facturas** (qué se compra junto, con "lift" para que cemento/tubo no salgan siempre; lista de exclusión; "¿qué estás construyendo?" para el cemento).
+
 **⏳ Pendientes:**
-1. ~~API key + prueba con IA real~~ ✅. Para producción: clave aparte `trinity-produccion` (solo en el `.env` del servidor) + límite de gasto en la consola.
+1. ~~API key + prueba con IA real~~ ✅. **Producción (grande):** clave `trinity-produccion` en `/opt/Trinity/apps/api/.env` + `pm2 restart trinity-api`; llenar Chatbot → Configuración (encender, textos, excepción cemento); activar sinónimos; dar el permiso `chatbot` al rol de quien atiende el WhatsApp. Para producción: clave aparte `trinity-produccion` (solo en el `.env` del servidor) + límite de gasto en la consola.
 2. Cargar en Configuración los textos fijos (dirección, horario, delivery, pagos, aliados) y las excepciones (categoría CEMENTO, etc.).
 3. Luego Fase 3: Chatwoot + WhatsApp (coexistencia con el número de WhatsApp Business actual).
 
