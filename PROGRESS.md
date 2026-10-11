@@ -43,7 +43,7 @@
 - Siguiente: **venta cruzada por datos de facturas** (qué se compra junto, con "lift" para que cemento/tubo no salgan siempre; lista de exclusión; "¿qué estás construyendo?" para el cemento).
 
 **⏳ Pendientes:**
-1. ~~API key + prueba con IA real~~ ✅. **Producción (grande):** clave `trinity-produccion` en `/opt/Trinity/apps/api/.env` + `pm2 restart trinity-api`; llenar Chatbot → Configuración (encender, textos, excepción cemento); activar sinónimos; dar el permiso `chatbot` al rol de quien atiende el WhatsApp. Para producción: clave aparte `trinity-produccion` (solo en el `.env` del servidor) + límite de gasto en la consola.
+1. ~~API key + prueba con IA real~~ ✅. **Producción (grande):** clave `trinity-produccion` en `/opt/Trinity/apps/api/.env` + `pm2 restart trinity-api`; llenar Chatbot → Configuración (encender, textos, excepción cemento); ~~activar sinónimos~~ ✅ (2026-10-11: 98 activas en la grande, 3.433 productos con sinónimos; quedan 8 pendientes con nota CONFIRMAR); dar el permiso `chatbot` al rol de quien atiende el WhatsApp. Para producción: clave aparte `trinity-produccion` (solo en el `.env` del servidor) + límite de gasto en la consola.
 2. Cargar en Configuración los textos fijos (dirección, horario, delivery, pagos, aliados) y las excepciones (categoría CEMENTO, etc.).
 3. Luego Fase 3: Chatwoot + WhatsApp (coexistencia con el número de WhatsApp Business actual).
 
