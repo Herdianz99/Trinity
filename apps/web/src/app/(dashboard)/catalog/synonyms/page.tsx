@@ -69,6 +69,9 @@ export default function SynonymsPage() {
 
   useEffect(() => {
     fetchRules();
+    // Desde Chatbot → Búsquedas sin resultado: ?nuevo=<palabra> abre una regla nueva con esa palabra.
+    const nuevo = new URLSearchParams(window.location.search).get('nuevo');
+    if (nuevo) setForm({ ...EMPTY_FORM, terms: [nuevo] });
     fetch('/api/proxy/categories')
       .then((r) => (r.ok ? r.json() : []))
       .then((roots: CategoryNode[]) => {

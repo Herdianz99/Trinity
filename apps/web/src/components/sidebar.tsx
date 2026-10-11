@@ -23,6 +23,9 @@ import {
   Layers,
   Tag,
   BookA,
+  Bot,
+  MessagesSquare,
+  SearchX,
   Truck,
   BoxesIcon,
   ArrowLeftRight,
@@ -137,6 +140,18 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Pedidos online', href: '/store/orders', icon: <ShoppingCart size={18} /> },
       { label: 'Personalización', href: '/store/personalizacion', icon: <Megaphone size={18} /> },
+    ],
+  },
+  {
+    key: 'chatbot',
+    label: 'CHATBOT',
+    icon: <Bot size={20} />,
+    permission: 'chatbot',
+    items: [
+      { label: 'Probar bot', href: '/chatbot', icon: <MessageCircle size={18} /> },
+      { label: 'Conversaciones', href: '/chatbot/conversations', icon: <MessagesSquare size={18} /> },
+      { label: 'Busquedas sin resultado', href: '/chatbot/missed', icon: <SearchX size={18} /> },
+      { label: 'Configuracion', href: '/chatbot/config', icon: <Settings size={18} /> },
     ],
   },
   {

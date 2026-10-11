@@ -83,6 +83,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PortalModule } from './modules/portal/portal.module';
 import { ClientOrdersModule } from './modules/client-orders/client-orders.module';
 import { SearchSynonymsModule } from './modules/search-synonyms/search-synonyms.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -168,6 +169,7 @@ import { SearchSynonymsModule } from './modules/search-synonyms/search-synonyms.
     PortalModule,
     ClientOrdersModule,
     SearchSynonymsModule,
+    ChatbotModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
 })

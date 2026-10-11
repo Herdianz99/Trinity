@@ -27,6 +27,21 @@
 > - No hay código de pruebas en Trinity: el usuario lo pidió así.
 > - **2026-10-11: Fase 1 (sinónimos) DESPLEGADA en las 7** (reglas pendientes en la grande) → ver Sesión 157. Número de WhatsApp: la empresa usa WhatsApp Business → se intentará coexistencia (si no, migrar el número a la API o línea nueva). Plan acordado: programar las fases 1→2→3 y que al final WhatsApp sea configuración en Chatwoot.
 
+## 🗓️ Sesión 157b (2026-10-11) — Chatbot Fase 2: el bot dentro de Trinity (EN PROGRESO, solo local)
+
+> **Estado: programado y probado SIN IA; falta probarlo con la API key real de Anthropic.** NO desplegar a propósito: si se despliega otra cosa, el bot viaja **apagado** (`ChatbotConfig.enabled=false`) y **sin clave** (`ANTHROPIC_API_KEY` no existe en los servidores) → no hace nada; solo ADMIN ve el menú CHATBOT. Spec `docs/superpowers/specs/2026-10-11-chatbot-bot-trinity-design.md` · plan `docs/superpowers/plans/2026-10-11-chatbot-bot-trinity.md`. Migración `20261011150000_chatbot` (aditiva; en `fix-schema.sql`). Dependencia nueva `@anthropic-ai/sdk` en el API.
+
+- **Decisiones:** API directa de Anthropic (no OpenRouter; OpenRouter sigue para la lectura de facturas con Gemini), modelo `claude-haiku-5-5`, esfuerzo `low`. Excepciones al −10% en divisas (cemento, etc.) → "lo confirma un asesor". Bs solo si lo piden (tasa guardada del día). Foto siempre si cotiza 1 producto. Textos fijos editables.
+- **API `modules/chatbot/`** (permiso nuevo `chatbot`, solo ADMIN por defecto): bucle manual de herramientas (máx. 6 vueltas) con `buscar_productos`, `enviar_foto`, `calcular_bolivares`, `escalar_a_asesor`; historial append-only (`ChatbotMessage.apiContent`, los bloques de razonamiento se reenvían intactos); tope de gasto mensual; error de IA / refusal / max_tokens → mensaje "te paso con un asesor" + conversación ESCALATED. Fotos del cliente → JPEG ≤1200px en Spaces `chatbot/<conv>/` y a la IA por URL.
+- **Buscador del bot** (mismo motor del POS + sinónimos): quita relleno ("precio del cemento" → "cemento"), 200 candidatos, orden: nombre que empieza por lo buscado → normal antes que (ROTO)/(SEGUNDA) → **más vendido** (nº de facturas 90 días) → disponible → relevancia. **(B) y (D) NO son variantes**: el cemento que se vende en la grande es "CEMENTO GRIS (42.5KG) SELLADO (B)" (3.801 facturas/90 días). Disponible = vendible − apartado en facturas en espera; nunca cantidades.
+- **Pantallas:** Chatbot → Probar bot (`/chatbot`: chat con fotos + panel "qué hizo el bot" con búsquedas/costo + buscador sin IA), Conversaciones, Búsquedas sin resultado (botón "Crear sinónimo" → `/catalog/synonyms?nuevo=`), Configuración.
+- **Verificado en local:** typecheck API/Web; buscador con consultas reales (cemento, pego, plantas, cable); bot apagado → 409; clave inválida → 401 manejado (escala con `error_ia_401`, no se rompe el historial); navegador sin errores en las 4 pantallas.
+
+**⏳ Pendientes:**
+1. **API key de Anthropic** (cuenta del usuario, saldo pequeño + límite de gasto en el panel) → `ANTHROPIC_API_KEY` en `apps/api/.env` local → probar las 17 conversaciones de la prueba de factibilidad.
+2. Cargar en Configuración los textos fijos (dirección, horario, delivery, pagos, aliados) y las excepciones (categoría CEMENTO, etc.).
+3. Luego Fase 3: Chatwoot + WhatsApp (coexistencia con el número de WhatsApp Business actual).
+
 ## 🗓️ Sesión 157 (2026-10-11) — Sinónimos de búsqueda (Fase 1 del chatbot)
 
 > **✅ DESPLEGADO Y VERIFICADO EN LAS 7 INSTANCIAS (2026-10-11, HEAD `b61698b`)**: migración aplicada y `searchVector` completo en las 7 BD. **106 reglas cargadas como PENDIENTES solo en la grande** (en las demás no hay reglas: el buscador solo cambia en las fracciones). Spec `docs/superpowers/specs/2026-10-11-sinonimos-busqueda-design.md`. Migración `20261011120000_search_synonyms` (aditiva; en `fix-schema.sql`).
