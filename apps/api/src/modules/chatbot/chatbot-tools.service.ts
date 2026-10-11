@@ -87,7 +87,7 @@ export class ChatbotToolsService {
       const like = `%${q}%`;
       const headLike = `${head}%`;
       rows = await this.prisma.$queryRaw<any[]>`
-        SELECT p.id, p.code, p.name, p."priceDetal", p."isOnSale", p."isService", p."categoryId",
+        SELECT p.id, p.code, p.name, p."priceDetal", p."isOnSale", p."isService", p."categoryId", p."saleBlocked",
           p."primaryImageMediumUrl", p."primaryImageThumbUrl", b.name AS brand, c.name AS category,
           COALESCE((SELECT SUM(s.quantity) FROM "Stock" s JOIN "Warehouse" w ON w.id = s."warehouseId"
                     WHERE s."productId" = p.id AND w."countsForSale" = true), 0)::float AS stock,
@@ -98,7 +98,9 @@ export class ChatbotToolsService {
         FROM "Product" p
         LEFT JOIN "Brand" b ON b.id = p."brandId"
         LEFT JOIN "Category" c ON c.id = p."categoryId"
-        WHERE p."isActive" AND NOT p."saleBlocked" AND p."priceDetal" > 0
+        -- Los bloqueados para la venta SI se devuelven (como no disponibles y sin precio): asi el bot dice
+        -- "no disponible por ahora" en vez de "no lo tenemos" (y no manda al cliente a los aliados).
+        WHERE p."isActive" AND p."priceDetal" > 0
           AND (p."searchVector" @@ to_tsquery('spanish', ${tsq})
                OR p.code ILIKE ${like} OR p.barcode ILIKE ${like})
         ORDER BY (lower(unaccent(p.name)) LIKE ${headLike}) DESC, rank DESC, p.name
@@ -108,7 +110,7 @@ export class ChatbotToolsService {
 
     const ranked = rows
       .map((r) => {
-        const available = r.isService || Number(r.stock) - (reserved[r.id] || 0) > 0;
+        const available = !r.saleBlocked && (r.isService || Number(r.stock) - (reserved[r.id] || 0) > 0);
         const name = normalizeWords(r.name).join(' ');
         return { r, available, variant: VARIANT_RE.test(r.name), starts: head.length >= 3 && name.startsWith(head) };
       })
@@ -133,8 +135,10 @@ export class ChatbotToolsService {
       nombre: r.name,
       marca: r.brand ?? null,
       categoria: r.category ?? null,
-      precio_bcv: `${usd(Number(r.priceDetal))} bcv`,
-      precio_divisas: this.divisaPrice(cfg, { id: r.id, categoryId: r.categoryId, priceDetal: Number(r.priceDetal) }),
+      precio_bcv: r.saleBlocked ? 'precio a confirmar con un asesor' : `${usd(Number(r.priceDetal))} bcv`,
+      precio_divisas: r.saleBlocked
+        ? 'precio a confirmar con un asesor'
+        : this.divisaPrice(cfg, { id: r.id, categoryId: r.categoryId, priceDetal: Number(r.priceDetal) }),
       disponible: available,
       en_oferta: !!r.isOnSale,
       variante: variant,
