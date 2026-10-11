@@ -25,3 +25,7 @@ export class SendChatbotMessageDto {
   @ApiPropertyOptional({ type: [String], description: 'Fotos como data URI (máx. 4)' })
   @IsOptional() @IsArray() @ArrayMaxSize(4) @IsString({ each: true }) images?: string[];
 }
+
+export class RateChatbotMessageDto {
+  @ApiPropertyOptional({ enum: [-1, 0, 1] }) @IsIn([-1, 0, 1]) rating: number;
+}

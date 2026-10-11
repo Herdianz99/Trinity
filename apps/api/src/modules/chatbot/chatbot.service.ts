@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
@@ -55,8 +55,9 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'escalar_a_asesor',
     description:
-      'Pasa la conversación a un asesor humano. Úsala en los casos indicados en tus instrucciones. ' +
-      'Después solo despídete; no sigas cotizando.',
+      'Pasa la conversación a un asesor humano, solo en los casos indicados en tus instrucciones. ' +
+      'NO la uses para preguntas de precio, disponibilidad o fotos: esas las respondes tú. ' +
+      'Después de usarla solo despídete; no sigas cotizando.',
     input_schema: {
       type: 'object',
       properties: {
@@ -150,13 +151,23 @@ export class ChatbotService {
           orderBy: { createdAt: 'asc' },
           select: {
             id: true, role: true, text: true, imageUrls: true, productImages: true, toolCalls: true,
-            inputTokens: true, outputTokens: true, cacheReadTokens: true, costUsd: true, createdAt: true,
+            inputTokens: true, outputTokens: true, cacheReadTokens: true, costUsd: true, rating: true, createdAt: true,
           },
         },
       },
     });
     if (!conv) throw new NotFoundException('Conversación no encontrada');
     return conv;
+  }
+
+  async rateMessage(id: string, rating: number) {
+    const msg = await this.prisma.chatbotMessage.findUnique({ where: { id }, select: { role: true } });
+    if (!msg || msg.role !== 'BOT') throw new NotFoundException('Respuesta del bot no encontrada');
+    return this.prisma.chatbotMessage.update({
+      where: { id },
+      data: { rating: rating === 0 ? null : rating, ratedAt: rating === 0 ? null : new Date() },
+      select: { id: true, rating: true },
+    });
   }
 
   async resetConversation(id: string) {
@@ -181,13 +192,15 @@ export class ChatbotService {
 
   async stats() {
     const since = this.monthStart();
-    const [cfg, cost, conversations, escalated] = await Promise.all([
+    const [cfg, cost, conversations, escalated, good, bad] = await Promise.all([
       this.getConfig(),
       this.monthCostUsd(),
       this.prisma.chatbotConversation.count({ where: { createdAt: { gte: since }, messages: { some: {} } } }),
       this.prisma.chatbotConversation.count({ where: { createdAt: { gte: since }, status: 'ESCALATED' } }),
+      this.prisma.chatbotMessage.count({ where: { createdAt: { gte: since }, rating: 1 } }),
+      this.prisma.chatbotMessage.count({ where: { createdAt: { gte: since }, rating: -1 } }),
     ]);
-    return { monthCostUsd: cost, monthlyBudgetUsd: cfg.monthlyBudgetUsd, conversations, escalated };
+    return { monthCostUsd: cost, monthlyBudgetUsd: cfg.monthlyBudgetUsd, conversations, escalated, ratedGood: good, ratedBad: bad };
   }
 
   async missedSearches(days = 30) {
@@ -199,6 +212,16 @@ export class ChatbotService {
       GROUP BY lower(trim(query))
       ORDER BY times DESC, "lastAt" DESC
       LIMIT 300`;
+  }
+
+  // Solo imagenes de NUESTRO CDN (evita usar el endpoint para descargar URLs arbitrarias).
+  async imagePng(url: string): Promise<Buffer> {
+    const base = this.spaces.cdnUrl('');
+    if (!url || !url.startsWith(base)) throw new BadRequestException('URL de imagen no permitida');
+    const res = await fetch(url);
+    if (!res.ok) throw new NotFoundException('No se pudo leer la imagen');
+    const buf = Buffer.from(await res.arrayBuffer());
+    return sharp(buf, { failOn: 'none' }).resize(1200, 1200, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
   }
 
   async testSearch(q: string) {
@@ -326,11 +349,17 @@ export class ChatbotService {
         if (res.stop_reason === 'tool_use') {
           newTurns.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
           const results: Anthropic.ToolResultBlockParam[] = [];
-          for (const block of res.content) {
-            if (block.type !== 'tool_use') continue;
+          const toolBlocks = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+          for (const block of toolBlocks) {
             let result: unknown;
             try {
-              result = await this.runTool(cfg, conversationId, block, out);
+              // Haiku a veces agrega en paralelo un escalar_a_asesor basura (motivo "prueba", resumen
+              // "PLACEHOLDER") junto a enviar_foto. Escalar de verdad es siempre una accion sola.
+              if (block.name === 'escalar_a_asesor' && toolBlocks.length > 1) {
+                result = { ignorado: true, nota: 'No se escaló: escalar debe ser la única acción del turno. Si de verdad corresponde, hazlo solo.' };
+              } else {
+                result = await this.runTool(cfg, conversationId, block, out);
+              }
             } catch (e) {
               this.logger.error(`Herramienta ${block.name} falló: ${(e as Error).message}`);
               result = { error: 'La herramienta falló. Pasa la conversación a un asesor.' };
@@ -407,7 +436,7 @@ export class ChatbotService {
     return {
       message: {
         id: msg.id, role: msg.role, text: msg.text, productImages: o.images ?? [], toolCalls: o.toolLog ?? [],
-        inputTokens: u.input, outputTokens: u.output, cacheReadTokens: u.cacheRead, costUsd: u.cost, createdAt: msg.createdAt,
+        inputTokens: u.input, outputTokens: u.output, cacheReadTokens: u.cacheRead, costUsd: u.cost, rating: null, createdAt: msg.createdAt,
       },
       status: conv.status,
       escalationReason: conv.escalationReason,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Bot, Send, Loader2, Plus, ImagePlus, X, Search, AlertTriangle, UserRound, RotateCcw, Wrench } from 'lucide-react';
+import { Bot, Send, Loader2, Plus, ImagePlus, X, Search, AlertTriangle, UserRound, RotateCcw, Wrench, Copy, Check, ThumbsUp, ThumbsDown, Image as ImageIcon } from 'lucide-react';
 
 interface ToolCall { name: string; input: any; result: any }
 interface ProductImage { code: string; name: string; url: string }
@@ -17,6 +17,7 @@ interface Msg {
   outputTokens?: number;
   cacheReadTokens?: number;
   costUsd?: number;
+  rating?: number | null;
   createdAt: string;
 }
 interface Conversation {
@@ -198,7 +199,7 @@ export default function ChatbotTestPage() {
               <p className="text-center text-slate-500 text-sm mt-10">Prueba con: &quot;buenas, precio del cemento&quot; o &quot;tienen cabilla de 3/8?&quot;</p>
             )}
             {conv?.messages.map((m) => (
-              <div key={m.id} className={`flex ${m.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id} className={`flex flex-col ${m.role === 'USER' ? 'items-end' : 'items-start'}`}>
                 <button
                   type="button"
                   onClick={() => m.role === 'BOT' && setSelected(m)}
@@ -230,6 +231,9 @@ export default function ChatbotTestPage() {
                     <span className="block text-[10px] text-slate-500 mt-1 text-right">{money(m.costUsd)}</span>
                   )}
                 </button>
+                {m.role === 'BOT' && !m.id.startsWith('tmp-') && (
+                  <BotActions msg={m} onRated={(rating) => setConv((c) => c && { ...c, messages: c.messages.map((x) => (x.id === m.id ? { ...x, rating } : x)) })} />
+                )}
               </div>
             ))}
             {sending && (
@@ -364,6 +368,61 @@ function ToolCallView({ call }: { call: ToolCall }) {
       ) : (
         <pre className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words">{JSON.stringify(call.result, null, 1)}</pre>
       )}
+    </div>
+  );
+}
+
+// Acciones del piloto: quien atiende el WhatsApp copia la respuesta (y la foto) para pegarla en la
+// conversacion real, y califica si la uso tal cual (1) o tuvo que corregirla (-1).
+function BotActions({ msg, onRated }: { msg: Msg; onRated: (rating: number | null) => void }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const flash = (k: string) => { setCopied(k); setTimeout(() => setCopied(null), 1500); };
+
+  async function copyText() {
+    await navigator.clipboard.writeText(msg.text);
+    flash('text');
+  }
+
+  async function copyImage(p: ProductImage) {
+    try {
+      const res = await fetch(`/api/proxy/chatbot/image.png?url=${encodeURIComponent(p.url)}`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      flash(p.code);
+    } catch {
+      window.open(p.url, '_blank'); // respaldo: abrir la foto para guardarla a mano
+    }
+  }
+
+  async function rate(value: number) {
+    const next = msg.rating === value ? 0 : value;
+    const res = await fetch(`/api/proxy/chatbot/messages/${msg.id}/rating`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: next }),
+    });
+    if (res.ok) onRated(next === 0 ? null : next);
+  }
+
+  const btn = 'flex items-center gap-1 px-2 py-1 rounded-md text-[11px] border border-slate-700/60 hover:bg-slate-700/60 transition-colors';
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-1 ml-1">
+      <button onClick={copyText} className={`${btn} text-slate-300`} title="Copiar el texto para pegarlo en WhatsApp">
+        {copied === 'text' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />} {copied === 'text' ? 'Copiado' : 'Copiar'}
+      </button>
+      {(msg.productImages ?? []).map((p) => (
+        <button key={p.code} onClick={() => copyImage(p)} className={`${btn} text-slate-300`} title={`Copiar la foto de ${p.name}`}>
+          {copied === p.code ? <Check size={12} className="text-emerald-400" /> : <ImageIcon size={12} />} {copied === p.code ? 'Foto copiada' : 'Copiar foto'}
+        </button>
+      ))}
+      <span className="w-px h-4 bg-slate-700 mx-0.5" />
+      <button onClick={() => rate(1)} title="La usé tal cual" className={`${btn} ${msg.rating === 1 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'text-slate-400'}`}>
+        <ThumbsUp size={12} />
+      </button>
+      <button onClick={() => rate(-1)} title="Tuve que corregirla" className={`${btn} ${msg.rating === -1 ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'text-slate-400'}`}>
+        <ThumbsDown size={12} />
+      </button>
     </div>
   );
 }

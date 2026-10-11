@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { ModuleGuard } from '../../common/guards/module.guard';
-import { SendChatbotMessageDto, UpdateChatbotConfigDto } from './dto/chatbot.dto';
+import { RateChatbotMessageDto, SendChatbotMessageDto, UpdateChatbotConfigDto } from './dto/chatbot.dto';
 import { ChatbotService } from './chatbot.service';
 
 // Chatbot de ventas (Fase 2): configuracion, pantalla de prueba y conversaciones.
@@ -21,7 +22,9 @@ export class ChatbotController {
     return this.service.getConfigView();
   }
 
+  // Cambiar precios/textos/tope: permiso aparte (quien solo usa el bot en el piloto no lo tiene).
   @Patch('config')
+  @RequireModule('chatbot-config')
   updateConfig(@Body() dto: UpdateChatbotConfigDto) {
     return this.service.updateConfig(dto);
   }
@@ -42,6 +45,15 @@ export class ChatbotController {
     return this.service.testSearch(q ?? '');
   }
 
+  // Foto de producto en PNG por el mismo dominio: el CDN no permite CORS, y el portapapeles del
+  // navegador solo acepta PNG. Asi quien atiende el WhatsApp puede copiar y pegar la foto.
+  @Get('image.png')
+  async imagePng(@Query('url') url: string, @Res() res: Response) {
+    const png = await this.service.imagePng(url);
+    res.set({ 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'private, max-age=3600' });
+    res.end(png);
+  }
+
   @Post('conversations')
   create(@CurrentUser('id') userId: string) {
     return this.service.createTestConversation(userId);
@@ -60,6 +72,12 @@ export class ChatbotController {
   @Post('conversations/:id/messages')
   send(@Param('id') id: string, @Body() dto: SendChatbotMessageDto) {
     return this.service.reply(id, dto.text ?? '', dto.images ?? []);
+  }
+
+  // Piloto: 1 = la respuesta se uso tal cual, -1 = hubo que corregirla, 0 = quitar calificacion.
+  @Patch('messages/:id/rating')
+  rate(@Param('id') id: string, @Body() dto: RateChatbotMessageDto) {
+    return this.service.rateMessage(id, dto.rating);
   }
 
   @Post('conversations/:id/reset')

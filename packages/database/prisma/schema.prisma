@@ -3141,6 +3141,8 @@ model ChatbotMessage {
   inputTokens     Int                 @default(0)
   outputTokens    Int                 @default(0)
   cacheReadTokens Int                 @default(0)
+  rating          Int?                // piloto: 1 = la uso tal cual, -1 = la corrigio
+  ratedAt         DateTime?
   costUsd         Float               @default(0)
   createdAt       DateTime            @default(now())
 

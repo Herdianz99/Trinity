@@ -24,7 +24,7 @@ interface Detail {
   costUsd: number;
   messages: { id: string; role: string; text: string; imageUrls: string[]; productImages: { code: string; name: string; url: string }[] | null; costUsd: number; createdAt: string }[];
 }
-interface Stats { monthCostUsd: number; monthlyBudgetUsd: number; conversations: number; escalated: number }
+interface Stats { monthCostUsd: number; monthlyBudgetUsd: number; conversations: number; escalated: number; ratedGood: number; ratedBad: number }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   BOT: { label: 'Bot', cls: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
@@ -69,11 +69,15 @@ export default function ChatbotConversationsPage() {
       </div>
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
           <StatCard label="Conversaciones del mes" value={String(stats.conversations)} />
           <StatCard label="Pasadas a asesor" value={String(stats.escalated)} />
           <StatCard label="Gasto del mes" value={`$${stats.monthCostUsd.toFixed(2)}`} />
-          <StatCard label="Tope mensual" value={`$${stats.monthlyBudgetUsd.toFixed(2)}`} />
+          <StatCard label="Tope mensual" value={`${stats.monthlyBudgetUsd.toFixed(2)}`} />
+          <StatCard
+            label={`Acierto del bot (${stats.ratedGood + stats.ratedBad} calificadas)`}
+            value={stats.ratedGood + stats.ratedBad > 0 ? `${Math.round((100 * stats.ratedGood) / (stats.ratedGood + stats.ratedBad))}% 👍` : '—'}
+          />
         </div>
       )}
 

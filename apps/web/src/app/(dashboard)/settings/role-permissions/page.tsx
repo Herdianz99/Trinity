@@ -64,7 +64,8 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'fiscal', label: 'Documentos Fiscales' },
       { key: 'users', label: 'Gestion de Usuarios' },
       { key: 'settings', label: 'Configuracion' },
-      { key: 'chatbot', label: 'Chatbot de ventas' },
+      { key: 'chatbot', label: 'Chatbot de ventas (probar y conversaciones)' },
+      { key: 'chatbot-config', label: 'Chatbot: configuracion (precios, textos, tope)' },
     ],
   },
   {
