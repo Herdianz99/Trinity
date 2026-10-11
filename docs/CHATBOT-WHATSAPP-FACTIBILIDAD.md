@@ -227,10 +227,10 @@ Son la pieza más importante. Sin ellos, ningún modelo encuentra la mitad de lo
 1. Iniciar la **verificación de Meta Business**. Es lo que más tarda.
 2. Decidir el **número de WhatsApp** del bot.
 3. Designar al **encargado de sinónimos** (alguien de ventas que conozca el catálogo).
-4. Entregar los **textos fijos**: dirección, horario, zonas y condiciones de delivery.
+4. Entregar los **textos fijos**: dirección, horario, zonas y condiciones de delivery (serán editables desde Trinity en la Fase 2).
 5. Entregar la **lista de productos con excepción** en el precio en divisas, y el precio en divisas del cemento.
-6. Confirmar lo de los **zunchos** (Trinity tenía stock y el asesor dijo que no).
-7. **Rotar la API key de OpenRouter**: la usada en la prueba quedó expuesta en el chat.
+~~6. Confirmar lo de los zunchos~~ (descartado por el usuario, 2026-10-11).
+~~7. Rotar la API key de OpenRouter~~ ✅ hecho (2026-10-11).
 
 ## 11. Riesgos y cuidados
 
