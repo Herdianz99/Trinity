@@ -290,7 +290,14 @@ export class ChatbotService {
         const img = await this.tools.productImage(String(input.codigo ?? ''));
         if (!img) return { error: 'Ese producto no tiene foto. Dilo, o pasa a un asesor si el cliente la necesita.' };
         if (!out.images.some((i) => i.code === img.code)) out.images.push(img);
-        return { ok: true, enviada: img.name };
+        const extra = await this.tools.crossSellFor(cfg, conversationId, img.code);
+        return {
+          ok: true,
+          enviada: img.name,
+          ...(extra.length
+            ? { ofrecer_tambien: extra, nota: 'Si estás cotizando este producto, ofrece también estos complementos con su precio en esta misma respuesta.' }
+            : {}),
+        };
       }
       case 'calcular_bolivares':
         return this.tools.toBolivares(

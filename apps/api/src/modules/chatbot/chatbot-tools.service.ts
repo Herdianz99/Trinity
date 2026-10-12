@@ -5,7 +5,7 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
 import { caracasDateKey } from '../../common/timezone';
 import { VARIANT_RE } from './cross-sell-utils';
-import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
+import { ChatbotCrossSellService, CrossSellCandidate } from './chatbot-cross-sell.service';
 
 const MAX_RESULTS = 10;
 const CANDIDATES = 200;
@@ -158,17 +158,7 @@ export class ChatbotToolsService {
       variante: variant,
       tiene_foto: !!(r.primaryImageMediumUrl || r.primaryImageThumbUrl),
       ...(qty ? { alcanza: enough } : {}),
-      ...(suggestions.get(r.id)?.length
-        ? {
-            ofrecer_tambien: suggestions.get(r.id)!.map((s) => ({
-              codigo: s.code,
-              nombre: s.name,
-              precio_bcv: `${usd(s.priceDetal)} bcv`,
-              precio_divisas: this.divisaPrice(cfg, { id: s.productId, categoryId: s.categoryId, priceDetal: s.priceDetal }),
-              regla_id: s.ruleId,
-            })),
-          }
-        : {}),
+      ...(suggestions.get(r.id)?.length ? { ofrecer_tambien: this.formatOffers(cfg, suggestions.get(r.id)!) } : {}),
     }));
     return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, productos };
   }
@@ -190,6 +180,28 @@ export class ChatbotToolsService {
     const pedido = cantidad && cantidad > 0 ? `pidió ${cantidad}, ` : '';
     return `[Stock en sistema, NO se le dijo al cliente] ${p.code} ${p.name}: ${pedido}hay ${free} disponibles`
       + `${reserved ? `, ${r2(reserved)} apartadas en facturas en espera` : ''}.`;
+  }
+
+  private formatOffers(cfg: ChatbotConfig, list: CrossSellCandidate[]): NonNullable<BotProduct['ofrecer_tambien']> {
+    return list.map((s) => ({
+      codigo: s.code,
+      nombre: s.name,
+      precio_bcv: `${usd(s.priceDetal)} bcv`,
+      precio_divisas: this.divisaPrice(cfg, { id: s.productId, categoryId: s.categoryId, priceDetal: s.priceDetal }),
+      regla_id: s.ruleId,
+    }));
+  }
+
+  // Venta cruzada de UN producto. Se usa al enviar su foto (es cuando el bot lo cotiza): asi el complemento le
+  // llega justo ahi, aunque el cliente lo haya elegido de una lista de mensajes atras.
+  async crossSellFor(cfg: ChatbotConfig, conversationId: string | null, codigo: string) {
+    const p = await this.prisma.product.findFirst({
+      where: { code: (codigo || '').trim(), isActive: true, saleBlocked: false },
+      select: { id: true, name: true },
+    });
+    if (!p) return [];
+    const list = (await this.crossSell.suggestFor(conversationId, [{ id: p.id, name: p.name }])).get(p.id) ?? [];
+    return this.formatOffers(cfg, list);
   }
 
   async productImage(codigo: string): Promise<ProductImageOut | null> {

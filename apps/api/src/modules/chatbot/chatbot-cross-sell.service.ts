@@ -241,8 +241,9 @@ export class ChatbotCrossSellService {
     ];
     const seen = new Set<string>();
     for (const t of logs) {
-      if (t.name !== 'buscar_productos') continue;
-      const productos = ((t.result as any)?.productos ?? []) as { ofrecer_tambien?: { codigo: string; nombre: string; regla_id: string }[] }[];
+      // buscar_productos trae ofertas por producto; enviar_foto las trae sueltas en el resultado.
+      const res = (t.result ?? {}) as any;
+      const productos = [...(res.productos ?? []), res] as { ofrecer_tambien?: { codigo: string; nombre: string; regla_id: string }[] }[];
       for (const p of productos) {
         for (const o of p.ofrecer_tambien ?? []) {
           if (seen.has(o.regla_id) || !wasOffered(o.nombre, finalText)) continue;

@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MessagesSquare, Loader2, UserRound, Bot, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { MessagesSquare, Loader2, UserRound, Bot, X, MessageCircle } from 'lucide-react';
+
+// Misma clave que usa Probar bot (/chatbot) para recordar la conversacion abierta.
+const TEST_CONVERSATION_KEY = 'chatbot-test-conversation';
 
 interface Row {
   id: string;
@@ -40,6 +44,13 @@ export default function ChatbotConversationsPage() {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const router = useRouter();
+
+  // Retomar una conversacion de prueba en Probar bot (p. ej. el cliente A vuelve a escribir despues del cliente B).
+  function continueConversation(id: string) {
+    localStorage.setItem(TEST_CONVERSATION_KEY, id);
+    router.push('/chatbot');
+  }
 
   useEffect(() => { document.title = 'Conversaciones del chatbot | Trinity ERP'; }, []);
 
@@ -97,24 +108,35 @@ export default function ChatbotConversationsPage() {
               <th className="text-center px-4 py-3 font-medium">Mensajes</th>
               <th className="text-left px-4 py-3 font-medium">Estado</th>
               <th className="text-right px-4 py-3 font-medium">Costo</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
+              <tr><td colSpan={7} className="text-center py-12"><Loader2 className="animate-spin text-green-500 mx-auto" size={28} /></td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-12 text-slate-500">No hay conversaciones</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-slate-500">No hay conversaciones</td></tr>
             ) : rows.map((r) => (
               <tr key={r.id} onClick={() => open(r.id)} className="border-b border-slate-700/30 hover:bg-slate-800/40 cursor-pointer">
                 <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{fmtDate(r.updatedAt)}</td>
                 <td className="px-4 py-3 text-slate-400">{r.channel === 'TEST' ? `Prueba${r.createdBy ? ` · ${r.createdBy.name}` : ''}` : r.channel}</td>
-                <td className="px-4 py-3 text-white max-w-md truncate">{r.firstMessage || '—'}</td>
+                <td className="px-4 py-3 text-white max-w-[16rem] truncate">{r.firstMessage || '—'}</td>
                 <td className="px-4 py-3 text-center text-slate-400">{r.messageCount}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs border ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
                   {r.escalationReason && <span className="ml-2 text-xs text-slate-500">{r.escalationReason}</span>}
                 </td>
                 <td className="px-4 py-3 text-right text-slate-300">${r.costUsd.toFixed(4)}</td>
+                <td className="px-4 py-3 text-right">
+                  {r.channel === 'TEST' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); continueConversation(r.id); }}
+                      className="btn-secondary !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <MessageCircle size={13} /> Continuar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -129,7 +151,14 @@ export default function ChatbotConversationsPage() {
                 <h2 className="text-white font-semibold">Conversación</h2>
                 <p className="text-xs text-slate-500">Costo total ${detail.costUsd.toFixed(4)}</p>
               </div>
-              <button onClick={() => setDetail(null)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                {rows.find((r) => r.id === detail.id)?.channel === 'TEST' && (
+                  <button onClick={() => continueConversation(detail.id)} className="btn-secondary !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5">
+                    <MessageCircle size={13} /> Continuar
+                  </button>
+                )}
+                <button onClick={() => setDetail(null)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              </div>
             </div>
             {detail.escalationSummary && (
               <div className="mx-5 mt-4 p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-200 text-xs">
