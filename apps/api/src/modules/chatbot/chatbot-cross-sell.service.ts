@@ -10,7 +10,7 @@ const SOURCE_PRODUCTS = 10;  // productos DISPONIBLES del resultado que llevan s
 const MAX_PER_PRODUCT = 2;   // maximo de complementos por producto cotizado
 const RULES_TTL_MS = 60_000;
 
-type ActiveRule = { id: string; trigger: string; offerTerms: string[]; excludeTerms: string[] };
+type ActiveRule = { id: string; trigger: string; offerTerms: string[]; excludeTerms: string[]; useMeasure: boolean };
 type CandRow = { id: string; name: string; stock: number };
 type Availability = { measure: string | null; count: number };
 
@@ -34,7 +34,7 @@ export class ChatbotCrossSellService {
     if (this.cache && Date.now() - this.cache.at < RULES_TTL_MS) return this.cache.rules;
     const rules = await this.prisma.chatbotCrossSellRule.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, trigger: true, offerTerms: true, excludeTerms: true },
+      select: { id: true, trigger: true, offerTerms: true, excludeTerms: true, useMeasure: true },
       orderBy: { createdAt: 'asc' },
     });
     this.cache = { at: Date.now(), rules };
@@ -113,10 +113,11 @@ export class ChatbotCrossSellService {
     const memo = new Map<string, Availability | null>();
     for (const p of src) {
       const list: CrossSellOffer[] = [];
-      const measures = extractMeasures(p.name);
+      const productMeasures = extractMeasures(p.name);
       for (const ruleId of matches.get(p.id) ?? []) {
         if (offered.has(ruleId) || list.length >= MAX_PER_PRODUCT) continue;
         const rule = byId.get(ruleId)!;
+        const measures = rule.useMeasure ? productMeasures : new Set<string>();
         for (const term of rule.offerTerms) {
           if (list.length >= MAX_PER_PRODUCT) break;
           const key = `${rule.trigger}|${term}|${[...measures].sort().join(',')}`;
@@ -148,7 +149,7 @@ export class ChatbotCrossSellService {
     for (const s of sample) {
       const offers: (Availability & { term: string })[] = [];
       for (const term of dto.offerTerms.slice(0, MAX_PER_PRODUCT)) {
-        const av = await this.termAvailability(term, dto.trigger, extractMeasures(s.name), reserved);
+        const av = await this.termAvailability(term, dto.trigger, dto.useMeasure === false ? new Set<string>() : extractMeasures(s.name), reserved);
         if (av) offers.push({ term, ...av });
       }
       examples.push({ product: { code: s.code, name: s.name, priceDetal: Number(s.priceDetal) }, offers });
@@ -189,7 +190,10 @@ export class ChatbotCrossSellService {
     const key = ruleKey(trigger, offerTerms);
     await this.assertFreeKey(key);
     const rule = await this.prisma.chatbotCrossSellRule.create({
-      data: { key, trigger, offerTerms, excludeTerms: this.clean(dto.excludeTerms), status: dto.status ?? 'PAUSED', createdById: userId },
+      data: {
+        key, trigger, offerTerms, excludeTerms: this.clean(dto.excludeTerms), useMeasure: dto.useMeasure ?? true,
+        status: dto.status ?? 'PAUSED', createdById: userId,
+      },
     });
     this.invalidate();
     return rule;
@@ -208,6 +212,7 @@ export class ChatbotCrossSellService {
       data: {
         key, trigger, offerTerms,
         ...(dto.excludeTerms !== undefined ? { excludeTerms: this.clean(dto.excludeTerms) } : {}),
+        ...(dto.useMeasure !== undefined ? { useMeasure: dto.useMeasure } : {}),
         ...(dto.status ? { status: dto.status } : {}),
       },
     });

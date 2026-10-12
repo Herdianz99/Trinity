@@ -5,15 +5,15 @@ import { Shuffle, Plus, Loader2, Pencil, Trash2, X, FlaskConical, RefreshCw, Che
 
 type Status = 'ACTIVE' | 'PAUSED' | 'SUGGESTED' | 'DISMISSED';
 interface Rule {
-  id: string; trigger: string; offerTerms: string[]; excludeTerms: string[]; status: Status;
+  id: string; trigger: string; offerTerms: string[]; excludeTerms: string[]; useMeasure: boolean; status: Status;
   statsBaseCount: number | null; statsPairPct: number | null; statsLift: number | null; timesOffered: number;
 }
 interface Pick { code: string; name: string; priceDetal: number }
 interface Offer { term: string; measure: string | null; count: number }
 interface TestResult { matchCount: number; examples: { product: Pick; offers: Offer[] }[] }
-interface FormState { id: string | null; trigger: string; offer1: string; offer2: string; exclude: string; fromSuggestion: boolean }
+interface FormState { id: string | null; trigger: string; offer1: string; offer2: string; exclude: string; useMeasure: boolean; fromSuggestion: boolean }
 
-const EMPTY_FORM: FormState = { id: null, trigger: '', offer1: '', offer2: '', exclude: '', fromSuggestion: false };
+const EMPTY_FORM: FormState = { id: null, trigger: '', offer1: '', offer2: '', exclude: '', useMeasure: true, fromSuggestion: false };
 const fmt = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -56,12 +56,12 @@ export default function CrossSellPage() {
   function openForm(r?: Rule, fromSuggestion = false) {
     setTest(null);
     setForm(r
-      ? { id: r.id, trigger: r.trigger, offer1: r.offerTerms[0] || '', offer2: r.offerTerms[1] || '', exclude: r.excludeTerms.join(', '), fromSuggestion }
+      ? { id: r.id, trigger: r.trigger, offer1: r.offerTerms[0] || '', offer2: r.offerTerms[1] || '', exclude: r.excludeTerms.join(', '), useMeasure: r.useMeasure, fromSuggestion }
       : EMPTY_FORM);
   }
 
   function formBody(f: FormState) {
-    return { trigger: f.trigger.trim(), offerTerms: [f.offer1, f.offer2].map((x) => x.trim()).filter(Boolean), excludeTerms: splitList(f.exclude) };
+    return { trigger: f.trigger.trim(), offerTerms: [f.offer1, f.offer2].map((x) => x.trim()).filter(Boolean), excludeTerms: splitList(f.exclude), useMeasure: f.useMeasure };
   }
 
   async function runTest() {
@@ -161,7 +161,10 @@ export default function CrossSellPage() {
               ) : own.map((r) => (
                 <tr key={r.id} className="border-b border-slate-700/30">
                   <td className="px-4 py-3 text-white font-medium">{r.trigger}</td>
-                  <td className="px-4 py-3 text-slate-200">{r.offerTerms.join(' · ')}</td>
+                  <td className="px-4 py-3 text-slate-200">
+                    {r.offerTerms.join(' · ')}
+                    {r.useMeasure && <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400">misma medida</span>}
+                  </td>
                   <td className="px-4 py-3 text-slate-400">{r.excludeTerms.join(', ') || '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <button disabled={busy} onClick={() => setStatus(r, r.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE')}
@@ -240,6 +243,13 @@ export default function CrossSellPage() {
                 <label className="text-xs text-slate-400 mb-1 block">No aplicar si el producto dice… (opcional, separado por comas)</label>
                 <input value={form.exclude} onChange={(e) => setForm({ ...form, exclude: e.target.value })} className="input-field !py-2 text-sm" placeholder="brocha, rodillo" />
               </div>
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer">
+                <input type="checkbox" checked={form.useMeasure} onChange={(e) => setForm({ ...form, useMeasure: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 accent-indigo-500" />
+                <span>
+                  <span className="text-sm text-slate-200 block">Usar la medida del producto</span>
+                  <span className="text-xs text-slate-500">Ej.: esmeril de 4-1/2&quot; → &quot;discos de corte para 4-1/2&quot;&quot;. Apágalo si la medida no aplica al complemento (un taladro de 1/2&quot; usa mechas de cualquier medida).</span>
+                </span>
+              </label>
             </div>
 
             <div className="mt-4">

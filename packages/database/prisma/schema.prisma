@@ -3128,6 +3128,9 @@ model ChatbotCrossSellRule {
   trigger        String
   offerTerms     String[]            @default([])
   excludeTerms   String[]            @default([])
+  // Mencionar la medida del producto cotizado ("discos de corte para 4-1/2"). Apagado cuando la medida no aplica
+  // al complemento (taladro 1/2" = capacidad del mandril; le sirven mechas de cualquier medida).
+  useMeasure     Boolean             @default(true)
   status         CrossSellRuleStatus @default(PAUSED)
   statsBaseCount Int?
   statsPairPct   Float?
