@@ -40,6 +40,14 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📊 Piloto del chatbot — día 1 en la grande (2026-10-12, solo lectura)
+
+- **Uso:** 59 conversaciones, 74 mensajes de clientes (todas del usuario "Marketing"), 7 con foto; picos 10-11 AM y 4-5 PM. Respuesta promedio 7,9 s. Costo del día **$0,11** (~$0,002 por conversación). Solo 1 escalada (foto no reconocida).
+- **Acierto:** 56 👍 / 9 👎 / 9 sin calificar → **86%** de las calificadas.
+- **Búsquedas:** 332, de ellas **124 sin resultado (37%)**, 111 distintas.
+- **Causas de los 👎 / sin resultado:** (1) **nombres distintos** a los del inventario: "poseta" (existen 118 POCETA → el bot dijo "no tenemos posetas"), "sercha" (CERCHA), "tubo cuadrado" (TUBO CUAD.), "tubo 2x1" (nombres con "2 X 1"); (2) **palabras de relleno** que rompen la búsqueda (todas las palabras son obligatorias): "cable **nro** 12", "clavo 2 **pulgadas**", "**saco** estuco gris", "electrodos **kilo**", "manguera 3/4 **100mts**"; (3) el bot **cambió la palabra** del cliente: "pegó" → pegamento, "epgo" → epoxi, "sercha" → serrucho; (4) **no lo vendemos**: alfajor, melamina, manto flex, lipotex, suncho, lámina "prepintada", curva PVC.
+- **Propuesta (pendiente de aprobación del usuario):** sinónimos (poseta, sercha, cuadrado/cuad, rectangular/rect…); más relleno en el bot (nro, numero, pulgada(s), saco(s), kilo(s)); normalizar "2x1" → "2 x 1" en el buscador (beneficia también al POS); reforzar en el prompt "busca primero la palabra tal cual, no la corrijas".
+
 ## 🗓️ Sesión 159 (2026-10-12) — Chatbot: venta cruzada
 
 > **Estado: ✅ DESPLEGADA EN LA GRANDE (2026-10-12, commit `352cc8d`)**; 5 reglas iniciales en PAUSED en producción (el usuario las activa en Chatbot → Venta cruzada). Spec `docs/superpowers/specs/2026-10-12-chatbot-venta-cruzada-design.md` · plan `docs/superpowers/plans/2026-10-12-chatbot-venta-cruzada.md`. Migración `20261012160000_chatbot_cross_sell` (aditiva; en `fix-schema.sql`; siembra 5 reglas PAUSED: esmeril, taladro, pintura, cabilla, poceta).
