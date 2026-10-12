@@ -43,6 +43,9 @@ const FILLER = new Set([
   'quiero', 'quisiera', 'me', 'por', 'favor', 'porfa', 'info', 'informacion', 'disponible', 'disponibilidad',
   'buenas', 'buenos', 'dias', 'tardes', 'noches', 'hola', 'saludos', 'amigo', 'amiga', 'del', 'de', 'la', 'el',
   'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'que', 'en', 'para', 'con', 'es', 'son', 'su', 'sus',
+  // Piloto dia 1: unidades y "numero" que el cliente agrega y los nombres no traen ("cable nro 12",
+  // "clavo 2 pulgadas", "saco de estuco", "electrodos kilo", "tornillos 100 unidades").
+  'nro', 'numero', 'num', 'pulgada', 'pulgadas', 'pulg', 'saco', 'sacos', 'kilo', 'kilos', 'unidad', 'unidades',
 ]);
 
 function normalizeWords(s: string): string[] {
@@ -51,7 +54,8 @@ function normalizeWords(s: string): string[] {
 
 // Quita el relleno; si no queda nada, deja la consulta como vino.
 export function cleanBotQuery(raw: string): string {
-  const words = normalizeWords(raw);
+  // "tubos de 3 por 3" -> "3x3" (medida; "por" es relleno y si se quita queda "3 3").
+  const words = normalizeWords((raw || '').replace(/(\d+)\s+por\s+(\d+)/gi, '$1x$2'));
   const kept = words.filter((w) => !FILLER.has(w));
   return (kept.length ? kept : words).join(' ');
 }

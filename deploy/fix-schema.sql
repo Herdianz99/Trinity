@@ -3340,3 +3340,16 @@ INSERT INTO "ChatbotCrossSellRule" ("id", "key", "trigger", "offerTerms", "exclu
   (gen_random_uuid()::text, 'cabilla|alambre', 'cabilla', ARRAY['alambre'], ARRAY[]::TEXT[], true, 'PAUSED', CURRENT_TIMESTAMP),
   (gen_random_uuid()::text, 'poceta|lavamanos', 'poceta', ARRAY['lavamanos'], ARRAY[]::TEXT[], true, 'PAUSED', CURRENT_TIMESTAMP)
 ON CONFLICT ("key") DO NOTHING;
+
+-- ===== Buscador: medidas 2x1 (20261012200000_search_dimensions) =====
+-- (solo la funcion; el reindexado lo hace la migracion)
+CREATE OR REPLACE FUNCTION product_search_normalize(input TEXT)
+RETURNS TEXT AS $$
+  SELECT regexp_replace(
+    regexp_replace(
+      regexp_replace(unaccent(lower(COALESCE(input, ''))), '([0-9]+)/([0-9]+)', '\1 \2 \1f\2', 'g'),
+      '\m([0-9]+) *x *([0-9]+)\M', '\1 \2 \1x\2', 'g'
+    ),
+    '[^a-z0-9 ]+', ' ', 'g'
+  );
+$$ LANGUAGE sql STABLE;
