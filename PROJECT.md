@@ -99,6 +99,11 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 159 (2026-10-12) — Chatbot: venta cruzada
+- Modelos `ChatbotCrossSellRule` (trigger, offerTerms[1-2], excludeTerms, status ACTIVE/PAUSED/SUGGESTED/DISMISSED, stats del análisis, timesOffered, `key` única normalizada) y `ChatbotCrossSellOffer` (conversación+regla única); `ChatbotConfig.crossSellAnalyzedAt`. Migración `20261012160000_chatbot_cross_sell`.
+- `cross-sell-utils.ts` (puras: normalizeTerm, ruleKey, extractMeasures/sharesMeasure, firstSignificantWord, wasOffered, countPairs, selectSuggestions, VARIANT_RE) · `ChatbotCrossSellService` (suggestFor, testRule, CRUD con caché 60 s, recordOffered) · `ChatbotCrossSellAnalysisService` (cron lunes 3 AM). `buscar_productos` devuelve `ofrecer_tambien`; sección VENTA CRUZADA en el prompt.
+- Endpoints (`chatbot-config`): `GET/POST /chatbot/cross-sell/rules`, `PATCH/DELETE /rules/:id` (activar/descartar = PATCH status), `POST /rules/test`, `POST /cross-sell/analyze`. Web `/chatbot/cross-sell`.
+
 #### Sesión 158b (2026-10-12) — Cliente: pedido mínimo del portal + ubicación GPS; catálogo "Condiciones BCV"
 - Migración `20261012120000_customer_min_order_location`: `Customer.minOrderUsd` (default 0), `latitude`, `longitude`, `locationAccuracyM`, `locationUpdatedAt`.
 - `PortalService.assertMinOrder()` en crear/editar pedido (total a precio de lista ≥ mínimo); `GET /portal/me` devuelve `customer.minOrderUsd`. `CustomersService.locationData()` valida y sella la fecha de la ubicación. `client-orders` findOne trae lat/lng.
