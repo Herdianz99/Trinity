@@ -122,7 +122,8 @@ peor es que el bot vuelva a recibir la sugerencia y el prompt le dice que no la 
 - `GET /chatbot/cross-sell/rules?status=` · `POST` · `PATCH /:id` · `DELETE /:id`
 - `POST /chatbot/cross-sell/rules/test` — body `{trigger, offerTerms, excludeTerms}` → nº de productos que
   dispararían la regla + hasta 8 ejemplos `producto → sugerencia (precio)`. No guarda nada.
-- `POST /chatbot/cross-sell/suggestions/:id/activate` (pasa a ACTIVE, admite edición) · `.../dismiss`
+- Activar una sugerencia = `PATCH /rules/:id` con `status: ACTIVE` (y la edición que haga el usuario); descartar = `PATCH` con `status: DISMISSED`.
+- `GET /rules` devuelve también `analyzedAt` (fecha del último análisis, `ChatbotConfig.crossSellAnalyzedAt`).
 - `POST /chatbot/cross-sell/analyze` — "Recalcular ahora".
 
 ## 4. Análisis semanal
@@ -142,7 +143,7 @@ endpoint manual.
    sus términos a ofrecer (no se pisan reglas del usuario ni se reviven descartadas; sí se refrescan las
    stats de la existente). Las `SUGGESTED` que ya no cumplen se borran.
 
-Todo en SQL agregado (no se cargan las facturas en memoria). Umbrales como constantes en el servicio.
+Se cargan solo los pares distintos (factura, producto) de la ventana y los nombres de esos productos; el conteo de pares se hace en memoria con funciones puras testeables (`countPairs` / `selectSuggestions`). Umbrales como constantes en el servicio. Al terminar se guarda `ChatbotConfig.crossSellAnalyzedAt`.
 
 ## 5. Pantalla `/chatbot/cross-sell` ("Venta cruzada")
 
