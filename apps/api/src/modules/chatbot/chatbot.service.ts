@@ -8,6 +8,7 @@ import { SpacesService } from '../product-images/spaces.service';
 import { parseDataUri } from '../product-images/image-processing';
 import { caracasDayStart, caracasToday } from '../../common/timezone';
 import { ChatbotToolsService, ProductImageOut } from './chatbot-tools.service';
+import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { buildChatbotSystemPrompt } from './chatbot-prompt';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
@@ -23,7 +24,8 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'buscar_productos',
     description:
       'Busca productos en el inventario de la tienda (precio, disponibilidad, marca, si tiene foto). ' +
-      'Pasa las palabras del cliente tal cual (ej. "cabilla 3/8", "cemento", "cable #8"). Devuelve hasta 10 productos.',
+      'Pasa las palabras del cliente tal cual (ej. "cabilla 3/8", "cemento", "cable #8"). Devuelve hasta 10 productos. ' +
+      'Los primeros resultados pueden traer "ofrecer_tambien" (complementos para ofrecer).',
     input_schema: {
       type: 'object',
       properties: {
@@ -93,6 +95,7 @@ export class ChatbotService {
     private config: ConfigService,
     private tools: ChatbotToolsService,
     private spaces: SpacesService,
+    private crossSell: ChatbotCrossSellService,
   ) {}
 
   private apiKey(): string {
@@ -416,6 +419,9 @@ export class ChatbotService {
         escalated: true, toolLog, usage, images: out.images, apiTurns: failure ? null : newTurns,
       });
     }
+    // Venta cruzada: marcar como ofrecido lo que la respuesta realmente menciono (nunca rompe la respuesta).
+    await this.crossSell.recordOffered(conversationId, toolLog, finalText).catch((e) =>
+      this.logger.error(`Venta cruzada: no se pudo registrar lo ofrecido: ${(e as Error).message}`));
     return this.saveBotMessage(conversationId, finalText, {
       escalated: out.escalated, toolLog, usage, images: out.images, apiTurns: newTurns,
     });

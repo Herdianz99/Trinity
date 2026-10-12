@@ -5,6 +5,7 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
 import { caracasDateKey } from '../../common/timezone';
 import { VARIANT_RE } from './cross-sell-utils';
+import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 
 const MAX_RESULTS = 10;
 const CANDIDATES = 200;
@@ -23,6 +24,8 @@ export interface BotProduct {
   // Solo si el cliente pidio una cantidad: si la existencia vendible (menos lo apartado) la cubre.
   // El numero NO se le pasa al bot (no debe decirlo); el asesor lo ve en el resumen al escalar.
   alcanza?: boolean;
+  // Venta cruzada: complementos para ofrecer si el bot cotiza ESTE producto (solo los 3 primeros resultados).
+  ofrecer_tambien?: { codigo: string; nombre: string; precio_bcv: string; precio_divisas: string; regla_id: string }[];
 }
 
 export interface ProductImageOut {
@@ -61,6 +64,7 @@ export class ChatbotToolsService {
   constructor(
     private prisma: PrismaService,
     private invoices: InvoicesService,
+    private crossSell: ChatbotCrossSellService,
   ) {}
 
   private isDivisaException(cfg: ChatbotConfig, p: { id: string; categoryId: string | null }) {
@@ -134,6 +138,11 @@ export class ChatbotToolsService {
       });
     }
 
+    const suggestions = await this.crossSell.suggestFor(
+      conversationId,
+      ranked.map(({ r }) => ({ id: r.id as string, name: r.name as string })),
+    );
+
     const productos: BotProduct[] = ranked.map(({ r, available, enough, variant }) => ({
       codigo: r.code,
       nombre: r.name,
@@ -148,6 +157,17 @@ export class ChatbotToolsService {
       variante: variant,
       tiene_foto: !!(r.primaryImageMediumUrl || r.primaryImageThumbUrl),
       ...(qty ? { alcanza: enough } : {}),
+      ...(suggestions.get(r.id)?.length
+        ? {
+            ofrecer_tambien: suggestions.get(r.id)!.map((s) => ({
+              codigo: s.code,
+              nombre: s.name,
+              precio_bcv: `${usd(s.priceDetal)} bcv`,
+              precio_divisas: this.divisaPrice(cfg, { id: s.productId, categoryId: s.categoryId, priceDetal: s.priceDetal }),
+              regla_id: s.ruleId,
+            })),
+          }
+        : {}),
     }));
     return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, productos };
   }
