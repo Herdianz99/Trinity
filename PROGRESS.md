@@ -26,6 +26,7 @@
 | 1. Sinónimos de búsqueda | ✅ **Desplegada en las 7.** En la grande: 98 reglas activas (3.433 productos), 8 pendientes con nota CONFIRMAR. |
 | 2. Bot dentro de Trinity | ✅ **Desplegado SOLO en la grande** (HEAD `5e97c27`), con `ANTHROPIC_API_KEY` de producción (`trinity-produccion`) ya en `/opt/Trinity/apps/api/.env` y verificada contra Anthropic. **Bot APAGADO** hasta que el usuario lo configure. Las otras 6 lo reciben inerte en su próximo deploy. |
 | 2b. Piloto "modo sugerencia manual" | ⏳ **Arranca 2026-10-12**: quien atiende el WhatsApp copia la pregunta del cliente en Chatbot → Probar bot, copia/pega la respuesta (y la foto) en WhatsApp y califica 👍/👎. % de acierto en Chatbot → Conversaciones. |
+| 2b'. Cantidad insuficiente | ✅ Programado y probado en local (Sesión 158), **NO desplegado** (el usuario pidió no hacer deploy todavía). |
 | 2c. Venta cruzada | ⏳ Por programar (aprobado): "qué se compra junto" desde las facturas (con lift), lista de exclusión, y "¿qué estás construyendo?" para el cemento. Datos ya analizados: cabilla→cemento 54%/alambre 42%; esmeril→discos 24%; poceta→lavamanos 27%. |
 | 3. Chatwoot + WhatsApp | ⏳ Pendiente: servidor nuevo + verificación de Meta Business. |
 
@@ -38,6 +39,17 @@
 4. **Programar venta cruzada** (Claude, cuando el usuario diga).
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
+
+## 🗓️ Sesión 158 (2026-10-12) — Chatbot: cliente pide más cantidad de la que hay
+
+> **Estado: probado con IA real en local, NO desplegado** (el usuario pidió no hacer deploy). Va con el próximo deploy de la grande.
+
+- **Decisión:** el bot NUNCA dice cuántas hay (stock del sistema ≠ físico, no regalarle el inventario a la competencia, el asesor puede ofrecer otro almacén/lo que viene/equivalentes). Si no alcanza: "en este momento no tengo esa cantidad, un asesor te confirma cuántas se pueden apartar" + escala.
+- `buscar_productos` acepta `cantidad` opcional → cada producto trae `alcanza` (vendible − apartado ≥ cantidad). Solo el booleano, nunca el número.
+- `escalar_a_asesor` acepta `codigo` + `cantidad`; el servidor agrega al resumen del asesor `[Stock en sistema, NO se le dijo al cliente] CODE NOMBRE: pidió N, hay X disponibles, Y apartadas en facturas en espera` (`ChatbotToolsService.stockNote`).
+- Unidades: en la grande los 10.100 productos tienen `saleUnit = UNIT` (incluso cable por metro o cemento por kilo), así que no se usa; el prompt le dice al bot que si la medida pedida no es claramente la misma en que se vende, escale.
+- **Bug corregido (ya existía):** `reply()` solo guardaba el texto de la ÚLTIMA vuelta con la IA; si el bot escribía la cotización y en la misma vuelta llamaba a `enviar_foto`/`escalar_a_asesor`, el cliente recibía solo "Te envié la foto" sin precio. Ahora junta el texto de todas las vueltas.
+- **Probado (local, grande_db):** 2000 sacos de cemento (hay 1260 libres) → explica y escala con nota; 10 sacos → cotiza normal + foto; 300 m de cable #12 (hay 15.35) → escala; "cuánto cuesta el cemento" y luego "dame 1500" → escala con codigo/cantidad.
 
 ## 🗓️ Sesión 157b (2026-10-11) — Chatbot Fase 2: el bot dentro de Trinity (piloto desplegado en la grande, bot apagado hasta configurarlo)
 

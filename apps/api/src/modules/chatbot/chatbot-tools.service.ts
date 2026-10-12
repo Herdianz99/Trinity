@@ -22,6 +22,9 @@ export interface BotProduct {
   en_oferta: boolean;
   variante: boolean;
   tiene_foto: boolean;
+  // Solo si el cliente pidio una cantidad: si la existencia vendible (menos lo apartado) la cubre.
+  // El numero NO se le pasa al bot (no debe decirlo); el asesor lo ve en el resumen al escalar.
+  alcanza?: boolean;
 }
 
 export interface ProductImageOut {
@@ -77,7 +80,8 @@ export class ChatbotToolsService {
   // de cemento gris), disponible, relevancia y oferta.
   // (Un producto principal AGOTADO no debe quedar fuera: el bot tiene que poder decir que esta agotado.)
   // conversationId null = prueba desde la pantalla (no se registra en el reporte de "sin resultado").
-  async searchProducts(cfg: ChatbotConfig, conversationId: string | null, consulta: string) {
+  async searchProducts(cfg: ChatbotConfig, conversationId: string | null, consulta: string, cantidad?: number) {
+    const qty = cantidad && Number.isFinite(cantidad) && cantidad > 0 ? cantidad : undefined;
     const q = cleanBotQuery(consulta || '').slice(0, 120);
     // Prefijo de la primera palabra (sin plural): "plantas" -> "planta", para priorizar nombres que empiezan asi.
     const head = (q.split(' ')[0] || '').replace(/(es|s)$/, '');
@@ -110,9 +114,11 @@ export class ChatbotToolsService {
 
     const ranked = rows
       .map((r) => {
-        const available = !r.saleBlocked && (r.isService || Number(r.stock) - (reserved[r.id] || 0) > 0);
+        const free = Number(r.stock) - (reserved[r.id] || 0);
+        const available = !r.saleBlocked && (r.isService || free > 0);
+        const enough = available && (r.isService || !qty || free >= qty);
         const name = normalizeWords(r.name).join(' ');
-        return { r, available, variant: VARIANT_RE.test(r.name), starts: head.length >= 3 && name.startsWith(head) };
+        return { r, available, enough, variant: VARIANT_RE.test(r.name), starts: head.length >= 3 && name.startsWith(head) };
       })
       .sort((a, b) =>
         Number(b.starts) - Number(a.starts)
@@ -130,7 +136,7 @@ export class ChatbotToolsService {
       });
     }
 
-    const productos: BotProduct[] = ranked.map(({ r, available, variant }) => ({
+    const productos: BotProduct[] = ranked.map(({ r, available, enough, variant }) => ({
       codigo: r.code,
       nombre: r.name,
       marca: r.brand ?? null,
@@ -143,8 +149,28 @@ export class ChatbotToolsService {
       en_oferta: !!r.isOnSale,
       variante: variant,
       tiene_foto: !!(r.primaryImageMediumUrl || r.primaryImageThumbUrl),
+      ...(qty ? { alcanza: enough } : {}),
     }));
-    return { consulta: q, total_encontrados: rows.length, productos };
+    return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, productos };
+  }
+
+  // Nota para el asesor cuando el bot escala porque no alcanza la cantidad: existencia vendible menos
+  // lo apartado en facturas en espera (mismo calculo que buscar_productos). Nunca se le da al bot.
+  async stockNote(codigo: string, cantidad?: number): Promise<string | null> {
+    const p = await this.prisma.product.findFirst({
+      where: { code: (codigo || '').trim(), isActive: true },
+      select: { id: true, code: true, name: true, isService: true },
+    });
+    if (!p || p.isService) return null;
+    const agg = await this.prisma.stock.aggregate({
+      where: { productId: p.id, warehouse: { countsForSale: true } },
+      _sum: { quantity: true },
+    });
+    const reserved = (await this.invoices.getReservedStock())[p.id] || 0;
+    const free = Math.max(0, r2(Number(agg._sum.quantity || 0) - reserved));
+    const pedido = cantidad && cantidad > 0 ? `pidió ${cantidad}, ` : '';
+    return `[Stock en sistema, NO se le dijo al cliente] ${p.code} ${p.name}: ${pedido}hay ${free} disponibles`
+      + `${reserved ? `, ${r2(reserved)} apartadas en facturas en espera` : ''}.`;
   }
 
   async productImage(codigo: string): Promise<ProductImageOut | null> {

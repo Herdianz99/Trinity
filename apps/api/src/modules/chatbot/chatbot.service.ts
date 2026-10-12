@@ -26,7 +26,13 @@ const TOOLS: Anthropic.Tool[] = [
       'Pasa las palabras del cliente tal cual (ej. "cabilla 3/8", "cemento", "cable #8"). Devuelve hasta 10 productos.',
     input_schema: {
       type: 'object',
-      properties: { consulta: { type: 'string', description: 'Lo que busca el cliente, con sus palabras' } },
+      properties: {
+        consulta: { type: 'string', description: 'Lo que busca el cliente, con sus palabras' },
+        cantidad: {
+          type: 'number',
+          description: 'Solo si el cliente dijo cuántas quiere (ej. "20 sacos" -> 20). Cada producto trae "alcanza" (si hay esa cantidad).',
+        },
+      },
       required: ['consulta'],
     },
   },
@@ -56,13 +62,15 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'escalar_a_asesor',
     description:
       'Pasa la conversación a un asesor humano, solo en los casos indicados en tus instrucciones. ' +
-      'NO la uses para preguntas de precio, disponibilidad o fotos: esas las respondes tú. ' +
+      'NO la uses para preguntas de precio, disponibilidad o fotos: esas las respondes tú (salvo que no alcance la cantidad pedida). ' +
       'Después de usarla solo despídete; no sigas cotizando.',
     input_schema: {
       type: 'object',
       properties: {
         motivo: { type: 'string', description: 'Motivo corto (ej. "pregunta técnica", "cerrar compra", "delivery")' },
         resumen: { type: 'string', description: 'Resumen para el asesor: qué quiere el cliente y qué se le cotizó' },
+        codigo: { type: 'string', description: 'Solo si escalas porque no alcanza la cantidad: código del producto' },
+        cantidad: { type: 'number', description: 'Solo si escalas porque no alcanza la cantidad: cuántas pidió el cliente' },
       },
       required: ['motivo', 'resumen'],
     },
@@ -271,7 +279,10 @@ export class ChatbotService {
     const input = (block.input ?? {}) as Record<string, any>;
     switch (block.name) {
       case 'buscar_productos':
-        return this.tools.searchProducts(cfg, conversationId, String(input.consulta ?? ''));
+        return this.tools.searchProducts(
+          cfg, conversationId, String(input.consulta ?? ''),
+          input.cantidad !== undefined ? Number(input.cantidad) : undefined,
+        );
       case 'enviar_foto': {
         const img = await this.tools.productImage(String(input.codigo ?? ''));
         if (!img) return { error: 'Ese producto no tiene foto. Dilo, o pasa a un asesor si el cliente la necesita.' };
@@ -283,10 +294,16 @@ export class ChatbotService {
           input.monto_usd !== undefined ? Number(input.monto_usd) : undefined,
           input.codigo ? String(input.codigo) : undefined,
         );
-      case 'escalar_a_asesor':
-        await this.escalate(conversationId, String(input.motivo ?? 'sin motivo'), String(input.resumen ?? ''));
+      case 'escalar_a_asesor': {
+        // El bot no conoce la existencia exacta: se agrega aqui al resumen para que el asesor no la busque.
+        const note = input.codigo
+          ? await this.tools.stockNote(String(input.codigo), input.cantidad !== undefined ? Number(input.cantidad) : undefined)
+          : null;
+        const summary = String(input.resumen ?? '');
+        await this.escalate(conversationId, String(input.motivo ?? 'sin motivo'), note ? `${summary}\n${note}` : summary);
         out.escalated = true;
         return { ok: true, nota: 'Conversación pasada a un asesor. Despídete brevemente.' };
+      }
       default:
         return { error: `Herramienta desconocida: ${block.name}` };
     }
@@ -327,6 +344,13 @@ export class ChatbotService {
     const toolLog: ToolCallLog[] = [];
     const out = { images: [] as ProductImageOut[], escalated: false };
     const usage = { input: 0, output: 0, cacheRead: 0, cost: 0 };
+    // Texto de TODAS las vueltas: el modelo a veces escribe la cotizacion y en la misma vuelta llama a
+    // enviar_foto o escalar_a_asesor; si solo se tomara la ultima vuelta, esa parte se perderia.
+    const texts: string[] = [];
+    const collectText = (content: Anthropic.ContentBlock[]) => {
+      const t = content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim();
+      if (t) texts.push(t);
+    };
     let finalText = '';
     let failure: string | null = null;
 
@@ -348,6 +372,7 @@ export class ChatbotService {
 
         if (res.stop_reason === 'tool_use') {
           newTurns.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
+          collectText(res.content);
           const results: Anthropic.ToolResultBlockParam[] = [];
           const toolBlocks = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
           for (const block of toolBlocks) {
@@ -372,11 +397,8 @@ export class ChatbotService {
         }
         if (res.stop_reason === 'end_turn' || res.stop_reason === 'stop_sequence') {
           newTurns.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
-          finalText = res.content
-            .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-            .map((b) => b.text)
-            .join('\n')
-            .trim();
+          collectText(res.content);
+          finalText = texts.join('\n\n');
           break;
         }
         failure = `stop_${res.stop_reason}`;

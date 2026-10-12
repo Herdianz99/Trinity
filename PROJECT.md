@@ -99,6 +99,10 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 158 (2026-10-12) — Chatbot: cantidad insuficiente
+- `buscar_productos` con `cantidad` opcional → `alcanza` por producto (vendible − apartado ≥ cantidad; nunca el número). Si no alcanza, el bot lo dice sin cantidades y escala con `codigo`/`cantidad`; `ChatbotToolsService.stockNote()` agrega la existencia real al `escalationSummary` solo para el asesor.
+- `ChatbotService.reply()` junta el texto de todas las vueltas (antes se perdía el texto escrito junto a una llamada a herramienta).
+
 #### Sesión 157b (2026-10-11) — Chatbot de ventas (Fase 2: el bot dentro de Trinity)
 - Spec `docs/superpowers/specs/2026-10-11-chatbot-bot-trinity-design.md`. Migraciones `20261011150000_chatbot` y `20261011170000_chatbot_rating` (aditivas; en `fix-schema.sql`). Dependencia `@anthropic-ai/sdk` (API). Clave en `ANTHROPIC_API_KEY` (.env del API, nunca en BD).
 - **Modelos:** `ChatbotConfig` (fila única: `enabled` default false, modelo/esfuerzo, textos editables, `divisaDiscountPct`, excepciones por categoría/producto, `monthlyBudgetUsd`), `ChatbotConversation` (`channel` TEST/WHATSAPP/…, `status` BOT/ESCALATED/CLOSED, resumen de escalado, costo), `ChatbotMessage` (texto, fotos del cliente, `productImages`, `toolCalls` de diagnóstico, `apiContent` = turnos crudos para reconstruir el historial append-only, tokens, costo, `rating` 1/-1), `ChatbotSearchLog` (reporte de búsquedas sin resultado).
