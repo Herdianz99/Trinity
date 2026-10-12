@@ -5,7 +5,7 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
 import { caracasDateKey } from '../../common/timezone';
 import { VARIANT_RE } from './cross-sell-utils';
-import { ChatbotCrossSellService, CrossSellCandidate } from './chatbot-cross-sell.service';
+import { ChatbotCrossSellService, CrossSellOffer } from './chatbot-cross-sell.service';
 
 const MAX_RESULTS = 10;
 const CANDIDATES = 200;
@@ -25,7 +25,8 @@ export interface BotProduct {
   // El numero NO se le pasa al bot (no debe decirlo); el asesor lo ve en el resumen al escalar.
   alcanza?: boolean;
   // Venta cruzada: complementos para ofrecer si el bot cotiza ESTE producto (solo productos disponibles).
-  ofrecer_tambien?: { codigo: string; nombre: string; precio_bcv: string; precio_divisas: string; regla_id: string }[];
+  // que = tipo a ofrecer ("disco de corte"); medida = la del producto cotizado si hay de esa medida.
+  ofrecer_tambien?: { que: string; medida: string | null; regla_id: string }[];
 }
 
 export interface ProductImageOut {
@@ -158,7 +159,7 @@ export class ChatbotToolsService {
       variante: variant,
       tiene_foto: !!(r.primaryImageMediumUrl || r.primaryImageThumbUrl),
       ...(qty ? { alcanza: enough } : {}),
-      ...(suggestions.get(r.id)?.length ? { ofrecer_tambien: this.formatOffers(cfg, suggestions.get(r.id)!) } : {}),
+      ...(suggestions.get(r.id)?.length ? { ofrecer_tambien: this.formatOffers(suggestions.get(r.id)!) } : {}),
     }));
     return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, productos };
   }
@@ -182,26 +183,21 @@ export class ChatbotToolsService {
       + `${reserved ? `, ${r2(reserved)} apartadas en facturas en espera` : ''}.`;
   }
 
-  private formatOffers(cfg: ChatbotConfig, list: CrossSellCandidate[]): NonNullable<BotProduct['ofrecer_tambien']> {
-    return list.map((s) => ({
-      codigo: s.code,
-      nombre: s.name,
-      precio_bcv: `${usd(s.priceDetal)} bcv`,
-      precio_divisas: this.divisaPrice(cfg, { id: s.productId, categoryId: s.categoryId, priceDetal: s.priceDetal }),
-      regla_id: s.ruleId,
-    }));
+  // Al bot solo le llega el TIPO (y la medida si aplica), sin producto ni precio: que no elija por el cliente.
+  private formatOffers(list: CrossSellOffer[]): NonNullable<BotProduct['ofrecer_tambien']> {
+    return list.map((s) => ({ que: s.term, medida: s.measure, regla_id: s.ruleId }));
   }
 
   // Venta cruzada de UN producto. Se usa al enviar su foto (es cuando el bot lo cotiza): asi el complemento le
   // llega justo ahi, aunque el cliente lo haya elegido de una lista de mensajes atras.
-  async crossSellFor(cfg: ChatbotConfig, conversationId: string | null, codigo: string) {
+  async crossSellFor(conversationId: string | null, codigo: string) {
     const p = await this.prisma.product.findFirst({
       where: { code: (codigo || '').trim(), isActive: true, saleBlocked: false },
       select: { id: true, name: true },
     });
     if (!p) return [];
     const list = (await this.crossSell.suggestFor(conversationId, [{ id: p.id, name: p.name }])).get(p.id) ?? [];
-    return this.formatOffers(cfg, list);
+    return this.formatOffers(list);
   }
 
   async productImage(codigo: string): Promise<ProductImageOut | null> {

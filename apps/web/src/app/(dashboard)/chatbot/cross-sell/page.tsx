@@ -9,7 +9,8 @@ interface Rule {
   statsBaseCount: number | null; statsPairPct: number | null; statsLift: number | null; timesOffered: number;
 }
 interface Pick { code: string; name: string; priceDetal: number }
-interface TestResult { matchCount: number; examples: { product: Pick; offers: Pick[] }[] }
+interface Offer { term: string; measure: string | null; count: number }
+interface TestResult { matchCount: number; examples: { product: Pick; offers: Offer[] }[] }
 interface FormState { id: string | null; trigger: string; offer1: string; offer2: string; exclude: string; fromSuggestion: boolean }
 
 const EMPTY_FORM: FormState = { id: null, trigger: '', offer1: '', offer2: '', exclude: '', fromSuggestion: false };
@@ -247,12 +248,12 @@ export default function CrossSellPage() {
               </button>
               {test && (
                 <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/50 p-3 text-xs space-y-1.5">
-                  <p className="text-slate-300">Se activa con <b className="text-white">{test.matchCount}</b> productos. Ejemplos (los más vendidos):</p>
+                  <p className="text-slate-300">Se activa con <b className="text-white">{test.matchCount}</b> productos. Lo que diría el bot en los más vendidos:</p>
                   {test.examples.map((ex) => (
                     <p key={ex.product.code} className="text-slate-400">
                       <span className="text-slate-200">{ex.product.name}</span> →{' '}
                       {ex.offers.length
-                        ? ex.offers.map((o) => `${o.name} (${fmt(o.priceDetal)}$)`).join(' · ')
+                        ? <>también tenemos <span className="text-slate-200">{ex.offers.map((o) => `${o.term}${o.measure ? ` para ${o.measure}` : ''}`).join(' y ')}</span> <span className="text-slate-500">({ex.offers.map((o) => o.count).join(' / ')} disponibles)</span></>
                         : <span className="text-amber-400">sin complemento disponible</span>}
                     </p>
                   ))}

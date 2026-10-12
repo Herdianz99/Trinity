@@ -3,7 +3,7 @@ import { CrossSellRuleStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
-import { VARIANT_RE, extractMeasures, normalizeTerm, ruleKey, sharesMeasure, wasOffered } from './cross-sell-utils';
+import { VARIANT_RE, extractMeasures, normalizeTerm, ruleKey, wasOffered } from './cross-sell-utils';
 import { CrossSellRuleDto, TestCrossSellRuleDto, UpdateCrossSellRuleDto } from './dto/cross-sell.dto';
 
 const SOURCE_PRODUCTS = 10;  // productos DISPONIBLES del resultado que llevan sugerencias (el cliente puede elegir cualquiera)
@@ -11,10 +11,13 @@ const MAX_PER_PRODUCT = 2;   // maximo de complementos por producto cotizado
 const RULES_TTL_MS = 60_000;
 
 type ActiveRule = { id: string; trigger: string; offerTerms: string[]; excludeTerms: string[] };
-type CandRow = { id: string; code: string; name: string; priceDetal: number; categoryId: string | null; stock: number; sold: number };
+type CandRow = { id: string; name: string; stock: number };
+type Availability = { measure: string | null; count: number };
 
-export interface CrossSellPick { productId: string; code: string; name: string; priceDetal: number; categoryId: string | null }
-export interface CrossSellCandidate extends CrossSellPick { ruleId: string }
+// Que ofrecer: el TIPO de producto ("brochas", "discos de corte"), nunca uno especifico: hay muchos tamaños y
+// marcas y el bot no puede elegir por el cliente. measure = medida del producto cotizado cuando hay complementos
+// disponibles de esa misma medida ("discos de corte para 4-1/2"). count = cuantos hay (solo para la pantalla).
+export interface CrossSellOffer extends Availability { ruleId: string; term: string }
 
 @Injectable()
 export class ChatbotCrossSellService {
@@ -63,40 +66,37 @@ export class ChatbotCrossSellService {
     return out;
   }
 
-  // Mejor producto disponible para un termino a ofrecer: misma medida que el cotizado -> mas vendido.
-  // Nunca el mismo producto, ni uno que tambien dispararia la regla (evita "rodillo -> rodillo").
-  private async pickCandidate(
-    term: string, trigger: string, excludeIds: string[], measures: Set<string>, reserved: Record<string, number>,
-  ): Promise<CrossSellPick | null> {
+  // Hay complementos disponibles para este termino? Si el cotizado tiene medida y hay de esa misma medida, se
+  // ofrecen "para <medida>". Excluye variantes (ROTO/SEGUNDA), bloqueados y los que tambien dispararian la regla
+  // (evita "rodillo -> rodillo"). null = no hay ninguno disponible: no se menciona.
+  private async termAvailability(
+    term: string, trigger: string, measures: Set<string>, reserved: Record<string, number>,
+  ): Promise<Availability | null> {
     const tsq = productSearchTsQuery(term);
     const trigTsq = productSearchTsQuery(trigger);
     if (!tsq || !trigTsq) return null;
     const rows = await this.prisma.$queryRaw<CandRow[]>`
-      SELECT p.id, p.code, p.name, p."priceDetal", p."categoryId",
+      SELECT p.id, p.name,
         COALESCE((SELECT SUM(s.quantity) FROM "Stock" s JOIN "Warehouse" w ON w.id = s."warehouseId"
-                  WHERE s."productId" = p.id AND w."countsForSale" = true), 0)::float AS stock,
-        COALESCE((SELECT COUNT(DISTINCT ii."invoiceId") FROM "InvoiceItem" ii JOIN "Invoice" i ON i.id = ii."invoiceId"
-                  WHERE ii."productId" = p.id AND i.status IN ('PAID', 'PARTIAL_RETURN')
-                    AND i."createdAt" >= now() - interval '90 days'), 0)::float AS sold
+                  WHERE s."productId" = p.id AND w."countsForSale" = true), 0)::float AS stock
       FROM "Product" p
       WHERE p."isActive" AND p."priceDetal" > 0 AND NOT p."saleBlocked" AND NOT p."isService"
         AND p."searchVector" @@ to_tsquery('spanish', ${tsq})
         AND NOT (p."searchVector" @@ to_tsquery('spanish', ${trigTsq}))
-        AND NOT (p.id = ANY(${excludeIds}::text[]))
-      ORDER BY sold DESC
-      LIMIT 60`;
-    const ok = rows
-      .filter((r) => Number(r.stock) - (reserved[r.id] || 0) > 0 && !VARIANT_RE.test(r.name))
-      .map((r) => ({ r, same: sharesMeasure(measures, extractMeasures(r.name)) }))
-      .sort((a, b) => Number(b.same) - Number(a.same) || Number(b.r.sold) - Number(a.r.sold));
-    const best = ok[0]?.r;
-    return best ? { productId: best.id, code: best.code, name: best.name, priceDetal: Number(best.priceDetal), categoryId: best.categoryId } : null;
+      LIMIT 500`;
+    const ok = rows.filter((r) => Number(r.stock) - (reserved[r.id] || 0) > 0 && !VARIANT_RE.test(r.name));
+    if (!ok.length) return null;
+    for (const m of measures) {
+      const same = ok.filter((r) => extractMeasures(r.name).has(m)).length;
+      if (same) return { measure: m, count: same };
+    }
+    return { measure: null, count: ok.length };
   }
 
   // Sugerencias para los productos DISPONIBLES de buscar_productos (el llamador ya filtra agotados/bloqueados).
   // conversationId null = prueba sin conversacion.
-  async suggestFor(conversationId: string | null, products: { id: string; name: string }[]): Promise<Map<string, CrossSellCandidate[]>> {
-    const result = new Map<string, CrossSellCandidate[]>();
+  async suggestFor(conversationId: string | null, products: { id: string; name: string }[]): Promise<Map<string, CrossSellOffer[]>> {
+    const result = new Map<string, CrossSellOffer[]>();
     const rules = await this.activeRules();
     const src = products.slice(0, SOURCE_PRODUCTS);
     if (!rules.length || !src.length) return result;
@@ -109,10 +109,10 @@ export class ChatbotCrossSellService {
     );
     const reserved = await this.invoices.getReservedStock();
     const byId = new Map(rules.map((r) => [r.id, r]));
-    // Productos parecidos (5 esmeriles de 4-1/2) comparten complemento: se busca una sola vez por regla/termino/medida.
-    const memo = new Map<string, CrossSellPick | null>();
+    // Productos parecidos (5 esmeriles de 4-1/2) dan la misma respuesta: se calcula una vez por regla/termino/medida.
+    const memo = new Map<string, Availability | null>();
     for (const p of src) {
-      const list: CrossSellCandidate[] = [];
+      const list: CrossSellOffer[] = [];
       const measures = extractMeasures(p.name);
       for (const ruleId of matches.get(p.id) ?? []) {
         if (offered.has(ruleId) || list.length >= MAX_PER_PRODUCT) continue;
@@ -120,9 +120,9 @@ export class ChatbotCrossSellService {
         for (const term of rule.offerTerms) {
           if (list.length >= MAX_PER_PRODUCT) break;
           const key = `${rule.trigger}|${term}|${[...measures].sort().join(',')}`;
-          if (!memo.has(key)) memo.set(key, await this.pickCandidate(term, rule.trigger, [p.id], measures, reserved));
-          const pick = memo.get(key);
-          if (pick && !list.some((c) => c.productId === pick.productId)) list.push({ ruleId, ...pick });
+          if (!memo.has(key)) memo.set(key, await this.termAvailability(term, rule.trigger, measures, reserved));
+          const av = memo.get(key);
+          if (av) list.push({ ruleId, term, ...av });
         }
       }
       if (list.length) result.set(p.id, list);
@@ -144,12 +144,12 @@ export class ChatbotCrossSellService {
       ORDER BY (SELECT COUNT(*) FROM "InvoiceItem" ii WHERE ii."productId" = p.id) DESC, p.name
       LIMIT 8`;
     const reserved = await this.invoices.getReservedStock();
-    const examples: { product: { code: string; name: string; priceDetal: number }; offers: CrossSellPick[] }[] = [];
+    const examples: { product: { code: string; name: string; priceDetal: number }; offers: (Availability & { term: string })[] }[] = [];
     for (const s of sample) {
-      const offers: CrossSellPick[] = [];
+      const offers: (Availability & { term: string })[] = [];
       for (const term of dto.offerTerms.slice(0, MAX_PER_PRODUCT)) {
-        const pick = await this.pickCandidate(term, dto.trigger, [s.id, ...offers.map((o) => o.productId)], extractMeasures(s.name), reserved);
-        if (pick) offers.push(pick);
+        const av = await this.termAvailability(term, dto.trigger, extractMeasures(s.name), reserved);
+        if (av) offers.push({ term, ...av });
       }
       examples.push({ product: { code: s.code, name: s.name, priceDetal: Number(s.priceDetal) }, offers });
     }
@@ -243,16 +243,14 @@ export class ChatbotCrossSellService {
     for (const t of logs) {
       // buscar_productos trae ofertas por producto; enviar_foto las trae sueltas en el resultado.
       const res = (t.result ?? {}) as any;
-      const productos = [...(res.productos ?? []), res] as { ofrecer_tambien?: { codigo: string; nombre: string; regla_id: string }[] }[];
+      const productos = [...(res.productos ?? []), res] as { ofrecer_tambien?: { que: string; regla_id: string }[] }[];
       for (const p of productos) {
         for (const o of p.ofrecer_tambien ?? []) {
-          if (seen.has(o.regla_id) || !wasOffered(o.nombre, finalText)) continue;
+          if (!o.que || seen.has(o.regla_id) || !wasOffered(o.que, finalText)) continue;
           seen.add(o.regla_id);
-          const prod = await this.prisma.product.findFirst({ where: { code: o.codigo }, select: { id: true } });
-          if (!prod) continue;
           try {
             await this.prisma.$transaction([
-              this.prisma.chatbotCrossSellOffer.create({ data: { conversationId, ruleId: o.regla_id, productId: prod.id } }),
+              this.prisma.chatbotCrossSellOffer.create({ data: { conversationId, ruleId: o.regla_id, term: o.que } }),
               this.prisma.chatbotCrossSellRule.update({ where: { id: o.regla_id }, data: { timesOffered: { increment: 1 } } }),
             ]);
           } catch (e) {

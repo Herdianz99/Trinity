@@ -14,7 +14,7 @@ usuario decide cuáles activar.
 
 | Tema | Decisión |
 |---|---|
-| Cómo ofrece | Con precio, en la misma respuesta: "Para usarlo también tenemos Disco de corte 4½" Norton a 1,20$ bcv. ¿Te lo agrego?" |
+| Cómo ofrece | **Revisado por el usuario tras probar:** por TIPO, sin producto ni precio: "Para aplicarlo también tenemos brochas y rodillos. ¿Quieres ver opciones?" (con medida si aplica: "discos de corte para 4-1/2""). Si dice que sí, el bot busca y lista. (La versión inicial ofrecía un producto específico con precio y elegía mal entre muchos tamaños/marcas.) |
 | Reglas | Por palabras: "si cotiza X → ofrecer Y (y Z)". Una regla cubre todos los productos presentes y futuros. |
 | Análisis de facturas | Solo propone; el bot usa únicamente reglas activadas por el usuario. |
 | Cemento "¿qué estás construyendo?" | Fuera de esta versión. Se maneja con una regla normal o ninguna. |

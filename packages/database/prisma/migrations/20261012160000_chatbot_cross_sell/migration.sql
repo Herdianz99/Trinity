@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS "ChatbotCrossSellOffer" (
   "id" TEXT NOT NULL,
   "conversationId" TEXT NOT NULL,
   "ruleId" TEXT NOT NULL,
-  "productId" TEXT NOT NULL,
+  "term" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ChatbotCrossSellOffer_pkey" PRIMARY KEY ("id")
 );

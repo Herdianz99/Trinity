@@ -39,6 +39,9 @@ test('wasOffered: el texto menciona la mayoria de las palabras del producto', ()
   assert.equal(wasOffered(name, 'Para usarlo también tenemos Disco de corte 4½" Norton a 1,20$ bcv.'), true);
   assert.equal(wasOffered(name, 'El esmeril está en 85$ bcv. ¿Buscas algo más?'), false);
   // caso real: el bot acorta 'BROCHA 1-1/2" M/PLASTICO AZUL EXXEL' a 'brocha de 1-1/2" Exxel' (2 de 4 palabras)
+  // ahora se ofrece el TIPO: 'disco de corte' -> el texto dice 'discos de corte para 4-1/2'
+  assert.equal(wasOffered('disco de corte', 'También tenemos discos de corte para 4-1/2". ¿Te muestro opciones?'), true);
+  assert.equal(wasOffered('rodillo', 'También tenemos brochas. ¿Quieres ver?'), false);
   assert.equal(wasOffered('BROCHA 1-1/2" M/PLASTICO AZUL EXXEL', 'también tenemos la brocha de 1-1/2" Exxel a 1.04$ bcv'), true);
 });
 

@@ -3146,7 +3146,7 @@ model ChatbotCrossSellOffer {
   id             String   @id @default(cuid())
   conversationId String
   ruleId         String
-  productId      String
+  term           String   // tipo ofrecido ("disco de corte"): se ofrece el tipo, no un producto
   createdAt      DateTime @default(now())
 
   @@unique([conversationId, ruleId])
