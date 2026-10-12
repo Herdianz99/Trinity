@@ -881,11 +881,14 @@ export class DashboardService {
   }
 
   // ── Returns (NCV POSTED in period) ────────────────────────────────────────
+  // Solo devoluciones REALES de mercancia (origin MERCHANDISE). Las NC por monto (MANUAL:
+  // descuentos/ajustes sin devolver productos) no son devoluciones y no cuentan aqui.
 
   private async getReturns(dateRange: { gte: Date; lte: Date }) {
     const result = await this.prisma.creditDebitNote.aggregate({
       where: {
         type: 'NCV',
+        origin: 'MERCHANDISE',
         status: 'POSTED',
         // Date the return actually happened (set on post), not appliedAt which
         // only fills when the note is later cruzada en un recibo.
@@ -1042,6 +1045,8 @@ export class DashboardService {
       this.prisma.creditDebitNote.findMany({
         where: {
           type: 'NCV',
+          // Solo devoluciones de mercancia; las NC por monto (MANUAL) no son devoluciones.
+          origin: 'MERCHANDISE',
           status: 'POSTED',
           documentDate: dateRange,
           // SIN filtro de sellerId: las devoluciones de mostrador (o notas sin factura)

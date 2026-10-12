@@ -40,6 +40,14 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🗓️ Sesión 158c (2026-10-12) — Dashboard: tarjeta Devoluciones y Ventas por vendedor solo con NC de mercancía
+
+> **Estado: en GitHub, NO desplegado.**
+
+- Las NCV tienen dos orígenes: `MERCHANDISE` (devuelve productos, con renglones) y `MANUAL` (rebaja un monto/% de la factura, SIN renglones). El dashboard no los distinguía.
+- Ahora la tarjeta **Devoluciones** (`getReturns`) y el "− $X devol." de **Ventas por vendedor** (`getSalesBySeller`) cuentan solo `origin=MERCHANDISE`. En la grande las NC por monto fueron $3,96 (jul), $283,54 (ago), $5,51 (sep) y $205,92 (oct a la fecha).
+- **Pendiente (el usuario dijo "por ahora no"):** la NC por monto NO se resta de la Ganancia ni de Ventas con/sin brecha (esas tarjetas trabajan por renglón y la MANUAL no tiene renglones) → la ganancia sale inflada por ese monto. Ventas (neto), contado/crédito, grupo, fiscal y el dashboard del vendedor sí restan ambas (usan el total de la nota).
+
 ## 🗓️ Sesión 158b (2026-10-12) — Mayor: pedido mínimo, ubicación GPS del cliente y "Condiciones BCV" en el catálogo
 
 > **Estado: ✅ DESPLEGADO EN EL MAYOR (2026-10-12, commit `bd05a93`)**, migración aplicada en `trebolmayor_db`. La grande y las demás NO lo tienen todavía (lo reciben inerte en su próximo deploy: mínimo 0 = sin mínimo). Migración `20261012120000_customer_min_order_location` (aditiva, IF NOT EXISTS, también en `fix-schema.sql`). Pensado para el mayor (portal de pedidos), pero el código viaja a todas las instancias inerte (mínimo 0 = sin mínimo).
