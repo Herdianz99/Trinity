@@ -108,3 +108,7 @@ export function selectSuggestions(
   }
   return out;
 }
+
+// Variantes defectuosas que existen como producto aparte (saco roto, segunda): van al final.
+// OJO: (B) y (D) NO son variantes: en la grande el cemento que se vende es "SELLADO (B)" / "(D)".
+export const VARIANT_RE = /\((ROTO|ROTA|SEGUNDA|SEG|DEFECTO|MUESTRA)\)|\bSEGUNDA\b/i;

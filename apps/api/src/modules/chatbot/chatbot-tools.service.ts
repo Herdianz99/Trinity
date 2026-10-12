@@ -4,12 +4,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
 import { caracasDateKey } from '../../common/timezone';
+import { VARIANT_RE } from './cross-sell-utils';
 
 const MAX_RESULTS = 10;
 const CANDIDATES = 200;
-// Variantes defectuosas que existen como producto aparte (saco roto, segunda): van al final.
-// OJO: (B) y (D) NO son variantes: en la grande el cemento que se vende es "SELLADO (B)" / "(D)".
-const VARIANT_RE = /\((ROTO|ROTA|SEGUNDA|SEG|DEFECTO|MUESTRA)\)|\bSEGUNDA\b/i;
 
 export interface BotProduct {
   codigo: string;
