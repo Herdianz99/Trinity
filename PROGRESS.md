@@ -26,8 +26,8 @@
 | 1. Sinónimos de búsqueda | ✅ **Desplegada en las 7.** En la grande: 98 reglas activas (3.433 productos), 8 pendientes con nota CONFIRMAR. |
 | 2. Bot dentro de Trinity | ✅ **Desplegado SOLO en la grande** (HEAD `5e97c27`), con `ANTHROPIC_API_KEY` de producción (`trinity-produccion`) ya en `/opt/Trinity/apps/api/.env` y verificada contra Anthropic. **Bot APAGADO** hasta que el usuario lo configure. Las otras 6 lo reciben inerte en su próximo deploy. |
 | 2b. Piloto "modo sugerencia manual" | ⏳ **Arranca 2026-10-12**: quien atiende el WhatsApp copia la pregunta del cliente en Chatbot → Probar bot, copia/pega la respuesta (y la foto) en WhatsApp y califica 👍/👎. % de acierto en Chatbot → Conversaciones. |
-| 2b'. Cantidad insuficiente | ✅ Programado y probado en local (Sesión 158), **NO desplegado** (el usuario pidió no hacer deploy todavía). |
-| 2c. Venta cruzada | ✅ **Programada (Sesión 159), NO desplegada.** Reglas por palabras ("si cotiza esmeril → ofrecer disco de corte") en Chatbot → Venta cruzada; el bot ofrece el complemento con precio al cotizar 1 producto. Análisis semanal (lunes 3 AM) PROPONE reglas; el usuario activa. 5 reglas iniciales APAGADAS. La pregunta "¿qué estás construyendo?" del cemento quedó fuera (decisión del usuario). |
+| 2b'. Cantidad insuficiente | ✅ **Desplegado en la grande** (Sesión 158, 2026-10-12, `352cc8d`). |
+| 2c. Venta cruzada | ✅ **Desplegada en la grande (Sesión 159, 2026-10-12, `352cc8d`).** Reglas por palabras ("si cotiza esmeril → ofrecer disco de corte") en Chatbot → Venta cruzada; el bot ofrece el complemento con precio al cotizar 1 producto. Análisis semanal (lunes 3 AM) PROPONE reglas; el usuario activa. 5 reglas iniciales APAGADAS. La pregunta "¿qué estás construyendo?" del cemento quedó fuera (decisión del usuario). |
 | 3. Chatwoot + WhatsApp | ⏳ Pendiente: servidor nuevo + verificación de Meta Business. |
 
 **Decisiones vigentes:** API directa de Anthropic (no OpenRouter; OpenRouter sigue solo para lectura de facturas con Gemini), modelo `claude-haiku-5-5` esfuerzo `low`. Los **USD 100/mes en créditos de API del plan Max** del usuario (org "Diego's Individual Org") pagan el bot (~$0.0005 por conversación); vencen cada mes y no cubren Claude Code. Número de WhatsApp: el actual (WhatsApp Business) por **coexistencia**; si no se puede, migrar ese número a la API (no hace falta comprar línea). Excepciones al −10% en divisas → "lo confirma un asesor". Bs solo si los piden. Foto automática si cotiza 1 producto. Cada respuesta cierra con una pregunta.
@@ -36,13 +36,13 @@
 1. **Usuario (2026-10-12):** en la grande → Chatbot → Configuración: encender el bot, llenar dirección/horario/delivery/pagos/aliados/info extra, agregar el **CEMENTO GRIS (42.5KG) SELLADO (B)/(D)** como producto de excepción en divisas (no está en la categoría CEMENTO). Probar él mismo en Probar bot.
 2. **Usuario:** Configuración → Permisos por rol → marcar **"Chatbot de ventas (probar y conversaciones)"** en el rol de quien atiende el WhatsApp (NO "Chatbot: configuración"). Enseñarle: **"Nueva conversación" por cada cliente**, Copiar/Copiar foto, 👍/👎.
 3. **Ventas:** revisar los 8 sinónimos pendientes (CONFIRMAR) y explicar qué son los productos con **(B)** y **(D)** (ej. el cemento que más se vende es "SELLADO (B)").
-4. ~~Programar venta cruzada~~ ✅ Sesión 159. **Falta:** desplegar a la grande y que el usuario active/pruebe las reglas en Chatbot → Venta cruzada ("Probar regla").
+4. ~~Programar venta cruzada~~ ✅ Sesión 159, desplegada en la grande. **Falta:** que el usuario active/pruebe las reglas en Chatbot → Venta cruzada ("Probar regla") y revise las Sugeridas (el primer análisis automático corre el lunes 3 AM, o "Recalcular ahora").
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
 ## 🗓️ Sesión 159 (2026-10-12) — Chatbot: venta cruzada
 
-> **Estado: programada y probada con IA real en local, NO desplegada.** Spec `docs/superpowers/specs/2026-10-12-chatbot-venta-cruzada-design.md` · plan `docs/superpowers/plans/2026-10-12-chatbot-venta-cruzada.md`. Migración `20261012160000_chatbot_cross_sell` (aditiva; en `fix-schema.sql`; siembra 5 reglas PAUSED: esmeril, taladro, pintura, cabilla, poceta).
+> **Estado: ✅ DESPLEGADA EN LA GRANDE (2026-10-12, commit `352cc8d`)**; 5 reglas iniciales en PAUSED en producción (el usuario las activa en Chatbot → Venta cruzada). Spec `docs/superpowers/specs/2026-10-12-chatbot-venta-cruzada-design.md` · plan `docs/superpowers/plans/2026-10-12-chatbot-venta-cruzada.md`. Migración `20261012160000_chatbot_cross_sell` (aditiva; en `fix-schema.sql`; siembra 5 reglas PAUSED: esmeril, taladro, pintura, cabilla, poceta).
 
 - **Decisiones del usuario:** ofrecer CON precio en la misma respuesta; reglas por PALABRAS (no producto por producto); el análisis de facturas SOLO propone (el usuario activa); cemento "¿qué estás construyendo?" fuera de esta versión.
 - **Cómo funciona:** `buscar_productos` agrega `ofrecer_tambien` a TODOS los productos disponibles del resultado (`ChatbotCrossSellService.suggestFor`, con memo por regla/término/medida; antes eran los 3 primeros y fallaba cuando esos venían agotados — lo detectó el usuario probando): regla ACTIVE cuyo trigger coincide con el producto (mismo tsquery/sinónimos del POS) y ningún "no aplicar si dice"; por término a ofrecer elige un producto disponible, no bloqueado, no variante, de la MISMA MEDIDA si la hay (4-1/2, 1/2, 10mm) y si no el más vendido; máx 2 por producto. El prompt lo ofrece solo al cotizar UN producto. `recordOffered` marca lo que el texto realmente mencionó (≥50% de las palabras; mira también búsquedas de mensajes anteriores) → no se repite en la conversación y suma "Veces ofrecida".
@@ -56,7 +56,7 @@
 
 ## 🗓️ Sesión 158c (2026-10-12) — Dashboard: tarjeta Devoluciones y Ventas por vendedor solo con NC de mercancía
 
-> **Estado: en GitHub, NO desplegado.**
+> **Estado: ✅ desplegado en la grande (2026-10-12, `352cc8d`).**
 
 - Las NCV tienen dos orígenes: `MERCHANDISE` (devuelve productos, con renglones) y `MANUAL` (rebaja un monto/% de la factura, SIN renglones). El dashboard no los distinguía.
 - Ahora la tarjeta **Devoluciones** (`getReturns`) y el "− $X devol." de **Ventas por vendedor** (`getSalesBySeller`) cuentan solo `origin=MERCHANDISE`. En la grande las NC por monto fueron $3,96 (jul), $283,54 (ago), $5,51 (sep) y $205,92 (oct a la fecha).
