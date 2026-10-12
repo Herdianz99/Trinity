@@ -24,7 +24,7 @@ export interface BotProduct {
   // Solo si el cliente pidio una cantidad: si la existencia vendible (menos lo apartado) la cubre.
   // El numero NO se le pasa al bot (no debe decirlo); el asesor lo ve en el resumen al escalar.
   alcanza?: boolean;
-  // Venta cruzada: complementos para ofrecer si el bot cotiza ESTE producto (solo los 3 primeros resultados).
+  // Venta cruzada: complementos para ofrecer si el bot cotiza ESTE producto (solo productos disponibles).
   ofrecer_tambien?: { codigo: string; nombre: string; precio_bcv: string; precio_divisas: string; regla_id: string }[];
 }
 
@@ -140,7 +140,8 @@ export class ChatbotToolsService {
 
     const suggestions = await this.crossSell.suggestFor(
       conversationId,
-      ranked.map(({ r }) => ({ id: r.id as string, name: r.name as string })),
+      // Solo los que se pueden vender: un agotado no lleva complemento (y no gasta consultas).
+      ranked.filter(({ r, available }) => available && !r.saleBlocked).map(({ r }) => ({ id: r.id as string, name: r.name as string })),
     );
 
     const productos: BotProduct[] = ranked.map(({ r, available, enough, variant }) => ({

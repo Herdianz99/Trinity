@@ -6,7 +6,7 @@ import { productSearchTsQuery } from '../../common/product-search';
 import { VARIANT_RE, extractMeasures, normalizeTerm, ruleKey, sharesMeasure, wasOffered } from './cross-sell-utils';
 import { CrossSellRuleDto, TestCrossSellRuleDto, UpdateCrossSellRuleDto } from './dto/cross-sell.dto';
 
-const SOURCE_PRODUCTS = 3;   // solo los primeros resultados de buscar_productos llevan sugerencias
+const SOURCE_PRODUCTS = 10;  // productos DISPONIBLES del resultado que llevan sugerencias (el cliente puede elegir cualquiera)
 const MAX_PER_PRODUCT = 2;   // maximo de complementos por producto cotizado
 const RULES_TTL_MS = 60_000;
 
@@ -93,7 +93,8 @@ export class ChatbotCrossSellService {
     return best ? { productId: best.id, code: best.code, name: best.name, priceDetal: Number(best.priceDetal), categoryId: best.categoryId } : null;
   }
 
-  // Sugerencias para los primeros productos de buscar_productos. conversationId null = prueba sin conversacion.
+  // Sugerencias para los productos DISPONIBLES de buscar_productos (el llamador ya filtra agotados/bloqueados).
+  // conversationId null = prueba sin conversacion.
   async suggestFor(conversationId: string | null, products: { id: string; name: string }[]): Promise<Map<string, CrossSellCandidate[]>> {
     const result = new Map<string, CrossSellCandidate[]>();
     const rules = await this.activeRules();
@@ -108,6 +109,8 @@ export class ChatbotCrossSellService {
     );
     const reserved = await this.invoices.getReservedStock();
     const byId = new Map(rules.map((r) => [r.id, r]));
+    // Productos parecidos (5 esmeriles de 4-1/2) comparten complemento: se busca una sola vez por regla/termino/medida.
+    const memo = new Map<string, CrossSellPick | null>();
     for (const p of src) {
       const list: CrossSellCandidate[] = [];
       const measures = extractMeasures(p.name);
@@ -116,8 +119,10 @@ export class ChatbotCrossSellService {
         const rule = byId.get(ruleId)!;
         for (const term of rule.offerTerms) {
           if (list.length >= MAX_PER_PRODUCT) break;
-          const pick = await this.pickCandidate(term, rule.trigger, [p.id, ...list.map((c) => c.productId)], measures, reserved);
-          if (pick) list.push({ ruleId, ...pick });
+          const key = `${rule.trigger}|${term}|${[...measures].sort().join(',')}`;
+          if (!memo.has(key)) memo.set(key, await this.pickCandidate(term, rule.trigger, [p.id], measures, reserved));
+          const pick = memo.get(key);
+          if (pick && !list.some((c) => c.productId === pick.productId)) list.push({ ruleId, ...pick });
         }
       }
       if (list.length) result.set(p.id, list);

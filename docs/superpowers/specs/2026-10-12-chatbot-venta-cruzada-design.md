@@ -81,8 +81,9 @@ Migración aditiva con `IF NOT EXISTS` y copia en `deploy/fix-schema.sql`.
 
 ### 3.1 Servicio nuevo `ChatbotCrossSellService`
 
-- `suggestFor(conversationId, products)`: recibe los **3 primeros** productos del resultado de
-  `buscar_productos`. Para cada uno:
+- `suggestFor(conversationId, products)`: recibe los productos **disponibles** (no agotados ni bloqueados) del
+  resultado de `buscar_productos` (antes eran los 3 primeros: fallaba cuando venían agotados). Los complementos se
+  memorizan por regla/término/medida dentro de la llamada. Para cada uno:
   1. Reglas `ACTIVE` (cacheadas 60 s) cuyo `trigger` coincide con el producto: `searchVector @@
      to_tsquery(productSearchTsQuery(trigger))` (mismo motor y sinónimos del POS), y ningún `excludeTerms`
      coincide.
@@ -96,7 +97,7 @@ Migración aditiva con `IF NOT EXISTS` y copia en `deploy/fix-schema.sql`.
 
 ### 3.2 Cambio en `buscar_productos`
 
-`ChatbotToolsService.searchProducts` agrega `ofrecer_tambien` a los primeros 3 productos (solo si hay
+`ChatbotToolsService.searchProducts` agrega `ofrecer_tambien` a los productos disponibles (solo si hay
 sugerencia). El resto del resultado no cambia. El cálculo de medida reutiliza la normalización de
 fracciones de `common/product-search.ts`.
 

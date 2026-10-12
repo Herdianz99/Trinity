@@ -25,7 +25,7 @@ const TOOLS: Anthropic.Tool[] = [
     description:
       'Busca productos en el inventario de la tienda (precio, disponibilidad, marca, si tiene foto). ' +
       'Pasa las palabras del cliente tal cual (ej. "cabilla 3/8", "cemento", "cable #8"). Devuelve hasta 10 productos. ' +
-      'Los primeros resultados pueden traer "ofrecer_tambien" (complementos para ofrecer).',
+      'Los productos disponibles pueden traer "ofrecer_tambien" (complementos para ofrecer).',
     input_schema: {
       type: 'object',
       properties: {
