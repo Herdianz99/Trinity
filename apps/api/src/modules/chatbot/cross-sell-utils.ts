@@ -53,3 +53,58 @@ export function wasOffered(productName: string, text: string): boolean {
   const hits = words.filter((w) => t.includes(w)).length;
   return hits / words.length >= 0.6;
 }
+
+export interface PairCounts {
+  total: number;                 // facturas
+  single: Map<string, number>;   // grupo -> nº de facturas con ese grupo
+  pair: Map<string, number>;     // "a|b" (a < b) -> nº de facturas con ambos
+}
+
+// Cada factura = conjunto de grupos (primera palabra de sus productos).
+export function countPairs(invoices: Set<string>[]): PairCounts {
+  const single = new Map<string, number>();
+  const pair = new Map<string, number>();
+  for (const set of invoices) {
+    const g = [...set].sort();
+    for (let i = 0; i < g.length; i++) {
+      single.set(g[i], (single.get(g[i]) || 0) + 1);
+      for (let j = i + 1; j < g.length; j++) {
+        const k = `${g[i]}|${g[j]}`;
+        pair.set(k, (pair.get(k) || 0) + 1);
+      }
+    }
+  }
+  return { total: invoices.length, single, pair };
+}
+
+export interface CrossSellSuggestion { trigger: string; offer: string; base: number; pct: number; lift: number }
+
+// A -> B se sugiere si: facturas con A >= minBase, % de esas que llevan B >= minPct y
+// lift = %(B|A) / %(B) >= minLift (evita lo que va en casi todas las facturas, como el cemento).
+export function selectSuggestions(
+  c: PairCounts,
+  opts: { minBase: number; minPct: number; minLift: number; maxPerTrigger: number },
+): CrossSellSuggestion[] {
+  const byTrigger = new Map<string, CrossSellSuggestion[]>();
+  const consider = (a: string, b: string, both: number) => {
+    const base = c.single.get(a) || 0;
+    const bCount = c.single.get(b) || 0;
+    if (base < opts.minBase || !bCount || !c.total) return;
+    const pct = (both / base) * 100;
+    const lift = (both / base) / (bCount / c.total);
+    if (pct < opts.minPct || lift < opts.minLift) return;
+    const list = byTrigger.get(a) ?? [];
+    list.push({ trigger: a, offer: b, base, pct: Math.round(pct * 10) / 10, lift: Math.round(lift * 10) / 10 });
+    byTrigger.set(a, list);
+  };
+  for (const [k, both] of c.pair) {
+    const [a, b] = k.split('|');
+    consider(a, b, both);
+    consider(b, a, both);
+  }
+  const out: CrossSellSuggestion[] = [];
+  for (const list of byTrigger.values()) {
+    out.push(...list.sort((x, y) => y.lift - x.lift).slice(0, opts.maxPerTrigger));
+  }
+  return out;
+}

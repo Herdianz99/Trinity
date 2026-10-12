@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  normalizeTerm, ruleKey, extractMeasures, sharesMeasure, firstSignificantWord, wasOffered,
+  normalizeTerm, ruleKey, extractMeasures, sharesMeasure, firstSignificantWord, wasOffered, countPairs, selectSuggestions,
 } from './src/modules/chatbot/cross-sell-utils';
 
 test('normalizeTerm: minusculas, sin acentos, espacios simples', () => {
@@ -38,4 +38,39 @@ test('wasOffered: el texto menciona la mayoria de las palabras del producto', ()
   const name = 'DISCO DE CORTE 4-1/2" X 1/16 NORTON';
   assert.equal(wasOffered(name, 'Para usarlo también tenemos Disco de corte 4½" Norton a 1,20$ bcv.'), true);
   assert.equal(wasOffered(name, 'El esmeril está en 85$ bcv. ¿Buscas algo más?'), false);
+});
+
+test('countPairs: cuenta facturas por grupo y por par (sin orden)', () => {
+  const c = countPairs([
+    new Set(['esmeril', 'disco']),
+    new Set(['esmeril', 'disco', 'cemento']),
+    new Set(['cemento']),
+    new Set(['esmeril']),
+  ]);
+  assert.equal(c.total, 4);
+  assert.equal(c.single.get('esmeril'), 3);
+  assert.equal(c.single.get('cemento'), 2);
+  assert.equal(c.pair.get('disco|esmeril'), 2);
+  assert.equal(c.pair.get('cemento|esmeril'), 1);
+});
+
+test('selectSuggestions: aplica base, % y lift; max por trigger; ordena por lift', () => {
+  // 100 facturas: 40 con esmeril, 20 de ellas con disco; disco aparece en 25 en total.
+  // cemento aparece en 80 (en 30 de las de esmeril): % alto pero lift < 2 -> no se sugiere.
+  const sets: Set<string>[] = [];
+  for (let i = 0; i < 100; i++) {
+    const s = new Set<string>();
+    if (i < 40) s.add('esmeril');
+    if (i < 20 || i >= 95) s.add('disco'); // disco en 25 facturas -> lift = 50% / 25% = 2.0
+    if (i >= 10 && i < 90) s.add('cemento');
+    sets.push(s);
+  }
+  const out = selectSuggestions(countPairs(sets), { minBase: 20, minPct: 15, minLift: 2, maxPerTrigger: 3 });
+  const esm = out.filter((s) => s.trigger === 'esmeril');
+  assert.deepEqual(esm.map((s) => s.offer), ['disco']);
+  assert.equal(esm[0].base, 40);
+  assert.equal(esm[0].pct, 50);
+  assert.equal(esm[0].lift, 2);
+  // cemento: 30 de 40 facturas con esmeril (75%) pero esta en 80 de 100 -> lift 0.94 -> no se sugiere
+  assert.ok(!esm.some((s) => s.offer === 'cemento'));
 });
