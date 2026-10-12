@@ -44,14 +44,14 @@ export function firstSignificantWord(name: string): string | null {
   return significantWords(name)[0] ?? null;
 }
 
-// Heuristica: el bot "ofrecio" el producto si su respuesta menciona >= 60% de las palabras significativas
+// Heuristica: el bot "ofrecio" el producto si su respuesta menciona >= 50% de las palabras significativas
 // del nombre (el bot suele acortar nombres y quitar codigos).
 export function wasOffered(productName: string, text: string): boolean {
   const words = significantWords(productName);
   if (!words.length) return false;
   const t = normalizeTerm(text);
   const hits = words.filter((w) => t.includes(w)).length;
-  return hits / words.length >= 0.6;
+  return hits / words.length >= 0.5;
 }
 
 export interface PairCounts {

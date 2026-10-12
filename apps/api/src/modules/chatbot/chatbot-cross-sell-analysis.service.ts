@@ -87,7 +87,8 @@ export class ChatbotCrossSellAnalysisService {
         update: { crossSellAnalyzedAt: now },
       });
       this.crossSell.invalidate();
-      return { invoices: perInvoice.size, suggestions: suggestions.length, analyzedAt: now };
+      // suggestions = las que quedan pendientes de revisar (las ya cubiertas por reglas solo refrescan sus datos).
+      return { invoices: perInvoice.size, suggestions: keepSuggested.length, analyzedAt: now };
     } finally {
       this.running = false;
     }

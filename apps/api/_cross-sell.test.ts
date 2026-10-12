@@ -38,6 +38,8 @@ test('wasOffered: el texto menciona la mayoria de las palabras del producto', ()
   const name = 'DISCO DE CORTE 4-1/2" X 1/16 NORTON';
   assert.equal(wasOffered(name, 'Para usarlo también tenemos Disco de corte 4½" Norton a 1,20$ bcv.'), true);
   assert.equal(wasOffered(name, 'El esmeril está en 85$ bcv. ¿Buscas algo más?'), false);
+  // caso real: el bot acorta 'BROCHA 1-1/2" M/PLASTICO AZUL EXXEL' a 'brocha de 1-1/2" Exxel' (2 de 4 palabras)
+  assert.equal(wasOffered('BROCHA 1-1/2" M/PLASTICO AZUL EXXEL', 'también tenemos la brocha de 1-1/2" Exxel a 1.04$ bcv'), true);
 });
 
 test('countPairs: cuenta facturas por grupo y por par (sin orden)', () => {

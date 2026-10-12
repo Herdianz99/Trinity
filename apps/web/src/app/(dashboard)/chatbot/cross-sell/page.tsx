@@ -48,7 +48,9 @@ export default function CrossSellPage() {
   useEffect(() => { load(); }, [load]);
 
   const own = rules.filter((r) => r.status === 'ACTIVE' || r.status === 'PAUSED');
-  const suggested = rules.filter((r) => r.status === 'SUGGESTED').sort((a, b) => (b.statsLift ?? 0) - (a.statsLift ?? 0));
+  // Primero lo que mas facturas llevan juntos (no el lift: arriba quedarian pares raros de pocas facturas).
+  const together = (r: Rule) => ((r.statsBaseCount ?? 0) * (r.statsPairPct ?? 0)) / 100;
+  const suggested = rules.filter((r) => r.status === 'SUGGESTED').sort((a, b) => together(b) - together(a));
 
   function openForm(r?: Rule, fromSuggestion = false) {
     setTest(null);
@@ -196,7 +198,7 @@ export default function CrossSellPage() {
                   <td className="px-4 py-3 text-white font-medium">{r.trigger}</td>
                   <td className="px-4 py-3 text-slate-200">{r.offerTerms.join(' · ')}</td>
                   <td className="px-4 py-3 text-slate-400">
-                    {r.statsPairPct}% de {r.statsBaseCount} facturas con {r.trigger} · {r.statsLift}× más de lo normal
+                    {Math.round(together(r))} facturas juntos ({r.statsPairPct}% de las {r.statsBaseCount} con {r.trigger}) · {r.statsLift}× más de lo normal
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">

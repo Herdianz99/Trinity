@@ -222,8 +222,20 @@ export class ChatbotCrossSellService {
   // Tras cada respuesta del bot: lo que el texto final realmente menciono cuenta como "ofrecido"
   // (no se repite en la conversacion y suma a "Veces ofrecida").
   async recordOffered(conversationId: string, toolLog: { name: string; result: unknown }[], finalText: string) {
+    // El bot suele ofrecer el complemento cuando el cliente ELIGE un producto de una lista anterior, sin
+    // volver a buscar: por eso tambien se miran las busquedas de los ultimos mensajes del bot.
+    const previous = await this.prisma.chatbotMessage.findMany({
+      where: { conversationId, role: 'BOT' },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+      select: { toolCalls: true },
+    });
+    const logs = [
+      ...toolLog,
+      ...previous.flatMap((m) => ((m.toolCalls ?? []) as unknown as { name: string; result: unknown }[])),
+    ];
     const seen = new Set<string>();
-    for (const t of toolLog) {
+    for (const t of logs) {
       if (t.name !== 'buscar_productos') continue;
       const productos = ((t.result as any)?.productos ?? []) as { ofrecer_tambien?: { codigo: string; nombre: string; regla_id: string }[] }[];
       for (const p of productos) {

@@ -112,7 +112,7 @@ Nueva sección VENTA CRUZADA:
 ### 3.4 Registro de lo ofrecido
 
 Al terminar `reply()`, para cada sugerencia entregada en ese turno se considera **ofrecida** si el texto
-final menciona el producto (≥ 60 % de las palabras significativas de su nombre, normalizadas). Si se
+final menciona el producto (≥ 50 % de las palabras significativas de su nombre, normalizadas). Si se
 ofreció: se crea `ChatbotCrossSellOffer` y se incrementa `timesOffered`. Esto alimenta el "una vez por
 conversación" del servidor (§3.1 paso 2) y la columna "Veces ofrecida". Es una heurística: si falla, lo
 peor es que el bot vuelva a recibir la sugerencia y el prompt le dice que no la repita.
