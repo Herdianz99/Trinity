@@ -10,11 +10,14 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import SeniatModal from '@/components/seniat-modal';
 import CustomerPortalAccess from '@/components/customer-portal-access';
+import CustomerLocationField from '@/components/customer-location-field';
 
 interface Customer {
   id: string; code: string | null; name: string; documentType: string; rif: string | null;
   phone: string | null; email: string | null; address: string | null;
   creditLimit: number; creditDays: number; isActive: boolean;
+  minOrderUsd?: number;
+  latitude?: number | null; longitude?: number | null; locationAccuracyM?: number | null; locationUpdatedAt?: string | null;
   isGroupCompany?: boolean;
   isEmployee?: boolean;
   creditAuthorizedBy?: string | null;
@@ -163,6 +166,8 @@ export default function CustomerDetailPage() {
         isEmployee: data.isEmployee ?? false,
         creditAuthorizedBy: data.creditAuthorizedBy || '',
         sellerId: data.sellerId || '',
+        minOrderUsd: data.minOrderUsd ?? 0,
+        latitude: data.latitude ?? null, longitude: data.longitude ?? null, locationAccuracyM: data.locationAccuracyM ?? null,
       });
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
@@ -234,7 +239,7 @@ export default function CustomerDetailPage() {
       const res = await fetch(`/api/proxy/customers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, sellerId: form.sellerId || null, creditLimit: Number(form.creditLimit), creditDays: Number(form.creditDays) }),
+        body: JSON.stringify({ ...form, sellerId: form.sellerId || null, creditLimit: Number(form.creditLimit), creditDays: Number(form.creditDays), minOrderUsd: Number(form.minOrderUsd) || 0 }),
       });
       if (res.ok) {
         setSaveMsg({ type: 'success', text: 'Cliente actualizado' });
@@ -432,6 +437,19 @@ export default function CustomerDetailPage() {
               </select>
               <p className="text-xs text-slate-500 mt-1">Los pedidos que el cliente monte en el portal llevan este vendedor.</p>
             </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Pedido minimo en el portal (USD)</label>
+              <input type="number" value={form.minOrderUsd ?? 0} onChange={e => setForm((f: any) => ({ ...f, minOrderUsd: e.target.value === '' ? '' : Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
+              <p className="text-xs text-slate-500 mt-1">El cliente no podra guardar pedidos por debajo de este monto (precio de lista). 0 = sin minimo.</p>
+            </div>
+            <CustomerLocationField
+              value={{
+                latitude: form.latitude ?? null, longitude: form.longitude ?? null, locationAccuracyM: form.locationAccuracyM ?? null,
+                // La fecha solo vale si las coordenadas son las guardadas.
+                locationUpdatedAt: form.latitude === customer.latitude && form.longitude === customer.longitude ? customer.locationUpdatedAt : null,
+              }}
+              onChange={(v) => setForm((f: any) => ({ ...f, latitude: v.latitude, longitude: v.longitude, locationAccuracyM: v.locationAccuracyM }))}
+            />
             <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
               <input
                 type="checkbox"

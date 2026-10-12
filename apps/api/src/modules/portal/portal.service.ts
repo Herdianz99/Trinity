@@ -29,7 +29,7 @@ export class PortalService {
       select: {
         isActive: true, role: true,
         customer: {
-          select: { id: true, name: true, code: true, documentType: true, rif: true, isActive: true, sellerId: true },
+          select: { id: true, name: true, code: true, documentType: true, rif: true, isActive: true, sellerId: true, minOrderUsd: true },
         },
       },
     });
@@ -85,6 +85,23 @@ export class PortalService {
     return [...map.entries()].map(([productId, quantity]) => ({ productId, quantity }));
   }
 
+  // Pedido minimo del cliente: el total a precio de lista (lo mismo que suma la pantalla del portal)
+  // debe llegar al minimo. Solo aplica a pedidos del portal; la empresa puede facturar lo que sea.
+  private async assertMinOrder(minOrderUsd: number, items: { productId: string; quantity: number }[]) {
+    if (!(minOrderUsd > 0)) return;
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: items.map((i) => i.productId) } },
+      select: { id: true, priceDetal: true },
+    });
+    const price = new Map(products.map((p) => [p.id, p.priceDetal]));
+    const total = r2(items.reduce((s, i) => s + (price.get(i.productId) ?? 0) * i.quantity, 0));
+    if (total < minOrderUsd) {
+      throw new BadRequestException(
+        `Tu pedido mínimo es de $${r2(minOrderUsd).toFixed(2)}. Te faltan $${r2(minOrderUsd - total).toFixed(2)} para poder guardarlo.`,
+      );
+    }
+  }
+
   private async ownOrder(customerId: string, id: string) {
     const inv = await this.prisma.invoice.findUnique({
       where: { id },
@@ -107,7 +124,7 @@ export class PortalService {
       this.todayRate(),
     ]);
     return {
-      customer: { name: c.name, code: c.code, documentType: c.documentType, rif: c.rif },
+      customer: { name: c.name, code: c.code, documentType: c.documentType, rif: c.rif, minOrderUsd: c.minOrderUsd },
       companyName: cfg?.companyName ?? '',
       allowNegativeStock: cfg?.allowNegativeStock ?? true,
       rate,
@@ -201,9 +218,11 @@ export class PortalService {
   async createOrder(userId: string, dto: PortalOrderDto) {
     const c = await this.resolveCustomer(userId);
     await this.assertRate();
+    const items = this.mergeItems(dto.items);
+    await this.assertMinOrder(c.minOrderUsd, items);
     // Precio de lista y descuento 0 SIEMPRE: el DTO del portal no trae precio ni descuento.
     const inv = await this.invoices.create(
-      { customerId: c.id, sellerId: c.sellerId ?? undefined, items: this.mergeItems(dto.items) },
+      { customerId: c.id, sellerId: c.sellerId ?? undefined, items },
       { id: userId, role: UserRole.CLIENT },
       { fromPortal: true, portalNote: dto.portalNote?.trim() || null, clientUpdatedAt: new Date() },
     );
@@ -215,9 +234,11 @@ export class PortalService {
     const inv = await this.ownOrder(c.id, id);
     if (this.orderState(inv) === 'EN_USO') throw new ConflictException(LOCKED_MSG);
     await this.assertRate();
+    const items = this.mergeItems(dto.items);
+    await this.assertMinOrder(c.minOrderUsd, items);
     await this.invoices.updateItems(
       id,
-      { customerId: c.id, items: this.mergeItems(dto.items) },
+      { customerId: c.id, items },
       { id: userId, role: UserRole.CLIENT },
       { extra: { portalNote: dto.portalNote?.trim() || null, clientUpdatedAt: new Date() }, rejectIfLocked: true },
     );

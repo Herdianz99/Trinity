@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, UserCheck, Loader2, Search } from 'lucide-react';
 import SeniatModal from '@/components/seniat-modal';
+import CustomerLocationField from '@/components/customer-location-field';
 
 const defaultForm = {
   name: '', documentType: 'V', rif: '', phone: '', email: '', address: '',
   creditLimit: 0, creditDays: 0, isGroupCompany: false, isEmployee: false, creditAuthorizedBy: '',
+  minOrderUsd: 0,
+  latitude: null as number | null, longitude: null as number | null, locationAccuracyM: null as number | null,
 };
 
 export default function NewCustomerPage() {
@@ -166,6 +169,15 @@ export default function NewCustomerPage() {
         {!canEditCredit && (
           <p className="text-xs text-amber-400">Solo administracion puede editar el credito del cliente.</p>
         )}
+        <div>
+          <label className="text-xs text-slate-400 mb-1 block">Pedido minimo en el portal (USD)</label>
+          <input type="number" value={form.minOrderUsd} onChange={e => setForm(f => ({ ...f, minOrderUsd: Number(e.target.value) }))} className="input-field !py-2 text-sm" min="0" step="0.01" />
+          <p className="text-xs text-slate-500 mt-1">El cliente no podra guardar pedidos por debajo de este monto (precio de lista). 0 = sin minimo.</p>
+        </div>
+        <CustomerLocationField
+          value={form}
+          onChange={(v) => setForm(f => ({ ...f, latitude: v.latitude, longitude: v.longitude, locationAccuracyM: v.locationAccuracyM }))}
+        />
         <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 cursor-pointer hover:border-amber-500/30 transition-colors">
           <input
             type="checkbox"

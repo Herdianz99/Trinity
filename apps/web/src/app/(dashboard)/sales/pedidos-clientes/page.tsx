@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Loader2, Lock, X, ExternalLink, RefreshCw } from 'lucide-react';
+import { ShoppingBag, Loader2, Lock, X, ExternalLink, RefreshCw, MapPin } from 'lucide-react';
+import { mapsUrl } from '@/components/customer-location-field';
 
 interface Row {
   id: string; portalNote: string | null; createdAt: string; clientUpdatedAt: string | null;
@@ -12,7 +13,10 @@ interface Row {
 }
 interface Detail {
   id: string; portalNote: string | null; createdAt: string; clientUpdatedAt: string | null; totalUsd: number;
-  customer: { name: string; code: string | null; documentType: string; rif: string | null } | null;
+  customer: {
+    name: string; code: string | null; documentType: string; rif: string | null;
+    latitude: number | null; longitude: number | null;
+  } | null;
   seller: { name: string } | null;
   items: { productId: string; productCode: string | null; productName: string; quantity: number; totalUsd: number }[];
 }
@@ -164,6 +168,14 @@ export default function PedidosClientesPage() {
                     <h2 className="text-lg font-bold text-white">{detail.customer?.name}</h2>
                     <p className="text-sm text-slate-400">{detail.portalNote || 'Pedido sin nombre'} · Vendedor: {detail.seller?.name || 'Sin vendedor'}</p>
                     <p className="text-xs text-slate-500">Modificado por el cliente: {fmtDateTime(detail.clientUpdatedAt || detail.createdAt)}</p>
+                    {detail.customer?.latitude != null && detail.customer?.longitude != null ? (
+                      <a href={mapsUrl(detail.customer.latitude, detail.customer.longitude)} target="_blank" rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300">
+                        <MapPin size={12} /> Ver ubicación para el despacho
+                      </a>
+                    ) : (
+                      <p className="mt-1 text-xs text-slate-500">Cliente sin ubicación GPS (se carga en su ficha).</p>
+                    )}
                   </div>
                   <button onClick={() => setDetail(null)} className="text-slate-400 hover:text-white" aria-label="Cerrar"><X size={20} /></button>
                 </div>

@@ -20,6 +20,13 @@ interface Line {
 const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n: number) => (n ?? 0).toLocaleString('es-VE', { maximumFractionDigits: 3 });
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+// Cuanto le falta al pedido para llegar al minimo del cliente (0 = ya llega o no hay minimo).
+function minOrderMissing(lines: Line[], minOrderUsd: number) {
+  if (!(minOrderUsd > 0)) return 0;
+  return Math.max(0, r2(minOrderUsd - r2(lines.reduce((s, l) => s + l.priceUsd * l.quantity, 0))));
+}
 
 function Thumb({ url }: { url: string | null }) {
   return url ? (
@@ -47,6 +54,8 @@ export default function PortalOrderPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [rate, setRate] = useState<number | null>(null);
   const [allowNegativeStock, setAllowNegativeStock] = useState(true);
+  // Pedido minimo del cliente (USD, precio de lista). 0 = sin minimo. El servidor tambien lo valida.
+  const [minOrderUsd, setMinOrderUsd] = useState(0);
 
   // Busqueda: MISMO comportamiento que el POS (debounce 300 ms, hasta 500 resultados,
   // ofertas primero, mismo motor del servidor).
@@ -62,7 +71,9 @@ export default function PortalOrderPage() {
   useEffect(() => {
     fetch('/api/proxy/portal/me')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) { setRate(d.rate ?? null); setAllowNegativeStock(d.allowNegativeStock ?? true); } })
+      .then((d) => {
+        if (d) { setRate(d.rate ?? null); setAllowNegativeStock(d.allowNegativeStock ?? true); setMinOrderUsd(d.customer?.minOrderUsd ?? 0); }
+      })
       .catch(() => {});
   }, []);
 
@@ -155,6 +166,11 @@ export default function PortalOrderPage() {
 
   const save = useCallback(async (): Promise<boolean> => {
     if (lines.length === 0) { setMessage({ type: 'error', text: 'Agrega al menos un producto.' }); return false; }
+    const missing = minOrderMissing(lines, minOrderUsd);
+    if (missing > 0) {
+      setMessage({ type: 'error', text: `Tu pedido mínimo es de $ ${fmt(minOrderUsd)}. Te faltan $ ${fmt(missing)} para poder guardarlo.` });
+      return false;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -186,7 +202,7 @@ export default function PortalOrderPage() {
     } finally {
       setSaving(false);
     }
-  }, [lines, note, orderId, applyOrder, loadOrder, router]);
+  }, [lines, note, orderId, minOrderUsd, applyOrder, loadOrder, router]);
 
   // Salir sin guardar: mismo guard que el POS.
   useEffect(() => {
@@ -196,6 +212,7 @@ export default function PortalOrderPage() {
   useEffect(() => () => setBlocker(null), [setBlocker]);
 
   const totalUsd = lines.reduce((s, l) => s + l.priceUsd * l.quantity, 0);
+  const missingUsd = minOrderMissing(lines, minOrderUsd);
 
   if (loading) {
     return <div className="py-24 flex items-center justify-center text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> Cargando pedido…</div>;
@@ -322,6 +339,11 @@ export default function PortalOrderPage() {
             <p className="text-[11px] text-slate-400">Total estimado</p>
             <p className="text-lg font-bold font-mono text-white leading-tight">$ {fmt(totalUsd)}</p>
             {rate != null && <p className="text-[11px] font-mono text-slate-500">Bs {fmt(totalUsd * rate)}</p>}
+            {minOrderUsd > 0 && (
+              <p className={`text-[11px] ${missingUsd > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {missingUsd > 0 ? `Mínimo $ ${fmt(minOrderUsd)} · faltan $ ${fmt(missingUsd)}` : `Mínimo $ ${fmt(minOrderUsd)} alcanzado`}
+              </p>
+            )}
           </div>
           <button onClick={save} disabled={locked || saving || !dirty || lines.length === 0}
             className="ml-auto btn-primary flex items-center gap-2 !py-3 !px-5 disabled:opacity-50 disabled:cursor-not-allowed">

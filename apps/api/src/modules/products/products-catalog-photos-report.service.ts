@@ -282,9 +282,10 @@ export class ProductsCatalogPhotosReportService {
     // Contraportada: pagina final a todo el ancho (condiciones + promociones). Se agrega ANTES
     // del loop de paginacion (justo tras la cuadricula, sin switchToPage de por medio) para que
     // su contenido quede asociado a su propia pagina; el loop luego la excluye del numerado.
-    // Solo si se tildo "Condiciones" en el modal.
-    const withConditions = !!query.withConditions;
-    if (withConditions) this.drawBackCover(doc, company);
+    // Solo si se eligio "Condiciones $" o "Condiciones BCV" en el modal.
+    const conditions = query.conditions ?? (query.withConditions ? 'usd' : null);
+    const withConditions = !!conditions;
+    if (conditions) this.drawBackCover(doc, company, conditions);
 
     // Paginacion al pie: numera solo las paginas de productos (excluye la contraportada = ultima).
     const range = doc.bufferedPageRange();
@@ -305,7 +306,9 @@ export class ProductsCatalogPhotosReportService {
   }
 
   // Pagina final: contraportada con las condiciones de pago (contado / credito).
-  private drawBackCover(doc: PDFKit.PDFDocument, company: string) {
+  // usd = "Condiciones $" (-10% / -5%), bcv = "Condiciones BCV" (-6% / -3%); el resto es igual.
+  private drawBackCover(doc: PDFKit.PDFDocument, company: string, conditions: 'usd' | 'bcv') {
+    const [cashPct, creditPct] = conditions === 'bcv' ? ['-6%', '-3%'] : ['-10%', '-5%'];
     doc.addPage();
     // Anula los margenes de ESTA pagina: dibujamos con coordenadas absolutas (bandas al borde);
     // sin esto PDFKit auto-agrega una pagina en blanco al "desbordar" el margen inferior.
@@ -343,8 +346,8 @@ export class ProductsCatalogPhotosReportService {
       doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(30)
         .text(badge, M + cw - badgeW - 24, y + (cardH - 56) / 2 + 13, { width: badgeW, align: 'center', lineBreak: false });
     };
-    condCard(startY, 'CONTADO', 'Pago de contado', '-10%');
-    condCard(startY + cardH + gap, '15 DIAS DE CREDITO', 'Pago hasta 15 dias', '-5%');
+    condCard(startY, 'CONTADO', 'Pago de contado', cashPct);
+    condCard(startY + cardH + gap, '15 DIAS DE CREDITO', 'Pago hasta 15 dias', creditPct);
 
     // --- Banda inferior ---
     const fy = H - 92;

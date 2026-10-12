@@ -200,6 +200,26 @@ export class CustomersService {
     }
   }
 
+  // Ubicacion GPS: latitud y longitud van juntas (las dos o ninguna). Sella la fecha cuando cambia.
+  private locationData(
+    dto: { latitude?: number | null; longitude?: number | null; locationAccuracyM?: number | null },
+    prev?: { latitude: number | null; longitude: number | null },
+  ) {
+    if (dto.latitude === undefined && dto.longitude === undefined) return {};
+    const lat = dto.latitude ?? null;
+    const lng = dto.longitude ?? null;
+    if ((lat === null) !== (lng === null)) {
+      throw new BadRequestException('La ubicacion necesita latitud y longitud');
+    }
+    if (prev && prev.latitude === lat && prev.longitude === lng) return {};
+    return {
+      latitude: lat,
+      longitude: lng,
+      locationAccuracyM: lat === null ? null : dto.locationAccuracyM ?? null,
+      locationUpdatedAt: lat === null ? null : new Date(),
+    };
+  }
+
   // Si hay cupo (> 0), dias y autorizado-por son obligatorios.
   private validateCreditFields(creditLimit: number, creditDays: number | undefined | null, authBy: string | undefined | null) {
     if (creditLimit > 0) {
@@ -219,9 +239,11 @@ export class CustomersService {
       await this.assertCanEditCredit(userId);
       this.validateCreditFields(creditLimit, dto.creditDays, dto.creditAuthorizedBy);
     }
+    const { latitude, longitude, locationAccuracyM, ...rest } = dto;
+    const location = this.locationData({ latitude, longitude, locationAccuracyM });
     const code = await this.generateCustomerCode();
     return this.prisma.customer.create({
-      data: { ...dto, code, createdById: userId, creditReviewedAt: creditLimit > 0 ? new Date() : null },
+      data: { ...rest, ...location, code, createdById: userId, creditReviewedAt: creditLimit > 0 ? new Date() : null },
     });
   }
 
@@ -281,9 +303,13 @@ export class CustomersService {
       (dto.creditLimit !== undefined && dto.creditLimit !== exists.creditLimit) ||
       (dto.creditDays !== undefined && dto.creditDays !== exists.creditDays);
 
+    // Sin cambio de coordenadas no se tocan los campos de ubicacion (ni su fecha).
+    const { latitude, longitude, locationAccuracyM, ...rest } = dto;
+    const location = this.locationData({ latitude, longitude, locationAccuracyM }, exists);
+
     return this.prisma.customer.update({
       where: { id },
-      data: { ...dto, ...(creditChanged ? { creditReviewedAt: new Date() } : {}) },
+      data: { ...rest, ...location, ...(creditChanged ? { creditReviewedAt: new Date() } : {}) },
     });
   }
 

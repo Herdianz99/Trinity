@@ -40,6 +40,14 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🗓️ Sesión 158b (2026-10-12) — Mayor: pedido mínimo, ubicación GPS del cliente y "Condiciones BCV" en el catálogo
+
+> **Estado: programado y probado en local (API + navegador), NO desplegado** (el usuario pidió no hacer deploy). Migración `20261012120000_customer_min_order_location` (aditiva, IF NOT EXISTS, también en `fix-schema.sql`). Pensado para el mayor (portal de pedidos), pero el código viaja a todas las instancias inerte (mínimo 0 = sin mínimo).
+
+- **Pedido mínimo** (`Customer.minOrderUsd`, 0 = sin mínimo). Decisión: **bloquear en el portal, no ocultar a compras** (ocultarlo haría que el cliente crea que lo envió y nadie lo despache). El portal muestra en la barra inferior "Mínimo $X · faltan $Y" y al guardar avisa; el servidor también rechaza (400) en `PortalService.createOrder/updateOrder` comparando contra el total a precio de lista (lo mismo que suma el portal). Borrar el pedido sí se permite. Los pedidos/facturas que monta el personal NO tienen mínimo. Se edita en la ficha del cliente (nuevo y detalle).
+- **Ubicación GPS** (`latitude`, `longitude`, `locationAccuracyM`, `locationUpdatedAt`): componente `components/customer-location-field.tsx` con botón "Tomar ubicación actual" (`navigator.geolocation`, alta precisión; requiere HTTPS, avisa si la precisión es > 100 m), enlace a Google Maps y "Quitar". El servidor valida lat/lng juntas y rangos, y sella `locationUpdatedAt` solo si cambian las coordenadas. En **Pedidos de clientes** (detalle) sale "Ver ubicación para el despacho".
+- **Catálogo con fotos**: el checkbox "Condiciones" pasó a radio **Sin condiciones / Condiciones $ (-10% / -5%) / Condiciones BCV (-6% / -3%)**; parámetro `conditions=usd|bcv` (`withConditions=true` sigue valiendo como $). La contraportada BCV es idéntica salvo los porcentajes (incluida la banda "PRECIOS A TASA BINANCE, ZELLE O EFECTIVO" — preguntar al usuario si en BCV debe cambiar).
+
 ## 🗓️ Sesión 158 (2026-10-12) — Chatbot: cliente pide más cantidad de la que hay
 
 > **Estado: probado con IA real en local, NO desplegado** (el usuario pidió no hacer deploy). Va con el próximo deploy de la grande.

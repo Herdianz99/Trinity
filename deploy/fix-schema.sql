@@ -3283,3 +3283,10 @@ ALTER TABLE "ChatbotMessage" ADD COLUMN IF NOT EXISTS "ratedAt" TIMESTAMP(3);
 -- Permiso aparte para la configuracion del bot (precios, textos, tope): solo ADMIN por defecto.
 UPDATE "RolePermission" SET modules = array_append(modules, 'chatbot-config')
 WHERE role = 'ADMIN' AND NOT ('chatbot-config' = ANY(modules)) AND NOT ('*' = ANY(modules));
+
+-- ===== Cliente: pedido minimo + ubicacion GPS (20261012120000_customer_min_order_location) =====
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "minOrderUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "longitude" DOUBLE PRECISION;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "locationAccuracyM" DOUBLE PRECISION;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "locationUpdatedAt" TIMESTAMP(3);

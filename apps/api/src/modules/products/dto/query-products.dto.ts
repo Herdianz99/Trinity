@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsBoolean, IsNumber, Min } from 'class-validator';
+import { IsOptional, IsString, IsBoolean, IsNumber, IsIn, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
@@ -27,6 +27,13 @@ export class QueryProductsDto {
   @Transform(toBool)
   @IsBoolean()
   withConditions?: boolean;
+
+  // Que condiciones lleva la contraportada: usd = "Condiciones $" (-10% / -5%), bcv = "Condiciones BCV" (-6% / -3%).
+  // Sin esto y con withConditions=true se asume usd (enlaces viejos).
+  @ApiProperty({ required: false, enum: ['usd', 'bcv'] })
+  @IsOptional()
+  @IsIn(['usd', 'bcv'])
+  conditions?: 'usd' | 'bcv';
 
   @ApiProperty({ required: false })
   @IsOptional()

@@ -11,6 +11,18 @@ import Link from 'next/link';
 
 const CATALOG_EXCLUDED_KEY = 'catalogPhotos.excludedCategories';
 const CATALOG_CONDITIONS_KEY = 'catalogPhotos.withConditions';
+type CatalogConditions = '' | 'usd' | 'bcv';
+const CATALOG_CONDITION_OPTIONS: { value: CatalogConditions; label: string; hint?: string }[] = [
+  { value: '', label: 'Sin condiciones' },
+  { value: 'usd', label: 'Condiciones $', hint: 'contado -10%, credito -5%' },
+  { value: 'bcv', label: 'Condiciones BCV', hint: 'contado -6%, credito -3%' },
+];
+// Valor guardado: 'usd' | 'bcv' | 'none'; los viejos 'true'/'false' del checkbox = $ / sin condiciones.
+function parseCatalogConditions(saved: string | null): CatalogConditions {
+  if (saved === 'bcv') return 'bcv';
+  if (saved === 'none' || saved === 'false') return '';
+  return 'usd';
+}
 const NO_CATEGORY = '__none__'; // productos sin categoria (el backend lo entiende igual)
 
 interface Product {
@@ -65,8 +77,8 @@ export default function ProductsPage() {
   // Catalogo con fotos: categorias DESTILDADAS (no salen). Se guarda en localStorage para
   // recordar la ultima seleccion; las categorias nuevas salen tildadas por defecto.
   const [catalogExcluded, setCatalogExcluded] = useState<Set<string>>(new Set());
-  // Checkbox "Condiciones": incluye la contraportada con las condiciones de pago (se recuerda).
-  const [catalogWithConditions, setCatalogWithConditions] = useState(true);
+  // Contraportada con las condiciones de pago: sin / "Condiciones $" / "Condiciones BCV" (se recuerda).
+  const [catalogConditions, setCatalogConditions] = useState<CatalogConditions>('usd');
   const [catalogGenerating, setCatalogGenerating] = useState(false);
 
   const fetchProducts = useCallback(async () => {
@@ -151,7 +163,7 @@ export default function ProductsPage() {
       const saved = JSON.parse(localStorage.getItem(CATALOG_EXCLUDED_KEY) || '[]');
       if (Array.isArray(saved)) setCatalogExcluded(new Set(saved));
     } catch { /* sin storage: todas tildadas */ }
-    try { setCatalogWithConditions(localStorage.getItem(CATALOG_CONDITIONS_KEY) !== 'false'); } catch { /* ignore */ }
+    try { setCatalogConditions(parseCatalogConditions(localStorage.getItem(CATALOG_CONDITIONS_KEY))); } catch { /* ignore */ }
     setShowCatalogModal(true);
   }
 
@@ -174,10 +186,10 @@ export default function ProductsPage() {
     params.delete('categoryId');
     const excluded = Array.from(catalogExcluded);
     if (excluded.length) params.set('excludeCategoryIds', excluded.join(','));
-    if (catalogWithConditions) params.set('withConditions', 'true');
+    if (catalogConditions) params.set('conditions', catalogConditions);
     try {
       localStorage.setItem(CATALOG_EXCLUDED_KEY, JSON.stringify(excluded));
-      localStorage.setItem(CATALOG_CONDITIONS_KEY, String(catalogWithConditions));
+      localStorage.setItem(CATALOG_CONDITIONS_KEY, catalogConditions || 'none');
     } catch { /* ignore */ }
     const url = `/api/proxy/products/report/catalog-photos/pdf?${params}`;
     const filename = 'Catalogo.pdf';
@@ -558,16 +570,22 @@ export default function ProductsPage() {
                   {included === 0 && (
                     <p className="mt-2 text-xs text-amber-400">Selecciona al menos una categoria.</p>
                   )}
-                  <label className="mt-4 flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={catalogWithConditions}
-                      onChange={(e) => setCatalogWithConditions(e.target.checked)}
-                      className="rounded border-slate-600 bg-slate-700 accent-indigo-500"
-                    />
-                    <span className="text-sm text-slate-200">Condiciones</span>
-                    <span className="text-xs text-slate-500">(contraportada con condiciones de pago)</span>
-                  </label>
+                  <p className="mt-4 mb-1.5 text-xs text-slate-400">Contraportada con condiciones de pago</p>
+                  <div className="space-y-1.5">
+                    {CATALOG_CONDITION_OPTIONS.map(o => (
+                      <label key={o.value || 'none'} className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="catalog-conditions"
+                          checked={catalogConditions === o.value}
+                          onChange={() => setCatalogConditions(o.value)}
+                          className="border-slate-600 bg-slate-700 accent-indigo-500"
+                        />
+                        <span className="text-sm text-slate-200">{o.label}</span>
+                        {o.hint && <span className="text-xs text-slate-500">({o.hint})</span>}
+                      </label>
+                    ))}
+                  </div>
                 </>
               );
             })()}

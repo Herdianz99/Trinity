@@ -57,7 +57,7 @@ export class ClientOrdersService {
       select: {
         id: true, fromPortal: true, status: true, portalNote: true, createdAt: true, clientUpdatedAt: true,
         totalUsd: true, totalBs: true,
-        customer: { select: { id: true, name: true, code: true, documentType: true, rif: true } },
+        customer: { select: { id: true, name: true, code: true, documentType: true, rif: true, latitude: true, longitude: true } },
         seller: { select: { id: true, name: true } },
         items: { select: { productId: true, productName: true, quantity: true, totalUsd: true } },
       },

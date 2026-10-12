@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsInt, IsIn, IsBoolean, Min, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsInt, IsIn, IsBoolean, Min, Max, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCustomerDto {
@@ -64,6 +64,34 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   creditAuthorizedBy?: string;
+
+  // Monto minimo (USD) para guardar un pedido desde el portal. 0 = sin minimo.
+  @ApiProperty({ default: 0, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minOrderUsd?: number;
+
+  // Ubicacion GPS para despachos. null en ambas = quitar la ubicacion.
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  locationAccuracyM?: number | null;
 
   // Vendedor asignado (los pedidos del portal llevan este vendedor). null = sin vendedor.
   @ApiProperty({ required: false, nullable: true })

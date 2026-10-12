@@ -1176,6 +1176,13 @@ model Customer {
   // Recordatorios de cobro por WhatsApp (/receivables/recordatorios):
   lastReminderAt     DateTime?               // Fecha/hora del ultimo recordatorio marcado como enviado
   reminderNote       String?                 // Observacion libre de cobranza (ej. "recordar manana AM")
+  // Monto minimo (USD, precio de lista) para que el cliente pueda guardar un pedido desde el portal. 0 = sin minimo.
+  minOrderUsd        Float     @default(0)
+  // Ubicacion GPS para despachos (tomada con el boton "Tomar ubicacion" en la ficha del cliente).
+  latitude           Float?
+  longitude          Float?
+  locationAccuracyM  Float?                  // Precision reportada por el GPS al tomarla (metros)
+  locationUpdatedAt  DateTime?
   invoices     Invoice[]
   quotations   Quotation[]
   receivables  Receivable[]
