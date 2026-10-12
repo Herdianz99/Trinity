@@ -306,9 +306,11 @@ export class ProductsCatalogPhotosReportService {
   }
 
   // Pagina final: contraportada con las condiciones de pago (contado / credito).
-  // usd = "Condiciones $" (-10% / -5%), bcv = "Condiciones BCV" (-6% / -3%); el resto es igual.
+  // usd = "Condiciones $" (-10% / -5%, precios a tasa Binance/Zelle/efectivo),
+  // bcv = "Condiciones BCV" (-6% / -3%, precios a tasa BCV); el resto es igual.
   private drawBackCover(doc: PDFKit.PDFDocument, company: string, conditions: 'usd' | 'bcv') {
     const [cashPct, creditPct] = conditions === 'bcv' ? ['-6%', '-3%'] : ['-10%', '-5%'];
+    const rateNote = conditions === 'bcv' ? 'PRECIOS A TASA BCV' : 'PRECIOS A TASA BINANCE, ZELLE O EFECTIVO';
     doc.addPage();
     // Anula los margenes de ESTA pagina: dibujamos con coordenadas absolutas (bandas al borde);
     // sin esto PDFKit auto-agrega una pagina en blanco al "desbordar" el margen inferior.
@@ -353,7 +355,7 @@ export class ProductsCatalogPhotosReportService {
     const fy = H - 92;
     doc.rect(0, fy, W, 92).fill(INK);
     doc.fillColor('#bbe6c8').font('Helvetica-Bold').fontSize(12)
-      .text('PRECIOS A TASA BINANCE, ZELLE O EFECTIVO', M, fy + 26, { width: cw, align: 'center', lineBreak: false });
+      .text(rateNote, M, fy + 26, { width: cw, align: 'center', lineBreak: false });
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(18)
       .text('@inversioneseltrebol', M, fy + 50, { width: cw, align: 'center', lineBreak: false });
   }
