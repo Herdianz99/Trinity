@@ -3108,7 +3108,48 @@ model ChatbotConfig {
   divisaExceptionCategoryIds String[] @default([])
   divisaExceptionProductIds  String[] @default([])
   monthlyBudgetUsd           Float    @default(20)
+  crossSellAnalyzedAt        DateTime? // ultimo analisis de venta cruzada (sugerencias)
   updatedAt                  DateTime @updatedAt
+}
+
+// Venta cruzada del chatbot: "si cotiza <trigger> -> ofrecer <offerTerms>". Por PALABRAS (mismo motor
+// tsquery del POS), no producto por producto. SUGGESTED/DISMISSED vienen del analisis semanal de facturas.
+enum CrossSellRuleStatus {
+  ACTIVE
+  PAUSED
+  SUGGESTED
+  DISMISSED
+}
+
+model ChatbotCrossSellRule {
+  id             String              @id @default(cuid())
+  // Clave normalizada (minusculas, sin acentos, ofertas ordenadas): "esmeril|disco de corte|disco de desbaste"
+  key            String              @unique
+  trigger        String
+  offerTerms     String[]            @default([])
+  excludeTerms   String[]            @default([])
+  status         CrossSellRuleStatus @default(PAUSED)
+  statsBaseCount Int?
+  statsPairPct   Float?
+  statsLift      Float?
+  statsAt        DateTime?
+  timesOffered   Int                 @default(0)
+  createdById    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([status])
+}
+
+// Que regla se ofrecio en que conversacion: no repetir y contar "veces ofrecida".
+model ChatbotCrossSellOffer {
+  id             String   @id @default(cuid())
+  conversationId String
+  ruleId         String
+  productId      String
+  createdAt      DateTime @default(now())
+
+  @@unique([conversationId, ruleId])
 }
 
 model ChatbotConversation {
