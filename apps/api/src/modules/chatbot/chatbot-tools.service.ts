@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ChatbotConfig } from '@prisma/client';
+import { ChatbotConfig, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { productSearchTsQuery } from '../../common/product-search';
@@ -54,15 +54,66 @@ function normalizeWords(s: string): string[] {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z0-9/#.-]+/).filter(Boolean);
 }
 
+// Medidas dichas con palabras (piloto dia 2: "tee de media", "manguera de tres cuartos"). Solo para el bot:
+// el POS no pasa por aqui. Los sinonimos no sirven para esto porque "1/2" tambien esta en los nombres
+// con 1-1/2" y 2-1/2", y "clavo de media" terminaria ofreciendo un clavo de 1-1/2".
+const SPOKEN_NUM: Record<string, string> = { un: '1', una: '1', uno: '1', dos: '2', tres: '3', cuatro: '4' };
+const NUM_RE = '(\\d+|un|una|uno|dos|tres|cuatro)';
+// "media" que NO es 1/2": "lima media caña", "media docena", "media caja"...
+const MEDIA_NOT_INCH = 'cana|luna|docena|caja|bolsa|paca|carga|plancha|lamina|hoja|rollo|resma|tonelada|libra|vuelta|hora|naranja';
+
+// Devuelve el texto con las medidas en fraccion y las que deben ser EXACTAS: 1/2 sin 1-1/2", y 1-1/2 sin 1/2"
+// (el buscador toma el "1" de "1-1/2" como prefijo y traeria todo lo de 1/2").
+// Recibe el texto ya normalizado (minusculas, sin acentos).
+export function spokenMeasures(text: string): { text: string; exact: string[] } {
+  const exact = new Set<string>();
+  const num = (w?: string) => (w ? SPOKEN_NUM[w] ?? w : '1');
+  const fraction = (f: string) => {
+    exact.add(f);
+    return ` ${f} `;
+  };
+  const out = text
+    // Mixtas primero: "pulgada y media", "una pulgada y media", "1 y media", "dos y media", "pulgada y cuarto".
+    .replace(new RegExp(`\\b(?:${NUM_RE}\\s+)?pulgadas?\\s+y\\s+media\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/2`))
+    .replace(new RegExp(`\\b${NUM_RE}\\s+y\\s+media\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/2`))
+    .replace(new RegExp(`\\b(?:${NUM_RE}\\s+)?pulgadas?\\s+y\\s+(?:un\\s+)?cuarto\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/4`))
+    .replace(new RegExp(`\\b${NUM_RE}\\s+y\\s+(?:un\\s+)?cuarto\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/4`))
+    .replace(/\btres\s+cuartos?\b/g, () => fraction('3/4'))
+    .replace(/\btres\s+octavos?\b/g, () => fraction('3/8'))
+    .replace(/\bcinco\s+octavos?\b/g, () => fraction('5/8'))
+    // "cuarto" solo NO: en pinturas es cuarto de galon ("esmalte negro cuarto").
+    .replace(/\b(?:un\s+)?cuarto\s+de\s+pulgadas?\b/g, () => fraction('1/4'))
+    .replace(/\bmedia\s+pulgadas?\b/g, () => fraction('1/2'))
+    .replace(new RegExp(`\\bmedia\\b(?!\\s+(?:${MEDIA_NOT_INCH})\\b)`, 'g'), () => fraction('1/2'));
+  return { text: out.replace(/\s+/g, ' ').trim(), exact: [...exact] };
+}
+
 // Quita el relleno; si no queda nada, deja la consulta como vino.
-export function cleanBotQuery(raw: string): string {
+// exact: fracciones que vinieron dichas con palabras ("media" -> 1/2) y no deben traer 1-1/2" ni 2-1/2".
+export function parseBotQuery(raw: string): { q: string; exact: string[] } {
   // "tubos de 3 por 3" -> "3x3" (medida; "por" es relleno y si se quita queda "3 3").
   // "100mts" / "6metros" -> "100 mts" (luego "mts" se va como relleno y queda el numero).
-  const words = normalizeWords(
-    (raw || '').replace(/(\d+)\s+por\s+(\d+)/gi, '$1x$2').replace(/(\d)(metros?|mtrs|mts?)\b/gi, '$1 $2'),
-  );
+  const base = (raw || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/(\d+)\s+por\s+(\d+)/g, '$1x$2')
+    .replace(/(\d)(metros?|mtrs|mts?)\b/g, '$1 $2');
+  const { text, exact } = spokenMeasures(base);
+  const words = normalizeWords(text);
   const kept = words.filter((w) => !FILLER.has(w));
-  return (kept.length ? kept : words).join(' ');
+  return { q: (kept.length ? kept : words).join(' '), exact };
+}
+
+export function cleanBotQuery(raw: string): string {
+  return parseBotQuery(raw).q;
+}
+
+// Condicion SQL de medida exacta, en el nombre o en los sinonimos (las cabillas dicen "BARRA 12MM" y el 1/2
+// viene del sinonimo). Simple ("1/2"): sola, no como parte de 1-1/2", 2 1/2", 11/2. Mixta ("1-1/2"): con
+// guion o espacio ("1-1/2", "1 1/2"), no 11-1/2.
+export function exactFractionRegex(f: string): string {
+  const mixed = f.match(/^(\d+)-(\d+\/\d+)$/);
+  if (mixed) return `(^|[^0-9])${mixed[1]}[- ]${mixed[2]}($|[^0-9])`;
+  return `(^|[^0-9 -]|(^|[^0-9])[ -])${f}($|[^0-9])`;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -94,7 +145,15 @@ export class ChatbotToolsService {
   // conversationId null = prueba desde la pantalla (no se registra en el reporte de "sin resultado").
   async searchProducts(cfg: ChatbotConfig, conversationId: string | null, consulta: string, cantidad?: number) {
     const qty = cantidad && Number.isFinite(cantidad) && cantidad > 0 ? cantidad : undefined;
-    const q = cleanBotQuery(consulta || '').slice(0, 120);
+    const parsed = parseBotQuery(consulta || '');
+    const q = parsed.q.slice(0, 120);
+    // "tee de media": solo 1/2" exacto (sin las de 1-1/2"). Las fracciones que escribe el cliente no se tocan.
+    const exactWhere = parsed.exact.length
+      ? Prisma.sql`AND ${Prisma.join(
+          parsed.exact.map((f) => Prisma.sql`(p.name || ' ' || p."searchKeywords") ~ ${exactFractionRegex(f)}`),
+          ' AND ',
+        )}`
+      : Prisma.empty;
     // Prefijo de la primera palabra (sin plural): "plantas" -> "planta", para priorizar nombres que empiezan asi.
     const head = (q.split(' ')[0] || '').replace(/(es|s)$/, '');
     const tsq = productSearchTsQuery(q);
@@ -119,6 +178,7 @@ export class ChatbotToolsService {
         WHERE p."isActive" AND p."priceDetal" > 0
           AND (p."searchVector" @@ to_tsquery('spanish', ${tsq})
                OR p.code ILIKE ${like} OR p.barcode ILIKE ${like})
+          ${exactWhere}
         ORDER BY (lower(unaccent(p.name)) LIKE ${headLike}) DESC, rank DESC, p.name
         LIMIT ${CANDIDATES}`;
     }
