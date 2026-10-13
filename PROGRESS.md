@@ -51,7 +51,7 @@
 ## 📊 Piloto del chatbot — día 2 en la grande (2026-10-13) · Sesión 161
 
 - **Uso hasta las 3:05 PM** (vs ayer a la misma hora): 51 conversaciones (39), 63 mensajes de clientes (48), acierto **81%** (95%; 43 👍 / 10 👎), búsquedas sin resultado 42% (39%), 1 escalada correcta (60 m de cable), respuesta 7,5 s, costo $0,09. Bajó el acierto porque llegaron pedidos más largos de construcción con nombres que no reconoce.
-- **Sinónimos activados en PRODUCCIÓN (grande, por la API, sin deploy):** cercha += selcha/selchas; losacero += "loza acero"/"losa acero"/lozacero; 3 reglas nuevas `disco ultrad` / `disco ultradelgado` / `disco ultrafino` → extrafino/extrafinos/"extra fino". Verificado: selchas → 4, loza acero → 11, discos extrafinos → 27.
+- **Sinónimos activados en PRODUCCIÓN (grande, por la API, sin deploy):** cercha += selcha/selchas; losacero += "loza acero"/"losa acero"/lozacero; 3 reglas nuevas `disco ultrad` / `disco ultradelgado` / `disco ultrafino` → extrafino/extrafinos/"extra fino" (+ ultrafino/ultrafinos/"ultra fino" en las 2 de ultradelgado). Verificado: selchas → 4, loza acero → 11, discos extrafinos → 27.
 - **Bot (código, ⏳ NO desplegado — el usuario pidió no hacer deploy):** relleno metro/metros/mts/mt/mtrs y "100mts" → "100 mts" en `cleanBotQuery`. Se quita la palabra pero se deja el número (los nombres dicen "6 MTS"/"6MTS": "tubo 2x1 6" → 7 en producción). Tests `apps/api/_bot-query.test.ts` (correr con tsx: `node <tsx>/dist/cli.mjs --test _bot-query.test.ts`).
 - **Pendiente:** "laminas zinc prepintadas" (6 búsquedas), "acerolic" (es acerolit), "talandrante", "flanche", "breaker triple", "manto flex", "cemento plástico Vituplas" (existe Ekocemento Cindu).
 
