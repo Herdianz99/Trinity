@@ -12,6 +12,22 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+// Base imponible ISLR de una CxP = solo bases gravables (sin exento ni IVA): el exento no es
+// ingreso del proveedor por el concepto (ej. valor nominal de tickets de alimentacion).
+// Si no hay base gravable (factura 100% exenta, ej. honorarios/alquiler de un no contribuyente
+// de IVA), la base es el exento.
+function payableIslrBase(p: {
+  exemptBaseUsd: number; exemptBaseBs: number;
+  taxableBase8Usd: number; taxableBase8Bs: number;
+  taxableBase16Usd: number; taxableBase16Bs: number;
+  taxableBase31Usd: number; taxableBase31Bs: number;
+}): { baseUsd: number; baseBs: number } {
+  const taxUsd = round2(p.taxableBase8Usd + p.taxableBase16Usd + p.taxableBase31Usd);
+  const taxBs = round2(p.taxableBase8Bs + p.taxableBase16Bs + p.taxableBase31Bs);
+  if (taxUsd > 0) return { baseUsd: taxUsd, baseBs: taxBs };
+  return { baseUsd: round2(p.exemptBaseUsd), baseBs: round2(p.exemptBaseBs) };
+}
+
 @Injectable()
 export class IslrRetentionVouchersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -139,10 +155,7 @@ export class IslrRetentionVouchersService {
         const p = await this.prisma.payable.findUnique({ where: { id: l.payableId } });
         if (!p) throw new BadRequestException('Cuenta por pagar no encontrada');
         if (p.supplierId !== dto.supplierId) throw new BadRequestException(`La CxP ${p.number} no pertenece al proveedor seleccionado`);
-        // Base imponible ISLR = solo bases gravables (sin exento ni IVA). El exento no es
-        // ingreso del proveedor por el concepto (ej. valor nominal de tickets de alimentacion).
-        const baseUsd = round2(p.taxableBase8Usd + p.taxableBase16Usd + p.taxableBase31Usd);
-        const baseBs = round2(p.taxableBase8Bs + p.taxableBase16Bs + p.taxableBase31Bs);
+        const { baseUsd, baseBs } = payableIslrBase(p);
         return { line: l, kind: 'PAY' as const, id: p.id, baseUsd, baseBs, totalUsd: p.amountUsd, totalBs: p.amountBs, exchangeRate: p.exchangeRate, invoiceDate: p.originalDate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
       }
       throw new BadRequestException('Cada linea debe referir una factura de compra o una CxP');
@@ -572,9 +585,7 @@ export class IslrRetentionVouchersService {
     const docs = [
       ...orders.map((o) => ({ docType: 'PURCHASE_ORDER' as const, id: o.id, number: o.number, invoiceDate: o.invoiceDate, baseUsd: o.subtotalUsd, baseBs: o.subtotalBs, totalUsd: o.totalUsd, totalBs: o.totalBs, exchangeRate: o.exchangeRate, controlNumber: o.supplierControlNumber, invoiceNumber: o.supplierInvoiceNumber })),
       ...payables.map((p) => {
-        // Base imponible ISLR = solo bases gravables (sin exento ni IVA).
-        const baseUsd = round2(p.taxableBase8Usd + p.taxableBase16Usd + p.taxableBase31Usd);
-        const baseBs = round2(p.taxableBase8Bs + p.taxableBase16Bs + p.taxableBase31Bs);
+        const { baseUsd, baseBs } = payableIslrBase(p);
         return { docType: 'PAYABLE' as const, id: p.id, number: p.documentNumber || p.number, invoiceDate: p.originalDate, baseUsd, baseBs, totalUsd: p.amountUsd, totalBs: p.amountBs, exchangeRate: p.exchangeRate, controlNumber: p.controlFiscal, invoiceNumber: p.documentNumber };
       }).filter((p) => p.baseUsd > 0),
     ];
