@@ -51,7 +51,7 @@
 ## 🧾 Retención ISLR sobre CxP 100% exenta (2026-10-13) · Sesión 161
 
 - **Problema (grande):** la `CXP/26-000376` (GERARDO GIANCARLOS FALABELLA SCUTARO, doc 131, Compras Fiscales, $4.600 todo exento: persona natural no contribuyente de IVA) no aparecía para retención ISLR: la base ISLR de una CxP era solo la suma de bases gravables (el exento se excluye por los tickets de alimentación) → base 0 → filtrada.
-- **Cambio:** si la CxP no tiene base gravable, la base ISLR es el exento. Helper `payableIslrBase` en `islr-retention-vouchers.service.ts` (lista de disponibles + creación del comprobante) y la misma regla en la retención inline de `payables.service.ts`. Si hay base gravable, igual que antes (tickets de alimentación no cambian). ⏳ **NO desplegado** (en `main` también está el código del bot sin desplegar).
+- **Cambio:** si la CxP no tiene base gravable, la base ISLR es el exento. Helper `payableIslrBase` en `islr-retention-vouchers.service.ts` (lista de disponibles + creación del comprobante) y la misma regla en la retención inline de `payables.service.ts`. Si hay base gravable, igual que antes (tickets de alimentación no cambian). ✅ Probado OK en local por el usuario. ⏳ **NO desplegado** (en `main` también está el código del bot sin desplegar).
 
 ## 📊 Piloto del chatbot — día 2 en la grande (2026-10-13) · Sesión 161
 
