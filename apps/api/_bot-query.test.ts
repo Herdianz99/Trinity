@@ -55,6 +55,21 @@ const CASES: [string, string, string[]][] = [
   ['tornillo de cuarto de pulgada', 'tornillo 1/4', ['1/4']],
   ['tornillo un cuarto de pulgada', 'tornillo 1/4', ['1/4']],
   ['tubo de media y codo de tres cuartos', 'tubo 1/2 codo 3/4', ['1/2', '3/4']],
+  // escritas con marca de pulgadas: exactas
+  ['tubo pvc 6"', 'tubo pvc 6', ['6"']],
+  ['Tubo PVC de 6"', 'tubo pvc 6', ['6"']],
+  ['tubo pvc 6 pulgadas', 'tubo pvc 6', ['6"']],
+  ['tubo de 6 pulgada', 'tubo 6', ['6"']],
+  ['esmeril 7”', 'esmeril 7', ['7"']],
+  ["disco 4.5''", 'disco 4.5', ['4.5"']],
+  ['clavo 2 pulgadas', 'clavo 2', ['2"']],
+  ['tee 1/2"', 'tee 1/2', ['1/2']],
+  ['tubo 1-1/2"', 'tubo 1-1/2', ['1-1/2']],
+  ['disco 4.1/2"', 'disco 4-1/2', ['4-1/2']],
+  ['clavo 2 pulgadas y media', 'clavo 2-1/2', ['2-1/2']],
+  ['disco sierra 7 1/4"', 'disco sierra 7-1/4', ['7-1/4']],
+  ['tubo 2x1 6 metros', 'tubo 2x1 6', []],
+  ['cable 12', 'cable 12', []],
   // NO se tocan
   ['lima media caña', 'lima media cana', []],
   ['media docena de tornillos', 'media docena tornillos', []],
@@ -85,6 +100,25 @@ test('fraccion mixta exacta: 1-1/2 si, 1/2 / 11-1/2 / 2-1/2 no', () => {
   const re = new RegExp(exactFractionRegex('1-1/2'));
   for (const s of ['TUBO RED. VENT. H.N 1-1/2 X 2.5 X 6 MTS', 'TUBO 1 1/2 GALV', 'CLAVO 1-1/2 X 14', 'TUBO RECT. H.P 3 X 1-1/2 X 0.90']) assert.ok(re.test(s), s);
   for (const s of ['TUBO PVC AF 1/2" X 6MTS', 'TUBO 11-1/2', 'CLAVO 2-1/2 X 12', 'TUBO 21 1/2']) assert.ok(!re.test(s), s);
+});
+
+test('pulgadas enteras exactas: 6 solo si, 6MTS / 60 / 6.10 / 6-1/2 / 16 no', () => {
+  // En Postgres es \M (fin de palabra); en JS \b. Mismo patron.
+  const re = new RegExp(exactFractionRegex('6"').replace(/\\M/g, '\\b'), 'i');
+  const yes = ['TUBO PVC AN 6" X 3MTS X 3,2MM', 'CODO PVC AN 6" X 90º', 'ALICATE CORTE DIAGONAL 6" FERCO',
+    'DISCO SIERRA MADERA 6 PROMAKER', 'TUBO 6 X 3MTS', 'REDUCCION 8 X 6'];
+  const no = ['TUBO PVC AF 1/2" X 6MTS', 'TUBO RECT 2 X 1 X 6 MTS', 'CANDADO 60MM', 'LOSACERO 780 X 6.10',
+    'MECHA 6-1/2', 'DISCO 16"', 'BROCA 6MM', 'CABLE 6 AWG', 'TUBO 3/6', 'JUEGO 6 PZAS', 'BATERIA 6V', 'TORNILLO 1/4 X 6'.replace('6', '6 MM')];
+  for (const s of yes) assert.ok(re.test(s), s);
+  for (const s of no) assert.ok(!re.test(s), s);
+});
+
+test('pulgadas: casos del piloto (grano, mango plastico, listas)', () => {
+  const re = (f: string) => new RegExp(exactFractionRegex(f).replace(/\\M/g, '\\b'), 'i');
+  for (const [f, s] of [['7"', 'FIBRO DISCO 7 GR. 120 BEST INOX BOSCH'], ['7"', 'FIBRO DISCO 7 G.120 METAL BOSCH'],
+    ['12"', 'ARCO SEGUETA 12 M/PLASTICO TRUEPOWER'], ['8"', 'SET DE 3 ALICATES COMBINADO (6",7",8") INGCO'],
+    ['7-1/4', 'DISCO SIERRA P/MADERA 7-1/4" 24D JADEVER'], ['7-1/4', 'DISCO P/MADERA 7.1/4X5/8 60T BOSCH']]) assert.ok(re(f).test(s), f + ' ' + s);
+  for (const [f, s] of [['2"', 'TUBO PVC AN 6" X 3MTS X 3,2MM'], ['3"', 'LIJA GRANO 2000 3M (MEDIO PLIEGO)'], ['6"', 'CABLE 6M']]) assert.ok(!re(f).test(s), f + ' ' + s);
 });
 
 test('fraccion exacta: 1/2 sola si, 1-1/2 / 2 1/2 / 11/2 no', () => {

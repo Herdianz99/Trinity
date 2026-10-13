@@ -78,6 +78,12 @@ export function spokenMeasures(text: string): { text: string; exact: string[] } 
     .replace(new RegExp(`\\b${NUM_RE}\\s+y\\s+media\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/2`))
     .replace(new RegExp(`\\b(?:${NUM_RE}\\s+)?pulgadas?\\s+y\\s+(?:un\\s+)?cuarto\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/4`))
     .replace(new RegExp(`\\b${NUM_RE}\\s+y\\s+(?:un\\s+)?cuarto\\b`, 'g'), (_, n) => fraction(`${num(n)}-1/4`))
+    // Escritas con marca de pulgadas: 6" / 6 pulgadas / 1/2" / 1-1/2" / 4.1/2" (piloto dia 2: "tubo PVC de 6""
+    // traia 56 tubos por el "6MTS" del largo y el de 6" no quedaba entre los 10 que ve el bot). Despues de las
+    // mixtas: si no, "2 pulgadas y media" se partiria en 2" + media.
+    // "7 1/4"" (con espacio) es 7-1/4".
+    .replace(/(?<![\d.,/-])(\d+[-. ]\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?)\s*(?:"|”|''|pulgadas?\b|pulg\b\.?)/g,
+      (_, n: string) => fraction(/^\d+(?:[.,]\d+)?$/.test(n) ? `${n.replace(',', '.')}"` : n.replace(/[. ]/, '-')))
     .replace(/\btres\s+cuartos?\b/g, () => fraction('3/4'))
     .replace(/\btres\s+octavos?\b/g, () => fraction('3/8'))
     .replace(/\bcinco\s+octavos?\b/g, () => fraction('5/8'))
@@ -85,7 +91,8 @@ export function spokenMeasures(text: string): { text: string; exact: string[] } 
     .replace(/\b(?:un\s+)?cuarto\s+de\s+pulgadas?\b/g, () => fraction('1/4'))
     .replace(/\bmedia\s+pulgadas?\b/g, () => fraction('1/2'))
     .replace(new RegExp(`\\bmedia\\b(?!\\s+(?:${MEDIA_NOT_INCH})\\b)`, 'g'), () => fraction('1/2'));
-  return { text: out.replace(/\s+/g, ' ').trim(), exact: [...exact] };
+  // 6" se busca como "6" (el nombre puede no traer la marca); el filtro exacto quita "6MTS", "60MM", "6-1/2".
+  return { text: out.replace(/(\d)"/g, '$1').replace(/\s+/g, ' ').trim(), exact: [...exact] };
 }
 
 // Quita el relleno; si no queda nada, deja la consulta como vino.
@@ -110,10 +117,22 @@ export function cleanBotQuery(raw: string): string {
 // Condicion SQL de medida exacta, en el nombre o en los sinonimos (las cabillas dicen "BARRA 12MM" y el 1/2
 // viene del sinonimo). Simple ("1/2"): sola, no como parte de 1-1/2", 2 1/2", 11/2. Mixta ("1-1/2"): con
 // guion o espacio ("1-1/2", "1 1/2"), no 11-1/2.
+// Pulgadas enteras ('6"'): el numero solo, sin otra cifra pegada (60, 6.10, 6-1/2, 16) y sin una unidad
+// detras (6MTS, 6 MM, 6 KG...). Los nombres a veces no traen la marca: "DISCO SIERRA MADERA 7 PROMAKER".
+// Se evalua con ~* (sin distinguir mayusculas). "4.1/2" es la forma con punto de 4-1/2.
+// Sin "gr"/"g" (en discos y lijas es grano: "FIBRO DISCO 7 GR. 120") y "m" no seguida de "/" ("12 M/PLASTICO"
+// es mango plastico). La coma solo corta si va entre cifras (3,2MM), no en listas: (6",7",8").
+const NOT_INCH_UNITS = 'mts?|mtrs?|metros?|m(?!/)|mm|cm|kgs?|kilos?|lbs?|lts?|litros?|gls?|gal|galon|ml|cc|oz|'
+  + 'v|w|amp|amps|hp|kva|psi|rpm|tpi|awg|und|unds|uds|pzas?|piezas?|dientes|d|t|p|k';
 export function exactFractionRegex(f: string): string {
+  const inch = f.match(/^(\d+(?:\.\d+)?)"$/);
+  if (inch) {
+    const n = inch[1].replace('.', '\\.');
+    return `(^|[^0-9.,/-]|[^0-9][.,])${n}(?![0-9.,/-])(?!\\s*(${NOT_INCH_UNITS})\\M)`;
+  }
   const mixed = f.match(/^(\d+)-(\d+\/\d+)$/);
-  if (mixed) return `(^|[^0-9])${mixed[1]}[- ]${mixed[2]}($|[^0-9])`;
-  return `(^|[^0-9 -]|(^|[^0-9])[ -])${f}($|[^0-9])`;
+  if (mixed) return `(^|[^0-9])${mixed[1]}[- .]${mixed[2]}($|[^0-9])`;
+  return `(^|[^0-9 .-]|(^|[^0-9])[ .-])${f}($|[^0-9])`;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -150,7 +169,7 @@ export class ChatbotToolsService {
     // "tee de media": solo 1/2" exacto (sin las de 1-1/2"). Las fracciones que escribe el cliente no se tocan.
     const exactWhere = parsed.exact.length
       ? Prisma.sql`AND ${Prisma.join(
-          parsed.exact.map((f) => Prisma.sql`(p.name || ' ' || p."searchKeywords") ~ ${exactFractionRegex(f)}`),
+          parsed.exact.map((f) => Prisma.sql`(p.name || ' ' || p."searchKeywords") ~* ${exactFractionRegex(f)}`),
           ' AND ',
         )}`
       : Prisma.empty;
@@ -230,7 +249,12 @@ export class ChatbotToolsService {
       ...(qty ? { alcanza: enough } : {}),
       ...(suggestions.get(r.id)?.length ? { ofrecer_tambien: this.formatOffers(suggestions.get(r.id)!) } : {}),
     }));
-    return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, productos };
+    // Piloto dia 2: con 56 resultados el bot vio 10 y dijo "el de 6" no lo tenemos". Que no lo concluya.
+    const nota = rows.length > productos.length
+      ? `Hay ${rows.length} resultados y solo ves los ${productos.length} más vendidos. Si lo que pidió el cliente no está aquí, `
+        + 'NO digas que no lo tenemos: busca de nuevo con más detalle (medida, material, marca) o pregúntale al cliente.'
+      : undefined;
+    return { consulta: q, ...(qty ? { cantidad_pedida: qty } : {}), total_encontrados: rows.length, ...(nota ? { nota } : {}), productos };
   }
 
   // Nota para el asesor cuando el bot escala porque no alcanza la cantidad: existencia vendible menos
