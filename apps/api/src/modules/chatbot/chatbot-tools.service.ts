@@ -46,6 +46,8 @@ const FILLER = new Set([
   // Piloto dia 1: unidades y "numero" que el cliente agrega y los nombres no traen ("cable nro 12",
   // "clavo 2 pulgadas", "saco de estuco", "electrodos kilo", "tornillos 100 unidades").
   'nro', 'numero', 'num', 'pulgada', 'pulgadas', 'pulg', 'saco', 'sacos', 'kilo', 'kilos', 'unidad', 'unidades',
+  // Piloto dia 2: "tubo 2x1 6 metros". Los nombres dicen "6 MTS"/"6MTS": el numero si sirve, la palabra no.
+  'metro', 'metros', 'mts', 'mt', 'mtrs',
 ]);
 
 function normalizeWords(s: string): string[] {
@@ -55,7 +57,10 @@ function normalizeWords(s: string): string[] {
 // Quita el relleno; si no queda nada, deja la consulta como vino.
 export function cleanBotQuery(raw: string): string {
   // "tubos de 3 por 3" -> "3x3" (medida; "por" es relleno y si se quita queda "3 3").
-  const words = normalizeWords((raw || '').replace(/(\d+)\s+por\s+(\d+)/gi, '$1x$2'));
+  // "100mts" / "6metros" -> "100 mts" (luego "mts" se va como relleno y queda el numero).
+  const words = normalizeWords(
+    (raw || '').replace(/(\d+)\s+por\s+(\d+)/gi, '$1x$2').replace(/(\d)(metros?|mtrs|mts?)\b/gi, '$1 $2'),
+  );
   const kept = words.filter((w) => !FILLER.has(w));
   return (kept.length ? kept : words).join(' ');
 }
