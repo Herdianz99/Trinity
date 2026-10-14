@@ -15,6 +15,7 @@ import { DynamicKeysService } from '../dynamic-keys/dynamic-keys.service';
 import { SetSaleBlockDto } from './dto/set-sale-block.dto';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit, newPriceAuditBatch } from '../../common/price-audit';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -152,7 +153,7 @@ export class ProductsService {
     return `${result[0].code}${String(result[0].lastProductNumber).padStart(5, '0')}`;
   }
 
-  async create(dto: CreateProductDto) {
+  async create(dto: CreateProductDto, userId?: string, auditSource: 'CREATE' | 'IMPORT' = 'CREATE') {
     if (dto.barcode) {
       const existing = await this.prisma.product.findUnique({ where: { barcode: dto.barcode } });
       if (existing) throw new ConflictException('El codigo de barras ya existe');
@@ -204,6 +205,7 @@ export class ProductsService {
         gananciaMayorPct,
         priceDetal,
         priceMayor,
+        ...priceAudit(userId, auditSource),
       },
       include: {
         category: true,
@@ -663,7 +665,7 @@ export class ProductsService {
     };
   }
 
-  async update(id: string, dto: UpdateProductDto) {
+  async update(id: string, dto: UpdateProductDto, userId?: string) {
     const existing = await this.findOne(id);
 
     if (dto.barcode && dto.barcode !== existing.barcode) {
@@ -708,6 +710,7 @@ export class ProductsService {
         ...updateData,
         priceDetal,
         priceMayor,
+        ...priceAudit(userId, 'MANUAL_EDIT'),
       },
       include: {
         category: true,
@@ -783,12 +786,12 @@ export class ProductsService {
     });
   }
 
-  async importProducts(products: CreateProductDto[]) {
+  async importProducts(products: CreateProductDto[], userId?: string) {
     const results = { created: 0, errors: [] as string[] };
 
     for (const dto of products) {
       try {
-        await this.create(dto);
+        await this.create(dto, userId, 'IMPORT');
         results.created++;
       } catch (err: any) {
         results.errors.push(`${dto.name || dto.code}: ${err.message}`);
@@ -918,6 +921,7 @@ export class ProductsService {
         : this.buildPriceAdjustmentWhere(dto.filters);
 
     const catMap = await buildCategoryBregaMap(this.prisma);
+    const batch = newPriceAuditBatch(); // todo el ajuste = un solo evento en la bitacora
 
     const result = await this.prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({ where });
@@ -969,6 +973,7 @@ export class ProductsService {
             gananciaMayorPct: newGananciaMayorPct,
             priceDetal,
             priceMayor,
+            ...priceAudit(userId, 'PRICE_ADJUSTMENT', null, batch),
           },
         });
       }

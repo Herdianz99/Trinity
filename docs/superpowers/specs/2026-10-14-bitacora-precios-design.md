@@ -17,7 +17,7 @@ historial por producto (solo `PriceAdjustmentLog`, que guarda el ajuste masivo s
 Cambios menores a 0,0001 (ruido de float) no cuentan.
 
 ## Mecanismo: trigger + "sello" en la fila
-Un trigger `BEFORE INSERT OR UPDATE` sobre `"Product"` escribe una fila en `ProductPriceLog` cuando cambia
+Un trigger `AFTER INSERT OR UPDATE` sobre `"Product"` (AFTER para que en INSERT la FK productId ya exista) escribe una fila en `ProductPriceLog` cuando cambia
 algún campo vigilado. Captura TODO camino, incluso SQL directo.
 
 La atribución (usuario/origen/documento) viaja **en la misma fila** del producto, en 4 columnas nuevas:
@@ -69,7 +69,7 @@ editar costo en compra, ref = número FC), `GLOBAL_BREGA` (config: brecha global
 Lo que no se selle queda como `DIRECT_DB` (visible, no se pierde).
 
 ## API
-`GET /products/:id/price-log?page&limit` y `GET /price-log` (filtros: from, to [anclados a Caracas con
+`GET /price-log/product/:productId?page&limit`, `GET /price-log/users` y `GET /price-log` (filtros: from, to [anclados a Caracas con
 `caracasDayStart/End` sobre `createdAt`], userId, productId, categoryId, source, onlyManual, page, limit) y
 `GET /price-log/export` (Excel). Todos con `@RequireModule('bitacora-precios')`. La respuesta agrupa por
 `batchId` en el reporte (un evento masivo = una fila expandible con N productos).
@@ -91,3 +91,8 @@ de SUPERVISOR (ADMIN tiene `*`). No reescribe productos existentes.
 - SQL en BD local: update sellado → fila con usuario; update sin sello → `DIRECT_DB`; update que no toca
   campos vigilados → sin fila; ajuste masivo → N filas con mismo `batchId`.
 - Probar en local por el usuario antes de desplegar.
+
+## Nota de implementacion
+Un mismo producto no debe sellarse dos veces con el mismo token dentro de un lote (el segundo update se veria
+como DIRECT_DB). Por eso procesar una compra usa un sello nuevo por update (la referencia FC los agrupa), y solo
+los recalculos/ajustes donde cada producto se toca una vez comparten token.

@@ -69,7 +69,7 @@ export class CategoriesService {
     return category;
   }
 
-  async update(id: string, dto: UpdateCategoryDto) {
+  async update(id: string, dto: UpdateCategoryDto, userId?: string) {
     const existing = await this.findOne(id);
     if (dto.parentId) {
       const parent = await this.prisma.category.findUnique({ where: { id: dto.parentId } });
@@ -104,7 +104,9 @@ export class CategoriesService {
     });
 
     if (bregaChanged) {
-      await this.companyConfig.recalculateCategoryPrices(id);
+      await this.companyConfig.recalculateCategoryPrices(
+        id, userId, `Brecha ${updated.name} ${existing.bregaPct}% → ${updated.bregaPct}%`,
+      );
     }
 
     // El icono/nombre afecta la tienda online → re-exportar snapshot.

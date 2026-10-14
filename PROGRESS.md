@@ -40,6 +40,15 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Bitácora de costos y precios (2026-10-14) · Sesión 162
+
+- **Pedido del usuario:** saber quién cambió costos y precios de los artículos. Decidió: registrar **todos** los cambios (manuales y automáticos) y verlos en la **ficha** y en un **reporte general**.
+- **Cómo funciona:** trigger `product_price_log_trg` (AFTER INSERT/UPDATE en `Product`) escribe `ProductPriceLog` si cambia costo, detal, mayor, % ganancia detal/mayor o precio manual (ignora ruido < 0,0001). Atribución por "sello" en 4 columnas nuevas de `Product` (`auditToken/auditUserId/auditSource/auditRef`) que la API llena con `priceAudit()` (`common/price-audit.ts`); si el token no cambió → `DIRECT_DB` sin usuario. Guarda tasa del día y Bs.
+- **Caminos sellados:** ficha (MANUAL_EDIT), creación, importación (2 caminos), ajuste masivo (lote), compra procesada y "actualizar precios" de la FC (ref = número FC), brecha global y de categoría (lote), integración con socio, traslado entre empresas, reemplazo de inventario.
+- **Pantallas:** `/inventory/price-log` (filtros fecha/usuario/origen/producto o FC/solo manuales, lotes plegados, Excel) y pestaña **"Historial de precios"** en la ficha. Permiso nuevo `bitacora-precios` (SUPERVISOR por migración; ADMIN por `*`).
+- **Migración** `20261014180000_product_price_log`. Test SQL `apps/api/_price-log.test.sql` (7 casos OK). Probado en local: edición en ficha, brecha de categoría (lote), Excel, cajero → 403, capturas de ambas pantallas.
+- ⏳ **Sin desplegar.** Pendiente: prueba del usuario en local y deploy a las 7 empresas.
+
 ## 🛒 Compras: alerta de productos desactivados (2026-10-14) · Sesión 162
 
 - **Pedido (total):** tras desactivar en total los 280 productos activos sin movimiento ni existencia (backup `/root/backup-desactivados-total-2026-10-14.csv` en 161.35.52.221), el usuario quiere que en la compra salgan igual, con alerta, para saber que existen y activarlos en vez de crearlos de nuevo.

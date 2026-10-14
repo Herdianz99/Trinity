@@ -24,6 +24,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/inventory/etiquetas', ['inventory', 'inventory-consult']],
   ['/inventory/replacements', ['inventory', 'inventory-consult']],
   // Resumen gerencial, alertas y reporte de danos: tambien accesibles desde el modulo de Almacen ('almacen')
+  ['/inventory/price-log', ['bitacora-precios']],
   ['/inventory/summary', ['inventory', 'almacen']],
   ['/inventory/alerts', ['inventory', 'almacen']],
   ['/inventory/damage-reports', ['inventory', 'almacen']],

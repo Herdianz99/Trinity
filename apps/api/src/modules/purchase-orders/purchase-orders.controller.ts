@@ -121,8 +121,9 @@ export class PurchaseOrdersController {
   updatePrices(
     @Param('id') id: string,
     @Body('items') items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[],
+    @CurrentUser('id') userId: string,
   ) {
-    return this.service.updatePrices(id, items);
+    return this.service.updatePrices(id, items, userId);
   }
 
   // ---- Adjuntos (foto/escaneo de la factura física del proveedor) ----

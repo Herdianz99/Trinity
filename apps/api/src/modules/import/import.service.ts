@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { IvaType } from '@prisma/client';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit } from '../../common/price-audit';
 import {
   BulkImportDto,
   ImportCategoryDto,
@@ -562,6 +563,7 @@ export class ImportService {
                   priceDetal,
                   priceMayor,
                   minStock: prodDto.minStock ?? 0,
+                  ...priceAudit(userId, 'IMPORT', 'Importacion de inventario'),
                 },
               });
 

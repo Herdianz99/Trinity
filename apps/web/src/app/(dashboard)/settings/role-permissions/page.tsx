@@ -66,6 +66,7 @@ const MODULE_GROUPS: { group: string; items: { key: string; label: string }[] }[
       { key: 'settings', label: 'Configuracion' },
       { key: 'chatbot', label: 'Chatbot de ventas (probar y conversaciones)' },
       { key: 'chatbot-config', label: 'Chatbot: configuracion (precios, textos, tope)' },
+      { key: 'bitacora-precios', label: 'Bitácora de precios (ver quién cambió costos y precios)' },
     ],
   },
   {

@@ -6,6 +6,7 @@ import { getIntegrationConfig } from './integration.config';
 import { caracasDateKey } from '../../common/timezone';
 import { resolveBregaPct, effectiveCost, computeSellingPrices, round2 } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit } from '../../common/price-audit';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -592,7 +593,10 @@ export class PartnerTransfersService {
           if (c.manualCost) continue; // costo congelado: no se toca
           await tx.product.update({
             where: { id: c.productId },
-            data: { costUsd: c.newCost, priceDetal: c.newPriceDetal, priceMayor: c.newPriceMayor },
+            data: {
+              costUsd: c.newCost, priceDetal: c.newPriceDetal, priceMayor: c.newPriceMayor,
+              ...priceAudit(userId, 'PARTNER_TRANSFER', rec.number),
+            },
           });
         }
       }

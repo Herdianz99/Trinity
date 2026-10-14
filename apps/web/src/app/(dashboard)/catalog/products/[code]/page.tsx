@@ -10,6 +10,7 @@ import {
 import Toggle from '@/components/toggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getMovementSource } from '@/lib/movement-source';
+import { PriceLogRow, PriceLogChanges, SourceBadge, fmtDateTime } from '@/components/price-log-changes';
 
 // ───── types ─────
 interface Product {
@@ -119,6 +120,14 @@ export default function ProductDetailPage() {
 
   // ── Active tab (lazy loading) ──
   const [activeTab, setActiveTab] = useState('info');
+
+  // ── Historial de precios (bitacora). La pestaña solo aparece si el usuario tiene el permiso
+  //    'bitacora-precios' (se detecta con la primera consulta: 403 = sin permiso). ──
+  const [priceLogAllowed, setPriceLogAllowed] = useState(false);
+  const [priceLog, setPriceLog] = useState<PriceLogRow[]>([]);
+  const [priceLogTotal, setPriceLogTotal] = useState(0);
+  const [priceLogPage, setPriceLogPage] = useState(1);
+  const [priceLogLoading, setPriceLogLoading] = useState(false);
 
   // ── Galería de imágenes (lazy) + lightbox ──
   const [gallery, setGallery] = useState<any[]>([]);
@@ -293,6 +302,25 @@ export default function ProductDetailPage() {
       .catch(() => { if (!cancel) setPartner(null); });
     return () => { cancel = true; };
   }, [code]);
+
+  // Historial de precios: se consulta al cargar el producto (asi se sabe si mostrar la pestaña) y al paginar.
+  useEffect(() => {
+    if (!product) return;
+    let cancel = false;
+    setPriceLogLoading(true);
+    fetch(`/api/proxy/price-log/product/${product.id}?page=${priceLogPage}&limit=20`)
+      .then(async (r) => {
+        if (cancel) return;
+        if (!r.ok) { setPriceLogAllowed(false); return; }
+        const d = await r.json();
+        setPriceLogAllowed(true);
+        setPriceLog(d.data || []);
+        setPriceLogTotal(d.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancel) setPriceLogLoading(false); });
+    return () => { cancel = true; };
+  }, [product, priceLogPage]);
 
   // Lazy load: fetch movements only when tab is active
   useEffect(() => {
@@ -648,6 +676,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="movements">Movimientos</TabsTrigger>
           <TabsTrigger value="purchases">Historial de compras</TabsTrigger>
           <TabsTrigger value="prices">Precios</TabsTrigger>
+          {priceLogAllowed && <TabsTrigger value="price-log">Historial de precios</TabsTrigger>}
         </TabsList>
 
         {/* ═══ TAB: Informacion General ═══ */}
@@ -1070,6 +1099,51 @@ export default function ProductDetailPage() {
             )}
           </div>
         </TabsContent>
+
+        {/* ═══ TAB: Historial de precios (bitacora) ═══ */}
+        {priceLogAllowed && (
+          <TabsContent value="price-log">
+            <div className="card overflow-hidden">
+              {priceLogLoading ? (
+                <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-emerald-500" size={28} /></div>
+              ) : priceLog.length === 0 ? (
+                <p className="py-12 text-center text-slate-500 text-sm">
+                  Todavía no hay cambios registrados. La bitácora guarda los cambios desde su instalación.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50">
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Usuario</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Origen</th>
+                        <th className="text-left px-4 py-3 text-slate-400 font-medium">Cambios</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priceLog.map((r) => (
+                        <tr key={r.id} className="border-b border-slate-800/60 align-top">
+                          <td className="px-4 py-2.5 text-slate-300 whitespace-nowrap">{fmtDateTime(r.createdAt)}</td>
+                          <td className="px-4 py-2.5 text-slate-300">{r.userName ?? <span className="text-red-300/80">(sin usuario)</span>}</td>
+                          <td className="px-4 py-2.5"><SourceBadge row={r} /></td>
+                          <td className="px-4 py-2.5"><PriceLogChanges row={r} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {priceLogTotal > 20 && (
+                <div className="flex items-center justify-center gap-3 py-3 text-sm text-slate-400 border-t border-slate-700/50">
+                  <button disabled={priceLogPage <= 1} onClick={() => setPriceLogPage((p) => p - 1)} className="btn-secondary !py-1 !px-3 disabled:opacity-40">Anterior</button>
+                  Página {priceLogPage} de {Math.ceil(priceLogTotal / 20)}
+                  <button disabled={priceLogPage >= Math.ceil(priceLogTotal / 20)} onClick={() => setPriceLogPage((p) => p + 1)} className="btn-secondary !py-1 !px-3 disabled:opacity-40">Siguiente</button>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
 
         {/* ═══ TAB: Precios (Editable) ═══ */}
         <TabsContent value="prices">

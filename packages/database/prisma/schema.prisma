@@ -399,6 +399,7 @@ model User {
   disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
   customersCreated    Customer[]          @relation("CustomerCreator")
   notificationsCreated Notification[]     @relation("NotificationCreator")
+  priceLogs           ProductPriceLog[]   @relation("ProductPriceLogUser")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -636,8 +637,49 @@ model Product {
   images                ProductImage[]
   primaryImageThumbUrl  String?
   primaryImageMediumUrl String?
+  // Sello de atribucion para la bitacora de precios (lo llena priceAudit() en la API; lo lee el
+  // trigger product_price_log_trg). No usar para otra cosa.
+  auditToken       String?
+  auditUserId      String?
+  auditSource      String?
+  auditRef         String?
+  priceLogs        ProductPriceLog[]
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+}
+
+// Bitacora de costos y precios: la escribe el trigger product_price_log_trg (migracion
+// 20261014180000_product_price_log), nunca la API directamente.
+model ProductPriceLog {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?    @relation("ProductPriceLogUser", fields: [userId], references: [id])
+  source              String
+  reference           String?
+  batchId             String?
+  oldCostUsd          Float?
+  newCostUsd          Float?
+  oldPriceDetal       Float?
+  newPriceDetal       Float?
+  oldPriceMayor       Float?
+  newPriceMayor       Float?
+  oldGananciaPct      Float?
+  newGananciaPct      Float?
+  oldGananciaMayorPct Float?
+  newGananciaMayorPct Float?
+  oldManualPrice      Boolean?
+  newManualPrice      Boolean?
+  exchangeRate        Float    @default(0)
+  newCostBs           Float    @default(0)
+  newPriceDetalBs     Float    @default(0)
+  newPriceMayorBs     Float    @default(0)
+  createdAt           DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([createdAt])
+  @@index([batchId])
 }
 
 // Sinonimo de busqueda: los productos cuyo NOMBRE contiene matchTerms (dentro de categoryIds; vacio = todas)

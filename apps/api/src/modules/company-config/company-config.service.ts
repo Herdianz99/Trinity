@@ -4,6 +4,7 @@ import { UpdateCompanyConfigDto } from './dto/update-company-config.dto';
 import { IvaType } from '@prisma/client';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit, newPriceAuditBatch } from '../../common/price-audit';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -28,7 +29,7 @@ export class CompanyConfigService {
     return config;
   }
 
-  async update(dto: UpdateCompanyConfigDto) {
+  async update(dto: UpdateCompanyConfigDto, userId?: string) {
     const data: any = { ...dto };
 
     const bregaChanged = dto.bregaGlobalPct !== undefined;
@@ -41,14 +42,15 @@ export class CompanyConfigService {
 
     // Recalculate all product prices when brega changes
     if (bregaChanged) {
-      await this.recalculateAllPrices(config.bregaGlobalPct);
+      await this.recalculateAllPrices(config.bregaGlobalPct, userId);
     }
 
     return config;
   }
 
-  private async recalculateAllPrices(bregaGlobalPct: number) {
+  private async recalculateAllPrices(bregaGlobalPct: number, userId?: string) {
     const catMap = await buildCategoryBregaMap(this.prisma);
+    const batch = newPriceAuditBatch(); // un solo evento en la bitacora
     const products = await this.prisma.product.findMany({
       where: { isActive: true, manualPrice: false },
       select: {
@@ -78,13 +80,14 @@ export class CompanyConfigService {
 
       await this.prisma.product.update({
         where: { id: p.id },
-        data: { priceDetal, priceMayor },
+        data: { priceDetal, priceMayor, ...priceAudit(userId, 'GLOBAL_BREGA', `Brecha global ${bregaGlobalPct}%`, batch) },
       });
     }
   }
 
   /** Recalcula precios de los productos de una categoría RAÍZ y todas sus subcategorías (manualPrice:false). */
-  async recalculateCategoryPrices(rootCategoryId: string) {
+  async recalculateCategoryPrices(rootCategoryId: string, userId?: string, categoryLabel?: string) {
+    const batch = newPriceAuditBatch(); // un solo evento en la bitacora
     const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' } });
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
     const catMap = await buildCategoryBregaMap(this.prisma);
@@ -131,7 +134,7 @@ export class CompanyConfigService {
       });
       await this.prisma.product.update({
         where: { id: p.id },
-        data: { priceDetal, priceMayor },
+        data: { priceDetal, priceMayor, ...priceAudit(userId, 'CATEGORY_BREGA', categoryLabel ?? null, batch) },
       });
     }
     return { updated: products.length };

@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StoreExportService } from '../store-export/store-export.service';
 import { PartnerClient } from './partner-client.service';
 import { getIntegrationConfig } from './integration.config';
+import { priceAudit, newPriceAuditBatch } from '../../common/price-audit';
 
 export interface ProductLookup {
   code: string;
@@ -171,6 +172,7 @@ export class IntegrationService {
     ).filter((p) => wanted.has(p.code) && partnerMap.has(p.code));
 
     let applied = 0;
+    const auditBatch = newPriceAuditBatch(); // un solo evento en la bitacora
     await this.prisma.$transaction(
       async (tx) => {
         for (const t of targets) {
@@ -181,6 +183,7 @@ export class IntegrationService {
               priceDetal: Math.round(pp.priceDetal * 100) / 100,
               priceMayor: Math.round(pp.priceMayor * 100) / 100,
               manualPrice: true,
+              ...priceAudit(userId, 'INTEGRATION', `Precios de ${getIntegrationConfig().partnerName}`, auditBatch),
             },
           });
           applied++;
@@ -297,6 +300,7 @@ export class IntegrationService {
         bregaApplies: payload.bregaApplies ?? true,
         brandId,
         categoryId,
+        ...priceAudit(null, 'INTEGRATION', `Producto recibido de ${getIntegrationConfig().partnerName}`),
       },
     });
     this.storeExport.scheduleExport();

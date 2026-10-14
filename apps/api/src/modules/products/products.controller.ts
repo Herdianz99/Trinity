@@ -42,8 +42,8 @@ export class ProductsController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  create(@Body() dto: CreateProductDto, @CurrentUser('id') userId: string) {
+    return this.productsService.create(dto, userId);
   }
 
   @Get()
@@ -238,8 +238,8 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
-    return this.productsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateProductDto, @CurrentUser('id') userId: string) {
+    return this.productsService.update(id, dto, userId);
   }
 
   @Delete(':id')
@@ -248,7 +248,7 @@ export class ProductsController {
   }
 
   @Post('import')
-  importProducts(@Body() products: CreateProductDto[]) {
-    return this.productsService.importProducts(products);
+  importProducts(@Body() products: CreateProductDto[], @CurrentUser('id') userId: string) {
+    return this.productsService.importProducts(products, userId);
   }
 }

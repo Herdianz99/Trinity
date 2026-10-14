@@ -11,6 +11,7 @@ import { IvaType, PurchaseStatus } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit, newPriceAuditBatch } from '../../common/price-audit';
 
 const IVA_MULTIPLIERS: Record<IvaType, number> = {
   EXEMPT: 1,
@@ -806,7 +807,7 @@ export class PurchaseOrdersService {
 
           await tx.product.update({
             where: { id: item.productId },
-            data: { costUsd: newCost, priceDetal, priceMayor },
+            data: { costUsd: newCost, priceDetal, priceMayor, ...priceAudit(userId, 'PURCHASE', order.number) },
           });
         }
 
@@ -848,7 +849,11 @@ export class PurchaseOrdersService {
           });
           await tx.product.update({
             where: { id: pu.productId },
-            data: { gananciaPct: pu.gananciaPct, gananciaMayorPct: pu.gananciaMayorPct, priceDetal, priceMayor },
+            data: {
+              gananciaPct: pu.gananciaPct, gananciaMayorPct: pu.gananciaMayorPct, priceDetal, priceMayor,
+              // Sello propio (no de lote): el mismo producto ya pudo sellarse arriba al cambiar el costo.
+              ...priceAudit(userId, 'PURCHASE', order.number),
+            },
           });
         }
       }
@@ -1022,7 +1027,7 @@ export class PurchaseOrdersService {
       });
   }
 
-  async updatePrices(id: string, items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[]) {
+  async updatePrices(id: string, items: { productId: string; gananciaPct: number; gananciaMayorPct: number }[], userId?: string) {
     const order = await this.findOne(id);
     if (order.status !== 'PROCESSED') {
       throw new BadRequestException('Solo se pueden actualizar precios de facturas PROCESADAS');
@@ -1032,6 +1037,7 @@ export class PurchaseOrdersService {
     const bregaGlobalPct = config?.bregaGlobalPct || 0;
     const catBregaMap = await buildCategoryBregaMap(this.prisma);
 
+    const auditBatch = newPriceAuditBatch(); // un solo evento en la bitacora
     return this.prisma.$transaction(async (tx) => {
       const results: any[] = [];
 
@@ -1054,7 +1060,10 @@ export class PurchaseOrdersService {
 
         const updated = await tx.product.update({
           where: { id: item.productId },
-          data: { gananciaPct: item.gananciaPct, gananciaMayorPct: item.gananciaMayorPct, priceDetal, priceMayor },
+          data: {
+            gananciaPct: item.gananciaPct, gananciaMayorPct: item.gananciaMayorPct, priceDetal, priceMayor,
+            ...priceAudit(userId, 'PURCHASE', order.number, auditBatch),
+          },
         });
 
         results.push({

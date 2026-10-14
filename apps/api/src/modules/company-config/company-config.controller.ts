@@ -27,7 +27,7 @@ export class CompanyConfigController {
 
   @Roles(UserRole.ADMIN)
   @Patch()
-  update(@Body() dto: UpdateCompanyConfigDto) {
-    return this.configService.update(dto);
+  update(@Body() dto: UpdateCompanyConfigDto, @CurrentUser('id') userId: string) {
+    return this.configService.update(dto, userId);
   }
 }

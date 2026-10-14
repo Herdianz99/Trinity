@@ -193,6 +193,7 @@ const menuSections: MenuSection[] = [
       { label: 'Sesion de fotos', href: '/catalog/photo-session', icon: <Camera size={18} />, permission: 'inventory-consult' },
       { label: 'Sesion de codigos de barras', href: '/catalog/barcode-session', icon: <Barcode size={18} />, permission: 'inventory-consult' },
       { label: 'Alertas de inventario', href: '/inventory/alerts', icon: <AlertTriangle size={18} /> },
+      { label: 'Bitácora de precios', href: '/inventory/price-log', icon: <History size={18} />, permission: 'bitacora-precios', strictPermission: true },
     ],
   },
   {

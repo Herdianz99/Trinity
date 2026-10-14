@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
+import { priceAudit } from '../../common/price-audit';
 import { CreateReplacementDto } from './dto/create-replacement.dto';
 import { AddReplacementLineDto } from './dto/add-replacement-line.dto';
 import {
@@ -354,7 +355,7 @@ export class InventoryReplacementsService {
         });
         await tx.product.update({
           where: { id: inProductId },
-          data: { costUsd: inCost, priceDetal, priceMayor },
+          data: { costUsd: inCost, priceDetal, priceMayor, ...priceAudit(userId, 'INVENTORY_REPLACEMENT', replacement.number) },
         });
       }
 
