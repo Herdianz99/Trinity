@@ -52,8 +52,8 @@ export class ProductsController {
   }
 
   @Get('search')
-  search(@Query('q') q: string) {
-    return this.productsService.search(q);
+  search(@Query('q') q: string, @Query('includeInactive') includeInactive?: string) {
+    return this.productsService.search(q, includeInactive === '1' || includeInactive === 'true');
   }
 
   @Get('purchase-analysis')

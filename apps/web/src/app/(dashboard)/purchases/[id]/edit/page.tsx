@@ -9,6 +9,7 @@ import {
   Loader2,
   Save,
   Search,
+  AlertTriangle,
   X,
   Plus,
   Pencil,
@@ -41,6 +42,7 @@ interface ProductSearchResult {
   priceMayor: number;
   totalStock: number;
   isService?: boolean;
+  isActive?: boolean;
 }
 
 interface ProductDetail {
@@ -369,7 +371,7 @@ export default function EditPurchaseBillPage() {
     searchTimeout.current = setTimeout(async () => {
       setSearchingProducts(true);
       try {
-        const res = await fetch(`/api/proxy/products/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/proxy/products/search?q=${encodeURIComponent(q)}&includeInactive=1`);
         if (res.ok) {
           const data = await res.json();
           setProductResults(Array.isArray(data) ? data : []);
@@ -1210,7 +1212,8 @@ export default function EditPurchaseBillPage() {
                               } else if (e.key === 'Enter') {
                                 e.preventDefault();
                                 const p = productResults[productHighlight];
-                                if (p) selectProduct(p, idx);
+                                // Los desactivados se muestran solo como aviso: no se pueden comprar hasta activarlos.
+                                if (p && p.isActive !== false) selectProduct(p, idx);
                               } else if (e.key === 'Escape') {
                                 setProductResults([]);
                               }
@@ -1229,19 +1232,26 @@ export default function EditPurchaseBillPage() {
                                   type="button"
                                   ref={pIdx === productHighlight ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
                                   onMouseEnter={() => setProductHighlight(pIdx)}
-                                  onClick={() => selectProduct(p, idx)}
-                                  className={`w-full text-left px-3 py-2 text-sm text-white flex justify-between items-center transition-colors ${
-                                    pIdx === productHighlight ? 'bg-slate-600' : ''
-                                  }`}
+                                  onClick={() => { if (p.isActive !== false) selectProduct(p, idx); }}
+                                  title={p.isActive === false ? 'Producto desactivado: actívalo en Catálogo para poder comprarlo' : undefined}
+                                  className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center transition-colors ${
+                                    p.isActive === false ? 'text-slate-400 cursor-not-allowed bg-red-500/5' : 'text-white'
+                                  } ${pIdx === productHighlight ? 'bg-slate-600' : ''}`}
                                 >
                                   <span>
-                                    <span className="font-mono text-green-400 text-xs mr-1.5">
+                                    <span className={`font-mono text-xs mr-1.5 ${p.isActive === false ? 'text-slate-500' : 'text-green-400'}`}>
                                       {p.code}
                                     </span>
                                     {p.name}
                                     {p.isService && (
                                       <span className="ml-1.5 px-1 py-0.5 bg-amber-500/20 text-amber-400 text-[9px] rounded font-bold">
                                         SERV
+                                      </span>
+                                    )}
+                                    {p.isActive === false && (
+                                      <span className="block mt-0.5 text-[11px] text-red-400 font-medium">
+                                        <AlertTriangle size={11} className="inline -mt-0.5 mr-1" />
+                                        DESACTIVADO · existe en el sistema, actívalo para poder comprarlo
                                       </span>
                                     )}
                                   </span>

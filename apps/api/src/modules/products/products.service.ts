@@ -555,17 +555,19 @@ export class ProductsService {
     return { items, rate };
   }
 
-  async search(q: string) {
+  // includeInactive: Compras lo pide para listar tambien los desactivados (con alerta), asi el
+  // comprador sabe que el producto ya existe y que hay que activarlo en vez de crearlo de nuevo.
+  async search(q: string, includeInactive = false) {
     if (!q || q.trim().length === 0) return [];
 
     const tsq = productSearchTsQuery(q);
     const like = `%${q}%`;
     const results = await this.prisma.$queryRaw<any[]>`
       SELECT p.id, p.code, p.name, p."priceDetal", p."priceMayor", p."isService",
-        p."primaryImageThumbUrl", p."isOnSale",
+        p."primaryImageThumbUrl", p."isOnSale", p."isActive",
         COALESCE((SELECT SUM(s.quantity) FROM "Stock" s WHERE s."productId" = p.id), 0) as "totalStock"
       FROM "Product" p
-      WHERE p."isActive" = true
+      WHERE (p."isActive" = true OR ${includeInactive}::boolean)
       AND (
         p."searchVector" @@ to_tsquery('spanish', ${tsq})
         OR p.code ILIKE ${like}
@@ -574,6 +576,7 @@ export class ProductsService {
         OR p."otherCode" ILIKE ${like}
       )
       ORDER BY
+        p."isActive" DESC,
         p."isOnSale" DESC,
         CASE WHEN p.code ILIKE ${like} THEN 0
              WHEN p.barcode = ${q} THEN 0
@@ -592,6 +595,7 @@ export class ProductsService {
       totalStock: Number(r.totalStock),
       isService: r.isService,
       isOnSale: r.isOnSale ?? false,
+      isActive: r.isActive,
       primaryImageThumbUrl: r.primaryImageThumbUrl ?? null,
     }));
   }

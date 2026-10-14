@@ -40,6 +40,11 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🛒 Compras: alerta de productos desactivados (2026-10-14) · Sesión 162
+
+- **Pedido (total):** tras desactivar en total los 280 productos activos sin movimiento ni existencia (backup `/root/backup-desactivados-total-2026-10-14.csv` en 161.35.52.221), el usuario quiere que en la compra salgan igual, con alerta, para saber que existen y activarlos en vez de crearlos de nuevo.
+- **Cambio:** `GET /products/search?includeInactive=1` devuelve también inactivos (ordenados al final, campo `isActive`). Solo lo usan `purchases/new` y `purchases/[id]/edit`: el inactivo sale en gris con ⚠ "DESACTIVADO · existe en el sistema, actívalo para poder comprarlo" y no se puede seleccionar. POS, bot e importación IA sin cambios. Sin migraciones. ⏳ **Sin desplegar** (pendiente deploy en total y demás).
+
 ## 📊 Piloto del chatbot — día 1 en la grande (2026-10-12, solo lectura)
 
 - **Uso:** 59 conversaciones, 74 mensajes de clientes (todas del usuario "Marketing"), 7 con foto; picos 10-11 AM y 4-5 PM. Respuesta promedio 7,9 s. Costo del día **$0,11** (~$0,002 por conversación). Solo 1 escalada (foto no reconocida).
