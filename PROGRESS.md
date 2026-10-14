@@ -47,7 +47,8 @@
 - **Caminos sellados:** ficha (MANUAL_EDIT), creación, importación (2 caminos), ajuste masivo (lote), compra procesada y "actualizar precios" de la FC (ref = número FC), brecha global y de categoría (lote), integración con socio, traslado entre empresas, reemplazo de inventario.
 - **Pantallas:** `/inventory/price-log` (filtros fecha/usuario/origen/producto o FC/solo manuales, lotes plegados, Excel) y pestaña **"Historial de precios"** en la ficha. Permiso nuevo `bitacora-precios` (SUPERVISOR por migración; ADMIN por `*`).
 - **Migración** `20261014180000_product_price_log`. Test SQL `apps/api/_price-log.test.sql` (7 casos OK). Probado en local: edición en ficha, brecha de categoría (lote), Excel, cajero → 403, capturas de ambas pantallas.
-- ⏳ **Sin desplegar.** Pendiente: prueba del usuario en local y deploy a las 7 empresas.
+- **Pruebas de punta a punta (2026-10-14, copia desechable `grande_test`, ya borrada):** crear producto → CREATE con usuario; procesar FC con cambio de % → 2 registros PURCHASE (costo 10→12 y % 30→35) con usuario y número FC, sin ningún DIRECT_DB; "actualizar precios" de la FC → mismo lote; ajuste masivo de 3 productos → 1 lote; brecha global ±1 → 2 eventos de 7.435 productos (~58 s c/u, es el bucle de siempre; el trigger suma ~0,15 ms por producto); buscador de compras: desactivado sale con la alerta y Enter/clic no lo agrega. El usuario probó un cambio manual de precio en la ficha. Sin probar: importación de inventario, integración/traslados con socio, reemplazo de inventario (revisados en código).
+- ⏳ **Sin desplegar.** Pendiente: deploy a las 7 empresas.
 
 ## 🛒 Compras: alerta de productos desactivados (2026-10-14) · Sesión 162
 
