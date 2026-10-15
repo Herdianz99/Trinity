@@ -17,7 +17,9 @@ const sharp = require('sharp') as typeof import('sharp').default;
 
 const MAX_TOOL_ROUNDS = 6;
 const MAX_IMAGES = 4;
-const FALLBACK_TEXT = 'En este momento no puedo responderte. Te paso con un asesor que te atenderá en breve.';
+// Herramientas que acompanan la respuesta al cliente: el texto de su vuelta se conserva.
+const REPLY_TOOLS = new Set(['enviar_foto', 'escalar_a_asesor']);
+const FALLBACK_TEXT ='En este momento no puedo responderte. Te paso con un asesor que te atenderá en breve.';
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -354,8 +356,10 @@ export class ChatbotService {
     const toolLog: ToolCallLog[] = [];
     const out = { images: [] as ProductImageOut[], escalated: false };
     const usage = { input: 0, output: 0, cacheRead: 0, cost: 0 };
-    // Texto de TODAS las vueltas: el modelo a veces escribe la cotizacion y en la misma vuelta llama a
-    // enviar_foto o escalar_a_asesor; si solo se tomara la ultima vuelta, esa parte se perderia.
+    // Texto de las vueltas intermedias: el modelo a veces escribe la cotizacion y en la misma vuelta llama a
+    // enviar_foto o escalar_a_asesor; si solo se tomara la ultima vuelta, esa parte se perderia. En vueltas
+    // que solo buscan o calculan, el texto es el modelo pensando en voz alta ("Let me try one more search…")
+    // y no debe llegar al cliente.
     const texts: string[] = [];
     const collectText = (content: Anthropic.ContentBlock[]) => {
       const t = content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim();
@@ -382,9 +386,9 @@ export class ChatbotService {
 
         if (res.stop_reason === 'tool_use') {
           newTurns.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
-          collectText(res.content);
-          const results: Anthropic.ToolResultBlockParam[] = [];
           const toolBlocks = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+          if (toolBlocks.some((b) => REPLY_TOOLS.has(b.name))) collectText(res.content);
+          const results: Anthropic.ToolResultBlockParam[] = [];
           for (const block of toolBlocks) {
             let result: unknown;
             try {

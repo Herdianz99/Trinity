@@ -99,6 +99,9 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 163 (2026-10-15) — Chatbot: no filtrar notas internas al cliente
+- `chatbot.service.ts`: del texto de las vueltas con herramientas solo se conserva el de las que llaman a `enviar_foto`/`escalar_a_asesor` (`REPLY_TOOLS`); el de `buscar_productos`/`calcular_bolivares` es el modelo narrando y se descarta. Prompt: "no narres lo que vas a hacer, siempre en español".
+
 #### Sesión 159 (2026-10-12) — Chatbot: venta cruzada
 - Modelos `ChatbotCrossSellRule` (trigger, offerTerms[1-2], excludeTerms, status ACTIVE/PAUSED/SUGGESTED/DISMISSED, stats del análisis, timesOffered, `key` única normalizada) y `ChatbotCrossSellOffer` (conversación+regla única); `ChatbotConfig.crossSellAnalyzedAt`. Migración `20261012160000_chatbot_cross_sell`.
 - `cross-sell-utils.ts` (puras: normalizeTerm, ruleKey, extractMeasures/sharesMeasure, firstSignificantWord, wasOffered, countPairs, selectSuggestions, VARIANT_RE) · `ChatbotCrossSellService` (suggestFor, testRule, CRUD con caché 60 s, recordOffered) · `ChatbotCrossSellAnalysisService` (cron lunes 3 AM). `buscar_productos` devuelve `ofrecer_tambien`; sección VENTA CRUZADA en el prompt.
