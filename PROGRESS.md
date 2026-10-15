@@ -50,12 +50,12 @@
 - **Pantallas:** `/inventory/price-log` (filtros fecha/usuario/origen/producto o FC/solo manuales, lotes plegados, Excel) y pestaña **"Historial de precios"** en la ficha. Permiso nuevo `bitacora-precios` (SUPERVISOR por migración; ADMIN por `*`).
 - **Migración** `20261014180000_product_price_log`. Test SQL `apps/api/_price-log.test.sql` (7 casos OK). Probado en local: edición en ficha, brecha de categoría (lote), Excel, cajero → 403, capturas de ambas pantallas.
 - **Pruebas de punta a punta (2026-10-14, copia desechable `grande_test`, ya borrada):** crear producto → CREATE con usuario; procesar FC con cambio de % → 2 registros PURCHASE (costo 10→12 y % 30→35) con usuario y número FC, sin ningún DIRECT_DB; "actualizar precios" de la FC → mismo lote; ajuste masivo de 3 productos → 1 lote; brecha global ±1 → 2 eventos de 7.435 productos (~58 s c/u, es el bucle de siempre; el trigger suma ~0,15 ms por producto); buscador de compras: desactivado sale con la alerta y Enter/clic no lo agrega. El usuario probó un cambio manual de precio en la ficha. Sin probar: importación de inventario, integración/traslados con socio, reemplazo de inventario (revisados en código).
-- ⏳ **Sin desplegar.** Pendiente: deploy a las 7 empresas.
+- ✅ **Desplegado en las 7 empresas** (verificado 2026-10-15: todas en `82797ca6`).
 
 ## 🛒 Compras: alerta de productos desactivados (2026-10-14) · Sesión 162
 
 - **Pedido (total):** tras desactivar en total los 280 productos activos sin movimiento ni existencia (backup `/root/backup-desactivados-total-2026-10-14.csv` en 161.35.52.221), el usuario quiere que en la compra salgan igual, con alerta, para saber que existen y activarlos en vez de crearlos de nuevo.
-- **Cambio:** `GET /products/search?includeInactive=1` devuelve también inactivos (ordenados al final, campo `isActive`). Solo lo usan `purchases/new` y `purchases/[id]/edit`: el inactivo sale en gris con ⚠ "DESACTIVADO · existe en el sistema, actívalo para poder comprarlo" y no se puede seleccionar. POS, bot e importación IA sin cambios. Sin migraciones. ⏳ **Sin desplegar** (pendiente deploy en total y demás).
+- **Cambio:** `GET /products/search?includeInactive=1` devuelve también inactivos (ordenados al final, campo `isActive`). Solo lo usan `purchases/new` y `purchases/[id]/edit`: el inactivo sale en gris con ⚠ "DESACTIVADO · existe en el sistema, actívalo para poder comprarlo" y no se puede seleccionar. POS, bot e importación IA sin cambios. Sin migraciones. ✅ **Desplegado en las 7** (`82797ca6`).
 
 ## 📊 Piloto del chatbot — día 1 en la grande (2026-10-12, solo lectura)
 
