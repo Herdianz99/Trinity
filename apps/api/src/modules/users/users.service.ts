@@ -6,10 +6,17 @@ import { PermissionKey } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { normalizeEmail } from '../../common/email';
 import { generateTempPassword } from '../../common/temp-password';
+import { RolePermissionsService, VALID_MODULES } from '../role-permissions/role-permissions.service';
+
+// Solo modulos conocidos y sin duplicados
+const cleanModules = (mods: string[]) => Array.from(new Set(mods.filter((m) => VALID_MODULES.includes(m))));
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private rolePermissions: RolePermissionsService,
+  ) {}
 
   async create(dto: CreateUserDto) {
     const email = normalizeEmail(dto.email);
@@ -28,6 +35,7 @@ export class UsersService {
         role: dto.role,
         isActive: dto.isActive ?? true,
         employeeId: dto.employeeId || null,
+        extraModules: cleanModules(dto.extraModules ?? []),
         mustChangePassword: true,
       },
     });
@@ -44,6 +52,7 @@ export class UsersService {
         role: true,
         isActive: true,
         restrictToOnSiteIp: true,
+        extraModules: true,
         lastLoginAt: true,
         createdAt: true,
         employeeId: true,
@@ -90,7 +99,10 @@ export class UsersService {
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.restrictToOnSiteIp !== undefined) data.restrictToOnSiteIp = dto.restrictToOnSiteIp;
     if (dto.employeeId !== undefined) data.employeeId = dto.employeeId || null;
+    if (dto.extraModules !== undefined) data.extraModules = cleanModules(dto.extraModules);
     const user = await this.prisma.user.update({ where: { id }, data });
+    // El guard del API toma el cambio al instante; el menu/rutas web, en el proximo login o refresco del token
+    if (dto.extraModules !== undefined) await this.rolePermissions.invalidateUser(id);
     const { password, ...result } = user;
     return result;
   }

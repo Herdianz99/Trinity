@@ -42,6 +42,14 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🔑 Módulos extra por usuario (2026-10-17) · Sesión 164
+
+- **Pedido:** darle el Chatbot a UN vendedor sin abrirle nada más. Los módulos eran solo por rol; como solución temporal se le había cambiado el rol a uno con muchos más accesos (ve información sensible). Al desplegar, devolverle su rol de Vendedor y marcarle solo "Chatbot de ventas".
+- **Cambio:** campo `User.extraModules` (migración aditiva `20261017180000_user_extra_modules` + fix-schema). `RolePermissionsService.getModulesForUser` = módulos del rol + extra (caché Redis 5 min, se invalida al editar). Reemplaza a `getModulesForRole` en `ModuleGuard`, login, refresh, `/auth/me`, crédito de clientes y tasa de cambio. DTO/servicio de usuarios aceptan `extraModules` (filtrados contra `VALID_MODULES`, sin duplicados). UI: Usuarios → Editar → sección plegable "Módulos extra solo para este usuario" + etiqueta "+N extra" en la lista. Lista de módulos movida a `apps/web/src/lib/module-groups.ts` (la usan Permisos por rol y Usuarios).
+- **Aplica:** el API (guards) al instante; el menú/rutas web en el próximo inicio de sesión o refresco del token del usuario.
+- **Verificado en local (copia desechable `grande_test`, ya borrada):** vendedor A con `chatbot` extra → `/chatbot/stats` 200; vendedor B → 403; A no puede `PATCH /chatbot/config` (`chatbot-config` no dado) → 403; login/`/auth/me`/refresh de A traen `chatbot`; módulo inventado se descarta; quitar el extra → 403 inmediato; editar solo el nombre conserva los extra. Capturas de la lista y del modal OK. `tsc` API y web limpios.
+- ⏳ **Sin desplegar.**
+
 ## 🧾 Bitácora de costos y precios (2026-10-14) · Sesión 162
 
 - **Pedido del usuario:** saber quién cambió costos y precios de los artículos. Decidió: registrar **todos** los cambios (manuales y automáticos) y verlos en la **ficha** y en un **reporte general**.

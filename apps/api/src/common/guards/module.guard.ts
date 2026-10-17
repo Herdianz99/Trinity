@@ -27,7 +27,7 @@ export class ModuleGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
     if (!user) return false;
 
-    const modules = await this.rolePermissions.getModulesForRole(user.role);
+    const modules = await this.rolePermissions.getModulesForUser(user.id, user.role);
     if (modules.includes('*') || requiredList.some((r) => modules.includes(r))) return true;
 
     throw new ForbiddenException('No tienes permiso para esta accion');

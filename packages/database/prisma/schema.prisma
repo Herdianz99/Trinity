@@ -352,6 +352,8 @@ model User {
   isActive            Boolean             @default(true)
   mustChangePassword  Boolean             @default(true)
   restrictToOnSiteIp  Boolean             @default(false)
+  // Modulos extra SOLO para este usuario, ademas de los de su rol (ej. 'chatbot' a un vendedor)
+  extraModules        String[]            @default([])
   employeeId          String?             @unique
   employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
   // Portal de pedidos (rol CLIENT): ficha de cliente vinculada a este usuario.

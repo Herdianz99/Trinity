@@ -16,6 +16,7 @@ import {
   MapPin,
   MapPinOff,
 } from 'lucide-react';
+import { MODULE_GROUPS } from '@/lib/module-groups';
 
 interface User {
   id: string;
@@ -24,6 +25,7 @@ interface User {
   role: string;
   isActive: boolean;
   restrictToOnSiteIp?: boolean;
+  extraModules?: string[];
   employeeId?: string | null;
   lastLoginAt: string | null;
   createdAt: string;
@@ -101,6 +103,7 @@ export default function UsersPage() {
   const [formActive, setFormActive] = useState(true);
   const [formRestrictIp, setFormRestrictIp] = useState(false);
   const [formEmployeeId, setFormEmployeeId] = useState('');
+  const [formExtra, setFormExtra] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
@@ -179,6 +182,7 @@ export default function UsersPage() {
           isActive: formActive,
           restrictToOnSiteIp: formRole === 'ADMIN' ? false : formRestrictIp,
           employeeId: formEmployeeId || null,
+          extraModules: formRole === 'ADMIN' ? [] : formExtra,
         }),
       });
       const data = await res.json();
@@ -268,6 +272,7 @@ export default function UsersPage() {
     setFormActive(user.isActive);
     setFormRestrictIp(!!user.restrictToOnSiteIp);
     setFormEmployeeId(user.employeeId ?? '');
+    setFormExtra(user.extraModules ?? []);
     setFormError('');
     setShowEdit(true);
   }
@@ -419,6 +424,11 @@ export default function UsersPage() {
                       <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[user.role] || 'bg-slate-500/15 text-slate-400'}`}>
                         {ROLE_LABELS[user.role] || user.role}
                       </span>
+                      {(user.extraModules?.length ?? 0) > 0 && (
+                        <span className="ml-1.5 inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" title={'Modulos extra: ' + user.extraModules!.join(', ')}>
+                          +{user.extraModules!.length} extra
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-slate-500">{formatDate(user.lastLoginAt)}</span>
@@ -468,6 +478,11 @@ export default function UsersPage() {
                   <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS[user.role] || 'bg-slate-500/15 text-slate-400'}`}>
                     {ROLE_LABELS[user.role] || user.role}
                   </span>
+                  {(user.extraModules?.length ?? 0) > 0 && (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+                      +{user.extraModules!.length} extra
+                    </span>
+                  )}
                   <span className="text-xs text-slate-500">Último acceso: {formatDate(user.lastLoginAt)}</span>
                 </div>
                 <div className="flex items-center justify-end gap-1 mt-2 -mr-1.5">{renderActions(user)}</div>
@@ -642,6 +657,42 @@ export default function UsersPage() {
                 Requiere cargar las IPs del local en Configuracion. Aplica en el proximo inicio de sesion del usuario.
               </p>
             </div>
+            {formRole !== 'ADMIN' && (
+              <details className="rounded-lg border border-slate-700 bg-slate-800/40" open={formExtra.length > 0}>
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-300">
+                  Modulos extra solo para este usuario
+                  {formExtra.length > 0 && <span className="ml-2 text-emerald-400">({formExtra.length})</span>}
+                </summary>
+                <div className="px-3 pb-3">
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Se suman a los permisos de su rol sin cambiarlo (ej. darle el Chatbot a un solo vendedor).
+                    Aplica en el proximo inicio de sesion del usuario.
+                  </p>
+                  <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
+                    {MODULE_GROUPS.map((g) => (
+                      <div key={g.group}>
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">{g.group}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                          {g.items.map((m) => (
+                            <label key={m.key} className="flex items-start gap-2 text-xs text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={formExtra.includes(m.key)}
+                                onChange={(e) =>
+                                  setFormExtra((prev) => (e.target.checked ? [...prev, m.key] : prev.filter((k) => k !== m.key)))
+                                }
+                                className="mt-0.5 w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500/40"
+                              />
+                              {m.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            )}
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <button type="button" onClick={() => setShowEdit(false)} className="btn-secondary">
                 Cancelar

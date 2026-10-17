@@ -1040,6 +1040,8 @@ model QuotationItem {
 
 *(Detalle completo se define antes de cada sesión)*
 
+**Módulos extra por usuario (Sesión 164):** `User.extraModules` (text[]) se SUMA a los módulos del rol, sin cambiarlo (ej. dar `chatbot` a un solo vendedor). Fuente única: `RolePermissionsService.getModulesForUser(userId, role)` = rol ∪ extra (caché Redis `user-extra-modules:<id>` 5 min, se invalida al editar el usuario). La usan `ModuleGuard`, login/refresh (payload del JWT → middleware web), `/auth/me` (menú) y los chequeos de crédito de clientes y tasa de cambio. NO usar `getModulesForRole` para decidir acceso de un usuario. UI: Usuarios → Editar → "Módulos extra solo para este usuario" (solo ADMIN edita usuarios). Lista de módulos compartida en `apps/web/src/lib/module-groups.ts`.
+
 ---
 
 ### FASE 3 — Inteligencia de Negocio

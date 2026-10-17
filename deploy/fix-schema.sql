@@ -3353,3 +3353,6 @@ RETURNS TEXT AS $$
     '[^a-z0-9 ]+', ' ', 'g'
   );
 $$ LANGUAGE sql STABLE;
+
+-- Modulos extra por usuario, ademas de los de su rol (Session 164)
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "extraModules" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

@@ -189,12 +189,12 @@ export class CustomersService {
   }
 
   // Solo roles con el permiso MANAGE_CUSTOMER_CREDIT (o ADMIN) pueden editar el credito del cliente.
-  // Los permisos son POR ROL (RolePermission.modules), no por usuario — misma fuente que /auth/me.
+  // Permisos del rol + modulos extra del usuario (getModulesForUser) — misma fuente que /auth/me.
   private async assertCanEditCredit(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     if (!user) throw new ForbiddenException('Usuario no encontrado');
     if (user.role === 'ADMIN') return;
-    const perms = await this.rolePermissions.getModulesForRole(user.role);
+    const perms = await this.rolePermissions.getModulesForUser(userId, user.role);
     if (!perms.includes('MANAGE_CUSTOMER_CREDIT')) {
       throw new ForbiddenException('No tiene permiso para editar el credito del cliente (MANAGE_CUSTOMER_CREDIT)');
     }

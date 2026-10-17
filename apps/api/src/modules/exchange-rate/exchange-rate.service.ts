@@ -62,7 +62,7 @@ export class ExchangeRateService {
     // ADMIN siempre puede; los demas roles necesitan el permiso MANAGE_EXCHANGE_RATE
     // (configurable desde "Permisos por rol").
     if (user.role !== UserRole.ADMIN) {
-      const modules = await this.rolePermissions.getModulesForRole(user.role);
+      const modules = await this.rolePermissions.getModulesForUser(user.id, user.role);
       if (!modules.includes(RATE_PERMISSION)) {
         throw new ForbiddenException('No tiene permiso para registrar la tasa de cambio');
       }

@@ -87,7 +87,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const permissions = await this.rolePermissionsService.getModulesForRole(user.role);
+    const permissions = await this.rolePermissionsService.getModulesForUser(user.id, user.role);
     const payload = {
       sub: user.id,
       name: user.name,
@@ -125,7 +125,7 @@ export class AuthService {
         throw new UnauthorizedException();
       }
       if (user.role === 'CLIENT') await this.assertClientCanLogin(user.customerId);
-      const permissions = await this.rolePermissionsService.getModulesForRole(user.role);
+      const permissions = await this.rolePermissionsService.getModulesForUser(user.id, user.role);
       const newPayload = {
         sub: user.id,
         name: user.name,
@@ -157,7 +157,7 @@ export class AuthService {
     const { password, ...result } = user;
     return {
       ...result,
-      permissions: await this.rolePermissionsService.getModulesForRole(user.role),
+      permissions: await this.rolePermissionsService.getModulesForUser(user.id, user.role),
     };
   }
 
