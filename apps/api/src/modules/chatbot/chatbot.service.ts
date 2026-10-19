@@ -10,6 +10,7 @@ import { caracasDayStart, caracasToday } from '../../common/timezone';
 import { ChatbotToolsService, ProductImageOut } from './chatbot-tools.service';
 import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { buildChatbotSystemPrompt } from './chatbot-prompt';
+import { numbersIn, unverifiedPrices } from './price-guard';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
 
@@ -425,6 +426,46 @@ export class ChatbotService {
       failure = e instanceof Anthropic.APIError ? `error_ia_${e.status ?? 'red'}` : 'error_ia';
     }
 
+    // Control de precios: todo monto en $ debe salir de una herramienta (ver price-guard.ts). Si no, se le pide
+    // una vez que reescriba sin herramientas; si vuelve a fallar, no se envia y pasa a un asesor.
+    if (!failure && finalText) {
+      try {
+        const { known, quantities } = await this.priceEvidence(conversationId, cfg, clean, toolLog);
+        const bad = unverifiedPrices(finalText, known, quantities);
+        if (bad.length) {
+          this.logger.warn(`Conversación ${conversationId}: precios sin respaldo ${bad.join(', ')}; se pide reescribir`);
+          const flawed = newTurns.pop()!;
+          const res = await this.anthropic().messages.create({
+            model: cfg.model,
+            max_tokens: 4096,
+            system,
+            tools: TOOLS,
+            tool_choice: { type: 'none' },
+            messages: [...messages, ...newTurns, flawed, {
+              role: 'user',
+              content: `[Revisión automática, no la escribió el cliente] Tu respuesta tiene precios que no salieron de ninguna herramienta: ${bad.map((b) => `${b}$`).join(', ')}. `
+                + 'Reescribe la respuesta COMPLETA para el cliente usando solo los precios exactos de los resultados (o cantidad × precio). No menciones esta revisión.',
+            }],
+            output_config: { effort: cfg.effort as 'low' | 'medium' | 'high' },
+          });
+          usage.input += res.usage.input_tokens;
+          usage.output += res.usage.output_tokens;
+          usage.cacheRead += res.usage.cache_read_input_tokens ?? 0;
+          usage.cost += chatbotCostUsd(cfg.model, res.usage);
+          const fixed = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim();
+          if (res.stop_reason === 'end_turn' && fixed && !unverifiedPrices(fixed, known, quantities).length) {
+            newTurns.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
+            finalText = fixed;
+          } else {
+            failure = 'precio_no_verificado';
+          }
+        }
+      } catch (e) {
+        this.logger.error(`Control de precios falló en ${conversationId}: ${(e as Error).message}`);
+        failure = 'precio_no_verificado';
+      }
+    }
+
     if (failure || !finalText) {
       if (!out.escalated) await this.escalate(conversationId, failure ?? 'respuesta_vacia', 'El bot no pudo responder; revisar la conversación');
       // Si fallo a mitad del bucle no se guardan los turnos parciales (el historial debe quedar valido).
@@ -438,6 +479,26 @@ export class ChatbotService {
     return this.saveBotMessage(conversationId, finalText, {
       escalated: out.escalated, toolLog, usage, images: out.images, apiTurns: newTurns,
     });
+  }
+
+  // Numeros que respaldan un precio (resultados de herramientas de toda la conversacion + textos de la
+  // configuracion, ej. el costo del delivery) y cantidades mencionadas (cliente + input de herramientas).
+  private async priceEvidence(conversationId: string, cfg: ChatbotConfig, userText: string, toolLog: ToolCallLog[]) {
+    const prev = await this.prisma.chatbotMessage.findMany({
+      where: { conversationId },
+      select: { role: true, text: true, toolCalls: true },
+    });
+    const calls = [...prev.flatMap((m) => (Array.isArray(m.toolCalls) ? (m.toolCalls as unknown as ToolCallLog[]) : [])), ...toolLog];
+    const known = [
+      ...calls.flatMap((t) => numbersIn(JSON.stringify(t.result ?? ''))),
+      ...numbersIn([cfg.addressText, cfg.hoursText, cfg.deliveryText, cfg.paymentText, cfg.partnersText, cfg.extraInfo].join(' ')),
+    ];
+    const quantities = [
+      ...prev.filter((m) => m.role === 'USER').flatMap((m) => numbersIn(m.text ?? '')),
+      ...numbersIn(userText),
+      ...calls.flatMap((t) => numbersIn(JSON.stringify(t.input ?? ''))),
+    ];
+    return { known, quantities };
   }
 
   private async saveBotMessage(
