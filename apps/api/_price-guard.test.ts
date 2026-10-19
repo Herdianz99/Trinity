@@ -9,6 +9,16 @@ test('parseMoney: punto o coma decimal y miles con coma', () => {
   assert.deepEqual(moneyInText('Está en 206.56$ bcv (185.90$ en divisas). Bs 41.304,39'), [206.56, 185.9]);
 });
 
+test('tambien con el signo antes: "$14.44 BCV, o $13.00 en divisas"', () => {
+  assert.deepEqual(moneyInText('Está en $14.44 BCV, o $ 13.00 en divisas, cada una.'), [14.44, 13]);
+  assert.deepEqual(unverifiedPrices('Está en $14.44 BCV o $12.43 en divisas', [14.44, 13], []), [12.43]);
+  // caso real: total general con el detalle en la misma respuesta, todo con el signo antes
+  const real = 'el total en divisas sería $253.32: 15 cabillas a $13.00 c/u: $195.00 / 6 sacos a $9.72 c/u: $58.32';
+  assert.deepEqual(unverifiedPrices(real, [13, 9.72], [15, 6]), []);
+  // un total suelto, sin sus partes en la respuesta, no se puede verificar
+  assert.deepEqual(unverifiedPrices('Total: $253.32', [13, 9.72], [15, 6]), [253.32]);
+});
+
 test('caso real del piloto: precio que no salio de ninguna herramienta', () => {
   const text = 'Malla: está en 12.43$ bcv... perdón, en 206.56$ bcv (185.90$ en divisas).';
   assert.deepEqual(unverifiedPrices(text, [206.56, 185.9, 106.87], [1, 100]), [12.43]);

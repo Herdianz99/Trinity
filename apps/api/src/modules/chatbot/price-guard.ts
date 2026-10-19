@@ -4,7 +4,10 @@
 // tal cual, por una cantidad entera que el cliente o el bot mencionaron (10 cabillas a 14.44 = 144.40), o como suma
 // de montos ya validados de la misma respuesta (total general).
 
-const MONEY_RE = /(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*\$/g;
+// "14.44$" (el formato pedido) o "$14.44" / "$ 14.44" (Haiku a veces lo escribe asi; prueba de conversaciones
+// largas 2026-10-19). La coma solo cuenta como decimal si no sigue una cifra (lista "1,2,3$" no aplica).
+const AMOUNT = '(\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
+const MONEY_RE = new RegExp(`${AMOUNT}\\s*\\$|\\$\\s*${AMOUNT}(?![\\d.,]*\\d)`, 'g');
 const MAX_SUM_TERMS = 12; // subconjuntos de hasta 2^12 combinaciones
 
 const cents = (v: number) => Math.round(v * 100);
@@ -17,7 +20,7 @@ export function parseMoney(s: string): number {
 
 // Montos en $ que aparecen en el texto del bot.
 export function moneyInText(text: string): number[] {
-  return [...(text || '').matchAll(MONEY_RE)].map((m) => parseMoney(m[1]));
+  return [...(text || '').matchAll(MONEY_RE)].map((m) => parseMoney(m[1] ?? m[2]));
 }
 
 // Todos los numeros de un texto/JSON (precios de herramientas, cantidades del cliente...).
