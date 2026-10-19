@@ -210,6 +210,12 @@ export class StoreExportService {
     // Prefijo de la ruta del snapshot. En prod queda 'store'; en local se puede
     // apuntar a 'store-local' (STORE_SNAPSHOT_PREFIX) para NO pisar el snapshot real.
     const prefix = (process.env.STORE_SNAPSHOT_PREFIX || 'store').replace(/\/+$/, '');
+    // Nunca subir un catalogo vacio: la mayor comparte el bucket de la grande y, sin STORE_SNAPSHOT_PREFIX,
+    // subia 0 productos a "store/" cada 10 min (2026-10-19), dejando la tienda vacia si ganaba la carrera.
+    if (!products.length) {
+      this.logger.warn(`Snapshot tienda NO subido a "${prefix}/": 0 productos publicados`);
+      return summary;
+    }
     await this.spaces.uploadJson(`${prefix}/catalog.json`, catalog, 60);
     await this.spaces.uploadJson(`${prefix}/meta.json`, meta, 60);
 

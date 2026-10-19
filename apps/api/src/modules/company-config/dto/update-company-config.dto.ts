@@ -99,6 +99,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   requireCustomerAddress?: boolean;
 
+  // Opt-in: boton "Tomar ubicacion" (GPS) en el formulario de cliente del POS.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  customerLocationInPos?: boolean;
+
   // Portal de pedidos para clientes (rol CLIENT).
   @ApiProperty({ required: false })
   @IsOptional()

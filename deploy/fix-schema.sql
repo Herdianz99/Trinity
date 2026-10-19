@@ -3356,3 +3356,6 @@ $$ LANGUAGE sql STABLE;
 
 -- Modulos extra por usuario, ademas de los de su rol (Session 164)
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "extraModules" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+
+-- Ubicacion GPS del cliente en el formulario del POS, opt-in por empresa (Session 166)
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "customerLocationInPos" BOOLEAN NOT NULL DEFAULT false;

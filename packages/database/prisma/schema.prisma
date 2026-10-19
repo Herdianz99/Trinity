@@ -285,6 +285,8 @@ model CompanyConfig {
   // Si true, al elegir un cliente sin direccion en el POS se muestra un aviso (patron del telefono).
   // Opt-in por empresa (default false = sin cambios para las demas).
   requireCustomerAddress  Boolean  @default(false)
+  // Boton "Tomar ubicacion" (GPS para despachos) en el formulario de cliente del POS. Opt-in (pensado para la mayor).
+  customerLocationInPos   Boolean  @default(false)
   // Portal de pedidos para clientes (rol CLIENT). Apagado = los CLIENT no pueden entrar.
   clientPortalEnabled     Boolean  @default(false)
   // No borrar las facturas en espera a medianoche (pedidos que duran varios dias).

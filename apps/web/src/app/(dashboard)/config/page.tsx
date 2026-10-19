@@ -106,6 +106,7 @@ interface CompanyConfig {
   igtfPct: number;
   allowNegativeStock: boolean;
   requireCustomerAddress: boolean;
+  customerLocationInPos: boolean;
   clientPortalEnabled: boolean;
   keepPendingInvoices: boolean;
   useScanDispatch: boolean;
@@ -149,6 +150,7 @@ export default function ConfigPage() {
     igtfPct: 3,
     allowNegativeStock: true,
     requireCustomerAddress: false,
+    customerLocationInPos: false,
     clientPortalEnabled: false,
     keepPendingInvoices: false,
     useScanDispatch: false,
@@ -317,6 +319,7 @@ export default function ConfigPage() {
           igtfPct: data.igtfPct ?? 3,
           allowNegativeStock: data.allowNegativeStock ?? true,
           requireCustomerAddress: data.requireCustomerAddress ?? false,
+          customerLocationInPos: data.customerLocationInPos ?? false,
           clientPortalEnabled: data.clientPortalEnabled ?? false,
           keepPendingInvoices: data.keepPendingInvoices ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
@@ -411,6 +414,7 @@ export default function ConfigPage() {
           igtfPct: Number(config.igtfPct),
           allowNegativeStock: config.allowNegativeStock,
           requireCustomerAddress: config.requireCustomerAddress,
+          customerLocationInPos: config.customerLocationInPos,
           clientPortalEnabled: config.clientPortalEnabled,
           keepPendingInvoices: config.keepPendingInvoices,
           useScanDispatch: config.useScanDispatch,
@@ -1176,6 +1180,18 @@ export default function ConfigPage() {
                 <div>
                   <span className="text-sm text-white">Direccion del cliente obligatoria</span>
                   <p className="text-xs text-slate-500">Si esta activado, al elegir un cliente sin direccion en el POS aparece un aviso para agregarla</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.customerLocationInPos}
+                  onChange={(e) => handleChange('customerLocationInPos', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Ubicacion GPS en el cliente del POS</span>
+                  <p className="text-xs text-slate-500">Si esta activado, el formulario de cliente del POS muestra el boton "Tomar ubicacion" para despachos</p>
                 </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">

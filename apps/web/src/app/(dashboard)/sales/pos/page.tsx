@@ -38,6 +38,9 @@ import SeniatModal from '@/components/seniat-modal';
 import { LostSaleModal } from '@/components/lost-sale-modal';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
 import QtyInput from '@/components/qty-input';
+import CustomerLocationField, { type CustomerLocation } from '@/components/customer-location-field';
+
+const NO_LOCATION: CustomerLocation = { latitude: null, longitude: null, locationAccuracyM: null, locationUpdatedAt: null };
 
 const IVA_RATES: Record<string, number> = {
   EXEMPT: 0,
@@ -236,7 +239,7 @@ export default function POSPage() {
   const [userId, setUserId] = useState('');
   const [userRole, setUserRole] = useState('');
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean; requireCustomerAddress?: boolean; defaultCustomerId?: string | null } | null>(null);
+  const [companyConfig, setCompanyConfig] = useState<{ isIGTFContributor: boolean; igtfPct: number; fiscalCreditCode?: string; companyName?: string; rif?: string; address?: string; phone?: string; allowNegativeStock?: boolean; requireCustomerAddress?: boolean; customerLocationInPos?: boolean; defaultCustomerId?: string | null } | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
@@ -268,6 +271,8 @@ export default function POSPage() {
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [showEditClient, setShowEditClient] = useState(false);
   const [clientForm, setClientForm] = useState({ documentType: 'V', rif: '', name: '', address: '', phone: '', email: '' });
+  // Ubicacion GPS del cliente: solo se muestra y se envia si la empresa activo customerLocationInPos.
+  const [clientLocation, setClientLocation] = useState<CustomerLocation>(NO_LOCATION);
   const [savingClient, setSavingClient] = useState(false);
   const [seniatOpen, setSeniatOpen] = useState(false);
   const [clientRifWarning, setClientRifWarning] = useState('');
@@ -498,6 +503,7 @@ export default function POSPage() {
           phone: data.phone || '',
           allowNegativeStock: data.allowNegativeStock ?? true,
           requireCustomerAddress: data.requireCustomerAddress ?? false,
+          customerLocationInPos: data.customerLocationInPos ?? false,
           defaultCustomerId: data.defaultCustomerId || null,
         });
       });
@@ -1686,6 +1692,7 @@ export default function POSPage() {
     } else {
       setClientForm({ documentType: 'V', rif: '', name: raw, address: '', phone: '', email: '' });
     }
+    setClientLocation(NO_LOCATION);
     setShowCreateClient(true);
   }
 
@@ -1703,10 +1710,15 @@ export default function POSPage() {
     try {
       const url = isEdit ? `/api/proxy/customers/${customerId}` : '/api/proxy/customers';
       const method = isEdit ? 'PATCH' : 'POST';
+      // Sin el flag no se mandan las coordenadas: la API no toca la ubicacion que ya tenga el cliente.
+      const { latitude, longitude, locationAccuracyM } = clientLocation;
+      const body = companyConfig?.customerLocationInPos
+        ? { ...clientForm, latitude, longitude, locationAccuracyM }
+        : clientForm;
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clientForm),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1737,6 +1749,12 @@ export default function POSPage() {
           address: data.address || '',
           phone: data.phone || '',
           email: data.email || '',
+        });
+        setClientLocation({
+          latitude: data.latitude ?? null,
+          longitude: data.longitude ?? null,
+          locationAccuracyM: data.locationAccuracyM ?? null,
+          locationUpdatedAt: data.locationUpdatedAt ?? null,
         });
         setShowEditClient(true);
       });
@@ -3073,6 +3091,9 @@ export default function POSPage() {
                     placeholder="Direccion"
                   />
                 </div>
+                {companyConfig?.customerLocationInPos && (
+                  <CustomerLocationField value={clientLocation} onChange={setClientLocation} disabled={savingClient} />
+                )}
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">Telefono <span className="text-red-400">*</span></label>
                   <input

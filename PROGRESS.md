@@ -42,6 +42,14 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📍 Ubicación GPS del cliente en el POS, opción por empresa (2026-10-19) · Sesión 166
+
+> ⏳ **Commiteado SIN DESPLEGAR.** Pensado para la **mayor**: desplegarla con su script (`bash /opt/deploy-trinity-mayor.sh`) y luego activar la opción en Configuración. Las demás reciben la columna inerte (apagada).
+
+- **Opción nueva** `CompanyConfig.customerLocationInPos` (default false; migración aditiva `20261019180000_customer_location_in_pos` + `fix-schema.sql`; DTO `update-company-config`). Configuración → junto a "Dirección del cliente obligatoria": **"Ubicación GPS en el cliente del POS"**.
+- **POS:** con la opción activa, el modal de nuevo/editar cliente muestra el mismo `CustomerLocationField` de la ficha del cliente ("Tomar ubicación actual", precisión, ver en Google Maps, quitar). Estado aparte (`clientLocation`); las coordenadas **solo se envían si la opción está activa** → en las demás empresas nunca se borra una ubicación tomada desde la ficha. La API ya aceptaba `latitude/longitude/locationAccuracyM` (fecha la pone el servidor, solo si cambió). `tsc` API y web limpios; no probado en navegador.
+- **Bug encontrado (export de tienda):** la mayor comparte el bucket `trinity-inversiones` y **no tiene `STORE_SNAPSHOT_PREFIX`** → su cron subía un catálogo **vacío** a `store/` cada 10 min, a la misma hora que la grande (la grande termina ~0,5 s después y casi siempre gana; si fallaba, o al editar un producto en la mayor, la tienda quedaba vacía hasta 10 min). Fix en código: `exportCatalog` **no sube si hay 0 productos**. Además conviene poner `STORE_SNAPSHOT_PREFIX=store-mayor` en `/opt/Trinity-mayor/apps/api/.env` (pendiente de visto bueno; requiere reiniciar `trinity-api-mayor`).
+
 ## 🤖 Chatbot: control de precios antes de enviar + sinónimos del piloto (2026-10-19) · Sesión 165
 
 > Preparación para el bot automático (sin nadie que revise antes de enviar). ⏳ **Código commiteado SIN DESPLEGAR** (va en el mismo deploy pendiente de la grande que el fix de Configuración y la tienda). Sinónimos: ✅ cargados en producción (son datos).
