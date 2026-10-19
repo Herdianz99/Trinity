@@ -99,6 +99,11 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 165 (2026-10-19) — Chatbot: control de precios + tienda con datos del bot + plan Fase 3
+- `chatbot/price-guard.ts` (puro): todo monto en $ de la respuesta debe salir de una herramienta, de cantidad × precio o de la suma de montos validados; si no, `ChatbotService.reply()` pide una reescritura (`tool_choice: none`) y si vuelve a fallar escala `precio_no_verificado`. `getConfigView` ya no devuelve `crossSellAnalyzedAt` (rompía el PATCH de Configuración).
+- `store-export`: excluye `saleBlocked`, stock de almacenes `countsForSale` menos apartado, `sold90` y `complements` (`store-complements.ts`, desde reglas ACTIVAS de venta cruzada + co-compra ≥2 facturas/180 d). Tienda `trebol-shop`: buscador con sinónimos y medidas habladas, orden por más vendidos, "También te puede servir".
+- Plan de la Fase 3 (Chatwoot propio, tienda online → Instagram → WhatsApp por coexistencia): `docs/CHATBOT-FASE3-PLAN.md`.
+
 #### Sesión 163 (2026-10-15) — Chatbot: no filtrar notas internas al cliente
 - `chatbot.service.ts`: del texto de las vueltas con herramientas solo se conserva el de las que llaman a `enviar_foto`/`escalar_a_asesor` (`REPLY_TOOLS`); el de `buscar_productos`/`calcular_bolivares` es el modelo narrando y se descarta. Prompt: "no narres lo que vas a hacer, siempre en español".
 
