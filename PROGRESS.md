@@ -42,6 +42,11 @@
 5. **Fase 3:** iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🤖 Chatbot en Total + fix "crossSellAnalyzedAt should not exist" (2026-10-19) · Sesión 165
+
+- **Total preparada para el chatbot (solo datos, por SQL en `total_db`):** análisis de facturas propio (tienda de herramientas). 12 reglas de venta cruzada ACTIVE (esmeril→disco de corte/flap, litio→cargador, cargador→batería de litio, inalámbrico→batería/cargador, ratchet→barra de extensión, dado→ratchet, guantes↔lentes, martillo↔cincel, rodillo→brocha, paleta→nivel/palustra), 4 PAUSED (taladro, máquina de soldar, compresor, hidrojet), sugeridas y semillas de la grande en DISMISSED (no borrar las semillas: `fix-schema.sql` las re-siembra). 38 sinónimos activos (notes `Analisis Total 2026-10-19 (chatbot)`). Total desplegada en `7204bfd6`. Falta: clave `ANTHROPIC_API_KEY`, Configuración y permisos (usuario).
+- **Bug:** Chatbot → Configuración → Guardar fallaba con `property crossSellAnalyzedAt should not exist` en cuanto corre el análisis de venta cruzada (cron lunes 3 AM o "Recalcular ahora"): `GET /chatbot/config` devolvía la columna, la pantalla reenvía todo en el PATCH y el DTO (`forbidNonWhitelisted`) la rechaza. Afecta a la grande desde el 2026-10-19 07:00 UTC y a Total. **Fix:** `getConfigView` ya no devuelve `crossSellAnalyzedAt` (la pantalla de venta cruzada usa `analyzedAt` de `GET /chatbot/cross-sell/rules`). ⏳ Commiteado, SIN DESPLEGAR (el usuario decide cuándo).
+
 ## 🔑 Módulos extra por usuario (2026-10-17) · Sesión 164
 
 - **Pedido:** darle el Chatbot a UN vendedor sin abrirle nada más. Los módulos eran solo por rol; como solución temporal se le había cambiado el rol a uno con muchos más accesos (ve información sensible). Al desplegar, devolverle su rol de Vendedor y marcarle solo "Chatbot de ventas".

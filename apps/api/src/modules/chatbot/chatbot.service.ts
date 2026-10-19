@@ -116,7 +116,9 @@ export class ChatbotService {
   }
 
   async getConfigView() {
-    const cfg = await this.getConfig();
+    // crossSellAnalyzedAt no va: la pantalla de Configuracion reenvia todo en el PATCH y el DTO lo rechazaria
+    // (la fecha del analisis la da GET /chatbot/cross-sell/rules).
+    const { crossSellAnalyzedAt: _analyzedAt, ...cfg } = await this.getConfig();
     return { ...cfg, apiKeyConfigured: !!this.apiKey() };
   }
 
