@@ -1,7 +1,8 @@
 // Lógica PURA del snapshot de la tienda: sin NestJS, sin Prisma, sin Spaces.
 // Testeable en aislamiento (ver _verify-store-export.ts).
+import { pickComplements, type ComplementRule } from './store-complements';
 
-const LOW_STOCK_THRESHOLD = 5; // "pocas unidades" si stock total <= este valor
+const LOW_STOCK_THRESHOLD = 5; // "pocas unidades" si stock libre <= este valor
 
 export type StockStatus = 'disponible' | 'pocas' | 'agotado';
 
@@ -21,6 +22,8 @@ export interface StoreProduct {
   featured: boolean;
   offer: boolean; // isOnSale en Trinity: producto marcado "en oferta"
   keywords: string; // sinonimos de busqueda activos ("cabilla, 3/8"); el buscador de la tienda puede usarlos
+  sold90: number; // facturas de los ultimos 90 dias (la tienda ordena por "mas vendidos")
+  complements?: string[]; // codigos para "Tambien te puede servir" (reglas de venta cruzada); solo si hay
 }
 
 /** Forma cruda de producto que espera el builder (subset del select de Prisma). */
@@ -37,7 +40,9 @@ export interface RawProduct {
   images: string[]; // URLs medium de todas las fotos (principal primero), ya resueltas a CDN
   category: { name: string } | null;
   brand: { name: string } | null;
-  stock: { quantity: number }[];
+  stock: { quantity: number }[]; // solo almacenes que cuentan para la venta
+  reservedQty: number; // apartado en facturas en espera (no se puede vender por la tienda)
+  sold90: number;
 }
 
 /** Banner de tienda ya listo para el snapshot (imageKey resuelto a URL de CDN). */
@@ -87,6 +92,7 @@ export function buildSnapshotData(
   banners: ExportBanner[] = [],
   catIcons: Record<string, string | null> = {}, // nombre de categoría → emoji
   brandLogos: Record<string, string | null> = {}, // nombre de marca → URL de CDN
+  complementRules: ComplementRule[] = [], // reglas ACTIVAS de venta cruzada ya resueltas a codigos
 ): SnapshotBuild {
   // Slugs de categoría/marca con dedupe determinista.
   const catSlugs = new Map<string, string>(); // name -> slug
@@ -103,9 +109,10 @@ export function buildSnapshotData(
   const brandCount = new Map<string, number>();
 
   const storeProducts: StoreProduct[] = products.map((p) => {
-    const total = p.stock.reduce((sum, s) => sum + s.quantity, 0);
+    // Mismo criterio que el chatbot: existencia en almacenes de venta menos lo apartado en facturas en espera.
+    const free = p.stock.reduce((sum, s) => sum + s.quantity, 0) - (p.reservedQty || 0);
     const stockStatus: StockStatus =
-      total <= 0 ? 'agotado' : total <= LOW_STOCK_THRESHOLD ? 'pocas' : 'disponible';
+      free <= 0 ? 'agotado' : free <= LOW_STOCK_THRESHOLD ? 'pocas' : 'disponible';
 
     let categorySlug: string | null = null;
     if (p.category?.name) {
@@ -140,8 +147,18 @@ export function buildSnapshotData(
       featured: p.storeFeatured,
       offer: p.isOnSale,
       keywords: p.searchKeywords,
+      sold90: p.sold90 || 0,
     };
   });
+
+  const complements = pickComplements(
+    storeProducts.map((p) => ({ code: p.code, name: p.name, available: p.stockStatus !== 'agotado', sold90: p.sold90 })),
+    complementRules,
+  );
+  for (const p of storeProducts) {
+    const c = complements.get(p.code);
+    if (c) p.complements = c;
+  }
 
   const categories = Array.from(catSlugs.entries()).map(([name, slug]) => ({
     slug,
