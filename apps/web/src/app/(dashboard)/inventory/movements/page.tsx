@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText, ChevronDown, Layers, DollarSign, ArrowDownUp } from 'lucide-react';
+import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText, ChevronDown, Layers, DollarSign, ArrowDownUp, UserRound } from 'lucide-react';
 import { getMovementSource } from '@/lib/movement-source';
 
 interface Movement {
@@ -160,8 +160,9 @@ export default function MovementsPage() {
     }
   }, [page, buildFilterParams]);
 
-  function openReport(path: string) {
+  function openReport(path: string, extra?: Record<string, string>) {
     const params = buildFilterParams();
+    if (extra) for (const [k, v] of Object.entries(extra)) params.set(k, v);
     window.open(`/api/proxy/stock-movements/${path}?${params}`, '_blank');
     setReportMenuOpen(false);
   }
@@ -234,6 +235,26 @@ export default function MovementsPage() {
                 <span>
                   <span className="block text-sm text-slate-200">Entradas y salidas</span>
                   <span className="block text-xs text-slate-500">Agrupa los movimientos en solo 2 grupos: entradas y salidas.</span>
+                </span>
+              </button>
+              <button
+                onClick={() => openReport('report/by-seller')}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-t border-slate-700/50"
+              >
+                <UserRound size={16} className="text-amber-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">Ventas por vendedor</span>
+                  <span className="block text-xs text-slate-500">Solo ventas: cada vendedor con las categorias que vendio y su monto.</span>
+                </span>
+              </button>
+              <button
+                onClick={() => openReport('report/by-seller', { detail: '1' })}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors"
+              >
+                <UserRound size={16} className="text-amber-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">Ventas por vendedor (detalle)</span>
+                  <span className="block text-xs text-slate-500">Igual, pero con cada producto vendido dentro de su categoria.</span>
                 </span>
               </button>
             </div>

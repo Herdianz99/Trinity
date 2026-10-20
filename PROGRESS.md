@@ -44,6 +44,14 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 👤 Reporte de movimientos: Ventas por vendedor (2026-10-20) · Sesión 167
+
+> ⏳ **Commiteado, NO desplegado** (se sube con el próximo deploy). El reporte "Por categoria" quedó igual.
+
+- **Reporte nuevo** en Inventario → Movimientos → Reportes: **"Ventas por vendedor"** y **"Ventas por vendedor (detalle)"** (`GET stock-movements/report/by-seller`, `detail=1` para el detalle). Solo movimientos de **venta** (fuerza `type=SALE`, ignora el filtro de tipo); respeta fechas, almacén, proveedor, búsqueda, producto y serie.
+- Agrupa **vendedor → categoría**. Vendedor = el de la factura/nota origen (`sourceId` → `Invoice.sellerId`); sin vendedor → "Sin vendedor". Resumen: tabla de vendedores (docs, movs, unidades, monto, %) y por vendedor sus categorías ordenadas por monto con % del vendedor. Detalle: cada línea (fecha, documento, código, producto, cant., precio, monto) con subtotales. **Monto = cantidad × precio detal actual** (mismo criterio que "Por categoria").
+- Origen: pedido del usuario del 1–15 oct en la grande filtrado por **CINDU DE VENEZUELA, S.A.** (sacado primero a mano: 212 movs, 175 docs, $26.156,87; el PDF nuevo da los mismos totales). `tsc` API y web limpios; PDF probado con esos datos, no probado en navegador.
+
 ## 📍 Ubicación GPS del cliente en el POS, opción por empresa (2026-10-19) · Sesión 166
 
 > ✅ **Desplegado en las 7 (2026-10-19, `0fc9e113`, por el usuario).** Opción **activada solo en la mayor** (`trebolmayor_db`); en las demás apagada. Mayor: agregado `STORE_SNAPSHOT_PREFIX=store-mayor` a `/opt/Trinity-mayor/apps/api/.env` (respaldo `.env.bak-20261019`) + restart de `trinity-api-mayor`.

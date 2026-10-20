@@ -99,6 +99,9 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 167 (2026-10-20) — Reporte de ventas por vendedor (movimientos de stock)
+- `GET stock-movements/report/by-seller` (`detail=1` opcional): `StockMovementsService.getGroupedBySeller` (solo `SALE`, vendedor vía `sourceId` → `Invoice.seller`, luego categoría) + `StockMovementsPdfService.generateBySeller`. Botones en /inventory/movements → Reportes. El reporte por categoría no se tocó.
+
 #### Sesión 166 (2026-10-19) — Ubicación GPS del cliente en el POS (opción por empresa)
 - `CompanyConfig.customerLocationInPos` (opt-in, migración `20261019180000_customer_location_in_pos`): el modal de cliente del POS muestra `CustomerLocationField`; las coordenadas solo se envían con la opción activa.
 - `StoreExportService.exportCatalog` no sube un catálogo vacío (la mayor, sin `STORE_SNAPSHOT_PREFIX`, pisaba `store/` de la grande con 0 productos).

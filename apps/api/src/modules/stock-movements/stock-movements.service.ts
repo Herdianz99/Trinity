@@ -250,6 +250,93 @@ export class StockMovementsService {
     return { groups, totalCount: movements.length, summary };
   }
 
+  /**
+   * Solo movimientos de VENTA (type SALE, ignora el filtro de tipo) agrupados primero por el
+   * vendedor de la factura/nota origen (sourceId → Invoice.sellerId) y dentro por categoria.
+   * Para el reporte PDF "por vendedor" de /inventory/movements. Monto = cantidad x precio detal
+   * (mismo criterio que el reporte por categoria).
+   */
+  async getGroupedBySeller(filters: {
+    productId?: string;
+    warehouseId?: string;
+    supplierId?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    serie?: string;
+  }) {
+    const where = this.buildWhere({ ...filters, type: 'SALE' });
+
+    const movements = await this.prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: {
+          select: { code: true, name: true, priceDetal: true, category: { select: { name: true } } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Vendedor de cada documento origen (en lotes para no pasar el limite de parametros)
+    const invoiceIds = [...new Set(movements.map((m) => m.sourceId).filter((id): id is string => !!id))];
+    const sellerByInvoice = new Map<string, string>();
+    for (let i = 0; i < invoiceIds.length; i += 5000) {
+      const invoices = await this.prisma.invoice.findMany({
+        where: { id: { in: invoiceIds.slice(i, i + 5000) } },
+        select: { id: true, seller: { select: { name: true } } },
+      });
+      for (const inv of invoices) if (inv.seller) sellerByInvoice.set(inv.id, inv.seller.name.trim());
+    }
+
+    const sellersMap = new Map<string, Map<string, typeof movements>>();
+    for (const m of movements) {
+      const seller = (m.sourceId && sellerByInvoice.get(m.sourceId)) || 'Sin vendedor';
+      const cat = m.product.category?.name || 'Sin categoria';
+      if (!sellersMap.has(seller)) sellersMap.set(seller, new Map());
+      const cats = sellersMap.get(seller)!;
+      if (!cats.has(cat)) cats.set(cat, []);
+      cats.get(cat)!.push(m);
+    }
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const sellers = [...sellersMap.entries()]
+      .map(([seller, cats]) => {
+        const categories = [...cats.entries()]
+          .map(([category, items]) => ({
+            category,
+            items,
+            count: items.length,
+            documents: new Set(items.map((m) => m.reference || m.sourceId)).size,
+            units: items.reduce((s, m) => s + Math.abs(m.quantity), 0),
+            amount: r2(items.reduce((s, m) => s + Math.abs(m.quantity) * (m.product.priceDetal || 0), 0)),
+          }))
+          .sort((a, b) => b.amount - a.amount);
+        const all = categories.flatMap((c) => c.items);
+        return {
+          seller,
+          categories,
+          count: all.length,
+          documents: new Set(all.map((m) => m.reference || m.sourceId)).size,
+          units: categories.reduce((s, c) => s + c.units, 0),
+          amount: r2(categories.reduce((s, c) => s + c.amount, 0)),
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+
+    const summary = await this.resolveFilterSummary({ ...filters, type: 'SALE' });
+
+    return {
+      sellers,
+      summary,
+      totals: {
+        count: movements.length,
+        documents: new Set(movements.map((m) => m.reference || m.sourceId)).size,
+        units: sellers.reduce((s, x) => s + x.units, 0),
+        amount: r2(sellers.reduce((s, x) => s + x.amount, 0)),
+      },
+    };
+  }
+
   /** Calcula los subtotales (cantidades + monto a precio de venta) de un grupo de movimientos. */
   private summarizeGroup<T extends { quantity: number; product: { priceDetal: number | null } }>(
     category: string,

@@ -106,6 +106,46 @@ export class StockMovementsController {
     res.end(buffer);
   }
 
+  // Solo ventas, agrupadas por vendedor y luego por categoria. detail=1 incluye cada movimiento.
+  @Get('report/by-seller')
+  @ApiQuery({ name: 'productId', required: false })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'serie', required: false })
+  @ApiQuery({ name: 'detail', required: false })
+  async reportBySeller(
+    @Res() res: Response,
+    @Query('productId') productId?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('serie') serie?: string,
+    @Query('detail') detail?: string,
+  ) {
+    const { sellers, summary, totals } = await this.stockMovementsService.getGroupedBySeller({
+      productId,
+      warehouseId,
+      supplierId,
+      search,
+      from,
+      to,
+      serie,
+    });
+    const withDetail = detail === '1' || detail === 'true';
+    const buffer = await this.stockMovementsPdf.generateBySeller(sellers, summary, totals, withDetail);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="ventas-por-vendedor${withDetail ? '-detalle' : ''}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Get('report/costs')
   @ApiQuery({ name: 'productId', required: false })
   @ApiQuery({ name: 'warehouseId', required: false })
