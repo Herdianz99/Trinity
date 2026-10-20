@@ -44,6 +44,15 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📸 Fondo blanco a fotos de productos, por lotes en la PC del usuario (2026-10-20, sin código en Trinity)
+
+> ⏳ **Prueba hecha, arranca en producción el 2026-10-21.** El usuario no quiere pagar servicios (Photoroom ~$0,02/foto, Gemini ~$0,04/foto) ni cargar el servidor de la grande.
+
+- **Flujo acordado:** los chicos toman fotos como siempre en Catálogo → Sesión de fotos (grande). Cuando el usuario avisa, se descargan las fotos nuevas, se les pone fondo blanco **en la PC del usuario** y se arma una página **antes / después**. El usuario aprueba y se suben las aprobadas por la API del server (`POST /products/:id/images`), borrando la vieja (`DELETE`, que también la quita de Spaces). Las no aprobadas quedan con la original.
+- **Herramienta:** `rembg` (licencia libre) en un venv aislado (uv + Python 3.12), sin instalar nada en el sistema ni en el servidor. **Modelo elegido: `birefnet-general`** (~33 s/foto en esta PC, bordes limpios). Alternativa rápida: `isnet-general-use` (~2,4 s/foto, a veces deja restos en el borde). Salida: recorte al producto, lienzo cuadrado blanco con 8% de margen.
+- **Prueba:** 5 fotos reales (interruptores y tomas Zaxon/Vert sostenidos con la mano): quita mano y pared sin alterar etiqueta ni código de barras. Las 5 fotos se **borraron** después a pedido del usuario (productos en su bolsa: se ven feos). Consejo a los chicos: sacar el producto del empaque, buena luz, que llene la foto.
+- Descartado: modelo en el servidor de la grande (riesgo bajo pero CPU compartida con el POS) y mini app con túnel (depende de que la PC esté prendida mientras toman fotos).
+
 ## 👤 Reporte de movimientos: Ventas por vendedor (2026-10-20) · Sesión 167
 
 > ⏳ **Commiteado, NO desplegado** (se sube con el próximo deploy). El reporte "Por categoria" quedó igual.
