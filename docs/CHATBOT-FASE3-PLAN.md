@@ -81,6 +81,15 @@ Con el bot solo fuera de horario, lo normal es quedarse dentro de las 1.000 grat
    producto de la tienda; al escalar: asignar a un asesor + nota interna con el resumen; si el asesor toma la
    conversación, el bot no responde; fotos del cliente (adjuntos); límite de **1.000 caracteres en Instagram**;
    horario del bot por canal + interruptor "Asesor presente".
+   **Obligatorio: mensajes seguidos del cliente (pendiente, detectado 2026-10-21).** Hoy cada mensaje dispara su propia
+   llamada a la IA y no hay bloqueo por conversación. En WhatsApp el cliente escribe en ráfagas ("Buenos días" /
+   "Saludos" / "tienen carretillas??" en el mismo minuto): saldrían 2-3 respuestas, quizá desordenadas, y dos llamadas
+   en paralelo leen el mismo historial sin verse entre sí (una saluda mientras la otra cotiza). Solución:
+   (a) **espera de silencio** de ~8-10 s por conversación antes de responder; si llegan más mensajes se reinicia la
+   espera y se juntan todos (texto + fotos) en un solo turno del cliente → una sola llamada a la IA;
+   (b) **una respuesta a la vez por conversación** (cola/bloqueo, p. ej. Redis o `SELECT … FOR UPDATE` sobre
+   `ChatbotConversation`): lo que llegue mientras el bot responde entra en la vuelta siguiente;
+   (c) probarlo con ráfagas reales (3 mensajes en 2 s, mensaje durante la respuesta, foto + texto separados).
 3. **Instalar Chatwoot** (Docker, imagen `-ce`, HTTPS, swap, respaldos) y crear los usuarios de los asesores.
 4. **Chat en la tienda online** (script del widget en `trebol-shop`; el push publica en Vercel) + página `/privacidad`.
 5. **Pruebas de punta a punta** como cliente (texto, fotos, escalada, el asesor la recibe) antes de publicar.
