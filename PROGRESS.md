@@ -44,6 +44,12 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🤖 Piloto del chatbot 19–20 oct + permiso en Total (2026-10-20, sin código)
+
+- **Grande:** 19-10: 106 conversaciones, 89% 👍 (80 de 90 calificadas), $0,12. 20-10 (hasta ~6 pm): 36 conversaciones, 93% 👍 (28 de 30), $0,05. 1 escalada (cerrar compra con Cashea). Todo lo usa el usuario Marketing. Los 👎 son casi todos "no encontré": Protex 220, metilan (no los tenemos); "malla Tucson" ya cubierta por el sinónimo creado el 19-10 a las 12:10.
+- **Sinónimos nuevos activos en la grande (por API):** `mil tejas / mil teja / miltejas / lamina mil tejas` → `milteja` (LAMINA MILTEJA 1.07 X 6.0MTS) y `manto ipa / manto asfaltico ipa` → `manto asfaltico` (3 mantos CINDU; IPA es otra marca). Ojo: "laminas pvc mil tejas" sigue sin resultado porque el nombre no dice PVC.
+- **Total:** el usuario Marketing (SELLER) tenía como módulo extra solo `chatbot-config` (veía Venta cruzada/Configuración pero no Probar bot). Cambiado a solo `chatbot` (`User.extraModules`), sin configuración. Debe cerrar sesión y volver a entrar para ver el menú.
+
 ## 📸 Fondo blanco a fotos de productos, por lotes en la PC del usuario (2026-10-20, sin código en Trinity)
 
 > ⏳ **Prueba hecha, arranca en producción el 2026-10-21.** El usuario no quiere pagar servicios (Photoroom ~$0,02/foto, Gemini ~$0,04/foto) ni cargar el servidor de la grande.
