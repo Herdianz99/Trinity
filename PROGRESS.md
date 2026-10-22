@@ -61,14 +61,14 @@
 
 ## 🏢 Gasto de autoconsumo del grupo: opción por empresa (2026-10-22) · Sesión 168
 
-> ✅ **Desplegado y ACTIVADO en la grande (2026-10-22, `d893bde8`)**: el flag se puso en true apenas la migración creó la columna, antes de reiniciar la API (sin ventana sin gasto). Otras 6: sin desplegar (quedará apagado; decidir qué hacer con sus gastos de autoconsumo existentes). Nota original: al desplegar queda **apagado en las 7**: activarlo **en la grande** (Configuración → "Gasto de autoconsumo para empresas del grupo", o `UPDATE "CompanyConfig" SET "groupAutoConsumptionExpense"=true;` en `trinity_db`) **justo después del deploy**, para que no queden facturas al grupo sin su gasto.
+> ✅ **Desplegado y ACTIVADO en la grande (2026-10-22, `d893bde8`)**: el flag se puso en true apenas la migración creó la columna, antes de reiniciar la API (sin ventana sin gasto). Otras 6: desplegadas 2026-10-22 (`85a4067b`), apagado (verificado en las 6 BDs). Pendiente decidir qué hacer con sus gastos de autoconsumo existentes (mayor 4, Total 3, Aceros 63). Nota original: al desplegar queda **apagado en las 7**: activarlo **en la grande** (Configuración → "Gasto de autoconsumo para empresas del grupo", o `UPDATE "CompanyConfig" SET "groupAutoConsumptionExpense"=true;` en `trinity_db`) **justo después del deploy**, para que no queden facturas al grupo sin su gasto.
 
 - Flag `CompanyConfig.groupAutoConsumptionExpense` (default false, migración `20261022200000_group_autoconsumption_flag`). `invoices.pay()` solo crea el gasto "Autoconsumo Grupo" si el cliente es `isGroupCompany` **y** el flag está activo. El recálculo al devolver mercancía (NCV) se dejó sin flag: solo actúa si la factura ya tiene gasto, así los gastos viejos siguen cuadrando.
 - Gastos de autoconsumo ya existentes al 22-10 (no se tocaron): grande 478 ($25.013,89), mayor 4 ($572,74), Total 3 ($61,43), Aceros 63 ($3.409,79), chica/Total Turén/Aceros mayor 0.
 
 ## 💬 Campaña de WhatsApp dentro de Trinity (2026-10-22) · Sesión 168
 
-> ✅ **Desplegada y ACTIVADA en la grande (2026-10-22, `d893bde8`)**: `whatsappCampaignEnabled=true` en `trinity_db`; probado en prod (13.684 clientes, 1,8 s la 1a vez, 0,05 s después). Historial local importado (export del 22-10: 161 envíos 17-20/10, 7 sin WhatsApp, 0 duplicados) y tope diario puesto en 40 como en la página local. Primer corte de Resultados (ventana 7 d, aún abierta): 8 de 161 compraron (5%) vs 3% del grupo control → ≈ +3 compras atribuibles, $935,07, 3 con Cashea. Pendiente: asignar el módulo a los usuarios. Otras 6: sin desplegar (quedará apagada). Nota original: después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
+> ✅ **Desplegada y ACTIVADA en la grande (2026-10-22, `d893bde8`)**: `whatsappCampaignEnabled=true` en `trinity_db`; probado en prod (13.684 clientes, 1,8 s la 1a vez, 0,05 s después). Historial local importado (export del 22-10: 161 envíos 17-20/10, 7 sin WhatsApp, 0 duplicados) y tope diario puesto en 40 como en la página local. Primer corte de Resultados (ventana 7 d, aún abierta): 8 de 161 compraron (5%) vs 3% del grupo control → ≈ +3 compras atribuibles, $935,07, 3 con Cashea. Pendiente: asignar el módulo a los usuarios. Otras 6: desplegadas 2026-10-22 (`85a4067b`), apagada. Nota original: después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
 
 - Reemplaza la página local `Desktop/campana-whatsapp` (ya no hace falta exportar CSV ni `gen-data.js`). **Ventas → Campaña WhatsApp** (`/sales/campana-whatsapp`), pestañas **Clientes** y **Resultados**.
 - **Acceso:** módulo `campana-whatsapp` (strictPermission: ni con `sales` se ve; ADMIN lo ve por `*`) + flag de empresa `CompanyConfig.whatsappCampaignEnabled` (default false → oculto en las otras 6 aunque se despliegue). El API devuelve 403 si el flag está apagado.
@@ -80,7 +80,7 @@
 
 ## ⚡ Dashboard gerencial lento: KPI "Clientes nuevos" (2026-10-22) · Sesión 168
 
-> ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ✅ **Índices desplegados en la grande (2026-10-22, `d893bde8`)**; faltan las otras 6.
+> ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ✅ **Índices desplegados en la grande (2026-10-22, `d893bde8`)**; **otras 6 desplegadas 2026-10-22 (`85a4067b`)**.
 
 **Tiempos de `GET /dashboard/gerencial` en la grande** (medido en el server con curl a localhost:4000, sin red):
 
@@ -100,7 +100,7 @@ El salto grande lo dio el ANALYZE; los índices evitan que vuelva a pasar cuando
 
 ## 👤 Reporte de movimientos: Ventas por vendedor (2026-10-20) · Sesión 167
 
-> ✅ **Desplegado en la grande (2026-10-22, `d893bde8`)**; faltan las otras 6. El reporte "Por categoria" quedó igual.
+> ✅ **Desplegado en la grande (2026-10-22, `d893bde8`)**; **otras 6 desplegadas 2026-10-22 (`85a4067b`)**. El reporte "Por categoria" quedó igual.
 
 - **Reporte nuevo** en Inventario → Movimientos → Reportes: **"Ventas por vendedor"** y **"Ventas por vendedor (detalle)"** (`GET stock-movements/report/by-seller`, `detail=1` para el detalle). Solo movimientos de **venta** (fuerza `type=SALE`, ignora el filtro de tipo); respeta fechas, almacén, proveedor, búsqueda, producto y serie.
 - Agrupa **vendedor → categoría**. Vendedor = el de la factura/nota origen (`sourceId` → `Invoice.sellerId`); sin vendedor → "Sin vendedor". Resumen: tabla de vendedores (docs, movs, unidades, monto, %) y por vendedor sus categorías ordenadas por monto con % del vendedor. Detalle: cada línea (fecha, documento, código, producto, cant., precio, monto) con subtotales. **Monto = cantidad × precio detal actual** (mismo criterio que "Por categoria").
