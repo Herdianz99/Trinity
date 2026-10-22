@@ -294,6 +294,9 @@ model CompanyConfig {
   whatsappCampaignEnabled    Boolean  @default(false)
   whatsappCampaignStoreName  String   @default("El Trébol")
   whatsappCampaignDailyLimit Int      @default(50)
+  // Al cobrar una factura a un cliente "empresa del grupo" se genera un gasto de autoconsumo al costo.
+  // Opt-in por empresa (solo la grande la usa).
+  groupAutoConsumptionExpense Boolean @default(false)
   // No borrar las facturas en espera a medianoche (pedidos que duran varios dias).
   keepPendingInvoices     Boolean  @default(false)
   defaultCustomerId       String?

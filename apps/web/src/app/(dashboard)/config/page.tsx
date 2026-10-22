@@ -109,6 +109,7 @@ interface CompanyConfig {
   customerLocationInPos: boolean;
   clientPortalEnabled: boolean;
   whatsappCampaignEnabled: boolean;
+  groupAutoConsumptionExpense: boolean;
   keepPendingInvoices: boolean;
   useScanDispatch: boolean;
   useAlmacenOps: boolean;
@@ -154,6 +155,7 @@ export default function ConfigPage() {
     customerLocationInPos: false,
     clientPortalEnabled: false,
     whatsappCampaignEnabled: false,
+    groupAutoConsumptionExpense: false,
     keepPendingInvoices: false,
     useScanDispatch: false,
     useAlmacenOps: false,
@@ -324,6 +326,7 @@ export default function ConfigPage() {
           customerLocationInPos: data.customerLocationInPos ?? false,
           clientPortalEnabled: data.clientPortalEnabled ?? false,
           whatsappCampaignEnabled: data.whatsappCampaignEnabled ?? false,
+          groupAutoConsumptionExpense: data.groupAutoConsumptionExpense ?? false,
           keepPendingInvoices: data.keepPendingInvoices ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
           useAlmacenOps: data.useAlmacenOps ?? false,
@@ -420,6 +423,7 @@ export default function ConfigPage() {
           customerLocationInPos: config.customerLocationInPos,
           clientPortalEnabled: config.clientPortalEnabled,
           whatsappCampaignEnabled: config.whatsappCampaignEnabled,
+          groupAutoConsumptionExpense: config.groupAutoConsumptionExpense,
           keepPendingInvoices: config.keepPendingInvoices,
           useScanDispatch: config.useScanDispatch,
           useAlmacenOps: config.useAlmacenOps,
@@ -1220,6 +1224,18 @@ export default function ConfigPage() {
                 <div>
                   <span className="text-sm text-white">Campaña de WhatsApp</span>
                   <p className="text-xs text-slate-500">Muestra Ventas &gt; Campaña WhatsApp. Ademas, cada usuario necesita el permiso &quot;Campaña de WhatsApp&quot; (Usuarios &gt; Modulos extra)</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.groupAutoConsumptionExpense}
+                  onChange={(e) => handleChange('groupAutoConsumptionExpense', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Gasto de autoconsumo para empresas del grupo</span>
+                  <p className="text-xs text-slate-500">Al cobrar una factura a un cliente marcado como &quot;empresa del grupo&quot; se registra un gasto al costo (categoria &quot;Autoconsumo Grupo&quot;). Apagado = la factura queda como una venta normal</p>
                 </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">

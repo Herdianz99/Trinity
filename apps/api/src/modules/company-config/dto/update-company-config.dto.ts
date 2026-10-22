@@ -117,6 +117,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   whatsappCampaignEnabled?: boolean;
 
+  // Gasto de autoconsumo al facturar a una empresa del grupo. Opt-in por empresa.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  groupAutoConsumptionExpense?: boolean;
+
   // No borrar las facturas en espera a medianoche.
   @ApiProperty({ required: false })
   @IsOptional()

@@ -1398,7 +1398,8 @@ export class InvoicesService {
       // ingreso real sino consumo interno. Se registra un GASTO al COSTO efectivo del
       // inventario (costo + brecha, ya guardado en item.costUsd/costBs), NO al monto de la
       // factura. No mueve caja (es solo reconocimiento contable del inventario consumido).
-      if (invoice.customer?.isGroupCompany) {
+      // Opt-in por empresa: CompanyConfig.groupAutoConsumptionExpense (solo la grande).
+      if (invoice.customer?.isGroupCompany && config?.groupAutoConsumptionExpense) {
         const costTotalUsd = Math.round(
           invoice.items.reduce((s, it) => s + it.costUsd * it.quantity, 0) * 100,
         ) / 100;

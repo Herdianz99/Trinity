@@ -59,6 +59,13 @@
 - **Prueba:** 5 fotos reales (interruptores y tomas Zaxon/Vert sostenidos con la mano): quita mano y pared sin alterar etiqueta ni código de barras. Las 5 fotos se **borraron** después a pedido del usuario (productos en su bolsa: se ven feos). Consejo a los chicos: sacar el producto del empaque, buena luz, que llene la foto.
 - Descartado: modelo en el servidor de la grande (riesgo bajo pero CPU compartida con el POS) y mini app con túnel (depende de que la PC esté prendida mientras toman fotos).
 
+## 🏢 Gasto de autoconsumo del grupo: opción por empresa (2026-10-22) · Sesión 168
+
+> ⏳ **Commiteado, NO desplegado.** Al desplegar queda **apagado en las 7**: activarlo **en la grande** (Configuración → "Gasto de autoconsumo para empresas del grupo", o `UPDATE "CompanyConfig" SET "groupAutoConsumptionExpense"=true;` en `trinity_db`) **justo después del deploy**, para que no queden facturas al grupo sin su gasto.
+
+- Flag `CompanyConfig.groupAutoConsumptionExpense` (default false, migración `20261022200000_group_autoconsumption_flag`). `invoices.pay()` solo crea el gasto "Autoconsumo Grupo" si el cliente es `isGroupCompany` **y** el flag está activo. El recálculo al devolver mercancía (NCV) se dejó sin flag: solo actúa si la factura ya tiene gasto, así los gastos viejos siguen cuadrando.
+- Gastos de autoconsumo ya existentes al 22-10 (no se tocaron): grande 478 ($25.013,89), mayor 4 ($572,74), Total 3 ($61,43), Aceros 63 ($3.409,79), chica/Total Turén/Aceros mayor 0.
+
 ## 💬 Campaña de WhatsApp dentro de Trinity (2026-10-22) · Sesión 168
 
 > ⏳ **Commiteado, NO desplegado.** Después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
