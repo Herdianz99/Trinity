@@ -59,6 +59,16 @@
 - **Prueba:** 5 fotos reales (interruptores y tomas Zaxon/Vert sostenidos con la mano): quita mano y pared sin alterar etiqueta ni código de barras. Las 5 fotos se **borraron** después a pedido del usuario (productos en su bolsa: se ven feos). Consejo a los chicos: sacar el producto del empaque, buena luz, que llene la foto.
 - Descartado: modelo en el servidor de la grande (riesgo bajo pero CPU compartida con el POS) y mini app con túnel (depende de que la PC esté prendida mientras toman fotos).
 
+## ⚡ Dashboard gerencial lento: KPI "Clientes nuevos" (2026-10-22) · Sesión 168
+
+> ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ⏳ **Migración de índices commiteada, NO desplegada** (se sube con el próximo deploy, junto al reporte "Ventas por vendedor").
+
+- Síntoma: el usuario lo notaba lento "en los teléfonos". Medido en el server: `GET /dashboard/gerencial` tardaba **2,8 s hoy / 8,9 s semana / 44 s mes** (igual para PC). Perfilando cada sub-consulta: **`getNewCustomers` = ~45 s** de 47 s; el resto ~3 s.
+- Causa: stats de `Customer` sin actualizar desde 2026-09-04 (autoanalyze salta cada ~5.500 cambios y se crean ~1.400 clientes/mes) → Postgres estimaba 1 cliente nuevo en octubre (había 1.414) → nested loop con seq scan de `Invoice` por cliente (35 M comparaciones; `Invoice.customerId` sin índice). Se repetiría cada mes.
+- Arreglo inmediato: `ANALYZE "Customer"; ANALYZE "Invoice";` en las 7 BDs → grande: **0,34 s hoy / 0,64 s semana / 2,5 s mes**.
+- Arreglo permanente: migración `20261022180000_dashboard_customer_indexes` (`Customer(createdAt)`, `Invoice(customerId)`, `IF NOT EXISTS`). Con el índice el plan es rápido aunque las stats vuelvan a quedar viejas.
+- Pendiente opcional: el mes sigue en ~2,5 s por las demás consultas (`getProfit`, `getSalesByCategory`, `getTopProducts`, `getCashSummary`… ~2,5–2,9 s cada una en paralelo).
+
 ## 👤 Reporte de movimientos: Ventas por vendedor (2026-10-20) · Sesión 167
 
 > ⏳ **Commiteado, NO desplegado** (se sube con el próximo deploy). El reporte "Por categoria" quedó igual.

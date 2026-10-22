@@ -782,6 +782,7 @@ model Payment {
   - Comparación automática vs período anterior (vsLastPeriod)
   - Timeline inteligente: por hora (día único) o por día (rango)
   - CxC/CxP siempre retorna datos actuales independiente del período
+  - Índices `Customer(createdAt)` + `Invoice(customerId)` (Sesión 168): sin ellos el KPI "Clientes nuevos" tardaba 20-45 s con stats viejas
 
 **Frontend:**
 - Dashboard gerencial (/dashboard): selector de período, 4 KPIs con comparación, CxC/CxP tiempo real

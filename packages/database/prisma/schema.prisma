@@ -1248,6 +1248,7 @@ model Customer {
   updatedAt    DateTime     @updatedAt
 
   @@index([sellerId])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -1582,6 +1583,7 @@ model Invoice {
 
   @@index([status])
   @@index([fromPortal, status])
+  @@index([customerId])
 }
 
 model InvoiceItem {
