@@ -108,6 +108,7 @@ interface CompanyConfig {
   requireCustomerAddress: boolean;
   customerLocationInPos: boolean;
   clientPortalEnabled: boolean;
+  whatsappCampaignEnabled: boolean;
   keepPendingInvoices: boolean;
   useScanDispatch: boolean;
   useAlmacenOps: boolean;
@@ -152,6 +153,7 @@ export default function ConfigPage() {
     requireCustomerAddress: false,
     customerLocationInPos: false,
     clientPortalEnabled: false,
+    whatsappCampaignEnabled: false,
     keepPendingInvoices: false,
     useScanDispatch: false,
     useAlmacenOps: false,
@@ -321,6 +323,7 @@ export default function ConfigPage() {
           requireCustomerAddress: data.requireCustomerAddress ?? false,
           customerLocationInPos: data.customerLocationInPos ?? false,
           clientPortalEnabled: data.clientPortalEnabled ?? false,
+          whatsappCampaignEnabled: data.whatsappCampaignEnabled ?? false,
           keepPendingInvoices: data.keepPendingInvoices ?? false,
           useScanDispatch: data.useScanDispatch ?? false,
           useAlmacenOps: data.useAlmacenOps ?? false,
@@ -416,6 +419,7 @@ export default function ConfigPage() {
           requireCustomerAddress: config.requireCustomerAddress,
           customerLocationInPos: config.customerLocationInPos,
           clientPortalEnabled: config.clientPortalEnabled,
+          whatsappCampaignEnabled: config.whatsappCampaignEnabled,
           keepPendingInvoices: config.keepPendingInvoices,
           useScanDispatch: config.useScanDispatch,
           useAlmacenOps: config.useAlmacenOps,
@@ -1204,6 +1208,18 @@ export default function ConfigPage() {
                 <div>
                   <span className="text-sm text-white">Pedidos de clientes en línea</span>
                   <p className="text-xs text-slate-500">Clientes seleccionados entran con su usuario a montar sus pedidos (quedan como facturas en espera). El acceso se crea desde la ficha del cliente</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.whatsappCampaignEnabled}
+                  onChange={(e) => handleChange('whatsappCampaignEnabled', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+                />
+                <div>
+                  <span className="text-sm text-white">Campaña de WhatsApp</span>
+                  <p className="text-xs text-slate-500">Muestra Ventas &gt; Campaña WhatsApp. Ademas, cada usuario necesita el permiso &quot;Campaña de WhatsApp&quot; (Usuarios &gt; Modulos extra)</p>
                 </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">

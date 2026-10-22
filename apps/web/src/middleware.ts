@@ -17,6 +17,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/catalog/barcode-session', ['catalog', 'inventory', 'inventory-consult']],
   ['/quotations', ['sales']],
   ['/sales/pedidos-clientes', ['pedidos-clientes']],
+  ['/sales/campana-whatsapp', ['campana-whatsapp']],
   ['/sales', ['sales']],
   ['/catalog', ['catalog']],
   // Paginas de inventario de SOLO CONSULTA: tambien las puede ver 'inventory-consult'

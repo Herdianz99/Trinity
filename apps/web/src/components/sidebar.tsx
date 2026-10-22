@@ -85,6 +85,8 @@ interface MenuItem {
   almacenOpsOnly?: boolean;
   // Solo visible si la empresa activó el portal de clientes (clientPortalEnabled).
   clientPortalOnly?: boolean;
+  // Solo visible si la empresa activó la campaña de WhatsApp (whatsappCampaignEnabled).
+  whatsappCampaignOnly?: boolean;
   // Exige SU permiso propio aunque el usuario tenga el de la sección.
   strictPermission?: boolean;
 }
@@ -111,6 +113,7 @@ const menuSections: MenuSection[] = [
       { label: 'Notas Cr/Db', href: '/credit-debit-notes?scope=sale', icon: <FileX2 size={18} /> },
       { label: 'Retenciones clientes', href: '/sales/customer-retentions', icon: <Shield size={18} /> },
       { label: 'Clientes', href: '/sales/customers', icon: <UserCheck size={18} /> },
+      { label: 'Campaña WhatsApp', href: '/sales/campana-whatsapp', icon: <MessageCircle size={18} />, permission: 'campana-whatsapp', whatsappCampaignOnly: true, strictPermission: true },
     ],
   },
   {
@@ -424,6 +427,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [scanDispatchOn, setScanDispatchOn] = useState(false);
   const [almacenOpsOn, setAlmacenOpsOn] = useState(false);
   const [clientPortalOn, setClientPortalOn] = useState(false);
+  const [whatsappCampaignOn, setWhatsappCampaignOn] = useState(false);
   const [clientOrdersUnseen, setClientOrdersUnseen] = useState(0);
   const [companyName, setCompanyName] = useState('');
   // Pendientes en "Mi Perfil" (notificaciones sin acuse, incl. amonestaciones que generan notif).
@@ -449,7 +453,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   useEffect(() => {
     fetch('/api/proxy/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); setClientPortalOn(!!d?.clientPortalEnabled); })
+      .then((d) => { setCompanyName(d?.companyName || ''); setScanDispatchOn(!!d?.useScanDispatch); setAlmacenOpsOn(!!d?.useAlmacenOps); setClientPortalOn(!!d?.clientPortalEnabled); setWhatsappCampaignOn(!!d?.whatsappCampaignEnabled); })
       .catch(() => {});
   }, []);
 
@@ -541,7 +545,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
     const gate = (items: MenuItem[]) =>
       items.filter((it) =>
         (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn) &&
-        (!it.clientPortalOnly || clientPortalOn) &&
+        (!it.clientPortalOnly || clientPortalOn) && (!it.whatsappCampaignOnly || whatsappCampaignOn) &&
         (!it.strictPermission || (!!it.permission && hasPermission(permissions, it.permission))));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
     // "Mi Perfil" se muestra a cualquier usuario con empleado vinculado (cajero, vendedor,

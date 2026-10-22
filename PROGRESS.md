@@ -59,6 +59,18 @@
 - **Prueba:** 5 fotos reales (interruptores y tomas Zaxon/Vert sostenidos con la mano): quita mano y pared sin alterar etiqueta ni código de barras. Las 5 fotos se **borraron** después a pedido del usuario (productos en su bolsa: se ven feos). Consejo a los chicos: sacar el producto del empaque, buena luz, que llene la foto.
 - Descartado: modelo en el servidor de la grande (riesgo bajo pero CPU compartida con el POS) y mini app con túnel (depende de que la PC esté prendida mientras toman fotos).
 
+## 💬 Campaña de WhatsApp dentro de Trinity (2026-10-22) · Sesión 168
+
+> ⏳ **Commiteado, NO desplegado.** Después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
+
+- Reemplaza la página local `Desktop/campana-whatsapp` (ya no hace falta exportar CSV ni `gen-data.js`). **Ventas → Campaña WhatsApp** (`/sales/campana-whatsapp`), pestañas **Clientes** y **Resultados**.
+- **Acceso:** módulo `campana-whatsapp` (strictPermission: ni con `sales` se ve; ADMIN lo ve por `*`) + flag de empresa `CompanyConfig.whatsappCampaignEnabled` (default false → oculto en las otras 6 aunque se despliegue). El API devuelve 403 si el flag está apagado.
+- **Backend** `modules/whatsapp-campaign`: `segmentation.ts` = port exacto de `seg.js` V2 + `gen-data.js` (validado: mismos 13.396 clientes y 0 diferencias campo por campo con el data.js del 20-10). Clasificación en memoria 30 min (≈1-6 s la primera vez) con botón "Recalcular ahora". Endpoints: `GET clientes` (filtros/pestañas/paginado server-side, 50 por página), `POST envios` (guarda foto del cliente en `snapshot`), `PATCH contactos/:id/respondio|sin-whatsapp`, `GET/PUT/DELETE plantillas`, `PATCH ajustes` (nombre de tienda, tope diario), `GET resultados`, `POST importar` (JSON de la página local, sin duplicar).
+- **Tablas** (migración `20261022190000_whatsapp_campaign`): `WhatsappCampaignSend`, `WhatsappCampaignContact` (respondió / sin WhatsApp), `WhatsappCampaignTemplate` (solo las editadas; plantillas originales en `templates.ts`). Plantilla de enfriándose/inactivos = la de reactivación sin promo (clave `CASHEA` por historia).
+- **Resultados:** primer envío de cada cliente en el rango; compró = factura SALE PAID/PARTIAL_RETURN creada después del envío dentro de la ventana (3/7/14/30 días). **Grupo control** = clientes nunca contactados (hasta cerrar la ventana) que ese día estaban en el mismo estado; su % de compra en la misma ventana → "habrían comprado sin mensaje" y "compras atribuibles". Desglose por plantilla, estado, usuario y día; lista de compradores con facturas, métodos y marca Cashea.
+- Abrir WhatsApp: preferencia por dispositivo (localStorage): WhatsApp Web en PC, app (wa.me) en teléfono.
+- Probado en local contra copia de la BD (borrada después): endpoints, importación del export del 21-10 (160 envíos, re-importar = 0), atribución con envíos sintéticos (ventana 7 d → 20/20, 2 d → 2/20), capturas escritorio/teléfono sin errores de consola. `tsc` API y web limpios.
+
 ## ⚡ Dashboard gerencial lento: KPI "Clientes nuevos" (2026-10-22) · Sesión 168
 
 > ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ⏳ **Migración de índices commiteada, NO desplegada** (se sube con el próximo deploy, junto al reporte "Ventas por vendedor").

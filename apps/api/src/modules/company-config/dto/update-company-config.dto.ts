@@ -111,6 +111,12 @@ export class UpdateCompanyConfigDto {
   @IsBoolean()
   clientPortalEnabled?: boolean;
 
+  // Campana de WhatsApp (Ventas > Campana WhatsApp). Opt-in por empresa.
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  whatsappCampaignEnabled?: boolean;
+
   // No borrar las facturas en espera a medianoche.
   @ApiProperty({ required: false })
   @IsOptional()

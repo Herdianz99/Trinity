@@ -26,6 +26,7 @@ import { StockMovementsModule } from './modules/stock-movements/stock-movements.
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { PurchaseRequestsModule } from './modules/purchase-requests/purchase-requests.module';
 import { PriceLogModule } from './modules/price-log/price-log.module';
+import { WhatsappCampaignModule } from './modules/whatsapp-campaign/whatsapp-campaign.module';
 import { ExchangeRateModule } from './modules/exchange-rate/exchange-rate.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
@@ -115,6 +116,7 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
     PurchaseOrdersModule,
     PurchaseRequestsModule,
     PriceLogModule,
+    WhatsappCampaignModule,
     ExchangeRateModule,
     CustomersModule,
     CashRegistersModule,

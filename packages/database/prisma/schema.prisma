@@ -289,6 +289,11 @@ model CompanyConfig {
   customerLocationInPos   Boolean  @default(false)
   // Portal de pedidos para clientes (rol CLIENT). Apagado = los CLIENT no pueden entrar.
   clientPortalEnabled     Boolean  @default(false)
+  // Campana de WhatsApp (Ventas > Campana WhatsApp). Opt-in por empresa (solo la grande); ademas
+  // requiere el modulo 'campana-whatsapp' asignado al usuario. Nombre de tienda y tope diario compartidos.
+  whatsappCampaignEnabled    Boolean  @default(false)
+  whatsappCampaignStoreName  String   @default("El Trébol")
+  whatsappCampaignDailyLimit Int      @default(50)
   // No borrar las facturas en espera a medianoche (pedidos que duran varios dias).
   keepPendingInvoices     Boolean  @default(false)
   defaultCustomerId       String?
@@ -3257,4 +3262,40 @@ model ChatbotSearchLog {
   createdAt      DateTime            @default(now())
 
   @@index([createdAt])
+}
+
+// ============================================
+// CAMPANA DE WHATSAPP (envio manual por WhatsApp Web / wa.me, sin API paga)
+// ============================================
+
+// Un mensaje marcado como enviado. snapshot = foto del cliente al enviar (rubro, segmento, estado,
+// dias sin comprar, total comprado...) para medir el efecto despues aunque la clasificacion cambie.
+// Sin FK a Customer/User a proposito: el historial no debe bloquear ni romperse por borrados.
+model WhatsappCampaignSend {
+  id         String   @id @default(uuid())
+  customerId String
+  userId     String? // null = importado de la pagina local (localStorage)
+  sentAt     DateTime @default(now())
+  template   String // clave de plantilla: CASHEA (enfriandose/inactivos) o la base del rubro
+  edited     Boolean  @default(false)
+  snapshot   Json
+
+  @@index([customerId])
+  @@index([sentAt])
+}
+
+// Estado de contacto por cliente: respondio / el numero no tiene WhatsApp.
+model WhatsappCampaignContact {
+  customerId   String    @id
+  repliedAt    DateTime?
+  noWhatsappAt DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+// Plantilla editada (solo se guardan las que difieren del texto original del codigo).
+model WhatsappCampaignTemplate {
+  key         String   @id
+  text        String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }
