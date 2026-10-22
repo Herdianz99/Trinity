@@ -61,14 +61,14 @@
 
 ## 🏢 Gasto de autoconsumo del grupo: opción por empresa (2026-10-22) · Sesión 168
 
-> ⏳ **Commiteado, NO desplegado.** Al desplegar queda **apagado en las 7**: activarlo **en la grande** (Configuración → "Gasto de autoconsumo para empresas del grupo", o `UPDATE "CompanyConfig" SET "groupAutoConsumptionExpense"=true;` en `trinity_db`) **justo después del deploy**, para que no queden facturas al grupo sin su gasto.
+> ✅ **Desplegado y ACTIVADO en la grande (2026-10-22, `d893bde8`)**: el flag se puso en true apenas la migración creó la columna, antes de reiniciar la API (sin ventana sin gasto). Otras 6: sin desplegar (quedará apagado; decidir qué hacer con sus gastos de autoconsumo existentes). Nota original: al desplegar queda **apagado en las 7**: activarlo **en la grande** (Configuración → "Gasto de autoconsumo para empresas del grupo", o `UPDATE "CompanyConfig" SET "groupAutoConsumptionExpense"=true;` en `trinity_db`) **justo después del deploy**, para que no queden facturas al grupo sin su gasto.
 
 - Flag `CompanyConfig.groupAutoConsumptionExpense` (default false, migración `20261022200000_group_autoconsumption_flag`). `invoices.pay()` solo crea el gasto "Autoconsumo Grupo" si el cliente es `isGroupCompany` **y** el flag está activo. El recálculo al devolver mercancía (NCV) se dejó sin flag: solo actúa si la factura ya tiene gasto, así los gastos viejos siguen cuadrando.
 - Gastos de autoconsumo ya existentes al 22-10 (no se tocaron): grande 478 ($25.013,89), mayor 4 ($572,74), Total 3 ($61,43), Aceros 63 ($3.409,79), chica/Total Turén/Aceros mayor 0.
 
 ## 💬 Campaña de WhatsApp dentro de Trinity (2026-10-22) · Sesión 168
 
-> ⏳ **Commiteado, NO desplegado.** Después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
+> ✅ **Desplegada y ACTIVADA en la grande (2026-10-22, `d893bde8`)**: `whatsappCampaignEnabled=true` en `trinity_db`; probado en prod (13.684 clientes, 1,8 s la 1a vez, 0,05 s después). Pendiente: asignar el módulo a los usuarios e importar el historial local. Otras 6: sin desplegar (quedará apagada). Nota original: después del deploy hay que **activarla solo en la grande**: `UPDATE "CompanyConfig" SET "whatsappCampaignEnabled"=true;` en `trinity_db` (o el check en Configuración). Luego asignar el módulo "Campaña de WhatsApp" a los usuarios (Usuarios → Módulos extra). Opcional: importar el historial de la página local (Ajustes → Cargar archivo .json con el último "Exportar envíos").
 
 - Reemplaza la página local `Desktop/campana-whatsapp` (ya no hace falta exportar CSV ni `gen-data.js`). **Ventas → Campaña WhatsApp** (`/sales/campana-whatsapp`), pestañas **Clientes** y **Resultados**.
 - **Acceso:** módulo `campana-whatsapp` (strictPermission: ni con `sales` se ve; ADMIN lo ve por `*`) + flag de empresa `CompanyConfig.whatsappCampaignEnabled` (default false → oculto en las otras 6 aunque se despliegue). El API devuelve 403 si el flag está apagado.
@@ -80,7 +80,17 @@
 
 ## ⚡ Dashboard gerencial lento: KPI "Clientes nuevos" (2026-10-22) · Sesión 168
 
-> ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ⏳ **Migración de índices commiteada, NO desplegada** (se sube con el próximo deploy, junto al reporte "Ventas por vendedor").
+> ✅ **ANALYZE hecho en las 7 BDs (2026-10-22).** ✅ **Índices desplegados en la grande (2026-10-22, `d893bde8`)**; faltan las otras 6.
+
+**Tiempos de `GET /dashboard/gerencial` en la grande** (medido en el server con curl a localhost:4000, sin red):
+
+| Período | Antes (22-10 mañana) | Tras ANALYZE (antes del deploy) | Tras deploy con índices (22-10 6:48 pm, 3 corridas) |
+|---|---|---|---|
+| Hoy | 2,8 s | 0,34 s | 0,32–0,52 s |
+| Esta semana | 8,9 s | 0,64 s | 0,72–0,83 s |
+| Este mes | 44 s | 2,5 s | 1,8–2,6 s |
+
+El salto grande lo dio el ANALYZE; los índices evitan que vuelva a pasar cuando las stats envejezcan. El mes sigue en ~2 s por las demás consultas (ganancia, categorías, top productos, caja).
 
 - Síntoma: el usuario lo notaba lento "en los teléfonos". Medido en el server: `GET /dashboard/gerencial` tardaba **2,8 s hoy / 8,9 s semana / 44 s mes** (igual para PC). Perfilando cada sub-consulta: **`getNewCustomers` = ~45 s** de 47 s; el resto ~3 s.
 - Causa: stats de `Customer` sin actualizar desde 2026-09-04 (autoanalyze salta cada ~5.500 cambios y se crean ~1.400 clientes/mes) → Postgres estimaba 1 cliente nuevo en octubre (había 1.414) → nested loop con seq scan de `Invoice` por cliente (35 M comparaciones; `Invoice.customerId` sin índice). Se repetiría cada mes.
@@ -90,7 +100,7 @@
 
 ## 👤 Reporte de movimientos: Ventas por vendedor (2026-10-20) · Sesión 167
 
-> ⏳ **Commiteado, NO desplegado** (se sube con el próximo deploy). El reporte "Por categoria" quedó igual.
+> ✅ **Desplegado en la grande (2026-10-22, `d893bde8`)**; faltan las otras 6. El reporte "Por categoria" quedó igual.
 
 - **Reporte nuevo** en Inventario → Movimientos → Reportes: **"Ventas por vendedor"** y **"Ventas por vendedor (detalle)"** (`GET stock-movements/report/by-seller`, `detail=1` para el detalle). Solo movimientos de **venta** (fuerza `type=SALE`, ignora el filtro de tipo); respeta fechas, almacén, proveedor, búsqueda, producto y serie.
 - Agrupa **vendedor → categoría**. Vendedor = el de la factura/nota origen (`sourceId` → `Invoice.sellerId`); sin vendedor → "Sin vendedor". Resumen: tabla de vendedores (docs, movs, unidades, monto, %) y por vendedor sus categorías ordenadas por monto con % del vendedor. Detalle: cada línea (fecha, documento, código, producto, cant., precio, monto) con subtotales. **Monto = cantidad × precio detal actual** (mismo criterio que "Por categoria").
