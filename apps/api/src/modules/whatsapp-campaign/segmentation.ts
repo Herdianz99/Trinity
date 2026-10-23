@@ -53,7 +53,8 @@ const SHORT: Record<string, string> = {
 const ORG = /\b(COMUNA|CONSEJO|COMUNAL|ALCALD|GOBERN|UNIDAD|U\.?E\.?|ESCUELA|COLEGIO|LICEO|ASOCIACI|FUNDACI|INVERSION|CONSTRUCTORA|COOPERATIVA|IGLESIA|MINISTERIO|INSTITUTO|CORPORACI|EMPRESA|COMERCIAL|FERRETER|AGROPECUARIA|HACIENDA|FINCA|GRUPO|C\.?A\.?|S\.?A\.?|SOCIEDAD|CLUB|HOSPITAL|EMPRENDIMIENTO|DISTRIBUIDORA|MULTISERVICIOS|BODEGA|TALLER|AUTOMOTRIZ|SERVICIOS|PANADERIA|REPRESENTACIONES|PROYECTOS|SUMINISTROS|TIENDA|MATERIALES|CLINICA|CONDOMINIO|RESIDENCIA|UNIVERSIDAD)\b/i;
 
 export type Segment = 'VIP' | 'Frecuente' | 'Recurrente' | 'Ocasional';
-export type Estado = 'Activo' | 'Enfriándose' | 'Inactivo';
+// 'Nuevo' = nunca ha comprado (solo aparece por una cotizacion pendiente).
+export type Estado = 'Activo' | 'Enfriándose' | 'Inactivo' | 'Nuevo';
 
 export interface CampaignCustomer {
   id: string;
@@ -72,6 +73,18 @@ export interface CampaignCustomer {
   tot: number; // total comprado USD
   dc: number; // dias con compra
   p: string; // producto que mas compro
+  q?: QuoteInfo; // cotizacion pendiente (pestana "Cotizaciones sin comprar")
+}
+
+export interface QuoteInfo {
+  id: string;
+  number: string;
+  at: string; // ISO
+  ymd: string; // fecha Caracas
+  daysAgo: number;
+  usd: number;
+  items: string[]; // los 3 productos de mayor monto
+  nItems: number;
 }
 
 export interface SegInputs {
@@ -106,7 +119,7 @@ export function waNumber(raw: string | null): string {
 
 const title = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
 
-function firstName(name: string, tipo: string): string {
+export function firstName(name: string, tipo: string): string {
   if (tipo === 'Empresa') return '';
   const full = String(name || '').trim();
   if (ORG.test(full)) return '';
@@ -122,7 +135,7 @@ export function estadoFor(diasSinComprar: number): Estado {
 }
 
 const SEG_ORDER: Record<Segment, number> = { VIP: 0, Frecuente: 1, Recurrente: 2, Ocasional: 3 };
-const ST_ORDER: Record<Estado, number> = { 'Enfriándose': 0, Activo: 1, Inactivo: 2 };
+const ST_ORDER: Record<Estado, number> = { 'Enfriándose': 0, Activo: 1, Inactivo: 2, Nuevo: 3 };
 
 /**
  * Devuelve los clientes con WhatsApp valido ya clasificados (ordenados: segmento, estado, monto)

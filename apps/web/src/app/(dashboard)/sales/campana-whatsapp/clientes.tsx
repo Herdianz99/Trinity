@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Loader2, RefreshCw, Search, Settings, PencilLine, Check, RotateCcw, Upload } from 'lucide-react';
 import {
   CampaignCustomer, ListResponse, TemplatesResponse, OpenMode,
@@ -9,6 +10,7 @@ import {
 } from './shared';
 
 const TABS: { id: string; label: string }[] = [
+  { id: 'cot', label: 'Cotizaciones sin comprar' },
   { id: 'cool', label: 'Enfriándose e inactivos' },
   { id: 'act', label: 'Activos' },
   { id: 'all', label: 'Todos' },
@@ -17,7 +19,7 @@ const TABS: { id: string; label: string }[] = [
 ];
 
 export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse; reloadCfg: () => Promise<void> }) {
-  const [tab, setTab] = useState('cool');
+  const [tab, setTab] = useState('cot');
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
   const [base, setBase] = useState('');
@@ -78,6 +80,7 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
 
   const st = data?.stats;
   const over = !!st && st.sentToday > st.dailyLimit;
+  const isQuoteTab = tab === 'cot';
 
   return (
     <div className="space-y-4">
@@ -116,19 +119,23 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder="Buscar cliente, código o teléfono…" className={`${input} w-full pl-9`} />
         </div>
-        <select value={base} onChange={(e) => resetPage(setBase)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
-          <option value="">Todos los rubros</option>
-          {cfg.bases.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
-        </select>
-        <select value={oficio} onChange={(e) => resetPage(setOficio)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
-          <option value="">Oficio y ocasional</option>
-          <option value="1">Solo de oficio</option>
-          <option value="0">Solo ocasionales</option>
-        </select>
-        <select value={seg} onChange={(e) => resetPage(setSeg)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
-          <option value="">Todos los segmentos</option>
-          {['VIP', 'Frecuente', 'Recurrente', 'Ocasional'].map((s) => <option key={s}>{s}</option>)}
-        </select>
+        {!isQuoteTab && (
+          <>
+            <select value={base} onChange={(e) => resetPage(setBase)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
+              <option value="">Todos los rubros</option>
+              {cfg.bases.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+            </select>
+            <select value={oficio} onChange={(e) => resetPage(setOficio)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
+              <option value="">Oficio y ocasional</option>
+              <option value="1">Solo de oficio</option>
+              <option value="0">Solo ocasionales</option>
+            </select>
+            <select value={seg} onChange={(e) => resetPage(setSeg)(e.target.value)} className={`${input} flex-1 sm:flex-none min-w-[150px]`}>
+              <option value="">Todos los segmentos</option>
+              {['VIP', 'Frecuente', 'Recurrente', 'Ocasional'].map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </>
+        )}
         <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
           <input type="checkbox" checked={hideSent} onChange={(e) => resetPage(setHideSent)(e.target.checked)} className="accent-emerald-500" />
           Ocultar ya enviados
@@ -141,6 +148,13 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
 
       {error && <div className="px-4 py-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">{error}</div>}
 
+      {isQuoteTab && (
+        <div className="px-4 py-2.5 rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-100 text-sm">
+          Clientes con una cotización de hace 1 a 7 días que no han comprado desde entonces, nuevos o de siempre.
+          Las de hoy no aparecen: casi todas se facturan el mismo día. Escríbeles primero a estos; mientras tengan la cotización pendiente no salen en las otras pestañas.
+        </div>
+      )}
+
       {/* Lista */}
       <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl overflow-hidden">
         {!data && loading ? (
@@ -149,7 +163,11 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
             Clasificando clientes (la primera vez tarda unos segundos)…
           </div>
         ) : data && data.items.length === 0 ? (
-          <div className="py-14 text-center text-slate-500 text-sm">No hay clientes con estos filtros.</div>
+          <div className="py-14 text-center text-slate-500 text-sm">
+            {isQuoteTab ? 'No hay cotizaciones pendientes por contactar.' : 'No hay clientes con estos filtros.'}
+          </div>
+        ) : data && isQuoteTab ? (
+          <QuoteList items={data.items} loading={loading} onSend={setSending} onReplied={toggleReplied} />
         ) : data ? (
           <div className={loading ? 'opacity-60 transition-opacity' : ''}>
             {/* Escritorio: tabla */}
@@ -179,7 +197,7 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
                     <td className="px-3 py-2.5"><span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${SEG_STYLE[c.sg]}`}>{c.sg}</span></td>
                     <td className="px-3 py-2.5">
                       <span className={ESTADO_STYLE[c.st]}>{c.st}</span>
-                      <div className="text-xs text-slate-500 whitespace-nowrap">{fmtYmd(c.u)} · hace {c.d} d</div>
+                      <div className="text-xs text-slate-500 whitespace-nowrap">{c.u ? `${fmtYmd(c.u)} · hace ${c.d} d` : 'nunca ha comprado'}</div>
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{fmtUsd(c.tot)}</td>
                     <td className="px-3 py-2.5 text-xs text-slate-400">
@@ -211,7 +229,7 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
                   </div>
                   <div className="mt-2 text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-1">
                     <span>{cfg.bases.find((b) => b.key === c.b)?.label ?? c.r}{!c.o && ' (ocasional)'}</span>
-                    <span className={ESTADO_STYLE[c.st]}>{c.st} · hace {c.d} d</span>
+                    <span className={ESTADO_STYLE[c.st]}>{c.st}{c.u ? ` · hace ${c.d} d` : ''}</span>
                     <span className="tabular-nums">{fmtUsd(c.tot)}</span>
                   </div>
                   <div className="mt-2.5 flex items-center justify-between gap-2">
@@ -251,6 +269,87 @@ export default function ClientesTab({ cfg, reloadCfg }: { cfg: TemplatesResponse
   );
 }
 
+// ── Cotizaciones sin comprar ───────────────────────────────────────────────
+
+function QuoteList({ items, loading, onSend, onReplied }: {
+  items: CampaignCustomer[]; loading: boolean; onSend: (c: CampaignCustomer) => void; onReplied: (c: CampaignCustomer) => void;
+}) {
+  const quoteLink = (c: CampaignCustomer) => (
+    <Link href={`/quotations/${c.q!.id}`} target="_blank" className="font-medium text-sky-400 hover:text-sky-300">{c.q!.number}</Link>
+  );
+  const when = (c: CampaignCustomer) => `${fmtYmd(c.q!.ymd)} · ${c.q!.daysAgo === 1 ? 'ayer' : `hace ${c.q!.daysAgo} d`}`;
+  const customerKind = (c: CampaignCustomer) =>
+    c.st === 'Nuevo'
+      ? <span className={ESTADO_STYLE.Nuevo}>Nunca ha comprado</span>
+      : <><span className={ESTADO_STYLE[c.st]}>{c.st}</span> <span className="text-slate-500">· {c.sg} · {fmtUsd(c.tot)} comprado</span></>;
+
+  return (
+    <div className={loading ? 'opacity-60 transition-opacity' : ''}>
+      <table className="w-full text-sm hidden md:table">
+        <thead>
+          <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-700/60">
+            <th className="px-4 py-2.5 font-medium">Cliente</th>
+            <th className="px-3 py-2.5 font-medium">Cotización</th>
+            <th className="px-3 py-2.5 font-medium">Productos</th>
+            <th className="px-3 py-2.5 font-medium text-right">Monto</th>
+            <th className="px-3 py-2.5 font-medium whitespace-nowrap">Último envío</th>
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((c) => (
+            <tr key={c.id} className="border-b border-slate-700/40 last:border-0 align-top">
+              <td className="px-4 py-2.5">
+                <div className="font-medium text-slate-100">{c.n}</div>
+                <div className="text-xs text-slate-500">{c.c} · +{c.wa}</div>
+                <div className="text-xs mt-0.5">{customerKind(c)}</div>
+              </td>
+              <td className="px-3 py-2.5">
+                {quoteLink(c)}
+                <div className="text-xs text-slate-500 whitespace-nowrap">{when(c)}</div>
+              </td>
+              <td className="px-3 py-2.5 text-xs text-slate-300 max-w-[320px]">
+                {c.q!.items.join(' · ')}
+                {c.q!.nItems > c.q!.items.length && <span className="text-slate-500"> · y {c.q!.nItems - c.q!.items.length} más</span>}
+              </td>
+              <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{fmtUsd(c.q!.usd)}</td>
+              <td className="px-3 py-2.5 text-xs text-slate-400">
+                {c.lastSentAt ? <>{fmtDateTime(c.lastSentAt)}<RepliedButton c={c} onClick={() => onReplied(c)} /></> : '—'}
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <button className={btnWa} onClick={() => onSend(c)}><WhatsAppIcon size={15} /> WhatsApp</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="md:hidden divide-y divide-slate-700/40">
+        {items.map((c) => (
+          <div key={c.id} className="p-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-100 leading-snug">{c.n}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{c.c} · +{c.wa}</div>
+              </div>
+              <span className="shrink-0 tabular-nums font-semibold text-slate-100">{fmtUsd(c.q!.usd)}</span>
+            </div>
+            <div className="mt-1.5 text-xs">{quoteLink(c)} <span className="text-slate-500">· {when(c)}</span></div>
+            <div className="mt-1 text-xs text-slate-400">{c.q!.items.join(' · ')}{c.q!.nItems > c.q!.items.length && ` · y ${c.q!.nItems - c.q!.items.length} más`}</div>
+            <div className="mt-1 text-xs">{customerKind(c)}</div>
+            <div className="mt-2.5 flex items-center justify-between gap-2">
+              <div className="text-xs text-slate-500">
+                {c.lastSentAt ? <>Enviado {fmtDateTime(c.lastSentAt)} <RepliedButton c={c} onClick={() => onReplied(c)} /></> : null}
+              </div>
+              <button className={btnWa} onClick={() => onSend(c)}><WhatsAppIcon size={15} /> WhatsApp</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value, tone = 'text-white' }: { label: string; value: string; tone?: string }) {
   return (
     <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl px-4 py-3">
@@ -284,7 +383,7 @@ function RowAction({ tab, c, onSend, onRestore }: { tab: string; c: CampaignCust
 
 function SendModal({ c, cfg, onClose, onDone }: { c: CampaignCustomer; cfg: TemplatesResponse; onClose: () => void; onDone: () => void }) {
   const original = buildMessage(c, cfg);
-  const key = templateKeyFor(c, cfg.coolingKey);
+  const key = templateKeyFor(c, cfg);
   const [msg, setMsg] = useState(original);
   const [asked, setAsked] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -319,7 +418,9 @@ function SendModal({ c, cfg, onClose, onDone }: { c: CampaignCustomer; cfg: Temp
         <>
           <div className="font-semibold text-white">{c.n}</div>
           <div className="text-xs text-slate-400 mt-0.5">
-            {c.c} · +{c.wa} · {cfg.bases.find((b) => b.key === c.b)?.label}{!c.o && ' (ocasional)'} · {c.sg} · {c.st}
+            {c.q
+              ? <>{c.c} · +{c.wa} · Cotización {c.q.number} ({fmtYmd(c.q.ymd)}, {fmtUsd(c.q.usd)}) · {c.st === 'Nuevo' ? 'nunca ha comprado' : c.st}</>
+              : <>{c.c} · +{c.wa} · {cfg.bases.find((b) => b.key === c.b)?.label}{!c.o && ' (ocasional)'} · {c.sg} · {c.st}</>}
           </div>
         </>
       }
@@ -397,7 +498,11 @@ function TemplatesModal({ cfg, onClose, reloadCfg }: { cfg: TemplatesResponse; o
           <p className="text-xs text-slate-400 mb-1.5">{current.description}</p>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={11} className={`${input} w-full resize-y leading-relaxed`} />
           <p className="text-xs text-slate-500 mt-1.5">
-            Variables: <b>{'{saludo}'}</b> (“Hola Juan” o “Hola” si es empresa) · <b>{'{nombre}'}</b> · <b>{'{empresa}'}</b> · <b>{'{area}'}</b> (ej. “material de construcción”) · <b>{'{gracias}'}</b> (solo a VIP y Frecuentes) · <b>{'{producto}'}</b> (lo que más compró)
+            {key === cfg.quoteKey ? (
+              <>Variables: <b>{'{saludo}'}</b> (“Hola Juan” o “Hola” si es empresa) · <b>{'{nombre}'}</b> · <b>{'{empresa}'}</b> · <b>{'{fecha}'}</b> (“ayer” o “martes 21-10”) · <b>{'{productos}'}</b> (ej. “cemento gris, pego y 3 productos más”) · <b>{'{monto}'}</b> (total de la cotización) · <b>{'{cotizacion}'}</b> (número)</>
+            ) : (
+              <>Variables: <b>{'{saludo}'}</b> (“Hola Juan” o “Hola” si es empresa) · <b>{'{nombre}'}</b> · <b>{'{empresa}'}</b> · <b>{'{area}'}</b> (ej. “material de construcción”) · <b>{'{gracias}'}</b> (solo a VIP y Frecuentes) · <b>{'{producto}'}</b> (lo que más compró)</>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <button className={btnWa} onClick={save} disabled={busy || !dirty || !text.trim()}>Guardar</button>

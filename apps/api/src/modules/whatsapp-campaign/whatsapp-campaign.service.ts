@@ -1,9 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { caracasToday, caracasDayStart, caracasDayEnd, caracasParts } from '../../common/timezone';
-import { BASES, CampaignCustomer, Estado, estadoFor, segmentCustomers } from './segmentation';
+import { BASES, CampaignCustomer, Estado, QuoteInfo, estadoFor, firstName, segmentCustomers, waNumber } from './segmentation';
 import {
-  COOLING_KEY, DEFAULT_TEMPLATES, TEMPLATE_LABELS, TEMPLATE_DESCRIPTIONS, DEFAULT_RUBRO_DESCRIPTION,
+  COOLING_KEY, QUOTE_KEY, DEFAULT_TEMPLATES, TEMPLATE_LABELS, TEMPLATE_DESCRIPTIONS, DEFAULT_RUBRO_DESCRIPTION,
 } from './templates';
 import {
   CreateSendDto, ImportLocalDto, ListCampaignQueryDto, ResultsQueryDto, UpdateSettingsDto,
@@ -13,6 +13,10 @@ const PAGE = 50;
 const CACHE_MS = 30 * 60 * 1000;
 const PAID = ['PAID', 'PARTIAL_RETURN'] as const;
 const dayMs = 864e5;
+// Cotizaciones pendientes: de hace 1 a QUOTE_MAX_DAYS dias. Las de hoy no entran: casi todas las que
+// se convierten lo hacen el mismo dia (p95 < 24 h), el mensaje es para las que ya se enfriaron.
+const QUOTE_MAX_DAYS = 7;
+const QUOTE_CUSTOMER = { isDefault: false, isEmployee: false, isGroupCompany: false, isActive: true };
 
 type Classified = {
   at: number;
@@ -87,6 +91,61 @@ export class WhatsappCampaignService {
     return { at: Date.now(), generado: todayYmd, customers: list, byId: new Map(list.map((c) => [c.id, c])), purchaseDays };
   }
 
+  // ── Cotizaciones sin comprar ─────────────────────────────────────────────
+  // Por cliente, su ultima cotizacion de hace 1-7 dias (sin convertir ni rechazar) si no ha comprado
+  // desde entonces. Va en vivo (son pocas filas), no en el cache de 30 min: una venta de hace un rato
+  // tiene que sacar al cliente de la lista. Los clientes que nunca compraron llegan con estado 'Nuevo'.
+  private async quoteLeads(data: Classified): Promise<CampaignCustomer[]> {
+    const todayYmd = caracasToday();
+    const from = caracasDayStart(addDays(todayYmd, -QUOTE_MAX_DAYS));
+    const quotes = await this.prisma.quotation.findMany({
+      where: {
+        customerId: { not: null }, convertedToInvoiceId: null, status: { in: ['DRAFT', 'SENT', 'EXPIRED'] },
+        createdAt: { gte: from, lt: caracasDayStart(todayYmd) },
+        customer: QUOTE_CUSTOMER,
+      },
+      select: {
+        id: true, number: true, createdAt: true, totalUsd: true, customerId: true,
+        customer: { select: { code: true, name: true, documentType: true, phone: true } },
+        items: { select: { productName: true, totalUsd: true }, orderBy: { totalUsd: 'desc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const latest = new Map<string, (typeof quotes)[number]>();
+    for (const q of quotes) if (!latest.has(q.customerId!)) latest.set(q.customerId!, q);
+    if (!latest.size) return [];
+
+    const buys = await this.prisma.invoice.groupBy({
+      by: ['customerId'],
+      where: { type: 'SALE', status: { in: [...PAID] }, customerId: { in: [...latest.keys()] }, createdAt: { gte: from } },
+      _max: { createdAt: true },
+    });
+    const lastBuy = new Map(buys.map((b) => [b.customerId!, b._max.createdAt]));
+
+    const out: CampaignCustomer[] = [];
+    for (const [cid, q] of latest) {
+      const lb = lastBuy.get(cid);
+      if (lb && lb >= q.createdAt) continue;
+      const wa = waNumber(q.customer!.phone);
+      if (!wa) continue;
+      const ymd = caracasParts(q.createdAt).ymd;
+      const info: QuoteInfo = {
+        id: q.id, number: q.number, at: q.createdAt.toISOString(), ymd,
+        daysAgo: Math.round((Date.parse(todayYmd + 'T00:00:00Z') - Date.parse(ymd + 'T00:00:00Z')) / dayMs),
+        usd: r2(q.totalUsd), items: q.items.slice(0, 3).map((i) => i.productName), nItems: q.items.length,
+      };
+      const known = data.byId.get(cid);
+      if (known) { out.push({ ...known, q: info }); continue; }
+      const c = q.customer!;
+      const tipo: 'Persona' | 'Empresa' = ['J', 'G'].includes(c.documentType) ? 'Empresa' : 'Persona';
+      out.push({
+        id: cid, c: c.code || '', n: c.name, fn: firstName(c.name, tipo), t: tipo, wa,
+        r: 'Cliente nuevo', b: 'HOGAR', o: 0, sg: 'Ocasional', st: 'Nuevo', d: -1, u: '', tot: 0, dc: 0, p: '', q: info,
+      });
+    }
+    return out;
+  }
+
   // ── Lista de clientes ────────────────────────────────────────────────────
 
   async list(q: ListCampaignQueryDto) {
@@ -103,10 +162,19 @@ export class WhatsappCampaignService {
     const replied = new Set(contacts.filter((c) => c.repliedAt).map((c) => c.customerId));
     const bad = new Set(contacts.filter((c) => c.noWhatsappAt).map((c) => c.customerId));
 
-    const tab = q.tab || 'cool';
+    // Cotizaciones: "enviado" = mensaje posterior a la cotizacion (un mensaje de reactivacion viejo no cuenta).
+    const leads = await this.quoteLeads(data);
+    const leadById = new Map(leads.map((l) => [l.id, l]));
+    const quoteSent = (l: CampaignCustomer) => { const s = lastSent.get(l.id); return !!s && s >= new Date(l.q!.at); };
+    // Con cotizacion pendiente sin mensaje: se le escribe por la cotizacion, no sale en activos/enfriandose
+    const openLead = (id: string) => { const l = leadById.get(id); return !!l && !quoteSent(l); };
+    // Los que nunca compraron no estan en la clasificacion: se suman para Todos/Contactados/Sin WhatsApp
+    const universe = [...data.customers, ...leads.filter((l) => !data.byId.has(l.id))];
+
+    const tab = q.tab || 'cot';
     const tabFilters: Record<string, (c: CampaignCustomer) => boolean> = {
-      cool: (c) => isCooling(c) && !bad.has(c.id),
-      act: (c) => c.st === 'Activo' && !bad.has(c.id),
+      cool: (c) => isCooling(c) && !bad.has(c.id) && !openLead(c.id),
+      act: (c) => c.st === 'Activo' && !bad.has(c.id) && !openLead(c.id),
       all: (c) => !bad.has(c.id),
       sent: (c) => lastSent.has(c.id) && !bad.has(c.id),
       bad: (c) => bad.has(c.id),
@@ -114,15 +182,22 @@ export class WhatsappCampaignService {
     const search = (q.q || '').trim().toLowerCase();
     const digits = search.replace(/\D/g, '');
     const hideSent = q.hideSent !== '0';
-    const base = data.customers.filter((c) =>
+    const matches = (c: CampaignCustomer) =>
+      !search || c.n.toLowerCase().includes(search) || c.c.toLowerCase().includes(search) || (!!digits && c.wa.includes(digits));
+    const base = universe.filter((c) =>
       (!q.base || c.b === q.base) &&
       (q.oficio === undefined || String(c.o) === q.oficio) &&
       (!q.seg || c.sg === q.seg) &&
-      (!search || c.n.toLowerCase().includes(search) || c.c.toLowerCase().includes(search) || (!!digits && c.wa.includes(digits))));
+      matches(c));
 
     const notHidden = (c: CampaignCustomer, t: string) => !hideSent || t === 'sent' || t === 'bad' || !lastSent.has(c.id);
-    const tabCounts = Object.fromEntries(Object.entries(tabFilters).map(([k, f]) => [k, base.filter((c) => f(c) && notHidden(c, k)).length]));
-    const rows = base.filter((c) => tabFilters[tab](c) && notHidden(c, tab));
+    // La pestana de cotizaciones no usa los filtros de rubro/oficio/segmento (no aplican a clientes nuevos)
+    const quoteRows = leads.filter((l) => !bad.has(l.id) && matches(l) && (!hideSent || !quoteSent(l)));
+    const tabCounts = {
+      cot: quoteRows.length,
+      ...Object.fromEntries(Object.entries(tabFilters).map(([k, f]) => [k, base.filter((c) => f(c) && notHidden(c, k)).length])),
+    };
+    const rows = tab === 'cot' ? quoteRows : base.filter((c) => tabFilters[tab](c) && notHidden(c, tab));
 
     const pages = Math.max(1, Math.ceil(rows.length / PAGE));
     const page = Math.min(q.page ?? 0, pages - 1);
@@ -153,9 +228,14 @@ export class WhatsappCampaignService {
   async send(userId: string, dto: CreateSendDto) {
     await this.ensureEnabled();
     const data = await this.classified();
-    const c = data.byId.get(dto.customerId);
-    if (!c) throw new NotFoundException('Cliente fuera de la campaña');
     if (!DEFAULT_TEMPLATES[dto.template]) throw new BadRequestException('Plantilla desconocida');
+    let c = data.byId.get(dto.customerId);
+    if (dto.template === QUOTE_KEY) {
+      c = (await this.quoteLeads(data)).find((l) => l.id === dto.customerId);
+      if (!c) throw new BadRequestException('El cliente ya no tiene una cotización pendiente (compró o pasaron más de 7 días)');
+    }
+    if (!c) throw new NotFoundException('Cliente fuera de la campaña');
+    const q = c.q;
     // Foto del cliente al momento del envio (para medir el efecto aunque cambie la clasificacion)
     return this.prisma.whatsappCampaignSend.create({
       data: {
@@ -163,6 +243,7 @@ export class WhatsappCampaignService {
         snapshot: {
           code: c.c, name: c.n, rubro: c.r, base: c.b, oficio: c.o, seg: c.sg, estado: c.st,
           diasSinComprar: c.d, totalUsd: c.tot, ultimaCompra: c.u, datos: data.generado,
+          ...(q && { cotizacion: { id: q.id, number: q.number, fecha: q.ymd, totalUsd: q.usd } }),
         },
       },
     });
@@ -194,6 +275,7 @@ export class WhatsappCampaignService {
       dailyLimit: cfg.whatsappCampaignDailyLimit,
       bases: Object.entries(BASES).map(([key, v]) => ({ key, ...v })),
       coolingKey: COOLING_KEY,
+      quoteKey: QUOTE_KEY,
       templates: Object.keys(DEFAULT_TEMPLATES).map((key) => ({
         key,
         label: TEMPLATE_LABELS[key],
@@ -314,6 +396,9 @@ export class WhatsappCampaignService {
       return r;
     };
 
+    const quoteDays = [...new Set(sends.filter((s) => s.template === QUOTE_KEY).map((s) => caracasParts(s.sentAt).ymd))].sort();
+    const quoteControlFor = quoteDays.length ? await this.quoteControl(quoteDays, W, todayYmd) : () => ({ eligible: 0, bought: 0 });
+
     type Agg = { sent: number; buyers: number; usd: number; expected: number };
     const newAgg = (): Agg => ({ sent: 0, buyers: 0, usd: 0, expected: 0 });
     const byTemplate = new Map<string, Agg>();
@@ -325,7 +410,9 @@ export class WhatsappCampaignService {
 
     for (const s of sends) {
       const snap = (s.snapshot || {}) as any;
-      const estado: string = snap.estado || 'Activo';
+      const isQuote = s.template === QUOTE_KEY;
+      // Las de cotizacion van en su propio grupo (y su propio control), aunque el cliente sea activo/inactivo
+      const estado: string = isQuote ? 'Cotización' : snap.estado || 'Activo';
       const day = caracasParts(s.sentAt).ymd;
       const windowEnd = new Date(s.sentAt.getTime() + W * dayMs);
       const inv = (invByCustomer.get(s.customerId) || []).filter((i) => i.createdAt > s.sentAt && i.createdAt <= windowEnd);
@@ -333,7 +420,7 @@ export class WhatsappCampaignService {
       const bs = r2(inv.reduce((a, i) => a + i.totalBs, 0));
       const methods = [...new Set(inv.flatMap((i) => i.payments.map((p) => p.method.name)))];
       const cashea = methods.some((m) => m.toLowerCase().includes('cashea'));
-      const ctl = controlFor(day, estado);
+      const ctl = isQuote ? quoteControlFor(day) : controlFor(day, estado);
       const expected = ctl.eligible ? ctl.bought / ctl.eligible : 0;
 
       const groups: [Map<string, Agg>, string][] = [
@@ -405,6 +492,69 @@ export class WhatsappCampaignService {
       byUser: rows(byUser).sort((a, b) => b.sent - a.sent),
       byDay: rows(byDay).sort((a, b) => a.key.localeCompare(b.key)),
       buyers: buyers.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime()),
+    };
+  }
+
+  // Grupo control de "Cotizacion sin comprar": el dia D son elegibles los clientes con WhatsApp que
+  // tenian una cotizacion de hace 1-7 dias sin compra entre la cotizacion y D, y que no recibieron
+  // mensaje despues de esa cotizacion (hasta el fin de la ventana). Compro = factura cobrada de D a D+W.
+  private async quoteControl(days: string[], W: number, todayYmd: string) {
+    const from = caracasDayStart(addDays(days[0], -QUOTE_MAX_DAYS));
+    const quotes = await this.prisma.quotation.findMany({
+      where: {
+        customerId: { not: null }, status: { not: 'REJECTED' },
+        createdAt: { gte: from, lt: caracasDayStart(days[days.length - 1]) },
+        customer: QUOTE_CUSTOMER,
+      },
+      select: { customerId: true, createdAt: true, customer: { select: { phone: true } } },
+    });
+    const byCustomer = new Map<string, Date[]>();
+    for (const q of quotes) {
+      if (!waNumber(q.customer!.phone)) continue;
+      (byCustomer.get(q.customerId!) || byCustomer.set(q.customerId!, []).get(q.customerId!)!).push(q.createdAt);
+    }
+    const ids = [...byCustomer.keys()];
+    const invoices: { customerId: string | null; createdAt: Date }[] = [];
+    const sendsAll: { customerId: string; sentAt: Date }[] = [];
+    for (let i = 0; i < ids.length; i += 5000) {
+      const chunk = ids.slice(i, i + 5000);
+      invoices.push(...await this.prisma.invoice.findMany({
+        where: { type: 'SALE', status: { in: [...PAID] }, customerId: { in: chunk }, createdAt: { gte: from } },
+        select: { customerId: true, createdAt: true },
+      }));
+      sendsAll.push(...await this.prisma.whatsappCampaignSend.findMany({
+        where: { customerId: { in: chunk }, sentAt: { gte: from } }, select: { customerId: true, sentAt: true },
+      }));
+    }
+    const group = <T extends { customerId: string | null }>(rows: T[], at: (r: T) => Date) => {
+      const m = new Map<string, Date[]>();
+      for (const r of rows) if (r.customerId) (m.get(r.customerId) || m.set(r.customerId, []).get(r.customerId)!).push(at(r));
+      return m;
+    };
+    const buysBy = group(invoices, (r) => r.createdAt);
+    const sendsBy = group(sendsAll, (r) => r.sentAt);
+
+    const cache = new Map<string, { eligible: number; bought: number }>();
+    return (day: string) => {
+      const hit = cache.get(day);
+      if (hit) return hit;
+      const dayStart = caracasDayStart(day);
+      const qFrom = caracasDayStart(addDays(day, -QUOTE_MAX_DAYS));
+      const end = caracasDayEnd(addDays(day, W) < todayYmd ? addDays(day, W) : todayYmd);
+      let eligible = 0, bought = 0;
+      for (const [cid, qs] of byCustomer) {
+        const inWin = qs.filter((d) => d >= qFrom && d < dayStart);
+        if (!inWin.length) continue;
+        const qAt = new Date(Math.max(...inWin.map((d) => d.getTime())));
+        const buys = buysBy.get(cid) || [];
+        if (buys.some((b) => b >= qAt && b < dayStart)) continue; // ya compro: no es cotizacion pendiente
+        if ((sendsBy.get(cid) || []).some((s) => s > qAt && s <= end)) continue; // recibio mensaje: no es control
+        eligible++;
+        if (buys.some((b) => b >= dayStart && b <= end)) bought++;
+      }
+      const r = { eligible, bought };
+      cache.set(day, r);
+      return r;
     };
   }
 

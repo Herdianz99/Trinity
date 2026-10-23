@@ -1,6 +1,18 @@
 // Tipos y utilidades compartidas de la Campana de WhatsApp (Ventas > Campana WhatsApp).
 
-export type Estado = 'Activo' | 'Enfriándose' | 'Inactivo';
+export type Estado = 'Activo' | 'Enfriándose' | 'Inactivo' | 'Nuevo';
+
+// Cotizacion pendiente (pestana "Cotizaciones sin comprar")
+export interface QuoteInfo {
+  id: string;
+  number: string;
+  at: string;
+  ymd: string;
+  daysAgo: number;
+  usd: number;
+  items: string[];
+  nItems: number;
+}
 export type Segment = 'VIP' | 'Frecuente' | 'Recurrente' | 'Ocasional';
 
 export interface CampaignCustomer {
@@ -20,6 +32,7 @@ export interface CampaignCustomer {
   tot: number;
   dc: number;
   p: string;
+  q?: QuoteInfo;
   lastSentAt: string | null;
   replied: boolean;
   noWhatsapp: boolean;
@@ -50,16 +63,38 @@ export interface TemplatesResponse {
   dailyLimit: number;
   bases: { key: string; label: string; area: string }[];
   coolingKey: string;
+  quoteKey: string;
   templates: TemplateInfo[];
 }
 
 export const isCooling = (c: { st: Estado }) => c.st === 'Enfriándose' || c.st === 'Inactivo';
 
-export const templateKeyFor = (c: CampaignCustomer, coolingKey: string) => (isCooling(c) ? coolingKey : c.b);
+// Con cotizacion pendiente manda la plantilla de cotizacion; si no, enfriandose/inactivo o la del rubro.
+export const templateKeyFor = (c: CampaignCustomer, cfg: Pick<TemplatesResponse, 'coolingKey' | 'quoteKey'>) =>
+  c.q ? cfg.quoteKey : isCooling(c) ? cfg.coolingKey : c.b;
+
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** "ayer" / "martes 21-10" para el mensaje de cotizacion. */
+export function quoteDateText(q: QuoteInfo): string {
+  if (q.daysAgo === 1) return 'ayer';
+  const d = new Date(q.ymd + 'T12:00:00Z');
+  return `${DIAS[d.getUTCDay()]} ${q.ymd.slice(8, 10)}-${q.ymd.slice(5, 7)}`;
+}
+
+const prettyProduct = (s: string) => s.toLowerCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** "cemento gris, pego y cabilla 3/8 y 2 productos más" */
+export function quoteProductsText(q: QuoteInfo): string {
+  const names = q.items.slice(0, 2).map(prettyProduct);
+  const rest = q.nItems - names.length;
+  if (rest > 0) return `${names.join(', ')} y ${rest === 1 ? 'otro producto' : `${rest} productos más`}`;
+  return names.length === 2 ? `${names[0]} y ${names[1]}` : names[0] ?? '';
+}
 
 /** Arma el mensaje reemplazando las variables de la plantilla con los datos del cliente. */
 export function buildMessage(c: CampaignCustomer, cfg: TemplatesResponse): string {
-  const key = templateKeyFor(c, cfg.coolingKey);
+  const key = templateKeyFor(c, cfg);
   const tpl = cfg.templates.find((t) => t.key === key)?.text ?? '';
   const base = cfg.bases.find((b) => b.key === c.b) ?? cfg.bases.find((b) => b.key === 'HOGAR');
   const vars: Record<string, string> = {
@@ -68,7 +103,11 @@ export function buildMessage(c: CampaignCustomer, cfg: TemplatesResponse): strin
     empresa: cfg.storeName,
     area: base?.area ?? '',
     gracias: c.sg === 'VIP' || c.sg === 'Frecuente' ? '¡Gracias por tu preferencia!' : '',
-    producto: c.p ? c.p.toLowerCase().replace(/\s*\(.*?\)\s*/g, ' ').trim() : '',
+    producto: c.p ? prettyProduct(c.p) : '',
+    cotizacion: c.q?.number ?? '',
+    fecha: c.q ? quoteDateText(c.q) : '',
+    productos: c.q ? quoteProductsText(c.q) : '',
+    monto: c.q ? '$' + fmt2(c.q.usd) : '',
   };
   return tpl
     .replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m))
@@ -123,6 +162,8 @@ export const ESTADO_STYLE: Record<string, string> = {
   Activo: 'text-emerald-300',
   'Enfriándose': 'text-amber-300',
   Inactivo: 'text-rose-300',
+  Nuevo: 'text-sky-300',
+  'Cotización': 'text-violet-300',
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {

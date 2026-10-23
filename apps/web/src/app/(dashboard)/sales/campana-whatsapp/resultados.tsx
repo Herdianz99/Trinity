@@ -93,6 +93,7 @@ export default function ResultadosTab() {
               Se toma el primer mensaje de cada cliente en el rango y cuenta si compró (factura cobrada) dentro de los {data!.window} días siguientes.
               El <b>grupo control</b> son clientes nunca contactados que ese mismo día estaban en el mismo estado (activo, enfriándose o inactivo):
               su % de compra en la misma ventana dice cuántos habrían comprado igual sin el mensaje.
+              Los mensajes por <b>cotización</b> tienen su propio control: clientes con una cotización pendiente ese día a los que no se les escribió.
             </span>
           </div>
 

@@ -2,8 +2,8 @@ import { Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class ListCampaignQueryDto {
-  @IsOptional() @IsIn(['cool', 'act', 'all', 'sent', 'bad'])
-  tab?: 'cool' | 'act' | 'all' | 'sent' | 'bad';
+  @IsOptional() @IsIn(['cot', 'cool', 'act', 'all', 'sent', 'bad'])
+  tab?: 'cot' | 'cool' | 'act' | 'all' | 'sent' | 'bad';
 
   @IsOptional() @IsString() @MaxLength(100)
   q?: string;

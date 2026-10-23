@@ -8,6 +8,10 @@ import { BASES } from './segmentation';
 // CASHEA por historia (empezo como la promo Cashea del 15-20 oct 2026) y asi quedo en los envios.
 export const COOLING_KEY = 'CASHEA';
 
+// Clientes (nuevos o no) con una cotizacion de hace 1-7 dias que no compraron despues.
+// Variables extra: {cotizacion} {fecha} {productos} {monto}.
+export const QUOTE_KEY = 'COTIZACION';
+
 const CIERRE = 'Responde este mensaje con tu lista y te la preparamos para retirar o despachar.';
 
 const BODY: Record<string, string> = {
@@ -26,6 +30,10 @@ const BODY: Record<string, string> = {
 };
 
 export const DEFAULT_TEMPLATES: Record<string, string> = {
+  [QUOTE_KEY]:
+    '{saludo} 👋, te saluda {empresa}.\n\n' +
+    'Te escribimos por la cotización que te hicimos el {fecha}: {productos} (total {monto}). ¿Todavía la necesitas?\n\n' +
+    'Responde este mensaje y te confirmamos precio y disponibilidad para dejártela lista para retirar o despachar. Si prefieres, llévatela con *Cashea* y págala en cuotas.',
   [COOLING_KEY]:
     '{saludo} 👋, te saluda {empresa}. ¡Te extrañamos!\n\n' +
     'Hace rato no pasas por la tienda y queremos verte de nuevo. Tenemos disponibilidad confirmada en {area}, y si prefieres, llévatelo con *Cashea* y págalo en cuotas.\n\n' +
@@ -34,11 +42,13 @@ export const DEFAULT_TEMPLATES: Record<string, string> = {
 };
 
 export const TEMPLATE_LABELS: Record<string, string> = {
+  [QUOTE_KEY]: 'Cotización sin comprar',
   [COOLING_KEY]: 'Enfriándose e inactivos',
   ...Object.fromEntries(Object.entries(BASES).map(([k, v]) => [k, v.label])),
 };
 
 export const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
+  [QUOTE_KEY]: 'Se usa para los clientes con una cotización de hace 1 a 7 días que no han comprado desde entonces (nuevos y de siempre). Tiene prioridad sobre las demás.',
   [COOLING_KEY]: 'Se usa para TODOS los clientes enfriándose (31-60 días sin comprar) e inactivos (más de 60), sin importar el rubro.',
 };
 export const DEFAULT_RUBRO_DESCRIPTION = 'Se usa para los clientes activos de este rubro (de oficio y ocasionales).';
