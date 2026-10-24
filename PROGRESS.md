@@ -44,6 +44,15 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📊 Chatbot: semana 18–24 oct en la grande (2026-10-24, solo lectura, sin código)
+
+- **Volumen:** 367 conversaciones (semana anterior 310), 434 preguntas, USD 0,51 (antes 0,47). Pico el 19-10 (105) y 21-10 (91). 87% de conversaciones siguen siendo de 1 pregunta. Todo en canal TEST (piloto copiar/pegar): Marketing 251, Diego Hernandez 116.
+- **Calidad:** 90% 👍 (198 de 220 calificadas; antes 90%, 268/299). Marketing califica ~85% de las respuestas; Diego casi nunca (21-10: 130 respuestas, 0 calificadas). 0 respuestas vacías, 0 en inglés; el "12.43$… perdón" fue el 18-10, antes del control de precios (19-10), no se repitió.
+- **Escaladas:** 11 (8 el 21-10): cerrar compra ×4 (Cashea, facturar, buscar en tienda), pregunta técnica ×2 (ancho Acerolit, reducción 4"→2" hierro negro), cantidad insuficiente ×2, financiamiento ×1 (nivel Cashea), no entendido ×1.
+- **Bug:** lista larga de materiales (~15 renglones, 21-10) → `stop_max_tokens` 3 veces seguidas (4096 tokens de salida) y el bot respondió "no puedo responderte". Pendiente: cotizar listas largas por partes o subir el tope.
+- **Búsquedas:** 1288, 450 en cero (35%); 15 conversaciones sin ningún resultado. Venta cruzada ofrecida 52 veces (antes 22): pega PVC 27, pego 10, lavamanos/amarre techo/teipe/ekoprimer 3 c/u.
+- **👎 (22):** casi todos "no lo encontré". Sí los tenemos y falló la búsqueda (propuestos como sinónimos, NO cargados): `puñete`→cuñete, `tanque agua 1000 litros`→TANQUE D/AGUA 1000LTS, `perfil marco puerta bloque 15`→PERFIL MARCO P/PUERTA 150, `ángulo 1 1/2`→ANGULO H.N 40X40 (el bot lo tomó como llave angular). No se venden: tubo 3x2, Protex 220, metilan, mil tejas PVC, guaraña, papel decorativo, multifuerza, tapa zinc, mezcla lista.
+
 ## 🤖 Piloto del chatbot 19–20 oct + permiso en Total (2026-10-20, sin código)
 
 - **Grande:** 19-10: 106 conversaciones, 89% 👍 (80 de 90 calificadas), $0,12. 20-10 (hasta ~6 pm): 36 conversaciones, 93% 👍 (28 de 30), $0,05. 1 escalada (cerrar compra con Cashea). Todo lo usa el usuario Marketing. Los 👎 son casi todos "no encontré": Protex 220, metilan (no los tenemos); "malla Tucson" ya cubierta por el sinónimo creado el 19-10 a las 12:10.
