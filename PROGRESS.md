@@ -61,7 +61,7 @@
 
 ## 📝 Campaña WhatsApp: segmento "Cotizaciones sin comprar" (2026-10-23) · Sesión 169
 
-> ⏳ **Código listo (tsc API y web limpios), falta deploy en la grande.** Sin migración ni flag nuevo: entra en la campaña que ya está activa.
+> ✅ **Desplegado en la grande (2026-10-23, `26f9e6bf`)**, health check OK, API online. Sin migración ni flag nuevo: entra en la campaña que ya está activa. Medir contra inactivos ~2 semanas en Resultados (estado `Cotización`).
 
 - **Por qué:** análisis del 23-10 en la grande. Los clientes nuevos que nunca compran son ~6% (101 de 1.539 en octubre, unos 3-4 por día). Un tercio de ellos pidió cotización (promedio $400-860). En los últimos 30 días vencieron 339 cotizaciones por ~$257k: 268 de clientes existentes ($222k) y 71 de clientes nuevos ($35k). Las que se convierten lo hacen el mismo día (p95 < 24 h). Decisión: **no reemplazar** la campaña de inactivos, sumar este segmento con prioridad.
 - **Pestaña nueva "Cotizaciones sin comprar"** (es la que abre por defecto). Por cliente, su última cotización de **hace 1 a 7 días** (DRAFT/SENT/EXPIRED, sin `convertedToInvoiceId`) **sin factura cobrada desde entonces**. Las del día no entran. Incluye clientes **nuevos** (estado `Nuevo`, no están en la clasificación) y existentes. Se calcula en vivo, fuera del cache de 30 min. "Ya enviado" = mensaje **posterior** a la cotización. Mientras la cotización esté pendiente y sin mensaje, el cliente **no sale** en Activos/Enfriándose (se le escribe por la cotización). Los nuevos también aparecen en Todos/Contactados/Sin WhatsApp.
