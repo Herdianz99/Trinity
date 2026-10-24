@@ -44,6 +44,12 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Total: FC-00052 seguía con IVA tras pasarla a nota de entrega (2026-10-24, datos en producción, sin código)
+
+- Al cambiarla de fiscal a "Nota de entrega compras" (ver Correcciones de datos en `total`, más abajo) se cambió la serie pero **no se recalcularon los totales**: seguía con base imponible 156,08 $ + IVA 24,97 $ = 181,05 $, y su CxP (sin pagar, vencida) por 181,05 $. Única NEC de Total con IVA.
+- Corregido como lo calcula el sistema con serie `isVatExempt` (todo exento): exento 156,08 $ / 122.915,74 Bs, base 0, IVA 0, total 156,08 $ / 122.915,74 Bs; CxP 156,08 $ / 122.916,06 Bs (tasa 787,5196, igual que la original). Costo del producto y stock no cambian (el costo nunca llevó IVA). Respaldo de las 2 filas en `/root/backups/fc00052-*-20261024.json` (161.35.52.221).
+- **Lección:** al pasar una compra de fiscal a nota de entrega por BD, además de serie/retención/libro hay que recalcular exento/base/IVA/total de la OC y el monto de su CxP.
+
 ## 📊 Chatbot: semana 18–24 oct en la grande (2026-10-24, solo lectura, sin código)
 
 - **Volumen:** 367 conversaciones (semana anterior 310), 434 preguntas, USD 0,51 (antes 0,47). Pico el 19-10 (105) y 21-10 (91). 87% de conversaciones siguen siendo de 1 pregunta. Todo en canal TEST (piloto copiar/pegar): Marketing 251, Diego Hernandez 116.
