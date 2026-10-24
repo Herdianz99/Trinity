@@ -11,6 +11,7 @@ import { ChatbotToolsService, ProductImageOut } from './chatbot-tools.service';
 import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { buildChatbotSystemPrompt } from './chatbot-prompt';
 import { numbersIn, unverifiedPrices } from './price-guard';
+import { isLongList, listLines } from './list-guard';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
 
@@ -21,6 +22,7 @@ const MAX_IMAGES = 4;
 // Herramientas que acompanan la respuesta al cliente: el texto de su vuelta se conserva.
 const REPLY_TOOLS = new Set(['enviar_foto', 'escalar_a_asesor']);
 const FALLBACK_TEXT ='En este momento no puedo responderte. Te paso con un asesor que te atenderá en breve.';
+const LONG_LIST_TEXT = '¡Gracias por enviarnos tu lista de materiales! Como es un presupuesto grande, un asesor te lo prepara completo y te escribe en breve.';
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -348,6 +350,13 @@ export class ChatbotService {
     if ((await this.monthCostUsd()) >= cfg.monthlyBudgetUsd) {
       await this.escalate(conversationId, 'tope_gasto', 'Se alcanzó el tope de gasto mensual del bot');
       return this.saveBotMessage(conversationId, FALLBACK_TEXT, { escalated: true });
+    }
+
+    // Lista de materiales muy larga: el bot se corta (ver list-guard.ts). Pasa directo a un asesor, sin IA.
+    if (isLongList(text)) {
+      await this.escalate(conversationId, 'lista de materiales',
+        `El cliente envió una lista de ${listLines(text)} renglones para presupuesto (muy larga para el bot). La lista completa está en la conversación.`);
+      return this.saveBotMessage(conversationId, LONG_LIST_TEXT, { escalated: true });
     }
 
     const company = await this.prisma.companyConfig.findFirst({ select: { companyName: true } });
