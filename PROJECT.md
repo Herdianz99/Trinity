@@ -66,7 +66,7 @@ Precio Detal Bs   = Precio Detal USD × Tasa BCV
 Precio Mayor Bs   = Precio Mayor USD × Tasa BCV
 ```
 - **Costo USD**: viene de la última orden de compra recibida (es el **costo aterrizado** = costo de factura + recargo repartido, ver abajo)
-- **Recargo (compras)**: cargo extra de la factura de compra (flete/gastos/"recuperación de gastos"). **NO afecta el total ni los montos de la factura** (que debe ser idéntica a la del proveedor); se reparte (PROPORCIONAL o EQUITATIVO) entre los artículos no-servicio subiendo solo su **costo aterrizado** (`PurchaseOrderItem.landedCostUsd`), que al recibir pasa a `Product.costUsd` y por tanto al precio de venta. Las líneas de servicio aportan su monto al pool de reparto pero no reciben recargo. (Sesión 61)
+- **Recargo (compras)**: cargo extra de la factura de compra (flete/gastos/"recuperación de gastos"). **NO afecta el total ni los montos de la factura** (que debe ser idéntica a la del proveedor); se reparte (PROPORCIONAL o EQUITATIVO) entre los artículos no-servicio subiendo solo su **costo aterrizado** (`PurchaseOrderItem.landedCostUsd`), que al recibir pasa a `Product.costUsd` y por tanto al precio de venta. Las líneas de servicio aportan su monto al pool de reparto pero no reciben recargo. (Sesión 61) En los formularios "Recargo $" se auto-rellena con la suma de las líneas de servicio hasta que se edita a mano; en edición se considera manual solo si el recargo guardado difiere de esa suma (Sesión 170, FC-00720).
 - **Brecha%**: porcentaje global en CompanyConfig, activable por producto (`bregaApplies`)
 - **GananciaPct%**: porcentaje por producto para precio detal
 - **GananciaMayorPct%**: porcentaje por producto para precio mayor
