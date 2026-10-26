@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Grande: FC-00720 sin recargo pese a la línea "RECUPERACION DE GASTOS" (2026-10-26)
+
+- **Causa:** la compra se creó y luego se editó (2 PATCH desde `/purchases/[id]/edit`) antes de procesarla. El formulario de edición marcaba `surchargeTouched=true` al cargar, lo que apaga el auto-rellenado de "Recargo $" desde las líneas de servicio; la línea de servicio (código `0`, $256) quedó en la factura pero `surchargeUsd=0`, y al procesar los 9 tubos tomaron el costo de factura sin recargo.
+- **Fix código:** en edición solo se considera "editado a mano" si el recargo guardado difiere de la suma de las líneas de servicio (flete externo). Si coincide o es 0, el auto-rellenado sigue activo.
+- **Datos corregidos en producción:** recargo 256 $ proporcional (+4,39 %), `landedCost*` de los 9 renglones, `StockMovement.costUsd` de la compra, y costo + precios de los 9 productos (brecha 20 %, IVA 16 %; ej. PLO03035 2,84→2,96 $, detal 5,26→5,49). Bitácora de precios: 9 filas `PURCHASE FC-00720`. Totales de la factura y CxP sin cambio (el recargo no los afecta).
+- Otras compras recientes con línea de servicio y recargo 0 (FC-00653, FC-00636, FC-00630) **no se tocaron**: revisar con el usuario si también debían llevar recargo.
+
 ## 🧾 Total: FC-00052 seguía con IVA tras pasarla a nota de entrega (2026-10-24, datos en producción, sin código)
 
 - Al cambiarla de fiscal a "Nota de entrega compras" (ver Correcciones de datos en `total`, más abajo) se cambió la serie pero **no se recalcularon los totales**: seguía con base imponible 156,08 $ + IVA 24,97 $ = 181,05 $, y su CxP (sin pagar, vencida) por 181,05 $. Única NEC de Total con IVA.

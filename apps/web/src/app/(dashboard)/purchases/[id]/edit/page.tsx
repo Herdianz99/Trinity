@@ -294,7 +294,16 @@ export default function EditPurchaseBillPage() {
         setCreditDays(bill.creditDays || 30);
         setSurchargeUsd(bill.surchargeUsd || 0);
         setSurchargeDistribution(bill.surchargeDistribution || 'PROPORTIONAL');
-        setSurchargeTouched(true);
+        // Solo se considera "editado a mano" si el recargo guardado no coincide con la suma de las
+        // líneas de servicio (flete externo). Si coincide (o es 0), el auto-rellenado sigue activo y
+        // una línea de servicio agregada al editar pasa al recargo.
+        const savedServiceTotal = bill.items
+          .filter((item: any) => item.product.isService)
+          .reduce((sum: number, item: any) => {
+            const cost = bill.currency === 'BS' ? item.costBs : item.costUsd;
+            return sum + cost * item.quantity * (1 - (item.discountPct || 0) / 100);
+          }, 0);
+        setSurchargeTouched(Math.abs((bill.surchargeUsd || 0) - Math.round(savedServiceTotal * 100) / 100) > 0.01);
         setDiscountGlobalPct(bill.discountGlobalPct || 0);
         setRetentionVoucherNumber(bill.retentionVoucherNumber || '');
         setNotes(bill.notes || '');
