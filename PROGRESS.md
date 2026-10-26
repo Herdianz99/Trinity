@@ -48,7 +48,7 @@
 
 - Las 3 primeras compras se crearon sin serie (no existía aún) y quedaron gravadas al 16 %. Se les puso la serie "Nota de entrega compras" (`isFiscal=false`) y se recalcularon como exentas: FC-00001 13.172,72→11.355,79 $; FC-00002 16.382,45→14.122,79 $; FC-00003 45.242,88→39.002,48 $ (Bs = subtotal Bs). CxP igual (Bs = USD × tasa de la CxP); FC-00003 sigue PARTIAL (pagado 15.218,30 $). Sin retenciones, libro ni notas. Costo de productos sin cambio (nunca llevó IVA).
 - Respaldo: `/root/backups/am-fc-sinserie-{po,cxp}-20261026.csv` (147.182.130.6).
-- Ojo: en acerosmayor la serie NEC tiene `Serie.isFiscal=true` (en la grande es una nota de entrega no fiscal). No se tocó.
+- La serie NEC de acerosmayor estaba con `Serie.isFiscal=true` por error: se puso en `false` (igual que en aceros). El libro de compras de acerosmayor estaba vacío, no hubo que borrar nada.
 
 ## 🔁 Aceros/acerosmayor: al recibir traslados de socio no salía la pantalla de costos (2026-10-26)
 
