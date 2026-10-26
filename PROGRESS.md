@@ -44,6 +44,10 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 💲 Aceros: ganancia detal ESTRUCTURAL 25 % / CERRAJERIA 48 % (2026-10-26, datos, sin código)
+
+- Solo `aceros_db` (no acerosmayor). Activos: ESTRUCTURAL 69, CERRAJERIA 148 (el usuario pidió "cerradura" → confirmó toda CERRAJERIA). Solo `gananciaPct` + `priceDetal` (la ganancia/precio mayor quedan igual), recalculado como `applyPriceAdjustment`: costo × (1+brecha 20 % global si `bregaApplies`) × ganancia × IVA. Bitácora: 216 filas PRICE_ADJUSTMENT con un solo token (usuario Diego Hernandez). Algunos precios bajan (tenían >48 %). Respaldo: `/root/backups/aceros-ganancia-estructural-cerrajeria-20261026.csv` (en 147.182.130.6).
+
 ## 🗃️ Grande: 899 artículos agotados desactivados (2026-10-26, datos, sin código)
 
 - Origen: Excel `alertas-agotados (9).xlsx` (956 códigos, todos activos). Cruce: ninguno con stock positivo, compras/traslados/facturas en espera pendientes. Detalle por código en `Downloads/revision-agotados-grande.csv`.
