@@ -44,6 +44,12 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Acerosmayor: FC-00001..00003 sin serie y con IVA → Nota de entrega compras (2026-10-26, datos, sin código)
+
+- Las 3 primeras compras se crearon sin serie (no existía aún) y quedaron gravadas al 16 %. Se les puso la serie "Nota de entrega compras" (`isFiscal=false`) y se recalcularon como exentas: FC-00001 13.172,72→11.355,79 $; FC-00002 16.382,45→14.122,79 $; FC-00003 45.242,88→39.002,48 $ (Bs = subtotal Bs). CxP igual (Bs = USD × tasa de la CxP); FC-00003 sigue PARTIAL (pagado 15.218,30 $). Sin retenciones, libro ni notas. Costo de productos sin cambio (nunca llevó IVA).
+- Respaldo: `/root/backups/am-fc-sinserie-{po,cxp}-20261026.csv` (147.182.130.6).
+- Ojo: en acerosmayor la serie NEC tiene `Serie.isFiscal=true` (en la grande es una nota de entrega no fiscal). No se tocó.
+
 ## 🔁 Aceros/acerosmayor: al recibir traslados de socio no salía la pantalla de costos (2026-10-26)
 
 - **Causa:** la pantalla "tomar costos del socio" (Sesión 154) solo estaba en el detalle del traslado (`/catalog/partner-transfers/[id]`). El botón **Recibir del listado** llamaba directo a `receive` sin pedir `cost-preview`, y ahí es donde reciben (nginx: todos los `receive` del 23–26 oct vienen con referer del listado). Por eso el costo se quedaba el viejo: en la BD no hay ningún cambio de costo `PARTNER_TRANSFER` desde el 20-10, aunque muchos traslados llegaron con costo base distinto (ej. HRR00347: socio 6,0384 vs aceros 5,056).
