@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Send, Download, Check, X, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CostChangesModal, type CostChange } from '@/components/partner-transfer-cost-modal';
 
 interface TItem { code: string; name?: string; quantity: number; unitCost?: number }
 interface Transfer {
@@ -32,6 +33,7 @@ export default function PartnerTransfersPage() {
   const [wh, setWh] = useState('');
   const [costBasis, setCostBasis] = useState<'COST' | 'COST_BREGA'>('COST');
   const [busy, setBusy] = useState(false);
+  const [costChanges, setCostChanges] = useState<CostChange[] | null>(null); // != null => pantalla abierta
   const router = useRouter();
 
   useEffect(() => { document.title = 'Traslados socio | Trinity ERP'; }, []);
@@ -60,17 +62,38 @@ export default function PartnerTransfersPage() {
 
   async function submit() {
     if (!wh) { setMsg({ type: 'error', text: 'Elige el almacén.' }); return; }
+    // Recibir: si el socio mandó costos base distintos a los míos, primero la pantalla de
+    // cambio de costos/precios (igual que en el detalle del traslado).
+    if (modal === 'receive') {
+      setBusy(true); setMsg(null);
+      try {
+        const res = await fetch(`/api/proxy/integration/transfers/${active!.id}/cost-preview`);
+        const rows: CostChange[] = res.ok ? await res.json() : [];
+        if (Array.isArray(rows) && rows.length > 0) { setModal(null); setCostChanges(rows); setBusy(false); return; }
+      } catch { /* sin vista previa: se recibe normal */ }
+    }
+    await send();
+  }
+
+  async function send(applyPartnerCosts = false) {
     setBusy(true);
     setMsg(null);
     try {
-      const url = modal === 'receive'
+      const receiving = modal === 'receive' || costChanges !== null;
+      const url = receiving
         ? `/api/proxy/integration/transfers/${active!.id}/receive`
         : `/api/proxy/integration/transfers/${active!.id}/approve`;
-      const body = modal === 'receive' ? { toWarehouseId: wh } : { fromWarehouseId: wh, costBasis };
+      const body = receiving ? { toWarehouseId: wh, applyPartnerCosts } : { fromWarehouseId: wh, costBasis };
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
-        setMsg({ type: 'success', text: 'Operación realizada.' });
+        setMsg({
+          type: 'success',
+          text: receiving && applyPartnerCosts
+            ? 'Traslado recibido. Se actualizaron los costos y precios de venta.'
+            : 'Operación realizada.',
+        });
         setModal(null);
+        setCostChanges(null);
         await load();
       } else {
         const e = await res.json().catch(() => ({}));
@@ -194,6 +217,17 @@ export default function PartnerTransfersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {costChanges && active && (
+        <CostChangesModal
+          rows={costChanges}
+          partnerName={active.partnerName || partnerName}
+          busy={busy}
+          error={msg?.type === 'error' ? msg.text : ''}
+          onCancel={() => { setCostChanges(null); setMsg(null); }}
+          onReceive={(apply) => send(apply)}
+        />
       )}
     </div>
   );

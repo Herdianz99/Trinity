@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🔁 Aceros/acerosmayor: al recibir traslados de socio no salía la pantalla de costos (2026-10-26)
+
+- **Causa:** la pantalla "tomar costos del socio" (Sesión 154) solo estaba en el detalle del traslado (`/catalog/partner-transfers/[id]`). El botón **Recibir del listado** llamaba directo a `receive` sin pedir `cost-preview`, y ahí es donde reciben (nginx: todos los `receive` del 23–26 oct vienen con referer del listado). Por eso el costo se quedaba el viejo: en la BD no hay ningún cambio de costo `PARTNER_TRANSFER` desde el 20-10, aunque muchos traslados llegaron con costo base distinto (ej. HRR00347: socio 6,0384 vs aceros 5,056).
+- El backend estaba bien: ambas instancias en `85a4067b` (con Sesión 154) y todos los traslados traen `baseCost`.
+- **Fix:** el modal se movió a `components/partner-transfer-cost-modal.tsx` y lo usan el detalle y el listado; Recibir en el listado ahora pide la vista previa y, si hay costos distintos, abre la pantalla (Sí, tomar costos / No, solo recibir).
+- Los traslados ya recibidos con costo distinto **no se corrigieron** (queda a decisión del usuario).
+
 ## 🧾 Grande: FC-00720 sin recargo pese a la línea "RECUPERACION DE GASTOS" (2026-10-26)
 
 - **Causa:** la compra se creó y luego se editó (2 PATCH desde `/purchases/[id]/edit`) antes de procesarla. El formulario de edición marcaba `surchargeTouched=true` al cargar, lo que apaga el auto-rellenado de "Recargo $" desde las líneas de servicio; la línea de servicio (código `0`, $256) quedó en la factura pero `surchargeUsd=0`, y al procesar los 9 tubos tomaron el costo de factura sin recargo.
