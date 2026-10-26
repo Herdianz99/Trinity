@@ -44,6 +44,10 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Grande: renglón agregado a FC-00710 ya procesada (2026-10-26, datos, sin código)
+
+- ELE13539 (BOMBILLO LED RECARGABLE 20W RUN) × 20 a 4,20 $ con 45 % = 2,31 $ neto, 46,20 $ (insertado con los mismos cálculos de `calculateItemValues`, tasa 880,1159). Stock +20 (1→21) con `StockMovement` PURCHASE ref FC-00710 (fecha del ajuste). Factura y CxP (PENDING, sin pagos) 469,16→515,36 $ / 453.576,53 Bs. Costo y precio del producto sin cambio (el neto coincide con su costo actual).
+
 ## 🧾 Acerosmayor: FC-00001..00003 sin serie y con IVA → Nota de entrega compras (2026-10-26, datos, sin código)
 
 - Las 3 primeras compras se crearon sin serie (no existía aún) y quedaron gravadas al 16 %. Se les puso la serie "Nota de entrega compras" (`isFiscal=false`) y se recalcularon como exentas: FC-00001 13.172,72→11.355,79 $; FC-00002 16.382,45→14.122,79 $; FC-00003 45.242,88→39.002,48 $ (Bs = subtotal Bs). CxP igual (Bs = USD × tasa de la CxP); FC-00003 sigue PARTIAL (pagado 15.218,30 $). Sin retenciones, libro ni notas. Costo de productos sin cambio (nunca llevó IVA).
