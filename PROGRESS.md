@@ -44,6 +44,14 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 💵 Grande: VF3-26-00002975 pago EFECTIVO $10 → DOLAR, sin IGTF (2026-10-27, datos, sin código)
+- Factura fiscal ya impresa (n.º fiscal 00003458), con la caja Fiscal 3 ya cerrada. El usuario eligió **cambiar solo el método sin agregar IGTF**, sabiendo que el documento fiscal impreso queda como estaba (efectivo Bs, sin IGTF). La alternativa era una nota de crédito y una factura nueva con IGTF.
+- El sistema bloquea ese cambio a propósito (`updatePaymentMethods` no deja cambiar `isDivisa`/`isCash`), así que se hizo por SQL en una sola transacción:
+  - `Payment.methodId` pasa a DOLAR.
+  - En `CashLedgerEntry`, `methodId` pasa a DOLAR y `currency` a USD.
+  - Se creó el `BankMovement` COBRO de $10 en "Principal Divisa", con la fecha del cobro, como el resto de los cobros en DOLAR.
+- El total ($38,76) y el IGTF (0) no cambiaron. Los campos del cierre ya guardados en la sesión (`expectedUsd`/`Bs`, `difference*`) no se recalcularon.
+
 ## 💲 Aceros: ganancia detal 37 % en ÁNGULO / ALAMBRÓN / TUBO CUAD / TUBO REC (2026-10-27, datos, sin código)
 - Solo `aceros_db`, sobre 139 artículos activos cuyo nombre **empieza** por esas palabras: ALAMBRON 14, ANGULO 11, TUBO CUAD 47, TUBO REC 67.
 - **Excluidos:** los de SEGUNDA/2DA (decisión del usuario: se quedan con su 0–5 %) y FER00104/FER00105 "RUEDA ANGULO".
