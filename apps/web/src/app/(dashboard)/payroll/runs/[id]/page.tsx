@@ -253,7 +253,7 @@ export default function PayrollRunDetailPage() {
       if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
       setRun(data);
       setCloseOpen(false);
-      setMessage({ type: 'success', text: 'Corrida cerrada y gasto de nómina registrado' });
+      setMessage({ type: 'success', text: data.expense ? 'Corrida cerrada y gasto de nómina registrado' : 'Corrida cerrada' });
     } catch (err: any) {
       setCloseOpen(false);
       setMessage({ type: 'error', text: err.message });

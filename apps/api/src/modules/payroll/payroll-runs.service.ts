@@ -14,6 +14,11 @@ import { MailService } from '../mail/mail.service';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// Gasto automático "Nomina" al cerrar la corrida (Sesión 155). APAGADO por pedido del usuario
+// (Sesión 171): generaba confusión y las empresas vuelven a cargar el gasto a mano en Gastos.
+// Para reactivarlo, poner en true aquí y PAYROLL_AUTO_EXPENSE en close-run-modal.tsx (web).
+const PAYROLL_AUTO_EXPENSE = false;
+
 const LINE_INCLUDE = {
   employee: {
     include: {
@@ -353,7 +358,7 @@ export class PayrollRunsService {
       // Reemplaza la carga manual del gasto. Se crea con la tasa de la corrida y sale de la
       // caja/método o queda a crédito según lo elegido al cerrar (mismo flujo que un gasto).
       const totals = await tx.payrollRun.findUniqueOrThrow({ where: { id }, select: { totalGrossBs: true } });
-      if (totals.totalGrossBs > 0.001) {
+      if (PAYROLL_AUTO_EXPENSE && totals.totalGrossBs > 0.001) {
         const fmtD = (d: Date) =>
           `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
         await this.expenses.createInTx(

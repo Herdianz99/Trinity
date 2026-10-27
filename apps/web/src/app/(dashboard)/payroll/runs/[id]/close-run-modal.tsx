@@ -6,6 +6,9 @@ import { Loader2, Lock, Wallet, FileClock, Receipt } from 'lucide-react';
 // Modal de cierre de corrida: al cerrar se genera el gasto "Nomina" por el TOTAL BRUTO
 // (sin restar deducciones) y aquí se elige de dónde sale el dinero, igual que en un gasto
 // manual: caja abierta (+ método), a crédito (CxP a un proveedor) o sin caja.
+// Con PAYROLL_AUTO_EXPENSE apagado solo se confirma el cierre (el gasto se carga a mano en Gastos).
+// Debe coincidir con PAYROLL_AUTO_EXPENSE de payroll-runs.service.ts (API).
+export const PAYROLL_AUTO_EXPENSE = false;
 
 type Source = 'cash' | 'credit' | 'none';
 
@@ -40,6 +43,7 @@ export default function CloseRunModal({ runNumber, totalGrossBs, exchangeRate, c
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!PAYROLL_AUTO_EXPENSE) { setLoaded(true); return; }
     Promise.all([
       fetch('/api/proxy/cash-sessions?status=OPEN').then((r) => r.json()).catch(() => []),
       fetch('/api/proxy/payment-methods/flat').then((r) => r.json()).catch(() => []),
@@ -88,6 +92,35 @@ export default function CloseRunModal({ runNumber, totalGrossBs, exchangeRate, c
   );
 
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm';
+
+  if (!PAYROLL_AUTO_EXPENSE) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !closing && onCancel()} />
+        <div className="relative bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <h2 className="text-lg font-bold text-white mb-1">Cerrar corrida {runNumber}</h2>
+          <p className="text-sm text-slate-400 mb-4">La corrida no podrá editarse después.</p>
+          <div className="rounded-lg border border-slate-700/60 bg-slate-800/40 p-3">
+            <p className="text-xs text-slate-400">Total bruto de la nómina:</p>
+            <p className="mt-1 text-xl font-bold text-white tabular-nums">Bs {fmt(totalGrossBs)}</p>
+            <p className="text-xs text-slate-400 tabular-nums">≈ ${fmt(grossUsd)} · tasa {fmt(exchangeRate)}</p>
+            <p className="mt-2 text-[11px] text-amber-400/90">El cierre no registra ningún gasto: cargue el gasto de nómina en Gastos como de costumbre.</p>
+          </div>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              onClick={() => onConfirm({})} disabled={closing}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {closing ? <Loader2 className="animate-spin" size={15} /> : <Lock size={15} />} Cerrar corrida
+            </button>
+            <button onClick={onCancel} disabled={closing} className="w-full text-slate-400 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

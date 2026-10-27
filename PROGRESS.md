@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## ⏸️ Nómina: gasto automático APAGADO (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
+- Pedido del usuario: el gasto automático al cerrar la corrida (Sesión 155) estaba confundiendo a quienes llevan la nómina ("al parecer el gasto no se genera por completo"). Se apaga por ahora y **vuelven a cargar el gasto de nómina a mano en Gastos**. No se investigó el problema del gasto incompleto.
+- API: constante  en . El cierre sigue recalculando y aplicando las deducciones de crédito a las CxC, pero ya no crea el .
+- Web:  en . El modal de cierre ya no pide caja, crédito ni sin caja: muestra el bruto, avisa que el gasto se carga a mano y tiene el botón "Cerrar corrida".
+- Para reactivarlo, poner las DOS constantes en true. Todavía no es una configuración por empresa (decisión del usuario: "quitarlo por el momento y luego ver").
+- **Pendiente: deploy en las 7 empresas cuando el usuario lo pida.**
+
 ## 💲 Aceros: ganancia detal ESTRUCTURAL 25 % / CERRAJERIA 48 % (2026-10-26, datos, sin código)
 
 - Solo `aceros_db` (no acerosmayor). Activos: ESTRUCTURAL 69, CERRAJERIA 148 (el usuario pidió "cerradura" → confirmó toda CERRAJERIA). Solo `gananciaPct` + `priceDetal` (la ganancia/precio mayor quedan igual), recalculado como `applyPriceAdjustment`: costo × (1+brecha 20 % global si `bregaApplies`) × ganancia × IVA. Bitácora: 216 filas PRICE_ADJUSTMENT con un solo token (usuario Diego Hernandez). Algunos precios bajan (tenían >48 %). Respaldo: `/root/backups/aceros-ganancia-estructural-cerrajeria-20261026.csv` (en 147.182.130.6).
