@@ -46,8 +46,8 @@
 
 ## ⏸️ Nómina: gasto automático APAGADO (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
 - Pedido del usuario: el gasto automático al cerrar la corrida (Sesión 155) estaba confundiendo a quienes llevan la nómina ("al parecer el gasto no se genera por completo"). Se apaga por ahora y **vuelven a cargar el gasto de nómina a mano en Gastos**. No se investigó el problema del gasto incompleto.
-- API: constante  en . El cierre sigue recalculando y aplicando las deducciones de crédito a las CxC, pero ya no crea el .
-- Web:  en . El modal de cierre ya no pide caja, crédito ni sin caja: muestra el bruto, avisa que el gasto se carga a mano y tiene el botón "Cerrar corrida".
+- API: constante `PAYROLL_AUTO_EXPENSE = false` en `payroll-runs.service.ts`. El cierre sigue recalculando y aplicando las deducciones de crédito a las CxC, pero ya no crea el `Expense`.
+- Web: `PAYROLL_AUTO_EXPENSE = false` en `close-run-modal.tsx`. El modal de cierre ya no pide caja, crédito ni sin caja: muestra el bruto, avisa que el gasto se carga a mano y tiene el botón "Cerrar corrida".
 - Para reactivarlo, poner las DOS constantes en true. Todavía no es una configuración por empresa (decisión del usuario: "quitarlo por el momento y luego ver").
 - **Pendiente: deploy en las 7 empresas cuando el usuario lo pida.**
 
