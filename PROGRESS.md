@@ -70,7 +70,7 @@
 - El backend estaba bien: ambas instancias en `85a4067b` (con Sesión 154) y todos los traslados traen `baseCost`.
 - **Fix:** el modal se movió a `components/partner-transfer-cost-modal.tsx` y lo usan el detalle y el listado; Recibir en el listado ahora pide la vista previa y, si hay costos distintos, abre la pantalla (Sí, tomar costos / No, solo recibir).
 - Los traslados ya recibidos con costo distinto **no se corrigieron** (queda a decisión del usuario).
-- **Deploy:** ✅ acerosmayor 2026-10-26 (`0099d8e3`, health OK, chunks del listado y detalle con `cost-preview`). ⏳ aceros sigue en `85a4067b`: ahí Recibir desde el listado todavía no muestra la pantalla.
+- **Deploy:** ✅ acerosmayor 2026-10-26 (`0099d8e3`, health OK, chunks del listado y detalle con `cost-preview`). ✅ Las otras 6 (grande, trebolmayor, total, totalturen, aceros, chica) 2026-10-26 en `f311ff78`, health OK; incluye también el fix del recargo al editar compras (FC-00720). En la chica el `nest build` murió por memoria (exit 137, 2 GB); se rehízo a mano (`NODE_OPTIONS=--max-old-space-size=1200 npx nest build` + `pm2 restart trinity-api`) y quedó OK.
 
 ## 🧾 Grande: FC-00720 sin recargo pese a la línea "RECUPERACION DE GASTOS" (2026-10-26)
 
