@@ -50,6 +50,7 @@
 - Se aplicó con el endpoint del sistema `POST /products/price-adjustment` (REPLACE, `gananciaPct: 37`, `productIds`), así que el precio detal se recalcula con brecha e IVA, queda en la bitácora `PRICE_ADJUSTMENT` y se republica la tienda. La ganancia y el precio mayor no cambian.
 - Resultado: 116 suben, 5 bajan (tenían 38–43 %), 8 ya tenían 37 % y 10 tienen costo 0.
 - Respaldo en `/root/backups/aceros-ganancia-37-20261027.csv` (147.182.130.6). Excel para el usuario: `Desktop/Aceros ganancia 37% 27-10-2026.xlsx`.
+- **Después, el mismo día:** el usuario pidió poner **toda la categoría ESTRUCTURAL en 25 %** (69 activos, mismo endpoint). Así, **50 tubos grandes (H.N, 80×40 en adelante) de la lista de 37 % quedaron en 25 %**; los otros 89 siguen en 37 %. De los 69, 46 bajan de precio, 23 no cambian y 4 tienen costo 0. Respaldo en `/root/backups/aceros-estructural-25-20261027.csv`. Excel: `Desktop/Aceros ESTRUCTURAL 25% 27-10-2026.xlsx`.
 
 ## 🧩 POS cajas en el teléfono · "Aplica 5%" · Quién hizo la devolución (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
 - **POS, modal "Elige una caja" en el teléfono:** el admin ve todas las cajas y la lista no cabía. El modal era `fixed` y estaba centrado sin scroll, así que tapaba la X y "Entrar sin caja". Ahora tiene scroll propio, la X queda fija arriba a la derecha y las tarjetas se apilan en pantallas angostas.
