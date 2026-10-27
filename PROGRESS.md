@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧩 POS cajas en el teléfono · "Aplica 5%" · Quién hizo la devolución (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
+- **POS, modal "Elige una caja" en el teléfono:** el admin ve todas las cajas y la lista no cabía. El modal era `fixed` y estaba centrado sin scroll, así que tapaba la X y "Entrar sin caja". Ahora tiene scroll propio, la X queda fija arriba a la derecha y las tarjetas se apilan en pantallas angostas.
+- **Productos: campo nuevo `applies5Pct` ("Aplica 5%"):**
+  - Migración `20261027120000_product_applies_5pct`, también agregada a `deploy/fix-schema.sql`.
+  - **Por ahora no hace nada.** Hay un toggle en crear y editar producto, un badge "Aplica 5%" en la lista y el filtro "Solo aplica 5%" (`?applies5Pct=true` en `buildListWhere`). Los reportes PDF y Excel de la lista respetan el filtro.
+- **Notas de crédito/débito (devoluciones de venta):** se muestra quién la hizo. `createdById` no tiene relación con User, así que `findAll` y `findOne` le agregan `createdBy {id,name}` con una sola consulta (`withCreatedBy`). En el listado aparece debajo de la fecha ("Fecha / Hecha por") y en el detalle hay un recuadro "Hecha por". No hubo cambios en la BD.
+
 ## ⏸️ Nómina: gasto automático APAGADO (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
 - Pedido del usuario: el gasto automático al cerrar la corrida (Sesión 155) estaba confundiendo a quienes llevan la nómina ("al parecer el gasto no se genera por completo"). Se apaga por ahora y **vuelven a cargar el gasto de nómina a mano en Gastos**. No se investigó el problema del gasto incompleto.
 - API: constante `PAYROLL_AUTO_EXPENSE = false` en `payroll-runs.service.ts`. El cierre sigue recalculando y aplicando las deducciones de crédito a las CxC, pero ya no crea el `Expense`.

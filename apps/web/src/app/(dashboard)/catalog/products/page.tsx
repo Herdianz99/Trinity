@@ -33,6 +33,7 @@ interface Product {
   supplierRef: string | null;
   saleBlocked?: boolean;
   isOnSale?: boolean;
+  applies5Pct?: boolean;
   name: string;
   categoryId: string | null;
   brandId: string | null;
@@ -71,6 +72,7 @@ export default function ProductsPage() {
   const [onlyInactive, setOnlyInactive] = useState(false);
   const [onlySaleBlocked, setOnlySaleBlocked] = useState(false);
   const [onlyOnSale, setOnlyOnSale] = useState(false);
+  const [only5Pct, setOnly5Pct] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   // Modal del catalogo con fotos: pregunta la categoria a exportar. '' = todas (segmentado).
   const [showCatalogModal, setShowCatalogModal] = useState(false);
@@ -97,6 +99,7 @@ export default function ProductsPage() {
       if (onlyInactive) params.set('isActive', 'false');
       if (onlySaleBlocked) params.set('saleBlocked', 'true');
       if (onlyOnSale) params.set('isOnSale', 'true');
+      if (only5Pct) params.set('applies5Pct', 'true');
 
       const res = await fetch(`/api/proxy/products?${params}`);
       if (res.ok) {
@@ -108,7 +111,7 @@ export default function ProductsPage() {
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock, onlyInactive, onlySaleBlocked, onlyOnSale]);
+  }, [page, search, filterCategory, filterBrand, filterSupplier, lowStock, onlyInactive, onlySaleBlocked, onlyOnSale, only5Pct]);
 
   const fetchMeta = useCallback(async () => {
     const [catRes, brandRes, supRes, rateRes] = await Promise.all([
@@ -149,6 +152,7 @@ export default function ProductsPage() {
     if (onlyInactive) params.set('isActive', 'false');
     if (onlySaleBlocked) params.set('saleBlocked', 'true');
     if (onlyOnSale) params.set('isOnSale', 'true');
+    if (only5Pct) params.set('applies5Pct', 'true');
     return params;
   }
 
@@ -372,6 +376,16 @@ export default function ProductsPage() {
             <Tag size={14} className="text-amber-400" />
             Solo en oferta
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={only5Pct}
+              onChange={(e) => { setOnly5Pct(e.target.checked); setPage(1); }}
+              className="rounded border-slate-600 bg-slate-700 text-green-500 focus:ring-green-500/40"
+            />
+            <span className="text-xs font-bold text-sky-400">5%</span>
+            Solo aplica 5%
+          </label>
         </div>
       </div>
 
@@ -459,6 +473,9 @@ export default function ProductsPage() {
                         )}
                         {product.isOnSale && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-400 text-amber-950">🏷️ Oferta</span>
+                        )}
+                        {product.applies5Pct && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">Aplica 5%</span>
                         )}
                       </div>
                     </td>

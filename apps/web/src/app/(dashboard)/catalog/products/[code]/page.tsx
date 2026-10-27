@@ -43,6 +43,7 @@ interface Product {
   isActive: boolean;
   saleBlocked?: boolean;
   isOnSale?: boolean;
+  applies5Pct?: boolean;
   showInStore?: boolean;
   storeFeatured?: boolean;
   primaryImageThumbUrl?: string | null;
@@ -209,6 +210,7 @@ export default function ProductDetailPage() {
         isActive: data.isActive,
         saleBlocked: data.saleBlocked ?? false,
         isOnSale: data.isOnSale ?? false,
+        applies5Pct: data.applies5Pct ?? false,
         showInStore: data.showInStore ?? false,
         storeFeatured: data.storeFeatured ?? false,
       });
@@ -378,6 +380,7 @@ export default function ProductDetailPage() {
         isActive: form.isActive,
         saleBlocked: form.saleBlocked,
         isOnSale: form.isOnSale,
+        applies5Pct: form.applies5Pct,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
       };
@@ -793,6 +796,9 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-2 pb-1">
                   <Toggle checked={form.isOnSale ?? false} onChange={v => setForm((f: any) => ({ ...f, isOnSale: v }))} label="Oferta" color="amber" />
                   {form.isOnSale && <span className="text-xs text-amber-400/90">Sale de primero y resaltado en el POS</span>}
+                </div>
+                <div className="flex items-center gap-2 pb-1">
+                  <Toggle checked={form.applies5Pct ?? false} onChange={v => setForm((f: any) => ({ ...f, applies5Pct: v }))} label="Aplica 5%" />
                 </div>
                 <div className="flex items-end pb-1">
                   <Toggle checked={form.showInStore ?? false} onChange={v => setForm((f: any) => ({ ...f, showInStore: v }))} label="Mostrar en tienda online" color="blue" />

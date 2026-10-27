@@ -1406,6 +1406,12 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - Al **cerrar** una corrida (`POST payroll-runs/:id/close`, body `ClosePayrollRunDto`) se crea, en la MISMA transacción, un `Expense` en la categoría **"Nomina"** (se reutiliza por nombre; las empresas ya la tenían) por el **TOTAL BRUTO** (`totalGrossBs`, USD = bruto / tasa de la corrida). Las deducciones solo afectan lo que cobra el empleado. `Expense.payrollRunId` (único) enlaza el gasto con la corrida.
 - De dónde sale el dinero se elige en el modal de cierre, con las mismas opciones que un gasto manual: caja abierta (+ método), a crédito (CxP a un proveedor) o sin caja. Reutiliza `ExpensesService.createInTx(tx, dto, userId, { payrollRunId })` (el `create()` normal es un envoltorio que abre la transacción). **Reemplaza la carga manual del gasto de nómina**: hay que avisar a las empresas que dejen de cargarlo a mano en Gastos.
 
+## Producto "Aplica 5%" (Sesión 171)
+- `Product.applies5Pct` (Boolean, default false). **Por ahora es solo una marca:** no afecta precios, márgenes ni facturación. Se edita con un toggle en crear y editar producto, y en el catálogo hay un badge y el filtro "Solo aplica 5%" (`applies5Pct=true` en `QueryProductsDto` / `buildListWhere`).
+
+## Notas de crédito/débito — quién la hizo (Sesión 171)
+- `CreditDebitNote.createdById` no tiene relación Prisma con `User`. `CreditDebitNotesService.withCreatedBy()` resuelve los nombres con una sola consulta y agrega `createdBy {id,name}` en `findAll` y `findOne`. El listado lo muestra debajo de la fecha y el detalle en "Hecha por".
+
 ## Catálogo con fotos — categorías (Sesión 155)
 - El modal del catálogo con fotos lista todas las categorías tildadas (+ "Sin categoria") y manda las destildadas en `excludeCategoryIds` (ids separados por coma; `__none__` = sin categoría). En `catalogReportList`, el `notIn` se combina con `categoryId IS NULL` porque el `NOT IN` de SQL descarta los NULL. La selección se recuerda en el `localStorage` del navegador (`catalogPhotos.excludedCategories`). El catálogo en tabla (PDF/Excel) no cambia.
 - Checkbox **"Condiciones"** (Sesión 156): la contraportada con las condiciones de pago solo sale si se manda `withConditions=true` (sin el param no sale). Se recuerda en `localStorage` (`catalogPhotos.withConditions`, tildado por defecto).

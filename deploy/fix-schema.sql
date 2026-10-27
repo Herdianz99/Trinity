@@ -3359,3 +3359,6 @@ ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "extraModules" TEXT[] NOT NULL DEFAU
 
 -- Ubicacion GPS del cliente en el formulario del POS, opt-in por empresa (Session 166)
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "customerLocationInPos" BOOLEAN NOT NULL DEFAULT false;
+
+-- "Aplica 5%" en productos, solo marca + filtro (Session 171)
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "applies5Pct" BOOLEAN NOT NULL DEFAULT false;

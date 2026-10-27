@@ -625,6 +625,7 @@ model Product {
   isActive         Boolean                  @default(true)
   saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
   isOnSale         Boolean                  @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
+  applies5Pct      Boolean                  @default(false) // "Aplica 5%": por ahora solo marca y filtro del catalogo, sin efecto en calculos
   showInStore      Boolean                  @default(false)
   storeFeatured    Boolean                  @default(false)
   isExhibited        Boolean                @default(false)

@@ -85,7 +85,18 @@ export class CreditDebitNotesService {
       this.prisma.creditDebitNote.count({ where }),
     ]);
 
-    return { data, total, page, totalPages: Math.ceil(total / limit) };
+    return { data: await this.withCreatedBy(data), total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  // createdById no tiene relacion con User en el schema: se resuelve el nombre aparte para
+  // mostrar en pantalla quien hizo la nota/devolucion (una sola consulta por pagina).
+  private async withCreatedBy<T extends { createdById: string }>(notes: T[]) {
+    const ids = [...new Set(notes.map((n) => n.createdById).filter(Boolean))];
+    const users = ids.length
+      ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+      : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return notes.map((n) => ({ ...n, createdBy: byId.get(n.createdById) ?? null }));
   }
 
   // Datos para el reporte PDF de DEVOLUCIONES por vendedor. Solo notas de crédito de
@@ -347,7 +358,8 @@ export class CreditDebitNotesService {
       },
     });
     if (!note) throw new NotFoundException('Nota no encontrada');
-    return note;
+    const [withUser] = await this.withCreatedBy([note]);
+    return withUser;
   }
 
   // Numeracion secuencial por tipo cuando la nota no hereda serie (padre sin serie asignada)

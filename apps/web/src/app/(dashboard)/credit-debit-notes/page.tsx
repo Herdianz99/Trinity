@@ -23,6 +23,7 @@ interface Note {
   appliedAt: string | null;
   fiscalPrinted: boolean;
   createdAt: string;
+  createdBy?: { id: string; name: string } | null;
   invoice: { id: string; number: string; customer: { name: string } | null } | null;
   purchaseOrder: { id: string; number: string; supplier: { name: string } | null } | null;
   serie?: { id: string; name: string; prefix: string; isFiscal: boolean } | null;
@@ -236,7 +237,7 @@ export default function CreditDebitNotesPage() {
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Total USD</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Saldo</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha / Hecha por</th>
                 <th className="text-center px-4 py-3 text-slate-400 font-medium">Acción</th>
               </tr>
             </thead>
@@ -285,7 +286,10 @@ export default function CreditDebitNotesPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{fmtDate(note.createdAt)}</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">
+                    {fmtDate(note.createdAt)}
+                    {note.createdBy && <div className="text-slate-500 truncate max-w-[160px]" title={note.createdBy.name}>{note.createdBy.name}</div>}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center" onClick={e => e.stopPropagation()}>
                       <button className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">

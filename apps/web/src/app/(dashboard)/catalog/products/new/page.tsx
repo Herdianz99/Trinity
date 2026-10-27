@@ -24,7 +24,7 @@ const defaultForm = {
   purchaseUnit: 'UNIT', saleUnit: 'UNIT', conversionFactor: 1,
   costUsd: '0', bregaApplies: true, gananciaPct: '0', gananciaMayorPct: '0',
   ivaType: 'GENERAL', minStock: 0, isActive: true, saleBlocked: false, isService: false,
-  isOnSale: false, showInStore: false, storeFeatured: false,
+  isOnSale: false, applies5Pct: false, showInStore: false, storeFeatured: false,
 };
 
 export default function NewProductPage() {
@@ -108,6 +108,7 @@ export default function NewProductPage() {
         saleBlocked: form.saleBlocked,
         isService: form.isService,
         isOnSale: form.isOnSale,
+        applies5Pct: form.applies5Pct,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
       };
@@ -349,6 +350,9 @@ export default function NewProductPage() {
             <div className="flex items-center gap-3 pb-1">
               <Toggle checked={form.isOnSale} onChange={v => setForm(f => ({ ...f, isOnSale: v }))} label="Oferta" color="amber" />
               {form.isOnSale && <span className="text-xs text-amber-400/90">Sale de primero y resaltado en el POS</span>}
+            </div>
+            <div className="flex items-center gap-3 pb-1">
+              <Toggle checked={form.applies5Pct} onChange={v => setForm(f => ({ ...f, applies5Pct: v }))} label="Aplica 5%" />
             </div>
             <div className="flex items-center gap-6 pb-1">
               <Toggle checked={form.showInStore} onChange={v => setForm(f => ({ ...f, showInStore: v }))} label="Mostrar en tienda online" color="blue" />

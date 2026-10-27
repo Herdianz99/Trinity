@@ -2016,19 +2016,21 @@ export default function POSPage() {
   // Cash register selection modal (fullscreen, non-dismissable)
   if (showCashModal && !isSeller) {
     return (
-      <div className="fixed inset-0 z-50 bg-slate-900/98 flex items-center justify-center p-6">
-        <div className="w-full max-w-2xl">
+      // Scroll propio: en el teléfono la lista de cajas (admin ve todas) no cabía y tapaba la X y "Entrar sin caja"
+      <div className="fixed inset-0 z-50 bg-slate-900/98 overflow-y-auto">
+        <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-2xl py-10 sm:py-0">
           {/* Admin/Supervisor no están obligados a elegir caja: pueden cerrar y entrar sin caja */}
           {canEnterWithoutCash && (
             <button
               onClick={() => setShowCashModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors"
+              className="fixed top-3 right-3 sm:top-5 sm:right-5 z-10 p-2 rounded-lg bg-slate-800/90 sm:bg-transparent text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors"
               title="Entrar sin caja"
             >
               <X size={22} />
             </button>
           )}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 mb-4">
               <Monitor className="text-green-400" size={32} />
             </div>
@@ -2045,9 +2047,9 @@ export default function POSPage() {
             <div className="mb-6">
               <div className="grid gap-3">
                 {cashRegisters.map(cr => (
-                  <div key={cr.id} className="card p-4 flex items-center justify-between hover:border-green-500/30 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
+                  <div key={cr.id} className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-green-500/30 transition-colors">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-white">{cr.name}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">Cod: {cr.code}</span>
                         {cr.serie?.isFiscal && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">Fiscal</span>}
@@ -2058,7 +2060,7 @@ export default function POSPage() {
                         {cr.sessions?.map((s: any) => s.openedBy?.name).join(', ')}
                       </p>
                     </div>
-                    <button onClick={() => selectCashRegister(cr)} className="btn-primary text-sm px-4 py-2">Usar esta caja</button>
+                    <button onClick={() => selectCashRegister(cr)} className="btn-primary text-sm px-4 py-2 shrink-0">Usar esta caja</button>
                   </div>
                 ))}
               </div>
@@ -2087,6 +2089,7 @@ export default function POSPage() {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
     );

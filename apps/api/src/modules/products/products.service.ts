@@ -222,7 +222,7 @@ export class ProductsService {
   // Construye el `where` compartido por findAll y el reporte PDF de existencias.
   // Devuelve null cuando el filtro garantiza 0 resultados (search / inStock sin coincidencias).
   private async buildListWhere(query: QueryProductsDto): Promise<Prisma.ProductWhereInput | null> {
-    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive, saleBlocked, isOnSale } = query;
+    const { categoryId, brandId, supplierId, search, lowStock, inStock, isActive, includeInactive, saleBlocked, isOnSale, applies5Pct } = query;
 
     const where: Prisma.ProductWhereInput = {};
 
@@ -237,6 +237,8 @@ export class ProductsService {
     if (saleBlocked) where.saleBlocked = true;
     // Filtro del catalogo: solo productos en oferta.
     if (isOnSale) where.isOnSale = true;
+    // Filtro del catalogo: solo productos con "Aplica 5%".
+    if (applies5Pct) where.applies5Pct = true;
 
     if (lowStock) {
       where.stock = {

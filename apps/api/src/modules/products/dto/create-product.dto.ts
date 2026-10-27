@@ -145,6 +145,11 @@ export class CreateProductDto {
   @IsBoolean()
   isOnSale?: boolean;
 
+  @ApiProperty({ required: false, default: false, description: 'Aplica 5%: por ahora solo marca (filtro del catalogo), sin efecto en calculos' })
+  @IsOptional()
+  @IsBoolean()
+  applies5Pct?: boolean;
+
   @ApiProperty({ required: false, default: false, description: 'Mostrar en la tienda online' })
   @IsOptional()
   @IsBoolean()

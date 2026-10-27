@@ -36,6 +36,7 @@ interface NoteDetail {
   motivo: string | null;
   notes: string | null;
   createdAt: string;
+  createdBy?: { id: string; name: string } | null;
   invoice: {
     id: string; number: string; fiscalNumber: string | null; fiscalMachineSerial: string | null; createdAt: string;
     totalUsd: number; totalBs: number;
@@ -516,6 +517,10 @@ export default function CreditDebitNoteDetailPage() {
               <div>
                 <p className="text-xs text-slate-500 uppercase">Fecha</p>
                 <p className="text-white font-mono">{fmtDate(note.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Hecha por</p>
+                <p className="text-white">{note.createdBy?.name || '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase">Tasa</p>

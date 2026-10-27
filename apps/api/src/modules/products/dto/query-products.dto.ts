@@ -86,6 +86,12 @@ export class QueryProductsDto {
   @IsBoolean()
   isOnSale?: boolean;
 
+  @ApiProperty({ required: false, description: 'Solo productos con "Aplica 5%" (applies5Pct=true).' })
+  @IsOptional()
+  @Transform(toBool)
+  @IsBoolean()
+  applies5Pct?: boolean;
+
   @ApiProperty({ required: false, description: 'Ordenar productos en oferta de primero (solo el POS lo usa).' })
   @IsOptional()
   @Transform(toBool)
