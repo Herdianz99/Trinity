@@ -60,19 +60,19 @@
 - Respaldo en `/root/backups/aceros-ganancia-37-20261027.csv` (147.182.130.6). Excel para el usuario: `Desktop/Aceros ganancia 37% 27-10-2026.xlsx`.
 - **Después, el mismo día:** el usuario pidió poner **toda la categoría ESTRUCTURAL en 25 %** (69 activos, mismo endpoint). Así, **50 tubos grandes (H.N, 80×40 en adelante) de la lista de 37 % quedaron en 25 %**; los otros 89 siguen en 37 %. De los 69, 46 bajan de precio, 23 no cambian y 4 tienen costo 0. Respaldo en `/root/backups/aceros-estructural-25-20261027.csv`. Excel: `Desktop/Aceros ESTRUCTURAL 25% 27-10-2026.xlsx`.
 
-## 🧩 POS cajas en el teléfono · "Aplica 5%" · Quién hizo la devolución (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
+## 🧩 POS cajas en el teléfono · "Aplica 5%" · Quién hizo la devolución (2026-10-27, Sesión 171) — ✅ DESPLEGADO
 - **POS, modal "Elige una caja" en el teléfono:** el admin ve todas las cajas y la lista no cabía. El modal era `fixed` y estaba centrado sin scroll, así que tapaba la X y "Entrar sin caja". Ahora tiene scroll propio, la X queda fija arriba a la derecha y las tarjetas se apilan en pantallas angostas.
 - **Productos: campo nuevo `applies5Pct` ("Aplica 5%"):**
   - Migración `20261027120000_product_applies_5pct`, también agregada a `deploy/fix-schema.sql`.
   - **Por ahora no hace nada.** Hay un toggle en crear y editar producto, un badge "Aplica 5%" en la lista y el filtro "Solo aplica 5%" (`?applies5Pct=true` en `buildListWhere`). Los reportes PDF y Excel de la lista respetan el filtro.
 - **Notas de crédito/débito (devoluciones de venta):** se muestra quién la hizo. `createdById` no tiene relación con User, así que `findAll` y `findOne` le agregan `createdBy {id,name}` con una sola consulta (`withCreatedBy`). En el listado aparece debajo de la fecha ("Fecha / Hecha por") y en el detalle hay un recuadro "Hecha por". No hubo cambios en la BD.
 
-## ⏸️ Nómina: gasto automático APAGADO (2026-10-27, Sesión 171) — ⏳ SIN DEPLOY
+## ⏸️ Nómina: gasto automático APAGADO (2026-10-27, Sesión 171) — ✅ DESPLEGADO
 - Pedido del usuario: el gasto automático al cerrar la corrida (Sesión 155) estaba confundiendo a quienes llevan la nómina ("al parecer el gasto no se genera por completo"). Se apaga por ahora y **vuelven a cargar el gasto de nómina a mano en Gastos**. No se investigó el problema del gasto incompleto.
 - API: constante `PAYROLL_AUTO_EXPENSE = false` en `payroll-runs.service.ts`. El cierre sigue recalculando y aplicando las deducciones de crédito a las CxC, pero ya no crea el `Expense`.
 - Web: `PAYROLL_AUTO_EXPENSE = false` en `close-run-modal.tsx`. El modal de cierre ya no pide caja, crédito ni sin caja: muestra el bruto, avisa que el gasto se carga a mano y tiene el botón "Cerrar corrida".
 - Para reactivarlo, poner las DOS constantes en true. Todavía no es una configuración por empresa (decisión del usuario: "quitarlo por el momento y luego ver").
-- **Pendiente: deploy en las 7 empresas cuando el usuario lo pida.**
+- **Deploy:** ✅ las 7 empresas el 2026-10-27 en `3c2e0165` (grande, mayor, chica, total, totalturen, aceros, acerosmayor). Health OK y migración `applies5Pct` verificada en las 7 BD. Avisar que el gasto de nómina vuelve a cargarse a mano.
 
 ## 💲 Aceros: ganancia detal ESTRUCTURAL 25 % / CERRAJERIA 48 % (2026-10-26, datos, sin código)
 
