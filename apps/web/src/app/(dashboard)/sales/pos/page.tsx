@@ -3127,7 +3127,7 @@ export default function POSPage() {
                 <button onClick={() => { setShowCreateClient(false); setShowEditClient(false); }} className="btn-secondary !py-2.5 text-sm">Cancelar</button>
                 <button
                   onClick={() => handleSaveClient(showEditClient)}
-                  disabled={savingClient || !clientForm.name.trim() || !clientForm.phone.trim() || (companyConfig?.requireCustomerAddress && !clientForm.address.trim())}
+                  disabled={savingClient || !clientForm.name.trim() || !(clientForm.rif || '').trim() || !clientForm.phone.trim() || (companyConfig?.requireCustomerAddress && !clientForm.address.trim())}
                   className="btn-primary !py-3 md:!py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
                 >
                   {savingClient && <Loader2 className="animate-spin" size={14} />}
