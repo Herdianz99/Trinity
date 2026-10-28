@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsNumber, IsInt, IsIn, IsBoolean, Min, Max, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsInt, IsIn, IsBoolean, IsNotEmpty, Min, Max, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCustomerDto {
@@ -13,10 +14,12 @@ export class CreateCustomerDto {
   @IsIn(['V', 'E', 'J', 'G', 'C', 'P'])
   documentType?: string;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  rif?: string;
+  // Obligatorio: la maquina fiscal da error al imprimir una factura con el RIF vacio.
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'El RIF / Documento del cliente es obligatorio' })
+  @IsNotEmpty({ message: 'El RIF / Documento del cliente es obligatorio' })
+  rif: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

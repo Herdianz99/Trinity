@@ -228,6 +228,9 @@ export default function CustomerDetailPage() {
 
   async function handleSave(e?: React.FormEvent): Promise<boolean> {
     if (e) e.preventDefault();
+    if (!String(form.rif || '').trim()) {
+      setSaveMsg({ type: 'error', text: 'El RIF / Documento del cliente es obligatorio' }); return false;
+    }
     if (Number(form.creditLimit) > 0 && (!Number(form.creditDays) || Number(form.creditDays) <= 0)) {
       setSaveMsg({ type: 'error', text: 'Con limite de credito, los dias de credito son obligatorios' }); return false;
     }
@@ -369,7 +372,7 @@ export default function CustomerDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">RIF / Documento</label>
+                <label className="text-xs text-slate-400 mb-1 block">RIF / Documento *</label>
                 <div className="flex gap-2">
                   <input type="text" value={form.rif || ''} onChange={e => setForm((f: any) => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" />
                   <button

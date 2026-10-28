@@ -1697,6 +1697,11 @@ export default function POSPage() {
   }
 
   async function handleSaveClient(isEdit: boolean) {
+    // La maquina fiscal da error al imprimir si el cliente no tiene RIF.
+    if (!(clientForm.rif || '').trim()) {
+      setMessage({ type: 'error', text: 'El RIF / Documento del cliente es obligatorio' });
+      return;
+    }
     if (!clientForm.phone.trim()) {
       setMessage({ type: 'error', text: 'El telefono del cliente es obligatorio' });
       return;
@@ -3030,7 +3035,7 @@ export default function POSPage() {
                     </select>
                   </div>
                   <div className="flex-1">
-                    <label className="text-xs text-slate-500 mb-1 block">RIF / Documento</label>
+                    <label className="text-xs text-slate-500 mb-1 block">RIF / Documento <span className="text-red-400">*</span></label>
                     <div className="flex gap-1.5">
                       <input
                         type="text"

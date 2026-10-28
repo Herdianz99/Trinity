@@ -61,6 +61,9 @@ export default function NewCustomerPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.rif.trim()) {
+      setMessage({ type: 'error', text: 'El RIF / Documento del cliente es obligatorio' }); return;
+    }
     if (Number(form.creditLimit) > 0 && (!Number(form.creditDays) || Number(form.creditDays) <= 0)) {
       setMessage({ type: 'error', text: 'Con limite de credito, los dias de credito son obligatorios' }); return;
     }
@@ -112,9 +115,9 @@ export default function NewCustomerPage() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">RIF / Documento</label>
+            <label className="text-xs text-slate-400 mb-1 block">RIF / Documento *</label>
             <div className="flex gap-2">
-              <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" />
+              <input type="text" value={form.rif} onChange={e => setForm(f => ({ ...f, rif: e.target.value }))} className="input-field !py-2 text-sm flex-1" placeholder="J-12345678-9" required />
               <button
                 type="button"
                 onClick={() => setSeniatOpen(true)}

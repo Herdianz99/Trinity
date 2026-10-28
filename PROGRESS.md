@@ -44,6 +44,12 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🪪 Cliente: RIF / Documento obligatorio (2026-10-28, Sesión 172) — ⏳ sin desplegar
+- La máquina fiscal da error al imprimir si el cliente no tiene RIF, y el sistema dejaba crear clientes sin él.
+- **API:** en `CreateCustomerDto`, `rif` ahora es obligatorio (se le quitan los espacios de los extremos y debe quedar con algo; mensaje "El RIF / Documento del cliente es obligatorio"). `UpdateCustomerDto` hereda por `PartialType`: se puede omitir, pero no mandarlo vacío.
+- **Web:** "RIF / Documento *" se valida antes de guardar en Nuevo cliente, en el detalle/edición del cliente y en el alta/edición rápida del POS.
+- Los clientes viejos sin RIF no se tocaron, pero **al editarlos ahora piden el RIF**. Quedan sin validar los clientes que se crean por dentro sin pasar por el DTO: pedidos de la tienda online (`invoices.service`), empleados→cliente, cliente por defecto de la importación y traslados entre socios.
+
 ## 💵 Grande: VF3-26-00002975 pago EFECTIVO $10 → DOLAR, sin IGTF (2026-10-27, datos, sin código)
 - Factura fiscal ya impresa (n.º fiscal 00003458), con la caja Fiscal 3 ya cerrada. El usuario eligió **cambiar solo el método sin agregar IGTF**, sabiendo que el documento fiscal impreso queda como estaba (efectivo Bs, sin IGTF). La alternativa era una nota de crédito y una factura nueva con IGTF.
 - El sistema bloquea ese cambio a propósito (`updatePaymentMethods` no deja cambiar `isDivisa`/`isCash`), así que se hizo por SQL en una sola transacción:
