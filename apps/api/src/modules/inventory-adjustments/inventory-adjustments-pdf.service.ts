@@ -458,9 +458,8 @@ export class InventoryAdjustmentsPdfService {
   }
 
   /**
-   * Excel del MISMO reporte agrupado por destinataria (mismos filtros y montos que el PDF),
-   * con las columnas Destinatario y Descripción en cada fila para poder filtrar/ordenar en Excel.
-   * Subtotal al final de cada destinataria y total general.
+   * Excel del MISMO reporte por destinataria (mismos filtros y montos que el PDF): lista plana,
+   * una fila por ajuste con Destinatario y Descripción, sin subtotales, con autofiltro por columna.
    */
   async generateGroupedExcel(filters: AdjustmentListFilters): Promise<Buffer> {
     const { company, ordered, filterLine } = await this.loadGroupedReport(filters);
@@ -475,17 +474,22 @@ export class InventoryAdjustmentsPdfService {
     const HEADER = ['Destinatario', 'RIF', 'Fecha', 'Traslado', 'Tipo', 'Estado', 'Descripción', 'Ítems', 'Monto USD'];
     const headerRowIdx = aoa.length;
     aoa.push(HEADER);
-    const ITEMS = 7, USD = 8;
+    const FECHA = 2, ITEMS = 7, USD = 8;
 
-    let grand = 0;
-    let grandCount = 0;
+    // Lista plana (sin subtotales ni filas en blanco) para filtrar/ordenar por columna en Excel.
+    // La fecha va como fecha real de Excel (no texto) para que ordene y filtre por fecha. Se escribe
+    // el número de serie de Excel directo: pasarle un Date a SheetJS lo corre un día según la zona
+    // horaria del proceso (13/07 salía 12/07 23:59).
+    const toExcelDate = (ddmmyyyy: string) => {
+      const [d, m, y] = ddmmyyyy.split('/').map(Number);
+      return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000;
+    };
     for (const g of ordered) {
-      let sub = 0;
       for (const r of g.rows) {
         aoa.push([
           g.name,
           g.rif,
-          r.fecha,
+          toExcelDate(r.fecha),
           r.number,
           r.type === 'IN' ? 'Entrada' : 'Salida',
           STATUS_LABELS[r.status] || r.status,
@@ -493,32 +497,13 @@ export class InventoryAdjustmentsPdfService {
           r.items,
           r.total,
         ]);
-        sub += r.total;
       }
-      sub = Math.round(sub * 100) / 100;
-      const subRow = new Array(HEADER.length).fill(null);
-      subRow[0] = `Subtotal ${g.name}`;
-      subRow[6] = `${g.rows.length} traslado(s)`;
-      subRow[USD] = sub;
-      aoa.push(subRow);
-      aoa.push([]);
-      grand += sub;
-      grandCount += g.rows.length;
-    }
-
-    if (ordered.length === 0) {
-      aoa.push(['No hay ajustes que coincidan con los filtros.']);
-    } else {
-      const totalRow = new Array(HEADER.length).fill(null);
-      totalRow[0] = 'TOTAL GENERAL';
-      totalRow[6] = `${grandCount} traslado(s)`;
-      totalRow[USD] = Math.round(grand * 100) / 100;
-      aoa.push(totalRow);
-      aoa.push([]);
-      aoa.push(['Montos al costo efectivo del artículo en USD. Los ajustes en "Borrador"/"Cancelado" son informativos. Fechas en horario Caracas.']);
     }
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({ s: { r: headerRowIdx, c: 0 }, e: { r: aoa.length - 1, c: HEADER.length - 1 } }),
+    };
     ws['!cols'] = [
       { wch: 34 }, { wch: 14 }, { wch: 11 }, { wch: 12 }, { wch: 9 },
       { wch: 11 }, { wch: 45 }, { wch: 7 }, { wch: 14 },
@@ -529,6 +514,8 @@ export class InventoryAdjustmentsPdfService {
       if (cell && cell.t === 'n') cell.z = '#,##0.00';
       const items = ws[XLSX.utils.encode_cell({ r: R, c: ITEMS })];
       if (items && items.t === 'n') items.z = '0';
+      const fecha = ws[XLSX.utils.encode_cell({ r: R, c: FECHA })];
+      if (fecha) fecha.z = 'dd/mm/yyyy';
     }
 
     const wb = XLSX.utils.book_new();
