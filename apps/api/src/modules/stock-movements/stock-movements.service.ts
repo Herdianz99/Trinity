@@ -4,6 +4,13 @@ import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
 import { resolveBregaPct, effectiveCost } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
 
+// Parte una lista de ids en lotes para no pasar el limite de parametros de Postgres en un IN.
+function chunk<T>(arr: T[], size = 5000): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 @Injectable()
 export class StockMovementsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -427,11 +434,7 @@ export class StockMovementsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const config = await this.prisma.companyConfig.findFirst();
-    const bregaGlobalPct = config?.bregaGlobalPct || 0;
-    const catBregaMap = await buildCategoryBregaMap(this.prisma);
-
-    // Costo historico de ventas: viene del InvoiceItem (ya con brecha aplicada al facturar).
+    const unitCostOf = await this.unitCostResolver(movements);
     const saleInvoiceIds = [
       ...new Set(
         movements
@@ -439,14 +442,6 @@ export class StockMovementsService {
           .map((m) => m.sourceId as string),
       ),
     ];
-    const histCostByKey = new Map<string, number>();
-    if (saleInvoiceIds.length) {
-      const items = await this.prisma.invoiceItem.findMany({
-        where: { invoiceId: { in: saleInvoiceIds } },
-        select: { invoiceId: true, productId: true, costUsd: true },
-      });
-      for (const it of items) histCostByKey.set(`${it.invoiceId}|${it.productId}`, it.costUsd);
-    }
 
     // "Total del grupo": movimientos cuyo documento origen es de un cliente empresa del grupo
     // (isGroupCompany) — facturas de venta y NC de venta (por el cliente de su factura original).
@@ -476,20 +471,7 @@ export class StockMovementsService {
     const r2 = (n: number) => Math.round(n * 100) / 100;
 
     const rows = movements.map((m) => {
-      const histKey =
-        m.sourceType === 'SALE_INVOICE' && m.sourceId ? `${m.sourceId}|${m.productId}` : null;
-      // Costo unitario con brecha: ventas -> historico del InvoiceItem; resto -> costo actual + brecha.
-      const unitCost =
-        histKey && histCostByKey.has(histKey)
-          ? histCostByKey.get(histKey)!
-          : effectiveCost(
-              m.product.costUsd,
-              resolveBregaPct({
-                bregaApplies: m.product.bregaApplies,
-                categoryBregaPct: m.product.categoryId ? (catBregaMap.get(m.product.categoryId) ?? 0) : 0,
-                bregaGlobalPct,
-              }),
-            );
+      const unitCost = unitCostOf(m);
       const qty = Math.abs(m.quantity);
       return {
         createdAt: m.createdAt,
@@ -534,6 +516,205 @@ export class StockMovementsService {
         product: product ? `${product.code} — ${product.name}` : null,
       },
     };
+  }
+
+  /**
+   * Devuelve una funcion que da el costo unitario (con brecha) de cada movimiento. Mismo criterio
+   * del reporte de costos:
+   * - Ventas (SALE_INVOICE): costo HISTORICO del InvoiceItem (capturado al facturar, ya con brecha).
+   * - Otros tipos: costo ACTUAL del producto + brecha (global / categoria, si bregaApplies).
+   */
+  private async unitCostResolver(
+    movements: {
+      sourceType: string | null;
+      sourceId: string | null;
+      productId: string;
+      product: { costUsd: number; bregaApplies: boolean; categoryId: string | null };
+    }[],
+  ) {
+    const config = await this.prisma.companyConfig.findFirst();
+    const bregaGlobalPct = config?.bregaGlobalPct || 0;
+    const catBregaMap = await buildCategoryBregaMap(this.prisma);
+
+    const saleInvoiceIds = [
+      ...new Set(
+        movements
+          .filter((m) => m.sourceType === 'SALE_INVOICE' && m.sourceId)
+          .map((m) => m.sourceId as string),
+      ),
+    ];
+    const histCostByKey = new Map<string, number>();
+    for (const ids of chunk(saleInvoiceIds)) {
+      const items = await this.prisma.invoiceItem.findMany({
+        where: { invoiceId: { in: ids } },
+        select: { invoiceId: true, productId: true, costUsd: true },
+      });
+      for (const it of items) histCostByKey.set(`${it.invoiceId}|${it.productId}`, it.costUsd);
+    }
+
+    return (m: (typeof movements)[number]): number => {
+      const histKey =
+        m.sourceType === 'SALE_INVOICE' && m.sourceId ? `${m.sourceId}|${m.productId}` : null;
+      if (histKey && histCostByKey.has(histKey)) return histCostByKey.get(histKey)!;
+      return effectiveCost(
+        m.product.costUsd,
+        resolveBregaPct({
+          bregaApplies: m.product.bregaApplies,
+          categoryBregaPct: m.product.categoryId ? (catBregaMap.get(m.product.categoryId) ?? 0) : 0,
+          bregaGlobalPct,
+        }),
+      );
+    };
+  }
+
+  /**
+   * Filas del Excel plano de /inventory/movements: una por movimiento (mismos filtros que el
+   * listado), con categoria, entrada/salida, documento y su cliente/proveedor, vendedor (ventas y
+   * devoluciones de venta), usuario, costo (mismo criterio que el reporte de costos) y, en ventas,
+   * precio final, descuento y total de la linea de factura.
+   */
+  async getExcelRows(filters: {
+    productId?: string;
+    warehouseId?: string;
+    type?: string;
+    supplierId?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    serie?: string;
+  }) {
+    const where = this.buildWhere(filters);
+    const movements = await this.prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: {
+          select: {
+            code: true,
+            name: true,
+            costUsd: true,
+            bregaApplies: true,
+            categoryId: true,
+            category: { select: { name: true } },
+            brand: { select: { name: true } },
+            supplier: { select: { name: true } },
+          },
+        },
+        warehouse: { select: { name: true } },
+        serie: { select: { name: true, isFiscal: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const unitCostOf = await this.unitCostResolver(movements);
+
+    const idsOf = (sourceType: string) => [
+      ...new Set(
+        movements.filter((m) => m.sourceType === sourceType && m.sourceId).map((m) => m.sourceId as string),
+      ),
+    ];
+    const invoiceIds = idsOf('SALE_INVOICE');
+    const noteIds = idsOf('CREDIT_DEBIT_NOTE');
+    const purchaseIds = idsOf('PURCHASE_ORDER');
+    const adjustmentIds = idsOf('INVENTORY_ADJUSTMENT');
+
+    // Contraparte (cliente/proveedor) y vendedor de cada documento origen, en lotes.
+    const partyBySource = new Map<string, string>();
+    const sellerBySource = new Map<string, string>();
+    for (const ids of chunk(invoiceIds)) {
+      const rows = await this.prisma.invoice.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, customer: { select: { name: true } }, seller: { select: { name: true } } },
+      });
+      for (const r of rows) {
+        if (r.customer) partyBySource.set(r.id, r.customer.name.trim());
+        if (r.seller) sellerBySource.set(r.id, r.seller.name.trim());
+      }
+    }
+    for (const ids of chunk(noteIds)) {
+      const rows = await this.prisma.creditDebitNote.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          invoice: { select: { customer: { select: { name: true } }, seller: { select: { name: true } } } },
+          purchaseOrder: { select: { supplier: { select: { name: true } } } },
+        },
+      });
+      for (const r of rows) {
+        const party = r.invoice?.customer?.name || r.purchaseOrder?.supplier?.name;
+        if (party) partyBySource.set(r.id, party.trim());
+        if (r.invoice?.seller) sellerBySource.set(r.id, r.invoice.seller.name.trim());
+      }
+    }
+    for (const ids of chunk(purchaseIds)) {
+      const rows = await this.prisma.purchaseOrder.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, supplier: { select: { name: true } } },
+      });
+      for (const r of rows) partyBySource.set(r.id, r.supplier.name.trim());
+    }
+    for (const ids of chunk(adjustmentIds)) {
+      const rows = await this.prisma.inventoryAdjustment.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, customer: { select: { name: true } }, supplier: { select: { name: true } } },
+      });
+      for (const r of rows) {
+        const party = r.customer?.name || r.supplier?.name;
+        if (party) partyBySource.set(r.id, party.trim());
+      }
+    }
+
+    // Precio final (con IVA y descuento) y descuento de la linea de factura, solo ventas.
+    const saleLineByKey = new Map<string, { quantity: number; totalUsd: number; discountPct: number }>();
+    for (const ids of chunk(invoiceIds)) {
+      const items = await this.prisma.invoiceItem.findMany({
+        where: { invoiceId: { in: ids } },
+        select: { invoiceId: true, productId: true, quantity: true, totalUsd: true, discountPct: true },
+      });
+      for (const it of items) saleLineByKey.set(`${it.invoiceId}|${it.productId}`, it);
+    }
+
+    const userIds = [...new Set(movements.map((m) => m.createdById))];
+    const users = userIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+      : [];
+    const userName = new Map(users.map((u) => [u.id, u.name]));
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const rows = movements.map((m) => {
+      const qty = Math.abs(m.quantity);
+      const unitCost = r2(unitCostOf(m));
+      const line =
+        m.sourceType === 'SALE_INVOICE' && m.sourceId ? saleLineByKey.get(`${m.sourceId}|${m.productId}`) : undefined;
+      const salePrice = line && line.quantity > 0 ? r2(line.totalUsd / line.quantity) : null;
+      return {
+        createdAt: m.createdAt,
+        type: m.type,
+        direction: m.quantity >= 0 ? 'Entrada' : 'Salida',
+        code: m.product.code,
+        name: m.product.name,
+        category: m.product.category?.name || 'Sin categoria',
+        brand: m.product.brand?.name || '',
+        productSupplier: m.product.supplier?.name || '',
+        warehouse: m.warehouse.name,
+        quantity: m.quantity,
+        stockAfter: m.stockAfter,
+        reference: m.reference || '',
+        serie: m.serie?.name || '',
+        fiscal: m.serie ? (m.serie.isFiscal ? 'Sí' : 'No') : '',
+        party: (m.sourceId && partyBySource.get(m.sourceId)) || '',
+        seller: (m.sourceId && sellerBySource.get(m.sourceId)) || '',
+        user: userName.get(m.createdById) || '',
+        reason: m.reason || '',
+        unitCost,
+        lineCost: r2(qty * unitCost),
+        salePrice,
+        discountPct: line ? line.discountPct : null,
+        saleTotal: salePrice != null ? r2(qty * salePrice) : null,
+      };
+    });
+
+    const summary = await this.resolveFilterSummary(filters);
+    return { rows, summary };
   }
 
   /**

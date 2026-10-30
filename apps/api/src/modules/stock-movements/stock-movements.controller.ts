@@ -4,6 +4,7 @@ import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
 import { StockMovementsService } from './stock-movements.service';
 import { StockMovementsPdfService } from './stock-movements-pdf.service';
+import { StockMovementsExcelService } from './stock-movements-excel.service';
 
 @ApiTags('Stock Movements')
 @ApiBearerAuth()
@@ -13,6 +14,7 @@ export class StockMovementsController {
   constructor(
     private readonly stockMovementsService: StockMovementsService,
     private readonly stockMovementsPdf: StockMovementsPdfService,
+    private readonly stockMovementsExcel: StockMovementsExcelService,
   ) {}
 
   @Get('kardex/:productId')
@@ -180,6 +182,45 @@ export class StockMovementsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="costo-movimientos.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Excel plano (una fila por movimiento) con los mismos filtros del listado.
+  @Get('report/excel')
+  @ApiQuery({ name: 'productId', required: false })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'serie', required: false })
+  async reportExcel(
+    @Res() res: Response,
+    @Query('productId') productId?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('type') type?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('serie') serie?: string,
+  ) {
+    const buffer = await this.stockMovementsExcel.generate({
+      productId,
+      warehouseId,
+      type,
+      supplierId,
+      search,
+      from,
+      to,
+      serie,
+    });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="movimientos-de-stock.xlsx"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

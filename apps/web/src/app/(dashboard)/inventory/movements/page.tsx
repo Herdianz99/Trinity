@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText, ChevronDown, Layers, DollarSign, ArrowDownUp, UserRound } from 'lucide-react';
+import { Activity, Loader2, ChevronLeft, ChevronRight, ExternalLink, FileText, ChevronDown, Layers, DollarSign, ArrowDownUp, UserRound, FileSpreadsheet } from 'lucide-react';
 import { getMovementSource } from '@/lib/movement-source';
 
 interface Movement {
@@ -198,7 +198,7 @@ export default function MovementsPage() {
           <button
             onClick={() => setReportMenuOpen(o => !o)}
             className="btn-secondary !py-2.5 text-sm flex items-center gap-2"
-            title="Generar reportes PDF de los movimientos filtrados"
+            title="Generar reportes PDF o Excel de los movimientos filtrados"
           >
             <FileText size={16} />
             <span className="hidden sm:inline">Reportes</span>
@@ -255,6 +255,17 @@ export default function MovementsPage() {
                 <span>
                   <span className="block text-sm text-slate-200">Ventas por vendedor (detalle)</span>
                   <span className="block text-xs text-slate-500">Igual, pero con cada producto vendido dentro de su categoria.</span>
+                </span>
+              </button>
+              <p className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-slate-500 border-t border-slate-700/50">Excel</p>
+              <button
+                onClick={() => openReport('report/excel')}
+                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors"
+              >
+                <FileSpreadsheet size={16} className="text-green-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-sm text-slate-200">Lista de movimientos</span>
+                  <span className="block text-xs text-slate-500">Una fila por movimiento con categoria, entrada/salida, vendedor, cliente/proveedor, costo y venta. Con filtros por columna.</span>
                 </span>
               </button>
             </div>
