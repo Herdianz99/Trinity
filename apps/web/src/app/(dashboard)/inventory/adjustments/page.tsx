@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { PackagePlus, Plus, Loader2, Search, X, FileDown } from 'lucide-react';
+import { PackagePlus, Plus, Loader2, Search, X, FileDown, FileSpreadsheet } from 'lucide-react';
 
 interface InventoryAdjustment {
   id: string;
@@ -79,14 +79,15 @@ export default function InventoryAdjustmentsPage() {
     setTo('');
   }
 
-  // Exporta el PDF agrupado por destinataria respetando los MISMOS filtros de la interfaz.
-  function exportReport() {
+  // Exporta el reporte agrupado por destinataria (PDF o Excel) respetando los MISMOS filtros de la interfaz.
+  function exportReport(format: 'pdf' | 'excel') {
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     if (search.trim()) params.set('search', search.trim());
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    window.open(`/api/proxy/inventory-adjustments/report/grouped?${params}`);
+    const path = format === 'excel' ? 'report/grouped-excel' : 'report/grouped';
+    window.open(`/api/proxy/inventory-adjustments/${path}?${params}`);
   }
 
   useEffect(() => { document.title = 'Ajustes de Inventario | Trinity ERP'; }, []);
@@ -110,11 +111,18 @@ export default function InventoryAdjustmentsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={exportReport}
+            onClick={() => exportReport('pdf')}
             className="btn-secondary flex items-center gap-2"
             title="Exportar a PDF agrupado por destinataria (respeta los filtros actuales)"
           >
             <FileDown size={18} /> Exportar PDF
+          </button>
+          <button
+            onClick={() => exportReport('excel')}
+            className="btn-secondary flex items-center gap-2"
+            title="Exportar a Excel agrupado por destinataria, con destinatario y descripción (respeta los filtros actuales)"
+          >
+            <FileSpreadsheet size={18} /> Exportar Excel
           </button>
           <button
             onClick={() => router.push('/inventory/adjustments/new')}
@@ -129,13 +137,13 @@ export default function InventoryAdjustmentsPage() {
       <div className="card p-4 mb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">Correlativo o destinatario</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Correlativo, destinatario o descripción</label>
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="ADJ-0001 o cliente / proveedor"
+                placeholder="ADJ-0001, cliente / proveedor o descripción"
                 className="input-field !pl-9 w-full"
               />
             </div>

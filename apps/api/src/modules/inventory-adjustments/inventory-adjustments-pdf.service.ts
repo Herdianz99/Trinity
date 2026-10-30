@@ -3,7 +3,28 @@ import { PrismaService } from '../../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
 import { resolveBregaPct, effectiveCost as effCost } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
-import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import * as XLSX from 'xlsx';
+import { AdjustmentListFilters, buildAdjustmentWhere } from './adjustment-filters';
+
+type GroupedRow = {
+  fecha: string;
+  number: string;
+  type: string;
+  status: string;
+  description: string;
+  items: number;
+  total: number;
+};
+
+const STATUS_LABELS: Record<string, string> = { DRAFT: 'Borrador', PROCESSED: 'Procesado', CANCELLED: 'Cancelado' };
+
+// Fecha en horario Caracas (UTC-4) → DD/MM/YYYY
+const fmtDate = (d: Date): string => {
+  const c = new Date(new Date(d).getTime() - 4 * 3600 * 1000);
+  const dd = String(c.getUTCDate()).padStart(2, '0');
+  const mm = String(c.getUTCMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${c.getUTCFullYear()}`;
+};
 
 @Injectable()
 export class InventoryAdjustmentsPdfService {
@@ -263,40 +284,15 @@ export class InventoryAdjustmentsPdfService {
   }
 
   /**
-   * Reporte AGRUPADO POR DESTINATARIA (cliente/proveedor) que respeta los mismos filtros
-   * del listado (status, warehouseId, type, search, from, to). Una fila por ajuste con
-   * fecha, correlativo, tipo, estado, nº de ítems y monto (mismo costo efectivo que la CxC/CxP);
-   * subtotal por destinataria y total general.
+   * Datos del reporte AGRUPADO POR DESTINATARIA (cliente/proveedor), compartidos por el PDF y el
+   * Excel. Respeta los mismos filtros del listado (status, warehouseId, type, search, from, to).
+   * Una fila por ajuste con fecha, correlativo, tipo, estado, descripción, nº de ítems y monto
+   * (mismo costo efectivo que la CxC/CxP); grupos ordenados por nombre.
    */
-  async generateGroupedReport(filters: {
-    status?: string;
-    warehouseId?: string;
-    type?: string;
-    search?: string;
-    from?: string;
-    to?: string;
-  }): Promise<Buffer> {
-    // WHERE: mismo criterio que InventoryAdjustmentsService.findAll
-    const where: any = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.warehouseId) where.warehouseId = filters.warehouseId;
-    if (filters.type) where.type = filters.type;
-    if (filters.from || filters.to) {
-      where.createdAt = {};
-      if (filters.from) where.createdAt.gte = caracasDayStart(filters.from);
-      if (filters.to) where.createdAt.lte = caracasDayEnd(filters.to);
-    }
+  private async loadGroupedReport(filters: AdjustmentListFilters) {
     const search = filters.search?.trim();
-    if (search) {
-      where.OR = [
-        { number: { contains: search, mode: 'insensitive' } },
-        { customer: { name: { contains: search, mode: 'insensitive' } } },
-        { supplier: { name: { contains: search, mode: 'insensitive' } } },
-      ];
-    }
-
     const adjustments = await this.prisma.inventoryAdjustment.findMany({
-      where,
+      where: buildAdjustmentWhere(filters),
       include: {
         customer: { select: { id: true, name: true, rif: true } },
         supplier: { select: { id: true, name: true, rif: true } },
@@ -336,19 +332,8 @@ export class InventoryAdjustmentsPdfService {
       return Math.round(total * 100) / 100;
     };
 
-    // Fecha en horario Caracas (UTC-4) → DD/MM/YYYY
-    const fmtDate = (d: Date): string => {
-      const c = new Date(new Date(d).getTime() - 4 * 3600 * 1000);
-      const dd = String(c.getUTCDate()).padStart(2, '0');
-      const mm = String(c.getUTCMonth() + 1).padStart(2, '0');
-      return `${dd}/${mm}/${c.getUTCFullYear()}`;
-    };
-    const money = (n: number) =>
-      n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
     // Agrupar por destinataria (cliente o proveedor). Sin entidad → "Sin destinatario".
-    type Row = { fecha: string; number: string; type: string; status: string; items: number; total: number };
-    const groups = new Map<string, { name: string; rif: string; rows: Row[] }>();
+    const groups = new Map<string, { name: string; rif: string; rows: GroupedRow[] }>();
     for (const a of adjustments) {
       const ent = a.customer || a.supplier;
       const key = ent ? ent.id : '__none__';
@@ -358,6 +343,7 @@ export class InventoryAdjustmentsPdfService {
         number: a.number || 's/n',
         type: a.type,
         status: a.status,
+        description: a.description || '',
         items: a.items.length,
         total: amountOf(a),
       });
@@ -365,13 +351,23 @@ export class InventoryAdjustmentsPdfService {
     const ordered = [...groups.values()].sort((x, y) => x.name.localeCompare(y.name));
 
     // Resumen de filtros aplicados (para documentar el alcance del reporte)
-    const statusLabelMap: Record<string, string> = { DRAFT: 'Borrador', PROCESSED: 'Procesado', CANCELLED: 'Cancelado' };
     const filterParts: string[] = [];
     if (filters.from || filters.to) filterParts.push(`Fechas: ${filters.from || '…'} a ${filters.to || '…'}`);
-    if (filters.status) filterParts.push(`Estado: ${statusLabelMap[filters.status] || filters.status}`);
+    if (filters.status) filterParts.push(`Estado: ${STATUS_LABELS[filters.status] || filters.status}`);
     if (filters.type) filterParts.push(`Tipo: ${filters.type === 'IN' ? 'Entrada' : 'Salida'}`);
     if (search) filterParts.push(`Búsqueda: "${search}"`);
     const filterLine = filterParts.length ? filterParts.join('   •   ') : 'Sin filtros (todos los ajustes)';
+
+    return { company, ordered, filterLine };
+  }
+
+  /**
+   * PDF del reporte agrupado por destinataria: subtotal por destinataria y total general.
+   */
+  async generateGroupedReport(filters: AdjustmentListFilters): Promise<Buffer> {
+    const { company, ordered, filterLine } = await this.loadGroupedReport(filters);
+    const money = (n: number) =>
+      n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
@@ -459,5 +455,84 @@ export class InventoryAdjustmentsPdfService {
 
       doc.end();
     });
+  }
+
+  /**
+   * Excel del MISMO reporte agrupado por destinataria (mismos filtros y montos que el PDF),
+   * con las columnas Destinatario y Descripción en cada fila para poder filtrar/ordenar en Excel.
+   * Subtotal al final de cada destinataria y total general.
+   */
+  async generateGroupedExcel(filters: AdjustmentListFilters): Promise<Buffer> {
+    const { company, ordered, filterLine } = await this.loadGroupedReport(filters);
+
+    const aoa: any[][] = [];
+    aoa.push([company]);
+    aoa.push(['Reporte de Ajustes de Inventario — por destinataria']);
+    aoa.push([filterLine]);
+    aoa.push([`Generado: ${fmtDate(new Date())}`]);
+    aoa.push([]);
+
+    const HEADER = ['Destinatario', 'RIF', 'Fecha', 'Traslado', 'Tipo', 'Estado', 'Descripción', 'Ítems', 'Monto USD'];
+    const headerRowIdx = aoa.length;
+    aoa.push(HEADER);
+    const ITEMS = 7, USD = 8;
+
+    let grand = 0;
+    let grandCount = 0;
+    for (const g of ordered) {
+      let sub = 0;
+      for (const r of g.rows) {
+        aoa.push([
+          g.name,
+          g.rif,
+          r.fecha,
+          r.number,
+          r.type === 'IN' ? 'Entrada' : 'Salida',
+          STATUS_LABELS[r.status] || r.status,
+          r.description,
+          r.items,
+          r.total,
+        ]);
+        sub += r.total;
+      }
+      sub = Math.round(sub * 100) / 100;
+      const subRow = new Array(HEADER.length).fill(null);
+      subRow[0] = `Subtotal ${g.name}`;
+      subRow[6] = `${g.rows.length} traslado(s)`;
+      subRow[USD] = sub;
+      aoa.push(subRow);
+      aoa.push([]);
+      grand += sub;
+      grandCount += g.rows.length;
+    }
+
+    if (ordered.length === 0) {
+      aoa.push(['No hay ajustes que coincidan con los filtros.']);
+    } else {
+      const totalRow = new Array(HEADER.length).fill(null);
+      totalRow[0] = 'TOTAL GENERAL';
+      totalRow[6] = `${grandCount} traslado(s)`;
+      totalRow[USD] = Math.round(grand * 100) / 100;
+      aoa.push(totalRow);
+      aoa.push([]);
+      aoa.push(['Montos al costo efectivo del artículo en USD. Los ajustes en "Borrador"/"Cancelado" son informativos. Fechas en horario Caracas.']);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [
+      { wch: 34 }, { wch: 14 }, { wch: 11 }, { wch: 12 }, { wch: 9 },
+      { wch: 11 }, { wch: 45 }, { wch: 7 }, { wch: 14 },
+    ];
+    const range = XLSX.utils.decode_range(ws['!ref'] as string);
+    for (let R = headerRowIdx + 1; R <= range.e.r; R++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: R, c: USD })];
+      if (cell && cell.t === 'n') cell.z = '#,##0.00';
+      const items = ws[XLSX.utils.encode_cell({ r: R, c: ITEMS })];
+      if (items && items.t === 'n') items.z = '0';
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ajustes');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 }

@@ -1430,3 +1430,6 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 
 ## Mi Perfil — Reglamento interno (Sesión 156)
 - Botón "Reglamento interno" en la tarjeta "Mis datos" de `/mi-perfil`: descarga el PDF estático `apps/web/public/docs/reglamento-interno-grupo-trebol.pdf` (mismo archivo en todas las instancias; requiere sesión por el middleware). Para actualizarlo se reemplaza el archivo y se redeploya.
+
+## Ajustes de inventario — búsqueda y reportes agrupados (Sesión 173)
+- `inventory-adjustments/adjustment-filters.ts` (`buildAdjustmentWhere`) es el único WHERE del listado, del PDF (`report/grouped`) y del Excel (`report/grouped-excel`). `search` busca en correlativo, cliente, proveedor y `description` (contains, insensitive). Si se agrega un filtro, ponerlo ahí para que el listado y los reportes sigan cuadrando.

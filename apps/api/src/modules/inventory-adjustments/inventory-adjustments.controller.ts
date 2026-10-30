@@ -48,7 +48,7 @@ export class InventoryAdjustmentsController {
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'type', required: false })
-  @ApiQuery({ name: 'search', required: false, description: 'Correlativo (ADJ-…) o destinatario (cliente/proveedor)' })
+  @ApiQuery({ name: 'search', required: false, description: 'Correlativo (ADJ-…), destinatario (cliente/proveedor) o descripción' })
   @ApiQuery({ name: 'from', required: false, description: 'Desde (YYYY-MM-DD)' })
   @ApiQuery({ name: 'to', required: false, description: 'Hasta (YYYY-MM-DD)' })
   findAll(
@@ -89,6 +89,32 @@ export class InventoryAdjustmentsController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="reporte-ajustes-por-destinataria.pdf"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  // Mismo reporte agrupado en Excel, con columnas Destinatario y Descripción.
+  @Get('report/grouped-excel')
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'warehouseId', required: false })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  async getGroupedExcel(
+    @Res() res: Response,
+    @Query('status') status?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('type') type?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const buffer = await this.pdfService.generateGroupedExcel({ status, warehouseId, type, search, from, to });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="reporte-ajustes-por-destinataria.xlsx"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);
