@@ -44,20 +44,24 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
-## 📊 Movimientos de stock: Excel con una fila por movimiento (2026-10-30, Sesión 173) — ⏳ sin desplegar
+## 📊 Movimientos de stock: Excel con una fila por movimiento (2026-10-30, Sesión 173) — ✅ DESPLEGADO en 6 (todas menos la chica)
 - En `/inventory/movements`, menú Reportes → sección **Excel** → "Lista de movimientos" → `GET /stock-movements/report/excel`, con los mismos filtros del listado (fechas, tipo, almacén, proveedor, búsqueda y serie).
 - **24 columnas:** Fecha (fecha real de Excel), Hora, Tipo, **Entrada/Salida**, Código, Producto, **Categoría**, Marca, Proveedor (ficha), Almacén, Cantidad (con signo), Existencia después, Documento, Serie, Fiscal, **Cliente / Proveedor** del documento, **Vendedor**, Usuario, Motivo, Costo unitario y total, y en ventas Precio de venta unitario, Descuento % y Total de la venta. Lista plana con autofiltro en los encabezados.
 - **De dónde sale cada dato:** Cliente/Proveedor y Vendedor vienen del documento de origen: factura (cliente y vendedor), NC/ND (cliente y vendedor de su factura, o proveedor de su compra), compra (proveedor) y ajuste (cliente o proveedor). Transferencias, reemplazos y conteos no tienen. El costo sigue el mismo criterio que el PDF de costos.
 - **Código:** `StockMovementsService.getExcelRows()` + `StockMovementsExcelService`. El cálculo del costo se sacó a `unitCostResolver()`, que ahora también usa `getCostReport` (mismo resultado). Los `IN` van en lotes de 5000 con `chunk()`. El Excel usa `compression` + `bookSST`: sin eso, 15 mil filas pesaban 15,6 MB y ahora 4,6 MB.
 - **Probado en la grande (solo lectura):** un día 0,2 MB en 0,8 s; octubre (15 mil movimientos) 5,1 MB en 8 s; todo el historial (77 mil) 23 MB en 38 s. En local: vendedor en 13.485 de 13.489 ventas y precio en todas.
 
-## 📦 Ajustes de inventario: buscar por descripción + reporte agrupado en Excel (2026-10-30, Sesión 173) — ⏳ sin desplegar
+## 📦 Ajustes de inventario: buscar por descripción + reporte agrupado en Excel (2026-10-30, Sesión 173) — ✅ DESPLEGADO en 6 (todas menos la chica)
 - **Búsqueda en `/inventory/adjustments`:** el buscador ahora también busca en la **descripción**, sin importar mayúsculas y aunque sea solo una parte (ej. "san rafael" encuentra "PARA ENVIAR A SAN RAFAEL"). Antes solo buscaba por correlativo y destinatario. Aplica igual al listado, al PDF y al Excel.
 - **Excel agrupado:** botón "Exportar Excel" junto a "Exportar PDF" → `GET /inventory-adjustments/report/grouped-excel` (mismos filtros que el PDF). Columnas: Destinatario, RIF, Fecha, Traslado, Tipo, Estado, **Descripción**, Ítems y Monto USD. Los montos son los mismos del PDF. **A pedido del usuario es una lista plana: sin subtotales ni total, con autofiltro en los encabezados** para filtrar por columna. La Fecha es una fecha real de Excel: se escribe como número de serie, porque pasarle un `Date` a SheetJS la corría un día según la zona horaria (13/07 salía 12/07).
 - **Código:** el WHERE vive en un solo lugar, `inventory-adjustments/adjustment-filters.ts` (`buildAdjustmentWhere`), y lo usan el listado, el PDF y el Excel. En `InventoryAdjustmentsPdfService`, `loadGroupedReport()` arma los grupos que usan tanto `generateGroupedReport` (PDF) como `generateGroupedExcel`.
 - **Probado contra la grande (solo lectura, bundle esbuild en el server):** "san rafael" encuentra 42 ajustes en el listado; el Excel (procesados) sale agrupado en (B) y (D) con sus descripciones, y el PDF se genera. `tsc` del API y de la web sin errores.
 
-## 🪪 Cliente: RIF / Documento obligatorio (2026-10-28, Sesión 172) — ⏳ sin desplegar
+## 🚀 Deploy Sesiones 172 + 173 (2026-10-30) — 6 empresas, la chica NO
+- `b98c3d3c` en la grande, la mayor, total, totalturen, aceros y acerosmayor; los 6 scripts de deploy salieron sin errores. Verificado: HEAD `b98c3d3c` en las 6, PM2 online y `GET /stock-movements/report/excel` e `/inventory-adjustments/report/grouped-excel` responden 401 sin token (existen; una ruta inexistente da 404). Sin migraciones.
+- **La chica (134.209.220.233) sigue en `3c2e0165`** por decisión del usuario: no tiene el RIF obligatorio, la búsqueda por descripción ni los Excel. Para ponerla al día: `git pull` + `bash deploy.sh` en ese servidor.
+
+## 🪪 Cliente: RIF / Documento obligatorio (2026-10-28, Sesión 172) — ✅ DESPLEGADO en 6 (todas menos la chica)
 - La máquina fiscal da error al imprimir si el cliente no tiene RIF, y el sistema dejaba crear clientes sin él.
 - **API:** en `CreateCustomerDto`, `rif` ahora es obligatorio (se le quitan los espacios de los extremos y debe quedar con algo; mensaje "El RIF / Documento del cliente es obligatorio"). `UpdateCustomerDto` hereda por `PartialType`: se puede omitir, pero no mandarlo vacío.
 - **Web:** "RIF / Documento *" se valida antes de guardar en Nuevo cliente, en el detalle/edición del cliente y en el alta/edición rápida del POS.
