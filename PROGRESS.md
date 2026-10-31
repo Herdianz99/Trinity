@@ -44,6 +44,10 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 💵 Grande: vuelto no registrado en NE3-26-00005925 (2026-10-31, datos, sin código)
+- Total $37,99, recibió $50: vuelto $11 en billetes USD + $1,01 en Efectivo Bs (Bs 898,47). El usuario dictó $0,99, pero no cuadra con el total; se aplicó $1,01, a confirmar contra lo entregado por la cajera.
+- Corregidos `Payment` (DOLAR neto $39 / Bs 34.693,44 + vuelto), `CashLedgerEntry` (IN neto + OUT `CHANGE`), `BankMovement` y `Invoice` (`totalPaidUsd`, `changeBs`), igual que el POS. Sesión de Caja Notas 3 abierta. Respaldo: `/root/backups/ne3-00005925-antes.json` (134.209.164.59).
+
 ## 💳 Aceros: grupo "Divisa" en métodos de pago (2026-10-31, Sesión 174) — ✅ DESPLEGADO y aplicado solo en aceros
 - Código `3b559bff` desplegado en aceros; las demás empresas lo reciben en su próximo deploy. Datos aplicados en `aceros_db`. Respaldo: `/root/backups/aceros-payment-methods-20261031.csv` (147.182.130.6).
 - Orden tras Divisa: Efectivo Bs, Divisa (Dolares, Zelle, BINANCE, Panamá), Puntos de venta, P.MOVIL BANESCO, Biopago, Transferencia, Cashea, Crediagro, Desc. y reten, Saldo a Favor.
