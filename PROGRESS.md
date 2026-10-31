@@ -44,7 +44,9 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
-## 💳 Aceros: grupo "Divisa" en métodos de pago (2026-10-31, Sesión 174)
+## 💳 Aceros: grupo "Divisa" en métodos de pago (2026-10-31, Sesión 174) — ✅ DESPLEGADO y aplicado solo en aceros
+- Código `3b559bff` desplegado en aceros; las demás empresas lo reciben en su próximo deploy. Datos aplicados en `aceros_db`. Respaldo: `/root/backups/aceros-payment-methods-20261031.csv` (147.182.130.6).
+- Orden final: Efectivo Bs, Divisa (Dolares, Zelle, BINANCE, Panamá), Puntos de venta, P.MOVIL BANESCO, Biopago, Transferencia, Cashea, Crediagro, Desc. y reten, Saldo a Favor.
 - Pedido: agrupar Dolares, Zelle, BINANCE y Panamá en un grupo "Divisa"; orden Efectivo Bs → Divisa → Puntos de venta → resto.
 - Solo `aceros_db`. Grupo `pm_divisa` (padre sin pagos propios). No cambian los ids, `isDivisa`, `isCash`, `fiscalCode` ni `bankAccountId` de los hijos, así que caja, cierres y reportes siguen por método.
 - **Fix de código necesario:** anticipos en CxC y CxP y el pago de compras leían `/payment-methods` (árbol) sin abrir los grupos. Con el grupo, compras perdía los 4 métodos y los anticipos habrían ofrecido "Divisa" como método. Ahora usan `/payment-methods/flat`, igual que las facturas. En esas pantallas también aparecen ahora los P.V individuales en lugar del grupo.
