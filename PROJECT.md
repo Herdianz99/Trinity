@@ -1434,5 +1434,8 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 ## Ajustes de inventario — búsqueda y reportes agrupados (Sesión 173)
 - `inventory-adjustments/adjustment-filters.ts` (`buildAdjustmentWhere`) es el único WHERE del listado, del PDF (`report/grouped`) y del Excel (`report/grouped-excel`). `search` busca en correlativo, cliente, proveedor y `description` (contains, insensitive). Si se agrega un filtro, ponerlo ahí para que el listado y los reportes sigan cuadrando.
 
+## Métodos de pago — grupos (Sesión 174)
+- Un grupo es un `PaymentMethod` con hijos (`parentId`, un solo nivel). Nunca debe recibir pagos: todo selector que registre un pago usa `GET /payment-methods/flat` (hojas activas) o aplana `children`. `GET /payment-methods` (árbol) es para el POS, que pinta los grupos, y para `/settings/payment-methods`.
+
 ## Movimientos de stock — Excel plano (Sesión 173)
 - `GET /stock-movements/report/excel` (`StockMovementsExcelService` + `StockMovementsService.getExcelRows`): una fila por movimiento con los filtros de `buildWhere`. Cliente/Proveedor y Vendedor se resuelven desde el documento de origen (`sourceType`/`sourceId`). El costo unitario sale de `unitCostResolver()`, compartido con el PDF de costos. Para Excel grandes, usar `XLSX.write(..., { compression: true, bookSST: true })` y escribir las fechas como número de serie, no como `Date`.

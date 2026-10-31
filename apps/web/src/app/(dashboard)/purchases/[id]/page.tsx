@@ -398,11 +398,12 @@ export default function PurchaseBillDetailPage() {
     if (!bill || bill.status !== 'PENDING' || bill.isCredit) return;
     (async () => {
       try {
-        const pmRes = await fetch('/api/proxy/payment-methods');
+        // 'flat' = metodos seleccionables (los hijos, no el grupo padre), igual que el POS.
+        const pmRes = await fetch('/api/proxy/payment-methods/flat');
         if (pmRes.ok) {
           const pmData = await pmRes.json();
           const methods = (Array.isArray(pmData) ? pmData : pmData.data || [])
-            .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor' && !m.children?.length);
+            .filter((m: PaymentMethodOption) => m.id !== 'pm_saldo_favor');
           setPaymentMethods(methods);
         }
       } catch { /* ignore */ }

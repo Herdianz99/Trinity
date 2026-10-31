@@ -44,6 +44,12 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 💳 Aceros: grupo "Divisa" en métodos de pago (2026-10-31, Sesión 174)
+- Pedido: agrupar Dolares, Zelle, BINANCE y Panamá en un grupo "Divisa"; orden Efectivo Bs → Divisa → Puntos de venta → resto.
+- Solo `aceros_db`. Grupo `pm_divisa` (padre sin pagos propios). No cambian los ids, `isDivisa`, `isCash`, `fiscalCode` ni `bankAccountId` de los hijos, así que caja, cierres y reportes siguen por método.
+- **Fix de código necesario:** anticipos en CxC y CxP y el pago de compras leían `/payment-methods` (árbol) sin abrir los grupos. Con el grupo, compras perdía los 4 métodos y los anticipos habrían ofrecido "Divisa" como método. Ahora usan `/payment-methods/flat`, igual que las facturas. En esas pantallas también aparecen ahora los P.V individuales en lugar del grupo.
+- El usuario enviará más cambios de métodos de pago después.
+
 ## 📊 Movimientos de stock: Excel con una fila por movimiento (2026-10-30, Sesión 173) — ✅ DESPLEGADO en 6 (todas menos la chica)
 - En `/inventory/movements`, menú Reportes → sección **Excel** → "Lista de movimientos" → `GET /stock-movements/report/excel`, con los mismos filtros del listado (fechas, tipo, almacén, proveedor, búsqueda y serie).
 - **24 columnas:** Fecha (fecha real de Excel), Hora, Tipo, **Entrada/Salida**, Código, Producto, **Categoría**, Marca, Proveedor (ficha), Almacén, Cantidad (con signo), Existencia después, Documento, Serie, Fiscal, **Cliente / Proveedor** del documento, **Vendedor**, Usuario, Motivo, Costo unitario y total, y en ventas Precio de venta unitario, Descuento % y Total de la venta. Lista plana con autofiltro en los encabezados.

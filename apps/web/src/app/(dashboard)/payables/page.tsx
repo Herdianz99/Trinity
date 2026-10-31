@@ -268,7 +268,8 @@ export default function PayablesPage() {
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/payment-methods');
+      // 'flat' = metodos seleccionables (los hijos, no el grupo padre), igual que el POS.
+      const res = await fetch('/api/proxy/payment-methods/flat');
       const data = await res.json();
       setPaymentMethods(Array.isArray(data) ? data : data.data || []);
     } catch {}

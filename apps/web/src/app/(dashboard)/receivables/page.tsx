@@ -245,7 +245,8 @@ export default function ReceivablesPage() {
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/payment-methods');
+      // 'flat' = metodos seleccionables (los hijos, no el grupo padre), igual que el POS.
+      const res = await fetch('/api/proxy/payment-methods/flat');
       const data = await res.json();
       const methods = (Array.isArray(data) ? data : data.data || []).filter((pm: any) => pm.isActive && pm.id !== 'pm_saldo_favor');
       setPaymentMethods(methods.map((pm: any) => ({ id: pm.id, name: pm.name })));
