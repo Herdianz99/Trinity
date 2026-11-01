@@ -84,7 +84,7 @@
 
 ## 🚀 Deploy Sesiones 172 + 173 (2026-10-30) — 6 empresas, la chica NO
 - `b98c3d3c` en la grande, la mayor, total, totalturen, aceros y acerosmayor; los 6 scripts de deploy salieron sin errores. Verificado: HEAD `b98c3d3c` en las 6, PM2 online y `GET /stock-movements/report/excel` e `/inventory-adjustments/report/grouped-excel` responden 401 sin token (existen; una ruta inexistente da 404). Sin migraciones.
-- **La chica (134.209.220.233) sigue en `3c2e0165`** por decisión del usuario: no tiene el RIF obligatorio, la búsqueda por descripción ni los Excel. Para ponerla al día: `git pull` + `bash deploy.sh` en ese servidor.
+- **La chica (134.209.220.233):** se quedó en `3c2e0165` hasta el 2026-11-01, cuando se desplegó `75154f89` (ya tiene RIF obligatorio, búsqueda por descripción, Excel y el fix de Anticipos/Pago de compras de la Sesión 174). El deploy tumbó la API unos 20 min: el build de la API murió por falta de memoria (2 GB sin swap), Nest ya había borrado `dist` y `fail` en `deploy.sh` no detiene el script. Se recuperó con swap temporal de 2 GB en `/swapfile-deploy` (no está en fstab) y recompilando la API aparte. Por eso `deploy.sh` terminó con "1 error", pero health y web quedaron OK. Ojo: el próximo deploy en la chica puede repetir esto si no hay swap activo.
 
 ## 🪪 Cliente: RIF / Documento obligatorio (2026-10-28, Sesión 172) — ✅ DESPLEGADO en 6 (todas menos la chica)
 - La máquina fiscal da error al imprimir si el cliente no tiene RIF, y el sistema dejaba crear clientes sin él.
