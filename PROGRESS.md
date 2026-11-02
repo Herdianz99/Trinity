@@ -44,6 +44,18 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📤 Catálogo con fotos: compartir con TODAS las categorías en el teléfono (2026-11-02, Sesión 176) — ✅ DESPLEGADO en la mayor
+
+- **Problema (mayor):** con todas las categorías tildadas el menú de compartir del teléfono no salía; con una sola sí. **Causa:** el navegador solo deja llamar `navigator.share()` unos segundos después del toque. Con todas las categorías el PDF pesa **~14,1 MB** (una sola: 0,4 MB) y tarda más que ese permiso → `NotAllowedError` → Trinity caía al fallback y abría el PDF en otra pestaña (nginx mostraba cada intento bajado 2 veces).
+- **Arreglo** (`catalog/products/page.tsx`): si `share()` falla con `NotAllowedError`, el modal no se cierra, guarda el `File` ya descargado y muestra "Catálogo listo (X MB)" + botón **Compartir catálogo**; ese toque nuevo abre el menú. Con una categoría sigue directo. `tsc` web limpio; no probado en teléfono.
+- **Desplegado solo en la mayor** (`/opt/deploy-trinity-mayor.sh`). La grande y las demás lo reciben en su próximo deploy.
+- Pendiente opcional: aligerar las fotos del catálogo (14 MB pesa para WhatsApp).
+
+**Otros de la misma sesión (sin código):**
+- **Campaña WhatsApp (grande):** plantillas `CASHEA` (enfriándose/inactivos) y `COTIZACION` editadas **en la BD** (`WhatsappCampaignTemplate`, sin deploy) con la promo Cashea de baja de inicial (N1 60 · N2 50 · N3 30 · N4 25 · N5-6 20 %) **válida hasta el domingo 08-11-2026**. ⏳ **El 09-11 tocar "Restaurar original" en las dos.**
+- **ISLR (grande):** eliminada la retención **N° 77** (GERARDO GIANCARLOS FALABELLA SCUTARO, $24,30 / Bs 21.616,79, factura 143) a pedido del usuario. Estaba huérfana (la CxP CXP/26-000444 ya no existía), sin recibo ni libro. `CompanyConfig.islrRetentionNextNumber` devuelto de 78 a **77**.
+- **Impresora fiscal (grande) — en análisis:** facturas que quedan a la mitad y hay que destrabar. El código de impresión fiscal no cambia desde el 25-07 (`fiscal-printer.ts`: corta si un comando tarda >5 s o la máquina no responde "lista" en 10 s). El volumen fiscal subió (≈40/día a fines de sept → 127/día la semana del 26-10; series Fiscal 4 y 5 nuevas desde el 19/20-10), pero la semana del 31-08 tuvo más carga por máquina. Falta que el usuario diga en qué caja pasa y mande captura del error; opción: subir los tiempos de espera.
+
 ## 📊 Chatbot: balance de octubre (grande y Total) (2026-11-01, solo lectura, sin código ni datos) · Sesión 175
 
 - **Grande (12–31 oct):** 1.122 conversaciones, 1.300 preguntas, USD 1,55 (~$0,0014 por conversación, casi 3 veces lo estimado de $0,0005, igual insignificante). 92% 👍 (768 de 834 calificadas; 466 sin calificar). Por semana: 90% (12-18), 90% (19-25), 96% (26-31, 428 conversaciones en 6 días, récord). 34 escaladas (3%): cantidad insuficiente 10, cerrar compra 6, técnica 4. Todo en canal TEST (copiar/pegar): Marketing 999, Diego 122.

@@ -6,6 +6,7 @@ import {
   Package, Plus, Search, ChevronLeft, ChevronRight,
   Edit2, Trash2, Loader2, AlertTriangle, PowerOff, Ban, Tag,
   FileSpreadsheet, FileText, Images,
+  Share2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -82,6 +83,7 @@ export default function ProductsPage() {
   // Contraportada con las condiciones de pago: sin / "Condiciones $" / "Condiciones BCV" (se recuerda).
   const [catalogConditions, setCatalogConditions] = useState<CatalogConditions>('usd');
   const [catalogGenerating, setCatalogGenerating] = useState(false);
+  const [catalogReadyFile, setCatalogReadyFile] = useState<File | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -208,13 +210,24 @@ export default function ProductsPage() {
 
     // En movil: bajar el PDF y abrir el menu nativo de compartir (WhatsApp, correo, etc.)
     setCatalogGenerating(true);
+    let keepOpen = false;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error('fetch');
       const blob = await res.blob();
       const file = new File([blob], filename, { type: 'application/pdf' });
       if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename, text: 'Catalogo' });
+        try {
+          await navigator.share({ files: [file], title: filename, text: 'Catalogo' });
+        } catch (err: any) {
+          // El navegador solo deja compartir unos segundos despues del toque. Con todas las
+          // categorias el PDF (~14 MB) tarda mas y share() falla con NotAllowedError: se deja
+          // el archivo listo y un boton "Compartir" para que un toque nuevo abra el menu.
+          if (err?.name === 'NotAllowedError') {
+            setCatalogReadyFile(file);
+            keepOpen = true;
+          } else throw err;
+        }
       } else {
         // soporta compartir pero no archivos: abrir el PDF
         const objectUrl = URL.createObjectURL(blob);
@@ -226,8 +239,28 @@ export default function ProductsPage() {
       if (err?.name !== 'AbortError') window.open(url, '_blank'); // fallback
     } finally {
       setCatalogGenerating(false);
-      setShowCatalogModal(false);
+      if (!keepOpen) setShowCatalogModal(false);
     }
+  }
+
+  // Segundo paso cuando el PDF tardo: este toque da el permiso fresco para compartir.
+  async function shareReadyCatalog() {
+    const file = catalogReadyFile;
+    if (!file) return;
+    try {
+      await navigator.share({ files: [file], title: file.name, text: 'Catalogo' });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return; // cancelo el menu: puede volver a intentar
+      const objectUrl = URL.createObjectURL(file);
+      window.open(objectUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    }
+    closeCatalogModal();
+  }
+
+  function closeCatalogModal() {
+    setCatalogReadyFile(null);
+    setShowCatalogModal(false);
   }
 
   async function handleDelete(id: string) {
@@ -534,7 +567,7 @@ export default function ProductsPage() {
       {showCatalogModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setShowCatalogModal(false)}
+          onClick={closeCatalogModal}
         >
           <div
             className="card w-full max-w-md p-6"
@@ -607,13 +640,27 @@ export default function ProductsPage() {
               );
             })()}
 
+            {catalogReadyFile && (
+              <p className="mt-4 text-sm text-emerald-400">
+                Catalogo listo ({(catalogReadyFile.size / 1048576).toFixed(1)} MB). Toca &quot;Compartir catalogo&quot; para enviarlo.
+              </p>
+            )}
+
             <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => setShowCatalogModal(false)}
+                onClick={closeCatalogModal}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-700/50 text-slate-300 hover:bg-slate-700 transition-colors"
               >
                 Cancelar
               </button>
+              {catalogReadyFile ? (
+                <button
+                  onClick={shareReadyCatalog}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                >
+                  <Share2 size={16} /> Compartir catalogo
+                </button>
+              ) : (
               <button
                 onClick={generatePhotoCatalog}
                 disabled={catalogGenerating || (catalogExcluded.has(NO_CATEGORY) && allCategories.every(c => catalogExcluded.has(c.id)))}
@@ -622,6 +669,7 @@ export default function ProductsPage() {
                 {catalogGenerating ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 {catalogGenerating ? 'Generando...' : 'Generar PDF'}
               </button>
+              )}
             </div>
           </div>
         </div>

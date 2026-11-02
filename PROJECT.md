@@ -125,6 +125,7 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 - `PortalService.assertMinOrder()` en crear/editar pedido (total a precio de lista ≥ mínimo); `GET /portal/me` devuelve `customer.minOrderUsd`. `CustomersService.locationData()` valida y sella la fecha de la ubicación. `client-orders` findOne trae lat/lng.
 - Web: `components/customer-location-field.tsx` (GPS + Google Maps) en cliente nuevo/detalle; enlace al mapa en `/sales/pedidos-clientes`; barra "Mínimo $X · faltan $Y" en `/portal/pedido/[id]`.
 - Catálogo con fotos: `conditions=usd|bcv` (`drawBackCover` con -10%/-5% o -6%/-3%); modal con radio Sin / Condiciones $ / Condiciones BCV (localStorage `catalogPhotos.withConditions` = usd|bcv|none).
+- Catálogo con fotos en el teléfono (Sesión 176): si `navigator.share()` falla por tiempo (`NotAllowedError`, PDF grande), el modal guarda el `File` y muestra el botón "Compartir catálogo" para un segundo toque.
 
 #### Sesión 158 (2026-10-12) — Chatbot: cantidad insuficiente
 - `buscar_productos` con `cantidad` opcional → `alcanza` por producto (vendible − apartado ≥ cantidad; nunca el número). Si no alcanza, el bot lo dice sin cantidades y escala con `codigo`/`cantidad`; `ChatbotToolsService.stockNote()` agrega la existencia real al `escalationSummary` solo para el asesor.
