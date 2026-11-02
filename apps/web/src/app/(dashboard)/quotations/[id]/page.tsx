@@ -33,6 +33,61 @@ const IVA_LABELS: Record<string, string> = {
   SPECIAL: 'Especial 31%',
 };
 
+// Número para WhatsApp: asume Venezuela (+58). Quita símbolos, el 0 inicial y antepone 58.
+// Devuelve '' si no parece un número válido (58 + 10 dígitos como mínimo).
+function waPhone(raw: string | null | undefined): string {
+  let d = (raw || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (!d.startsWith('58')) {
+    if (d.startsWith('0')) d = d.slice(1);
+    d = '58' + d;
+  }
+  return d.length >= 12 ? d : '';
+}
+
+const money = (n: number) =>
+  '$' + (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qty = (n: number) => (n || 0).toLocaleString('es-VE', { maximumFractionDigits: 3 });
+
+// En WhatsApp un mensaje muy largo hace que el enlace falle: más allá de esto se resume.
+const WA_MAX_ITEMS = 40;
+
+function buildWhatsAppMessage(q: any, companyName: string): string {
+  const nombre = q.customer?.name?.trim();
+  const lines: string[] = [nombre ? `Hola, ${nombre}. ¡Buen día!` : '¡Hola! ¡Buen día!', ''];
+  const quien = q.seller?.name ? `${q.seller.name}${companyName ? ` de ${companyName}` : ''}` : companyName;
+  if (quien) lines.push(`Le saluda ${quien}.`);
+  lines.push(`Le envío la cotización *${q.number}*:`, '');
+
+  const items: any[] = q.items || [];
+  for (const it of items.slice(0, WA_MAX_ITEMS)) {
+    lines.push(`• ${qty(it.quantity)} x ${it.productName} — ${money(it.totalUsd)}`);
+  }
+  if (items.length > WA_MAX_ITEMS) {
+    lines.push(`• … y ${items.length - WA_MAX_ITEMS} producto(s) más (ver PDF)`);
+  }
+
+  lines.push('');
+  if ((q.ivaUsd || 0) > 0) {
+    lines.push(`Subtotal: ${money(q.subtotalUsd)}`, `IVA: ${money(q.ivaUsd)}`);
+  }
+  lines.push(`*Total: ${money(q.totalUsd)}*`);
+  if (q.expiresAt) {
+    lines.push('', `Válida hasta el ${new Date(q.expiresAt).toLocaleDateString('es-VE')}.`);
+  }
+  lines.push('', 'Le adjunto la cotización en PDF. Quedo atento(a) a cualquier duda.');
+  return lines.join('\n');
+}
+
+// Logo de WhatsApp (SVG inline, sin dependencias).
+function WhatsAppIcon({ size = 14, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.157 5.335 5.492 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.82 9.82 0 001.599 5.339l-.999 3.648 3.889-.336zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.767.967-.94 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+    </svg>
+  );
+}
+
 export default function QuotationDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -45,6 +100,19 @@ export default function QuotationDetailPage() {
   const [converting, setConverting] = useState(false);
   const [printChoice, setPrintChoice] = useState(false);
   const [printCurrency, setPrintCurrency] = useState<'USD' | 'BS'>('USD');
+  const [companyName, setCompanyName] = useState('');
+  const [phoneModal, setPhoneModal] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [savePhone, setSavePhone] = useState(true);
+  const [phoneError, setPhoneError] = useState('');
+
+  // Nombre de la empresa para el saludo del mensaje de WhatsApp
+  useEffect(() => {
+    fetch('/api/proxy/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => setCompanyName(cfg?.companyName || ''))
+      .catch(() => {});
+  }, []);
 
   const fetchQuotation = useCallback(async () => {
     setLoading(true);
@@ -141,6 +209,57 @@ export default function QuotationDetailPage() {
     }
   }
 
+  // Abre el chat del cliente con la cotización escrita y baja el PDF para adjuntarlo.
+  // window.open va primero y sin await: si no, el navegador lo bloquea como ventana emergente.
+  function openWhatsApp(phone: string) {
+    const text = encodeURIComponent(buildWhatsAppMessage(quotation, companyName));
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const waUrl = isMobile
+      ? `https://wa.me/${phone}?text=${text}`
+      : `https://web.whatsapp.com/send?phone=${phone}&text=${text}`;
+    window.open(waUrl, '_blank');
+
+    const a = document.createElement('a');
+    a.href = `/api/proxy/quotations/${id}/pdf`;
+    a.download = `Cotizacion-${quotation.number}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setMessage({ type: 'success', text: `Se descargó el PDF de ${quotation.number}: adjúntalo en el chat y dale a enviar.` });
+  }
+
+  function handleWhatsApp() {
+    const phone = waPhone(quotation?.customer?.phone);
+    if (phone) { openWhatsApp(phone); return; }
+    setPhoneInput(quotation?.customer?.phone || '');
+    setSavePhone(!!quotation?.customer?.id);
+    setPhoneError('');
+    setPhoneModal(true);
+  }
+
+  function handlePhoneSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const phone = waPhone(phoneInput);
+    if (!phone) { setPhoneError('Número inválido. Ejemplo: 0414-1234567'); return; }
+    setPhoneModal(false);
+    openWhatsApp(phone);
+
+    const customerId = quotation?.customer?.id;
+    if (savePhone && customerId) {
+      const clean = phoneInput.trim();
+      fetch(`/api/proxy/customers/${customerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: clean }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error();
+          setQuotation((prev: any) => (prev?.customer ? { ...prev, customer: { ...prev.customer, phone: clean } } : prev));
+        })
+        .catch(() => setMessage({ type: 'error', text: 'Se abrió WhatsApp, pero no se pudo guardar el teléfono en la ficha del cliente.' }));
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
@@ -203,12 +322,19 @@ export default function QuotationDetailPage() {
           <button onClick={() => { setPrintCurrency('USD'); setPrintChoice(true); }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-200 hover:bg-slate-600 flex items-center gap-1.5">
             <Printer size={12} /> Imprimir PDF
           </button>
+          <button onClick={handleWhatsApp} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#25D366]/10 text-[#25D366] border border-[#25D366]/25 hover:bg-[#25D366]/20 flex items-center gap-1.5">
+            <WhatsAppIcon size={12} /> Enviar por WhatsApp
+          </button>
         </div>
       </div>
 
       {/* Info grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-        <div className="card p-3"><span className="text-slate-500 block text-xs mb-0.5">Cliente</span><span className="text-white">{quotation.customer?.name || 'Sin cliente'}</span></div>
+        <div className="card p-3">
+          <span className="text-slate-500 block text-xs mb-0.5">Cliente</span>
+          <span className="text-white">{quotation.customer?.name || 'Sin cliente'}</span>
+          {quotation.customer?.phone && <span className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><Phone size={11} /> {quotation.customer.phone}</span>}
+        </div>
         <div className="card p-3"><span className="text-slate-500 block text-xs mb-0.5">Fecha</span><span className="text-white">{new Date(quotation.createdAt).toLocaleDateString('es-VE')}</span></div>
         <div className="card p-3"><span className="text-slate-500 block text-xs mb-0.5">Vence</span><span className="text-white">{quotation.expiresAt ? new Date(quotation.expiresAt).toLocaleDateString('es-VE') : '-'}</span></div>
         <div className="card p-3"><span className="text-slate-500 block text-xs mb-0.5">Items</span><span className="text-white">{quotation.items?.length || 0}</span></div>
@@ -282,6 +408,49 @@ export default function QuotationDetailPage() {
       {quotation.convertedToInvoiceId && (
         <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm">
           Esta cotizacion fue convertida a factura.
+        </div>
+      )}
+
+      {/* Modal: el cliente no tiene teléfono → registrarlo */}
+      {phoneModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setPhoneModal(false)} />
+          <form onSubmit={handlePhoneSubmit} className="relative bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2.5 rounded-xl bg-[#25D366]/10 border border-[#25D366]/25">
+                <WhatsAppIcon size={20} className="text-[#25D366]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Teléfono del cliente</h3>
+                <p className="text-sm text-slate-400">{quotation.customer?.name || 'Cotización sin cliente'}</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-400 mt-4">
+              {quotation.customer?.phone ? 'El teléfono registrado no es válido para WhatsApp.' : 'Este cliente no tiene teléfono registrado.'} Escribe su número de WhatsApp:
+            </p>
+            <input
+              autoFocus
+              type="tel"
+              inputMode="tel"
+              value={phoneInput}
+              onChange={(e) => { setPhoneInput(e.target.value); setPhoneError(''); }}
+              placeholder="0414-1234567"
+              className="input-field w-full mt-3"
+            />
+            {phoneError && <p className="text-xs text-red-400 mt-1.5">{phoneError}</p>}
+            {quotation.customer?.id && (
+              <label className="flex items-center gap-2 mt-3 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={savePhone} onChange={(e) => setSavePhone(e.target.checked)} className="accent-green-500" />
+                Guardarlo en la ficha del cliente
+              </label>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setPhoneModal(false)} className="btn-secondary !py-2 text-sm">Cancelar</button>
+              <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-[#25D366] text-white hover:bg-[#20bd5a] flex items-center gap-2">
+                <WhatsAppIcon size={14} /> Abrir WhatsApp
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
