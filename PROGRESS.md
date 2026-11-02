@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 💬 Cotización: botón "Enviar por WhatsApp" (2026-11-02, Sesión 177) — ✅ commiteado, ⏳ SIN DESPLEGAR
+
+- **Pedido:** desde la cotización, enviarla por WhatsApp al teléfono del cliente; si no tiene número, pedirlo en un modal. El usuario eligió: mensaje con la cotización escrita + saludo, y el PDF se adjunta al enviar.
+- **Hecho** (`quotations/[id]/page.tsx`, solo frontend, sin cambios de API): botón verde **Enviar por WhatsApp**. Abre el chat (wa.me en teléfono, WhatsApp Web en PC) con saludo (cliente, vendedor y empresa de `/config`), ítems `cant x producto — $total` (máx. 40, el resto "ver PDF"), subtotal/IVA/total y vigencia. A la vez descarga `Cotizacion-<num>.pdf` (USD con IVA) para arrastrarlo al chat. Sin teléfono válido → modal que lo pide (formato VE → 58…) y lo guarda en la ficha del cliente (casilla, marcada por defecto). WhatsApp se abre antes de guardar para que el navegador no lo bloquee como ventana emergente.
+- Límite: un enlace de WhatsApp no puede adjuntar archivos (solo texto); adjuntar solo es posible con la API oficial de WhatsApp Business (ver Fase 3 del chatbot).
+- `tsc` web limpio; no probado en el navegador ni en el teléfono.
+
 ## 📤 Catálogo con fotos: compartir con TODAS las categorías en el teléfono (2026-11-02, Sesión 176) — ✅ DESPLEGADO en la mayor
 
 - **Problema (mayor):** con todas las categorías tildadas el menú de compartir del teléfono no salía; con una sola sí. **Causa:** el navegador solo deja llamar `navigator.share()` unos segundos después del toque. Con todas las categorías el PDF pesa **~14,1 MB** (una sola: 0,4 MB) y tarda más que ese permiso → `NotAllowedError` → Trinity caía al fallback y abría el PDF en otra pestaña (nginx mostraba cada intento bajado 2 veces).

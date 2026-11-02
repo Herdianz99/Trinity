@@ -1001,6 +1001,7 @@ model PriceAdjustmentLog {
 - QuotationPdfService: PDF con pdfkit (header, items, IVA, totales)
 - QuotationsCronService: cron diario — expira cotizaciones vencidas, cancela facturas PENDING de días anteriores
 - ScheduleModule (@nestjs/schedule) para cron jobs
+- **Enviar por WhatsApp (Ses.177, solo frontend):** botón en el detalle `/quotations/[id]`. Abre el chat del teléfono del cliente (wa.me en móvil, web.whatsapp.com en PC) con saludo + ítems + totales + vigencia escritos, y baja el PDF (USD con IVA) para adjuntarlo a mano: un enlace de WhatsApp no puede llevar archivos. Si el cliente no tiene teléfono válido, un modal lo pide y lo guarda en la ficha (`PATCH /customers/:id`). Normaliza a +58.
 
 **Schema:**
 ```prisma
