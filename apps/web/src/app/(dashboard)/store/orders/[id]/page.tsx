@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin, Receipt, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin, Receipt, Loader2, X } from 'lucide-react';
+import WhatsAppIcon from '@/components/whatsapp-icon';
+import { waPhone, openWhatsAppChat } from '@/lib/whatsapp';
+import { ONLINE_ORDERS_CHANGED } from '@/components/online-orders-alert';
 
 interface OnlineOrderItem {
   id: string;
@@ -42,6 +45,55 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   CANCELADO:     { label: 'Cancelado',     cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
 };
 
+// ── Mensajes para "Avisar al cliente" (salen del WhatsApp del empleado, sin costo) ──
+type MsgKey = 'recibido' | 'pago' | 'listo' | 'cancelado';
+const MSG_LABELS: Record<MsgKey, string> = {
+  recibido: 'Pedido recibido',
+  pago: 'Falta el pago',
+  listo: 'Listo para retirar',
+  cancelado: 'Pedido cancelado',
+};
+const usd = (n: number) => '$' + (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const bs = (n: number) => 'Bs ' + (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const WA_MAX_ITEMS = 40; // un enlace de WhatsApp muy largo falla
+
+function defaultMsgKey(o: OnlineOrder): MsgKey {
+  if (o.status === 'CANCELADO') return 'cancelado';
+  if (o.status === 'CONFIRMADO' || o.status === 'FACTURADO') return 'listo';
+  return o.paymentRef || o.paymentProofUrl ? 'recibido' : 'pago';
+}
+
+function buildCustomerMessage(key: MsgKey, o: OnlineOrder, companyName: string): string {
+  const nombre = o.customerName?.trim();
+  const saludo = [nombre ? `Hola, ${nombre}. ¡Buen día!` : '¡Hola! ¡Buen día!'];
+  if (companyName) saludo.push(`Le saluda ${companyName}.`);
+  const total = `*Total: ${usd(o.totalUsd)}*${o.totalBs ? ` (${bs(o.totalBs)})` : ''}`;
+  const lines = [...saludo, ''];
+
+  if (key === 'recibido') {
+    lines.push(`Recibimos su pedido *${o.number}* de nuestra tienda online:`, '');
+    for (const it of o.items.slice(0, WA_MAX_ITEMS)) lines.push(`• ${it.quantity} x ${it.name} — ${usd(it.priceUsd * it.quantity)}`);
+    if (o.items.length > WA_MAX_ITEMS) lines.push(`• … y ${o.items.length - WA_MAX_ITEMS} producto(s) más`);
+    lines.push('', total, '', 'Estamos verificando el pago y la disponibilidad. Le escribimos apenas esté confirmado.');
+  } else if (key === 'pago') {
+    lines.push(
+      `Recibimos su pedido *${o.number}* de nuestra tienda online.`, '', total, '',
+      'Aún no hemos podido verificar el pago. ¿Nos puede enviar por aquí la referencia o la captura del Pago Móvil?',
+    );
+  } else if (key === 'listo') {
+    lines.push(
+      `¡Su pedido *${o.number}* ya está listo para retirar en la tienda!`, '',
+      'Al retirar, indique el número de pedido y presente su cédula. ¡Gracias por su compra!',
+    );
+  } else {
+    lines.push(
+      `Lamentamos informarle que su pedido *${o.number}* fue cancelado.`, '',
+      'Si tiene alguna duda o desea hacer un nuevo pedido, con gusto le ayudamos por aquí.',
+    );
+  }
+  return lines.join('\n');
+}
+
 export default function StoreOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -54,6 +106,54 @@ export default function StoreOrderDetailPage() {
   const [proofOpen, setProofOpen] = useState(false);
   const [billing, setBilling] = useState(false);
   const [billMsg, setBillMsg] = useState<{ text: string; skipped: { code: string; reason: string }[] } | null>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [waOpen, setWaOpen] = useState(false);
+  const [waKey, setWaKey] = useState<MsgKey>('recibido');
+  const [waText, setWaText] = useState('');
+  const [waPhoneInput, setWaPhoneInput] = useState('');
+  const [waError, setWaError] = useState('');
+
+  // Nombre de la empresa para el saludo del mensaje de WhatsApp
+  useEffect(() => {
+    fetch('/api/proxy/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => setCompanyName(cfg?.companyName || ''))
+      .catch(() => {});
+  }, []);
+
+  // Si el nombre de la empresa llega con el modal ya abierto y el texto no se ha tocado,
+  // se rearma el mensaje para que incluya el saludo.
+  const [waEdited, setWaEdited] = useState(false);
+  useEffect(() => {
+    if (waOpen && !waEdited && order && companyName) setWaText(buildCustomerMessage(waKey, order, companyName));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyName]);
+
+  function openNotify() {
+    if (!order) return;
+    const key = defaultMsgKey(order);
+    setWaKey(key);
+    setWaText(buildCustomerMessage(key, order, companyName));
+    setWaPhoneInput(order.phone || '');
+    setWaError('');
+    setWaEdited(false);
+    setWaOpen(true);
+  }
+
+  function pickTemplate(key: MsgKey) {
+    if (!order) return;
+    setWaKey(key);
+    setWaText(buildCustomerMessage(key, order, companyName));
+    setWaEdited(false);
+  }
+
+  function sendWhatsApp() {
+    const phone = waPhone(waPhoneInput);
+    if (!phone) { setWaError('Número inválido. Ejemplo: 0414-1234567'); return; }
+    if (!waText.trim()) { setWaError('El mensaje está vacío'); return; }
+    openWhatsAppChat(phone, waText);
+    setWaOpen(false);
+  }
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -111,6 +211,7 @@ export default function StoreOrderDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || 'No se pudo procesar');
       setOrder(data);
+      window.dispatchEvent(new Event(ONLINE_ORDERS_CHANGED)); // refresca el contador del menú
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -154,13 +255,85 @@ export default function StoreOrderDetailPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <Link href="/store/orders" className="text-slate-400 hover:text-blue-400 flex items-center gap-2 mb-4 text-sm"><ArrowLeft size={16} /> Volver a pedidos</Link>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-100 font-mono">{order.number}</h1>
           <p className="text-sm text-slate-500">{new Date(order.createdAt).toLocaleString('es-VE')}</p>
         </div>
-        <span className={`px-3 py-1.5 text-sm rounded-md border ${st.cls}`}>{st.label}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openNotify}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30 hover:bg-[#25D366]/25"
+            title="Abre tu WhatsApp con el mensaje ya escrito"
+          >
+            <WhatsAppIcon size={14} /> Avisar al cliente
+          </button>
+          <span className={`px-3 py-1.5 text-sm rounded-md border ${st.cls}`}>{st.label}</span>
+        </div>
       </div>
+
+      {/* Modal: elegir mensaje y abrir WhatsApp */}
+      {waOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setWaOpen(false)}>
+          <div
+            className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+                <WhatsAppIcon size={18} className="text-[#25D366]" /> Avisar al cliente
+              </h2>
+              <button onClick={() => setWaOpen(false)} className="p-1 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800" aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(Object.keys(MSG_LABELS) as MsgKey[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => pickTemplate(k)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    waKey === k ? 'bg-[#25D366]/20 text-[#25D366] border-[#25D366]/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                  }`}
+                >
+                  {MSG_LABELS[k]}
+                </button>
+              ))}
+            </div>
+
+            <label className="text-xs text-slate-400 mb-1 block">Teléfono</label>
+            <input
+              value={waPhoneInput}
+              onChange={(e) => { setWaPhoneInput(e.target.value); setWaError(''); }}
+              className="w-full mb-3 px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-100 font-mono focus:border-[#25D366] outline-none"
+            />
+
+            <label className="text-xs text-slate-400 mb-1 block">Mensaje (puedes editarlo)</label>
+            <textarea
+              value={waText}
+              onChange={(e) => { setWaText(e.target.value); setWaEdited(true); setWaError(''); }}
+              rows={11}
+              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-100 focus:border-[#25D366] outline-none resize-y"
+            />
+
+            {waError && <p className="mt-2 text-xs text-red-400">{waError}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setWaOpen(false)} className="px-3 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200">
+                Cancelar
+              </button>
+              <button
+                onClick={sendWhatsApp}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-slate-900 font-semibold"
+              >
+                <WhatsAppIcon size={14} /> Abrir WhatsApp
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500 text-right">Se abre tu WhatsApp con el mensaje escrito: revisa y dale a enviar.</p>
+          </div>
+        </div>
+      )}
 
       {error && <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/15 text-red-400 border border-red-500/30 text-sm">{error}</div>}
 

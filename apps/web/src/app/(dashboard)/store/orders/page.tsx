@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, RotateCw, Phone, Truck, Store } from 'lucide-react';
+import { ShoppingCart, RotateCw, Phone, Truck, Store, BellRing, BellOff } from 'lucide-react';
 
 interface OnlineOrderItem {
   id: string;
@@ -55,6 +55,21 @@ export default function StoreOrdersPage() {
 
   useEffect(() => { document.title = 'Pedidos online | Trinity ERP'; }, []);
 
+  // Permiso de notificaciones del navegador ('unsupported' en navegadores sin la API).
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | 'unsupported'>('unsupported');
+  useEffect(() => {
+    if (typeof Notification !== 'undefined') setNotifPerm(Notification.permission);
+  }, []);
+  async function enableNotifications() {
+    try {
+      const p = await Notification.requestPermission();
+      setNotifPerm(p);
+      if (p === 'granted') {
+        new Notification('Avisos activados', { body: 'Te avisaremos aquí cuando llegue un pedido online.', icon: '/icons/icon-192.png' });
+      }
+    } catch {}
+  }
+
   const fetchOrders = useCallback(async () => {
     const params = new URLSearchParams();
     if (tab) params.set('status', tab);
@@ -90,6 +105,30 @@ export default function StoreOrdersPage() {
           <RotateCw size={16} /> Actualizar
         </button>
       </div>
+
+      {/* Notificaciones de Windows: el navegador solo deja pedir el permiso tras un clic */}
+      {notifPerm === 'default' && (
+        <div className="mb-4 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <BellRing size={18} className="text-blue-400 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-slate-300">
+              Activa los avisos en esta computadora para ver un aviso de Windows cuando llegue un pedido,
+              aunque estés en otra pantalla.
+            </p>
+          </div>
+          <button
+            onClick={enableNotifications}
+            className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium whitespace-nowrap"
+          >
+            Activar avisos
+          </button>
+        </div>
+      )}
+      {notifPerm === 'denied' && (
+        <p className="mb-4 text-xs text-slate-500 flex items-center gap-2">
+          <BellOff size={14} /> Los avisos de Windows están bloqueados en este navegador (se activan desde el candado de la barra de direcciones). El timbre y el aviso dentro de Trinity siguen funcionando.
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4">

@@ -19,9 +19,20 @@ export class OnlineOrdersService {
     });
   }
 
+  // Contador del menú + los pendientes más recientes: el navegador compara sus ids con los
+  // que ya avisó para sonar y mostrar la notificación solo con los pedidos NUEVOS.
   async pendingCount() {
-    const count = await this.prisma.onlineOrder.count({ where: { status: 'POR_VERIFICAR' } });
-    return { count };
+    const where = { status: 'POR_VERIFICAR' as const };
+    const [count, latest] = await Promise.all([
+      this.prisma.onlineOrder.count({ where }),
+      this.prisma.onlineOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, number: true, customerName: true, totalUsd: true, createdAt: true },
+      }),
+    ]);
+    return { count, latest };
   }
 
   async findOne(id: string) {

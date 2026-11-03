@@ -68,6 +68,7 @@ import {
   Bell,
 } from 'lucide-react';
 import CompanySwitcher from '@/components/company-switcher';
+import OnlineOrdersAlert from '@/components/online-orders-alert';
 
 interface MenuItem {
   label: string;
@@ -429,6 +430,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [clientPortalOn, setClientPortalOn] = useState(false);
   const [whatsappCampaignOn, setWhatsappCampaignOn] = useState(false);
   const [clientOrdersUnseen, setClientOrdersUnseen] = useState(0);
+  // Pedidos de la tienda online "Por verificar" (lo cuenta OnlineOrdersAlert, que además avisa).
+  const [onlineOrdersPending, setOnlineOrdersPending] = useState(0);
   const [companyName, setCompanyName] = useState('');
   // Pendientes en "Mi Perfil" (notificaciones sin acuse, incl. amonestaciones que generan notif).
   const [miPerfilPending, setMiPerfilPending] = useState(0);
@@ -669,7 +672,7 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
               >
                 <span className={`relative flex-shrink-0 ${hasActiveItem ? 'text-green-400' : ''}`}>
                   {section.icon}
-                  {section.key === 'mi-perfil' && miPerfilPending > 0 && (
+                  {((section.key === 'mi-perfil' && miPerfilPending > 0) || (section.key === 'store' && onlineOrdersPending > 0)) && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-slate-900" />
                   )}
                 </span>
@@ -679,6 +682,11 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
                     {section.key === 'mi-perfil' && miPerfilPending > 0 && (
                       <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
                         {miPerfilPending > 9 ? '9+' : miPerfilPending}
+                      </span>
+                    )}
+                    {section.key === 'store' && onlineOrdersPending > 0 && !isOpen && (
+                      <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                        {onlineOrdersPending > 9 ? '9+' : onlineOrdersPending}
                       </span>
                     )}
                     <ChevronDown
@@ -717,6 +725,11 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
                         {item.href === '/sales/pedidos-clientes' && clientOrdersUnseen > 0 && (
                           <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
                             {clientOrdersUnseen > 9 ? '9+' : clientOrdersUnseen}
+                          </span>
+                        )}
+                        {item.href === '/store/orders' && onlineOrdersPending > 0 && (
+                          <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                            {onlineOrdersPending > 9 ? '9+' : onlineOrdersPending}
                           </span>
                         )}
                       </Link>
@@ -807,6 +820,9 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
       >
         {sidebarContent}
       </aside>
+
+      {/* Aviso de pedido nuevo de la tienda online (timbre + notificación + tarjeta) */}
+      <OnlineOrdersAlert enabled={hasPermission(permissions, 'store')} onCount={setOnlineOrdersPending} />
     </>
   );
 }
