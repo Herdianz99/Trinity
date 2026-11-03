@@ -44,6 +44,10 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🧾 Total: gasto "Bono de Alimentacion" enlazado a la CxP 4428763 (2026-11-03, datos, sin código)
+
+- `total_db` (161.35.52.221): la CxP **CXP/26-000016** (doc. 4428763, CESTATICKET SERVICES, "BONO DE ALIMENTACION", Bs 545.070,55 / $620,88 a 877,9023, 14-10-2026, PAGADA, fiscal) no tenía gasto. Se creó el `Expense` a crédito igual que lo hace `ExpensesService` (misma descripción, `reference`=4428763, `date` = medianoche Caracas del 14-10, `isCredit`, mismo proveedor y creador Marielys Rodriguez, categoría **Bono de Alimentacion**, nota "Enlazado a la CxP CXP/26-000016…") y se enlazó con `Payable.expenseId`, en una transacción que verificaba que la CxP siguiera sin gasto.
+
 ## 📦 Pedidos online: estado "Entregado" (2026-11-03, Sesión 178) — ⏳ COMMITEADO, SIN DESPLEGAR
 
 - **Pedido:** después de cobrar, el pedido se quedaba en FACTURADO y no se distinguía lo retirado de lo pendiente.
