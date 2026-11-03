@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Users, Plus, Pencil, ToggleLeft, ToggleRight, X, Search, Loader2,
+  Users, Plus, Pencil, X, Search, Loader2, UserCog, FileSpreadsheet, FileText,
 } from 'lucide-react';
 import MoneyInput from '@/components/money-input';
 
@@ -38,8 +38,28 @@ interface Employee {
   bonusUsd: number;
   frequency: string;
   isActive: boolean;
+  status: string;
+  statusFrom: string | null;
+  statusTo: string | null;
+  statusNote: string | null;
   customer: EmployeeCustomer;
 }
+
+// Mismo orden y regla que apps/api/src/modules/payroll/employee-status.ts (inPayroll = entra en nómina).
+const STATUSES: { key: string; label: string; inPayroll: boolean; cls: string; dot: string }[] = [
+  { key: 'ACTIVE', label: 'Activo', inPayroll: true, cls: 'bg-green-500/15 text-green-400 border-green-500/30', dot: 'bg-green-400' },
+  { key: 'VACATION', label: 'Vacaciones', inPayroll: true, cls: 'bg-sky-500/15 text-sky-400 border-sky-500/30', dot: 'bg-sky-400' },
+  { key: 'MEDICAL_LEAVE', label: 'Reposo', inPayroll: true, cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30', dot: 'bg-amber-400' },
+  { key: 'SPECIAL_LEAVE', label: 'Permiso especial', inPayroll: true, cls: 'bg-violet-500/15 text-violet-400 border-violet-500/30', dot: 'bg-violet-400' },
+  { key: 'INACTIVE', label: 'Inactivo', inPayroll: false, cls: 'bg-slate-500/15 text-slate-400 border-slate-500/30', dot: 'bg-slate-400' },
+  { key: 'VOLUNTARY_RESIGNATION', label: 'Retiro voluntario', inPayroll: false, cls: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-400' },
+  { key: 'JUSTIFIED_DISMISSAL', label: 'Despido justificado', inPayroll: false, cls: 'bg-rose-700/20 text-rose-400 border-rose-600/30', dot: 'bg-rose-500' },
+];
+const STATUS_BY_KEY = Object.fromEntries(STATUSES.map((s) => [s.key, s]));
+
+// statusFrom/statusTo son fechas-calendario a medianoche UTC → leer la parte YYYY-MM-DD sin convertir.
+const ymd = (d: string | null) => (d ? d.slice(0, 10) : '');
+const fmtYmd = (d: string | null) => { const s = ymd(d); return s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : ''; };
 
 interface CustomerOption {
   id: string;
@@ -54,6 +74,16 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(''); // '' = todos
+
+  // Modal de cambio de estado
+  const [statusEmp, setStatusEmp] = useState<Employee | null>(null);
+  const [newStatus, setNewStatus] = useState('ACTIVE');
+  const [statusFrom, setStatusFrom] = useState('');
+  const [statusTo, setStatusTo] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [statusError, setStatusError] = useState('');
+  const [statusSaving, setStatusSaving] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -225,11 +255,48 @@ export default function EmployeesPage() {
     finally { setFormLoading(false); }
   }
 
-  async function handleToggle(emp: Employee) {
+  function openStatus(emp: Employee) {
+    setStatusEmp(emp);
+    setNewStatus(emp.status || (emp.isActive ? 'ACTIVE' : 'INACTIVE'));
+    setStatusFrom(ymd(emp.statusFrom));
+    setStatusTo(ymd(emp.statusTo));
+    setStatusNote(emp.statusNote || '');
+    setStatusError('');
+  }
+
+  async function handleStatusSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!statusEmp) return;
+    if (statusFrom && statusTo && statusTo < statusFrom) { setStatusError('La fecha "hasta" no puede ser anterior a "desde".'); return; }
+    setStatusSaving(true); setStatusError('');
     try {
-      const res = await fetch(`/api/proxy/employees/${emp.id}/toggle-active`, { method: 'PATCH' });
-      if (res.ok) fetchEmployees(search);
-    } catch { /* empty */ }
+      const detail = newStatus !== 'ACTIVE';
+      const res = await fetch(`/api/proxy/employees/${statusEmp.id}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          statusFrom: detail && statusFrom ? statusFrom : undefined,
+          statusTo: detail && statusTo ? statusTo : undefined,
+          statusNote: detail && statusNote.trim() ? statusNote.trim() : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message);
+      setStatusEmp(null);
+      fetchEmployees(search);
+    } catch (err: any) { setStatusError(err.message || 'Error al guardar'); }
+    finally { setStatusSaving(false); }
+  }
+
+  // Filtro por estado en el navegador (la lista es corta); los reportes usan el mismo filtro en el servidor.
+  const counts = employees.reduce<Record<string, number>>((acc, e) => { acc[e.status] = (acc[e.status] || 0) + 1; return acc; }, {});
+  const visible = statusFilter ? employees.filter((e) => e.status === statusFilter) : employees;
+
+  function openReport(kind: 'pdf' | 'xlsx') {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    window.open(`/api/proxy/employees/report/${kind}?${params}`, '_blank');
   }
 
   return (
@@ -245,22 +312,38 @@ export default function EmployeesPage() {
             <p className="text-sm text-slate-400">Fichas de nómina (reusan la ficha de cliente)</p>
           </div>
         </div>
-        <button
-          onClick={openCreate}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-        >
-          <Plus size={18} /> Nuevo empleado
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => openReport('xlsx')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors flex items-center gap-2" title="Reporte en Excel con los filtros actuales">
+            <FileSpreadsheet size={16} className="text-emerald-400" /> Excel
+          </button>
+          <button onClick={() => openReport('pdf')} className="px-3 py-2 rounded-lg text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors flex items-center gap-2" title="Reporte en PDF con los filtros actuales">
+            <FileText size={16} className="text-red-400" /> PDF
+          </button>
+          <button
+            onClick={openCreate}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus size={18} /> Nuevo empleado
+          </button>
+        </div>
       </div>
 
       {/* Search */}
-      <div className="relative mb-4 max-w-md">
+      <div className="relative mb-3 max-w-md">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
         <input
           type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por nombre, código, cargo o RIF..."
           className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
         />
+      </div>
+
+      {/* Filtro por estado */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <FilterChip active={statusFilter === ''} onClick={() => setStatusFilter('')} label="Todos" count={employees.length} />
+        {STATUSES.map((s) => (
+          <FilterChip key={s.key} active={statusFilter === s.key} onClick={() => setStatusFilter(s.key)} label={s.label} count={counts[s.key] || 0} dot={s.dot} />
+        ))}
       </div>
 
       {/* Table */}
@@ -283,9 +366,9 @@ export default function EmployeesPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-500">Cargando...</td></tr>
-              ) : employees.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-slate-500">No hay empleados registrados</td></tr>
-              ) : employees.map((emp) => (
+              ) : visible.length === 0 ? (
+                <tr><td colSpan={9} className="text-center py-12 text-slate-500">{statusFilter ? `No hay empleados en estado "${STATUS_BY_KEY[statusFilter]?.label}"` : 'No hay empleados registrados'}</td></tr>
+              ) : visible.map((emp) => (
                 <tr key={emp.id} onClick={() => openEdit(emp)} className="border-t border-slate-700/30 hover:bg-slate-800/30 transition-colors cursor-pointer">
                   <td className="px-4 py-3 text-sm text-slate-300 font-mono">{emp.code || '--'}</td>
                   <td className="px-4 py-3">
@@ -302,15 +385,22 @@ export default function EmployeesPage() {
                   <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">${emp.salaryBaseUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-sm text-slate-200 text-right font-mono">${(emp.bonusUsd ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                      emp.isActive ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
-                    }`}>{emp.isActive ? 'Activo' : 'Inactivo'}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openStatus(emp); }}
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap hover:brightness-125 ${STATUS_BY_KEY[emp.status]?.cls || STATUS_BY_KEY.INACTIVE.cls}`}
+                      title="Cambiar estado"
+                    >{STATUS_BY_KEY[emp.status]?.label || emp.status}</button>
+                    {(emp.statusFrom || emp.statusTo) && (
+                      <span className="block text-[11px] text-slate-500 mt-0.5 whitespace-nowrap">
+                        {emp.statusFrom ? fmtYmd(emp.statusFrom) : '…'}{emp.statusTo ? ` al ${fmtYmd(emp.statusTo)}` : ''}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={(e) => { e.stopPropagation(); openEdit(emp); }} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Editar"><Pencil size={16} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); handleToggle(emp); }} className={`p-1.5 rounded-lg transition-colors ${emp.isActive ? 'text-slate-400 hover:text-orange-400 hover:bg-orange-500/10' : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'}`} title={emp.isActive ? 'Desactivar' : 'Activar'}>
-                        {emp.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                      <button onClick={(e) => { e.stopPropagation(); openStatus(emp); }} className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors" title="Cambiar estado">
+                        <UserCog size={16} />
                       </button>
                     </div>
                   </td>
@@ -412,6 +502,49 @@ export default function EmployeesPage() {
           </form>
         </Modal>
       )}
+
+      {/* Modal: Cambiar estado */}
+      {statusEmp && (
+        <Modal onClose={() => setStatusEmp(null)} title={`Estado — ${statusEmp.customer.name}`}>
+          <form onSubmit={handleStatusSave} className="space-y-4">
+            {statusError && <ErrorBanner message={statusError} />}
+            <div className="grid grid-cols-2 gap-2">
+              {STATUSES.map((s) => (
+                <button
+                  key={s.key} type="button" onClick={() => setNewStatus(s.key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm text-left transition-colors ${newStatus === s.key ? 'border-green-500/60 bg-green-500/10 text-white' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />{s.label}
+                </button>
+              ))}
+            </div>
+            <p className={`text-xs ${STATUS_BY_KEY[newStatus]?.inPayroll ? 'text-green-400/80' : 'text-amber-400/90'}`}>
+              {STATUS_BY_KEY[newStatus]?.inPayroll
+                ? 'Sigue entrando en la nómina.'
+                : 'No entrará en las próximas nóminas.'}
+            </p>
+            {newStatus !== 'ACTIVE' && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Desde</label>
+                    <input type="date" value={statusFrom} onChange={(e) => setStatusFrom(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Hasta <span className="text-slate-500 font-normal">(opcional)</span></label>
+                    <input type="date" value={statusTo} min={statusFrom || undefined} onChange={(e) => setStatusTo(e.target.value)} className={inputCls} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Observación <span className="text-slate-500 font-normal">(opcional)</span></label>
+                  <textarea value={statusNote} onChange={(e) => setStatusNote(e.target.value)} rows={2} maxLength={500} placeholder="Ej. reposo médico por 15 días" className={inputCls} />
+                </div>
+              </>
+            )}
+            <FormActions loading={statusSaving} onCancel={() => setStatusEmp(null)} label="Guardar estado" />
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -475,6 +608,19 @@ function EmployeeFields(props: {
 
 function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <th className={`text-left text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3 ${className}`}>{children}</th>;
+}
+
+function FilterChip({ active, onClick, label, count, dot }: { active: boolean; onClick: () => void; label: string; count: number; dot?: string }) {
+  return (
+    <button
+      type="button" onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${active ? 'bg-green-500/15 text-green-300 border-green-500/40' : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'}`}
+    >
+      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />}
+      {label}
+      <span className={`tabular-nums ${active ? 'text-green-200' : 'text-slate-500'}`}>{count}</span>
+    </button>
+  );
 }
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

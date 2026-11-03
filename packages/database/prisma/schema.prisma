@@ -2710,6 +2710,12 @@ model Employee {
   salaryBaseUsd Float    @default(0)       // sueldo base del período, en USD (autollenado del cargo, editable)
   bonusUsd      Float    @default(0)       // bonificación del período, en USD (autollenado del cargo, editable)
   frequency     String   @default("WEEKLY") // WEEKLY | BIWEEKLY
+  // ACTIVE | VACATION | MEDICAL_LEAVE | SPECIAL_LEAVE | INACTIVE | VOLUNTARY_RESIGNATION | JUSTIFIED_DISMISSAL
+  // (ver apps/api/src/modules/payroll/employee-status.ts). isActive se deriva del estado = entra en nomina.
+  status        String   @default("ACTIVE")
+  statusFrom    DateTime?                  // fecha-calendario (medianoche UTC), opcional
+  statusTo      DateTime?                  // fecha-calendario (medianoche UTC), opcional
+  statusNote    String?
   isActive      Boolean  @default(true)
   lines         PayrollRunLine[]
   disciplinaryActions DisciplinaryAction[]

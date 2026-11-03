@@ -44,6 +44,14 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 👥 Nómina: estados de empleado, filtro y reportes Excel/PDF (2026-11-02, Sesión 177) — ✅ commiteado, ⏳ SIN DESPLEGAR
+
+- **Pedido:** en `/payroll/employees`, además de Activo/Inactivo: Vacaciones, Reposo, Retiro voluntario, Despido justificado y Permiso especial; filtro por estado; reporte en Excel y en PDF.
+- **Decisiones del usuario:** Vacaciones, Reposo y Permiso especial **siguen entrando en la nómina**; Inactivo, Retiro y Despido no. Cada cambio guarda **desde / hasta (opcional) y una observación**, que salen en los reportes.
+- **Hecho:** `Employee.status/statusFrom/statusTo/statusNote` (migración `20261102200000_employee_status` + fix-schema); `isActive` queda derivado del estado, así la nómina y las notificaciones no se tocan. Endpoint `PATCH /employees/:id/status`, filtro `?status=`, `GET /employees/report/pdf|xlsx`. Pantalla: chips por estado con conteo, badge clicable → modal de estado, botones Excel/PDF con los filtros actuales. Detalle en PROJECT.md.
+- **Probado:** `tsc` API y web limpios; PDF y Excel generados con datos de ejemplo (bundle esbuild + prisma simulado) y revisados a ojo (nombres largos en 2 líneas, observación multilínea, subtotales y total). No probado contra una BD real ni en el navegador.
+- **Al desplegar:** la migración pasa los empleados inactivos a estado "Inactivo"; no cambia quién entra en la nómina.
+
 ## 💬 Cotización: botón "Enviar por WhatsApp" (2026-11-02, Sesión 177) — ✅ commiteado, ⏳ SIN DESPLEGAR
 
 - **Pedido:** desde la cotización, enviarla por WhatsApp al teléfono del cliente; si no tiene número, pedirlo en un modal. El usuario eligió: mensaje con la cotización escrita + saludo, y el PDF se adjunta al enviar.

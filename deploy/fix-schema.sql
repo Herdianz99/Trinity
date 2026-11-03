@@ -3362,3 +3362,9 @@ ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "customerLocationInPos" BOO
 
 -- "Aplica 5%" en productos, solo marca + filtro (Session 171)
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "applies5Pct" BOOLEAN NOT NULL DEFAULT false;
+
+-- Estados de empleado (Session 177). El backfill de inactivos lo hace la migracion 20261102200000_employee_status.
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "statusFrom" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "statusTo" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "statusNote" TEXT;

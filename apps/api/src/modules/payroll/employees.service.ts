@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { SetEmployeeStatusDto, QueryEmployeesDto } from './dto/set-employee-status.dto';
+import { EMPLOYEE_STATUS_KEYS, statusInPayroll } from './employee-status';
 
 const EMPLOYEE_INCLUDE = {
   customer: { select: { id: true, name: true, documentType: true, rif: true, phone: true } },
@@ -31,11 +33,14 @@ export class EmployeesService {
     return `EMP-${next.toString().padStart(4, '0')}`;
   }
 
-  async findAll(query?: { search?: string; isActive?: string; departmentId?: string }) {
+  /** Filtros del listado (también los usan los reportes Excel/PDF). */
+  buildWhere(query?: QueryEmployeesDto) {
     const where: any = {};
     if (query?.isActive === 'true') where.isActive = true;
     if (query?.isActive === 'false') where.isActive = false;
     if (query?.departmentId) where.departmentId = query.departmentId;
+    const statuses = (query?.status || '').split(',').map((x) => x.trim()).filter((x) => (EMPLOYEE_STATUS_KEYS as string[]).includes(x));
+    if (statuses.length) where.status = { in: statuses };
     if (query?.search) {
       where.OR = [
         { code: { contains: query.search, mode: 'insensitive' } },
@@ -44,8 +49,12 @@ export class EmployeesService {
         { customer: { rif: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
+    return where;
+  }
+
+  async findAll(query?: QueryEmployeesDto) {
     return this.prisma.employee.findMany({
-      where,
+      where: this.buildWhere(query),
       orderBy: [{ isActive: 'desc' }, { code: 'asc' }],
       include: EMPLOYEE_INCLUDE,
     });
@@ -132,6 +141,7 @@ export class EmployeesService {
           bonusUsd: dto.bonusUsd ?? 0,
           frequency: dto.frequency || 'WEEKLY',
           isActive: dto.isActive ?? true,
+          status: dto.isActive === false ? 'INACTIVE' : 'ACTIVE',
         },
         include: EMPLOYEE_INCLUDE,
       });
@@ -140,9 +150,13 @@ export class EmployeesService {
 
   async update(id: string, dto: UpdateEmployeeDto) {
     await this.findOne(id);
+    // isActive suelto (compatibilidad): se traduce a estado Activo/Inactivo para no desincronizarlos.
+    const { isActive, ...rest } = dto;
+    const data: any = { ...rest };
+    if (isActive !== undefined) Object.assign(data, this.statusData({ status: isActive ? 'ACTIVE' : 'INACTIVE' }));
     return this.prisma.employee.update({
       where: { id },
-      data: dto,
+      data,
       include: EMPLOYEE_INCLUDE,
     });
   }
@@ -151,7 +165,31 @@ export class EmployeesService {
     const employee = await this.findOne(id);
     return this.prisma.employee.update({
       where: { id },
-      data: { isActive: !employee.isActive },
+      data: this.statusData({ status: employee.isActive ? 'INACTIVE' : 'ACTIVE' }),
+      include: EMPLOYEE_INCLUDE,
+    });
+  }
+
+  /** Campos a guardar para un estado. isActive = entra en nómina. Fechas date-only (medianoche UTC). */
+  private statusData(dto: SetEmployeeStatusDto) {
+    const keepDetail = dto.status !== 'ACTIVE';
+    const from = keepDetail && dto.statusFrom ? new Date(dto.statusFrom.slice(0, 10)) : null;
+    const to = keepDetail && dto.statusTo ? new Date(dto.statusTo.slice(0, 10)) : null;
+    if (from && to && to < from) throw new BadRequestException('La fecha "hasta" no puede ser anterior a "desde"');
+    return {
+      status: dto.status,
+      isActive: statusInPayroll(dto.status),
+      statusFrom: from,
+      statusTo: to,
+      statusNote: keepDetail ? dto.statusNote?.trim() || null : null,
+    };
+  }
+
+  async setStatus(id: string, dto: SetEmployeeStatusDto) {
+    await this.findOne(id);
+    return this.prisma.employee.update({
+      where: { id },
+      data: this.statusData(dto),
       include: EMPLOYEE_INCLUDE,
     });
   }
