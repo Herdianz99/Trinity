@@ -44,7 +44,9 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
-## 👥 Nómina: estados de empleado, filtro y reportes Excel/PDF (2026-11-02, Sesión 177) — ✅ commiteado, ⏳ SIN DESPLEGAR
+## 👥 Nómina: estados de empleado, filtro y reportes Excel/PDF (2026-11-02, Sesión 177) — ✅ DESPLEGADO EN LAS 7 (2026-11-02, `6f18027e`)
+
+- **Deploy 2026-11-02 (noche) en las 7, en este orden: chica → aceros → acerosmayor → mayor → Turen → Total → grande**, todas sin errores (health OK). Lleva también el fix de anticipos/pago de compras (Sesión 174, `3b559bff`) a grande, Total, Turen y acerosmayor, y el del catálogo (Sesión 176) a todas. Migración aplicada: grande 87 activos/18 inactivos, chica 9/2, Total 13, Turen 3, aceros 19; mayor y acerosmayor sin empleados.
 
 - **Pedido:** en `/payroll/employees`, además de Activo/Inactivo: Vacaciones, Reposo, Retiro voluntario, Despido justificado y Permiso especial; filtro por estado; reporte en Excel y en PDF.
 - **Decisiones del usuario:** Vacaciones, Reposo y Permiso especial **siguen entrando en la nómina**; Inactivo, Retiro y Despido no. Cada cambio guarda **desde / hasta (opcional) y una observación**, que salen en los reportes.
@@ -52,14 +54,14 @@
 - **Probado:** `tsc` API y web limpios; PDF y Excel generados con datos de ejemplo (bundle esbuild + prisma simulado) y revisados a ojo (nombres largos en 2 líneas, observación multilínea, subtotales y total). No probado contra una BD real ni en el navegador.
 - **Al desplegar:** la migración pasa los empleados inactivos a estado "Inactivo"; no cambia quién entra en la nómina.
 
-## 💬 Cotización: botón "Enviar por WhatsApp" (2026-11-02, Sesión 177) — ✅ commiteado, ⏳ SIN DESPLEGAR
+## 💬 Cotización: botón "Enviar por WhatsApp" (2026-11-02, Sesión 177) — ✅ DESPLEGADO EN LAS 7 (2026-11-02, `6f18027e`)
 
 - **Pedido:** desde la cotización, enviarla por WhatsApp al teléfono del cliente; si no tiene número, pedirlo en un modal. El usuario eligió: mensaje con la cotización escrita + saludo, y el PDF se adjunta al enviar.
 - **Hecho** (`quotations/[id]/page.tsx`, solo frontend, sin cambios de API): botón verde **Enviar por WhatsApp**. Abre el chat (wa.me en teléfono, WhatsApp Web en PC) con saludo (cliente, vendedor y empresa de `/config`), ítems `cant x producto — $total` (máx. 40, el resto "ver PDF"), subtotal/IVA/total y vigencia. A la vez descarga `Cotizacion-<num>.pdf` (USD con IVA) para arrastrarlo al chat. Sin teléfono válido → modal que lo pide (formato VE → 58…) y lo guarda en la ficha del cliente (casilla, marcada por defecto). WhatsApp se abre antes de guardar para que el navegador no lo bloquee como ventana emergente.
 - Límite: un enlace de WhatsApp no puede adjuntar archivos (solo texto); adjuntar solo es posible con la API oficial de WhatsApp Business (ver Fase 3 del chatbot).
 - `tsc` web limpio; no probado en el navegador ni en el teléfono.
 
-## 📤 Catálogo con fotos: compartir con TODAS las categorías en el teléfono (2026-11-02, Sesión 176) — ✅ DESPLEGADO en la mayor
+## 📤 Catálogo con fotos: compartir con TODAS las categorías en el teléfono (2026-11-02, Sesión 176) — ✅ DESPLEGADO EN LAS 7 (2026-11-02, `6f18027e`)
 
 - **Problema (mayor):** con todas las categorías tildadas el menú de compartir del teléfono no salía; con una sola sí. **Causa:** el navegador solo deja llamar `navigator.share()` unos segundos después del toque. Con todas las categorías el PDF pesa **~14,1 MB** (una sola: 0,4 MB) y tarda más que ese permiso → `NotAllowedError` → Trinity caía al fallback y abría el PDF en otra pestaña (nginx mostraba cada intento bajado 2 veces).
 - **Arreglo** (`catalog/products/page.tsx`): si `share()` falla con `NotAllowedError`, el modal no se cierra, guarda el `File` ya descargado y muestra "Catálogo listo (X MB)" + botón **Compartir catálogo**; ese toque nuevo abre el menú. Con una categoría sigue directo. `tsc` web limpio; no probado en teléfono.
