@@ -46,11 +46,48 @@ export class PublicService {
     });
     const rate = rateRow?.rate ?? 0;
 
+    // Bloqueados para la venta no se aceptan (al facturar el pedido se omitirían).
     const products = await this.prisma.product.findMany({
-      where: { code: { in: codes }, isActive: true, showInStore: true },
-      select: { code: true, name: true, priceDetal: true },
+      where: { code: { in: codes }, isActive: true, showInStore: true, saleBlocked: false },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        priceDetal: true,
+        stock: { where: { warehouse: { countsForSale: true } }, select: { quantity: true } },
+      },
     });
     const byCode = new Map(products.map((p) => [p.code, p]));
+
+    // Existencia libre = almacenes que cuentan para la venta - apartado en facturas en espera
+    // (la misma regla con que el snapshot marca Disponible/Pocas/Agotado). Nunca se le dice al
+    // cliente cuántas hay, solo que no alcanza (los números de stock no se publican).
+    const reservedRows = await this.prisma.invoiceItem.groupBy({
+      by: ['productId'],
+      where: { productId: { in: products.map((p) => p.id) }, invoice: { status: 'PENDING' } },
+      _sum: { quantity: true },
+    });
+    const reserved = new Map(reservedRows.map((r) => [r.productId, Math.max(0, r._sum.quantity || 0)]));
+    const wanted = new Map<string, number>();
+    for (const i of dto.items) {
+      const code = i.code.trim();
+      wanted.set(code, (wanted.get(code) || 0) + i.quantity);
+    }
+    const short = products.filter((p) => {
+      const free = p.stock.reduce((s, x) => s + x.quantity, 0) - (reserved.get(p.id) || 0);
+      return (wanted.get(p.code) || 0) > free + 1e-9;
+    });
+    if (short.length) {
+      const names = short.map((p) => `"${p.name}"`).join(', ');
+      throw new BadRequestException({
+        statusCode: 400,
+        message:
+          short.length === 1
+            ? `No tenemos suficiente existencia de ${names} para la cantidad pedida. Reduce la cantidad o escríbenos por WhatsApp.`
+            : `No tenemos suficiente existencia de: ${names}. Reduce las cantidades o escríbenos por WhatsApp.`,
+        outOfStock: short.map((p) => p.code),
+      });
+    }
 
     // Items con precios RECALCULADOS por Trinity (nunca confiar en el precio del cliente).
     const items = dto.items.map((i) => {

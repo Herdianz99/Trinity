@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PublicController } from './public.controller';
 import { PublicService } from './public.service';
+import { StoreThrottlerGuard } from './store-throttler.guard';
 import { ProductImagesModule } from '../product-images/product-images.module';
 
 @Module({
@@ -10,6 +11,6 @@ import { ProductImagesModule } from '../product-images/product-images.module';
     ProductImagesModule, // reusa SpacesService para subir la captura del pago
   ],
   controllers: [PublicController],
-  providers: [PublicService],
+  providers: [PublicService, StoreThrottlerGuard],
 })
 export class PublicModule {}
