@@ -27,7 +27,7 @@ export class OnlineOrdersController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+    return this.service.findDetail(id);
   }
 
   @Patch(':id')
@@ -38,6 +38,12 @@ export class OnlineOrdersController {
   @Patch(':id/confirm')
   confirm(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.service.confirm(id, userId);
+  }
+
+  // FACTURADO -> ENTREGADO (requiere la factura cobrada)
+  @Patch(':id/deliver')
+  deliver(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.service.deliver(id, userId);
   }
 
   @Patch(':id/cancel')

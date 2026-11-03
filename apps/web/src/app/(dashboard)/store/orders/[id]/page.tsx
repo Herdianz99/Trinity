@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin, Receipt, Loader2, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Phone, User, CreditCard, Truck, Store, MapPin, Receipt, Loader2, X, PackageCheck } from 'lucide-react';
 import WhatsAppIcon from '@/components/whatsapp-icon';
 import { waPhone, openWhatsAppChat } from '@/lib/whatsapp';
 import { ONLINE_ORDERS_CHANGED } from '@/components/online-orders-alert';
@@ -31,9 +31,13 @@ interface OnlineOrder {
   totalUsd: number;
   totalBs: number;
   exchangeRate: number;
-  status: 'POR_VERIFICAR' | 'CONFIRMADO' | 'FACTURADO' | 'CANCELADO';
+  status: 'POR_VERIFICAR' | 'CONFIRMADO' | 'FACTURADO' | 'ENTREGADO' | 'CANCELADO';
   verifiedAt: string | null;
   invoiceId: string | null;
+  deliveredAt?: string | null;
+  deliveredByName?: string | null;
+  // Solo viene en GET /online-orders/:id (los PATCH devuelven el pedido sin esto)
+  invoice?: { id: string; number: string | null; status: string } | null;
   createdAt: string;
   items: OnlineOrderItem[];
 }
@@ -42,15 +46,19 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   POR_VERIFICAR: { label: 'Por verificar', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   CONFIRMADO:    { label: 'Confirmado',    cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   FACTURADO:     { label: 'Facturado',     cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  ENTREGADO:     { label: 'Entregado',     cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   CANCELADO:     { label: 'Cancelado',     cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
 };
 
+const INVOICE_PAID = ['PAID', 'PARTIAL_RETURN'];
+
 // ── Mensajes para "Avisar al cliente" (salen del WhatsApp del empleado, sin costo) ──
-type MsgKey = 'recibido' | 'pago' | 'listo' | 'cancelado';
+type MsgKey = 'recibido' | 'pago' | 'listo' | 'entregado' | 'cancelado';
 const MSG_LABELS: Record<MsgKey, string> = {
   recibido: 'Pedido recibido',
   pago: 'Falta el pago',
   listo: 'Listo para retirar',
+  entregado: 'Gracias por su compra',
   cancelado: 'Pedido cancelado',
 };
 const usd = (n: number) => '$' + (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -59,6 +67,7 @@ const WA_MAX_ITEMS = 40; // un enlace de WhatsApp muy largo falla
 
 function defaultMsgKey(o: OnlineOrder): MsgKey {
   if (o.status === 'CANCELADO') return 'cancelado';
+  if (o.status === 'ENTREGADO') return 'entregado';
   if (o.status === 'CONFIRMADO' || o.status === 'FACTURADO') return 'listo';
   return o.paymentRef || o.paymentProofUrl ? 'recibido' : 'pago';
 }
@@ -84,6 +93,11 @@ function buildCustomerMessage(key: MsgKey, o: OnlineOrder, companyName: string):
     lines.push(
       `¡Su pedido *${o.number}* ya está listo para retirar en la tienda!`, '',
       'Al retirar, indique el número de pedido y presente su cédula. ¡Gracias por su compra!',
+    );
+  } else if (key === 'entregado') {
+    lines.push(
+      `¡Gracias por su compra! Su pedido *${o.number}* ya fue entregado.`, '',
+      'Si necesita algo más, con gusto le atendemos por aquí o en nuestra tienda online.',
     );
   } else {
     lines.push(
@@ -212,6 +226,23 @@ export default function StoreOrderDetailPage() {
       if (!res.ok) throw new Error(data?.message || 'No se pudo procesar');
       setOrder(data);
       window.dispatchEvent(new Event(ONLINE_ORDERS_CHANGED)); // refresca el contador del menú
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function deliver() {
+    if (!order) return;
+    if (!confirm(`¿Confirmas que el cliente ya retiró el pedido ${order.number}?`)) return;
+    setActing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proxy/online-orders/${id}/deliver`, { method: 'PATCH' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'No se pudo marcar como entregado');
+      setOrder(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -509,13 +540,44 @@ export default function StoreOrderDetailPage() {
       )}
 
       {order.status === 'FACTURADO' && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-green-300 flex items-center gap-2">
-            <Receipt size={16} /> Pedido facturado. Retómalo en el POS (facturas en espera) para cobrarlo.
+        order.invoice && INVOICE_PAID.includes(order.invoice.status) ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
+                <CheckCircle size={16} /> Factura {order.invoice.number} cobrada
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">Cuando el cliente retire la mercancía, márcalo como entregado.</p>
+            </div>
+            <button
+              onClick={deliver}
+              disabled={acting}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg text-sm inline-flex items-center gap-2 whitespace-nowrap"
+            >
+              {acting ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />}
+              Marcar entregado
+            </button>
+          </div>
+        ) : (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-green-300 flex items-center gap-2">
+              <Receipt size={16} />
+              Pedido facturado{order.invoice?.number ? ` (${order.invoice.number})` : ''}. Retómalo en el POS (facturas en espera) para cobrarlo; luego podrás marcarlo como entregado.
+            </p>
+            <Link href="/sales/pos" className="text-sm text-blue-400 hover:text-blue-300 font-medium whitespace-nowrap">
+              Ir al POS →
+            </Link>
+          </div>
+        )
+      )}
+
+      {order.status === 'ENTREGADO' && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+          <p className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
+            <PackageCheck size={16} /> Pedido entregado
+            {order.deliveredAt ? ` el ${new Date(order.deliveredAt).toLocaleString('es-VE')}` : ''}
+            {order.deliveredByName ? ` por ${order.deliveredByName}` : ''}
           </p>
-          <Link href="/sales/pos" className="text-sm text-blue-400 hover:text-blue-300 font-medium whitespace-nowrap">
-            Ir al POS →
-          </Link>
+          {order.invoice?.number && <p className="text-xs text-slate-400 mt-1">Factura {order.invoice.number}</p>}
         </div>
       )}
 

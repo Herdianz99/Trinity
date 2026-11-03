@@ -22,7 +22,7 @@ interface OnlineOrder {
   paymentRef: string | null;
   totalUsd: number;
   totalBs: number;
-  status: 'POR_VERIFICAR' | 'CONFIRMADO' | 'FACTURADO' | 'CANCELADO';
+  status: 'POR_VERIFICAR' | 'CONFIRMADO' | 'FACTURADO' | 'ENTREGADO' | 'CANCELADO';
   createdAt: string;
   items: OnlineOrderItem[];
 }
@@ -31,12 +31,14 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   POR_VERIFICAR: { label: 'Por verificar', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   CONFIRMADO:    { label: 'Confirmado',    cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   FACTURADO:     { label: 'Facturado',     cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  ENTREGADO:     { label: 'Entregado',     cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   CANCELADO:     { label: 'Cancelado',     cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
 };
 
 const TABS: { key: string; label: string }[] = [
   { key: 'POR_VERIFICAR', label: 'Por verificar' },
   { key: 'CONFIRMADO', label: 'Confirmados' },
+  { key: 'FACTURADO', label: 'Por entregar' },
   { key: '', label: 'Todos' },
 ];
 

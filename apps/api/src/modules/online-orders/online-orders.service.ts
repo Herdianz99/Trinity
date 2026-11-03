@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { OnlineOrderStatus } from '@prisma/client';
+import { InvoiceStatus, OnlineOrderStatus } from '@prisma/client';
 import { UpdateOnlineOrderDto } from './dto/update-online-order.dto';
+
+// Factura "cobrada" (se puede entregar el pedido). Una devolución parcial ya pasó por caja.
+const PAID_INVOICE: InvoiceStatus[] = ['PAID', 'PARTIAL_RETURN'];
 
 @Injectable()
 export class OnlineOrdersService {
@@ -41,9 +44,46 @@ export class OnlineOrdersService {
     return order;
   }
 
+  // Detalle para la pantalla: + la factura (número y si ya se cobró) y quién lo entregó.
+  // OnlineOrder.invoiceId / deliveredById no tienen relación Prisma: se resuelven aparte.
+  async findDetail(id: string) {
+    const order = await this.findOne(id);
+    const [invoice, deliveredBy] = await Promise.all([
+      order.invoiceId
+        ? this.prisma.invoice.findUnique({ where: { id: order.invoiceId }, select: { id: true, number: true, status: true } })
+        : null,
+      order.deliveredById
+        ? this.prisma.user.findUnique({ where: { id: order.deliveredById }, select: { name: true } })
+        : null,
+    ]);
+    return { ...order, invoice, deliveredByName: deliveredBy?.name ?? null };
+  }
+
+  // FACTURADO -> ENTREGADO, solo con la factura ya cobrada (no entregar mercancía sin cobrar).
+  async deliver(id: string, userId: string) {
+    const order = await this.findOne(id);
+    if (order.status !== 'FACTURADO' || !order.invoiceId) {
+      throw new BadRequestException('Solo se puede entregar un pedido facturado');
+    }
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: order.invoiceId },
+      select: { number: true, status: true },
+    });
+    if (!invoice || !PAID_INVOICE.includes(invoice.status)) {
+      throw new BadRequestException(
+        `La factura${invoice?.number ? ` ${invoice.number}` : ''} aún no está cobrada: cóbrala en el POS antes de entregar el pedido`,
+      );
+    }
+    await this.prisma.onlineOrder.update({
+      where: { id },
+      data: { status: 'ENTREGADO', deliveredAt: new Date(), deliveredById: userId },
+    });
+    return this.findDetail(id);
+  }
+
   async update(id: string, dto: UpdateOnlineOrderDto) {
     const order = await this.findOne(id);
-    if (order.status === 'FACTURADO' || order.status === 'CANCELADO') {
+    if (order.status === 'FACTURADO' || order.status === 'ENTREGADO' || order.status === 'CANCELADO') {
       throw new BadRequestException('El pedido ya no se puede editar');
     }
     return this.prisma.onlineOrder.update({
@@ -70,8 +110,8 @@ export class OnlineOrdersService {
 
   async cancel(id: string) {
     const order = await this.findOne(id);
-    if (order.status === 'FACTURADO') {
-      throw new BadRequestException('No se puede cancelar un pedido facturado');
+    if (order.status === 'FACTURADO' || order.status === 'ENTREGADO') {
+      throw new BadRequestException(`No se puede cancelar un pedido ${order.status === 'ENTREGADO' ? 'entregado' : 'facturado'}`);
     }
     return this.prisma.onlineOrder.update({
       where: { id },

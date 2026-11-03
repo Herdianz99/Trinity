@@ -2567,6 +2567,7 @@ enum OnlineOrderStatus {
   POR_VERIFICAR
   CONFIRMADO
   FACTURADO
+  ENTREGADO // cobrado y retirado/entregado al cliente (Sesion 178)
   CANCELADO
 }
 
@@ -2589,6 +2590,8 @@ model OnlineOrder {
   verifiedById   String?
   verifiedAt     DateTime?
   invoiceId      String? // se llena cuando se factura (Fase 2)
+  deliveredAt    DateTime? // cuando se marco ENTREGADO
+  deliveredById  String?
   items          OnlineOrderItem[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
