@@ -21,6 +21,7 @@ interface PurchaseBill {
   invoiceDate: string;
   totalUsd: number;
   status: 'PENDING' | 'PROCESSED' | 'CANCELLED';
+  returnStatus?: 'NONE' | 'PARTIAL' | 'TOTAL';
   supplier: { id: string; name: string };
 }
 
@@ -33,13 +34,24 @@ const STATUS_BADGES: Record<string, string> = {
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PROCESSED: 'text-green-400 border-green-500/30 bg-green-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  PARTIAL_RETURN: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  RETURNED: 'text-red-400 border-red-500/30 bg-red-500/10',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
   PROCESSED: 'Procesada',
   CANCELLED: 'Cancelada',
+  PARTIAL_RETURN: 'Dev. Parcial',
+  RETURNED: 'Devuelta',
 };
+
+// Una compra procesada con NCC de mercancia confirmadas se muestra como devuelta (parcial o total)
+function displayStatus(bill: { status: string; returnStatus?: string }): string {
+  if (bill.status === 'PROCESSED' && bill.returnStatus === 'TOTAL') return 'RETURNED';
+  if (bill.status === 'PROCESSED' && bill.returnStatus === 'PARTIAL') return 'PARTIAL_RETURN';
+  return bill.status;
+}
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -192,6 +204,8 @@ export default function PurchasesPage() {
             <option value="PENDING">Pendiente</option>
             <option value="PROCESSED">Procesada</option>
             <option value="CANCELLED">Cancelada</option>
+            <option value="PARTIAL_RETURN">Dev. Parcial</option>
+            <option value="RETURNED">Devuelta</option>
           </select>
           <input
             type="date"
@@ -271,8 +285,8 @@ export default function PurchasesPage() {
                       ${bill.totalUsd.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGES[bill.status] || ''}`}>
-                        {STATUS_LABELS[bill.status] || bill.status}
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGES[displayStatus(bill)] || ''}`}>
+                        {STATUS_LABELS[displayStatus(bill)] || bill.status}
                       </span>
                     </td>
                     <td className="px-4 py-3">

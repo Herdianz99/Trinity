@@ -18,7 +18,6 @@ import { PurchaseAttachmentsService } from './purchase-attachments.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { PurchaseStatus } from '@prisma/client';
 
 @Controller('purchases')
 @UseGuards(AuthGuard('jwt'))
@@ -54,7 +53,7 @@ export class PurchaseOrdersController {
   @Get()
   findAll(
     @Query('supplierId') supplierId?: string,
-    @Query('status') status?: PurchaseStatus,
+    @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,

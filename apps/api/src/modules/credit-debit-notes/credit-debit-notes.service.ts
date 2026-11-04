@@ -17,6 +17,33 @@ export class CreditDebitNotesService {
     return Math.round(n * 100) / 100;
   }
 
+  // Recalcula PurchaseOrder.returnStatus (NONE | PARTIAL | TOTAL) segun las NCC de mercancia
+  // CONFIRMADAS de la compra. Se llama dentro de la transaccion despues de confirmar o
+  // eliminar una NCC. No toca "status" (PROCESSED lo exigen retenciones y validaciones).
+  private async recalcPurchaseReturnStatus(tx: any, purchaseOrderId: string) {
+    const po = await tx.purchaseOrder.findUnique({
+      where: { id: purchaseOrderId },
+      include: { items: { select: { productId: true, quantity: true } } },
+    });
+    if (!po) return;
+    const returned = await tx.creditDebitNoteItem.groupBy({
+      by: ['productId'],
+      where: { note: { purchaseOrderId, type: 'NCC', origin: 'MERCHANDISE', status: 'POSTED' } },
+      _sum: { quantity: true },
+    });
+    const retByProduct: Record<string, number> = {};
+    for (const r of returned) if (r.productId) retByProduct[r.productId] = r._sum.quantity || 0;
+    const boughtByProduct: Record<string, number> = {};
+    for (const it of po.items) boughtByProduct[it.productId] = (boughtByProduct[it.productId] || 0) + it.quantity;
+    const productIds = Object.keys(boughtByProduct);
+    const anyRet = productIds.some((p) => (retByProduct[p] || 0) > 0);
+    const allRet = productIds.length > 0 && productIds.every((p) => (retByProduct[p] || 0) >= boughtByProduct[p]);
+    const returnStatus = allRet ? 'TOTAL' : anyRet ? 'PARTIAL' : 'NONE';
+    if (po.returnStatus !== returnStatus) {
+      await tx.purchaseOrder.update({ where: { id: purchaseOrderId }, data: { returnStatus } });
+    }
+  }
+
   private getIvaRate(ivaType: string): number {
     switch (ivaType) {
       case 'GENERAL':
@@ -987,6 +1014,11 @@ export class CreditDebitNotesService {
         where: { id },
         data: { status: 'POSTED' },
       });
+
+      // Estado de devolucion de la compra (ya con esta nota en POSTED)
+      if (note.type === 'NCC' && note.origin === 'MERCHANDISE' && note.purchaseOrderId) {
+        await this.recalcPurchaseReturnStatus(tx, note.purchaseOrderId);
+      }
     });
 
     return this.findOne(id);
@@ -1210,6 +1242,11 @@ export class CreditDebitNotesService {
       }
       await tx.creditDebitNoteItem.deleteMany({ where: { noteId: id } });
       await tx.creditDebitNote.delete({ where: { id } });
+
+      // Estado de devolucion de la compra (ya sin esta nota)
+      if (note.status === 'POSTED' && note.type === 'NCC' && note.origin === 'MERCHANDISE' && note.purchaseOrderId) {
+        await this.recalcPurchaseReturnStatus(tx, note.purchaseOrderId);
+      }
     });
 
     return { message: 'Nota eliminada' };

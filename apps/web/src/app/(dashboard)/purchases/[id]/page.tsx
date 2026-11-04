@@ -78,6 +78,7 @@ interface PurchaseBill {
   number: string;
   purchaseNumber: number;
   status: 'PENDING' | 'PROCESSED' | 'CANCELLED';
+  returnStatus?: 'NONE' | 'PARTIAL' | 'TOTAL';
   supplierId: string;
   supplier: Supplier;
   responsibleId: string | null;
@@ -225,12 +226,16 @@ const STATUS_BADGES: Record<string, string> = {
   PENDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
   PROCESSED: 'text-green-400 border-green-500/30 bg-green-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
+  PARTIAL_RETURN: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  RETURNED: 'text-red-400 border-red-500/30 bg-red-500/10',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pendiente',
   PROCESSED: 'Procesada',
   CANCELLED: 'Cancelada',
+  PARTIAL_RETURN: 'Dev. Parcial',
+  RETURNED: 'Devuelta',
 };
 
 const PAYABLE_STATUS_BADGES: Record<string, string> = {
@@ -265,6 +270,13 @@ const NOTE_STATUS_COLORS: Record<string, string> = {
   POSTED: 'text-green-400 border-green-500/30 bg-green-500/10',
   CANCELLED: 'text-red-400 border-red-500/30 bg-red-500/10',
 };
+
+// Una compra procesada con NCC de mercancia confirmadas se muestra como devuelta (parcial o total)
+function displayStatus(bill: { status: string; returnStatus?: string }): string {
+  if (bill.status === 'PROCESSED' && bill.returnStatus === 'TOTAL') return 'RETURNED';
+  if (bill.status === 'PROCESSED' && bill.returnStatus === 'PARTIAL') return 'PARTIAL_RETURN';
+  return bill.status;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -758,8 +770,8 @@ export default function PurchaseBillDetailPage() {
             </h1>
             <p className="text-slate-400 text-sm">{bill.supplier.name}</p>
           </div>
-          <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_BADGES[bill.status]}`}>
-            {STATUS_LABELS[bill.status]}
+          <span className={`text-xs px-2.5 py-1 rounded-full border ${STATUS_BADGES[displayStatus(bill)]}`}>
+            {STATUS_LABELS[displayStatus(bill)]}
           </span>
         </div>
 

@@ -3373,3 +3373,6 @@ ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "statusNote" TEXT;
 ALTER TYPE "OnlineOrderStatus" ADD VALUE IF NOT EXISTS 'ENTREGADO';
 ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "deliveredAt" TIMESTAMP(3);
 ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "deliveredById" TEXT;
+
+-- Estado de devolucion de compras (Session 179). El backfill lo hace la migracion 20261104120000_purchase_return_status.
+ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "returnStatus" TEXT NOT NULL DEFAULT 'NONE';

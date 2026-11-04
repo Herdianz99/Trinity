@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PurchaseRequestsService } from '../purchase-requests/purchase-requests.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ProcessPurchaseBillDto } from './dto/receive-purchase-order.dto';
-import { IvaType, PurchaseStatus } from '@prisma/client';
+import { IvaType } from '@prisma/client';
 import { caracasDateKey } from '../../common/timezone';
 import { resolveBregaPct, computeSellingPrices } from '../../common/pricing';
 import { buildCategoryBregaMap } from '../../common/category-brega';
@@ -481,7 +481,7 @@ export class PurchaseOrdersService {
 
   async findAll(filters: {
     supplierId?: string;
-    status?: PurchaseStatus;
+    status?: string;
     search?: string;
     from?: string;
     to?: string;
@@ -493,7 +493,10 @@ export class PurchaseOrdersService {
     const where: any = {};
 
     if (supplierId) where.supplierId = supplierId;
-    if (status) where.status = status;
+    // "Devuelta parcial" / "Devuelta" salen de returnStatus (las devueltas siguen en PROCESSED)
+    if (status === 'PARTIAL_RETURN') where.returnStatus = 'PARTIAL';
+    else if (status === 'RETURNED') where.returnStatus = 'TOTAL';
+    else if (status) where.status = status;
 
     // Busqueda unificada: N° de documento, N° de factura del proveedor, nombre o RIF del proveedor
     if (search) {

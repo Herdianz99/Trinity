@@ -1109,6 +1109,7 @@ model PurchaseOrder {
   supplierId            String
   supplier              Supplier               @relation(fields: [supplierId], references: [id])
   status                PurchaseStatus         @default(PENDING)
+  returnStatus          String                 @default("NONE") // NONE | PARTIAL | TOTAL (devoluciones por NCC de mercancia)
   invoiceDate           DateTime?
   receivedDate          DateTime?
   currency              String                 @default("USD")
