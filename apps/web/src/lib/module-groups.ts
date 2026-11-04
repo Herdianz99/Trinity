@@ -18,7 +18,7 @@ export const MODULE_GROUPS: { group: string; items: { key: string; label: string
       { key: 'payables', label: 'Cuentas por Pagar' },
       { key: 'expenses', label: 'Gastos' },
       { key: 'payroll', label: 'Nómina' },
-      { key: 'incidents', label: 'Incidencias (seguridad)' },
+      { key: 'incidents', label: 'Incidencias (por departamento)' },
       { key: 'divisas', label: 'Compra de divisas (finanzas)' },
       { key: 'bancos', label: 'Bancos (libro banco + conciliación)' },
       { key: 'almacen', label: 'Almacén (5S + reporte de daños)' },

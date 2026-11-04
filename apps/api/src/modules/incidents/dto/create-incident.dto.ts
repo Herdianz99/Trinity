@@ -4,6 +4,11 @@ export class CreateIncidentDto {
   @IsString()
   typeId: string;
 
+  // Departamento donde se registra. Opcional si el usuario pertenece a uno solo.
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
+
   @IsString()
   @MaxLength(2000)
   description: string; // la observación

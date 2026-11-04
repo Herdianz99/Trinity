@@ -2563,7 +2563,8 @@ CREATE TABLE IF NOT EXISTS "IncidentType" (
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "IncidentType_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "IncidentType_name_key" ON "IncidentType"("name");
+-- (Session 179) El nombre del tipo ya NO es unico global: es unico por departamento
+-- ("IncidentType_departmentId_name_key", migracion 20261104150000_incident_departments).
 
 CREATE TABLE IF NOT EXISTS "Incident" (
   "id" TEXT NOT NULL,
@@ -2593,16 +2594,21 @@ DO $$ BEGIN
     FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- Tipos de incidencia por defecto (idempotente por nombre).
-INSERT INTO "IncidentType" ("id","name","isActive","createdAt","updatedAt") VALUES
-  ('inctype_empleado','Empleado',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_robo','Robo/Hurto',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_cliente','Cliente',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_proveedor','Proveedor',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_accidente','Accidente',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_dano','Daño a propiedad',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
-  ('inctype_otro','Otro',true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-ON CONFLICT ("name") DO NOTHING;
+-- Tipos de incidencia por defecto, en el departamento Seguridad (Session 179: cada tipo
+-- pertenece a un departamento). Solo si existe el departamento creado por la migracion.
+INSERT INTO "IncidentType" ("id","name","isActive","createdAt","updatedAt","departmentId")
+SELECT v.id, v.name, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, d.id
+FROM (VALUES
+  ('inctype_empleado','Empleado'),
+  ('inctype_robo','Robo/Hurto'),
+  ('inctype_cliente','Cliente'),
+  ('inctype_proveedor','Proveedor'),
+  ('inctype_accidente','Accidente'),
+  ('inctype_dano','Daño a propiedad'),
+  ('inctype_otro','Otro')
+) AS v(id, name)
+JOIN "IncidentDepartment" d ON d.id = 'incdept_seguridad'
+ON CONFLICT DO NOTHING;
 
 -- Habilitar el modulo 'incidents' a los roles ADMIN y SUPERVISOR existentes (idempotente).
 UPDATE "RolePermission" SET modules = array_append(modules,'incidents')
@@ -3376,3 +3382,18 @@ ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "deliveredById" TEXT;
 
 -- Estado de devolucion de compras (Session 179). El backfill lo hace la migracion 20261104120000_purchase_return_status.
 ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "returnStatus" TEXT NOT NULL DEFAULT 'NONE';
+
+-- Departamentos de incidencias (Session 179). Migracion 20261104150000_incident_departments (crea "Seguridad" y hace el backfill).
+CREATE TABLE IF NOT EXISTS "IncidentDepartment" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "roles" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "viewerDepartmentIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "IncidentDepartment_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "incidentDepartmentId" TEXT;
+-- El nombre del tipo es unico POR departamento: quitar el indice unico global viejo si quedo.
+DROP INDEX IF EXISTS "IncidentType_name_key";

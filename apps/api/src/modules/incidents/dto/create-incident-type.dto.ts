@@ -8,4 +8,9 @@ export class CreateIncidentTypeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  // Departamento del tipo. Opcional si el usuario pertenece a un solo departamento.
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
 }

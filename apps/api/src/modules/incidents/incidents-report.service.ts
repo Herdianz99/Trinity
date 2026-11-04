@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { caracasDayStart, caracasDayEnd } from '../../common/timezone';
+import { IncidentsService } from './incidents.service';
+import { ScopeUser } from './incidents-scope';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
 import * as PDFDocument from 'pdfkit';
 import * as XLSX from 'xlsx';
@@ -10,31 +11,17 @@ const SEVERITY_COLORS: Record<string, string> = { LOW: '#16a34a', MEDIUM: '#d977
 
 @Injectable()
 export class IncidentsReportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly incidents: IncidentsService,
+  ) {}
 
-  private buildWhere(query: QueryIncidentsDto) {
-    const where: any = {};
-    if (query.typeId) where.typeId = query.typeId;
-    if (query.severity) where.severity = query.severity;
-    if (query.from || query.to) {
-      where.occurredAt = {};
-      if (query.from) where.occurredAt.gte = caracasDayStart(query.from);
-      if (query.to) where.occurredAt.lte = caracasDayEnd(query.to);
-    }
-    if (query.search) {
-      where.OR = [
-        { description: { contains: query.search, mode: 'insensitive' } },
-        { involvedName: { contains: query.search, mode: 'insensitive' } },
-        { number: { contains: query.search, mode: 'insensitive' } },
-      ];
-    }
-    return where;
-  }
-
-  private async load(query: QueryIncidentsDto) {
+  // Mismos filtros y MISMO alcance por departamento que el listado (Session 179).
+  private async load(query: QueryIncidentsDto, user: ScopeUser) {
+    const scope = await this.incidents.getScope(user);
     return this.prisma.incident.findMany({
-      where: this.buildWhere(query),
-      include: { type: { select: { name: true } }, createdBy: { select: { name: true } } },
+      where: this.incidents.buildWhere(query, scope),
+      include: { type: { select: { name: true } }, department: { select: { name: true } }, createdBy: { select: { name: true } } },
       orderBy: [{ typeId: 'asc' }, { occurredAt: 'desc' }],
     });
   }
@@ -44,15 +31,17 @@ export class IncidentsReportService {
   }
 
   // Reporte PDF agrupado por TIPO de incidencia, con subtotal por tipo y total general.
-  async generatePdf(query: QueryIncidentsDto): Promise<Buffer> {
-    const incidents = await this.load(query);
+  async generatePdf(query: QueryIncidentsDto, user: ScopeUser): Promise<Buffer> {
+    const incidents = await this.load(query, user);
+    // Si el reporte mezcla departamentos, cada grupo de tipo lleva el departamento al lado
+    const multiDept = new Set(incidents.map((i) => i.departmentId)).size > 1;
     const config = await this.prisma.companyConfig.findFirst();
     const company = config?.companyName || 'Trinity ERP';
 
     // Agrupar por tipo
     const groups = new Map<string, any[]>();
     for (const i of incidents) {
-      const t = i.type.name;
+      const t = multiDept ? `${i.type.name} · ${i.department.name}` : i.type.name;
       if (!groups.has(t)) groups.set(t, []);
       groups.get(t)!.push(i);
     }
@@ -163,14 +152,15 @@ export class IncidentsReportService {
   }
 
   // Exporta la lista a Excel (plana, mismos filtros).
-  async generateXlsx(query: QueryIncidentsDto): Promise<Buffer> {
-    const incidents = await this.load(query);
+  async generateXlsx(query: QueryIncidentsDto, user: ScopeUser): Promise<Buffer> {
+    const incidents = await this.load(query, user);
     const rows = incidents.map((i) => {
       const d = new Date(i.occurredAt);
       return {
         'N°': i.number,
         'Fecha': d.toLocaleDateString('es-VE', { timeZone: 'America/Caracas' }),
         'Hora': d.toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' }),
+        'Departamento': i.department.name,
         'Tipo': i.type.name,
         'Gravedad': SEVERITY_LABELS[i.severity] || i.severity,
         'Involucrado': i.involvedName || '',
@@ -179,8 +169,8 @@ export class IncidentsReportService {
       };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 22 }];
-    if (rows.length) ws['!autofilter'] = { ref: `A1:H${rows.length + 1}` };
+    ws['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 24 }, { wch: 60 }, { wch: 22 }];
+    if (rows.length) ws['!autofilter'] = { ref: `A1:I${rows.length + 1}` };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Incidencias');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

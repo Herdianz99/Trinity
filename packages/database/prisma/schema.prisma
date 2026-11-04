@@ -399,6 +399,9 @@ model User {
   dispatchesCreated   Dispatch[]          @relation("DispatchCreator")
   dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
   incidentsCreated    Incident[]          @relation("IncidentCreator")
+  // Departamento de incidencias asignado a mano (ademas del que le toca por rol)
+  incidentDepartmentId String?
+  incidentDepartment   IncidentDepartment? @relation("IncidentDepartmentMember", fields: [incidentDepartmentId], references: [id], onDelete: SetNull)
   purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
   treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
   treasuryBsMovements TreasuryBsMovement[] @relation("TreasuryBsMovementCreator")
@@ -2198,13 +2201,34 @@ model Expense {
 // INCIDENCIAS (SEGURIDAD)
 // ============================================
 
+// Departamentos de incidencias (Session 179): Seguridad, Auditoria, Infraestructura...
+// Pertenecen al departamento los usuarios cuyo ROL esta en `roles` y los usuarios con
+// `User.incidentDepartmentId` = este departamento. Ven sus incidencias todos los miembros,
+// mas los miembros de los departamentos en `viewerDepartmentIds` (solo lectura). ADMIN ve todo.
+model IncidentDepartment {
+  id                  String         @id @default(cuid())
+  name                String         @unique
+  isActive            Boolean        @default(true)
+  roles               String[]       @default([])   // roles cuyos usuarios son miembros (ej. SEGURIDAD)
+  viewerDepartmentIds String[]       @default([])   // departamentos que TAMBIEN ven estas incidencias
+  members             User[]         @relation("IncidentDepartmentMember")
+  types               IncidentType[]
+  incidents           Incident[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
 model IncidentType {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  isActive  Boolean    @default(true)
-  incidents Incident[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id           String             @id @default(cuid())
+  name         String
+  departmentId String
+  department   IncidentDepartment @relation(fields: [departmentId], references: [id])
+  isActive     Boolean            @default(true)
+  incidents    Incident[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([departmentId, name])
 }
 
 model Incident {
@@ -2212,6 +2236,8 @@ model Incident {
   number       String       @unique              // correlativo INC-XXXX
   typeId       String
   type         IncidentType @relation(fields: [typeId], references: [id])
+  departmentId String                              // departamento dueño (el del creador)
+  department   IncidentDepartment @relation(fields: [departmentId], references: [id])
   description  String                              // la observación (qué pasó)
   involvedName String?                             // persona involucrada (opcional)
   severity     String       @default("MEDIUM")     // LOW | MEDIUM | HIGH
@@ -2227,6 +2253,7 @@ model Incident {
   updatedAt    DateTime     @updatedAt
 
   @@index([typeId])
+  @@index([departmentId])
   @@index([occurredAt])
 }
 

@@ -6,6 +6,8 @@ import { Layers, Plus, Pencil, ToggleLeft, ToggleRight, Loader2, X } from 'lucid
 interface IncidentType {
   id: string;
   name: string;
+  departmentId: string;
+  department?: { id: string; name: string };
   isActive: boolean;
   createdAt: string;
 }
@@ -16,6 +18,8 @@ export default function IncidentTypesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<IncidentType | null>(null);
   const [formName, setFormName] = useState('');
+  const [formDept, setFormDept] = useState('');
+  const [depts, setDepts] = useState<{ id: string; name: string }[]>([]);
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
@@ -24,9 +28,14 @@ export default function IncidentTypesPage() {
   const fetchTypes = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/proxy/incidents/types');
+      const [res, resScope] = await Promise.all([
+        fetch('/api/proxy/incidents/types'),
+        fetch('/api/proxy/incidents/scope'),
+      ]);
       const data = await res.json();
       setTypes(Array.isArray(data) ? data : []);
+      // Departamentos donde puede crear tipos (los suyos; ADMIN todos los activos)
+      if (resScope.ok) setDepts((await resScope.json()).createDepartments || []);
     } catch {
       setMessage({ type: 'error', text: 'Error al cargar tipos' });
     } finally {
@@ -35,11 +44,13 @@ export default function IncidentTypesPage() {
   }, []);
 
   useEffect(() => { fetchTypes(); }, [fetchTypes]);
+  // Columna Departamento solo si los tipos listados son de mas de un departamento
+  const showDept = new Set(types.map((t) => t.departmentId)).size > 1 || depts.length > 1;
   useEffect(() => {
     if (message) { const t = setTimeout(() => setMessage(null), 4000); return () => clearTimeout(t); }
   }, [message]);
 
-  function openCreate() { setEditing(null); setFormName(''); setModalOpen(true); }
+  function openCreate() { setEditing(null); setFormName(''); setFormDept(depts[0]?.id || ''); setModalOpen(true); }
   function openEdit(t: IncidentType) { setEditing(t); setFormName(t.name); setModalOpen(true); }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -50,7 +61,7 @@ export default function IncidentTypesPage() {
       const res = await fetch(url, {
         method: editing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName }),
+        body: JSON.stringify(editing ? { name: formName } : { name: formName, departmentId: formDept || undefined }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Error'); }
       setMessage({ type: 'success', text: editing ? 'Tipo actualizado' : 'Tipo creado' });
@@ -102,19 +113,21 @@ export default function IncidentTypesPage() {
           <thead>
             <tr className="bg-slate-800/60 border-b border-slate-700/50">
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
+              {showDept && <th className="text-left px-4 py-3 text-slate-400 font-medium">Departamento</th>}
               <th className="text-center px-4 py-3 text-slate-400 font-medium">Estado</th>
               <th className="text-center px-4 py-3 text-slate-400 font-medium">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} className="text-center py-12"><Loader2 className="animate-spin inline-block text-slate-500" size={24} /></td></tr>
+              <tr><td colSpan={showDept ? 4 : 3} className="text-center py-12"><Loader2 className="animate-spin inline-block text-slate-500" size={24} /></td></tr>
             ) : types.length === 0 ? (
-              <tr><td colSpan={3} className="text-center py-12 text-slate-500">No hay tipos</td></tr>
+              <tr><td colSpan={showDept ? 4 : 3} className="text-center py-12 text-slate-500">No hay tipos</td></tr>
             ) : (
               types.map((t) => (
                 <tr key={t.id} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 text-slate-200 font-medium">{t.name}</td>
+                  {showDept && <td className="px-4 py-3 text-slate-400">{t.department?.name || '—'}</td>}
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${t.isActive ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-slate-500/10 text-slate-500 border-slate-500/30'}`}>
                       {t.isActive ? 'Activo' : 'Inactivo'}
@@ -144,6 +157,15 @@ export default function IncidentTypesPage() {
               <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {!editing && depts.length > 1 && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Departamento *</label>
+                  <select value={formDept} onChange={(e) => setFormDept(e.target.value)} required
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm">
+                    {depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Nombre *</label>
                 <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} required autoFocus

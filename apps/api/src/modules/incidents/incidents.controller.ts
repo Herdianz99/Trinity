@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -10,6 +10,12 @@ import { IncidentsReportService } from './incidents-report.service';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { CreateIncidentTypeDto } from './dto/create-incident-type.dto';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
+import { IncidentDepartmentDto } from './dto/incident-department.dto';
+import { ScopeUser } from './incidents-scope';
+
+function assertAdmin(user: ScopeUser) {
+  if (user?.role !== 'ADMIN') throw new ForbiddenException('Solo un administrador puede gestionar departamentos');
+}
 
 @ApiTags('incidents')
 @ApiBearerAuth()
@@ -22,42 +28,73 @@ export class IncidentsController {
     private readonly reportService: IncidentsReportService,
   ) {}
 
-  // ---- Tipos (abiertos a cualquiera con el módulo, no solo ADMIN) ----
+  // ---- Mi alcance (departamentos donde crea / que ve) ----
+  @Get('scope')
+  myScope(@CurrentUser() user: ScopeUser) {
+    return this.service.myScope(user);
+  }
+
+  // ---- Departamentos (solo ADMIN) ----
+  @Get('departments')
+  findAllDepartments(@CurrentUser() user: ScopeUser) {
+    assertAdmin(user);
+    return this.service.findAllDepartments();
+  }
+
+  @Get('departments/users')
+  departmentUsers(@CurrentUser() user: ScopeUser) {
+    assertAdmin(user);
+    return this.service.departmentUserOptions();
+  }
+
+  @Post('departments')
+  createDepartment(@Body() dto: IncidentDepartmentDto, @CurrentUser() user: ScopeUser) {
+    assertAdmin(user);
+    return this.service.createDepartment(dto);
+  }
+
+  @Patch('departments/:id')
+  updateDepartment(@Param('id') id: string, @Body() dto: IncidentDepartmentDto, @CurrentUser() user: ScopeUser) {
+    assertAdmin(user);
+    return this.service.updateDepartment(id, dto);
+  }
+
+  // ---- Tipos (cada miembro los de su departamento; ADMIN todos) ----
   @Get('types')
-  findAllTypes() {
-    return this.service.findAllTypes();
+  findAllTypes(@CurrentUser() user: ScopeUser) {
+    return this.service.findAllTypes(user);
   }
 
   @Get('types/active')
-  findActiveTypes() {
-    return this.service.findActiveTypes();
+  findActiveTypes(@CurrentUser() user: ScopeUser) {
+    return this.service.findActiveTypes(user);
   }
 
   @Post('types')
-  createType(@Body() dto: CreateIncidentTypeDto) {
-    return this.service.createType(dto);
+  createType(@Body() dto: CreateIncidentTypeDto, @CurrentUser() user: ScopeUser) {
+    return this.service.createType(dto, user);
   }
 
   @Patch('types/:id')
-  updateType(@Param('id') id: string, @Body() dto: Partial<CreateIncidentTypeDto>) {
-    return this.service.updateType(id, dto);
+  updateType(@Param('id') id: string, @Body() dto: Partial<CreateIncidentTypeDto>, @CurrentUser() user: ScopeUser) {
+    return this.service.updateType(id, dto, user);
   }
 
   @Patch('types/:id/toggle-active')
-  toggleTypeActive(@Param('id') id: string) {
-    return this.service.toggleTypeActive(id);
+  toggleTypeActive(@Param('id') id: string, @CurrentUser() user: ScopeUser) {
+    return this.service.toggleTypeActive(id, user);
   }
 
   // ---- Resumen (KPIs + gráfica) ----
   @Get('summary')
-  summary(@Query() query: QueryIncidentsDto) {
-    return this.service.summary(query);
+  summary(@Query() query: QueryIncidentsDto, @CurrentUser() user: ScopeUser) {
+    return this.service.summary(query, user);
   }
 
   // ---- Reportes (deben ir antes de rutas con parámetros) ----
   @Get('report/pdf')
-  async reportPdf(@Query() query: QueryIncidentsDto, @Res() res: Response) {
-    const buffer = await this.reportService.generatePdf(query);
+  async reportPdf(@Query() query: QueryIncidentsDto, @CurrentUser() user: ScopeUser, @Res() res: Response) {
+    const buffer = await this.reportService.generatePdf(query, user);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="reporte-incidencias.pdf"',
@@ -67,8 +104,8 @@ export class IncidentsController {
   }
 
   @Get('report/xlsx')
-  async reportXlsx(@Query() query: QueryIncidentsDto, @Res() res: Response) {
-    const buffer = await this.reportService.generateXlsx(query);
+  async reportXlsx(@Query() query: QueryIncidentsDto, @CurrentUser() user: ScopeUser, @Res() res: Response) {
+    const buffer = await this.reportService.generateXlsx(query, user);
     res.set({
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': 'attachment; filename="incidencias.xlsx"',
@@ -79,12 +116,12 @@ export class IncidentsController {
 
   // ---- Incidencias ----
   @Get()
-  findAll(@Query() query: QueryIncidentsDto) {
-    return this.service.findAll(query);
+  findAll(@Query() query: QueryIncidentsDto, @CurrentUser() user: ScopeUser) {
+    return this.service.findAll(query, user);
   }
 
   @Post()
-  create(@Body() dto: CreateIncidentDto, @CurrentUser() user: { id: string }) {
-    return this.service.create(dto, user.id);
+  create(@Body() dto: CreateIncidentDto, @CurrentUser() user: ScopeUser) {
+    return this.service.create(dto, user);
   }
 }

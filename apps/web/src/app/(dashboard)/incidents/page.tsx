@@ -10,11 +10,14 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
-interface IncidentType { id: string; name: string; }
+interface IncidentType { id: string; name: string; departmentId: string; department?: { name: string } }
+interface Dept { id: string; name: string }
+interface Scope { isAdmin: boolean; createDepartments: Dept[]; visibleDepartments: Dept[] }
 interface Incident {
   id: string;
   number: string;
   type: { id: string; name: string } | null;
+  department: { id: string; name: string } | null;
   description: string;
   involvedName: string | null;
   severity: string;
@@ -51,6 +54,8 @@ export default function IncidentsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [typeId, setTypeId] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [scope, setScope] = useState<Scope | null>(null);
   const [severity, setSeverity] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -60,7 +65,7 @@ export default function IncidentsPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ typeId: '', severity: 'MEDIUM', involvedName: '', occurredAt: '', description: '' });
+  const [form, setForm] = useState({ departmentId: '', typeId: '', severity: 'MEDIUM', involvedName: '', occurredAt: '', description: '' });
   const [photos, setPhotos] = useState<string[]>([]); // data URIs de las fotos a subir (varias)
   const [photoErr, setPhotoErr] = useState('');
   const MAX_PHOTOS = 8;
@@ -70,6 +75,7 @@ export default function IncidentsPage() {
 
   function buildParams() {
     const params = new URLSearchParams();
+    if (departmentId) params.set('departmentId', departmentId);
     if (typeId) params.set('typeId', typeId);
     if (severity) params.set('severity', severity);
     if (from) params.set('from', from);
@@ -95,7 +101,7 @@ export default function IncidentsPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, typeId, severity, from, to, search]);
+  }, [page, departmentId, typeId, severity, from, to, search]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -103,15 +109,28 @@ export default function IncidentsPage() {
       if (res.ok) setSummary(await res.json());
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeId, severity, from, to, search]);
+  }, [departmentId, typeId, severity, from, to, search]);
 
   const fetchTypes = useCallback(async () => {
     try {
-      const res = await fetch('/api/proxy/incidents/types/active');
-      const data = await res.json();
+      const [resTypes, resScope] = await Promise.all([
+        fetch('/api/proxy/incidents/types/active'),
+        fetch('/api/proxy/incidents/scope'),
+      ]);
+      const data = await resTypes.json();
       setTypes(Array.isArray(data) ? data : []);
+      if (resScope.ok) setScope(await resScope.json());
     } catch { /* ignore */ }
   }, []);
+
+  const createDepts = scope?.createDepartments || [];
+  const visibleDepts = scope?.visibleDepartments || [];
+  const multiDept = visibleDepts.length > 1;
+  // Tipos del filtro: los del departamento elegido (o todos los visibles)
+  const filterTypes = departmentId ? types.filter((t) => t.departmentId === departmentId) : types;
+  // Tipos del formulario: solo los del departamento donde se registra
+  const formTypes = types.filter((t) => t.departmentId === form.departmentId);
+  const typeLabel = (t: IncidentType) => (multiDept && !departmentId && t.department ? `${t.name} · ${t.department.name}` : t.name);
 
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 400);
@@ -125,7 +144,10 @@ export default function IncidentsPage() {
   }, [message]);
 
   function openCreate() {
-    setForm({ typeId: types[0]?.id || '', severity: 'MEDIUM', involvedName: '', occurredAt: nowLocalDatetime(), description: '' });
+    // Si filtra por un departamento donde puede registrar, se propone ese; si no, el primero suyo
+    const dept = createDepts.find((d) => d.id === departmentId)?.id || createDepts[0]?.id || '';
+    const firstType = types.find((t) => t.departmentId === dept)?.id || '';
+    setForm({ departmentId: dept, typeId: firstType, severity: 'MEDIUM', involvedName: '', occurredAt: nowLocalDatetime(), description: '' });
     setPhotos([]);
     setPhotoErr('');
     setModalOpen(true);
@@ -185,6 +207,7 @@ export default function IncidentsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          departmentId: form.departmentId || undefined,
           typeId: form.typeId,
           description: form.description.trim(),
           involvedName: form.involvedName.trim() || undefined,
@@ -227,7 +250,9 @@ export default function IncidentsPage() {
             <Shield className="text-red-400" size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-100">Incidencias</h1>
+            <h1 className="text-xl font-bold text-slate-100">
+              Incidencias{visibleDepts.length === 1 && <span className="text-slate-400 font-medium"> · {visibleDepts[0].name}</span>}
+            </h1>
             <p className="text-sm text-slate-400">{total} registrada{total !== 1 ? 's' : ''}</p>
           </div>
         </div>
@@ -247,12 +272,18 @@ export default function IncidentsPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button onClick={openCreate}
+          {createDepts.length > 0 && <button onClick={openCreate}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
             <Plus size={16} /> Registrar<span className="hidden sm:inline"> incidencia</span>
-          </button>
+          </button>}
         </div>
       </div>
+
+      {scope && !scope.isAdmin && visibleDepts.length === 0 && (
+        <div className="px-4 py-3 rounded-xl border text-sm bg-amber-500/10 border-amber-500/30 text-amber-300">
+          No perteneces a ningún departamento de incidencias. Pide a un administrador que te asigne uno.
+        </div>
+      )}
 
       {message && (
         <div className={`px-4 py-3 rounded-xl border text-sm font-medium ${message.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}>
@@ -303,9 +334,15 @@ export default function IncidentsPage() {
             className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg pl-9 pr-9 py-2 text-sm placeholder:text-slate-500" />
           {searchInput && <button onClick={() => setSearchInput('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"><X size={16} /></button>}
         </div>
+        {multiDept && (
+          <select value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setTypeId(''); setPage(1); }} className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">Todos los departamentos</option>
+            {visibleDepts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        )}
         <select value={typeId} onChange={(e) => { setTypeId(e.target.value); setPage(1); }} className="flex-1 min-w-[130px] bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm">
           <option value="">Todos los tipos</option>
-          {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {filterTypes.map((t) => <option key={t.id} value={t.id}>{typeLabel(t)}</option>)}
         </select>
         <select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }} className="flex-1 min-w-[130px] bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm">
           <option value="">Toda gravedad</option>
@@ -315,8 +352,8 @@ export default function IncidentsPage() {
         </select>
         <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="flex-1 min-w-[130px] bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm" />
         <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="flex-1 min-w-[130px] bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm" />
-        {(typeId || severity || from || to || searchInput) && (
-          <button onClick={() => { setTypeId(''); setSeverity(''); setFrom(''); setTo(''); setSearchInput(''); setPage(1); }} className="text-xs text-slate-400 hover:text-white">Limpiar</button>
+        {(departmentId || typeId || severity || from || to || searchInput) && (
+          <button onClick={() => { setDepartmentId(''); setTypeId(''); setSeverity(''); setFrom(''); setTo(''); setSearchInput(''); setPage(1); }} className="text-xs text-slate-400 hover:text-white">Limpiar</button>
         )}
       </div>
 
@@ -338,6 +375,7 @@ export default function IncidentsPage() {
                   </div>
                   <div className="text-xs text-slate-400">{fmtDateTime(i.occurredAt)}</div>
                   <div className="text-sm text-slate-200"><span className="text-slate-500">Tipo:</span> {i.type?.name || '—'}</div>
+                  {multiDept && <div className="text-sm text-slate-300"><span className="text-slate-500">Departamento:</span> {i.department?.name || '—'}</div>}
                   {i.involvedName && <div className="text-sm text-slate-300"><span className="text-slate-500">Involucrado:</span> {i.involvedName}</div>}
                   <div className="text-sm text-slate-300 whitespace-pre-wrap break-words">{i.description}</div>
                   {i.photos?.length > 0 && (
@@ -361,6 +399,7 @@ export default function IncidentsPage() {
                   <tr className="border-b border-slate-700/50">
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">N°</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Fecha / hora</th>
+                    {multiDept && <th className="text-left px-4 py-3 text-slate-400 font-medium">Departamento</th>}
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Tipo</th>
                     <th className="text-center px-4 py-3 text-slate-400 font-medium">Gravedad</th>
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Involucrado</th>
@@ -374,6 +413,7 @@ export default function IncidentsPage() {
                     <tr key={i.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors align-top">
                       <td className="px-4 py-3 text-white font-mono text-xs whitespace-nowrap">{i.number}</td>
                       <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{fmtDateTime(i.occurredAt)}</td>
+                      {multiDept && <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{i.department?.name || '—'}</td>}
                       <td className="px-4 py-3 text-slate-200">{i.type?.name || '—'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${SEVERITY_BADGE[i.severity] || ''}`}>{SEVERITY_LABELS[i.severity] || i.severity}</span>
@@ -423,14 +463,30 @@ export default function IncidentsPage() {
               <button onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400"><X size={18} /></button>
             </div>
             <div className="space-y-4">
+              {createDepts.length > 1 && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Departamento *</label>
+                  <select value={form.departmentId}
+                    onChange={(e) => {
+                      const dept = e.target.value;
+                      setForm((f) => ({ ...f, departmentId: dept, typeId: types.find((t) => t.departmentId === dept)?.id || '' }));
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm">
+                    {createDepts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Tipo *</label>
                   <select value={form.typeId} onChange={(e) => setForm((f) => ({ ...f, typeId: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-sm">
                     <option value="">Seleccionar…</option>
-                    {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {formTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
+                  {form.departmentId && formTypes.length === 0 && (
+                    <p className="text-xs text-amber-400 mt-1">Este departamento no tiene tipos. Créalos en Tipos de incidencia.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Gravedad</label>

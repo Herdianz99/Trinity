@@ -90,6 +90,8 @@ interface MenuItem {
   whatsappCampaignOnly?: boolean;
   // Exige SU permiso propio aunque el usuario tenga el de la sección.
   strictPermission?: boolean;
+  // Solo visible para ADMIN.
+  adminOnly?: boolean;
 }
 
 interface MenuSection {
@@ -279,12 +281,13 @@ const menuSections: MenuSection[] = [
   },
   {
     key: 'incidents',
-    label: 'SEGURIDAD',
+    label: 'INCIDENCIAS',
     icon: <Shield size={20} />,
     permission: 'incidents',
     items: [
       { label: 'Incidencias', href: '/incidents', icon: <AlertTriangle size={18} /> },
       { label: 'Tipos de incidencia', href: '/incidents/types', icon: <Layers size={18} /> },
+      { label: 'Departamentos', href: '/incidents/departments', icon: <Building2 size={18} />, adminOnly: true },
     ],
   },
   {
@@ -549,7 +552,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
       items.filter((it) =>
         (!it.integrationOnly || integrationOn) && (!it.scanDispatchOnly || scanDispatchOn) && (!it.almacenOpsOnly || almacenOpsOn) &&
         (!it.clientPortalOnly || clientPortalOn) && (!it.whatsappCampaignOnly || whatsappCampaignOn) &&
-        (!it.strictPermission || (!!it.permission && hasPermission(permissions, it.permission))));
+        (!it.strictPermission || (!!it.permission && hasPermission(permissions, it.permission))) &&
+        (!it.adminOnly || user?.role === 'ADMIN'));
     if (section.key === 'settings' || section.key === 'reports') return gate(section.items);
     // "Mi Perfil" se muestra a cualquier usuario con empleado vinculado (cajero, vendedor,
     // etc.) o al rol EMPLOYEE (que trae el permiso mi-perfil). Sin empleado vinculado, no sale.

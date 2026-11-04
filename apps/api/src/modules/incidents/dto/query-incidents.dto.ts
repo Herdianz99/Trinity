@@ -3,6 +3,10 @@ import { IsOptional, IsString, IsIn } from 'class-validator';
 export class QueryIncidentsDto {
   @IsOptional()
   @IsString()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsString()
   typeId?: string;
 
   @IsOptional()
