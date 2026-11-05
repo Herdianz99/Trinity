@@ -208,6 +208,9 @@ export class ProductsService {
         ...(dto.isActive === false
           ? { deactivationReason: dto.deactivationReason?.trim() || null, deactivatedAt: new Date(), deactivatedById: userId ?? null }
           : { deactivationReason: null }),
+        ...(dto.saleBlocked
+          ? { saleBlockReason: dto.saleBlockReason?.trim() || null, saleBlockedAt: new Date(), saleBlockedById: userId ?? null }
+          : { saleBlockReason: null }),
         ...priceAudit(userId, auditSource),
       },
       include: {
@@ -348,6 +351,8 @@ export class ProductsService {
           brand: true,
           supplier: { select: { id: true, name: true } },
           stock: { include: { warehouse: { select: { id: true, name: true, countsForSale: true } } } },
+          deactivatedBy: { select: { id: true, name: true } },
+          saleBlockedBy: { select: { id: true, name: true } },
         },
       }),
       this.prisma.product.count({ where }),
@@ -616,6 +621,7 @@ export class ProductsService {
         supplier: true,
         stock: { include: { warehouse: true } },
         deactivatedBy: { select: { id: true, name: true } },
+        saleBlockedBy: { select: { id: true, name: true } },
       },
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
@@ -631,6 +637,7 @@ export class ProductsService {
         supplier: true,
         stock: { include: { warehouse: true } },
         deactivatedBy: { select: { id: true, name: true } },
+        saleBlockedBy: { select: { id: true, name: true } },
       },
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
@@ -682,11 +689,12 @@ export class ProductsService {
 
     // Recalculate prices
     const isManual = dto.manualPrice ?? existing.manualPrice;
-    const { code, deactivationReason, ...updateData } = dto;
+    const { code, deactivationReason, saleBlockReason, ...updateData } = dto;
 
     // Desactivacion: al pasar de activo a inactivo el motivo es obligatorio (solo por la API; un
     // cambio directo por BD no pasa por aqui). Al reactivar se limpian motivo/fecha/usuario.
     const deactivationData = this.deactivationChange(existing.isActive, dto.isActive, deactivationReason, userId);
+    const saleBlockData = this.saleBlockChange(existing.saleBlocked, dto.saleBlocked, saleBlockReason, userId);
 
     // Barcode vacio ("" o solo espacios) => null. El campo es @unique: guardar "" haria
     // chocar a un segundo producto "sin codigo" contra el "" ya existente. null permite N sin codigo.
@@ -722,6 +730,7 @@ export class ProductsService {
         priceDetal,
         priceMayor,
         ...deactivationData,
+        ...saleBlockData,
         ...priceAudit(userId, 'MANUAL_EDIT'),
       },
       include: {
@@ -730,6 +739,7 @@ export class ProductsService {
         supplier: true,
         stock: { include: { warehouse: true } },
         deactivatedBy: { select: { id: true, name: true } },
+        saleBlockedBy: { select: { id: true, name: true } },
       },
     });
     this.storeExport.scheduleExport(); // republica el snapshot de la tienda
@@ -738,11 +748,14 @@ export class ProductsService {
 
   // Activar/bloquear para la venta. Exige clave dinamica (TOGGLE_PRODUCT_SALE) y deja log de auditoria.
   // Si el estado no cambia, no pide clave (no-op).
-  async setSaleBlock(id: string, dto: SetSaleBlockDto) {
+  async setSaleBlock(id: string, dto: SetSaleBlockDto, userId?: string) {
     const existing = await this.findOne(id);
     if (existing.saleBlocked === dto.saleBlocked) return existing;
 
-    await this.dynamicKeys.validate({
+    // Validar el motivo ANTES de consumir la clave dinamica (no dejar un log de clave sin cambio).
+    const saleBlockData = this.saleBlockChange(existing.saleBlocked, dto.saleBlocked, dto.reason, userId);
+
+    const auth = await this.dynamicKeys.validate({
       key: dto.dynamicKey || '',
       permission: 'TOGGLE_PRODUCT_SALE',
       action: `${dto.saleBlocked ? 'Bloquear' : 'Activar'} para la venta: ${existing.code} - ${existing.name}`,
@@ -752,16 +765,37 @@ export class ProductsService {
 
     const updated = await this.prisma.product.update({
       where: { id },
-      data: { saleBlocked: dto.saleBlocked },
+      data: {
+        saleBlocked: dto.saleBlocked,
+        ...saleBlockData,
+        ...(dto.saleBlocked ? { saleBlockAuthorizedBy: auth.keyName } : {}),
+      },
       include: {
         category: true,
         brand: true,
         supplier: true,
         stock: { include: { warehouse: true } },
+        deactivatedBy: { select: { id: true, name: true } },
+        saleBlockedBy: { select: { id: true, name: true } },
       },
     });
     this.storeExport.scheduleExport(); // republica el snapshot de la tienda
     return updated;
+  }
+
+  /** Campos del bloqueo para la venta segun la transicion de saleBlocked. Exige motivo al bloquear. */
+  private saleBlockChange(wasBlocked: boolean, saleBlocked: boolean | undefined, reason: string | undefined, userId?: string) {
+    if (saleBlocked === true && !wasBlocked) {
+      const motivo = (reason || '').trim();
+      if (motivo.length < 5) {
+        throw new BadRequestException('Indica el motivo por el cual se bloquea el producto para la venta (minimo 5 caracteres)');
+      }
+      return { saleBlockReason: motivo, saleBlockedAt: new Date(), saleBlockedById: userId ?? null, saleBlockAuthorizedBy: null };
+    }
+    if (saleBlocked === false && wasBlocked) {
+      return { saleBlockReason: null, saleBlockedAt: null, saleBlockedById: null, saleBlockAuthorizedBy: null };
+    }
+    return {};
   }
 
   /** Campos de desactivacion segun la transicion de isActive. Exige motivo al desactivar. */

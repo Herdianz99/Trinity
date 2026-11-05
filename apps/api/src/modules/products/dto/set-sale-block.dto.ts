@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class SetSaleBlockDto {
   @IsBoolean()
@@ -8,4 +8,10 @@ export class SetSaleBlockDto {
   @IsOptional()
   @IsString()
   dynamicKey?: string;
+
+  // Motivo del bloqueo: obligatorio al bloquear (saleBlocked=true).
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
 }

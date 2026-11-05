@@ -9,7 +9,7 @@ import {
   Share2,
 } from 'lucide-react';
 import Link from 'next/link';
-import DeactivateProductModal, { formatDeactivation } from '@/components/deactivate-product-modal';
+import DeactivateProductModal, { formatDeactivation, formatSaleBlock } from '@/components/deactivate-product-modal';
 
 const CATALOG_EXCLUDED_KEY = 'catalogPhotos.excludedCategories';
 const CATALOG_CONDITIONS_KEY = 'catalogPhotos.withConditions';
@@ -46,6 +46,9 @@ interface Product {
   isActive: boolean;
   deactivationReason?: string | null;
   deactivatedAt?: string | null;
+  saleBlockReason?: string | null;
+  saleBlockedAt?: string | null;
+  saleBlockAuthorizedBy?: string | null;
   manualCost?: boolean;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
@@ -517,7 +520,7 @@ export default function ProductsPage() {
                           >Inactivo</span>
                         )}
                         {product.saleBlocked && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">Bloq. venta</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 cursor-help" title={formatSaleBlock(product)}>Bloq. venta</span>
                         )}
                         {product.isOnSale && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-400 text-amber-950">🏷️ Oferta</span>

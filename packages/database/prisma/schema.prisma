@@ -367,6 +367,7 @@ model User {
   employeeId          String?             @unique
   employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
   deactivatedProducts Product[]           @relation("ProductDeactivatedBy")
+  saleBlockedProducts Product[]           @relation("ProductSaleBlockedBy")
   // Portal de pedidos (rol CLIENT): ficha de cliente vinculada a este usuario.
   customerId          String?             @unique
   customer            Customer?           @relation("CustomerPortalUser", fields: [customerId], references: [id], onDelete: SetNull)
@@ -634,6 +635,12 @@ model Product {
   deactivatedById    String?
   deactivatedBy      User?                  @relation("ProductDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
   saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
+  // Bloqueo para la venta (Session 180): motivo obligatorio por la API; se limpian al desbloquear.
+  saleBlockReason       String?
+  saleBlockedAt         DateTime?
+  saleBlockedById       String?
+  saleBlockedBy         User?             @relation("ProductSaleBlockedBy", fields: [saleBlockedById], references: [id], onDelete: SetNull)
+  saleBlockAuthorizedBy String?           // nombre de la clave dinamica que lo autorizo (si aplica)
   isOnSale         Boolean                  @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
   applies5Pct      Boolean                  @default(false) // "Aplica 5%": por ahora solo marca y filtro del catalogo, sin efecto en calculos
   showInStore      Boolean                  @default(false)

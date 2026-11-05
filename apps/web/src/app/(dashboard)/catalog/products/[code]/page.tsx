@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, X,
 } from 'lucide-react';
 import Toggle from '@/components/toggle';
-import DeactivateProductModal, { formatDeactivation } from '@/components/deactivate-product-modal';
+import DeactivateProductModal, { formatDeactivation, formatSaleBlock } from '@/components/deactivate-product-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getMovementSource } from '@/lib/movement-source';
 import { PriceLogRow, PriceLogChanges, SourceBadge, fmtDateTime } from '@/components/price-log-changes';
@@ -46,6 +46,10 @@ interface Product {
   deactivatedAt?: string | null;
   deactivatedBy?: { id: string; name: string } | null;
   saleBlocked?: boolean;
+  saleBlockReason?: string | null;
+  saleBlockedAt?: string | null;
+  saleBlockedBy?: { id: string; name: string } | null;
+  saleBlockAuthorizedBy?: string | null;
   isOnSale?: boolean;
   applies5Pct?: boolean;
   showInStore?: boolean;
@@ -122,6 +126,7 @@ export default function ProductDetailPage() {
   const [form, setForm] = useState<any>({});
   // Desactivar exige motivo: el toggle abre el modal y el motivo viaja en el PATCH (deactivationReason).
   const [askDeactivate, setAskDeactivate] = useState(false);
+  const [askSaleBlock, setAskSaleBlock] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -386,6 +391,7 @@ export default function ProductDetailPage() {
         isActive: form.isActive,
         deactivationReason: form.isActive === false && product.isActive ? form.deactivationReason : undefined,
         saleBlocked: form.saleBlocked,
+        saleBlockReason: form.saleBlocked && !product.saleBlocked ? form.saleBlockReason : undefined,
         isOnSale: form.isOnSale,
         applies5Pct: form.applies5Pct,
         showInStore: form.showInStore,
@@ -677,6 +683,26 @@ export default function ProductDetailPage() {
         </div>
       )}
 
+      {product.saleBlocked && (
+        <div className="mb-4 p-3 rounded-lg border text-sm bg-orange-500/5 border-orange-500/20 text-orange-300">
+          {formatSaleBlock(product)}
+        </div>
+      )}
+
+      <DeactivateProductModal
+        open={askSaleBlock}
+        productLabel={`${product.code} - ${product.name}`}
+        title="Bloquear para la venta"
+        reasonLabel="Motivo del bloqueo"
+        confirmLabel="Bloquear"
+        placeholder="Ej: precio por revisar, mercancía dañada, esperando conteo..."
+        onConfirm={reason => {
+          setForm((f: any) => ({ ...f, saleBlocked: true, saleBlockReason: reason }));
+          setAskSaleBlock(false);
+        }}
+        onCancel={() => setAskSaleBlock(false)}
+      />
+
       <DeactivateProductModal
         open={askDeactivate}
         productLabel={`${product.code} - ${product.name}`}
@@ -825,8 +851,19 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pb-1">
-                  <Toggle checked={!form.saleBlocked} onChange={v => setForm((f: any) => ({ ...f, saleBlocked: !v }))} label="Activo para la venta" />
-                  {form.saleBlocked && <span className="text-xs text-red-400/90">Bloqueado: no se puede facturar</span>}
+                  <Toggle
+                    checked={!form.saleBlocked}
+                    onChange={v => {
+                      if (!v && !product.saleBlocked) setAskSaleBlock(true);
+                      else setForm((f: any) => ({ ...f, saleBlocked: !v, saleBlockReason: undefined }));
+                    }}
+                    label="Activo para la venta"
+                  />
+                  {form.saleBlocked && (
+                    <span className="text-xs text-red-400/90 line-clamp-2" title={form.saleBlockReason || undefined}>
+                      Bloqueado: no se puede facturar{form.saleBlockReason && !product.saleBlocked ? ` · Motivo: ${form.saleBlockReason} (se aplica al guardar)` : ''}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 pb-1">
                   <Toggle checked={form.isOnSale ?? false} onChange={v => setForm((f: any) => ({ ...f, isOnSale: v }))} label="Oferta" color="amber" />

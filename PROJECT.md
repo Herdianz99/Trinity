@@ -1460,3 +1460,4 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 
 ## Productos — desactivación con motivo (Sesión 180)
 - Pasar un producto de activo a inactivo por la API exige `deactivationReason` (PATCH) o `{reason}` (DELETE); se guardan `deactivatedAt`/`deactivatedById` y se limpian al reactivar. Todo código nuevo que desactive productos debe pasar por `ProductsService.deactivationChange()`. Los cambios directos por BD quedan sin motivo (permitido a propósito).
+- Igual para el **bloqueo para la venta**: bloquear exige `saleBlockReason` (PATCH) o `reason` (`PATCH /products/:id/sale-block`, que además guarda en `saleBlockAuthorizedBy` el nombre de la clave dinámica); se guardan `saleBlockedAt`/`saleBlockedById` y se limpian al desbloquear. Pasar por `ProductsService.saleBlockChange()`.

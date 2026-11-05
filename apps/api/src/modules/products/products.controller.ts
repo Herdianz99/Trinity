@@ -233,8 +233,8 @@ export class ProductsController {
 
   // Activar/bloquear un producto para la venta. Requiere clave dinamica (TOGGLE_PRODUCT_SALE).
   @Patch(':id/sale-block')
-  setSaleBlock(@Param('id') id: string, @Body() dto: SetSaleBlockDto) {
-    return this.productsService.setSaleBlock(id, dto);
+  setSaleBlock(@Param('id') id: string, @Body() dto: SetSaleBlockDto, @CurrentUser('id') userId: string) {
+    return this.productsService.setSaleBlock(id, dto, userId);
   }
 
   @Patch(':id')

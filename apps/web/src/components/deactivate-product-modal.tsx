@@ -8,13 +8,24 @@ export const MIN_DEACTIVATION_REASON = 5;
 interface Props {
   open: boolean;
   productLabel?: string;
+  /** Textos para reutilizarlo (ej. bloqueo para la venta). Por defecto: desactivar producto. */
+  title?: string;
+  reasonLabel?: string;
+  confirmLabel?: string;
+  placeholder?: string;
   /** Recibe el motivo ya validado. Si devuelve un string, se muestra como error y el modal sigue abierto. */
   onConfirm: (reason: string) => Promise<string | void> | string | void;
   onCancel: () => void;
 }
 
 /** Pide el motivo (obligatorio) antes de desactivar un producto. */
-export default function DeactivateProductModal({ open, productLabel, onConfirm, onCancel }: Props) {
+export default function DeactivateProductModal({
+  open, productLabel, onConfirm, onCancel,
+  title = 'Desactivar producto',
+  reasonLabel = 'Motivo de la desactivación',
+  confirmLabel = 'Desactivar',
+  placeholder = 'Ej: descontinuado por el proveedor, código duplicado, ya no se trabaja...',
+}: Props) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,13 +67,13 @@ export default function DeactivateProductModal({ open, productLabel, onConfirm, 
             <PackageX className="text-red-400" size={20} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-white">Desactivar producto</h2>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
             {productLabel && <p className="text-sm text-slate-400 truncate">{productLabel}</p>}
           </div>
         </div>
 
         <label className="block text-xs font-medium text-slate-400 mb-1">
-          Motivo de la desactivación <span className="text-red-400">*</span>
+          {reasonLabel} <span className="text-red-400">*</span>
         </label>
         <textarea
           ref={ref}
@@ -71,7 +82,7 @@ export default function DeactivateProductModal({ open, productLabel, onConfirm, 
           onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(); }}
           rows={3}
           maxLength={500}
-          placeholder="Ej: descontinuado por el proveedor, código duplicado, ya no se trabaja..."
+          placeholder={placeholder}
           className="input-field text-sm resize-none"
         />
         <div className="mt-1 flex justify-between text-[11px] text-slate-500">
@@ -94,7 +105,7 @@ export default function DeactivateProductModal({ open, productLabel, onConfirm, 
             className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {busy && <Loader2 size={14} className="animate-spin" />}
-            Desactivar
+            {confirmLabel}
           </button>
         </div>
       </div>
@@ -107,4 +118,12 @@ export function formatDeactivation(p: { deactivatedAt?: string | null; deactivat
   const date = p.deactivatedAt ? new Date(p.deactivatedAt).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
   const parts = [date ? `Desactivado el ${date}` : 'Desactivado', p.deactivatedBy?.name ? `por ${p.deactivatedBy.name}` : null].filter(Boolean).join(' ');
   return p.deactivationReason ? `${parts}: ${p.deactivationReason}` : `${parts} (sin motivo registrado)`;
+}
+
+/** Texto "Bloqueado el dd/mm/aaaa por X (clave Y): motivo" para el bloqueo para la venta. */
+export function formatSaleBlock(p: { saleBlockedAt?: string | null; saleBlockReason?: string | null; saleBlockedBy?: { name: string } | null; saleBlockAuthorizedBy?: string | null }) {
+  const date = p.saleBlockedAt ? new Date(p.saleBlockedAt).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
+  const who = [p.saleBlockedBy?.name ? `por ${p.saleBlockedBy.name}` : null, p.saleBlockAuthorizedBy ? `(clave: ${p.saleBlockAuthorizedBy})` : null].filter(Boolean).join(' ');
+  const parts = [date ? `Bloqueado para la venta el ${date}` : 'Bloqueado para la venta', who || null].filter(Boolean).join(' ');
+  return p.saleBlockReason ? `${parts}: ${p.saleBlockReason}` : `${parts} (sin motivo registrado)`;
 }

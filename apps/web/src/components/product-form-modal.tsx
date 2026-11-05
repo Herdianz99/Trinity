@@ -50,6 +50,9 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
   const [origActive, setOrigActive] = useState(true);
   const [askDeactivate, setAskDeactivate] = useState(false);
   const [deactivationReason, setDeactivationReason] = useState<string | null>(null);
+  const [origSaleBlocked, setOrigSaleBlocked] = useState(false);
+  const [askSaleBlock, setAskSaleBlock] = useState(false);
+  const [saleBlockReason, setSaleBlockReason] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
@@ -130,6 +133,8 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
           const p = await res.json();
           setOrigActive(p.isActive !== false);
           setDeactivationReason(null);
+          setOrigSaleBlocked(!!p.saleBlocked);
+          setSaleBlockReason(null);
           setForm({
             code: p.code || '', barcode: p.barcode || '', supplierRef: p.supplierRef || '',
             otherCode: p.otherCode || '',
@@ -155,6 +160,8 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
       } else {
         setOrigActive(true);
         setDeactivationReason(null);
+        setOrigSaleBlocked(false);
+        setSaleBlockReason(null);
         setForm({
           ...defaultForm,
           gananciaPct: String(defGanancia),
@@ -283,6 +290,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         isActive: form.isActive,
         deactivationReason: mode === 'edit' && origActive && !form.isActive ? deactivationReason || undefined : undefined,
         saleBlocked: form.saleBlocked,
+        saleBlockReason: form.saleBlocked && !origSaleBlocked ? saleBlockReason || undefined : undefined,
         isService: form.isService,
         showInStore: form.showInStore,
         storeFeatured: form.storeFeatured,
@@ -588,6 +596,21 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
           </form>
         )}
       </div>
+
+      <DeactivateProductModal
+        open={askSaleBlock}
+        productLabel={form.code ? `${form.code} - ${form.name}` : form.name}
+        title="Bloquear para la venta"
+        reasonLabel="Motivo del bloqueo"
+        confirmLabel="Bloquear"
+        placeholder="Ej: precio por revisar, mercancía dañada, esperando conteo..."
+        onConfirm={reason => {
+          setSaleBlockReason(reason);
+          setForm(f => ({ ...f, saleBlocked: true }));
+          setAskSaleBlock(false);
+        }}
+        onCancel={() => setAskSaleBlock(false)}
+      />
 
       <DeactivateProductModal
         open={askDeactivate}

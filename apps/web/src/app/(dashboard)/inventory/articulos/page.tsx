@@ -7,6 +7,7 @@ import {
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import Toggle from '@/components/toggle';
 import DynamicKeyModal from '@/components/dynamic-key-modal';
+import DeactivateProductModal, { formatSaleBlock } from '@/components/deactivate-product-modal';
 
 // ── Types ──
 interface StockRow { quantity: number; warehouse: { id: string; name: string }; }
@@ -19,6 +20,10 @@ interface Product {
   priceMayor: number;
   stock: StockRow[];
   saleBlocked?: boolean;
+  saleBlockReason?: string | null;
+  saleBlockedAt?: string | null;
+  saleBlockedBy?: { id: string; name: string } | null;
+  saleBlockAuthorizedBy?: string | null;
 }
 interface Movement {
   id: string;
@@ -74,6 +79,8 @@ export default function InventoryArticlesPage() {
   const [saleErr, setSaleErr] = useState(false);
   // Clave dinamica para activar/bloquear la venta
   const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [askReason, setAskReason] = useState(false);
+  const [pendingReason, setPendingReason] = useState<string | null>(null);
   const [pendingActive, setPendingActive] = useState<boolean | null>(null);
   const [kLoading, setKLoading] = useState(false);
   const [kPage, setKPage] = useState(1);
@@ -149,11 +156,14 @@ export default function InventoryArticlesPage() {
     setMovements([]);
   }
   // Al mover el toggle no se guarda directo: se pide la clave dinamica (permiso TOGGLE_PRODUCT_SALE).
+  // Al BLOQUEAR primero se pide el motivo (obligatorio) y luego la clave.
   function requestToggleSale(active: boolean) {
     if (!selected || savingSale) return;
     setSaleErr(false);
     setPendingActive(active);
-    setKeyModalOpen(true);
+    setPendingReason(null);
+    if (!active) setAskReason(true);
+    else setKeyModalOpen(true);
   }
   // Ejecuta el cambio ya con la clave validada por el modal (el backend la revalida y deja log).
   async function executeToggleSale(key: string) {
@@ -165,16 +175,25 @@ export default function InventoryArticlesPage() {
       const res = await fetch(`/api/proxy/products/${selected.id}/sale-block`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saleBlocked, dynamicKey: key }),
+        body: JSON.stringify({ saleBlocked, dynamicKey: key, reason: saleBlocked ? pendingReason : undefined }),
       });
       if (!res.ok) throw new Error();
-      setSelected(s => (s ? { ...s, saleBlocked } : s));
-      setProducts(prev => prev.map(p => (p.id === selected.id ? { ...p, saleBlocked } : p)));
+      const upd = await res.json().catch(() => ({}));
+      const patch = {
+        saleBlocked,
+        saleBlockReason: upd.saleBlockReason ?? null,
+        saleBlockedAt: upd.saleBlockedAt ?? null,
+        saleBlockedBy: upd.saleBlockedBy ?? null,
+        saleBlockAuthorizedBy: upd.saleBlockAuthorizedBy ?? null,
+      };
+      setSelected(s => (s ? { ...s, ...patch } : s));
+      setProducts(prev => prev.map(p => (p.id === selected.id ? { ...p, ...patch } : p)));
     } catch {
       setSaleErr(true); // el toggle queda en su estado real (no cambiamos selected)
     } finally {
       setSavingSale(false);
       setPendingActive(null);
+      setPendingReason(null);
     }
   }
   function changeKardexPage(p: number) {
@@ -356,6 +375,9 @@ export default function InventoryArticlesPage() {
                   )}
                   {saleErr && <span className="text-[11px] text-red-400">No se pudo guardar</span>}
                 </div>
+                {selected.saleBlocked && (
+                  <p className="mt-1.5 text-[11px] text-red-300/90">{formatSaleBlock(selected)}</p>
+                )}
               </div>
               <button onClick={closeKardex} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
                 <X size={18} />
@@ -428,9 +450,20 @@ export default function InventoryArticlesPage() {
         />
       )}
 
+      <DeactivateProductModal
+        open={askReason}
+        productLabel={selected ? `${selected.code} - ${selected.name}` : undefined}
+        title="Bloquear para la venta"
+        reasonLabel="Motivo del bloqueo"
+        confirmLabel="Bloquear"
+        placeholder="Ej: precio por revisar, mercancía dañada, esperando conteo..."
+        onConfirm={reason => { setPendingReason(reason); setAskReason(false); setKeyModalOpen(true); }}
+        onCancel={() => { setAskReason(false); setPendingActive(null); }}
+      />
+
       <DynamicKeyModal
         isOpen={keyModalOpen}
-        onClose={() => { setKeyModalOpen(false); setPendingActive(null); }}
+        onClose={() => { setKeyModalOpen(false); setPendingActive(null); setPendingReason(null); }}
         onAuthorized={executeToggleSale}
         permission="TOGGLE_PRODUCT_SALE"
         title={pendingActive ? 'Activar para la venta' : 'Bloquear para la venta'}

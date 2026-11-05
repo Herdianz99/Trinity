@@ -141,6 +141,12 @@ export class CreateProductDto {
   @MaxLength(500)
   deactivationReason?: string;
 
+  @ApiProperty({ required: false, description: 'Motivo del bloqueo para la venta: obligatorio al bloquear' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  saleBlockReason?: string;
+
   @ApiProperty({ required: false, default: false, description: 'Bloqueado para la venta: se muestra en POS pero no se puede facturar' })
   @IsOptional()
   @IsBoolean()
