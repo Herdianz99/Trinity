@@ -8,6 +8,7 @@ import {
   Image as ImageIcon, X,
 } from 'lucide-react';
 import Toggle from '@/components/toggle';
+import DeactivateProductModal, { formatDeactivation } from '@/components/deactivate-product-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getMovementSource } from '@/lib/movement-source';
 import { PriceLogRow, PriceLogChanges, SourceBadge, fmtDateTime } from '@/components/price-log-changes';
@@ -41,6 +42,9 @@ interface Product {
   weight: number;
   minStock: number;
   isActive: boolean;
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
+  deactivatedBy?: { id: string; name: string } | null;
   saleBlocked?: boolean;
   isOnSale?: boolean;
   applies5Pct?: boolean;
@@ -116,6 +120,8 @@ export default function ProductDetailPage() {
 
   // ── Form state ──
   const [form, setForm] = useState<any>({});
+  // Desactivar exige motivo: el toggle abre el modal y el motivo viaja en el PATCH (deactivationReason).
+  const [askDeactivate, setAskDeactivate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -378,6 +384,7 @@ export default function ProductDetailPage() {
         minStock: Number(form.minStock),
         weight: parseNum(form.weight),
         isActive: form.isActive,
+        deactivationReason: form.isActive === false && product.isActive ? form.deactivationReason : undefined,
         saleBlocked: form.saleBlocked,
         isOnSale: form.isOnSale,
         applies5Pct: form.applies5Pct,
@@ -664,6 +671,22 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
+      {!product.isActive && (
+        <div className="mb-4 p-3 rounded-lg border text-sm bg-red-500/5 border-red-500/20 text-red-300">
+          {formatDeactivation(product)}
+        </div>
+      )}
+
+      <DeactivateProductModal
+        open={askDeactivate}
+        productLabel={`${product.code} - ${product.name}`}
+        onConfirm={reason => {
+          setForm((f: any) => ({ ...f, isActive: false, deactivationReason: reason }));
+          setAskDeactivate(false);
+        }}
+        onCancel={() => setAskDeactivate(false)}
+      />
+
       {saveMsg && (
         <div className={`mb-4 p-3 rounded-lg border text-sm ${saveMsg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
           {saveMsg.text}
@@ -787,7 +810,19 @@ export default function ProductDetailPage() {
                   <Toggle checked={form.isService ?? false} onChange={v => setForm((f: any) => ({ ...f, isService: v }))} label="Es servicio (no maneja inventario)" color="cyan" />
                 </div>
                 <div className="flex items-end pb-1">
-                  <Toggle checked={form.isActive ?? true} onChange={v => setForm((f: any) => ({ ...f, isActive: v }))} label="Producto activo" />
+                  <div className="min-w-0">
+                    <Toggle
+                      checked={form.isActive ?? true}
+                      onChange={v => {
+                        if (!v && product.isActive) setAskDeactivate(true);
+                        else setForm((f: any) => ({ ...f, isActive: v, deactivationReason: undefined }));
+                      }}
+                      label="Producto activo"
+                    />
+                    {form.isActive === false && product.isActive && form.deactivationReason && (
+                      <p className="mt-1 text-xs text-red-400/90 line-clamp-2" title={form.deactivationReason}>Motivo: {form.deactivationReason} (se aplica al guardar)</p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 pb-1">
                   <Toggle checked={!form.saleBlocked} onChange={v => setForm((f: any) => ({ ...f, saleBlocked: !v }))} label="Activo para la venta" />

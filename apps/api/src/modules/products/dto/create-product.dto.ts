@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsEnum, MinLength, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsEnum, MinLength, MaxLength, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { IvaType } from '@prisma/client';
 
@@ -134,6 +134,12 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false, description: 'Motivo de desactivacion: obligatorio al pasar el producto de activo a inactivo' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  deactivationReason?: string;
 
   @ApiProperty({ required: false, default: false, description: 'Bloqueado para la venta: se muestra en POS pero no se puede facturar' })
   @IsOptional()

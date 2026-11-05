@@ -9,6 +9,7 @@ import {
   Share2,
 } from 'lucide-react';
 import Link from 'next/link';
+import DeactivateProductModal, { formatDeactivation } from '@/components/deactivate-product-modal';
 
 const CATALOG_EXCLUDED_KEY = 'catalogPhotos.excludedCategories';
 const CATALOG_CONDITIONS_KEY = 'catalogPhotos.withConditions';
@@ -43,6 +44,8 @@ interface Product {
   priceMayor: number;
   minStock: number;
   isActive: boolean;
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
   manualCost?: boolean;
   category: { id: string; name: string; printArea?: { id: string; name: string } | null } | null;
   brand: { id: string; name: string } | null;
@@ -57,6 +60,7 @@ interface Supplier { id: string; name: string; }
 export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [deactivating, setDeactivating] = useState<Product | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -263,13 +267,21 @@ export default function ProductsPage() {
     setShowCatalogModal(false);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Desactivar este producto?')) return;
-    const res = await fetch(`/api/proxy/products/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      fetchProducts();
-      setMessage({ type: 'success', text: 'Producto desactivado' });
+  // Desactivar exige motivo: se pide en DeactivateProductModal y se envia en el body del DELETE.
+  async function confirmDeactivate(reason: string) {
+    if (!deactivating) return;
+    const res = await fetch(`/api/proxy/products/${deactivating.id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return err.message || 'Error al desactivar';
     }
+    setDeactivating(null);
+    fetchProducts();
+    setMessage({ type: 'success', text: 'Producto desactivado' });
   }
 
   // Flatten categories for select
@@ -499,7 +511,10 @@ export default function ProductsPage() {
                         {product.isActive ? (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">Activo</span>
                         ) : (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Inactivo</span>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 cursor-help"
+                            title={formatDeactivation(product)}
+                          >Inactivo</span>
                         )}
                         {product.saleBlocked && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">Bloq. venta</span>
@@ -522,9 +537,10 @@ export default function ProductsPage() {
                           <Edit2 size={14} />
                         </Link>
                         <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
-                          title="Desactivar"
+                          onClick={() => setDeactivating(product)}
+                          disabled={!product.isActive}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={product.isActive ? "Desactivar" : "Ya está inactivo"}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -564,6 +580,13 @@ export default function ProductsPage() {
       </div>
 
       {/* Modal: elegir categoria para el catalogo con fotos */}
+      <DeactivateProductModal
+        open={!!deactivating}
+        productLabel={deactivating ? `${deactivating.code} - ${deactivating.name}` : undefined}
+        onConfirm={confirmDeactivate}
+        onCancel={() => setDeactivating(null)}
+      />
+
       {showCatalogModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"

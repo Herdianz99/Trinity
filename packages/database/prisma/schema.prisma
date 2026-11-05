@@ -366,6 +366,7 @@ model User {
   extraModules        String[]            @default([])
   employeeId          String?             @unique
   employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
+  deactivatedProducts Product[]           @relation("ProductDeactivatedBy")
   // Portal de pedidos (rol CLIENT): ficha de cliente vinculada a este usuario.
   customerId          String?             @unique
   customer            Customer?           @relation("CustomerPortalUser", fields: [customerId], references: [id], onDelete: SetNull)
@@ -626,6 +627,12 @@ model Product {
   weight           Float                    @default(0) // peso unitario en kg (para guia de carga en el PDF de factura)
   minStock         Float                    @default(0)
   isActive         Boolean                  @default(true)
+  // Desactivacion (Session 180): la API exige el motivo al pasar de activo a inactivo; se limpian al reactivar.
+  // Un cambio directo por BD no pasa por esa validacion (queda sin motivo).
+  deactivationReason String?
+  deactivatedAt      DateTime?
+  deactivatedById    String?
+  deactivatedBy      User?                  @relation("ProductDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
   saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
   isOnSale         Boolean                  @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
   applies5Pct      Boolean                  @default(false) // "Aplica 5%": por ahora solo marca y filtro del catalogo, sin efecto en calculos

@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🚫 Productos: motivo obligatorio al desactivar (2026-11-05, Sesión 180) — ⏳ COMMITEADO, SIN DESPLEGAR
+- **Pedido:** al desactivar un producto hay que poner el motivo, y guardar la fecha para verla luego. Obligatorio salvo cuando lo hacemos nosotros por BD.
+- **Schema:**  /  /  (→ User, SET NULL). Migración  (idempotente). Los productos ya inactivos quedan sin motivo (se muestran como "sin motivo registrado").
+- **API:** : al pasar de activo a inactivo (PATCH  o  con body ) exige motivo de 5+ caracteres (400 si falta) y guarda fecha y usuario; al reactivar los limpia. Si ya estaba inactivo no pide nada. Un UPDATE directo por BD no pasa por la validación. // devuelven .
+- **Web:**  (motivo obligatorio + ). Lista de artículos: el botón de desactivar abre el modal (deshabilitado si ya está inactivo), el badge "Inactivo" muestra el motivo y la fecha al pasar el mouse. Ficha  y : apagar "Producto activo" abre el modal; la ficha muestra un aviso "Desactivado el dd/mm/aaaa por X: motivo".
+- **Verificado:**  api/web limpios. **No probado en navegador ni contra BD** (Docker apagado).
+
 ## 🗂️ Incidencias por departamento (2026-11-04, Sesión 179) — ⏳ COMMITEADO, SIN DESPLEGAR (solo para la grande; el usuario dirá cuándo)
 
 - **Pedido:** auditores e infraestructura también registran incidencias. Lo de Auditoría lo ve también Seguridad; los auditores NO ven lo de Seguridad; Infraestructura solo su empleado por ahora (rol SELLER, factura autoconsumo); ADMIN ve todo. Cada departamento ve todo lo suyo; Seguridad solo lee lo de Auditoría (no registra ahí).

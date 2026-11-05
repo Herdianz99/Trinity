@@ -205,6 +205,9 @@ export class ProductsService {
         gananciaMayorPct,
         priceDetal,
         priceMayor,
+        ...(dto.isActive === false
+          ? { deactivationReason: dto.deactivationReason?.trim() || null, deactivatedAt: new Date(), deactivatedById: userId ?? null }
+          : { deactivationReason: null }),
         ...priceAudit(userId, auditSource),
       },
       include: {
@@ -612,6 +615,7 @@ export class ProductsService {
         brand: true,
         supplier: true,
         stock: { include: { warehouse: true } },
+        deactivatedBy: { select: { id: true, name: true } },
       },
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
@@ -626,6 +630,7 @@ export class ProductsService {
         brand: true,
         supplier: true,
         stock: { include: { warehouse: true } },
+        deactivatedBy: { select: { id: true, name: true } },
       },
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
@@ -677,7 +682,11 @@ export class ProductsService {
 
     // Recalculate prices
     const isManual = dto.manualPrice ?? existing.manualPrice;
-    const { code, ...updateData } = dto;
+    const { code, deactivationReason, ...updateData } = dto;
+
+    // Desactivacion: al pasar de activo a inactivo el motivo es obligatorio (solo por la API; un
+    // cambio directo por BD no pasa por aqui). Al reactivar se limpian motivo/fecha/usuario.
+    const deactivationData = this.deactivationChange(existing.isActive, dto.isActive, deactivationReason, userId);
 
     // Barcode vacio ("" o solo espacios) => null. El campo es @unique: guardar "" haria
     // chocar a un segundo producto "sin codigo" contra el "" ya existente. null permite N sin codigo.
@@ -712,6 +721,7 @@ export class ProductsService {
         ...updateData,
         priceDetal,
         priceMayor,
+        ...deactivationData,
         ...priceAudit(userId, 'MANUAL_EDIT'),
       },
       include: {
@@ -719,6 +729,7 @@ export class ProductsService {
         brand: true,
         supplier: true,
         stock: { include: { warehouse: true } },
+        deactivatedBy: { select: { id: true, name: true } },
       },
     });
     this.storeExport.scheduleExport(); // republica el snapshot de la tienda
@@ -753,11 +764,27 @@ export class ProductsService {
     return updated;
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  /** Campos de desactivacion segun la transicion de isActive. Exige motivo al desactivar. */
+  private deactivationChange(wasActive: boolean, isActive: boolean | undefined, reason: string | undefined, userId?: string) {
+    if (isActive === false && wasActive) {
+      const motivo = (reason || '').trim();
+      if (motivo.length < 5) {
+        throw new BadRequestException('Indica el motivo por el cual se desactiva el producto (minimo 5 caracteres)');
+      }
+      return { deactivationReason: motivo, deactivatedAt: new Date(), deactivatedById: userId ?? null };
+    }
+    if (isActive === true && !wasActive) {
+      return { deactivationReason: null, deactivatedAt: null, deactivatedById: null };
+    }
+    return {};
+  }
+
+  async remove(id: string, reason?: string, userId?: string) {
+    const existing = await this.findOne(id);
+    if (!existing.isActive) return { message: 'El producto ya estaba inactivo' };
     await this.prisma.product.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive: false, ...this.deactivationChange(true, false, reason, userId) },
     });
     return { message: 'Producto desactivado' };
   }

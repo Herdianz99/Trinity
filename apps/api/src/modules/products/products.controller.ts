@@ -243,8 +243,8 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
+  remove(@Param('id') id: string, @Body() body: { reason?: string }, @CurrentUser('id') userId: string) {
+    return this.productsService.remove(id, body?.reason, userId);
   }
 
   @Post('import')

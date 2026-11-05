@@ -1457,3 +1457,6 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 
 ## Movimientos de stock — Excel plano (Sesión 173)
 - `GET /stock-movements/report/excel` (`StockMovementsExcelService` + `StockMovementsService.getExcelRows`): una fila por movimiento con los filtros de `buildWhere`. Cliente/Proveedor y Vendedor se resuelven desde el documento de origen (`sourceType`/`sourceId`). El costo unitario sale de `unitCostResolver()`, compartido con el PDF de costos. Para Excel grandes, usar `XLSX.write(..., { compression: true, bookSST: true })` y escribir las fechas como número de serie, no como `Date`.
+
+## Productos — desactivación con motivo (Sesión 180)
+- Pasar un producto de activo a inactivo por la API exige `deactivationReason` (PATCH) o `{reason}` (DELETE); se guardan `deactivatedAt`/`deactivatedById` y se limpian al reactivar. Todo código nuevo que desactive productos debe pasar por `ProductsService.deactivationChange()`. Los cambios directos por BD quedan sin motivo (permitido a propósito).

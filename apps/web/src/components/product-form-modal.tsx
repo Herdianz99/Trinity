@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Package, Loader2 } from 'lucide-react';
 import Toggle from '@/components/toggle';
 import ProductNameSuggest from '@/components/product-name-suggest';
+import DeactivateProductModal from '@/components/deactivate-product-modal';
 
 interface Category { id: string; name: string; children: { id: string; name: string }[]; }
 interface Brand { id: string; name: string; }
@@ -45,6 +46,10 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
   const [exchangeRate, setExchangeRate] = useState(0);
   const [bregaGlobalPct, setBregaGlobalPct] = useState(0);
   const [form, setForm] = useState(defaultForm);
+  // Desactivar un producto activo exige motivo (modal); se envia como deactivationReason en el PATCH.
+  const [origActive, setOrigActive] = useState(true);
+  const [askDeactivate, setAskDeactivate] = useState(false);
+  const [deactivationReason, setDeactivationReason] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error'; text: string } | null>(null);
@@ -123,6 +128,8 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         const res = await fetch(`/api/proxy/products/${productId}`);
         if (res.ok) {
           const p = await res.json();
+          setOrigActive(p.isActive !== false);
+          setDeactivationReason(null);
           setForm({
             code: p.code || '', barcode: p.barcode || '', supplierRef: p.supplierRef || '',
             otherCode: p.otherCode || '',
@@ -146,6 +153,8 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
           });
         }
       } else {
+        setOrigActive(true);
+        setDeactivationReason(null);
         setForm({
           ...defaultForm,
           gananciaPct: String(defGanancia),
@@ -272,6 +281,7 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
         minStock: Number(form.minStock),
         weight: parseNum(form.weight),
         isActive: form.isActive,
+        deactivationReason: mode === 'edit' && origActive && !form.isActive ? deactivationReason || undefined : undefined,
         saleBlocked: form.saleBlocked,
         isService: form.isService,
         showInStore: form.showInStore,
@@ -541,7 +551,19 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
                   <p className="text-[10px] text-slate-500 mt-1">Sale en la guia de carga del PDF de factura (peso total por linea)</p>
                 </div>
                 <div className="flex items-center gap-6 pb-1">
-                  <Toggle checked={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} label="Producto activo" />
+                  <div className="min-w-0">
+                    <Toggle
+                      checked={form.isActive}
+                      onChange={v => {
+                        if (!v && mode === 'edit' && origActive) setAskDeactivate(true);
+                        else { setForm(f => ({ ...f, isActive: v })); if (v) setDeactivationReason(null); }
+                      }}
+                      label="Producto activo"
+                    />
+                    {!form.isActive && deactivationReason && (
+                      <p className="mt-1 text-xs text-red-400/90 line-clamp-2" title={deactivationReason}>Motivo: {deactivationReason}</p>
+                    )}
+                  </div>
                   <Toggle checked={form.isService} onChange={v => setForm(f => ({ ...f, isService: v }))} label="Articulo de servicio" color="amber" />
                 </div>
                 <div className="flex items-center gap-3 pb-1">
@@ -566,6 +588,17 @@ export default function ProductFormModal({ open, mode, productId, defaultSupplie
           </form>
         )}
       </div>
+
+      <DeactivateProductModal
+        open={askDeactivate}
+        productLabel={form.code ? `${form.code} - ${form.name}` : form.name}
+        onConfirm={reason => {
+          setDeactivationReason(reason);
+          setForm(f => ({ ...f, isActive: false }));
+          setAskDeactivate(false);
+        }}
+        onCancel={() => setAskDeactivate(false)}
+      />
     </div>
   );
 }
