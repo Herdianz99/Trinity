@@ -46,10 +46,10 @@
 
 ## 🚫 Productos: motivo obligatorio al desactivar (2026-11-05, Sesión 180) — ⏳ COMMITEADO, SIN DESPLEGAR
 - **Pedido:** al desactivar un producto hay que poner el motivo, y guardar la fecha para verla luego. Obligatorio salvo cuando lo hacemos nosotros por BD.
-- **Schema:**  /  /  (→ User, SET NULL). Migración  (idempotente). Los productos ya inactivos quedan sin motivo (se muestran como "sin motivo registrado").
-- **API:** : al pasar de activo a inactivo (PATCH  o  con body ) exige motivo de 5+ caracteres (400 si falta) y guarda fecha y usuario; al reactivar los limpia. Si ya estaba inactivo no pide nada. Un UPDATE directo por BD no pasa por la validación. // devuelven .
-- **Web:**  (motivo obligatorio + ). Lista de artículos: el botón de desactivar abre el modal (deshabilitado si ya está inactivo), el badge "Inactivo" muestra el motivo y la fecha al pasar el mouse. Ficha  y : apagar "Producto activo" abre el modal; la ficha muestra un aviso "Desactivado el dd/mm/aaaa por X: motivo".
-- **Verificado:**  api/web limpios. **No probado en navegador ni contra BD** (Docker apagado).
+- **Schema:** `Product.deactivationReason` / `deactivatedAt` / `deactivatedById` (→ User, SET NULL). Migración `20261105120000_product_deactivation_reason` (idempotente). Los productos ya inactivos quedan sin motivo (se muestran como "sin motivo registrado").
+- **API:** `ProductsService.deactivationChange()`: al pasar de activo a inactivo (PATCH `isActive:false` o `DELETE /products/:id` con body `{reason}`) exige motivo de 5+ caracteres (400 si falta) y guarda fecha y usuario; al reactivar los limpia. Si ya estaba inactivo no pide nada. Un UPDATE directo por BD no pasa por la validación. `findOne`/`findByCode`/`update` devuelven `deactivatedBy {id,name}`.
+- **Web:** `components/deactivate-product-modal.tsx` (motivo obligatorio + `formatDeactivation`). Lista de artículos: el botón de desactivar abre el modal (deshabilitado si ya está inactivo), el badge "Inactivo" muestra el motivo y la fecha al pasar el mouse. Ficha `/catalog/products/[code]` y `product-form-modal`: apagar "Producto activo" abre el modal; la ficha muestra un aviso "Desactivado el dd/mm/aaaa por X: motivo".
+- **Verificado:** `tsc` api/web limpios. **No probado en navegador ni contra BD** (Docker apagado).
 
 ## 🗂️ Incidencias por departamento (2026-11-04, Sesión 179) — ⏳ COMMITEADO, SIN DESPLEGAR (solo para la grande; el usuario dirá cuándo)
 
