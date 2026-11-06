@@ -28,6 +28,32 @@ export function mergeTranscripts(parts: string[]): string {
   return acc;
 }
 
+// Voces del navegador ordenadas de mejor a peor para Clover. Lo que mas pesa es la calidad: las
+// "Natural"/"Online" (Edge) y las de Google suenan mucho menos roboticas que las del sistema.
+// Despues el acento (latino antes que España) y que sea masculina (Clover es un muchacho).
+export interface VoiceLike { name: string; lang: string; localService: boolean; voiceURI: string }
+
+const MALE_NAMES = /\b(sebastian|jorge|alonso|gonzalo|alvaro|pablo|raul|emilio|tomas|gerardo|andres|diego|carlos|juan|enrique|federico|lorenzo|manuel|male|hombre)\b/i;
+const LANG_SCORE: Record<string, number> = { 've': 8, 'us': 6, 'mx': 5, '419': 5, 'co': 4, 'pe': 4, 'cl': 4, 'ar': 3, 'es': 1 };
+
+export function voiceScore(v: VoiceLike): number {
+  const name = v.name.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const region = v.lang.toLowerCase().replace('_', '-').split('-')[1] ?? '';
+  let s = 0;
+  if (/natural|neural|online|enhanced|premium/i.test(name)) s += 50;
+  if (/google/i.test(name)) s += 30;
+  if (!v.localService) s += 10;
+  s += LANG_SCORE[region] ?? 2;
+  if (MALE_NAMES.test(name)) s += 3;
+  return s;
+}
+
+export function rankVoices<T extends VoiceLike>(voices: T[]): T[] {
+  return voices
+    .filter((v) => v.lang.toLowerCase().startsWith('es'))
+    .sort((a, b) => voiceScore(b) - voiceScore(a));
+}
+
 // Constructor (no literal /u): el tsconfig del web apunta a ES5.
 const EMOJI = new RegExp('\\p{Extended_Pictographic}', 'gu');
 

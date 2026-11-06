@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, UserRound, ImageOff } from 'lucide-react';
 import CloverAvatar, { CloverState } from './clover-avatar';
 import { useVoice } from './use-voice';
+import { textForSpeech } from '@/lib/kiosk-speech';
 
 interface Card { code: string; name: string; price: string; available: boolean; imageUrl: string | null }
 
@@ -18,7 +19,18 @@ const cardPrice = (p: string) => {
 };
 
 export default function TotemPage() {
-  const { supported, interim, startListening, stopListening, speak } = useVoice();
+  const { supported, interim, startListening, stopListening, speak, voices, voice, setVoiceURI } = useVoice();
+  const [voicePanel, setVoicePanel] = useState(false);
+  const voiceHold = useRef<ReturnType<typeof setTimeout>>();
+  // Prueba de una voz del selector (sin esperar a que se guarde la eleccion).
+  const speakWith = (v: SpeechSynthesisVoice, text: string) => {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(textForSpeech(text));
+    u.voice = v;
+    u.lang = v.lang;
+    synth.speak(u);
+  };
   const [state, setState] = useState<CloverState>('idle');
   const [heard, setHeard] = useState('');
   const [answer, setAnswer] = useState(GREETING);
@@ -122,9 +134,42 @@ export default function TotemPage() {
 
   return (
     <main className="mx-auto flex min-h-[100dvh] max-w-3xl flex-col items-center px-4 pt-6 pb-5">
-      <span className="mb-1 rounded-full bg-emerald-500/15 px-4 py-1 text-sm font-bold uppercase tracking-[0.25em] text-emerald-300 ring-1 ring-emerald-400/30">
+      {/* Mantener presionada la etiqueta 2 s abre el selector de voz (para el encargado, no para el cliente). */}
+      <span
+        onPointerDown={() => { voiceHold.current = setTimeout(() => setVoicePanel(true), 2000); }}
+        onPointerUp={() => clearTimeout(voiceHold.current)}
+        onPointerLeave={() => clearTimeout(voiceHold.current)}
+        className="mb-1 rounded-full bg-emerald-500/15 px-4 py-1 text-sm font-bold uppercase tracking-[0.25em] text-emerald-300 ring-1 ring-emerald-400/30"
+      >
         Clover · Asistente El Trébol
       </span>
+
+      {voicePanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setVoicePanel(false)}>
+          <div className="max-h-[80dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 text-slate-900" onClick={(e) => e.stopPropagation()}>
+            <p className="text-2xl font-extrabold">Voz de Clover</p>
+            <p className="mb-3 text-sm text-slate-500">
+              Toca una voz para escucharla. Se guarda en este equipo. Las que dicen “Natural”, “Online” o “Google” suenan mejor.
+            </p>
+            {voices.length === 0 && <p className="text-slate-500">Este navegador no trae voces en español.</p>}
+            {voices.map((v) => (
+              <button
+                key={v.voiceURI}
+                onClick={() => { setVoiceURI(v.voiceURI); speakWith(v, '¡Hola! Soy Clover. El cemento gris de 21 kilos está en 10.80$ bcv. ¿Te ayudo con algo más?'); }}
+                className={`mb-2 flex w-full items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left ${
+                  voice?.voiceURI === v.voiceURI ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}
+              >
+                <span className="font-semibold leading-tight">{v.name}</span>
+                <span className="shrink-0 text-sm text-slate-500">{v.lang}</span>
+              </button>
+            ))}
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setVoiceURI(null)} className="flex-1 rounded-2xl border-2 border-slate-200 px-4 py-3 font-bold">Automática</button>
+              <button onClick={() => setVoicePanel(false)} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 font-bold text-white">Listo</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CloverAvatar state={state} compact={cards.length > 0} />
 

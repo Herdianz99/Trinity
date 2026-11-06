@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { mergeTranscripts, textForSpeech } from '@/lib/kiosk-speech';
+import { mergeTranscripts, rankVoices, textForSpeech } from '@/lib/kiosk-speech';
+
+const VOICE_KEY = 'clover-voice';
 
 // Reconocimiento de voz (solo Chrome) + sintesis del navegador. Gratis, sin servicios externos.
 export function useVoice() {
@@ -52,21 +54,38 @@ export function useVoice() {
     try { rec.stop(); } catch { resolve(finalRef.current.trim()); }
   }), []);
 
+  // Voces en español de este equipo, de mejor a peor. La lista llega tarde en Chrome (voiceschanged).
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURIState] = useState<string | null>(null);
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const load = () => setVoices(rankVoices(synth.getVoices()));
+    load();
+    synth.addEventListener('voiceschanged', load);
+    try { setVoiceURIState(localStorage.getItem(VOICE_KEY)); } catch { /* sin almacenamiento */ }
+    return () => synth.removeEventListener('voiceschanged', load);
+  }, []);
+
+  // Voz elegida a mano en este equipo (se guarda en el navegador); si no, la mejor disponible.
+  const setVoiceURI = useCallback((uri: string | null) => {
+    setVoiceURIState(uri);
+    try { uri ? localStorage.setItem(VOICE_KEY, uri) : localStorage.removeItem(VOICE_KEY); } catch { /* nada */ }
+  }, []);
+  const voice = voices.find((v) => v.voiceURI === voiceURI) ?? voices[0] ?? null;
+
   const speak = useCallback((text: string, onEnd?: () => void) => {
     const synth = window.speechSynthesis;
     if (!synth) { onEnd?.(); return; }
     synth.cancel();
     const u = new SpeechSynthesisUtterance(textForSpeech(text));
-    const voices = synth.getVoices();
-    const voice = voices.find((v) => v.lang === 'es-US') ?? voices.find((v) => v.lang.startsWith('es-4') || v.lang === 'es-MX')
-      ?? voices.find((v) => v.lang.startsWith('es')) ?? null;
     u.voice = voice;
-    u.lang = voice?.lang ?? 'es-ES';
-    u.rate = 1.05;
+    u.lang = voice?.lang ?? 'es-US';
+    u.rate = 1;
     u.onend = () => onEnd?.();
     u.onerror = () => onEnd?.();
     synth.speak(u);
-  }, []);
+  }, [voice]);
 
-  return { supported, interim, startListening, stopListening, speak };
+  return { supported, interim, startListening, stopListening, speak, voices, voice, setVoiceURI };
 }

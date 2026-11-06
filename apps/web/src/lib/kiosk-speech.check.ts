@@ -18,3 +18,21 @@ assert.equal(mergeTranscripts(['tienen codos', 'tienen codos', 'de media']), 'ti
 assert.equal(mergeTranscripts(['', '  ', 'hola']), 'hola');
 assert.equal(mergeTranscripts([]), '');
 console.log('mergeTranscripts OK');
+
+// rankVoices: primero las naturales/en linea, luego Google, prefiriendo español latino y voz masculina (Clover)
+import { rankVoices } from './kiosk-speech.ts';
+const V = (name: string, lang: string, localService = true) => ({ name, lang, localService, voiceURI: name });
+const ranked = rankVoices([
+  V('Microsoft Helena - Spanish (Spain)', 'es-ES'),
+  V('English US', 'en-US'),
+  V('Google español de Estados Unidos', 'es-US', false),
+  V('Microsoft Paola Online (Natural) - Spanish (Venezuela)', 'es-VE', false),
+  V('Microsoft Sebastian Online (Natural) - Spanish (Venezuela)', 'es-VE', false),
+  V('Spanish Mexico', 'es_MX'),
+]).map((v) => v.name);
+assert.equal(ranked[0], 'Microsoft Sebastian Online (Natural) - Spanish (Venezuela)');
+assert.equal(ranked[1], 'Microsoft Paola Online (Natural) - Spanish (Venezuela)');
+assert.equal(ranked[2], 'Google español de Estados Unidos');
+assert.ok(!ranked.includes('English US'));
+assert.equal(ranked.length, 5);
+console.log('rankVoices OK');
