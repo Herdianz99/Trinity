@@ -1463,8 +1463,7 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - Igual para el **bloqueo para la venta**: bloquear exige `saleBlockReason` (PATCH) o `reason` (`PATCH /products/:id/sale-block`, que además guarda en `saleBlockAuthorizedBy` el nombre de la clave dinámica); se guardan `saleBlockedAt`/`saleBlockedById` y se limpian al desbloquear. Pasar por `ProductsService.saleBlockChange()`.
 
 ## Chatbot — tótem de voz Clover (Sesión 181)
-- Canal .  acepta  (sin body = TEST, la pantalla de prueba no cambia).  escala sin IA.
-- En KIOSK,  pasa por  (): reemplaza LÍNEAS completas por prefijo (si se edita el texto de esas líneas en , revisar ) y agrega . La respuesta de  trae  (: productos de  cuyo precio aparece en el texto, máx 4).
-- Verificaciones sin jest: kiosk.check OK
-adaptPromptForKiosk OK y kiosk-speech.check OK (Node 24 quita los tipos;  excluidos de los tsconfig).
-- Web:  (sin menú, fuente Baloo 2, SessionKeeper) y  (, , ). Middleware:  → permiso . Requiere Chrome (webkitSpeechRecognition).
+- Canal `ChatbotChannel.KIOSK`. `POST /chatbot/conversations` acepta `{channel: 'TEST'|'KIOSK'}` (sin body = TEST, la pantalla de prueba no cambia). `POST /chatbot/conversations/:id/call-seller` escala sin IA.
+- En KIOSK, `buildChatbotSystemPrompt(cfg, company, channel)` pasa por `adaptPromptForKiosk` (`chatbot/kiosk.ts`): reemplaza LÍNEAS completas por prefijo (si se edita el texto de esas líneas en `chatbot-prompt.ts`, revisar `KIOSK_LINE_OVERRIDES`) y agrega `KIOSK_VOICE_RULES`. La respuesta de `reply()` trae `productCards` (`pickMentionedProducts`: productos de `buscar_productos` cuyo precio aparece en el texto, máx 4).
+- Verificaciones sin jest: `node apps/api/src/modules/chatbot/kiosk.check.ts` y `node apps/web/src/lib/kiosk-speech.check.ts` (Node 24 quita los tipos; `*.check.ts` excluidos de los tsconfig).
+- Web: `app/(kiosk)/layout.tsx` (sin menú, fuente Baloo 2, SessionKeeper) y `app/(kiosk)/totem/` (`page.tsx`, `clover-avatar.tsx`, `use-voice.ts`). Middleware: `/totem` → permiso `chatbot`. Requiere Chrome (webkitSpeechRecognition).
