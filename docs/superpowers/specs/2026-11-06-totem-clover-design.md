@@ -40,7 +40,8 @@ lo usan y cuántas veces los entiende bien.
    (hoy siempre crea `TEST`).
 3. **Modo voz en el prompt** (`chatbot-prompt.ts`) cuando el canal es `KIOSK`:
    presentarse como Clover; respuestas de 1–3 frases; sin listas ni viñetas ni emojis;
-   montos dichos como se hablan; no dar ubicaciones; el cliente está en la tienda (no ofrecer delivery
+   precios escritos como siempre (`12.50$ bcv`, así los sigue verificando `price-guard`) y convertidos a
+   "12 dólares con 50" solo para la voz, en el navegador; no dar ubicaciones; el cliente está en la tienda (no ofrecer delivery
    ni pedir datos de contacto).
 4. **Tarjetas de producto**: la respuesta del mensaje incluye los productos que el bot mencionó
    (id, nombre, precio, foto) para pintarlos en pantalla — sacados de los resultados de búsqueda de esa vuelta.
