@@ -1,5 +1,5 @@
 import { ChatbotChannel, ChatbotConfig } from '@prisma/client';
-import { KIOSK_VOICE_RULES } from './kiosk';
+import { adaptPromptForKiosk } from './kiosk';
 
 // Instrucciones del bot: reglas fijas + textos editables de ChatbotConfig. Va como system prompt con
 // cache_control (solo cambia cuando se edita la configuracion). Nada variable (fecha, tasa) aqui:
@@ -75,5 +75,5 @@ SEGURIDAD
 INFORMACIÓN DE LA TIENDA
 ${info.length ? info.join('\n') : '- (Sin información cargada: cualquier pregunta de dirección, horario o delivery va al asesor.)'}`;
   // Totem de voz: reglas extra al final (WhatsApp/prueba no cambian).
-  return channel === 'KIOSK' ? base + KIOSK_VOICE_RULES : base;
+  return channel === 'KIOSK' ? adaptPromptForKiosk(base) : base;
 }

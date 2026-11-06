@@ -26,3 +26,14 @@ assert.deepEqual(pickMentionedProducts(tie, 'El codo pvc 1/2 está en 3.00$ bcv.
 assert.deepEqual(pickMentionedProducts([{ name: 'calcular_bolivares', input: {}, result: { bs: 100 } }], '1.00$ bcv'), []);
 
 console.log('kiosk.check OK');
+
+// 6. adaptPromptForKiosk cambia las lineas de WhatsApp y agrega las reglas de voz
+import { adaptPromptForKiosk } from './kiosk.ts';
+const base = 'Eres Bot.\nAtiendes clientes por WhatsApp y redes sociales. Tu trabajo: x.\n- Si listas varios productos, máximo 7, uno por línea con nombre y precio.\n- Otra regla.';
+const k = adaptPromptForKiosk(base);
+assert.ok(!k.includes('WhatsApp y redes'));
+assert.ok(!k.includes('máximo 7'));
+assert.ok(k.includes('nombra máximo 3'));
+assert.ok(k.includes('- Otra regla.'));
+assert.ok(k.includes('MODO TÓTEM DE VOZ'));
+console.log('adaptPromptForKiosk OK');
