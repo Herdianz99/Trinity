@@ -20,6 +20,10 @@ export class UpdateChatbotConfigDto {
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(10000) monthlyBudgetUsd?: number;
 }
 
+export class CreateChatbotConversationDto {
+  @ApiPropertyOptional({ enum: ['TEST', 'KIOSK'] }) @IsOptional() @IsIn(['TEST', 'KIOSK']) channel?: 'TEST' | 'KIOSK';
+}
+
 export class SendChatbotMessageDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) text?: string;
   @ApiPropertyOptional({ type: [String], description: 'Fotos como data URI (máx. 4)' })

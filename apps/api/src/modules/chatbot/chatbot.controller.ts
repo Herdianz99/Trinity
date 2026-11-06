@@ -6,7 +6,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { ModuleGuard } from '../../common/guards/module.guard';
-import { RateChatbotMessageDto, SendChatbotMessageDto, UpdateChatbotConfigDto } from './dto/chatbot.dto';
+import { CreateChatbotConversationDto, RateChatbotMessageDto, SendChatbotMessageDto, UpdateChatbotConfigDto } from './dto/chatbot.dto';
 import { ChatbotService } from './chatbot.service';
 import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { ChatbotCrossSellAnalysisService } from './chatbot-cross-sell-analysis.service';
@@ -63,8 +63,14 @@ export class ChatbotController {
   }
 
   @Post('conversations')
-  create(@CurrentUser('id') userId: string) {
-    return this.service.createTestConversation(userId);
+  create(@CurrentUser('id') userId: string, @Body() dto: CreateChatbotConversationDto) {
+    return this.service.createConversation(userId, dto.channel ?? 'TEST');
+  }
+
+  // Totem: boton "Llamar a un vendedor" (escala sin IA).
+  @Post('conversations/:id/call-seller')
+  callSeller(@Param('id') id: string) {
+    return this.service.callSeller(id);
   }
 
   @Get('conversations')

@@ -23,5 +23,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "_*.ts"]
+  "exclude": ["node_modules", "dist", "_*.ts", "**/*.check.ts"]
 }

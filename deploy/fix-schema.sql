@@ -3397,3 +3397,6 @@ CREATE TABLE IF NOT EXISTS "IncidentDepartment" (
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "incidentDepartmentId" TEXT;
 -- El nombre del tipo es unico POR departamento: quitar el indice unico global viejo si quedo.
 DROP INDEX IF EXISTS "IncidentType_name_key";
+
+-- ===== Totem Clover (20261106120000_chatbot_kiosk_channel) =====
+ALTER TYPE "ChatbotChannel" ADD VALUE IF NOT EXISTS 'KIOSK';

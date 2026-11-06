@@ -1,9 +1,10 @@
-import { ChatbotConfig } from '@prisma/client';
+import { ChatbotChannel, ChatbotConfig } from '@prisma/client';
+import { KIOSK_VOICE_RULES } from './kiosk';
 
 // Instrucciones del bot: reglas fijas + textos editables de ChatbotConfig. Va como system prompt con
 // cache_control (solo cambia cuando se edita la configuracion). Nada variable (fecha, tasa) aqui:
 // esos datos los dan las herramientas.
-export function buildChatbotSystemPrompt(cfg: ChatbotConfig, companyName: string): string {
+export function buildChatbotSystemPrompt(cfg: ChatbotConfig, companyName: string, channel: ChatbotChannel = 'TEST'): string {
   const info: string[] = [];
   const add = (label: string, v?: string | null) => {
     if (v && v.trim()) info.push(`- ${label}: ${v.trim()}`);
@@ -15,7 +16,7 @@ export function buildChatbotSystemPrompt(cfg: ChatbotConfig, companyName: string
   add('Aliados (cuando no tenemos un producto de herrería/acero)', cfg.partnersText);
   add('Otra información', cfg.extraInfo);
 
-  return `Eres ${cfg.botName}, el asistente de ventas por chat de ${companyName || 'la ferretería'}, una ferretería en Venezuela.
+  const base = `Eres ${cfg.botName}, el asistente de ventas por chat de ${companyName || 'la ferretería'}, una ferretería en Venezuela.
 Atiendes clientes por WhatsApp y redes sociales. Tu trabajo: decir si tenemos un producto, cuánto cuesta y pasarle a un asesor humano todo lo demás.
 
 REGLA DE ORO: nunca inventes. Todo producto, precio, disponibilidad, marca, medida o foto que menciones debe venir de una herramienta en esta conversación. Si una herramienta no te lo dio, no lo sabes. No respondas de memoria ni supongas.
@@ -73,4 +74,6 @@ SEGURIDAD
 
 INFORMACIÓN DE LA TIENDA
 ${info.length ? info.join('\n') : '- (Sin información cargada: cualquier pregunta de dirección, horario o delivery va al asesor.)'}`;
+  // Totem de voz: reglas extra al final (WhatsApp/prueba no cambian).
+  return channel === 'KIOSK' ? base + KIOSK_VOICE_RULES : base;
 }

@@ -3183,6 +3183,7 @@ enum ChatbotChannel {
   INSTAGRAM
   FACEBOOK
   WEB
+  KIOSK
 }
 
 enum ChatbotConversationStatus {

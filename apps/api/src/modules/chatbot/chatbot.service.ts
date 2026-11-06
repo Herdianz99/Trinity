@@ -12,6 +12,7 @@ import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { buildChatbotSystemPrompt } from './chatbot-prompt';
 import { numbersIn, unverifiedPrices } from './price-guard';
 import { isLongList, listLines } from './list-guard';
+import { KioskToolCall, pickMentionedProducts } from './kiosk';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
 
@@ -134,10 +135,32 @@ export class ChatbotService {
 
   // ---------- Conversaciones ----------
 
-  async createTestConversation(userId: string) {
+  async createConversation(userId: string, channel: 'TEST' | 'KIOSK' = 'TEST') {
     return this.prisma.chatbotConversation.create({
-      data: { channel: 'TEST', contactName: 'Prueba', createdById: userId },
+      data: { channel, contactName: channel === 'KIOSK' ? 'Tótem' : 'Prueba', createdById: userId },
     });
+  }
+
+  // Boton "Llamar a un vendedor" del totem: escala sin pasar por la IA.
+  async callSeller(conversationId: string) {
+    const conv = await this.prisma.chatbotConversation.findUnique({ where: { id: conversationId } });
+    if (!conv) throw new NotFoundException('Conversación no encontrada');
+    if (conv.status === 'BOT') {
+      await this.escalate(conversationId, 'totem: cliente pide vendedor', 'Cliente en el tótem del piso de venta pidió que lo atienda un vendedor.');
+    }
+    return { ok: true };
+  }
+
+  // Tarjetas del totem: productos cotizados en la respuesta, con foto (si tiene).
+  private async kioskCards(toolLog: ToolCallLog[], text: string) {
+    const picked = pickMentionedProducts(toolLog as KioskToolCall[], text);
+    return Promise.all(picked.map(async (p) => ({
+      code: p.codigo,
+      name: p.nombre,
+      price: p.precio_bcv,
+      available: p.disponible,
+      imageUrl: p.tiene_foto ? (await this.tools.productImage(p.codigo))?.url ?? null : null,
+    })));
   }
 
   async listConversations(status?: string) {
@@ -361,7 +384,7 @@ export class ChatbotService {
 
     const company = await this.prisma.companyConfig.findFirst({ select: { companyName: true } });
     const system: Anthropic.TextBlockParam[] = [
-      { type: 'text', text: buildChatbotSystemPrompt(cfg, company?.companyName ?? ''), cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: buildChatbotSystemPrompt(cfg, company?.companyName ?? '', conv.channel), cache_control: { type: 'ephemeral' } },
     ];
     const messages = await this.history(conversationId);
     const newTurns: Anthropic.MessageParam[] = [];
@@ -485,9 +508,15 @@ export class ChatbotService {
     // Venta cruzada: marcar como ofrecido lo que la respuesta realmente menciono (nunca rompe la respuesta).
     await this.crossSell.recordOffered(conversationId, toolLog, finalText).catch((e) =>
       this.logger.error(`Venta cruzada: no se pudo registrar lo ofrecido: ${(e as Error).message}`));
-    return this.saveBotMessage(conversationId, finalText, {
+    const saved = await this.saveBotMessage(conversationId, finalText, {
       escalated: out.escalated, toolLog, usage, images: out.images, apiTurns: newTurns,
     });
+    if (conv.channel !== 'KIOSK') return saved;
+    const productCards = await this.kioskCards(toolLog, finalText).catch((e) => {
+      this.logger.error(`Totem: no se pudieron armar las tarjetas: ${(e as Error).message}`);
+      return [];
+    });
+    return { ...saved, productCards };
   }
 
   // Numeros que respaldan un precio (resultados de herramientas de toda la conversacion + textos de la
