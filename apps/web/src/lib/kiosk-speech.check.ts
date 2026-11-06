@@ -36,3 +36,8 @@ assert.equal(ranked[2], 'Google español de Estados Unidos');
 assert.ok(!ranked.includes('English US'));
 assert.equal(ranked.length, 5);
 console.log('rankVoices OK');
+
+// Precio con el signo delante
+assert.equal(textForSpeech('Está en $14.06 bcv.'), 'Está en 14 dólares con 6 a tasa BCV.');
+assert.equal(textForSpeech('Sale a $9.50'), 'Sale a 9 dólares con 50');
+console.log('voz con $ delante OK');

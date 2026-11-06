@@ -43,8 +43,12 @@ export function adaptPromptForKiosk(base: string): string {
   return lines.join('\n') + KIOSK_VOICE_RULES;
 }
 
-const priceRe =/\d+(?:[.,]\d+)?\s*\$/g;
-const normPrice = (s: string) => s.replace(/\s+/g, '').replace(',', '.');
+// Precio en el texto: "12.50$" o "$12.50" (el bot usa los dos). Se compara solo el numero.
+const priceRe = /\$\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s*\$/g;
+const normPrice = (s: string) => {
+  const n = Number(s.replace(/[\s$]/g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n.toFixed(2) : s;
+};
 const words = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9/.]+/).filter((w) => w.length > 1);
 

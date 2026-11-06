@@ -37,3 +37,9 @@ assert.ok(k.includes('nombra máximo 3'));
 assert.ok(k.includes('- Otra regla.'));
 assert.ok(k.includes('MODO TÓTEM DE VOZ'));
 console.log('adaptPromptForKiosk OK');
+
+// 7. Precio con el signo delante ("$14.06 bcv"): el bot a veces escribe asi
+const front = [search([p('F1', 'Cemento blanco 10 kg', '14.06$ bcv'), p('F2', 'Cemento gris x kg', '0.52$ bcv')])];
+assert.deepEqual(pickMentionedProducts(front, 'Tenemos cemento blanco a $14.06 bcv y gris por kilo a $0.52 bcv.').map((x) => x.codigo), ['F1', 'F2']);
+assert.deepEqual(pickMentionedProducts(front, 'Cemento blanco a $ 14,06 bcv').map((x) => x.codigo), ['F1']);
+console.log('precio con $ delante OK');

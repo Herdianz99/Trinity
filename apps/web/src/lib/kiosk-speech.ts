@@ -59,6 +59,8 @@ const EMOJI = new RegExp('\\p{Extended_Pictographic}', 'gu');
 
 export function textForSpeech(text: string): string {
   return text
+    .replace(/\$\s*(\d+(?:[.,]\d+)?)\s*bcv/gi, (_, n: string) => `${dollars(n)} a tasa BCV`)
+    .replace(/\$\s*(\d+(?:[.,]\d+)?)/g, (_, n: string) => dollars(n))
     .replace(/(\d+(?:[.,]\d+)?)\s*\$\s*bcv/gi, (_, n: string) => `${dollars(n)} a tasa BCV`)
     .replace(/(\d+(?:[.,]\d+)?)\s*\$/g, (_, n: string) => dollars(n))
     .replace(/(\d+(?:\/\d+)?)"/g, '$1 pulgada')
