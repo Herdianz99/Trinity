@@ -126,7 +126,7 @@ export default function TotemPage() {
         Clover · Asistente El Trébol
       </span>
 
-      <CloverAvatar state={state} />
+      <CloverAvatar state={state} compact={cards.length > 0} />
 
       {/* Globo de dialogo: lo que dice Clover */}
       <div className="relative -mt-4 w-full rounded-[28px] bg-white px-6 py-5 text-center text-slate-900 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.6)]">
@@ -145,11 +145,11 @@ export default function TotemPage() {
       )}
 
       {cards.length > 0 && (
-        <div className="mt-4 grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 flex w-full flex-wrap justify-center gap-3">
           {cards.map((c, i) => (
             <div
               key={c.code}
-              className="animate-[card-in_.4s_ease-out_both] overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg"
+              className="w-[calc(50%-0.375rem)] animate-[card-in_.4s_ease-out_both] overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg sm:w-[calc(25%-0.5625rem)]"
               style={{ animationDelay: `${i * 90}ms` }}
             >
               <div className="flex aspect-square items-center justify-center bg-slate-50 p-2">
@@ -177,10 +177,12 @@ export default function TotemPage() {
             onPointerCancel={onPressEnd}
             onContextMenu={(e) => e.preventDefault()}
             disabled={state === 'thinking'}
-            className={`flex h-28 w-full touch-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,3.6vw,2rem)] font-extrabold shadow-xl transition-all duration-150 disabled:opacity-60 ${
+            className={`flex h-28 w-full touch-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,3.6vw,2rem)] font-extrabold shadow-xl transition-all duration-150 ${
               state === 'listening'
                 ? 'scale-[0.97] bg-emerald-400 text-emerald-950'
-                : 'bg-emerald-600 text-white active:scale-[0.97]'}`}
+                : state === 'thinking'
+                  ? 'bg-emerald-800 text-white/70'
+                  : 'bg-emerald-600 text-white active:scale-[0.97]'}`}
           >
             <Mic className={`h-11 w-11 ${state === 'listening' ? 'animate-pulse' : ''}`} />
             {state === 'listening' ? 'Te escucho… suelta al terminar'

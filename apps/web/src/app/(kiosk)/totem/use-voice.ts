@@ -7,6 +7,7 @@ export function useVoice() {
   const recRef = useRef<any>(null);
   const finalRef = useRef('');
   const endResolver = useRef<((t: string) => void) | null>(null);
+  const activeRef = useRef(false); // el reconocedor esta grabando (Chrome puede cortarlo solo)
   const [supported, setSupported] = useState(true);
   const [interim, setInterim] = useState('');
 
@@ -24,6 +25,7 @@ export function useVoice() {
       setInterim(text);
     };
     rec.onend = () => {
+      activeRef.current = false;
       endResolver.current?.(finalRef.current.trim());
       endResolver.current = null;
     };
@@ -36,13 +38,15 @@ export function useVoice() {
     window.speechSynthesis?.cancel(); // si Clover esta hablando, se calla
     finalRef.current = '';
     setInterim('');
-    try { recRef.current?.start(); } catch { /* ya estaba escuchando */ }
+    try { recRef.current?.start(); activeRef.current = true; } catch { /* ya estaba escuchando */ }
   }, []);
 
   // Devuelve lo entendido cuando el reconocedor termina de procesar el audio.
   const stopListening = useCallback(() => new Promise<string>((resolve) => {
     const rec = recRef.current;
     if (!rec) return resolve('');
+    // Si Chrome ya corto la grabacion (silencio, error, sin permiso), onend no vuelve a llegar.
+    if (!activeRef.current) return resolve(finalRef.current.trim());
     endResolver.current = resolve;
     try { rec.stop(); } catch { resolve(finalRef.current.trim()); }
   }), []);
