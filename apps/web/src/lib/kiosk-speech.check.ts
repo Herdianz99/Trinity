@@ -8,3 +8,13 @@ assert.equal(textForSpeech('Cuesta 9.05$'), 'Cuesta 9 dólares con 5');
 assert.equal(textForSpeech('Tubo de 1/2" y 3/4"'), 'Tubo de 1/2 pulgada y 3/4 pulgada');
 assert.equal(textForSpeech('Hola 👋 *amigo*'), 'Hola amigo');
 console.log('kiosk-speech.check OK');
+
+// mergeTranscripts: Chrome en PC manda trozos nuevos; Chrome en Android repite el acumulado en cada resultado.
+import { mergeTranscripts } from './kiosk-speech.ts';
+assert.equal(mergeTranscripts(['cuánto cuesta', ' el cemento gris']), 'cuánto cuesta el cemento gris');
+assert.equal(mergeTranscripts(['cemento', 'cemento gris', 'cemento gris de 42']), 'cemento gris de 42');
+assert.equal(mergeTranscripts(['Cemento', 'cemento gris']), 'cemento gris');
+assert.equal(mergeTranscripts(['tienen codos', 'tienen codos', 'de media']), 'tienen codos de media');
+assert.equal(mergeTranscripts(['', '  ', 'hola']), 'hola');
+assert.equal(mergeTranscripts([]), '');
+console.log('mergeTranscripts OK');

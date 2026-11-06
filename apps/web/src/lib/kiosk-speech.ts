@@ -10,6 +10,24 @@ function dollars(raw: string): string {
   return cents ? `${n} ${unit} con ${cents}` : `${n} ${unit}`;
 }
 
+// Une los resultados del reconocimiento de voz. Chrome en PC manda cada trozo nuevo por separado, pero
+// Chrome en Android repite en cada resultado TODO lo dicho hasta ahi ("cemento", "cemento gris", ...):
+// si se concatenan, sale "cemento cemento gris". Si un trozo empieza con lo acumulado, lo reemplaza;
+// si es igual al ultimo, se ignora; si no, se agrega.
+export function mergeTranscripts(parts: string[]): string {
+  let acc = '';
+  for (const raw of parts) {
+    const p = raw.trim();
+    if (!p) continue;
+    const a = acc.toLowerCase();
+    const l = p.toLowerCase();
+    if (!acc || l.startsWith(a)) acc = p;
+    else if (a.endsWith(l)) continue;
+    else acc = `${acc} ${p}`;
+  }
+  return acc;
+}
+
 // Constructor (no literal /u): el tsconfig del web apunta a ES5.
 const EMOJI = new RegExp('\\p{Extended_Pictographic}', 'gu');
 

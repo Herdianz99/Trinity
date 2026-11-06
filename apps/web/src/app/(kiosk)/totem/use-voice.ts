@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { textForSpeech } from '@/lib/kiosk-speech';
+import { mergeTranscripts, textForSpeech } from '@/lib/kiosk-speech';
 
 // Reconocimiento de voz (solo Chrome) + sintesis del navegador. Gratis, sin servicios externos.
 export function useVoice() {
@@ -19,8 +19,9 @@ export function useVoice() {
     rec.interimResults = true;
     rec.continuous = true;
     rec.onresult = (e: any) => {
-      let text = '';
-      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+      const parts: string[] = [];
+      for (let i = 0; i < e.results.length; i++) parts.push(e.results[i][0].transcript);
+      const text = mergeTranscripts(parts);
       finalRef.current = text;
       setInterim(text);
     };
