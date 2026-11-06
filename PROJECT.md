@@ -1461,3 +1461,10 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 ## Productos — desactivación con motivo (Sesión 180)
 - Pasar un producto de activo a inactivo por la API exige `deactivationReason` (PATCH) o `{reason}` (DELETE); se guardan `deactivatedAt`/`deactivatedById` y se limpian al reactivar. Todo código nuevo que desactive productos debe pasar por `ProductsService.deactivationChange()`. Los cambios directos por BD quedan sin motivo (permitido a propósito).
 - Igual para el **bloqueo para la venta**: bloquear exige `saleBlockReason` (PATCH) o `reason` (`PATCH /products/:id/sale-block`, que además guarda en `saleBlockAuthorizedBy` el nombre de la clave dinámica); se guardan `saleBlockedAt`/`saleBlockedById` y se limpian al desbloquear. Pasar por `ProductsService.saleBlockChange()`.
+
+## Chatbot — tótem de voz Clover (Sesión 181)
+- Canal .  acepta  (sin body = TEST, la pantalla de prueba no cambia).  escala sin IA.
+- En KIOSK,  pasa por  (): reemplaza LÍNEAS completas por prefijo (si se edita el texto de esas líneas en , revisar ) y agrega . La respuesta de  trae  (: productos de  cuyo precio aparece en el texto, máx 4).
+- Verificaciones sin jest: kiosk.check OK
+adaptPromptForKiosk OK y kiosk-speech.check OK (Node 24 quita los tipos;  excluidos de los tsconfig).
+- Web:  (sin menú, fuente Baloo 2, SessionKeeper) y  (, , ). Middleware:  → permiso . Requiere Chrome (webkitSpeechRecognition).
