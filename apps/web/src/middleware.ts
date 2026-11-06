@@ -11,6 +11,7 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/chatbot/config', ['chatbot-config']],
   ['/chatbot/cross-sell', ['chatbot-config']],
   ['/chatbot', ['chatbot']],
+  ['/totem', ['chatbot']],
   ['/catalog/suppliers', ['purchases']],
   // Sesiones de fotos / codigos de barras: tambien accesibles desde Inventario (incl. solo-consulta)
   ['/catalog/photo-session', ['catalog', 'inventory', 'inventory-consult']],
