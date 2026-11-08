@@ -44,14 +44,20 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
-## 📄 PDF de transferencias entre almacenes (2026-11-08, Sesión 182) — ⏳ COMMITEADO, SIN DESPLEGAR
+## 🚀 Deploy 2026-11-08 en las 7 (`039f1597`) — Sesiones 178 a 182
+- **Orden:** chica → aceros → acerosmayor → mayor → Turen → Total → grande. Verificado en las 7: HEAD `039f1597`, web 200, `/health` ok, `/transfers/:id/pdf` y `/incidents/departments` responden 401 (ruta existe). Migraciones aplicadas: `online_order_delivered`, `purchase_return_status`, `incident_departments`, `product_deactivation_reason`, `chatbot_kiosk_channel`.
+- **Lleva el tótem Clover (Sesión 181)** a las 7 (solo visible en `/totem` con permiso `chatbot`); el usuario pidió desplegar todo.
+- **Chica:** `next build` de la web murió por memoria dentro de `deploy.sh` ("Build failed because of webpack errors", sin `.next`) y el script igual dijo "sin errores" → **web caída ~12 min**. Se recuperó corriendo a mano `cd /opt/Trinity/apps/web && NODE_OPTIONS=--max-old-space-size=1536 pnpm build` + `pm2 restart trinity-web`. El swap `/swapfile-deploy` seguía activo. **Próximo deploy en la chica: revisar que la web responda 200 al terminar, no fiarse del mensaje final.**
+- **Pendiente de configurar en cada empresa (incidencias):** crear Auditoría/Infraestructura y sus tipos, y activar el módulo `incidents` al rol AUDITOR en Permisos por rol.
+
+## 📄 PDF de transferencias entre almacenes (2026-11-08, Sesión 182) — ✅ DESPLEGADO EN LAS 7 (2026-11-08)
 - **Pedido:** en el detalle de `/inventory/transfers/[id]` un reporte PDF con los artículos transferidos de un almacén a otro, como el de `/catalog/partner-transfers`.
 - **Backend:** `TransferPdfService` (`apps/api/src/modules/transfers/transfer-pdf.service.ts`, pdfkit, carta vertical) + `GET /transfers/:id/pdf` (mismo guard que el módulo: `inventory`). Encabezado con origen → destino, estado, creada (fecha Caracas + usuario), aprobada por, notas. Tabla # / Código / Ref. proveedor / Artículo / Cantidad ordenada por código; los nombres largos parten en 2 líneas (alto de fila variable). Totales (artículos y unidades), aviso si está CANCELADA, firmas "Entregado por" / "Recibido por", paginación. **Sin costos** (la transferencia no guarda costo histórico).
 - **Frontend:** botón **PDF** en el encabezado del detalle, visible en cualquier estado.
 - **Probado en local:** transferencia de 70 artículos (2 páginas) por API y por el proxy web (`%PDF-`), render revisado. Typecheck API y Web 0 errores. Sin migración.
 - **Datos de prueba en la BD LOCAL:** `TRF-0001` pendiente (18 artículos) y "Almacen Secundario" activado para poder crearla; incidencias de muestra de Auditoría (INC-1949..1953) e Infraestructura (INC-1954..1956) y factura `NE1-26-00005214` de la prueba del POS. Nada de esto va a producción.
 
-## 🗣️ Tótem de voz "Clover" en el piso de venta (2026-11-06, Sesión 181) — ⏳ COMMITEADO, SIN DESPLEGAR (el usuario pidió NO desplegar)
+## 🗣️ Tótem de voz "Clover" en el piso de venta (2026-11-06, Sesión 181) — ✅ DESPLEGADO EN LAS 7 (2026-11-08, con el resto de main)
 - **Pedido:** pantalla con un avatar que escucha y habla con el cliente en la tienda (solo la grande). Piloto: tablet existente con Chrome, un solo punto de la tienda, 1–2 semanas.
 - **Diseño y plan:** `docs/superpowers/specs/2026-11-06-totem-clover-design.md` · `docs/superpowers/plans/2026-11-06-totem-clover.md`.
 - **Avatar:** imagen generada con IA en Canva (media `MAHaKo0Nzmk`): muchacho animado, casco "CLOVER", chaleco amarillo, trébol verde. Archivo `apps/web/public/clover/clover.png`. Se llama **Clover**.
