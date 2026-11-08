@@ -48,7 +48,13 @@
 - **Orden:** chica → aceros → acerosmayor → mayor → Turen → Total → grande. Verificado en las 7: HEAD `039f1597`, web 200, `/health` ok, `/transfers/:id/pdf` y `/incidents/departments` responden 401 (ruta existe). Migraciones aplicadas: `online_order_delivered`, `purchase_return_status`, `incident_departments`, `product_deactivation_reason`, `chatbot_kiosk_channel`.
 - **Lleva el tótem Clover (Sesión 181)** a las 7 (solo visible en `/totem` con permiso `chatbot`); el usuario pidió desplegar todo.
 - **Chica:** `next build` de la web murió por memoria dentro de `deploy.sh` ("Build failed because of webpack errors", sin `.next`) y el script igual dijo "sin errores" → **web caída ~12 min**. Se recuperó corriendo a mano `cd /opt/Trinity/apps/web && NODE_OPTIONS=--max-old-space-size=1536 pnpm build` + `pm2 restart trinity-web`. El swap `/swapfile-deploy` seguía activo. **Próximo deploy en la chica: revisar que la web responda 200 al terminar, no fiarse del mensaje final.**
-- **Pendiente de configurar en cada empresa (incidencias):** crear Auditoría/Infraestructura y sus tipos, y activar el módulo `incidents` al rol AUDITOR en Permisos por rol.
+- **Pendiente de configurar en las otras 6 empresas (incidencias):** crear Auditoría/Infraestructura y sus tipos, y dar el módulo `incidents` a los auditores que correspondan.
+- **Grande — departamento Auditoría configurado (2026-11-08, por SQL en `trinity_db`):**
+  - `IncidentDepartment` id `incdept_auditoria`, **sin roles** (`roles = {}`): miembros asignados a mano con `User.incidentDepartmentId` → **DANA RIVAS, JOSE ALEXANDER RODRIGUEZ, RONALDO LINAREZ**. El usuario pidió dejar fuera a **Angelimar Diaz** y **MARKETING** (los dos tienen rol AUDITOR), por eso NO se usa el rol como membresía: un AUDITOR nuevo no entra solo, hay que agregarlo en Incidencias → Departamentos.
+  - Módulo `incidents`: **NO está en el rol AUDITOR** (`RolePermission` sin cambios netos); se dio por usuario en `User.extraModules` solo a los 3 miembros.
+  - **Seguridad ve las de Auditoría solo lectura:** `viewerDepartmentIds = {incdept_seguridad}` en Auditoría. Auditoría NO ve las de Seguridad.
+  - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
+  - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
 ## 📄 PDF de transferencias entre almacenes (2026-11-08, Sesión 182) — ✅ DESPLEGADO EN LAS 7 (2026-11-08)
 - **Pedido:** en el detalle de `/inventory/transfers/[id]` un reporte PDF con los artículos transferidos de un almacén a otro, como el de `/catalog/partner-transfers`.
