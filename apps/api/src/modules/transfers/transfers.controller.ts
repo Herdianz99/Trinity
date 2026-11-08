@@ -7,7 +7,9 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
@@ -17,6 +19,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleGuard } from '../../common/guards/module.guard';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { TransfersService } from './transfers.service';
+import { TransferPdfService } from './transfer-pdf.service';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 
 @ApiTags('Transfers')
@@ -25,7 +28,10 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 @RequireModule('inventory')
 @Controller('transfers')
 export class TransfersController {
-  constructor(private readonly transfersService: TransfersService) {}
+  constructor(
+    private readonly transfersService: TransfersService,
+    private readonly transferPdf: TransferPdfService,
+  ) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -45,6 +51,18 @@ export class TransfersController {
     @Query('warehouseId') warehouseId?: string,
   ) {
     return this.transfersService.findAll({ status, warehouseId });
+  }
+
+  // PDF con los articulos transferidos de un almacen a otro (Session 182)
+  @Get(':id/pdf')
+  async pdf(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, number } = await this.transferPdf.generate(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="transferencia-${number}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get(':id')

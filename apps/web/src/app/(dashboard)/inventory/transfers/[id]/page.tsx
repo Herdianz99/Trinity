@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, Check, Ban } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Check, Ban, FileText } from 'lucide-react';
 
 interface TransferItem {
   id: string;
@@ -116,18 +116,26 @@ export default function TransferDetailPage() {
             {transfer.notes && <span className="text-slate-500">| {transfer.notes}</span>}
           </div>
         </div>
-        {transfer.status === 'PENDING' && (
-          <div className="flex items-center gap-2 self-start">
-            <button onClick={handleCancel} disabled={saving} className="btn-secondary !py-2 text-sm flex items-center gap-1.5">
-              <Ban size={15} /> Cancelar
-            </button>
-            {canApprove && (
-              <button onClick={handleApprove} disabled={saving} className="btn-primary !py-2 text-sm flex items-center gap-1.5">
-                {saving ? <Loader2 className="animate-spin" size={15} /> : <Check size={15} />} Aprobar
+        <div className="flex items-center gap-2 self-start flex-wrap">
+          <button
+            onClick={() => window.open(`/api/proxy/transfers/${encodeURIComponent(transfer.id)}/pdf`, '_blank')}
+            className="btn-secondary !py-2 text-sm flex items-center gap-1.5"
+          >
+            <FileText size={15} /> PDF
+          </button>
+          {transfer.status === 'PENDING' && (
+            <>
+              <button onClick={handleCancel} disabled={saving} className="btn-secondary !py-2 text-sm flex items-center gap-1.5">
+                <Ban size={15} /> Cancelar
               </button>
-            )}
-          </div>
-        )}
+              {canApprove && (
+                <button onClick={handleApprove} disabled={saving} className="btn-primary !py-2 text-sm flex items-center gap-1.5">
+                  {saving ? <Loader2 className="animate-spin" size={15} /> : <Check size={15} />} Aprobar
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {message && (

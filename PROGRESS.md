@@ -44,6 +44,13 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 📄 PDF de transferencias entre almacenes (2026-11-08, Sesión 182) — ⏳ COMMITEADO, SIN DESPLEGAR
+- **Pedido:** en el detalle de `/inventory/transfers/[id]` un reporte PDF con los artículos transferidos de un almacén a otro, como el de `/catalog/partner-transfers`.
+- **Backend:** `TransferPdfService` (`apps/api/src/modules/transfers/transfer-pdf.service.ts`, pdfkit, carta vertical) + `GET /transfers/:id/pdf` (mismo guard que el módulo: `inventory`). Encabezado con origen → destino, estado, creada (fecha Caracas + usuario), aprobada por, notas. Tabla # / Código / Ref. proveedor / Artículo / Cantidad ordenada por código; los nombres largos parten en 2 líneas (alto de fila variable). Totales (artículos y unidades), aviso si está CANCELADA, firmas "Entregado por" / "Recibido por", paginación. **Sin costos** (la transferencia no guarda costo histórico).
+- **Frontend:** botón **PDF** en el encabezado del detalle, visible en cualquier estado.
+- **Probado en local:** transferencia de 70 artículos (2 páginas) por API y por el proxy web (`%PDF-`), render revisado. Typecheck API y Web 0 errores. Sin migración.
+- **Datos de prueba en la BD LOCAL:** `TRF-0001` pendiente (18 artículos) y "Almacen Secundario" activado para poder crearla; incidencias de muestra de Auditoría (INC-1949..1953) e Infraestructura (INC-1954..1956) y factura `NE1-26-00005214` de la prueba del POS. Nada de esto va a producción.
+
 ## 🗣️ Tótem de voz "Clover" en el piso de venta (2026-11-06, Sesión 181) — ⏳ COMMITEADO, SIN DESPLEGAR (el usuario pidió NO desplegar)
 - **Pedido:** pantalla con un avatar que escucha y habla con el cliente en la tienda (solo la grande). Piloto: tablet existente con Chrome, un solo punto de la tienda, 1–2 semanas.
 - **Diseño y plan:** `docs/superpowers/specs/2026-11-06-totem-clover-design.md` · `docs/superpowers/plans/2026-11-06-totem-clover.md`.

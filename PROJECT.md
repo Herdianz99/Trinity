@@ -730,6 +730,7 @@ model Payment {
   - Correlativo `number` TRF-0001. Pagina de detalle `/inventory/transfers/[id]` y creacion en pagina propia `/inventory/transfers/new`. Al aprobar, los movimientos llevan `sourceType:'TRANSFER'` + `sourceId` (clicables desde Movimientos).
   - POST /transfers — crear solicitud (WAREHOUSE)
   - GET /transfers/:id — detalle
+  - GET /transfers/:id/pdf — PDF de los artículos transferidos (origen → destino, firmas entregado/recibido; sin costos). Botón "PDF" en el detalle (Session 182)
   - PATCH /transfers/:id/approve — aprobar (SUPERVISOR)
   - PATCH /transfers/:id/cancel
 - InventoryCountModule:
