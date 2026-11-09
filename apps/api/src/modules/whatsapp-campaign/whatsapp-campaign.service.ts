@@ -491,7 +491,8 @@ export class WhatsappCampaignService {
       byEstado: rows(byEstado).sort((a, b) => b.sent - a.sent),
       byUser: rows(byUser).sort((a, b) => b.sent - a.sent),
       byDay: rows(byDay).sort((a, b) => a.key.localeCompare(b.key)),
-      buyers: buyers.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime()),
+      // Compra mas reciente primero (las facturas de cada cliente vienen en orden ascendente)
+      buyers: buyers.sort((a, b) => b.invoices[b.invoices.length - 1].createdAt.getTime() - a.invoices[a.invoices.length - 1].createdAt.getTime()),
     };
   }
 

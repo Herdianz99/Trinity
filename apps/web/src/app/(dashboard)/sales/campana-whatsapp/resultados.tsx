@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Info } from 'lucide-react';
 import { api, fmt2, fmtUsd, fmtYmd, fmtDateTime, localYmd, input, ESTADO_STYLE } from './shared';
@@ -129,9 +129,9 @@ export default function ResultadosTab() {
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-700/60">
                       <th className="px-4 py-2 font-medium">Cliente</th>
-                      <th className="px-3 py-2 font-medium">Mensaje</th>
+                      <th className="px-3 py-2 font-medium">Mensaje enviado</th>
                       <th className="px-3 py-2 font-medium">Compró</th>
-                      <th className="px-3 py-2 font-medium">Facturas</th>
+                      <th className="px-3 py-2 font-medium">Facturas (fecha de compra)</th>
                       <th className="px-3 py-2 font-medium text-right">Monto</th>
                     </tr>
                   </thead>
@@ -149,11 +149,11 @@ export default function ResultadosTab() {
                           {b.cashea && <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 text-[10px] font-semibold">CASHEA</span>}
                         </td>
                         <td className="px-3 py-2.5 text-xs">
-                          {b.invoices.map((i, idx) => (
-                            <Fragment key={i.id}>
-                              {idx > 0 && ', '}
+                          {b.invoices.map((i) => (
+                            <div key={i.id} className="whitespace-nowrap">
                               <Link href={`/sales/invoices/${i.id}`} className="text-sky-400 hover:text-sky-300">{i.number || 'S/N'}</Link>
-                            </Fragment>
+                              <span className="text-slate-500"> · {fmtDateTime(i.createdAt)}</span>
+                            </div>
                           ))}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">
