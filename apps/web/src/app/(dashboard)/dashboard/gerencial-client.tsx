@@ -707,11 +707,14 @@ export default function DashboardGerencialClient() {
               <h3 className="text-sm font-semibold text-slate-300 mb-4">Ventas por Vendedor</h3>
               {data.salesBySeller.length > 0 ? (
                 <div className="space-y-3">
-                  {data.salesBySeller.map((s) => (
-                    <div key={s.sellerId}>
+                  {data.salesBySeller.map((s) => {
+                    // "Sin vendedor" no tiene filtro en /sales/invoices: queda sin enlace.
+                    const linkable = s.sellerId !== '__no_seller__';
+                    const body = (
+                      <>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-300 font-medium truncate max-w-[120px]">{s.sellerName}</span>
+                          <span className={`text-xs font-medium truncate max-w-[120px] ${linkable ? 'text-slate-300 group-hover:text-emerald-300' : 'text-slate-300'}`}>{s.sellerName}</span>
                           <span className="text-[10px] text-slate-500">{s.invoiceCount} fact.</span>
                         </div>
                         <div className="text-right leading-tight">
@@ -730,8 +733,21 @@ export default function DashboardGerencialClient() {
                         />
                       </div>
                       <p className="text-[10px] text-slate-500 mt-0.5 text-right">{s.pct}%</p>
-                    </div>
-                  ))}
+                      </>
+                    );
+                    return linkable ? (
+                      <Link
+                        key={s.sellerId}
+                        href={`/sales/invoices?sellerId=${s.sellerId}&from=${fromDate}&to=${toDate}`}
+                        title={`Ver las facturas de ${s.sellerName} en este período`}
+                        className="block -mx-2 px-2 py-1 rounded-lg hover:bg-slate-700/40 transition-colors group"
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <div key={s.sellerId} className="-mx-2 px-2 py-1">{body}</div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">

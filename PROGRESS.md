@@ -56,6 +56,11 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🔗 Dashboard: vendedor de "Ventas por Vendedor" enlaza a sus facturas (2026-11-09, Sesión 183) — ⏳ COMMITEADO, SIN DEPLOY
+- **Pedido:** clic en un vendedor de "Ventas por Vendedor" (`/dashboard`, `gerencial-client.tsx`) → `/sales/invoices` filtrado.
+- **Cambio:** cada fila es un `Link` a `/sales/invoices?sellerId=<id>&from=<desde>&to=<hasta>` con el período elegido en el dashboard (la lista ya leía esos parámetros de la URL). "Sin vendedor" (`__no_seller__`) queda sin enlace: el filtro de facturas no soporta "sin vendedor". Solo frontend; typecheck Web OK.
+- **Nota:** la lista muestra todos los estados (también pendientes/anuladas), así que puede tener más facturas que el "N fact." del dashboard (que cuenta solo cobradas).
+
 ## 🐛 Ficha de producto: vaciar ref. proveedor / marca no se guardaba (2026-11-09, Sesión 183) — ⏳ COMMITEADO, SIN DEPLOY
 - **Reporte (grande):** en `ELE00503` (ref. `C340401`, marca BOSCH) quitar ref. proveedor y marca decía "Producto actualizado" pero al volver a entrar seguían.
 - **Causa:** `catalog/products/[code]/page.tsx` mandaba `campo || undefined`; un campo vacío no viajaba en el JSON y el PATCH lo dejaba igual. Afectaba ref. proveedor, otro código, descripción, categoría, marca y proveedor.
