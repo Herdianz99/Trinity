@@ -16,12 +16,12 @@ export class CreateProductDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  supplierRef?: string;
+  supplierRef?: string | null;
 
   @ApiProperty({ required: false, description: 'Otro codigo (codigo alterno, sin uso funcional aun)' })
   @IsOptional()
   @IsString()
-  otherCode?: string;
+  otherCode?: string | null;
 
   @ApiProperty()
   @IsString()
@@ -31,22 +31,22 @@ export class CreateProductDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  description?: string;
+  description?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  categoryId?: string;
+  categoryId?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  brandId?: string;
+  brandId?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  supplierId?: string;
+  supplierId?: string | null;
 
   @ApiProperty({ required: false, default: 'UNIT' })
   @IsOptional()

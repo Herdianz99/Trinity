@@ -376,12 +376,14 @@ export default function ProductDetailPage() {
       const body: any = {
         name: form.name,
         barcode: (form.barcode || '').trim() || null,
-        supplierRef: form.supplierRef || undefined,
-        otherCode: form.otherCode || undefined,
-        description: form.description || undefined,
-        categoryId: form.categoryId || undefined,
-        brandId: form.brandId || undefined,
-        supplierId: form.supplierId || undefined,
+        // Vacio => null para BORRAR el valor. Con undefined el campo no viajaba en el JSON y la API
+        // lo dejaba como estaba (decia "guardado" pero la ref./marca seguian ahi).
+        supplierRef: (form.supplierRef || '').trim() || null,
+        otherCode: (form.otherCode || '').trim() || null,
+        description: (form.description || '').trim() || null,
+        categoryId: form.categoryId || null,
+        brandId: form.brandId || null,
+        supplierId: form.supplierId || null,
         isService: form.isService,
         purchaseUnit: form.purchaseUnit,
         saleUnit: form.saleUnit,

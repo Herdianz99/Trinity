@@ -716,7 +716,8 @@ export class ProductsService {
       const ivaType = dto.ivaType ?? existing.ivaType;
       const bregaApplies = dto.bregaApplies ?? existing.bregaApplies;
       const catMap = await buildCategoryBregaMap(this.prisma);
-      const categoryId = dto.categoryId ?? existing.categoryId;
+      // null = categoria quitada (sin brecha de categoria); undefined = no vino, se conserva
+      const categoryId = dto.categoryId !== undefined ? dto.categoryId : existing.categoryId;
       const categoryBregaPct = categoryId ? (catMap.get(categoryId) ?? 0) : 0;
       const prices = await this.calculatePrices(costUsd, gananciaPct, gananciaMayorPct, ivaType, bregaApplies, categoryBregaPct);
       priceDetal = prices.priceDetal;

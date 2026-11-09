@@ -56,6 +56,11 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🐛 Ficha de producto: vaciar ref. proveedor / marca no se guardaba (2026-11-09, Sesión 183) — ⏳ COMMITEADO, SIN DEPLOY
+- **Reporte (grande):** en `ELE00503` (ref. `C340401`, marca BOSCH) quitar ref. proveedor y marca decía "Producto actualizado" pero al volver a entrar seguían.
+- **Causa:** `catalog/products/[code]/page.tsx` mandaba `campo || undefined`; un campo vacío no viajaba en el JSON y el PATCH lo dejaba igual. Afectaba ref. proveedor, otro código, descripción, categoría, marca y proveedor.
+- **Fix:** el frontend manda `null` al vaciar (texto con `trim`); DTO acepta `| null` en esos 6 campos; en `update()` la categoría `null` ya no cae a la existente para la brecha (`!== undefined`). Typecheck API y Web OK. Sin migración.
+
 ## 📣 Campaña WhatsApp: fecha de compra en Resultados + promo Cashea/cemento (2026-11-09, Sesión 183) — ⏳ COMMITEADO, SIN DEPLOY
 - **Problema:** en Resultados el conteo de compradores subía (15 → 16) y parecía venir de días anteriores. Causa: la lista mostraba la fecha del **mensaje**, no la de la compra (las del 09-11 eran NE4-26-00004466 y NE1-26-00005242, de mensajes del 06-11 y 03-11, dentro de la ventana de 7 días). No hay facturas cobradas en un día distinto al de su creación.
 - **Cambio (`c173c004`):** cada factura del comprador muestra su fecha/hora de compra; columnas "Mensaje enviado" y "Facturas (fecha de compra)"; la lista se ordena por la compra más reciente (backend `results()`). Typecheck API y Web OK. Sin migración. **Falta deploy en la grande** (única con la campaña).
