@@ -5,6 +5,7 @@ import { StoreExportService } from '../store-export/store-export.service';
 import { dataUriToBuffer, processBannerImage } from '../product-images/image-processing';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
+import { UpdateStorePaymentDto } from './dto/update-store-payment.dto';
 
 @Injectable()
 export class StoreCustomizationService {
@@ -13,6 +14,35 @@ export class StoreCustomizationService {
     private spaces: SpacesService,
     private storeExport: StoreExportService,
   ) {}
+
+  /** Datos de Pago Movil que muestra el checkout de la tienda. */
+  async getPayment() {
+    const cfg = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { storePagoMovilBank: true, storePagoMovilRif: true, storePagoMovilPhone: true },
+    });
+    return {
+      pagoMovilBank: cfg?.storePagoMovilBank ?? '',
+      pagoMovilRif: cfg?.storePagoMovilRif ?? '',
+      pagoMovilPhone: cfg?.storePagoMovilPhone ?? '',
+    };
+  }
+
+  async updatePayment(dto: UpdateStorePaymentDto) {
+    const clean = (v?: string) => (v === undefined ? undefined : v.trim() || null);
+    const data = {
+      storePagoMovilBank: clean(dto.pagoMovilBank),
+      storePagoMovilRif: clean(dto.pagoMovilRif),
+      storePagoMovilPhone: clean(dto.pagoMovilPhone),
+    };
+    await this.prisma.companyConfig.upsert({
+      where: { id: 'singleton' },
+      update: data,
+      create: { id: 'singleton', ...data },
+    });
+    this.storeExport.scheduleExport();
+    return this.getPayment();
+  }
 
   /** Lista todos los banners (hero + promo), ordenados para la UI de administración. */
   async findAll() {

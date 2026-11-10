@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
-import { buildSnapshotData, type ExportBanner, type RawProduct, type SnapshotBuild } from './store-export.builder';
+import { buildSnapshotData, type ExportBanner, type RawProduct, type SnapshotBuild, type StorePayment } from './store-export.builder';
 import { caracasDateKey } from '../../common/timezone';
 import { productSearchTsQuery } from '../../common/product-search';
 import type { ComplementRule } from './store-complements';
@@ -47,6 +47,18 @@ export class StoreExportService {
     const brandLogos: Record<string, string | null> = {};
     for (const b of brands) if (b.logoKey) brandLogos[b.name] = this.spaces.cdnUrl(b.logoKey);
     return { catIcons, brandLogos };
+  }
+
+  /** Datos de Pago Movil (Tienda > Personalizacion). Solo se publican si estan los tres. */
+  private async fetchPayment(): Promise<StorePayment> {
+    const cfg = await this.prisma.companyConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { storePagoMovilBank: true, storePagoMovilRif: true, storePagoMovilPhone: true },
+    });
+    const bank = cfg?.storePagoMovilBank?.trim();
+    const rif = cfg?.storePagoMovilRif?.trim();
+    const phone = cfg?.storePagoMovilPhone?.trim();
+    return { pagoMovil: bank && rif && phone ? { bank, rif, phone } : null };
   }
 
   /** Lee los banners activos y resuelve sus imágenes a URL de CDN. */
@@ -191,11 +203,12 @@ export class StoreExportService {
 
   /** Construye y sube store/catalog.json + store/meta.json. Devuelve un resumen. */
   async exportCatalog(): Promise<SnapshotBuild['summary']> {
-    const [{ products, rate }, banners, chrome, complementRules] = await Promise.all([
+    const [{ products, rate }, banners, chrome, complementRules, payment] = await Promise.all([
       this.fetchData(),
       this.fetchBanners(),
       this.fetchChrome(),
       this.fetchComplementRules(),
+      this.fetchPayment(),
     ]);
     const { catalog, meta, summary } = buildSnapshotData(
       products,
@@ -206,6 +219,7 @@ export class StoreExportService {
       chrome.brandLogos,
       complementRules,
     );
+    meta.payment = payment;
 
     // Prefijo de la ruta del snapshot. En prod queda 'store'; en local se puede
     // apuntar a 'store-local' (STORE_SNAPSHOT_PREFIX) para NO pisar el snapshot real.

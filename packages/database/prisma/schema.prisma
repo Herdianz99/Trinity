@@ -328,6 +328,11 @@ model CompanyConfig {
   // Opt-in por empresa del módulo de bancos: gatea los enganches automáticos al libro banco.
   // Default false = las demás empresas no ven efecto hasta encenderlo.
   bancosEnabled           Boolean  @default(false)
+  // Datos de Pago Movil que la tienda online muestra en el checkout (van en store/meta.json).
+  // Se editan en Tienda > Personalizacion. Vacio = la tienda usa sus datos por defecto.
+  storePagoMovilBank      String?
+  storePagoMovilRif       String?
+  storePagoMovilPhone     String?
   updatedAt               DateTime @updatedAt
 }
 

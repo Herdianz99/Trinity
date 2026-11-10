@@ -1411,6 +1411,10 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - Al **cerrar** una corrida (`POST payroll-runs/:id/close`, body `ClosePayrollRunDto`) se crea, en la MISMA transacción, un `Expense` en la categoría **"Nomina"** (se reutiliza por nombre; las empresas ya la tenían) por el **TOTAL BRUTO** (`totalGrossBs`, USD = bruto / tasa de la corrida). Las deducciones solo afectan lo que cobra el empleado. `Expense.payrollRunId` (único) enlaza el gasto con la corrida.
 - De dónde sale el dinero se elige en el modal de cierre, con las mismas opciones que un gasto manual: caja abierta (+ método), a crédito (CxP a un proveedor) o sin caja. Reutiliza `ExpensesService.createInTx(tx, dto, userId, { payrollRunId })` (el `create()` normal es un envoltorio que abre la transacción). **Reemplaza la carga manual del gasto de nómina**: hay que avisar a las empresas que dejen de cargarlo a mano en Gastos.
 
+## Tienda online — Pago Móvil del checkout (Sesión 184)
+- `CompanyConfig.storePagoMovilBank/Rif/Phone` (opcionales). `GET/PATCH /store-settings/payment` (ADMIN). Se publican en `store/meta.json` como `payment.pagoMovil` solo si están los tres; la tienda cae a `DEFAULT_PAGO_MOVIL` (`trebol-shop/lib/payment.ts`) si no vienen.
+- Checkout de trebol-shop: modo "Pagar ahora" (referencia + captura obligatorias) o "Confirmar primero" (pedido sin `paymentRef`/`paymentProof`).
+
 ## Tienda online — aviso de pedido nuevo y "Avisar al cliente" (Sesión 178)
 - Estado **ENTREGADO** (`deliveredAt`, `deliveredById`): `PATCH /online-orders/:id/deliver` solo desde FACTURADO con la factura PAID/PARTIAL_RETURN. `GET /online-orders/:id` (`findDetail`) agrega `invoice` y `deliveredByName` (sin relaciones Prisma). ENTREGADO no se edita ni se cancela.
 - `POST /public/orders`: `StoreThrottlerGuard` limita por `x-store-client-ip` cuando `x-store-key` = env `STORE_ORDERS_KEY` (si no, por `req.ip`). Valida `saleBlocked` y existencia libre (almacenes `countsForSale` − facturas PENDING); el 400 trae `outOfStock: [codes]` y nunca cantidades.

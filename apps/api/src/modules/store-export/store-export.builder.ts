@@ -58,6 +58,10 @@ export interface ExportBanner {
   order: number;
 }
 
+export interface StorePayment {
+  pagoMovil: { bank: string; rif: string; phone: string } | null;
+}
+
 export interface SnapshotBuild {
   catalog: { generatedAt: string; rate: number; products: StoreProduct[] };
   meta: {
@@ -66,6 +70,8 @@ export interface SnapshotBuild {
     categories: { slug: string; name: string; productCount: number; icon: string | null }[];
     brands: { slug: string; name: string; productCount: number; logo: string | null }[];
     banners: ExportBanner[];
+    // Datos de Pago Movil para el checkout (null = la tienda usa los suyos por defecto).
+    payment?: StorePayment | null;
   };
   summary: { products: number; categories: number; brands: number; banners: number; generatedAt: string };
 }

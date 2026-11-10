@@ -3400,3 +3400,8 @@ DROP INDEX IF EXISTS "IncidentType_name_key";
 
 -- ===== Totem Clover (20261106120000_chatbot_kiosk_channel) =====
 ALTER TYPE "ChatbotChannel" ADD VALUE IF NOT EXISTS 'KIOSK';
+
+-- ===== Pago Movil de la tienda online (20261110120000_store_pago_movil) =====
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilBank" TEXT;
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilRif" TEXT;
+ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilPhone" TEXT;

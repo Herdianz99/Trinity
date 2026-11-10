@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  Smartphone,
 } from 'lucide-react';
 
 type Banner = {
@@ -131,6 +132,9 @@ export default function StorePersonalizationPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {/* PAGO MOVIL */}
+          <PaymentEditor setMsg={setMsg} />
+
           {/* HERO */}
           <section>
             <div className="flex items-center justify-between mb-3">
@@ -181,6 +185,85 @@ export default function StorePersonalizationPage() {
         </div>
       )}
     </div>
+  );
+}
+
+type Payment = { pagoMovilBank: string; pagoMovilRif: string; pagoMovilPhone: string };
+
+// Datos de Pago Movil que el checkout de la tienda le muestra al cliente para pagar.
+function PaymentEditor({ setMsg }: { setMsg: (m: { type: 'ok' | 'err'; text: string } | null) => void }) {
+  const [form, setForm] = useState<Payment>({ pagoMovilBank: '', pagoMovilRif: '', pagoMovilPhone: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/proxy/store-settings/payment')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('No se pudieron cargar los datos de pago'))))
+      .then((d: Payment) => setForm(d))
+      .catch((e: Error) => setMsg({ type: 'err', text: e.message }))
+      .finally(() => setLoading(false));
+  }, [setMsg]);
+
+  const filled = [form.pagoMovilBank, form.pagoMovilRif, form.pagoMovilPhone].filter((v) => v.trim()).length;
+
+  async function save() {
+    if (filled !== 0 && filled !== 3) {
+      setMsg({ type: 'err', text: 'Completa banco, RIF y teléfono del Pago Móvil (o deja los tres vacíos).' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/proxy/store-settings/payment', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error('No se pudieron guardar los datos de pago');
+      setForm(await res.json());
+      setMsg({ type: 'ok', text: 'Datos de Pago Móvil guardados. La tienda los mostrará en ~1 minuto.' });
+    } catch (e) {
+      setMsg({ type: 'err', text: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const field = (key: keyof Payment, label: string, placeholder: string) => (
+    <div>
+      <label className="block text-xs text-slate-400 mb-1">{label}</label>
+      <input
+        className="input w-full"
+        value={form[key]}
+        placeholder={placeholder}
+        disabled={loading}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+      />
+    </div>
+  );
+
+  return (
+    <section>
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Smartphone size={18} className="text-brand-500" /> Pago Móvil
+        </h2>
+        <p className="text-xs text-slate-400">
+          Datos que ve el cliente en el checkout cuando elige pagar al momento. Vacío = la tienda usa sus datos por defecto.
+        </p>
+      </div>
+      <div className="card p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {field('pagoMovilBank', 'Banco', 'Banesco 0134')}
+          {field('pagoMovilRif', 'RIF / Cédula', 'J409907600')}
+          {field('pagoMovilPhone', 'Teléfono', '0424-557.35.45')}
+        </div>
+        <div className="flex justify-end mt-3">
+          <button onClick={save} disabled={saving || loading} className="btn-primary !py-2 text-sm flex items-center gap-2">
+            {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Guardar
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
