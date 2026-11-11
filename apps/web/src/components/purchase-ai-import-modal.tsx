@@ -290,9 +290,11 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
       setDraft(d);
       setLineStates(
         d.lines.map((l) => {
-          const product = l.matchStatus === 'matched' ? l.product : l.candidates[0] ?? null;
+          // Solo el match exacto por código se asigna solo. Las sugerencias por nombre se ofrecen
+          // como opciones a elegir (se equivocan seguido y cargarían el producto incorrecto).
+          const product = l.matchStatus === 'matched' ? l.product : null;
           return {
-            include: l.matchStatus !== 'new',
+            include: l.matchStatus === 'matched',
             product,
             quantity: l.quantity || 1,
             unitCost: l.unitCost || 0,
@@ -635,7 +637,13 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
               {/* Encabezado extraído */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-lg bg-slate-900/50 p-3 text-sm md:grid-cols-3">
                 <div><span className="text-slate-400">Proveedor:</span> {draft.header.supplierName || '—'}
-                  {draft.supplier ? <Check className="ml-1 inline h-3.5 w-3.5 text-green-600" /> : <span className="ml-1 text-xs text-red-400">(no en sistema)</span>}
+                  {draft.supplier ? (
+                    <span className="ml-1 text-xs text-green-400">
+                      <Check className="inline h-3.5 w-3.5" /> {draft.supplier.name}
+                    </span>
+                  ) : (
+                    <span className="ml-1 text-xs text-red-400">(no en sistema: elígelo en la compra)</span>
+                  )}
                 </div>
                 <div><span className="text-slate-400">RIF:</span> {draft.header.supplierRif || '—'}</div>
                 <div><span className="text-slate-400">Factura N°:</span> {draft.header.invoiceNumber || '—'}</div>
@@ -783,6 +791,21 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                                         className="block w-full px-2 py-1.5 text-left text-sm hover:bg-slate-700"
                                       >
                                         <span className="text-slate-500">{r.code}</span> {r.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {line.candidates.length > 0 && !ls.search && (
+                                  <div className="mt-1 space-y-0.5">
+                                    <div className="text-xs text-amber-300/80">¿Es alguno de estos?</div>
+                                    {line.candidates.map((c) => (
+                                      <button
+                                        key={c.id}
+                                        onClick={() => pickProduct(idx, { id: c.id, code: c.code, name: c.name, isService: c.isService })}
+                                        className="block w-full truncate rounded px-1 py-0.5 text-left text-xs text-slate-300 hover:bg-slate-700"
+                                        title={c.name}
+                                      >
+                                        <span className="text-slate-500">{c.code}</span> {c.name}
                                       </button>
                                     ))}
                                   </div>

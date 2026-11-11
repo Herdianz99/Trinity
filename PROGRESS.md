@@ -57,7 +57,9 @@
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
 ## ✨ Compras → Cargar con IA: crear los artículos que no existen (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
-- En la revisión, cada línea sin producto tiene "Crear producto nuevo" (formulario prellenado: nombre, Ref. proveedor, costo USD; se elige categoría, marca e IVA) y arriba "Crear los N sin producto" en lote. Usa `POST /products` (código por categoría, precios con la ganancia por defecto). Solo frontend. Compila (tsc); NO probado todavía con una factura real.
+- En la revisión, cada línea sin producto tiene "Crear producto nuevo" (formulario prellenado: nombre, Ref. proveedor, costo USD; se elige categoría, marca e IVA) y arriba "Crear los N sin producto" en lote. Usa `POST /products` (código por categoría, precios con la ganancia por defecto).
+- **Probado en local (copia `grande_test`) con factura Iluminak S33422 (62 líneas, Odoo):** lectura 62/62 correcta; "Crear los 62" → ELE14096.. con Ref. proveedor limpia, costo neto del 30% y precios con 43%/20%; subtotal cuadra 234,48 vs 234,49; carga al formulario OK.
+- **Fixes salidos de la prueba:** (1) la IA tomaba el RIF del CLIENTE (El Trébol) como RIF del proveedor y emparejaba "CABLE CLOVER INVERSIONES EL TREBOL"/"EL TREBOL MAYORISTA" → prompt aclara emisor vs cliente + `purchase-ai.service` descarta el RIF si es el de `CompanyConfig.rif`; el modal muestra el nombre del proveedor emparejado. (2) Códigos `[HYVZ10WR]` → se quitan corchetes (prompt + `tryParse`). (3) Las sugerencias por nombre ya NO se asignan ni marcan solas (las 10 de esta factura eran incorrectas): se muestran como "¿Es alguno de estos?" para elegir con un clic.
 - La clave de OpenRouter ya está puesta en la grande (2026-11-11, `/opt/Trinity/apps/api/.env`, respaldo `.env.bak-20261111205659`), así que el botón ya lee facturas allí.
 
 ## 🏖️ Nómina: empleados en Vacaciones no entran en las corridas (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR

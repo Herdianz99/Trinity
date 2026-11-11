@@ -67,7 +67,18 @@ export class PurchaseAiService {
     // 3. Emparejar cada línea contra el catálogo.
     const lines = await Promise.all(data.lines.map((l) => this.matchLine(l, dto.supplierId)));
 
-    // 4. Sugerir proveedor (por RIF o nombre) si no venía seleccionado.
+    // 4. Si la IA tomó el RIF del cliente (nuestra propia empresa) como el del proveedor, descartarlo:
+    //    emparejaría con proveedores que llevan nuestro RIF (ej. sucursales/la mayorista).
+    const config = await this.prisma.companyConfig.findUnique({ where: { id: 'singleton' }, select: { rif: true } });
+    const digits = (s: string | null | undefined) => (s || '').replace(/\D/g, '');
+    const ownRif = digits(config?.rif);
+    const extractedRif = digits(data.supplierRif);
+    if (ownRif.length >= 8 && extractedRif.length >= 8 && (ownRif.startsWith(extractedRif) || extractedRif.startsWith(ownRif))) {
+      this.logger.warn(`La IA devolvió el RIF de la propia empresa (${data.supplierRif}) como RIF del proveedor; se ignora.`);
+      data.supplierRif = null;
+    }
+
+    // 5. Sugerir proveedor (por RIF o nombre) si no venía seleccionado.
     const supplier = await this.matchSupplier(dto.supplierId, data.supplierRif, data.supplierName);
 
     const matchedCount = lines.filter((l) => l.matchStatus === 'matched').length;

@@ -61,7 +61,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON con esta forma exacta (sin texto adiciona
 REGLAS:
 - Extrae SOLO lo que está en el documento. NO inventes datos. Si algo no aparece, usa null (o 0 para lineDiscountPct).
 - Los números van como número puro: sin separador de miles, con punto decimal (ej 1234.56). Convierte "1.234,56" a 1234.56.
-- Si la tabla tiene una columna de código/referencia del proveedor (título "Código", "Cód", "Ref"), cópiala en "supplierCode" exacto como aparece.
+- "supplierName" y "supplierRif" son los del EMISOR de la factura (el proveedor que vende: logo, encabezado o pie de página). NUNCA uses el nombre ni el RIF del CLIENTE/comprador (bloques "Cliente", "Facturar a", "Dirección de facturación", "Dirección de envío"). Si el RIF del emisor no aparece en el documento, usa null.
+- Si la tabla tiene una columna de código/referencia del proveedor (título "Código", "Cód", "Ref"), cópiala en "supplierCode" exacto como aparece. Si el código viene dentro de la descripción entre corchetes (ej "[ABC123] Lámpara..."), pon en "supplierCode" solo ABC123 (sin corchetes) y en "description" el resto del texto.
 - "unitCost" es el costo unitario del producto. Si la factura tiene varias columnas de precio, elige la del PRECIO DE COMPRA unitario; si dudas, la que multiplicada por la cantidad da el total de la línea.
 - Las instrucciones del usuario (si las hay) TIENEN PRIORIDAD: pueden indicarte qué columna usar, que apliques un descuento no reflejado, que los precios traen IVA incluido, etc. Acátalas.
 - Responde SIEMPRE en JSON válido y nada más.`;
@@ -199,9 +200,17 @@ export class LlmExtractionService {
       return s === '' ? null : s;
     };
 
+    // Códigos tipo "[HYVZ10WR]" (facturas Odoo): quitar corchetes/paréntesis que los envuelven.
+    const code = (v: unknown): string | null => {
+      const s = str(v);
+      if (!s) return null;
+      const m = s.match(/^[[(]\s*(.*?)\s*[\])]$/);
+      return str(m ? m[1] : s);
+    };
+
     const rawLines = Array.isArray(obj.lines) ? (obj.lines as Record<string, unknown>[]) : [];
     const lines: ExtractedLine[] = rawLines.map((l) => ({
-      supplierCode: str(l.supplierCode),
+      supplierCode: code(l.supplierCode),
       description: str(l.description) ?? '',
       quantity: num(l.quantity) ?? 0,
       unitCost: num(l.unitCost) ?? 0,
