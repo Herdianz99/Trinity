@@ -15,3 +15,7 @@ export const EMPLOYEE_STATUS_KEYS = Object.keys(EMPLOYEE_STATUSES) as EmployeeSt
 
 export const statusLabel = (s: string) => EMPLOYEE_STATUSES[s as EmployeeStatus]?.label ?? s;
 export const statusInPayroll = (s: string) => EMPLOYEE_STATUSES[s as EmployeeStatus]?.inPayroll ?? false;
+
+// Estados que siguen siendo empleados activos (isActive) pero NO se incluyen al crear/sincronizar
+// corridas de nomina (/payroll/runs). Vacaciones: no entra en la corrida mientras este fuera.
+export const PAYROLL_RUN_EXCLUDED_STATUSES: EmployeeStatus[] = ['VACATION'];

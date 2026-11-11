@@ -56,6 +56,10 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🏖️ Nómina: empleados en Vacaciones no entran en las corridas (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
+- `PAYROLL_RUN_EXCLUDED_STATUSES = ['VACATION']` en `employee-status.ts`; `payroll-runs.service.ts` lo filtra (`status notIn`) al **crear** la corrida y en **sincronizar empleados**. `isActive` NO cambia (siguen como empleados activos en listados/notificaciones). Corridas ya creadas no se tocan: si alguien ya estaba en un borrador, se quita a mano.
+- Web (Empleados → cambiar estado): el aviso de Vacaciones ahora dice que no entrará en las corridas.
+
 ## 🛒 Tienda online: Pago Móvil desde Trinity + dos formas de pago en el checkout (2026-11-10, Sesión 184) — ⏳ TRINITY SIN DESPLEGAR (tienda ya publicada)
 - **Trinity:** `CompanyConfig.storePagoMovilBank/Rif/Phone` (migración `20261110120000_store_pago_movil` + `fix-schema.sql`). `GET/PATCH /store-settings/payment` (ADMIN, `StorePaymentController` en store-customization; al guardar dispara `scheduleExport`). `store-export` publica `meta.payment = { pagoMovil: {bank,rif,phone} | null }` (null si falta alguno de los tres). Web: sección "Pago Móvil" en Tienda > Personalización.
 - **Tienda (trebol-shop `80613c8`, ya en Vercel):** checkout con "¿Cómo quieres pagar?": **Pagar ahora** (muestra banco/RIF/teléfono/monto Bs con copiar; referencia y captura OBLIGATORIAS) o **Confirmar primero** (sin pago; se envía sin `paymentRef`/`paymentProof`). Mientras Trinity no publique `meta.payment`, usa `DEFAULT_PAGO_MOVIL` de `lib/payment.ts` (Banesco 0134 · J409907600 · 0424-557.35.45).

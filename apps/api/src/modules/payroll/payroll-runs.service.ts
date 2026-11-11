@@ -10,6 +10,7 @@ import { UpdatePayrollLinesDto } from './dto/update-payroll-lines.dto';
 import { UpdatePayrollRunDto } from './dto/update-payroll-run.dto';
 import { SendReceiptsDto } from './dto/send-receipts.dto';
 import { PayrollPdfService } from './payroll-pdf.service';
+import { PAYROLL_RUN_EXCLUDED_STATUSES } from './employee-status';
 import { MailService } from '../mail/mail.service';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -96,9 +97,9 @@ export class PayrollRunsService {
       rate = today.rate;
     }
 
-    // Empleados activos de esa frecuencia → líneas iniciales (snapshot del sueldo base).
+    // Empleados activos de esa frecuencia (sin los de vacaciones) → líneas iniciales (snapshot del sueldo base).
     const employees = await this.prisma.employee.findMany({
-      where: { isActive: true, frequency: dto.type },
+      where: { isActive: true, frequency: dto.type, status: { notIn: PAYROLL_RUN_EXCLUDED_STATUSES } },
       orderBy: { code: 'asc' },
     });
     if (employees.length === 0) {
@@ -263,14 +264,16 @@ export class PayrollRunsService {
     return this.findOne(id);
   }
 
-  // Agrega a la corrida los empleados activos de su frecuencia que aún no estén.
+  // Agrega a la corrida los empleados activos de su frecuencia que aún no estén (sin los de vacaciones).
   async syncEmployees(id: string) {
     const run = await this.prisma.payrollRun.findUnique({ where: { id }, include: { lines: { select: { employeeId: true } } } });
     if (!run) throw new NotFoundException('Corrida no encontrada');
     if (run.status !== 'DRAFT') throw new BadRequestException('La corrida ya está cerrada');
 
     const present = new Set(run.lines.map((l) => l.employeeId));
-    const employees = await this.prisma.employee.findMany({ where: { isActive: true, frequency: run.type } });
+    const employees = await this.prisma.employee.findMany({
+      where: { isActive: true, frequency: run.type, status: { notIn: PAYROLL_RUN_EXCLUDED_STATUSES } },
+    });
     const missing = employees.filter((e) => !present.has(e.id));
     if (missing.length === 0) return this.findOne(id);
 

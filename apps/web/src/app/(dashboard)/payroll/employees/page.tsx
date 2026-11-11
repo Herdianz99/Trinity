@@ -518,10 +518,12 @@ export default function EmployeesPage() {
                 </button>
               ))}
             </div>
-            <p className={`text-xs ${STATUS_BY_KEY[newStatus]?.inPayroll ? 'text-green-400/80' : 'text-amber-400/90'}`}>
-              {STATUS_BY_KEY[newStatus]?.inPayroll
-                ? 'Sigue entrando en la nómina.'
-                : 'No entrará en las próximas nóminas.'}
+            <p className={`text-xs ${STATUS_BY_KEY[newStatus]?.inPayroll && newStatus !== 'VACATION' ? 'text-green-400/80' : 'text-amber-400/90'}`}>
+              {newStatus === 'VACATION'
+                ? 'Sigue como empleado activo, pero no entrará en las corridas de nómina mientras esté de vacaciones.'
+                : STATUS_BY_KEY[newStatus]?.inPayroll
+                  ? 'Sigue entrando en la nómina.'
+                  : 'No entrará en las próximas nóminas.'}
             </p>
             {newStatus !== 'ACTIVE' && (
               <>
