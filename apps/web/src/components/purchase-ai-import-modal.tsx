@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Loader2, Sparkles, X, Upload, Check, AlertTriangle, Search } from 'lucide-react';
+import { useState, useRef, useEffect, Fragment } from 'react';
+import { Loader2, Sparkles, X, Upload, Check, AlertTriangle, Search, Plus } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Tipos que devuelve POST /purchases/ai/extract
@@ -73,7 +73,33 @@ interface LineState {
   search: string;
   results: SearchResult[];
   searching: boolean;
+  /** Formulario de "crear producto" abierto para esta línea. */
+  createForm: NewProductForm | null;
+  creating: boolean;
+  createError: string;
+  /** El producto de la línea se creó desde esta pantalla. */
+  created: boolean;
 }
+
+// Datos para crear en el catálogo un artículo que no existe (línea "Nuevo").
+interface NewProductForm {
+  name: string;
+  supplierRef: string;
+  costUsd: string;
+  categoryId: string;
+  brandId: string;
+  ivaType: string;
+}
+
+interface CategoryNode { id: string; name: string; children?: { id: string; name: string }[] }
+interface BrandOption { id: string; name: string }
+
+const IVA_OPTIONS = [
+  { value: 'EXEMPT', label: 'Exento (0%)' },
+  { value: 'REDUCED', label: 'Reducido (8%)' },
+  { value: 'GENERAL', label: 'General (16%)' },
+  { value: 'SPECIAL', label: 'Especial (31%)' },
+];
 
 // Payload que se aplica al formulario de compra
 export interface AiImportItem {
@@ -159,6 +185,21 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
   const [lineStates, setLineStates] = useState<LineState[]>([]);
   const searchTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
+  // Datos para crear productos nuevos (se cargan una vez, al llegar a la revisión).
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [brands, setBrands] = useState<BrandOption[]>([]);
+  const [todayRate, setTodayRate] = useState(0);
+  const [metaLoaded, setMetaLoaded] = useState(false);
+  // Últimos valores elegidos: se proponen en el siguiente producto y en "crear todos".
+  const [lastCategoryId, setLastCategoryId] = useState('');
+  const [lastIvaType, setLastIvaType] = useState('GENERAL');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState('');
+  const [bulkBrandId, setBulkBrandId] = useState('');
+  const [bulkIvaType, setBulkIvaType] = useState('GENERAL');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState('');
+
   // Reset al cerrar
   useEffect(() => {
     if (!open) {
@@ -170,8 +211,42 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
       setDraft(null);
       setLineStates([]);
       setLoading(false);
+      setBulkOpen(false);
+      setBulkMessage('');
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!draft || metaLoaded) return;
+    setMetaLoaded(true);
+    (async () => {
+      try {
+        const [catRes, brandRes, rateRes] = await Promise.all([
+          fetch('/api/proxy/categories'),
+          fetch('/api/proxy/brands'),
+          fetch('/api/proxy/exchange-rate/today'),
+        ]);
+        if (catRes.ok) {
+          const tree: CategoryNode[] = await catRes.json();
+          const flat: { id: string; name: string }[] = [];
+          tree.forEach((c) => {
+            flat.push({ id: c.id, name: c.name });
+            c.children?.forEach((ch) => flat.push({ id: ch.id, name: `${c.name} › ${ch.name}` }));
+          });
+          setCategories(flat);
+        }
+        if (brandRes.ok) setBrands(await brandRes.json());
+        if (rateRes.ok) {
+          const text = await rateRes.text();
+          if (text) {
+            try { setTodayRate(JSON.parse(text).rate || 0); } catch { /* sin tasa */ }
+          }
+        }
+      } catch {
+        /* el formulario mostrará listas vacías */
+      }
+    })();
+  }, [draft, metaLoaded]);
 
   if (!open) return null;
 
@@ -227,6 +302,10 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
             search: '',
             results: [],
             searching: false,
+            createForm: null,
+            creating: false,
+            createError: '',
+            created: false,
           };
         }),
       );
@@ -291,6 +370,147 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
       /* usa defaults */
     }
     patchLine(idx, { product, include: true, search: '', results: [] });
+  }
+
+  // ---- Crear productos nuevos -------------------------------------------------
+
+  // Tasa para pasar el costo de la factura a USD: la de la factura o, si no trae, la de hoy.
+  const invoiceIsBs = draft?.header.currency === 'BS';
+  const conversionRate = invoiceIsBs ? draft?.header.exchangeRate || todayRate : 1;
+
+  // Costo USD propuesto para el producto: costo unitario neto del descuento de línea.
+  function suggestedCostUsd(ls: LineState): string {
+    if (!conversionRate) return '0';
+    const net = ls.unitCost * (1 - ls.discountPct / 100);
+    return String(Math.round((net / conversionRate) * 10000) / 10000);
+  }
+
+  function openCreate(idx: number) {
+    const ls = lineStates[idx];
+    if (!ls) return;
+    patchLine(idx, {
+      createError: '',
+      createForm: {
+        name: ls.description.trim(),
+        supplierRef: ls.supplierCode?.trim() || '',
+        costUsd: suggestedCostUsd(ls),
+        categoryId: lastCategoryId,
+        brandId: '',
+        ivaType: lastIvaType,
+      },
+    });
+  }
+
+  function patchCreateForm(idx: number, patch: Partial<NewProductForm>) {
+    setLineStates((prev) =>
+      prev.map((ls, i) => (i === idx && ls.createForm ? { ...ls, createForm: { ...ls.createForm, ...patch } } : ls)),
+    );
+  }
+
+  // POST /products: el código sale de la categoría y los precios de la ganancia por defecto de la empresa.
+  async function postProduct(form: NewProductForm): Promise<DraftProduct> {
+    const cost = parseFloat(form.costUsd.replace(',', '.'));
+    const res = await fetch('/api/proxy/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: form.name.trim(),
+        supplierRef: form.supplierRef.trim() || null,
+        categoryId: form.categoryId,
+        brandId: form.brandId || null,
+        supplierId: draft?.supplier?.id || supplierId || null,
+        ivaType: form.ivaType,
+        costUsd: isNaN(cost) || cost < 0 ? 0 : cost,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = Array.isArray(data?.message) ? data.message.join(', ') : data?.message;
+      throw new Error(msg || `Error ${res.status}`);
+    }
+    return {
+      id: data.id,
+      code: data.code,
+      name: data.name,
+      supplierRef: data.supplierRef ?? null,
+      costUsd: data.costUsd ?? 0,
+      priceDetal: data.priceDetal ?? 0,
+      priceMayor: data.priceMayor ?? 0,
+      ivaType: data.ivaType ?? form.ivaType,
+      isService: data.isService ?? false,
+    };
+  }
+
+  function validateForm(form: NewProductForm): string {
+    if (form.name.trim().length < 2) return 'El nombre debe tener al menos 2 caracteres.';
+    if (!form.categoryId) return 'Elige una categoría (de ella sale el código del producto).';
+    return '';
+  }
+
+  async function createForLine(idx: number) {
+    const form = lineStates[idx]?.createForm;
+    if (!form) return;
+    const invalid = validateForm(form);
+    if (invalid) return patchLine(idx, { createError: invalid });
+    patchLine(idx, { creating: true, createError: '' });
+    try {
+      const product = await postProduct(form);
+      setLastCategoryId(form.categoryId);
+      setLastIvaType(form.ivaType);
+      patchLine(idx, { product, include: true, created: true, createForm: null, creating: false });
+    } catch (e) {
+      patchLine(idx, { creating: false, createError: (e as Error).message || 'No se pudo crear el producto.' });
+    }
+  }
+
+  // Líneas sin producto que se pueden crear en lote.
+  const pendingNewIdx = lineStates
+    .map((ls, i) => (!ls.product && ls.description.trim().length >= 2 ? i : -1))
+    .filter((i) => i >= 0);
+
+  function openBulk() {
+    setBulkCategoryId(lastCategoryId);
+    setBulkIvaType(lastIvaType);
+    setBulkBrandId('');
+    setBulkMessage('');
+    setBulkOpen(true);
+  }
+
+  async function createAllNew() {
+    if (!bulkCategoryId) return setBulkMessage('Elige una categoría.');
+    setBulkBusy(true);
+    setBulkMessage('');
+    let ok = 0;
+    let failed = 0;
+    // En serie: cada código sale del correlativo de la categoría.
+    for (const idx of pendingNewIdx) {
+      const ls = lineStates[idx];
+      const form: NewProductForm = {
+        name: ls.description.trim(),
+        supplierRef: ls.supplierCode?.trim() || '',
+        costUsd: suggestedCostUsd(ls),
+        categoryId: bulkCategoryId,
+        brandId: bulkBrandId,
+        ivaType: bulkIvaType,
+      };
+      try {
+        const product = await postProduct(form);
+        patchLine(idx, { product, include: true, created: true, createForm: null, createError: '' });
+        ok++;
+      } catch (e) {
+        patchLine(idx, { createError: (e as Error).message || 'No se pudo crear.' });
+        failed++;
+      }
+    }
+    setLastCategoryId(bulkCategoryId);
+    setLastIvaType(bulkIvaType);
+    setBulkBusy(false);
+    if (failed === 0) {
+      setBulkOpen(false);
+      setBulkMessage(`${ok} producto(s) creados.`);
+    } else {
+      setBulkMessage(`${ok} creados, ${failed} con error (ver las líneas en rojo).`);
+    }
   }
 
   // Total calculado de las líneas incluidas (en moneda de la factura)
@@ -430,7 +650,63 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                 <span className="rounded bg-amber-500/15 px-2 py-1 text-amber-300">Sugeridos: {draft.summary.suggested}</span>
                 <span className="rounded bg-red-500/15 px-2 py-1 text-red-300">Nuevos: {draft.summary.new}</span>
                 <span className="rounded bg-slate-700 px-2 py-1 text-slate-400">Modelo: {draft.model}</span>
+                {pendingNewIdx.length > 0 && !bulkOpen && (
+                  <button
+                    onClick={openBulk}
+                    className="ml-auto flex items-center gap-1 rounded bg-indigo-600/20 px-2 py-1 font-medium text-indigo-300 hover:bg-indigo-600/30"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Crear los {pendingNewIdx.length} sin producto
+                  </button>
+                )}
               </div>
+
+              {bulkMessage && !bulkOpen && (
+                <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-300">{bulkMessage}</div>
+              )}
+
+              {/* Crear en lote los artículos que no existen */}
+              {bulkOpen && (
+                <div className="space-y-3 rounded-lg border border-indigo-500/40 bg-indigo-500/5 p-3 text-sm">
+                  <div className="font-medium text-white">
+                    Crear {pendingNewIdx.length} producto(s) nuevos en el catálogo
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Cada uno usa la descripción de la factura como nombre, el código del proveedor como Ref. proveedor y el
+                    costo de la línea{invoiceIsBs ? ' convertido a USD' : ''}. El código sale de la categoría y los precios de la
+                    ganancia por defecto de la empresa. Si un artículo necesita datos distintos, créalo por separado en su línea.
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100">
+                      <option value="">Categoría *</option>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <select value={bulkBrandId} onChange={(e) => setBulkBrandId(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100">
+                      <option value="">Sin marca</option>
+                      {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <select value={bulkIvaType} onChange={(e) => setBulkIvaType(e.target.value)} className="rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-slate-100">
+                      {IVA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  {invoiceIsBs && !conversionRate && (
+                    <div className="text-xs text-amber-300">No hay tasa en la factura ni tasa de hoy: los costos quedarán en 0.</div>
+                  )}
+                  {bulkMessage && <div className="text-xs text-red-300">{bulkMessage}</div>}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="rounded border border-slate-600 px-3 py-1.5 text-slate-300 hover:bg-slate-700">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={createAllNew}
+                      disabled={bulkBusy}
+                      className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {bulkBusy ? 'Creando…' : `Crear ${pendingNewIdx.length}`}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Tabla de líneas */}
               <div className="overflow-x-auto rounded-lg border border-slate-700">
@@ -451,7 +727,8 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                       if (!ls) return null;
                       const st = STATUS_LABEL[line.matchStatus];
                       return (
-                        <tr key={idx} className={ls.include ? '' : 'opacity-50'}>
+                        <Fragment key={idx}>
+                        <tr className={ls.include || ls.createForm ? '' : 'opacity-50'}>
                           <td className="px-2 py-2 align-top">
                             <input
                               type="checkbox"
@@ -464,7 +741,11 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                             <div className="font-medium text-slate-100">{line.description || '—'}</div>
                             <div className="text-xs text-slate-500">
                               {line.supplierCode ? `Cód: ${line.supplierCode}` : 'sin código'} ·{' '}
-                              <span className={`rounded px-1 ${st.cls}`}>{st.text}</span>
+                              {ls.created ? (
+                                <span className="rounded bg-indigo-500/20 px-1 text-indigo-300">Creado</span>
+                              ) : (
+                                <span className={`rounded px-1 ${st.cls}`}>{st.text}</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-2 py-2 align-top">
@@ -506,6 +787,17 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                                     ))}
                                   </div>
                                 )}
+                                {!ls.createForm && (
+                                  <button
+                                    onClick={() => openCreate(idx)}
+                                    className="mt-1 flex items-center gap-1 text-xs text-indigo-400 hover:underline"
+                                  >
+                                    <Plus className="h-3 w-3" /> Crear producto nuevo
+                                  </button>
+                                )}
+                                {ls.createError && !ls.createForm && (
+                                  <div className="mt-1 text-xs text-red-300">{ls.createError}</div>
+                                )}
                               </div>
                             )}
                           </td>
@@ -534,6 +826,100 @@ export default function PurchaseAiImportModal({ open, onClose, supplierId, onApp
                             />
                           </td>
                         </tr>
+                        {ls.createForm && (
+                          <tr className="bg-indigo-500/5">
+                            <td></td>
+                            <td colSpan={5} className="px-2 pb-3 pt-1">
+                              <div className="space-y-2 rounded-lg border border-indigo-500/40 p-3 text-sm">
+                                <div className="text-xs font-medium uppercase text-indigo-300">Nuevo producto en el catálogo</div>
+                                <div className="grid gap-2 md:grid-cols-6">
+                                  <label className="md:col-span-3">
+                                    <span className="mb-0.5 block text-xs text-slate-400">Nombre *</span>
+                                    <input
+                                      value={ls.createForm.name}
+                                      onChange={(e) => patchCreateForm(idx, { name: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+                                    />
+                                  </label>
+                                  <label className="md:col-span-2">
+                                    <span className="mb-0.5 block text-xs text-slate-400">Ref. proveedor</span>
+                                    <input
+                                      value={ls.createForm.supplierRef}
+                                      onChange={(e) => patchCreateForm(idx, { supplierRef: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+                                    />
+                                  </label>
+                                  <label>
+                                    <span className="mb-0.5 block text-xs text-slate-400">Costo USD</span>
+                                    <input
+                                      inputMode="decimal"
+                                      value={ls.createForm.costUsd}
+                                      onChange={(e) => patchCreateForm(idx, { costUsd: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-right text-slate-100"
+                                    />
+                                  </label>
+                                  <label className="md:col-span-3">
+                                    <span className="mb-0.5 block text-xs text-slate-400">Categoría *</span>
+                                    <select
+                                      value={ls.createForm.categoryId}
+                                      onChange={(e) => patchCreateForm(idx, { categoryId: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+                                    >
+                                      <option value="">Elegir…</option>
+                                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                  </label>
+                                  <label className="md:col-span-2">
+                                    <span className="mb-0.5 block text-xs text-slate-400">Marca</span>
+                                    <select
+                                      value={ls.createForm.brandId}
+                                      onChange={(e) => patchCreateForm(idx, { brandId: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+                                    >
+                                      <option value="">Sin marca</option>
+                                      {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <span className="mb-0.5 block text-xs text-slate-400">IVA</span>
+                                    <select
+                                      value={ls.createForm.ivaType}
+                                      onChange={(e) => patchCreateForm(idx, { ivaType: e.target.value })}
+                                      className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+                                    >
+                                      {IVA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                  </label>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  El código sale de la categoría y los precios de la ganancia por defecto de la empresa.
+                                  {invoiceIsBs && (conversionRate
+                                    ? ` Costo convertido de Bs a USD con tasa ${n2(conversionRate)}.`
+                                    : ' Sin tasa: escribe el costo en USD a mano.')}
+                                </p>
+                                {ls.createError && <div className="text-xs text-red-300">{ls.createError}</div>}
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => patchLine(idx, { createForm: null, createError: '' })}
+                                    disabled={ls.creating}
+                                    className="rounded border border-slate-600 px-3 py-1 text-slate-300 hover:bg-slate-700"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={() => createForLine(idx)}
+                                    disabled={ls.creating}
+                                    className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                  >
+                                    {ls.creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                    Crear y asignar
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

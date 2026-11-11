@@ -56,6 +56,10 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## ✨ Compras → Cargar con IA: crear los artículos que no existen (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
+- En la revisión, cada línea sin producto tiene "Crear producto nuevo" (formulario prellenado: nombre, Ref. proveedor, costo USD; se elige categoría, marca e IVA) y arriba "Crear los N sin producto" en lote. Usa `POST /products` (código por categoría, precios con la ganancia por defecto). Solo frontend. Compila (tsc); NO probado todavía con una factura real.
+- La clave de OpenRouter ya está puesta en la grande (2026-11-11, `/opt/Trinity/apps/api/.env`, respaldo `.env.bak-20261111205659`), así que el botón ya lee facturas allí.
+
 ## 🏖️ Nómina: empleados en Vacaciones no entran en las corridas (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
 - `PAYROLL_RUN_EXCLUDED_STATUSES = ['VACATION']` en `employee-status.ts`; `payroll-runs.service.ts` lo filtra (`status notIn`) al **crear** la corrida y en **sincronizar empleados**. `isActive` NO cambia (siguen como empleados activos en listados/notificaciones). Corridas ya creadas no se tocan: si alguien ya estaba en un borrador, se quita a mano.
 - Web (Empleados → cambiar estado): el aviso de Vacaciones ahora dice que no entrará en las corridas.
