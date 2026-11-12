@@ -60,7 +60,7 @@
 - Caso: VF4-26-00000486 y VF4-26-00000499 (CONSTRUCTORA MENECON, CLI-007740). Se guardaron con `creditDays = 0`: al facturar el cliente tenía 0 días fijos (administración le puso 15 después, a las 2:10 pm), y con 0 días fijos el POS deja la casilla en 0 para que el cajero los escriba. El cajero no los escribió.
 - **Bug:** `fiscal-printer.ts` imprimía `invoice.creditDays || 30` → con 0 días el papel decía "30 dias" mientras la CxC vencía ese mismo día. Ahora imprime los días reales (`?? 0`).
 - No se bloquea el crédito a 0 días: desde agosto hay ~416 facturas a crédito con 0 días y 212 se cobraron el mismo día (se usa a propósito).
-- **Datos (por SQL en `trinity_db`, pedido del usuario):** las 3 abiertas con 0 días (VF4-486, VF4-499, VF5-26-00000470 de APROSCELLO) → `creditDays = 30` y vencimiento de factura y CxC +30 días (12-12-2026).
+- **Datos (por SQL en `trinity_db`, pedido del usuario):** las 3 abiertas con 0 días (VF4-486, VF4-499, VF5-26-00000470 de APROSCELLO) → primero 30 días (como el papel) y luego, a pedido del usuario, **15 días** (los de la ficha de MENECON): factura y CxC vencen el 27-11-2026. APROSCELLO tiene 0 días en su ficha pero también quedó en 15.
 
 ## 🐛 Tótem Clover en iPhone: solo funcionaba la 1ra búsqueda y no hablaba (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - Reporte del usuario: en un iPhone el tótem busca la primera vez, después el botón no hace nada y Clover nunca habla. Sin iPhone para reproducir; causas conocidas de WebKit (Safari y Chrome de iOS):
