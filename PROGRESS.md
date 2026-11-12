@@ -56,6 +56,13 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🐛 Tótem Clover en iPhone: solo funcionaba la 1ra búsqueda y no hablaba (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
+- Reporte del usuario: en un iPhone el tótem busca la primera vez, después el botón no hace nada y Clover nunca habla. Sin iPhone para reproducir; causas conocidas de WebKit (Safari y Chrome de iOS):
+  1. **Reusar el mismo `webkitSpeechRecognition`:** el 2do `start()` no graba ni dispara `onend` → `stopListening()` nunca resolvía y el botón quedaba en "Buscando…" (deshabilitado). Ahora se crea un reconocedor nuevo en cada pulsación, se ignoran avisos de reconocedores viejos, se maneja `onerror` y hay respaldo de 1,5 s si `onend` no llega.
+  2. **La voz solo suena si el primer `speak()` ocurre dentro de un toque:** la respuesta llega tras un `fetch` y iOS la descartaba. `unlockSpeech()` dice una frase muda (volumen 0) al presionar el botón o "Llamar a un vendedor". `speak()` llama `resume()` y tiene respaldo por tiempo si `onend` no llega.
+  3. Botón con `select-none` + `-webkit-touch-callout: none` para que la pulsación larga no abra el menú de iOS.
+- Archivos: `app/(kiosk)/totem/use-voice.ts`, `page.tsx`. `tsc` OK. **Falta probarlo en el iPhone después del deploy.**
+
 ## ✨ Compras → Cargar con IA: crear los artículos que no existen (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
 - En la revisión, cada línea sin producto tiene "Crear producto nuevo" (formulario prellenado: nombre, Ref. proveedor, costo USD; se elige categoría, marca e IVA) y arriba "Crear los N sin producto" en lote. Usa `POST /products` (código por categoría, precios con la ganancia por defecto).
 - **Probado en local (copia `grande_test`) con factura Iluminak S33422 (62 líneas, Odoo):** lectura 62/62 correcta; "Crear los 62" → ELE14096.. con Ref. proveedor limpia, costo neto del 30% y precios con 43%/20%; subtotal cuadra 234,48 vs 234,49; carga al formulario OK.

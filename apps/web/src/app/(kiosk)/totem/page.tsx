@@ -19,7 +19,7 @@ const cardPrice = (p: string) => {
 };
 
 export default function TotemPage() {
-  const { supported, interim, startListening, stopListening, speak, voices, voice, setVoiceURI } = useVoice();
+  const { supported, interim, startListening, stopListening, speak, unlockSpeech, voices, voice, setVoiceURI } = useVoice();
   const [voicePanel, setVoicePanel] = useState(false);
   const voiceHold = useRef<ReturnType<typeof setTimeout>>();
   // Prueba de una voz del selector (sin esperar a que se guarde la eleccion).
@@ -113,6 +113,7 @@ export default function TotemPage() {
   };
 
   const callSeller = async () => {
+    unlockSpeech(); // dentro del toque: iPhone solo deja hablar si la sintesis arranco con un toque
     touch();
     try {
       const id = convId.current ?? (await newConversation());
@@ -221,8 +222,9 @@ export default function TotemPage() {
             onPointerUp={onPressEnd}
             onPointerCancel={onPressEnd}
             onContextMenu={(e) => e.preventDefault()}
+            style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
             disabled={state === 'thinking'}
-            className={`flex h-28 w-full touch-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,3.6vw,2rem)] font-extrabold shadow-xl transition-all duration-150 ${
+            className={`flex h-28 w-full touch-none select-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,3.6vw,2rem)] font-extrabold shadow-xl transition-all duration-150 ${
               state === 'listening'
                 ? 'scale-[0.97] bg-emerald-400 text-emerald-950'
                 : state === 'thinking'
