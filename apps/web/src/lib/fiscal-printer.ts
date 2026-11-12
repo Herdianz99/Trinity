@@ -70,7 +70,9 @@ export function buildFiscalCommands(
   const seller = invoice.seller;
   const cashier = invoice.cashier;
   if (isCredit) {
-    const creditDays = invoice.creditDays || 30;
+    // Imprimir los dias REALES guardados. Antes caia en 30 cuando eran 0, y el papel decia
+    // "30 dias" mientras en el sistema la CxC vencia el mismo dia (VF4-26-00000486 / 499).
+    const creditDays = invoice.creditDays ?? 0;
     const dueDate = invoice.dueDate ? fmtDate(new Date(invoice.dueDate)) : '';
     commands.push(`i04Doc. Nro: ${invoiceNumber} CREDITO`);
     commands.push(`i05${creditDays} dias - Vence: ${dueDate}`);
