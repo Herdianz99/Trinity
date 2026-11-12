@@ -66,6 +66,55 @@ export class PayablesService {
         }
       }
 
+      // Igual con el comprobante ISLR creado junto a esta CxP. Antes quedaba huerfano (la linea
+      // perdia el payableId) y quemaba el numero: Total 48/49, 2026-11-12. Si el comprobante tiene
+      // otras lineas (otras facturas), solo se quita la linea de esta CxP y se recalcula el total.
+      const islrLines = await tx.islrRetentionVoucherLine.findMany({
+        where: { payableId: id },
+        select: { id: true, islrRetentionVoucherId: true },
+      });
+      const islrIds = [...new Set(islrLines.map((l) => l.islrRetentionVoucherId))];
+      if (islrIds.length > 0) {
+        const islrVouchers = await tx.islrRetentionVoucher.findMany({
+          where: { id: { in: islrIds } },
+          select: { id: true, number: true, receiptItems: { select: { id: true } }, lines: { select: { payableId: true } } },
+        });
+        if (islrVouchers.some((v) => v.receiptItems.length > 0)) {
+          throw new BadRequestException('No se puede eliminar: su retencion ISLR ya fue aplicada en un recibo');
+        }
+        const whole = islrVouchers.filter((v) => v.lines.every((l) => l.payableId === id));
+        const partial = islrVouchers.filter((v) => !whole.includes(v));
+        if (whole.length > 0) {
+          await tx.purchaseBookEntry.deleteMany({ where: { islrRetentionVoucherId: { in: whole.map((v) => v.id) } } });
+          await tx.islrRetentionVoucher.deleteMany({ where: { id: { in: whole.map((v) => v.id) } } });
+          const cfg = await tx.companyConfig.findUnique({
+            where: { id: 'singleton' },
+            select: { islrRetentionNextNumber: true },
+          });
+          // Numeracion ISLR "pelada": si los borrados eran los ultimos, devolver el correlativo.
+          const nums = new Set(whole.map((v) => parseInt(v.number, 10)).filter((n) => !Number.isNaN(n)));
+          let next = cfg?.islrRetentionNextNumber ?? 0;
+          while (next > 1 && nums.has(next - 1)) next--;
+          if (cfg && next !== cfg.islrRetentionNextNumber) {
+            await tx.companyConfig.update({ where: { id: 'singleton' }, data: { islrRetentionNextNumber: next } });
+          }
+        }
+        for (const v of partial) {
+          await tx.islrRetentionVoucherLine.deleteMany({ where: { islrRetentionVoucherId: v.id, payableId: id } });
+          const rest = await tx.islrRetentionVoucherLine.aggregate({
+            where: { islrRetentionVoucherId: v.id },
+            _sum: { retentionAmountUsd: true, retentionAmountBs: true },
+          });
+          await tx.islrRetentionVoucher.update({
+            where: { id: v.id },
+            data: {
+              retentionAmountUsd: rest._sum.retentionAmountUsd ?? 0,
+              retentionAmountBs: rest._sum.retentionAmountBs ?? 0,
+            },
+          });
+        }
+      }
+
       await tx.purchaseBookEntry.deleteMany({ where: { payableId: id } });
       await tx.payable.delete({ where: { id } });
       // Si esta CxP genero un gasto enlazado, borrarlo tambien (evita gasto huerfano que

@@ -56,6 +56,13 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
+- **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
+- **Causa:** `payables.service.remove()` borraba el comprobante de IVA de la CxP pero no el de ISLR (la línea quedaba con `payableId = NULL`, y `purchaseBookEntry.deleteMany({payableId})` se llevaba la línea del libro).
+- **Fix:** `remove()` ahora borra el comprobante ISLR creado con la CxP (si todas sus líneas son de esa CxP) con su línea del libro, y devuelve el correlativo si eran los últimos. Si el comprobante tiene líneas de otras facturas, quita solo la línea y recalcula el total. Si la retención ya está aplicada en un recibo, no deja eliminar la CxP. Probado en `grande_test` (2 CxP con ISLR: contador 84 → 83 → 82, sin comprobantes ni libro huérfanos).
+- **Grande, mismo día:** se borró a pedido el ISLR Nº 85 (CESTATICKET, CXP/26-000485, Bs 122,10) y el contador volvió a 85. Ese sí estaba ligado a su CxP.
+- **NE3-26-00006237 (grande):** pago CASHEA partido en 2 (49,90 + 21,39, misma ref.) unido en 1 de $71,29: Payment, CashLedgerEntry y CxC Cashea (una borrada, sin recibos).
+
 ## 🐛 Facturas a crédito: el papel decía 30 días y en el sistema vencían el mismo día (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - Caso: VF4-26-00000486 y VF4-26-00000499 (CONSTRUCTORA MENECON, CLI-007740). Se guardaron con `creditDays = 0`: al facturar el cliente tenía 0 días fijos (administración le puso 15 después, a las 2:10 pm), y con 0 días fijos el POS deja la casilla en 0 para que el cajero los escriba. El cajero no los escribió.
 - **Bug:** `fiscal-printer.ts` imprimía `invoice.creditDays || 30` → con 0 días el papel decía "30 dias" mientras la CxC vencía ese mismo día. Ahora imprime los días reales (`?? 0`).
