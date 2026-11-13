@@ -144,25 +144,26 @@ export class InventoryAnalysisExportExcelService {
 
     // ── Hoja 5: Sugerencias de compra ────────────────────
     const sugAoa: any[][] = [[
-      'Proveedor', 'Codigo', 'Producto', 'Stock', 'Stock min.', 'Sugerido', 'Costo unit. USD', 'Costo total USD',
+      'Proveedor', 'Clase', 'Urgencia', 'Codigo', 'Producto', 'Stock', 'Vta/dia', 'Cobertura (dias)', 'Sugerido', 'Costo unit. USD', 'Costo total USD',
     ]];
+    const URG: Record<string, string> = { AGOTADO: 'Agotado', CRITICO: 'Critico', BAJO: 'Bajo' };
     for (const g of suggestions?.suppliers || []) {
       for (const it of g.items || []) {
         sugAoa.push([
-          g.supplierName, it.productCode, it.productName, it.currentStock, it.minStock,
-          it.suggestedQty, it.costUsd, it.estimatedCost,
+          g.supplierName, it.classification || '', URG[it.urgency] || '', it.productCode, it.productName, it.currentStock,
+          it.dailySalesAvg ?? 0, it.daysOfCoverage ?? '', it.suggestedQty, it.costUsd, it.estimatedCost,
         ]);
       }
     }
     if ((suggestions?.suppliers || []).length > 0) {
       sugAoa.push([]);
-      sugAoa.push(['INVERSION TOTAL ESTIMADA', '', '', '', '', '', '', suggestions?.grandTotal ?? 0]);
+      sugAoa.push(['INVERSION TOTAL ESTIMADA', '', '', '', '', '', '', '', '', '', suggestions?.grandTotal ?? 0]);
     }
     const wsSug = XLSX.utils.aoa_to_sheet(sugAoa);
     wsSug['!cols'] = [
-      { wch: 28 }, { wch: 14 }, { wch: 40 }, { wch: 9 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 16 },
+      { wch: 28 }, { wch: 6 }, { wch: 9 }, { wch: 14 }, { wch: 40 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 9 }, { wch: 15 }, { wch: 16 },
     ];
-    this.formatNumericCols(wsSug, [6, 7]);
+    this.formatNumericCols(wsSug, [9, 10]);
     XLSX.utils.book_append_sheet(wb, wsSug, 'Sugerencias compra');
 
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

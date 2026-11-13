@@ -19,11 +19,15 @@ interface AbcProduct {
   classification: 'A' | 'B' | 'C'; totalSalesUsd: number; totalUnitsSold: number;
   salesPct: number; cumulativePct: number; currentStock: number; minStock: number;
   costUsd: number; priceDetal: number; grossMarginPct: number; inventoryValueUsd: number;
+  dailySalesAvg: number; daysOfCoverage: number | null; urgency: Urgency | null;
 }
+type Urgency = 'AGOTADO' | 'CRITICO' | 'BAJO';
 interface RotationProduct {
   productId: string; productCode: string; productName: string; category: string;
+  classification: 'A' | 'B' | 'C' | null;
   currentStock: number; minStock: number; unitsSold: number; rotationRate: number;
   daysOfInventory: number; dailySalesAvg: number; costUsd: number; inventoryValueUsd: number;
+  daysOfCoverage: number | null; urgency: Urgency | null; salesFromHistory: boolean;
   reorderAlert: boolean; deadStockAlert: boolean; excessStockAlert: boolean;
 }
 interface ProfitProduct {
@@ -42,12 +46,36 @@ interface Summary {
   topProduct: { name: string; salesUsd: number } | null;
   mostProfitable: { name: string; marginPct: number } | null;
 }
+interface SuggestionItem {
+  productId: string; productCode: string; productName: string; currentStock: number; minStock: number;
+  suggestedQty: number; costUsd: number; estimatedCost: number;
+  classification: 'A' | 'B' | 'C' | null; dailySalesAvg: number; salesFromHistory: boolean;
+  daysOfCoverage: number | null; urgency: Urgency;
+}
 interface SupplierGroup {
   supplierId: string | null; supplierName: string;
-  items: { productId: string; productCode: string; productName: string; currentStock: number; minStock: number; suggestedQty: number; costUsd: number; estimatedCost: number }[];
+  items: SuggestionItem[];
   totalEstimated: number;
 }
 interface PurchaseSuggestions { suppliers: SupplierGroup[]; grandTotal: number; }
+
+// Urgencia de compra (la calcula el API por cobertura = stock / venta diaria)
+const URGENCY_BADGES: Record<Urgency, { label: string; cls: string; title: string }> = {
+  AGOTADO: { label: 'Agotado', cls: 'bg-red-500/15 text-red-400 border-red-500/30', title: 'Sin stock y se vende' },
+  CRITICO: { label: 'Crítico', cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30', title: 'Alcanza para 7 días o menos' },
+  BAJO: { label: 'Bajo', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20', title: 'Alcanza para 15 días o menos (o bajo su mínimo)' },
+};
+function UrgencyBadge({ urgency }: { urgency: Urgency | null }) {
+  if (!urgency) return null;
+  const b = URGENCY_BADGES[urgency];
+  return <span title={b.title} className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold whitespace-nowrap ${b.cls}`}>{b.label}</span>;
+}
+function fmtCoverage(days: number | null): string {
+  if (days == null) return '—';
+  if (days <= 0) return '0 d';
+  return days < 10 ? `${days.toFixed(1)} d` : `${Math.round(days)} d`;
+}
+const STOCK_COLOR: Record<Urgency, string> = { AGOTADO: 'text-red-400 font-semibold', CRITICO: 'text-orange-400 font-semibold', BAJO: 'text-amber-400' };
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
 const ABC_COLORS: Record<string, string> = { A: '#10b981', B: '#3b82f6', C: '#64748b' };
@@ -78,7 +106,9 @@ export default function InventoryAnalysisPage() {
 
   // ── Filters ──
   const [abcFilter, setAbcFilter] = useState<'ALL' | 'A' | 'B' | 'C'>('ALL');
+  const [abcUrgentOnly, setAbcUrgentOnly] = useState(false);
   const [rotationAlertsOnly, setRotationAlertsOnly] = useState(false);
+  const [sugClassFilter, setSugClassFilter] = useState<'ALL' | 'A' | 'B' | 'C'>('ALL');
 
   useEffect(() => { document.title = 'Analisis de Inventario | Trinity ERP'; }, []);
 
@@ -130,7 +160,16 @@ export default function InventoryAnalysisPage() {
   }
 
   // ── Filtered data ──
-  const filteredAbc = abcFilter === 'ALL' ? abcData : abcData.filter(p => p.classification === abcFilter);
+  const filteredAbc = (abcFilter === 'ALL' ? abcData : abcData.filter(p => p.classification === abcFilter))
+    .filter(p => !abcUrgentOnly || p.urgency);
+  const abcUrgentCount = abcData.filter(p => p.urgency && (abcFilter === 'ALL' || p.classification === abcFilter)).length;
+
+  // Sugerencias filtradas por clase (totales recalculados)
+  const sugGroups = (suggestions?.suppliers || []).map(g => {
+    const items = sugClassFilter === 'ALL' ? g.items : g.items.filter(i => i.classification === sugClassFilter);
+    return { ...g, items, totalEstimated: items.reduce((s, i) => s + i.estimatedCost, 0) };
+  }).filter(g => g.items.length > 0);
+  const sugGrandTotal = sugGroups.reduce((s, g) => s + g.totalEstimated, 0);
   const filteredRotation = rotationAlertsOnly
     ? rotationData.filter(p => p.reorderAlert || p.deadStockAlert || p.excessStockAlert)
     : rotationData;
@@ -253,7 +292,7 @@ export default function InventoryAnalysisPage() {
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-red-500/10"><AlertTriangle className="text-red-400" size={20} /></div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase">Con alerta stock</p>
+                  <p className="text-xs text-slate-500 uppercase" title="Productos que se venden y están agotados o alcanzan para 15 días o menos">Agotados / por agotarse</p>
                   <p className="text-2xl font-bold text-white">{summary.productsWithAlert}
                     {summary.productsWithAlert > 0 && <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400">{summary.productsWithAlert}</span>}
                   </p>
@@ -343,6 +382,14 @@ export default function InventoryAnalysisPage() {
                     {f === 'ALL' ? 'Todos' : `Clase ${f}`}
                   </button>
                 ))}
+                <button
+                  onClick={() => setAbcUrgentOnly(v => !v)}
+                  className={`ml-2 px-2.5 py-1 rounded text-xs font-medium border transition-colors ${abcUrgentOnly ? 'bg-red-500/15 text-red-400 border-red-500/30' : 'text-slate-400 border-slate-700 hover:text-slate-200'}`}
+                  title="Solo los que están agotados o alcanzan para 15 días o menos"
+                >
+                  <AlertTriangle size={12} className="inline -mt-0.5 mr-1" />
+                  Agotados / por agotarse ({abcUrgentCount})
+                </button>
                 <span className="text-xs text-slate-500 ml-2">{filteredAbc.length} productos</span>
               </div>
 
@@ -361,12 +408,13 @@ export default function InventoryAnalysisPage() {
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">% total</th>
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">% acum.</th>
                         <th className="text-right px-3 py-3 text-slate-400 font-medium">Stock</th>
+                        <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Días que dura el stock al ritmo de venta del período">Cobertura</th>
                         <th className="text-right px-3 py-3 text-slate-400 font-medium" title="Basado en precio y costo actual del producto">Margen teórico</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAbc.length === 0 ? (
-                        <tr><td colSpan={10} className="text-center py-8 text-slate-500">Sin datos para el periodo seleccionado</td></tr>
+                        <tr><td colSpan={11} className="text-center py-8 text-slate-500">Sin datos para el periodo seleccionado</td></tr>
                       ) : filteredAbc.map(p => (
                         <tr key={p.productId} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                           <td className="px-3 py-2.5 text-center">
@@ -379,7 +427,13 @@ export default function InventoryAnalysisPage() {
                           <td className="px-3 py-2.5 text-right font-mono text-slate-300">{p.totalUnitsSold}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-300">{p.salesPct.toFixed(1)}%</td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-400">{p.cumulativePct.toFixed(1)}%</td>
-                          <td className={`px-3 py-2.5 text-right font-mono ${p.currentStock <= p.minStock ? 'text-red-400' : 'text-slate-300'}`}>{p.currentStock}</td>
+                          <td className={`px-3 py-2.5 text-right font-mono ${p.urgency ? STOCK_COLOR[p.urgency] : 'text-slate-300'}`}>{p.currentStock}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <UrgencyBadge urgency={p.urgency} />
+                              <span className="font-mono text-xs text-slate-400">{fmtCoverage(p.daysOfCoverage)}</span>
+                            </div>
+                          </td>
                           <td className={`px-3 py-2.5 text-right font-mono ${p.grossMarginPct >= 30 ? 'text-green-400' : p.grossMarginPct >= 15 ? 'text-amber-400' : 'text-red-400'}`}>{p.grossMarginPct.toFixed(1)}%</td>
                         </tr>
                       ))}
@@ -427,7 +481,7 @@ export default function InventoryAnalysisPage() {
                         <tr key={p.productId} className="border-b border-slate-700/30 hover:bg-slate-800/40 transition-colors">
                           <td className="px-3 py-2.5 font-mono text-xs text-emerald-400">{p.productCode}</td>
                           <td className="px-3 py-2.5 text-white">{p.productName}</td>
-                          <td className={`px-3 py-2.5 text-right font-mono ${p.currentStock <= p.minStock ? 'text-red-400' : 'text-slate-300'}`}>{p.currentStock}</td>
+                          <td className={`px-3 py-2.5 text-right font-mono ${p.urgency ? STOCK_COLOR[p.urgency] : 'text-slate-300'}`}>{p.currentStock}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-500">{p.minStock}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-300">{p.unitsSold}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-white">{p.rotationRate.toFixed(1)}x</td>
@@ -437,7 +491,13 @@ export default function InventoryAnalysisPage() {
                           <td className="px-3 py-2.5 text-right font-mono text-slate-400">{p.dailySalesAvg.toFixed(1)}</td>
                           <td className="px-3 py-2.5">
                             <div className="flex gap-1 flex-wrap">
-                              {p.reorderAlert && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">Stock bajo</span>}
+                              {p.classification && p.urgency && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${ABC_BADGES[p.classification]}`}>{p.classification}</span>
+                              )}
+                              <UrgencyBadge urgency={p.urgency} />
+                              {p.urgency && p.urgency !== 'AGOTADO' && p.daysOfCoverage != null && (
+                                <span className="text-[10px] text-slate-500 font-mono self-center">{fmtCoverage(p.daysOfCoverage)}</span>
+                              )}
                               {p.excessStockAlert && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Exceso</span>}
                               {p.deadStockAlert && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">Sin movimiento</span>}
                             </div>
@@ -526,19 +586,41 @@ export default function InventoryAnalysisPage() {
 
             {/* ═══ TAB: Sugerencias de compra ═══ */}
             <TabsContent value="suggestions">
-              {!suggestions || suggestions.suppliers.length === 0 ? (
+              {/* Filtro por clase + leyenda */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Filter size={14} className="text-slate-500" />
+                {(['ALL', 'A', 'B', 'C'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setSugClassFilter(f)}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${sugClassFilter === f ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    {f === 'ALL' ? 'Todas las clases' : `Clase ${f}`}
+                  </button>
+                ))}
+                <span className="text-xs text-slate-500 ml-auto">
+                  Cobertura = días que dura el stock al ritmo de venta. Sugerido = reponer 30 días.
+                </span>
+              </div>
+
+              {sugGroups.length === 0 ? (
                 <div className="card p-8 text-center text-slate-500">
-                  No hay productos bajo stock minimo en este periodo
+                  No hay productos agotados ni por agotarse en este periodo
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {suggestions.suppliers.map(group => (
+                  {sugGroups.map(group => (
                     <div key={group.supplierId || '__none__'} className="card overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 bg-slate-800/50 border-b border-slate-700/50">
                         <div className="flex items-center gap-2">
                           <ShoppingCart size={16} className="text-emerald-400" />
                           <span className="text-white font-semibold">{group.supplierName}</span>
                           <span className="text-xs text-slate-500">({group.items.length} productos)</span>
+                          {group.items.some(i => i.urgency === 'AGOTADO') && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 font-semibold">
+                              {group.items.filter(i => i.urgency === 'AGOTADO').length} agotados
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-mono text-emerald-400 font-semibold">{fmtUsd(group.totalEstimated)}</span>
@@ -556,10 +638,12 @@ export default function InventoryAnalysisPage() {
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b border-slate-700/30">
+                              <th className="text-center px-3 py-2 text-slate-400 font-medium text-xs w-12">Clase</th>
                               <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Codigo</th>
                               <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Producto</th>
+                              <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Urgencia</th>
                               <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Stock</th>
-                              <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Min.</th>
+                              <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Vta/día</th>
                               <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Sugerido</th>
                               <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Costo unit.</th>
                               <th className="text-right px-4 py-2 text-slate-400 font-medium text-xs">Costo total</th>
@@ -568,10 +652,23 @@ export default function InventoryAnalysisPage() {
                           <tbody>
                             {group.items.map(item => (
                               <tr key={item.productId} className="border-b border-slate-700/20 hover:bg-slate-800/30">
+                                <td className="px-3 py-2 text-center">
+                                  {item.classification
+                                    ? <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${ABC_BADGES[item.classification]}`}>{item.classification}</span>
+                                    : <span className="text-slate-600 text-xs">—</span>}
+                                </td>
                                 <td className="px-4 py-2 font-mono text-xs text-emerald-400">{item.productCode}</td>
                                 <td className="px-4 py-2 text-white">{item.productName}</td>
-                                <td className="px-4 py-2 text-right font-mono text-red-400">{item.currentStock}</td>
-                                <td className="px-4 py-2 text-right font-mono text-slate-500">{item.minStock}</td>
+                                <td className="px-4 py-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <UrgencyBadge urgency={item.urgency} />
+                                    {item.urgency !== 'AGOTADO' && <span className="font-mono text-[11px] text-slate-500">{fmtCoverage(item.daysOfCoverage)}</span>}
+                                  </div>
+                                </td>
+                                <td className={`px-4 py-2 text-right font-mono ${STOCK_COLOR[item.urgency]}`}>{item.currentStock}</td>
+                                <td className="px-4 py-2 text-right font-mono text-slate-400" title={item.salesFromHistory ? 'Estuvo agotado todo el período: ritmo de los últimos 180 días' : undefined}>
+                                  {item.dailySalesAvg.toFixed(2)}{item.salesFromHistory && <span className="text-slate-500">*</span>}
+                                </td>
                                 <td className="px-4 py-2 text-right font-mono text-white font-semibold">{item.suggestedQty}</td>
                                 <td className="px-4 py-2 text-right font-mono text-slate-300">{fmtUsd(item.costUsd)}</td>
                                 <td className="px-4 py-2 text-right font-mono text-white">{fmtUsd(item.estimatedCost)}</td>
@@ -586,7 +683,7 @@ export default function InventoryAnalysisPage() {
                   {/* Grand total */}
                   <div className="card p-4 flex items-center justify-between">
                     <span className="text-slate-300 font-semibold">Inversion total estimada</span>
-                    <span className="text-2xl font-mono font-bold text-emerald-400">{fmtUsd(suggestions.grandTotal)}</span>
+                    <span className="text-2xl font-mono font-bold text-emerald-400">{fmtUsd(sugGrandTotal)}</span>
                   </div>
                 </div>
               )}

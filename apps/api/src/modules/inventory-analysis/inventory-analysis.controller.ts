@@ -21,12 +21,13 @@ export class InventoryAnalysisController {
 
   // Junta las 5 secciones del analisis (mismas fuentes que la pantalla).
   private async gatherAnalysis(from: string, to: string) {
-    const [summary, abc, rotation, profitability, suggestions] = await Promise.all([
+    // El ABC se calcula una vez y se reusa en rotacion y sugerencias (clase de cada producto).
+    const abc = await this.service.getAbcClassification(from, to);
+    const [summary, rotation, profitability, suggestions] = await Promise.all([
       this.service.getSummary(from, to),
-      this.service.getAbcClassification(from, to),
-      this.service.getRotation(from, to),
+      this.service.getRotation(from, to, abc),
       this.service.getProfitability(from, to),
-      this.service.getPurchaseSuggestions(from, to),
+      this.service.getPurchaseSuggestions(from, to, abc),
     ]);
     return { summary, abc, rotation, profitability, suggestions };
   }

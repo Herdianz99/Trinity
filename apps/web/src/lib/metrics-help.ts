@@ -53,8 +53,8 @@ export const METRICS_HELP: Record<string, MetricHelp> = {
   sugerenciaCompra: {
     key: 'sugerenciaCompra',
     titulo: 'Sugerencia de compra',
-    formula: 'sugerido = máx( venta diaria promedio × 30 , mínimo − stock )',
-    explicacion: 'Toma el mayor entre "30 días de demanda" y "lo que falta para el mínimo". Solo aplica a productos en o bajo el mínimo.',
+    formula: 'sugerido = máx( venta diaria × 30 − stock , mínimo − stock , 1 )   ·   cobertura = stock ÷ venta diaria',
+    explicacion: 'Solo entran productos que se venden y se están acabando: Agotado (stock en 0), Crítico (alcanza para 7 días o menos) o Bajo (15 días o menos, o bajo su mínimo). En la Clasificación ABC el botón "Agotados / por agotarse" filtra solo esos. Si un producto estuvo agotado todo el período (no pudo venderse), su venta diaria se toma de los últimos 180 días (marcado con *).',
   },
   agotado: {
     key: 'agotado',

@@ -206,7 +206,7 @@ export class InventoryAnalysisExportPdfService {
       { label: 'Codigo', x: 40, width: 70 },
       { label: 'Producto', x: 110, width: 250 },
       { label: 'Stock', x: 360, width: 50, align: 'right' },
-      { label: 'Min', x: 410, width: 50, align: 'right' },
+      { label: 'Urgencia', x: 410, width: 50, align: 'right' },
       { label: 'Sugerido', x: 460, width: 60, align: 'right' },
       { label: 'Costo unit', x: 520, width: 80, align: 'right' },
       { label: 'Costo total', x: 600, width: 90, align: 'right' },
@@ -214,7 +214,7 @@ export class InventoryAnalysisExportPdfService {
     const suppliers = suggestions?.suppliers || [];
     if (suppliers.length === 0) {
       doc.fontSize(9).font('Helvetica').fillColor('#64748b')
-        .text('No hay productos bajo stock minimo en este periodo.', 40, y);
+        .text('No hay productos agotados ni por agotarse en este periodo.', 40, y);
       doc.fillColor('#000');
       y += 16;
     } else {
@@ -226,7 +226,8 @@ export class InventoryAnalysisExportPdfService {
         doc.fillColor('#000');
         y += 15;
         y = this.drawTable(doc, y, sugCols, (g.items || []).map((it: any) => [
-          it.productCode, it.productName, String(it.currentStock), String(it.minStock),
+          it.productCode, `${it.classification ? `[${it.classification}] ` : ''}${it.productName}`, String(it.currentStock),
+          it.urgency === 'AGOTADO' ? 'Agotado' : it.urgency === 'CRITICO' ? `Crit ${Math.round(it.daysOfCoverage ?? 0)}d` : `Bajo ${it.daysOfCoverage != null ? Math.round(it.daysOfCoverage) + 'd' : ''}`,
           String(it.suggestedQty), `$${this.fmt(it.costUsd)}`, `$${this.fmt(it.estimatedCost)}`,
         ]));
       }

@@ -61,6 +61,14 @@
 - **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
 - **Pendientes:** total, totalturen, aceros, acerosmayor (Sesiones 184-186, siguen en `1cd39845`).
 
+## ✨ Análisis de inventario: ver agotados / por agotarse (2026-11-13, Sesión 187) — ⏳ SIN DESPLEGAR
+- **Pedido:** en `/purchases/analysis` poder ver los productos que rotan (ej. clase A) y están agotados o por agotarse, para comprarlos a tiempo. **El usuario pidió mantener el orden de siempre** (ABC por ventas, rotación por días de inventario, sugerencias por monto del proveedor): se probó ordenar por urgencia y bloque "Comprar ya", y se revirtió a pedido.
+- **Causa de fondo:** la sugerencia de compra usaba `stock <= minStock`, pero solo 32 de 7.322 productos (grande local) tienen mínimo → salía todo lo que estaba en 0 aunque no se vendiera, y los que se estaban acabando no salían.
+- **Ahora:** urgencia por COBERTURA = stock ÷ venta diaria del período: Agotado (stock ≤ 0 y se vende), Crítico (≤ 7 días), Bajo (≤ 15 días o bajo su mínimo). Si estuvo agotado todo el período, la venta diaria se toma de los últimos 180 días (marcado con *). Constantes en `inventory-analysis.service.ts`. Productos desactivados y servicios no se marcan.
+- **Pantalla:** ABC con columna Cobertura + etiqueta y botón **"Agotados / por agotarse (N)"**; Rotación con etiqueta y clase; Sugerencias solo con productos que rotan y se acaban, con clase/urgencia/vta-día, filtro por clase y "N agotados" por proveedor; sugerido = venta diaria × 30 − stock (antes no restaba el stock). Tarjeta "Agotados / por agotarse". Excel/PDF con clase y urgencia.
+- **Efecto colateral:** el Resumen gerencial de inventario ("Bajo mínimo / quiebre") usa la misma alerta → cuenta productos que rotan y se acaban, no todo lo que está en 0.
+- **Rendimiento:** el resumen calculaba el ABC dos veces (17 s → 8 s en local); el export reusa el ABC.
+
 ## ✨ Retención ISLR con varios conceptos en un comprobante (2026-11-13, Sesión 187) — ⏳ SIN DESPLEGAR
 - **Pedido:** como Wensoft (comprobante Nº 10 de CESTATICKET: factura 4330400, "contratistas PJD" 2% sobre Bs 3.744,58 = 74,89 + "fletes PJD" 3% sobre Bs 1.188,75 = 35,66, total 110,55). En Wensoft se hacen 2 retenciones con el mismo correlativo; aquí es un solo comprobante con varias líneas.
 - **Cómo se usa:** Compras > Retenciones ISLR > detalle > **"Agregar concepto"**: se elige la factura (si hay varias), el concepto y la base imponible en Bs, y se calcula base × %base × %ret − sustraendo (solo P.N. residente). La papelera quita el concepto; el de la factura no se puede quitar.

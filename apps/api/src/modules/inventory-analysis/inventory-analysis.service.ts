@@ -10,9 +10,79 @@ const DIAS_RECIEN_INGRESADO = 10; // < 10 días sin ventas => "Recién ingresado
 const DIAS_STOCK_MUERTO = 28;     // > 28 días sin ventas => "Stock muerto" (rojo); intermedio => "Nuevo sin rotación" (naranja)
 const DIAS_EXCESO = 180;          // > 180 días de inventario (vendiendo) => "Exceso"
 
+// Urgencia de compra por COBERTURA (días que dura el stock al ritmo de venta del período).
+// Solo cuenta para productos que rotan; un producto en 0 que no se vende no es urgente.
+const DIAS_COBERTURA_CRITICA = 7;  // <= 7 días => "Crítico"
+const DIAS_COBERTURA_BAJA = 15;    // <= 15 días => "Bajo"
+const DIAS_COBERTURA_OBJETIVO = 30; // la sugerencia de compra repone para 30 días
+const DIAS_HISTORIA_AGOTADOS = 180; // si estuvo agotado todo el período, su ritmo se toma de los últimos 180 días
+
+export type StockUrgency = 'AGOTADO' | 'CRITICO' | 'BAJO';
+
+/** Urgencia y cobertura (días) de un producto. dailySales = unidades/día. */
+function stockUrgency(stock: number, minStock: number, dailySales: number): { urgency: StockUrgency | null; daysOfCoverage: number | null } {
+  if (dailySales > 0) {
+    if (stock <= 0) return { urgency: 'AGOTADO', daysOfCoverage: 0 };
+    const days = stock / dailySales;
+    const urgency = days <= DIAS_COBERTURA_CRITICA ? 'CRITICO'
+      : days <= DIAS_COBERTURA_BAJA || (minStock > 0 && stock <= minStock) ? 'BAJO' : null;
+    return { urgency, daysOfCoverage: Math.round(days * 10) / 10 };
+  }
+  // Sin ventas: solo alerta si tiene un minimo cargado y esta por debajo.
+  if (minStock > 0 && stock <= minStock) return { urgency: stock <= 0 ? 'AGOTADO' : 'BAJO', daysOfCoverage: null };
+  return { urgency: null, daysOfCoverage: null };
+}
+
 @Injectable()
 export class InventoryAnalysisService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Unidades vendidas por producto (neto de devoluciones) en un rango. */
+  private async unitsSoldByProduct(fromDate: Date, toDate: Date): Promise<Map<string, number>> {
+    const items = await this.prisma.invoiceItem.findMany({
+      where: {
+        invoice: {
+          status: { in: ['PAID', 'PARTIAL_RETURN'] },
+          type: 'SALE',
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+      },
+      select: { productId: true, quantity: true, returnedQty: true },
+    });
+    const map = new Map<string, number>();
+    for (const item of items) {
+      const effectiveQty = item.quantity - (item.returnedQty || 0);
+      if (effectiveQty <= 0) continue;
+      map.set(item.productId, (map.get(item.productId) || 0) + effectiveQty);
+    }
+    return map;
+  }
+
+  /**
+   * Venta diaria de cada producto: la del período; si no vendió nada en el período y está
+   * agotado (no pudo vender), se usa su ritmo de los últimos DIAS_HISTORIA_AGOTADOS días.
+   */
+  private async dailySalesRates(fromDate: Date, toDate: Date, periodDays: number) {
+    const histFrom = new Date(Math.min(fromDate.getTime(), toDate.getTime() - DIAS_HISTORIA_AGOTADOS * 86400000));
+    const [period, history] = await Promise.all([
+      this.unitsSoldByProduct(fromDate, toDate),
+      this.unitsSoldByProduct(histFrom, toDate),
+    ]);
+    const histDays = Math.max(1, Math.round((toDate.getTime() - histFrom.getTime()) / 86400000));
+    return {
+      period,
+      /** rate(productId, stock) -> { daily, fromHistory } */
+      rate: (productId: string, stock: number) => {
+        const sold = period.get(productId) || 0;
+        if (sold > 0) return { daily: sold / periodDays, fromHistory: false };
+        if (stock <= 0) {
+          const h = history.get(productId) || 0;
+          if (h > 0) return { daily: h / histDays, fromHistory: true };
+        }
+        return { daily: 0, fromHistory: false };
+      },
+    };
+  }
 
   /**
    * ABC Classification: Products ranked by sales contribution
@@ -20,6 +90,7 @@ export class InventoryAnalysisService {
   async getAbcClassification(from: string, to: string) {
     const fromDate = caracasDayStart(from);
     const toDate = caracasDayEnd(to);
+    const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Get all invoice items in period from PAID invoices (type SALE)
     const items = await this.prisma.invoiceItem.findMany({
@@ -80,6 +151,7 @@ export class InventoryAnalysisService {
         priceDetal: true,
         minStock: true,
         isService: true,
+        isActive: true,
         category: { select: { name: true } },
         stock: { select: { quantity: true } },
       },
@@ -98,6 +170,11 @@ export class InventoryAnalysisService {
       const costUsd = detail?.costUsd || 0;
       const priceDetal = detail?.priceDetal || 0;
       const grossMarginPct = priceDetal > 0 ? ((priceDetal - costUsd) / priceDetal) * 100 : 0;
+      const dailySalesAvg = p.totalUnitsSold / periodDays;
+      // Servicios y productos desactivados no se compran: sin urgencia
+      const { urgency, daysOfCoverage } = !detail || detail.isService || !detail.isActive
+        ? { urgency: null, daysOfCoverage: null }
+        : stockUrgency(currentStock, detail?.minStock || 0, dailySalesAvg);
 
       return {
         productId: p.productId,
@@ -115,37 +192,36 @@ export class InventoryAnalysisService {
         priceDetal,
         grossMarginPct: Math.round(grossMarginPct * 100) / 100,
         inventoryValueUsd: Math.round(currentStock * costUsd * 100) / 100,
+        dailySalesAvg: Math.round(dailySalesAvg * 100) / 100,
+        daysOfCoverage,
+        urgency,
       };
     });
+  }
+
+  /** Clase ABC por producto (solo los que vendieron en el período). */
+  private async abcClassMap(from: string, to: string): Promise<Map<string, 'A' | 'B' | 'C'>> {
+    const abc = await this.getAbcClassification(from, to);
+    return new Map(abc.map((p) => [p.productId, p.classification as 'A' | 'B' | 'C']));
   }
 
   /**
    * Rotation analysis: How fast products sell relative to stock
    */
-  async getRotation(from: string, to: string) {
+  async getRotation(from: string, to: string, abcPrecomputed?: { productId: string; classification: string }[]) {
     const fromDate = caracasDayStart(from);
     const toDate = caracasDayEnd(to);
 
     const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-    // Get sales by product in period
-    const items = await this.prisma.invoiceItem.findMany({
-      where: {
-        invoice: {
-          status: { in: ['PAID', 'PARTIAL_RETURN'] },
-          type: 'SALE',
-          createdAt: { gte: fromDate, lte: toDate },
-        },
-      },
-      select: { productId: true, quantity: true, returnedQty: true },
-    });
-
-    const salesMap = new Map<string, number>();
-    for (const item of items) {
-      const effectiveQty = item.quantity - (item.returnedQty || 0);
-      if (effectiveQty <= 0) continue;
-      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + effectiveQty);
-    }
+    // Ventas del período (+ ritmo histórico para los que estuvieron agotados) y clase ABC
+    // (si quien llama ya calculó el ABC, se reusa para no repetir la consulta).
+    const [{ period: salesMap, rate }, classMap] = await Promise.all([
+      this.dailySalesRates(fromDate, toDate, periodDays),
+      abcPrecomputed
+        ? Promise.resolve(new Map(abcPrecomputed.map((p) => [p.productId, p.classification as 'A' | 'B' | 'C'])))
+        : this.abcClassMap(from, to),
+    ]);
 
     // Get all active non-service products with stock
     const products = await this.prisma.product.findMany({
@@ -167,22 +243,30 @@ export class InventoryAnalysisService {
       const avgStock = Math.max(currentStock, 0.01); // avoid division by zero
       const rotationRate = unitsSold / avgStock;
       const daysOfInventory = rotationRate > 0 ? periodDays / rotationRate : currentStock > 0 ? 9999 : 0;
-      const dailySalesAvg = unitsSold / periodDays;
+      const { daily: dailySalesAvg, fromHistory } = rate(p.id, currentStock);
+      const { urgency, daysOfCoverage } = stockUrgency(currentStock, p.minStock, dailySalesAvg);
+      const classification = classMap.get(p.id) ?? null;
 
       return {
         productId: p.id,
         productCode: p.code,
         productName: p.name,
         category: p.category?.name || '',
+        classification,
         currentStock,
         minStock: p.minStock,
         unitsSold: Math.round(unitsSold * 100) / 100,
         rotationRate: Math.round(rotationRate * 100) / 100,
         daysOfInventory: Math.round(daysOfInventory),
         dailySalesAvg: Math.round(dailySalesAvg * 100) / 100,
+        salesFromHistory: fromHistory,
+        daysOfCoverage,
+        urgency,
         costUsd: p.costUsd,
         inventoryValueUsd: Math.round(currentStock * p.costUsd * 100) / 100,
-        reorderAlert: currentStock <= p.minStock && currentStock >= 0,
+        // Alerta de reposicion = producto que rota y se esta acabando (o bajo su minimo).
+        // Antes era "stock <= minimo", y como casi nadie tiene minimo cargado marcaba todo lo que estaba en 0.
+        reorderAlert: urgency !== null,
         deadStockAlert: unitsSold === 0 && currentStock > 0,
         excessStockAlert: daysOfInventory > 180,
       };
@@ -275,8 +359,11 @@ export class InventoryAnalysisService {
    * Executive summary
    */
   async getSummary(from: string, to: string) {
-    const abc = await this.getAbcClassification(from, to);
-    const rotation = await this.getRotation(from, to);
+    const [abc, profitability] = await Promise.all([
+      this.getAbcClassification(from, to),
+      this.getProfitability(from, to),
+    ]);
+    const rotation = await this.getRotation(from, to, abc);
 
     const classA = abc.filter((p) => p.classification === 'A');
     const classB = abc.filter((p) => p.classification === 'B');
@@ -290,7 +377,6 @@ export class InventoryAnalysisService {
     const topProduct = abc.length > 0 ? { name: abc[0].productName, salesUsd: abc[0].totalSalesUsd } : null;
 
     // Most profitable
-    const profitability = await this.getProfitability(from, to);
     const mostProfitable = profitability.length > 0 ? { name: profitability[0].productName, marginPct: profitability[0].grossMarginPct } : null;
 
     return {
@@ -418,32 +504,22 @@ export class InventoryAnalysisService {
   }
 
   /**
-   * Purchase suggestions: products below min stock grouped by supplier
+   * Sugerencias de compra: productos que ROTAN y se están acabando (agotados, cobertura
+   * <= 15 días) o bajo su mínimo, ordenados por prioridad (urgencia + clase ABC) y
+   * agrupados por proveedor. Reponen para DIAS_COBERTURA_OBJETIVO días descontando el stock.
    */
-  async getPurchaseSuggestions(from: string, to: string) {
+  async getPurchaseSuggestions(from: string, to: string, abcPrecomputed?: { productId: string; classification: string }[]) {
     const fromDate = caracasDayStart(from);
     const toDate = caracasDayEnd(to);
     const periodDays = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-    // Get sales in period
-    const items = await this.prisma.invoiceItem.findMany({
-      where: {
-        invoice: {
-          status: { in: ['PAID', 'PARTIAL_RETURN'] },
-          type: 'SALE',
-          createdAt: { gte: fromDate, lte: toDate },
-        },
-      },
-      select: { productId: true, quantity: true, returnedQty: true },
-    });
-    const salesMap = new Map<string, number>();
-    for (const item of items) {
-      const effectiveQty = item.quantity - (item.returnedQty || 0);
-      if (effectiveQty <= 0) continue;
-      salesMap.set(item.productId, (salesMap.get(item.productId) || 0) + effectiveQty);
-    }
+    const [{ rate }, classMap] = await Promise.all([
+      this.dailySalesRates(fromDate, toDate, periodDays),
+      abcPrecomputed
+        ? Promise.resolve(new Map(abcPrecomputed.map((p) => [p.productId, p.classification as 'A' | 'B' | 'C'])))
+        : this.abcClassMap(from, to),
+    ]);
 
-    // Products below min stock
     const products = await this.prisma.product.findMany({
       where: { isActive: true, isService: false },
       select: {
@@ -469,15 +545,26 @@ export class InventoryAnalysisService {
       estimatedCost: number;
       supplierId: string | null;
       supplierName: string;
+      classification: 'A' | 'B' | 'C' | null;
+      dailySalesAvg: number;
+      salesFromHistory: boolean;
+      daysOfCoverage: number | null;
+      urgency: StockUrgency;
     }[] = [];
 
     for (const p of products) {
       const currentStock = p.stock.reduce((s, st) => s + st.quantity, 0);
-      if (currentStock > p.minStock) continue;
+      const { daily: dailySalesAvg, fromHistory } = rate(p.id, currentStock);
+      const { urgency, daysOfCoverage } = stockUrgency(currentStock, p.minStock, dailySalesAvg);
+      if (!urgency) continue;
 
-      const unitsSold = salesMap.get(p.id) || 0;
-      const dailySalesAvg = unitsSold / periodDays;
-      const suggestedQty = Math.max(Math.ceil(dailySalesAvg * 30), Math.ceil(p.minStock - currentStock));
+      // Reponer para 30 dias de venta descontando lo que hay (o hasta el minimo, lo que sea mayor)
+      const suggestedQty = Math.max(
+        1,
+        Math.ceil(dailySalesAvg * DIAS_COBERTURA_OBJETIVO - Math.max(currentStock, 0)),
+        Math.ceil(p.minStock - currentStock),
+      );
+      const classification = classMap.get(p.id) ?? null;
 
       suggestions.push({
         productId: p.id,
@@ -490,6 +577,11 @@ export class InventoryAnalysisService {
         estimatedCost: Math.round(suggestedQty * p.costUsd * 100) / 100,
         supplierId: p.supplierId,
         supplierName: p.supplier?.name || 'Sin proveedor',
+        classification,
+        dailySalesAvg: Math.round(dailySalesAvg * 100) / 100,
+        salesFromHistory: fromHistory,
+        daysOfCoverage,
+        urgency,
       });
     }
 
