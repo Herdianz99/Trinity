@@ -56,6 +56,10 @@
   - Tipos de Auditoría: **"Mercancía dañada o vencida"** y **"Transferencia sin soporte"**. Otras ideas propuestas y aún no creadas: Faltante/Sobrante en conteo, Diferencia de caja, Precio mal cargado, Documento sin soporte, Incumplimiento de procedimiento, Recepción con diferencias, Despacho sin factura, Devolución/NC irregular, Pago mal registrado, Crédito fuera de política, Exhibición incompleta.
   - Infraestructura NO se creó en producción (solo existe en la BD local como muestra).
 
+## 🚀 Deploy Sesión 186 — estado (2026-11-12)
+- **Chica ✅ `92b2ad18`** (incluye Sesiones 184-186 y la migración `store_pago_movil`). El usuario lanzó por error 3 `deploy.sh` a la vez (3 `next build` en la misma `.next`, RAM casi llena): se mataron los 3 + 3 `jest-worker` huérfanos y se relanzó UNO con `NODE_OPTIONS=--max-old-space-size=1536 nohup bash deploy.sh > /root/deploy-20261112.log`. Verificado: `BUILD_ID` nuevo, web 200, API /health 200.
+- **Pendientes:** grande (solo Sesión 186), mayor, total, totalturen, aceros, acerosmayor (Sesiones 184-186).
+
 ## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
 - **Causa:** `payables.service.remove()` borraba el comprobante de IVA de la CxP pero no el de ISLR (la línea quedaba con `payableId = NULL`, y `purchaseBookEntry.deleteMany({payableId})` se llevaba la línea del libro).
