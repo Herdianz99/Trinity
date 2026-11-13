@@ -658,6 +658,12 @@ export class PayablesService {
             retentionVoucher: { select: { id: true, number: true, status: true, retentionAmountUsd: true, retentionAmountBs: true } },
           },
         },
+        islrRetentionVoucherLines: {
+          where: { islrRetentionVoucher: { status: { not: 'CANCELLED' } } },
+          include: {
+            islrRetentionVoucher: { select: { id: true, number: true, status: true, retentionAmountUsd: true, retentionAmountBs: true } },
+          },
+        },
         payments: {
           orderBy: { createdAt: 'desc' },
           include: {

@@ -192,6 +192,18 @@ export default function IslrRetentionDetailPage() {
 
   useEffect(() => { fetchVoucher(); }, [fetchVoucher]);
 
+  // Desde la lista ("Agregar concepto") se llega con ?concepto=1: abrir el modal una vez cargado.
+  const [autoOpened, setAutoOpened] = useState(false);
+  useEffect(() => {
+    if (!voucher || autoOpened) return;
+    setAutoOpened(true);
+    if (new URLSearchParams(window.location.search).get('concepto') !== '1') return;
+    window.history.replaceState(null, '', window.location.pathname);
+    const editable = voucher.status === 'PENDING' || (voucher.status === 'ISSUED' && !voucher.appliedAt);
+    if (editable && voucher.lines.some(l => !l.isExtraConcept)) openConceptModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voucher, autoOpened]);
+
   // ── Handlers ──────────────────────────────────────────────────────────
 
   function openConceptModal() {

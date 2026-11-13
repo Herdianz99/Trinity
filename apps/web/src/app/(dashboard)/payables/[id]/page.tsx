@@ -71,6 +71,7 @@ interface PayableDetail {
   igtfUsd: number;
   igtfBs: number;
   retentionVoucherLines: RetentionVoucherLineRef[];
+  islrRetentionVoucherLines?: { id: string; islrRetentionVoucher: RetentionVoucherRef }[];
   payments: PayablePayment[];
   createdAt: string;
 }
@@ -243,6 +244,9 @@ export default function PayableDetailPage() {
   const isFiscal = payable.serie?.isFiscal ?? false;
   const hasFiscalData = isFiscal || (payable.exemptBaseUsd || 0) > 0 || (payable.taxableBase16Usd || 0) > 0 || (payable.taxableBase8Usd || 0) > 0 || (payable.taxableBase31Usd || 0) > 0;
   const retentionVouchers = (payable.retentionVoucherLines || []).map(l => l.retentionVoucher).filter(Boolean);
+  // Comprobantes ISLR (uno por comprobante aunque tenga varios conceptos de esta CxP)
+  const islrVouchers = Array.from(new Map((payable.islrRetentionVoucherLines || [])
+    .map(l => l.islrRetentionVoucher).filter(Boolean).map(v => [v.id, v])).values());
   // Solo CxP manual (sin factura de compra) y no cruzada/pagada
   const canDelete = !payable.purchaseOrderId && payable.status !== 'PAID' && payable.status !== 'PARTIAL'
     && (payable.paidAmountUsd || 0) === 0 && payable.payments.length === 0;
@@ -371,6 +375,16 @@ export default function PayableDetailPage() {
                     <button key={rv.id} onClick={() => router.push(`/purchases/retentions/${rv.id}`)}
                       className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-xs">
                       <ExternalLink size={12} /> Comprobante {rv.number} ({rv.status}) — ${rv.retentionAmountUsd.toFixed(2)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {islrVouchers.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {islrVouchers.map((v) => (
+                    <button key={v.id} onClick={() => router.push(`/purchases/islr-retentions/${v.id}`)}
+                      className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 text-xs">
+                      <ExternalLink size={12} /> Retención ISLR {v.number} ({v.status}) — Bs {v.retentionAmountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ver / agregar concepto
                     </button>
                   ))}
                 </div>

@@ -124,7 +124,7 @@ export default function NewRetentionVoucherPage() {
   // ── Load default % from config ─────────────────────────────────────
 
   useEffect(() => {
-    fetch('/api/proxy/company-config')
+    fetch('/api/proxy/config')
       .then(r => r.json())
       .then(c => { if (c.ivaRetentionPct) setRetentionPct(c.ivaRetentionPct); })
       .catch(() => {});

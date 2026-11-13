@@ -101,7 +101,7 @@ export default function NewPayablePage() {
           fetch('/api/proxy/exchange-rate/today'),
           fetch('/api/proxy/suppliers?isActive=true&limit=1000'),
           fetch('/api/proxy/series?type=PURCHASES'),
-          fetch('/api/proxy/company-config'),
+          fetch('/api/proxy/config'),
           fetch('/api/auth/me'),
         ]);
         if (rateRes.ok) { const d = await rateRes.json(); setExchangeRate(d.rate || 0); }
@@ -150,7 +150,12 @@ export default function NewPayablePage() {
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch.trim()) return suppliers;
     const q = supplierSearch.toLowerCase();
-    return suppliers.filter(s => s.name.toLowerCase().includes(q) || (s.rif && s.rif.toLowerCase().includes(q)));
+    // Sin guiones/puntos/espacios: "003274445" o "cesta ticket" encuentran "J-00327444-5" / "CESTATICKET".
+    const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9ñ]/g, '');
+    const qn = norm(supplierSearch);
+    return suppliers.filter(s =>
+      s.name.toLowerCase().includes(q) || (s.rif && s.rif.toLowerCase().includes(q))
+      || (qn.length > 0 && (norm(s.name).includes(qn) || (!!s.rif && norm(s.rif).includes(qn)))));
   }, [suppliers, supplierSearch]);
 
   const selectedSupplier = useMemo(() => suppliers.find(s => s.id === supplierId), [suppliers, supplierId]);

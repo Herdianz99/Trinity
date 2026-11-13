@@ -85,7 +85,7 @@ export default function NewReceivablePage() {
         const [rateRes, seriesRes, configRes, profileRes] = await Promise.all([
           fetch('/api/proxy/exchange-rate/today'),
           fetch('/api/proxy/series?type=SALES'),
-          fetch('/api/proxy/company-config'),
+          fetch('/api/proxy/config'),
           fetch('/api/auth/me'),
         ]);
         if (rateRes.ok) { const d = await rateRes.json(); setExchangeRate(d.rate || 0); }

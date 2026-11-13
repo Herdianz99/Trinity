@@ -4,8 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Loader2, Search, CheckCircle, Ban, Eye, X, Calendar,
-  Plus, ChevronLeft, ChevronRight, Download,
+  Plus, ChevronLeft, ChevronRight, Download, ListPlus,
 } from 'lucide-react';
+
+// Se le pueden agregar conceptos si esta pendiente, o emitido y aun no aplicado en un recibo.
+function canAddConcept(v: { status: string; appliedAt?: string | null }): boolean {
+  return v.status === 'PENDING' || (v.status === 'ISSUED' && !v.appliedAt);
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +18,7 @@ interface IslrVoucherLine {
   id: string;
   purchaseOrderId: string | null;
   payableId?: string | null;
+  isExtraConcept?: boolean;
   supplierInvoiceNumber: string | null;
   supplierControlNumber: string | null;
   invoiceDate: string | null;
@@ -49,6 +55,7 @@ interface IslrVoucher {
   number: string;
   status: 'PENDING' | 'ISSUED' | 'CANCELLED';
   issueDate: string | null;
+  appliedAt?: string | null;
   retentionAmountUsd: number;
   retentionAmountBs: number;
   exchangeRate: number;
@@ -326,14 +333,19 @@ export default function IslrRetentionsPage() {
                     </td>
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col gap-0.5">
-                        {v.lines.slice(0, 3).map((line) => (
+                        {v.lines.filter(l => !l.isExtraConcept).slice(0, 3).map((line) => (
                           <a key={line.id} href={line.purchaseOrder ? `/purchases/${line.purchaseOrder.id}` : `/payables/${line.payableId}`}
                             className="text-blue-400 hover:text-blue-300 font-mono text-xs">
                             {line.purchaseOrder ? line.purchaseOrder.number : (line.payable?.documentNumber || line.payable?.number || 'CxP')}
                           </a>
                         ))}
-                        {v.lines.length > 3 && (
-                          <span className="text-xs text-slate-500">+{v.lines.length - 3} más</span>
+                        {v.lines.filter(l => !l.isExtraConcept).length > 3 && (
+                          <span className="text-xs text-slate-500">+{v.lines.filter(l => !l.isExtraConcept).length - 3} más</span>
+                        )}
+                        {v.lines.some(l => l.isExtraConcept) && (
+                          <span className="text-[10px] text-slate-500">
+                            {v.lines.length} conceptos
+                          </span>
                         )}
                       </div>
                     </td>
@@ -357,6 +369,13 @@ export default function IslrRetentionsPage() {
                           title="Descargar PDF">
                           <FileText size={15} />
                         </button>
+                        {canAddConcept(v) && (
+                          <button onClick={() => router.push(`/purchases/islr-retentions/${v.id}?concepto=1`)}
+                            className="p-1.5 rounded hover:bg-orange-500/20 text-slate-400 hover:text-orange-400 transition-colors"
+                            title="Agregar concepto">
+                            <ListPlus size={15} />
+                          </button>
+                        )}
                         {v.status === 'PENDING' && (
                           <button onClick={() => { setIssueModal(v); setIssueDate(toLocalDateStr(now)); }}
                             className="p-1.5 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-colors"
@@ -533,6 +552,9 @@ export default function IslrRetentionsPage() {
                     <tbody>
                       {detailModal.lines.map((line) => (
                         <tr key={line.id} className="border-b border-slate-700/20">
+                          {line.isExtraConcept ? (
+                            <td className="px-3 py-2 pl-6 text-slate-500 italic">↳ Concepto adicional</td>
+                          ) : (
                           <td className="px-3 py-2">
                             <a href={line.purchaseOrder ? `/purchases/${line.purchaseOrder.id}` : `/payables/${line.payableId}`}
                               className="text-blue-400 hover:text-blue-300 font-mono">
@@ -540,6 +562,7 @@ export default function IslrRetentionsPage() {
                             </a>
                             <div className="text-slate-600">{fmtDate(line.invoiceDate)}</div>
                           </td>
+                          )}
                           <td className="px-3 py-2 text-slate-400">
                             <span className="text-orange-400 font-mono mr-1">{line.islrRetentionType.codigo}</span>
                             {line.islrRetentionType.descripcion.substring(0, 30)}
@@ -564,7 +587,13 @@ export default function IslrRetentionsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end px-5 py-4 border-t border-slate-700 sticky bottom-0 bg-slate-800">
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-700 sticky bottom-0 bg-slate-800">
+              {canAddConcept(detailModal) && (
+                <button onClick={() => router.push(`/purchases/islr-retentions/${detailModal.id}?concepto=1`)}
+                  className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium flex items-center gap-2">
+                  <ListPlus size={16} /> Agregar concepto
+                </button>
+              )}
               <button onClick={() => setDetailModal(null)}
                 className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm">
                 Cerrar

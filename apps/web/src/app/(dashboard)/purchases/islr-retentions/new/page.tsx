@@ -153,7 +153,7 @@ export default function NewIslrRetentionPage() {
   // ── Load config + ISLR types ──────────────────────────────────────
 
   useEffect(() => {
-    fetch('/api/proxy/company-config')
+    fetch('/api/proxy/config')
       .then(r => r.json())
       .then(c => { if (c.unidadTributaria) setValorUT(c.unidadTributaria); })
       .catch(() => {});
