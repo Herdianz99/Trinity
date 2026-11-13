@@ -58,7 +58,8 @@
 
 ## 🚀 Deploy Sesión 186 — estado (2026-11-12)
 - **Chica ✅ `92b2ad18`** (incluye Sesiones 184-186 y la migración `store_pago_movil`). El usuario lanzó por error 3 `deploy.sh` a la vez (3 `next build` en la misma `.next`, RAM casi llena): se mataron los 3 + 3 `jest-worker` huérfanos y se relanzó UNO con `NODE_OPTIONS=--max-old-space-size=1536 nohup bash deploy.sh > /root/deploy-20261112.log`. Verificado: `BUILD_ID` nuevo, web 200, API /health 200.
-- **Pendientes:** grande (solo Sesión 186), mayor, total, totalturen, aceros, acerosmayor (Sesiones 184-186).
+- **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
+- **Pendientes:** total, totalturen, aceros, acerosmayor (Sesiones 184-186, siguen en `1cd39845`).
 
 ## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
