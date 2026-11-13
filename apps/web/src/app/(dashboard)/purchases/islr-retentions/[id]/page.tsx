@@ -5,7 +5,7 @@ import { fmtRate } from '@/lib/format';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft, FileText, Loader2, CheckCircle, Ban, Calendar, X,
-  Printer, Edit3, Save,
+  Printer, Edit3, Save, Plus, Trash2,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -13,6 +13,8 @@ import {
 interface IslrRetentionLine {
   id: string;
   purchaseOrderId: string | null;
+  payableId: string | null;
+  isExtraConcept: boolean;
   islrRetentionTypeId: string;
   islrRetentionType: {
     id: string;
@@ -46,6 +48,35 @@ interface IslrRetentionLine {
     supplierControlNumber: string | null;
     supplierInvoiceNumber: string | null;
   } | null;
+  payable: { id: string; number: string; documentNumber: string | null } | null;
+}
+
+interface IslrType {
+  id: string;
+  codigo: number;
+  descripcion: string;
+  baseImponiblePct: number;
+  retentionPct: number;
+  sustraendoUt: number;
+}
+
+// Conceptos adicionales justo debajo de su factura (mismo orden que el PDF).
+function orderLines(lines: IslrRetentionLine[]): IslrRetentionLine[] {
+  const key = (l: IslrRetentionLine) => l.payableId || l.purchaseOrderId || l.id;
+  const order = new Map<string, number>();
+  lines.forEach(l => { if (!order.has(key(l))) order.set(key(l), order.size); });
+  return [...lines].sort((a, b) =>
+    (order.get(key(a))! - order.get(key(b))!) || (Number(a.isExtraConcept) - Number(b.isExtraConcept)));
+}
+
+function lineDocLabel(l: IslrRetentionLine): string {
+  if (l.purchaseOrder) return l.purchaseOrder.number;
+  if (l.payable) return `CxP ${l.payable.number}`;
+  return l.supplierInvoiceNumber || 'Manual';
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 interface IslrRetentionVoucher {
@@ -53,6 +84,7 @@ interface IslrRetentionVoucher {
   number: string;
   status: 'PENDING' | 'ISSUED' | 'CANCELLED';
   issueDate: string | null;
+  appliedAt: string | null;
   retentionAmountUsd: number;
   retentionAmountBs: number;
   exchangeRate: number;
@@ -123,6 +155,15 @@ export default function IslrRetentionDetailPage() {
   const [notesValue, setNotesValue] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
+  // Concepto adicional
+  const [conceptModal, setConceptModal] = useState(false);
+  const [islrTypes, setIslrTypes] = useState<IslrType[]>([]);
+  const [conceptBaseLineId, setConceptBaseLineId] = useState('');
+  const [conceptTypeId, setConceptTypeId] = useState('');
+  const [conceptBaseBs, setConceptBaseBs] = useState('');
+  const [savingConcept, setSavingConcept] = useState(false);
+  const [removingLineId, setRemovingLineId] = useState<string | null>(null);
+
   useEffect(() => {
     if (voucher) {
       document.title = `Retención ISLR ${voucher.number} | Trinity ERP`;
@@ -152,6 +193,64 @@ export default function IslrRetentionDetailPage() {
   useEffect(() => { fetchVoucher(); }, [fetchVoucher]);
 
   // ── Handlers ──────────────────────────────────────────────────────────
+
+  function openConceptModal() {
+    if (!voucher) return;
+    const firstDoc = voucher.lines.find(l => !l.isExtraConcept);
+    setConceptBaseLineId(firstDoc?.id || '');
+    setConceptTypeId('');
+    setConceptBaseBs('');
+    setConceptModal(true);
+    if (islrTypes.length === 0) {
+      fetch('/api/proxy/islr-retention-types?active=true')
+        .then(r => r.json())
+        .then(data => setIslrTypes(Array.isArray(data) ? data : []))
+        .catch(() => setIslrTypes([]));
+    }
+  }
+
+  async function handleAddConcept() {
+    if (!voucher) return;
+    setSavingConcept(true);
+    try {
+      const res = await fetch(`/api/proxy/islr-retention-vouchers/${id}/lines`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseLineId: conceptBaseLineId,
+          islrRetentionTypeId: conceptTypeId,
+          taxableBaseBs: Number(conceptBaseBs),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al agregar el concepto');
+      }
+      setConceptModal(false);
+      fetchVoucher();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingConcept(false);
+    }
+  }
+
+  async function handleRemoveConcept(lineId: string) {
+    if (!confirm('¿Quitar este concepto del comprobante?')) return;
+    setRemovingLineId(lineId);
+    try {
+      const res = await fetch(`/api/proxy/islr-retention-vouchers/${id}/lines/${lineId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Error al quitar el concepto');
+      }
+      fetchVoucher();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setRemovingLineId(null);
+    }
+  }
 
   async function handleIssue() {
     if (!voucher || !issueDate) return;
@@ -237,6 +336,20 @@ export default function IslrRetentionDetailPage() {
   }
 
   if (!voucher) return null;
+
+  // Conceptos editables: pendiente, o emitido aun no aplicado en un recibo de pago.
+  const canEditConcepts = voucher.status === 'PENDING' || (voucher.status === 'ISSUED' && !voucher.appliedAt);
+  const docLines = voucher.lines.filter(l => !l.isExtraConcept);
+  const orderedLines = orderLines(voucher.lines);
+
+  // Vista previa del concepto adicional: base x %base x %ret - sustraendo (solo P.N. residente)
+  const previewType = islrTypes.find(t => t.id === conceptTypeId);
+  const previewBase = Number(conceptBaseBs) || 0;
+  const previewSust = previewType && previewType.sustraendoUt > 0 && voucher.supplier.supplierType === 'NATURAL_RESIDENTE'
+    ? round2(previewType.sustraendoUt * voucher.unidadTributaria) : 0;
+  const previewRet = previewType
+    ? Math.max(0, round2(previewBase * (previewType.baseImponiblePct / 100) * (previewType.retentionPct / 100) - previewSust))
+    : 0;
 
   return (
     <div className="p-6 space-y-5 max-w-6xl">
@@ -377,10 +490,16 @@ export default function IslrRetentionDetailPage() {
 
       {/* Lines table */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-700/50">
+        <div className="px-5 py-3 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-300">
-            Facturas incluidas ({voucher.lines.length})
+            Conceptos ({voucher.lines.length})
           </h2>
+          {canEditConcepts && docLines.length > 0 && (
+            <button onClick={openConceptModal}
+              className="px-3 py-1.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/30 text-orange-300 text-xs font-medium flex items-center gap-1.5 transition-colors">
+              <Plus size={14} /> Agregar concepto
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -391,16 +510,46 @@ export default function IslrRetentionDetailPage() {
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Nº Control</th>
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Fecha</th>
                 <th className="text-left px-3 py-2.5 text-slate-400 font-medium">Concepto</th>
+                <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base imp. Bs</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Base imp. $</th>
                 <th className="text-center px-3 py-2.5 text-slate-400 font-medium">% Base</th>
                 <th className="text-center px-3 py-2.5 text-slate-400 font-medium">% Ret.</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Sust. Bs</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Ret. $</th>
                 <th className="text-right px-3 py-2.5 text-slate-400 font-medium">Ret. Bs</th>
+                {canEditConcepts && <th className="w-10"></th>}
               </tr>
             </thead>
             <tbody>
-              {voucher.lines.map(line => (
+              {orderedLines.map(line => line.isExtraConcept ? (
+                <tr key={line.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
+                  <td colSpan={4} className="px-3 py-2.5 pl-8 text-xs text-slate-500 italic">
+                    ↳ Concepto adicional (base manual)
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="text-orange-400 text-xs font-bold">{line.islrRetentionType.codigo}</span>
+                    <span className="text-slate-400 text-xs ml-1.5 truncate max-w-[200px] inline-block align-bottom">{line.islrRetentionType.descripcion}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.taxableBaseBs)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(line.taxableBaseUsd)}</td>
+                  <td className="px-3 py-2.5 text-center text-slate-400">{line.baseImponiblePct}%</td>
+                  <td className="px-3 py-2.5 text-center text-slate-400">{line.retentionPct}%</td>
+                  <td className="px-3 py-2.5 text-right text-slate-400 font-mono">
+                    {line.sustraendoBs > 0 ? `Bs ${fmt(line.sustraendoBs)}` : '--'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">${fmt(line.retentionAmountUsd)}</td>
+                  <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">Bs {fmt(line.retentionAmountBs)}</td>
+                  {canEditConcepts && (
+                    <td className="px-2 py-2.5 text-center">
+                      <button onClick={() => handleRemoveConcept(line.id)} disabled={removingLineId === line.id}
+                        title="Quitar concepto"
+                        className="p-1.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 disabled:opacity-50">
+                        {removingLineId === line.id ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ) : (
                 <tr key={line.id} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
                   <td className="px-3 py-2.5">
                     {line.purchaseOrder ? (
@@ -408,6 +557,8 @@ export default function IslrRetentionDetailPage() {
                         className="text-blue-400 hover:text-blue-300 font-mono text-xs">
                         {line.purchaseOrder.number}
                       </a>
+                    ) : line.payable ? (
+                      <span className="text-slate-300 font-mono text-xs">CxP {line.payable.number}</span>
                     ) : (
                       <span className="text-slate-500 text-xs">Manual</span>
                     )}
@@ -419,6 +570,7 @@ export default function IslrRetentionDetailPage() {
                     <span className="text-orange-400 text-xs font-bold">{line.islrRetentionType.codigo}</span>
                     <span className="text-slate-400 text-xs ml-1.5 truncate max-w-[200px] inline-block align-bottom">{line.islrRetentionType.descripcion}</span>
                   </td>
+                  <td className="px-3 py-2.5 text-right text-slate-300 font-mono">Bs {fmt(line.taxableBaseBs)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-300 font-mono">${fmt(line.taxableBaseUsd)}</td>
                   <td className="px-3 py-2.5 text-center text-slate-400">{line.baseImponiblePct}%</td>
                   <td className="px-3 py-2.5 text-center text-slate-400">{line.retentionPct}%</td>
@@ -427,12 +579,16 @@ export default function IslrRetentionDetailPage() {
                   </td>
                   <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">${fmt(line.retentionAmountUsd)}</td>
                   <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">Bs {fmt(line.retentionAmountBs)}</td>
+                  {canEditConcepts && <td></td>}
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-600/50 bg-slate-900/30">
                 <td colSpan={5} className="px-3 py-2.5 text-right text-slate-400 font-medium">Totales:</td>
+                <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
+                  Bs {fmt(voucher.lines.reduce((s, l) => s + l.taxableBaseBs, 0))}
+                </td>
                 <td className="px-3 py-2.5 text-right text-slate-300 font-mono font-bold">
                   ${fmt(voucher.lines.reduce((s, l) => s + l.taxableBaseUsd, 0))}
                 </td>
@@ -442,11 +598,102 @@ export default function IslrRetentionDetailPage() {
                 </td>
                 <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">${fmt(voucher.retentionAmountUsd)}</td>
                 <td className="px-3 py-2.5 text-right text-orange-400 font-mono font-bold">Bs {fmt(voucher.retentionAmountBs)}</td>
+                {canEditConcepts && <td></td>}
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
+
+      {/* Concepto adicional Modal */}
+      {conceptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-lg mx-4 shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-slate-100">Agregar concepto</h2>
+              <button onClick={() => setConceptModal(false)} className="p-1 rounded hover:bg-slate-700 text-slate-400">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-400">
+                Otro concepto ISLR sobre la misma factura. Escribe la base imponible en Bs y se calcula con el porcentaje del concepto; se suma al total del comprobante {voucher.number}.
+              </p>
+
+              {docLines.length > 1 && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Factura *</label>
+                  <select value={conceptBaseLineId} onChange={e => setConceptBaseLineId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                    {docLines.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {lineDocLabel(l)}{l.supplierInvoiceNumber ? ` · Fact. ${l.supplierInvoiceNumber}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Concepto *</label>
+                <select value={conceptTypeId} onChange={e => setConceptTypeId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                  <option value="">Seleccionar concepto...</option>
+                  {islrTypes.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.codigo} - {t.descripcion} ({t.retentionPct}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Base imponible Bs *</label>
+                <input type="number" step="0.01" min="0" value={conceptBaseBs}
+                  onChange={e => setConceptBaseBs(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono" />
+              </div>
+
+              {previewType && previewBase > 0 && (
+                <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg px-3 py-2 text-xs space-y-1">
+                  <div className="flex justify-between gap-3 text-slate-400">
+                    <span>
+                      Bs {fmt(previewBase)}
+                      {previewType.baseImponiblePct !== 100 ? ` × ${previewType.baseImponiblePct}%` : ''}
+                      {' '}× {previewType.retentionPct}%
+                      {previewSust > 0 ? ` − sustraendo Bs ${fmt(previewSust)}` : ''}
+                    </span>
+                    <span className="font-mono text-orange-300 font-bold">Bs {fmt(previewRet)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-slate-400">
+                    <span>Nuevo total del comprobante</span>
+                    <span className="font-mono text-slate-200">Bs {fmt(round2(voucher.retentionAmountBs + previewRet))}</span>
+                  </div>
+                </div>
+              )}
+
+              {voucher.status === 'ISSUED' && (
+                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+                  <p className="text-xs text-emerald-400">El comprobante ya está emitido: también se actualizará el monto retenido en el libro de compras.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-700">
+              <button onClick={() => setConceptModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm">
+                Cancelar
+              </button>
+              <button onClick={handleAddConcept}
+                disabled={savingConcept || !conceptBaseLineId || !conceptTypeId || !(previewBase > 0)}
+                className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50">
+                {savingConcept ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Issue Modal */}
       {issueModal && (

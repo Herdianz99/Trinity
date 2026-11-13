@@ -193,7 +193,16 @@ export class IslrRetentionVouchersPdfService {
       doc.font('Helvetica').fontSize(6.5).fillColor('#000000');
       let totalRetentionBs = 0;
 
-      voucher.lines.forEach((line) => {
+      // Conceptos adicionales justo debajo de su factura (como en Wensoft).
+      const docKey = (l: { payableId: string | null; purchaseOrderId: string | null; id: string }) =>
+        l.payableId || l.purchaseOrderId || l.id;
+      const docOrder = new Map<string, number>();
+      voucher.lines.forEach((l) => { if (!docOrder.has(docKey(l))) docOrder.set(docKey(l), docOrder.size); });
+      const orderedLines = [...voucher.lines].sort((a, b) =>
+        (docOrder.get(docKey(a))! - docOrder.get(docKey(b))!) || (Number(a.isExtraConcept) - Number(b.isExtraConcept)),
+      );
+
+      orderedLines.forEach((line) => {
         const concepto = line.islrRetentionType.descripcion;
         doc.fontSize(6.5).font('Helvetica');
         const conceptoH = doc.heightOfString(concepto, { width: cols.concepto.w - 4 });
@@ -214,11 +223,14 @@ export class IslrRetentionVouchersPdfService {
 
         const cy = y + 3.5;
         doc.fillColor('#000000').fontSize(6.5).font('Helvetica');
-        doc.text(fmtDate(line.invoiceDate), cols.fecha.x + 2, cy, { width: cols.fecha.w - 4, align: 'center', lineBreak: false });
-        const serieFactura = line.payable?.serieProveedor || line.purchaseOrder?.supplierSerialNumber || '';
-        doc.text(`${serieFactura}${line.supplierInvoiceNumber || ''}`, cols.factura.x + 2, cy, { width: cols.factura.w - 4, align: 'center', lineBreak: false });
-        doc.text(line.supplierControlNumber || '', cols.control.x + 2, cy, { width: cols.control.w - 4, align: 'center', lineBreak: false });
-        doc.text(fmtBs(line.invoiceTotalBs), cols.monto.x + 2, cy, { width: cols.monto.w - 4, align: 'right', lineBreak: false });
+        // Concepto adicional: solo montos, sin datos de la factura (ya salen en la fila de arriba).
+        if (!line.isExtraConcept) {
+          doc.text(fmtDate(line.invoiceDate), cols.fecha.x + 2, cy, { width: cols.fecha.w - 4, align: 'center', lineBreak: false });
+          const serieFactura = line.payable?.serieProveedor || line.purchaseOrder?.supplierSerialNumber || '';
+          doc.text(`${serieFactura}${line.supplierInvoiceNumber || ''}`, cols.factura.x + 2, cy, { width: cols.factura.w - 4, align: 'center', lineBreak: false });
+          doc.text(line.supplierControlNumber || '', cols.control.x + 2, cy, { width: cols.control.w - 4, align: 'center', lineBreak: false });
+          doc.text(fmtBs(line.invoiceTotalBs), cols.monto.x + 2, cy, { width: cols.monto.w - 4, align: 'right', lineBreak: false });
+        }
         doc.text(concepto, cols.concepto.x + 2, cy, { width: cols.concepto.w - 4, align: 'left' });
         doc.text(fmtBs(line.taxableBaseBs), cols.base.x + 2, cy, { width: cols.base.w - 4, align: 'right', lineBreak: false });
         doc.text(fmtPct(line.retentionPct), cols.pct.x + 2, cy, { width: cols.pct.w - 4, align: 'center', lineBreak: false });

@@ -3405,3 +3405,6 @@ ALTER TYPE "ChatbotChannel" ADD VALUE IF NOT EXISTS 'KIOSK';
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilBank" TEXT;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilRif" TEXT;
 ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilPhone" TEXT;
+
+-- ===== Conceptos adicionales ISLR (20261113120000_islr_extra_concept) =====
+ALTER TABLE "IslrRetentionVoucherLine" ADD COLUMN IF NOT EXISTS "isExtraConcept" BOOLEAN NOT NULL DEFAULT false;

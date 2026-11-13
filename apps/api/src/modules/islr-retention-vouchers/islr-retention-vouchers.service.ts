@@ -448,6 +448,187 @@ export class IslrRetentionVouchersService {
     });
   }
 
+  // ── Conceptos adicionales ────────────────────────────────────────────────
+  // Una misma factura puede llevar varios conceptos ISLR (ej. servicio 2% + fletes 3%).
+  // La primera linea sale de la factura; las adicionales cuelgan del MISMO documento
+  // (FC o CxP) pero con base imponible en Bs escrita a mano. Todas suman al total del
+  // comprobante, que es lo que se descuenta al proveedor en el recibo de pago.
+
+  /** Se puede modificar si esta PENDIENTE, o EMITIDO pero aun no aplicado en un recibo. */
+  private async assertConceptsEditable(voucher: { id: string; status: string; appliedAt: Date | null; number: string }) {
+    if (voucher.status === 'CANCELLED') throw new BadRequestException('El comprobante está anulado');
+    // Un recibo (aun en borrador) guarda una copia del monto: cambiarlo lo descuadraria.
+    const inReceipt = await this.prisma.receiptItem.count({ where: { islrRetentionVoucherId: voucher.id } });
+    if (voucher.appliedAt || inReceipt > 0) {
+      throw new BadRequestException(
+        `La retención ISLR ${voucher.number} ya está en un recibo de pago; no se pueden cambiar sus conceptos`,
+      );
+    }
+  }
+
+  /** Recalcula los totales del comprobante a partir de sus lineas. */
+  private async recalcTotals(tx: any, voucherId: string) {
+    const agg = await tx.islrRetentionVoucherLine.aggregate({
+      where: { islrRetentionVoucherId: voucherId },
+      _sum: { retentionAmountUsd: true, retentionAmountBs: true },
+    });
+    await tx.islrRetentionVoucher.update({
+      where: { id: voucherId },
+      data: {
+        retentionAmountUsd: round2(agg._sum.retentionAmountUsd ?? 0),
+        retentionAmountBs: round2(agg._sum.retentionAmountBs ?? 0),
+      },
+    });
+  }
+
+  /**
+   * Comprobante ya emitido: el libro de compras lleva una fila ISLR por factura con el
+   * total retenido de esa factura (suma de todos sus conceptos). Se ajusta esa fila.
+   */
+  private async syncIssuedBookForDoc(
+    tx: any,
+    voucherId: string,
+    doc: { purchaseOrderId: string | null; payableId: string | null },
+    userId: string,
+  ) {
+    const voucher = await tx.islrRetentionVoucher.findUnique({
+      where: { id: voucherId },
+      include: { supplier: { select: { name: true, rif: true } } },
+    });
+    if (!voucher || voucher.status !== 'ISSUED') return;
+
+    const docWhere = doc.payableId ? { payableId: doc.payableId } : { purchaseOrderId: doc.purchaseOrderId };
+    const lines = await tx.islrRetentionVoucherLine.findMany({
+      where: { islrRetentionVoucherId: voucherId, ...docWhere },
+      orderBy: { createdAt: 'asc' },
+    });
+    const totalBs = round2(lines.reduce((s: number, l: any) => s + l.retentionAmountBs, 0));
+
+    const entries = await tx.purchaseBookEntry.findMany({
+      where: { islrRetentionVoucherId: voucherId, isIslrRetentionLine: true, ...docWhere },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (entries.length > 0) {
+      await tx.purchaseBookEntry.update({
+        where: { id: entries[0].id },
+        data: { islrRetentionAmountBs: totalBs, totalBs: -totalBs },
+      });
+      // Si habia una fila por linea (emisiones viejas), se dejan en una sola por factura.
+      if (entries.length > 1) {
+        await tx.purchaseBookEntry.deleteMany({ where: { id: { in: entries.slice(1).map((e: any) => e.id) } } });
+      }
+      return;
+    }
+    const first = lines[0];
+    if (!first) return;
+    await tx.purchaseBookEntry.create({
+      data: {
+        purchaseOrderId: doc.purchaseOrderId,
+        payableId: doc.payableId,
+        entryDate: voucher.issueDate ?? new Date(),
+        documentDate: voucher.issueDate ?? null,
+        supplierControlNumber: first.supplierControlNumber || null,
+        supplierInvoiceNumber: first.supplierInvoiceNumber || null,
+        supplierName: voucher.supplier.name,
+        supplierRif: voucher.supplier.rif || 'S/R',
+        islrRetentionVoucherNumber: voucher.number,
+        islrRetentionAmountBs: totalBs,
+        totalBs: -totalBs,
+        isIslrRetentionLine: true,
+        islrRetentionVoucherId: voucherId,
+        isManual: false,
+        createdById: userId,
+      },
+    });
+  }
+
+  async addExtraConcept(
+    id: string,
+    dto: { baseLineId: string; islrRetentionTypeId: string; taxableBaseBs: number },
+    userId: string,
+  ) {
+    const baseBs = round2(Number(dto.taxableBaseBs));
+    if (!(baseBs > 0)) throw new BadRequestException('La base imponible debe ser mayor a 0');
+
+    const voucher = await this.prisma.islrRetentionVoucher.findUnique({
+      where: { id },
+      include: { supplier: true, lines: true },
+    });
+    if (!voucher) throw new NotFoundException('Comprobante de retención ISLR no encontrado');
+    await this.assertConceptsEditable(voucher);
+
+    const baseLine = voucher.lines.find((l) => l.id === dto.baseLineId && !l.isExtraConcept);
+    if (!baseLine) throw new BadRequestException('Factura del comprobante no encontrada');
+
+    const tipo = await this.prisma.islrRetentionType.findUnique({ where: { id: dto.islrRetentionTypeId } });
+    if (!tipo) throw new BadRequestException('Tipo de retención ISLR no encontrado');
+
+    // Tasa de la factura a la que pertenece el concepto (la misma de su primera linea).
+    const rate = baseLine.exchangeRate || voucher.exchangeRate;
+    if (!(rate > 0)) throw new BadRequestException('La factura no tiene tasa de cambio');
+
+    let sustraendoBs = 0;
+    if (tipo.sustraendoUt > 0 && voucher.supplier.supplierType === 'NATURAL_RESIDENTE') {
+      sustraendoBs = round2(tipo.sustraendoUt * voucher.unidadTributaria);
+    }
+    const retBs = Math.max(0, round2(baseBs * (tipo.baseImponiblePct / 100) * (tipo.retentionPct / 100) - sustraendoBs));
+    const baseUsd = round2(baseBs / rate);
+    const retUsd = round2(retBs / rate);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.islrRetentionVoucherLine.create({
+        data: {
+          islrRetentionVoucherId: id,
+          purchaseOrderId: baseLine.purchaseOrderId,
+          payableId: baseLine.payableId,
+          islrRetentionTypeId: tipo.id,
+          // Se copian los datos de la factura: el XML del SENIAT exige el Nº de factura por concepto.
+          supplierInvoiceNumber: baseLine.supplierInvoiceNumber,
+          supplierControlNumber: baseLine.supplierControlNumber,
+          invoiceDate: baseLine.invoiceDate,
+          invoiceTotalUsd: 0,
+          invoiceTotalBs: 0,
+          taxableBaseUsd: baseUsd,
+          taxableBaseBs: baseBs,
+          baseImponiblePct: tipo.baseImponiblePct,
+          retentionPct: tipo.retentionPct,
+          sustraendoUt: tipo.sustraendoUt,
+          sustraendoBs,
+          retentionAmountUsd: retUsd,
+          retentionAmountBs: retBs,
+          exchangeRate: rate,
+          isManual: false,
+          isExtraConcept: true,
+        },
+      });
+      await this.recalcTotals(tx, id);
+      await this.syncIssuedBookForDoc(tx, id, baseLine, userId);
+      return tx.islrRetentionVoucher.findUnique({ where: { id }, include: this.includeDetail });
+    });
+  }
+
+  async removeExtraConcept(id: string, lineId: string, userId: string) {
+    const voucher = await this.prisma.islrRetentionVoucher.findUnique({
+      where: { id },
+      include: { lines: true },
+    });
+    if (!voucher) throw new NotFoundException('Comprobante de retención ISLR no encontrado');
+    await this.assertConceptsEditable(voucher);
+
+    const line = voucher.lines.find((l) => l.id === lineId);
+    if (!line) throw new NotFoundException('Concepto no encontrado');
+    if (!line.isExtraConcept) {
+      throw new BadRequestException('Solo se pueden quitar conceptos adicionales; el concepto de la factura no se quita');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.islrRetentionVoucherLine.delete({ where: { id: lineId } });
+      await this.recalcTotals(tx, id);
+      await this.syncIssuedBookForDoc(tx, id, line, userId);
+      return tx.islrRetentionVoucher.findUnique({ where: { id }, include: this.includeDetail });
+    });
+  }
+
   async issue(id: string, issueDate: string, userId: string) {
     const voucher = await this.findOne(id);
     if (voucher.status !== 'PENDING') {
@@ -468,8 +649,17 @@ export class IslrRetentionVouchersService {
         include: this.includeDetail,
       });
 
-      // Create one purchase book entry per line (ISLR retention line)
-      for (const line of updated.lines) {
+      // Una fila del libro de compras por FACTURA con el total retenido de todos sus
+      // conceptos (la factura puede tener conceptos adicionales con base manual).
+      const byDoc = new Map<string, { line: (typeof updated.lines)[number]; retentionAmountBs: number }>();
+      for (const l of updated.lines) {
+        const key = l.payableId ? `P:${l.payableId}` : l.purchaseOrderId ? `O:${l.purchaseOrderId}` : `L:${l.id}`;
+        const g = byDoc.get(key);
+        if (g) g.retentionAmountBs = round2(g.retentionAmountBs + l.retentionAmountBs);
+        else byDoc.set(key, { line: l, retentionAmountBs: l.retentionAmountBs });
+      }
+      for (const { line: docLine, retentionAmountBs } of byDoc.values()) {
+        const line = { ...docLine, retentionAmountBs };
         await tx.purchaseBookEntry.create({
           data: {
             purchaseOrderId: line.purchaseOrderId || null,

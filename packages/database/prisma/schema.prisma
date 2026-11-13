@@ -2603,6 +2603,8 @@ model IslrRetentionVoucherLine {
   retentionAmountBs        Float                 @default(0)
   exchangeRate             Float                 @default(0)
   isManual                 Boolean               @default(false)
+  // Concepto adicional sobre la misma factura: base imponible escrita a mano en Bs (sin datos de factura en el PDF)
+  isExtraConcept           Boolean               @default(false)
   createdAt                DateTime              @default(now())
 }
 

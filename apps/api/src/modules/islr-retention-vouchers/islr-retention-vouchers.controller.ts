@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -17,6 +18,7 @@ import { IslrRetentionVouchersPdfService } from './islr-retention-vouchers-pdf.s
 import { CreateIslrRetentionVoucherDto } from './dto/create-islr-retention-voucher.dto';
 import { UpdateIslrRetentionVoucherDto } from './dto/update-islr-retention-voucher.dto';
 import { IssueIslrRetentionDto } from './dto/issue-islr-retention.dto';
+import { AddIslrExtraConceptDto } from './dto/add-islr-extra-concept.dto';
 
 @Controller('islr-retention-vouchers')
 @UseGuards(AuthGuard('jwt'))
@@ -82,6 +84,24 @@ export class IslrRetentionVouchersController {
     @Request() req: any,
   ) {
     return this.service.update(id, dto, req.user.id);
+  }
+
+  @Post(':id/lines')
+  addExtraConcept(
+    @Param('id') id: string,
+    @Body() dto: AddIslrExtraConceptDto,
+    @Request() req: any,
+  ) {
+    return this.service.addExtraConcept(id, dto, req.user.id);
+  }
+
+  @Delete(':id/lines/:lineId')
+  removeExtraConcept(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Request() req: any,
+  ) {
+    return this.service.removeExtraConcept(id, lineId, req.user.id);
   }
 
   @Patch(':id/issue')

@@ -762,6 +762,7 @@ model Payment {
   - GET /purchases/reorder-suggestions — productos bajo mínimo con historial
   - Campos fiscales precalculados: subtotal, exemptAmount, taxableBase, totalIva, totalSurcharge (USD + Bs)
   - Retenciones IVA (75% para agentes) e ISLR configurables
+  - Comprobante ISLR con varios conceptos por factura (Sesión 187): `POST /islr-retention-vouchers/:id/lines` {baseLineId, islrRetentionTypeId, taxableBaseBs} agrega un concepto adicional (`isExtraConcept`) sobre el MISMO documento (FC o CxP) con base manual en Bs; `DELETE /islr-retention-vouchers/:id/lines/:lineId` lo quita. Permitido si está PENDIENTE o EMITIDO y aún no está en ningún recibo. Recalcula el total del comprobante; si ya está emitido, ajusta la fila ISLR del libro de compras (una fila por factura = suma de sus conceptos). El PDF muestra la fila adicional sin datos de factura; el XML del SENIAT lleva una fila por concepto con el Nº de factura.
 
 **Frontend:**
 - Sección COMPRAS en sidebar: Facturas de compra, Sugerencias de reorden, Análisis ABC

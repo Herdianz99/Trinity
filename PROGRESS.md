@@ -61,6 +61,13 @@
 - **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
 - **Pendientes:** total, totalturen, aceros, acerosmayor (Sesiones 184-186, siguen en `1cd39845`).
 
+## ✨ Retención ISLR con varios conceptos en un comprobante (2026-11-13, Sesión 187) — ⏳ SIN DESPLEGAR
+- **Pedido:** como Wensoft (comprobante Nº 10 de CESTATICKET: factura 4330400, "contratistas PJD" 2% sobre Bs 3.744,58 = 74,89 + "fletes PJD" 3% sobre Bs 1.188,75 = 35,66, total 110,55). En Wensoft se hacen 2 retenciones con el mismo correlativo; aquí es un solo comprobante con varias líneas.
+- **Cómo se usa:** Compras > Retenciones ISLR > detalle > **"Agregar concepto"**: se elige la factura (si hay varias), el concepto y la base imponible en Bs, y se calcula base × %base × %ret − sustraendo (solo P.N. residente). La papelera quita el concepto; el de la factura no se puede quitar.
+- **Reglas acordadas con el usuario:** el concepto pertenece a la MISMA factura (se descuenta junto con la CxP en el recibo, porque se aplica el total del comprobante); la suma de bases es libre (no se valida contra la factura); la base va en Bs (USD = Bs / tasa de la factura); editable si está PENDIENTE o EMITIDO sin estar en un recibo (los de la CxP nacen emitidos).
+- **Técnico:** campo `IslrRetentionVoucherLine.isExtraConcept` (migración `20261113120000_islr_extra_concept` + `fix-schema.sql`). Libro de compras: una fila ISLR por factura con la suma de sus conceptos (también al emitir). PDF: la fila adicional sale debajo de su factura, solo con concepto y montos. El total ya decía "Total retenido".
+- **Falta:** probarlo en local (Docker estaba apagado; solo se verificó que compila con `tsc` en API y web) y desplegar.
+
 ## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
 - **Causa:** `payables.service.remove()` borraba el comprobante de IVA de la CxP pero no el de ISLR (la línea quedaba con `payableId = NULL`, y `purchaseBookEntry.deleteMany({payableId})` se llevaba la línea del libro).
