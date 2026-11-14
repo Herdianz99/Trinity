@@ -59,10 +59,12 @@
 ## 🚀 Deploy Sesión 186 — estado (2026-11-12)
 - **Chica ✅ `92b2ad18`** (incluye Sesiones 184-186 y la migración `store_pago_movil`). El usuario lanzó por error 3 `deploy.sh` a la vez (3 `next build` en la misma `.next`, RAM casi llena): se mataron los 3 + 3 `jest-worker` huérfanos y se relanzó UNO con `NODE_OPTIONS=--max-old-space-size=1536 nohup bash deploy.sh > /root/deploy-20261112.log`. Verificado: `BUILD_ID` nuevo, web 200, API /health 200.
 - **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
-- **Pendientes:** total, totalturen, aceros, acerosmayor (Sesiones 184-186, siguen en `1cd39845`).
+- ~~Pendientes: total, totalturen, aceros, acerosmayor~~ → desplegadas el 2026-11-13 con `a816504c` (ver Deploy Sesión 187).
 
 ## 🚀 Deploy Sesión 187 — ✅ LAS 7 EMPRESAS (2026-11-13 noche, `a816504c`)
 - chica, grande, mayor, total, totalturen, aceros y acerosmayor: scripts sin errores, HEAD `a816504c`, web y API 200, columna `isExtraConcept` en las 7 BD (migración `20261113120000_islr_extra_concept`). Chica con `NODE_OPTIONS=--max-old-space-size=1536` y swap activo: BUILD_ID y dist nuevos.
+- Total, totalturen, aceros y acerosmayor estaban en `1cd39845`: con este deploy recibieron también todo lo de las Sesiones 184-186 (incluida la migración `store_pago_movil`). **Desde aquí, TODO `main` hasta `a816504c` está en las 7**: cualquier "SIN DESPLEGAR" de secciones viejas más abajo quedó obsoleto.
+- Hecho en paralelo por servidor (chica · aceros→acerosmayor · totalturen→total · mayor→grande); ~6 min en total.
 
 ## ✨ Análisis de inventario: ver agotados / por agotarse (2026-11-13, Sesión 187) — ✅ DESPLEGADO
 - **Pedido:** en `/purchases/analysis` poder ver los productos que rotan (ej. clase A) y están agotados o por agotarse, para comprarlos a tiempo. **El usuario pidió mantener el orden de siempre** (ABC por ventas, rotación por días de inventario, sugerencias por monto del proveedor): se probó ordenar por urgencia y bloque "Comprar ya", y se revirtió a pedido.
@@ -82,37 +84,37 @@
 - **Arreglos de paso:** (1) buscador de proveedores de Nueva CxP ignora guiones/puntos/espacios ("003274445" encuentra "J-00327444-5"). (2) 4 pantallas pedían `/api/proxy/company-config` (404 desde la Sesión 31) en vez de `/api/proxy/config`: Nueva CxP, Nueva CxC, Nueva retención IVA y Nueva retención ISLR. Usaban siempre 75% / UT 43 por defecto.
 - **Desplegado** en las 7 (ver Deploy Sesión 187).
 
-## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
+## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
 - **Causa:** `payables.service.remove()` borraba el comprobante de IVA de la CxP pero no el de ISLR (la línea quedaba con `payableId = NULL`, y `purchaseBookEntry.deleteMany({payableId})` se llevaba la línea del libro).
 - **Fix:** `remove()` ahora borra el comprobante ISLR creado con la CxP (si todas sus líneas son de esa CxP) con su línea del libro, y devuelve el correlativo si eran los últimos. Si el comprobante tiene líneas de otras facturas, quita solo la línea y recalcula el total. Si la retención ya está aplicada en un recibo, no deja eliminar la CxP. Probado en `grande_test` (2 CxP con ISLR: contador 84 → 83 → 82, sin comprobantes ni libro huérfanos).
 - **Grande, mismo día:** se borró a pedido el ISLR Nº 85 (CESTATICKET, CXP/26-000485, Bs 122,10) y el contador volvió a 85. Ese sí estaba ligado a su CxP.
 - **NE3-26-00006237 (grande):** pago CASHEA partido en 2 (49,90 + 21,39, misma ref.) unido en 1 de $71,29: Payment, CashLedgerEntry y CxC Cashea (una borrada, sin recibos).
 
-## 🐛 Facturas a crédito: el papel decía 30 días y en el sistema vencían el mismo día (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
+## 🐛 Facturas a crédito: el papel decía 30 días y en el sistema vencían el mismo día (2026-11-12, Sesión 186) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - Caso: VF4-26-00000486 y VF4-26-00000499 (CONSTRUCTORA MENECON, CLI-007740). Se guardaron con `creditDays = 0`: al facturar el cliente tenía 0 días fijos (administración le puso 15 después, a las 2:10 pm), y con 0 días fijos el POS deja la casilla en 0 para que el cajero los escriba. El cajero no los escribió.
 - **Bug:** `fiscal-printer.ts` imprimía `invoice.creditDays || 30` → con 0 días el papel decía "30 dias" mientras la CxC vencía ese mismo día. Ahora imprime los días reales (`?? 0`).
 - No se bloquea el crédito a 0 días: desde agosto hay ~416 facturas a crédito con 0 días y 212 se cobraron el mismo día (se usa a propósito).
 - **Datos (por SQL en `trinity_db`, pedido del usuario):** las 3 abiertas con 0 días (VF4-486, VF4-499, VF5-26-00000470 de APROSCELLO) → primero 30 días (como el papel) y luego, a pedido del usuario, **15 días** (los de la ficha de MENECON): factura y CxC vencen el 27-11-2026. APROSCELLO tiene 0 días en su ficha pero también quedó en 15.
 
-## 🐛 Tótem Clover en iPhone: solo funcionaba la 1ra búsqueda y no hablaba (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
+## 🐛 Tótem Clover en iPhone: solo funcionaba la 1ra búsqueda y no hablaba (2026-11-12, Sesión 186) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - Reporte del usuario: en un iPhone el tótem busca la primera vez, después el botón no hace nada y Clover nunca habla. Sin iPhone para reproducir; causas conocidas de WebKit (Safari y Chrome de iOS):
   1. **Reusar el mismo `webkitSpeechRecognition`:** el 2do `start()` no graba ni dispara `onend` → `stopListening()` nunca resolvía y el botón quedaba en "Buscando…" (deshabilitado). Ahora se crea un reconocedor nuevo en cada pulsación, se ignoran avisos de reconocedores viejos, se maneja `onerror` y hay respaldo de 1,5 s si `onend` no llega.
   2. **La voz solo suena si el primer `speak()` ocurre dentro de un toque:** la respuesta llega tras un `fetch` y iOS la descartaba. `unlockSpeech()` dice una frase muda (volumen 0) al presionar el botón o "Llamar a un vendedor". `speak()` llama `resume()` y tiene respaldo por tiempo si `onend` no llega.
   3. Botón con `select-none` + `-webkit-touch-callout: none` para que la pulsación larga no abra el menú de iOS.
 - Archivos: `app/(kiosk)/totem/use-voice.ts`, `page.tsx`. `tsc` OK. **Falta probarlo en el iPhone después del deploy.**
 
-## ✨ Compras → Cargar con IA: crear los artículos que no existen (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
+## ✨ Compras → Cargar con IA: crear los artículos que no existen (2026-11-11, Sesión 185) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - En la revisión, cada línea sin producto tiene "Crear producto nuevo" (formulario prellenado: nombre, Ref. proveedor, costo USD; se elige categoría, marca e IVA) y arriba "Crear los N sin producto" en lote. Usa `POST /products` (código por categoría, precios con la ganancia por defecto).
 - **Probado en local (copia `grande_test`) con factura Iluminak S33422 (62 líneas, Odoo):** lectura 62/62 correcta; "Crear los 62" → ELE14096.. con Ref. proveedor limpia, costo neto del 30% y precios con 43%/20%; subtotal cuadra 234,48 vs 234,49; carga al formulario OK.
 - **Fixes salidos de la prueba:** (1) la IA tomaba el RIF del CLIENTE (El Trébol) como RIF del proveedor y emparejaba "CABLE CLOVER INVERSIONES EL TREBOL"/"EL TREBOL MAYORISTA" → prompt aclara emisor vs cliente + `purchase-ai.service` descarta el RIF si es el de `CompanyConfig.rif`; el modal muestra el nombre del proveedor emparejado. (2) Códigos `[HYVZ10WR]` → se quitan corchetes (prompt + `tryParse`). (3) Las sugerencias por nombre ya NO se asignan ni marcan solas (las 10 de esta factura eran incorrectas): se muestran como "¿Es alguno de estos?" para elegir con un clic.
 - La clave de OpenRouter ya está puesta en la grande (2026-11-11, `/opt/Trinity/apps/api/.env`, respaldo `.env.bak-20261111205659`), así que el botón ya lee facturas allí.
 
-## 🏖️ Nómina: empleados en Vacaciones no entran en las corridas (2026-11-11, Sesión 185) — ⏳ SIN DESPLEGAR
+## 🏖️ Nómina: empleados en Vacaciones no entran en las corridas (2026-11-11, Sesión 185) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - `PAYROLL_RUN_EXCLUDED_STATUSES = ['VACATION']` en `employee-status.ts`; `payroll-runs.service.ts` lo filtra (`status notIn`) al **crear** la corrida y en **sincronizar empleados**. `isActive` NO cambia (siguen como empleados activos en listados/notificaciones). Corridas ya creadas no se tocan: si alguien ya estaba en un borrador, se quita a mano.
 - Web (Empleados → cambiar estado): el aviso de Vacaciones ahora dice que no entrará en las corridas.
 
-## 🛒 Tienda online: Pago Móvil desde Trinity + dos formas de pago en el checkout (2026-11-10, Sesión 184) — ⏳ TRINITY SIN DESPLEGAR (tienda ya publicada)
+## 🛒 Tienda online: Pago Móvil desde Trinity + dos formas de pago en el checkout (2026-11-10, Sesión 184) — ✅ DESPLEGADO (las 7, 2026-11-13; tienda ya publicada)
 - **Trinity:** `CompanyConfig.storePagoMovilBank/Rif/Phone` (migración `20261110120000_store_pago_movil` + `fix-schema.sql`). `GET/PATCH /store-settings/payment` (ADMIN, `StorePaymentController` en store-customization; al guardar dispara `scheduleExport`). `store-export` publica `meta.payment = { pagoMovil: {bank,rif,phone} | null }` (null si falta alguno de los tres). Web: sección "Pago Móvil" en Tienda > Personalización.
 - **Tienda (trebol-shop `80613c8`, ya en Vercel):** checkout con "¿Cómo quieres pagar?": **Pagar ahora** (muestra banco/RIF/teléfono/monto Bs con copiar; referencia y captura OBLIGATORIAS) o **Confirmar primero** (sin pago; se envía sin `paymentRef`/`paymentProof`). Mientras Trinity no publique `meta.payment`, usa `DEFAULT_PAGO_MOVIL` de `lib/payment.ts` (Banesco 0134 · J409907600 · 0424-557.35.45).
 - **Al desplegar la grande:** cargar los datos en Tienda > Personalización > Pago Móvil (si no, la tienda sigue con los de por defecto, que son los mismos). En Trinity el cajero distingue los pedidos por si traen referencia o no (no hay etiqueta nueva).
@@ -150,7 +152,7 @@
 - **Probado en local (IA real):** cemento, codos, tubos, "dónde lo consigo", "en qué pasillo", divisas, "me lo llevo" (escala), llamar vendedor, 409 tras escalar (la pantalla abre conversación nueva). Navegador con puppeteer + reconocimiento simulado: flujo completo con tarjetas. Costo ~USD 0,0003–0,001 por respuesta.
 - **Pendiente:** (1) deploy cuando el usuario diga; (2) crear usuario "Tótem Clover" con rol que tenga módulo `chatbot` y NO `chatbot-config`; (3) en la tablet: Chrome → login → `/totem` → permitir micrófono → fijar pantalla. La sesión dura hasta 7 días (refresh token): habrá que volver a entrar una vez por semana; (4) piloto: revisar a diario conversaciones `channel='KIOSK'` (qué no entendió, búsquedas sin resultado → sinónimos); (5) etapa 2 si funciona: voz natural de pago, micrófono USB.
 
-## 🚫 Productos: motivo obligatorio al desactivar y al bloquear para la venta (2026-11-05, Sesión 180) — ⏳ COMMITEADO, SIN DESPLEGAR
+## 🚫 Productos: motivo obligatorio al desactivar y al bloquear para la venta (2026-11-05, Sesión 180) — ✅ DESPLEGADO (las 7, 2026-11-13)
 - **Pedido:** al desactivar un producto hay que poner el motivo, y guardar la fecha para verla luego. Obligatorio salvo cuando lo hacemos nosotros por BD. Luego: lo mismo al **bloquear para la venta** (maestro de artículos e Inventario → Buscar artículo), guardando también quién lo hizo.
 - **Bloqueo para la venta:** `Product.saleBlockReason` / `saleBlockedAt` / `saleBlockedById` (→ User) / `saleBlockAuthorizedBy` (nombre de la clave dinámica, solo vía Inventario) en la misma migración. `ProductsService.saleBlockChange()`: al bloquear exige motivo 5+ (PATCH `saleBlockReason` desde la ficha/modal; `PATCH /products/:id/sale-block` con `reason` desde Inventario, validado ANTES de gastar la clave); al desbloquear limpia todo. Web: mismo modal (`DeactivateProductModal` con textos de bloqueo) + `formatSaleBlock`; en Inventario el orden es motivo → clave; la ficha muestra aviso naranja y la lista el tooltip en "Bloq. venta". El listado `/products` ahora incluye `deactivatedBy`/`saleBlockedBy`.
 - **Probado en local** (copia `grande_test`, borrada): migración 2 veces sin error; 16 llamadas a la API OK (400 sin motivo / motivo corto, 200 guarda motivo+fecha+usuario, ya inactivo no pide, reactivar limpia, DELETE con/sin motivo, sale-block sin motivo no gasta clave, clave mala 401, guarda nombre de la clave, listado trae `saleBlockedBy`). **Pantallas no revisadas en el navegador.**
@@ -159,7 +161,7 @@
 - **Web:** `components/deactivate-product-modal.tsx` (motivo obligatorio + `formatDeactivation`). Lista de artículos: el botón de desactivar abre el modal (deshabilitado si ya está inactivo), el badge "Inactivo" muestra el motivo y la fecha al pasar el mouse. Ficha `/catalog/products/[code]` y `product-form-modal`: apagar "Producto activo" abre el modal; la ficha muestra un aviso "Desactivado el dd/mm/aaaa por X: motivo".
 - **Verificado:** `tsc` api/web limpios.
 
-## 🗂️ Incidencias por departamento (2026-11-04, Sesión 179) — ⏳ COMMITEADO, SIN DESPLEGAR (solo para la grande; el usuario dirá cuándo)
+## 🗂️ Incidencias por departamento (2026-11-04, Sesión 179) — ✅ DESPLEGADO (las 7, 2026-11-13)
 
 - **Pedido:** auditores e infraestructura también registran incidencias. Lo de Auditoría lo ve también Seguridad; los auditores NO ven lo de Seguridad; Infraestructura solo su empleado por ahora (rol SELLER, factura autoconsumo); ADMIN ve todo. Cada departamento ve todo lo suyo; Seguridad solo lee lo de Auditoría (no registra ahí).
 - **Hecho (schema):** `IncidentDepartment` (name único, `isActive`, `roles[]` = roles miembros, `viewerDepartmentIds[]` = departamentos que también lo ven) + `User.incidentDepartmentId` (miembro asignado a mano) + `departmentId` obligatorio en `Incident` e `IncidentType`. Nombre del tipo único **por departamento**. Migración `20261104150000_incident_departments` (idempotente): crea **Seguridad** (`incdept_seguridad`, roles `[SEGURIDAD]`) y le pasa todas las incidencias y tipos existentes. `deploy/fix-schema.sql`: el seed de tipos por defecto ahora va al departamento Seguridad (`ON CONFLICT DO NOTHING`), ya no recrea `IncidentType_name_key` y lo borra si quedó (el seed viejo con `ON CONFLICT ("name")` habría tumbado el deploy).
@@ -168,7 +170,7 @@
 - **Probado en local** (copia `grande_test`, borrada): migración 2 veces + fix-schema 2 veces sin error; 1779 incidencias y 10 tipos a Seguridad. 26 comprobaciones del servicio OK (quién ve/registra/gestiona tipos por departamento, admin, sin departamento, filtro, resumen, Excel/PDF, sacar miembro, departamento inactivo). `tsc` api/web limpios. **No se revisaron las pantallas en el navegador.**
 - **Al desplegar en la grande (pendiente):** crear **Auditoría** (rol Auditor, la ve también Seguridad) e **Infraestructura** (miembro: el empleado) en Incidencias → Departamentos; dar el módulo **incidents** al rol AUDITOR (Permisos por rol) y al empleado de infraestructura (módulos extra del usuario); crear los tipos de cada departamento. Ojo en las otras 6 empresas: el próximo deploy general también lleva esto (todo queda en Seguridad, sin cambio visible salvo el nombre del menú).
 
-## ↩️ Compras: estado "Dev. Parcial" / "Devuelta" (2026-11-04, Sesión 179) — ⏳ COMMITEADO, SIN DESPLEGAR (el usuario pidió no hacer deploy)
+## ↩️ Compras: estado "Dev. Parcial" / "Devuelta" (2026-11-04, Sesión 179) — ✅ DESPLEGADO (las 7, 2026-11-13)
 
 - **Pedido:** al devolver una compra con NCC, la factura de compra seguía diciendo "Procesada" (las ventas sí muestran Dev. Parcial / Devuelta).
 - **Hecho:** `PurchaseOrder.returnStatus` TEXT `NONE | PARTIAL | TOTAL`, **aparte de `status`** (retenciones IVA/ISLR y validaciones exigen `PROCESSED`, por eso no se cambia). Migración `20261104120000_purchase_return_status` (`ADD COLUMN IF NOT EXISTS` + backfill por producto: comprado vs devuelto en NCC de mercancía POSTED; también en `deploy/fix-schema.sql`). `CreditDebitNotesService.recalcPurchaseReturnStatus(tx, poId)` se llama dentro de la transacción al **confirmar** (`post`) y al **eliminar** (`remove`) una NCC de mercancía. NCC de monto/manual no cambian el estado.
@@ -179,14 +181,14 @@
 
 - `total_db` (161.35.52.221): la CxP **CXP/26-000016** (doc. 4428763, CESTATICKET SERVICES, "BONO DE ALIMENTACION", Bs 545.070,55 / $620,88 a 877,9023, 14-10-2026, PAGADA, fiscal) no tenía gasto. Se creó el `Expense` a crédito igual que lo hace `ExpensesService` (misma descripción, `reference`=4428763, `date` = medianoche Caracas del 14-10, `isCredit`, mismo proveedor y creador Marielys Rodriguez, categoría **Bono de Alimentacion**, nota "Enlazado a la CxP CXP/26-000016…") y se enlazó con `Payable.expenseId`, en una transacción que verificaba que la CxP siguiera sin gasto.
 
-## 📦 Pedidos online: estado "Entregado" (2026-11-03, Sesión 178) — ⏳ COMMITEADO, SIN DESPLEGAR
+## 📦 Pedidos online: estado "Entregado" (2026-11-03, Sesión 178) — ✅ DESPLEGADO (las 7, 2026-11-13)
 
 - **Pedido:** después de cobrar, el pedido se quedaba en FACTURADO y no se distinguía lo retirado de lo pendiente.
 - **Hecho:** `OnlineOrderStatus.ENTREGADO` + `OnlineOrder.deliveredAt` / `deliveredById` (migración `20261103120000_online_order_delivered` con `ADD VALUE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`, también en `deploy/fix-schema.sql`). `PATCH /online-orders/:id/deliver` solo desde FACTURADO y con la factura PAID o PARTIAL_RETURN ("cóbrala en el POS antes de entregar"). `GET /online-orders/:id` ahora es `findDetail`: agrega `invoice {id, number, status}` y `deliveredByName`. Un pedido ENTREGADO no se edita ni se cancela.
 - **Web:** detalle → con la factura cobrada aparece "Factura NE… cobrada" + botón **Marcar entregado** (pide confirmación); sin cobrar, el aviso de ir al POS. Entregado muestra fecha y quién. Plantilla de WhatsApp "Gracias por su compra" (por defecto en ENTREGADO). Lista: estado Entregado y pestaña **Por entregar** (= FACTURADO).
 - **Probado en local** (copia `grande_test`, borrada; migración corrida 2 veces sin error): entregar sin facturar → rechazado; facturado sin cobrar → rechazado y sin botón; tras cobrar → "Marcar entregado" → "Pedido entregado el … por Jalil khir"; cancelar entregado → rechazado. `tsc` api/web limpios.
 
-## 🛡️ Tienda online: límite por cliente real + validación de existencia (2026-11-03, Sesión 178) — ⏳ COMMITEADO, SIN DESPLEGAR
+## 🛡️ Tienda online: límite por cliente real + validación de existencia (2026-11-03, Sesión 178) — ✅ DESPLEGADO (las 7, 2026-11-13)
 
 - **Límite (punto 3):** `modules/public/store-throttler.guard.ts` (`StoreThrottlerGuard extends ThrottlerGuard`, reemplaza al `ThrottlerGuard` del `PublicController`). Si la petición trae `x-store-key` = env **`STORE_ORDERS_KEY`** (comparación de tiempo constante) y `x-store-client-ip`, el cupo de 10 pedidos/min se cuenta por esa IP; si no, por `req.ip` como antes (compatible con la tienda vieja y con servidores sin la variable). La tienda (`trebol-shop`, commit local `4245dd3`, SIN subir) manda las dos cabeceras desde `/api/orders` con la IP de `x-real-ip`/`x-forwarded-for` de Vercel, y tiene una trampa para bots (campo oculto `website`: responde OK sin crear pedido).
 - **Existencia (punto 4):** `PublicService.createOrder` rechaza `saleBlocked` y valida existencia libre = almacenes `countsForSale` − apartado en facturas PENDING (misma regla del snapshot), sumando renglones repetidos. Error 400 `{ message, outOfStock: [codes] }` sin revelar cantidades ("No tenemos suficiente existencia de …"). Los pedidos online abiertos NO apartan existencia.
@@ -200,7 +202,7 @@
 - **Ciclo probado en local** (copia `grande_test` de `grande_db`, ya borrada; tasa de hoy insertada en la copia): tienda local (`trebol-shop`, catálogo real del CDN, `TRINITY_API_URL=localhost:4000`) → checkout con referencia (sin captura, para no subir a Spaces de producción) → aviso en Trinity (tarjeta "Nuevo pedido online WEB-0005") → Confirmar pago → Facturar pedido (factura PENDING, cliente nuevo V-99887766, nota "Pedido tienda online WEB-0005 · Pago Movil: 00123456") → cobro con `PATCH /invoices/:id/pay` (el mismo endpoint del POS) en Caja Notas 1 con P. MOVIL MERCANTIL → NE1-26-00004923 PAID, `StockMovement` SALE −1, `CashLedgerEntry` IN SALE_PAYMENT. El cobro no se hizo clic a clic en la pantalla del POS (el admin primero elige caja).
 - **Hallazgos:** no existe estado "Entregado": el pedido queda en FACTURADO después de cobrar, así que no se distingue lo cobrado/retirado de lo pendiente. `createFromOnlineOrder` crea la factura y luego marca el pedido FUERA de una transacción (si lo segundo falla, un reintento podría duplicar la factura).
 
-## 🔔 Tienda online: aviso de pedido nuevo + botón "Avisar al cliente" (2026-11-03, Sesión 178) — ⏳ COMMITEADO, SIN DESPLEGAR (el usuario pidió no hacer deploy)
+## 🔔 Tienda online: aviso de pedido nuevo + botón "Avisar al cliente" (2026-11-03, Sesión 178) — ✅ DESPLEGADO (las 7, 2026-11-13)
 
 - **Pedido:** que alguien se entere cuando llega un pedido de la tienda online (los 4 que hay en la grande llevaban meses "Por verificar") y poder avisarle al cliente, **sin gastar WhatsApp de la API** (se reserva para el chatbot).
 - **Aviso en Trinity** (gratis): `components/online-orders-alert.tsx`, montado una vez desde el sidebar para quien tenga el módulo `store`. Cada 30 s consulta `GET /online-orders/pending-count` (ahora devuelve `{ count, latest[10] }`). Si aparece un id que este navegador no avisó (`localStorage` `trinity-online-orders-notified`, compartido entre pestañas; la primera vez solo siembra, no avisa lo viejo): timbre con Web Audio, notificación de Windows (si se dio permiso) y tarjeta abajo a la derecha con "Ver pedido". Contador rojo en "Pedidos online" y punto en TIENDA. Evento `trinity-online-orders-changed` al confirmar/cancelar refresca el contador.
