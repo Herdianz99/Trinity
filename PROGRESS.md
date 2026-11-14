@@ -61,6 +61,12 @@
 - **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
 - ~~Pendientes: total, totalturen, aceros, acerosmayor~~ → desplegadas el 2026-11-13 con `a816504c` (ver Deploy Sesión 187).
 
+## 🐛 Compras → Cargar con IA fallaba en facturas largas (2026-11-14, Sesión 188) — ⏳ SIN DESPLEGAR
+- **Síntoma:** "La IA no devolvió un JSON válido tras 3 intentos (respuesta no-JSON o truncada (finish_reason=length))" con la factura ILUMINAK S32456 (106 líneas, 3-4 páginas). En el log de la grande se repetía todo el 14-11.
+- **Causa:** `max_tokens: 8000` en `llm-extraction.service.ts`. El JSON de 106 líneas pide ~8.800 tokens (~80/línea), así que se cortaba siempre; reintentar no ayudaba. Probado directo contra OpenRouter desde el servidor con el PDF: 8000 → `length`; 32000 → `stop`, 106 líneas, ~32 s, ~USD 0,02.
+- **Arreglo:** `max_tokens: 32000` (Gemini 2.5 Flash admite 65k; se cobra solo lo generado).
+- **Correcciones por BD en la grande ese día (sin código):** FC-00878 línea HRRLIV00109→HRRLIV00012 (135 u, stock/movimiento/costo; respaldo en tablas `bk_fc00878_*`), FC-00873 N. factura proveedor TR00001→63083.
+
 ## 🚀 Deploy Sesión 187 — ✅ LAS 7 EMPRESAS (2026-11-13 noche, `a816504c`)
 - chica, grande, mayor, total, totalturen, aceros y acerosmayor: scripts sin errores, HEAD `a816504c`, web y API 200, columna `isExtraConcept` en las 7 BD (migración `20261113120000_islr_extra_concept`). Chica con `NODE_OPTIONS=--max-old-space-size=1536` y swap activo: BUILD_ID y dist nuevos.
 - Total, totalturen, aceros y acerosmayor estaban en `1cd39845`: con este deploy recibieron también todo lo de las Sesiones 184-186 (incluida la migración `store_pago_movil`). **Desde aquí, TODO `main` hasta `a816504c` está en las 7**: cualquier "SIN DESPLEGAR" de secciones viejas más abajo quedó obsoleto.

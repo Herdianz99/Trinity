@@ -113,7 +113,10 @@ export class LlmExtractionService {
     const body = {
       model,
       temperature: 0,
-      max_tokens: 8000, // facturas con muchas líneas generan JSON largo; sin esto la salida se trunca
+      // Facturas con muchas líneas generan JSON largo (~80 tokens/línea): una de 106 líneas
+      // (ILUMINAK S32456) pide ~8.800 y con 8000 se truncaba siempre (finish_reason=length).
+      // Solo se cobra lo que se genera, así que el tope alto no encarece las facturas cortas.
+      max_tokens: 32000,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
