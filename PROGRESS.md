@@ -61,7 +61,10 @@
 - **Grande ✅ y Mayor ✅ `92b2ad18`** (desplegadas por el usuario ~8:25-8:35 pm; verificado: builds nuevos, web+API 200, migración `store_pago_movil` aplicada en `trebolmayor_db`).
 - **Pendientes:** total, totalturen, aceros, acerosmayor (Sesiones 184-186, siguen en `1cd39845`).
 
-## ✨ Análisis de inventario: ver agotados / por agotarse (2026-11-13, Sesión 187) — ⏳ SIN DESPLEGAR
+## 🚀 Deploy Sesión 187 — ✅ LAS 7 EMPRESAS (2026-11-13 noche, `a816504c`)
+- chica, grande, mayor, total, totalturen, aceros y acerosmayor: scripts sin errores, HEAD `a816504c`, web y API 200, columna `isExtraConcept` en las 7 BD (migración `20261113120000_islr_extra_concept`). Chica con `NODE_OPTIONS=--max-old-space-size=1536` y swap activo: BUILD_ID y dist nuevos.
+
+## ✨ Análisis de inventario: ver agotados / por agotarse (2026-11-13, Sesión 187) — ✅ DESPLEGADO
 - **Pedido:** en `/purchases/analysis` poder ver los productos que rotan (ej. clase A) y están agotados o por agotarse, para comprarlos a tiempo. **El usuario pidió mantener el orden de siempre** (ABC por ventas, rotación por días de inventario, sugerencias por monto del proveedor): se probó ordenar por urgencia y bloque "Comprar ya", y se revirtió a pedido.
 - **Causa de fondo:** la sugerencia de compra usaba `stock <= minStock`, pero solo 32 de 7.322 productos (grande local) tienen mínimo → salía todo lo que estaba en 0 aunque no se vendiera, y los que se estaban acabando no salían.
 - **Ahora:** urgencia por COBERTURA = stock ÷ venta diaria del período: Agotado (stock ≤ 0 y se vende), Crítico (≤ 7 días), Bajo (≤ 15 días o bajo su mínimo). Si estuvo agotado todo el período, la venta diaria se toma de los últimos 180 días (marcado con *). Constantes en `inventory-analysis.service.ts`. Productos desactivados y servicios no se marcan.
@@ -69,7 +72,7 @@
 - **Efecto colateral:** el Resumen gerencial de inventario ("Bajo mínimo / quiebre") usa la misma alerta → cuenta productos que rotan y se acaban, no todo lo que está en 0.
 - **Rendimiento:** el resumen calculaba el ABC dos veces (17 s → 8 s en local); el export reusa el ABC.
 
-## ✨ Retención ISLR con varios conceptos en un comprobante (2026-11-13, Sesión 187) — ⏳ SIN DESPLEGAR
+## ✨ Retención ISLR con varios conceptos en un comprobante (2026-11-13, Sesión 187) — ✅ DESPLEGADO
 - **Pedido:** como Wensoft (comprobante Nº 10 de CESTATICKET: factura 4330400, "contratistas PJD" 2% sobre Bs 3.744,58 = 74,89 + "fletes PJD" 3% sobre Bs 1.188,75 = 35,66, total 110,55). En Wensoft se hacen 2 retenciones con el mismo correlativo; aquí es un solo comprobante con varias líneas.
 - **Cómo se usa:** Compras > Retenciones ISLR > detalle > **"Agregar concepto"**: se elige la factura (si hay varias), el concepto y la base imponible en Bs, y se calcula base × %base × %ret − sustraendo (solo P.N. residente). La papelera quita el concepto; el de la factura no se puede quitar.
 - **Reglas acordadas con el usuario:** el concepto pertenece a la MISMA factura (se descuenta junto con la CxP en el recibo, porque se aplica el total del comprobante); la suma de bases es libre (no se valida contra la factura); la base va en Bs (USD = Bs / tasa de la factura); editable si está PENDIENTE o EMITIDO sin estar en un recibo (los de la CxP nacen emitidos).
@@ -77,7 +80,7 @@
 - **Accesos al botón:** detalle del comprobante; en la lista `/purchases/islr-retentions` un icono por fila y un botón en el modal del ojo (llevan al detalle con `?concepto=1`, que abre el modal solo); y desde la CxP un enlace "Retención ISLR N (…) · ver / agregar concepto" (`payables.findOne` ahora incluye `islrRetentionVoucherLines`).
 - **Probado en local (grande_db):** CxP CXP/26-000467 (base 16% Bs 3.744,58 + exento 1.188,75 = 5.532,46) → ISLR Nº 82 con 74,89; + fletes 3% sobre 1.188,75 = 35,66 → total **110,55** y una sola fila del libro con 110,55. Igual al comprobante 10 de Wensoft.
 - **Arreglos de paso:** (1) buscador de proveedores de Nueva CxP ignora guiones/puntos/espacios ("003274445" encuentra "J-00327444-5"). (2) 4 pantallas pedían `/api/proxy/company-config` (404 desde la Sesión 31) en vez de `/api/proxy/config`: Nueva CxP, Nueva CxC, Nueva retención IVA y Nueva retención ISLR. Usaban siempre 75% / UT 43 por defecto.
-- **Falta:** desplegar.
+- **Desplegado** en las 7 (ver Deploy Sesión 187).
 
 ## 🐛 Eliminar una CxP dejaba huérfana su retención ISLR (2026-11-12, Sesión 186) — ⏳ SIN DESPLEGAR
 - **Total:** comprobantes ISLR 48 y 49 (CESTATICKET, factura 4439451, Bs 732,60 c/u) quedaron sin CxP ni línea en el libro y gastaron los números. El usuario pidió borrarlos y reusar los números → borrados por SQL en `total_db`, `islrRetentionNextNumber` 50 → 48.
