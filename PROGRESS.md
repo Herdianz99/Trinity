@@ -65,6 +65,7 @@
 - **Síntoma:** "La IA no devolvió un JSON válido tras 3 intentos (respuesta no-JSON o truncada (finish_reason=length))" con la factura ILUMINAK S32456 (106 líneas, 3-4 páginas). En el log de la grande se repetía todo el 14-11.
 - **Causa:** `max_tokens: 8000` en `llm-extraction.service.ts`. El JSON de 106 líneas pide ~8.800 tokens (~80/línea), así que se cortaba siempre; reintentar no ayudaba. Probado directo contra OpenRouter desde el servidor con el PDF: 8000 → `length`; 32000 → `stop`, 106 líneas, ~32 s, ~USD 0,02.
 - **Arreglo:** `max_tokens: 32000` (Gemini 2.5 Flash admite 65k; se cobra solo lo generado).
+- **Deploy 2026-11-15:** las 7 en paralelo por servidor (chica · grande→mayor · total→totalturen · aceros→acerosmayor), scripts sin errores, `max_tokens: 32000` verificado en el `dist` de las 7, webs respondiendo. Verificado además con el prompt real: ambos PDFs ILUMINAK salen con 106 líneas idénticas al PDF (código, cantidad, precio, 15 % desc.).
 - **Correcciones por BD en la grande ese día (sin código):** FC-00878 línea HRRLIV00109→HRRLIV00012 (135 u, stock/movimiento/costo; respaldo en tablas `bk_fc00878_*`), FC-00873 N. factura proveedor TR00001→63083.
 
 ## 🚀 Deploy Sesión 187 — ✅ LAS 7 EMPRESAS (2026-11-13 noche, `a816504c`)
