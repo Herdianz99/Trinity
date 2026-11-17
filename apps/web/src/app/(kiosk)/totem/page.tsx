@@ -4,6 +4,7 @@ import { Mic, UserRound, ImageOff } from 'lucide-react';
 import CloverAvatar, { CloverState } from './clover-avatar';
 import { useVoice } from './use-voice';
 import { textForSpeech } from '@/lib/kiosk-speech';
+import AttractLoop, { TotemPlaylist, buildSequence } from './attract-loop';
 
 interface Card { code: string; name: string; price: string; available: boolean; imageUrl: string | null }
 
@@ -11,6 +12,7 @@ const GREETING = '¡Hola! Soy Clover. Mantén presionado el botón verde y dime 
 const ERROR_TEXT = 'Ahora no puedo responder. Pregúntale a un vendedor, por favor.';
 const NOT_HEARD = 'No te escuché bien. Mantén presionado el botón mientras hablas, y suéltalo al terminar.';
 const IDLE_RESET_MS = 60_000;
+const PLAYLIST_REFRESH_MS = 3 * 60_000; // la publicidad nueva llega sola, sin recargar (recargar quita el permiso de sonido)
 
 // Precio para la tarjeta: "12.50$ bcv" -> "$12.50"
 const cardPrice = (p: string) => {
@@ -21,6 +23,8 @@ const cardPrice = (p: string) => {
 export default function TotemPage() {
   const { supported, interim, startListening, stopListening, speak, unlockSpeech, voices, voice, setVoiceURI } = useVoice();
   const [voicePanel, setVoicePanel] = useState(false);
+  const voicePanelRef = useRef(false);
+  voicePanelRef.current = voicePanel;
   const voiceHold = useRef<ReturnType<typeof setTimeout>>();
   // Prueba de una voz del selector (sin esperar a que se guarde la eleccion).
   const speakWith = (v: SpeechSynthesisVoice, text: string) => {
@@ -39,6 +43,9 @@ export default function TotemPage() {
   const stateRef = useRef<CloverState>('idle');
   const convId = useRef<string | null>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [playlist, setPlaylist] = useState<TotemPlaylist | null>(null);
+  const [attract, setAttract] = useState(false);
+  const lastActivity = useRef(Date.now());
 
   const go = (s: CloverState) => { stateRef.current = s; setState(s); };
 
@@ -56,6 +63,54 @@ export default function TotemPage() {
   }, [reset]);
   useEffect(() => () => clearTimeout(idleTimer.current), []);
 
+  // Publicidad del modo espera. Si la respuesta no cambia, no se toca el estado (no reinicia el bucle).
+  useEffect(() => {
+    let last = '';
+    const load = () => fetch('/api/proxy/totem/playlist')
+      .then((r) => (r.ok ? r.text() : null))
+      .then((t) => { if (t && t !== last) { last = t; setPlaylist(JSON.parse(t)); } })
+      .catch(() => undefined);
+    load();
+    const t = setInterval(load, PLAYLIST_REFRESH_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  // Cualquier toque cuenta como uso.
+  useEffect(() => {
+    const mark = () => { lastActivity.current = Date.now(); };
+    document.addEventListener('pointerdown', mark, true);
+    return () => document.removeEventListener('pointerdown', mark, true);
+  }, []);
+
+  // Sin uso por X segundos (y Clover callado): arranca la presentacion y la publicidad.
+  useEffect(() => {
+    if (attract || !playlist || buildSequence(playlist).length === 0) return;
+    const t = setInterval(() => {
+      if (stateRef.current !== 'idle' || voicePanelRef.current) { lastActivity.current = Date.now(); return; }
+      if (Date.now() - lastActivity.current >= playlist.idleSeconds * 1000) { reset(); setAttract(true); }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [attract, playlist, reset]);
+
+  const exitAttract = () => {
+    unlockSpeech(); // es un toque: deja lista la voz de Clover
+    lastActivity.current = Date.now();
+    setAttract(false);
+    touch();
+  };
+
+  // La pantalla del TV no se apaga sola mientras el totem esta abierto.
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null;
+    const request = async () => {
+      try { lock = await (navigator as any).wakeLock?.request('screen'); } catch { /* sin permiso: nada */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') request(); };
+    request();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { document.removeEventListener('visibilitychange', onVisible); lock?.release().catch(() => undefined); };
+  }, []);
+
   const say = (text: string) => {
     setAnswer(text);
     go('speaking');
@@ -63,8 +118,8 @@ export default function TotemPage() {
   };
 
   const newConversation = async () => {
-    const res = await fetch('/api/proxy/chatbot/conversations', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'KIOSK' }),
+    const res = await fetch('/api/proxy/totem/conversations', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
     if (!res.ok) throw new Error('no se pudo crear la conversación');
     convId.current = (await res.json()).id as string;
@@ -72,7 +127,7 @@ export default function TotemPage() {
   };
 
   const send = async (text: string) => {
-    const post = (id: string) => fetch(`/api/proxy/chatbot/conversations/${id}/messages`, {
+    const post = (id: string) => fetch(`/api/proxy/totem/conversations/${id}/messages`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
     });
     let res = await post(convId.current ?? (await newConversation()));
@@ -117,7 +172,7 @@ export default function TotemPage() {
     touch();
     try {
       const id = convId.current ?? (await newConversation());
-      await fetch(`/api/proxy/chatbot/conversations/${id}/call-seller`, { method: 'POST' });
+      await fetch(`/api/proxy/totem/conversations/${id}/call-seller`, { method: 'POST' });
     } catch { /* igual se muestra el aviso */ }
     setSellerCalled(true);
     say('¡Listo! Ya le aviso a un vendedor. Viene en camino.');
@@ -134,7 +189,8 @@ export default function TotemPage() {
   const live = state === 'listening' ? interim : heard;
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] max-w-3xl flex-col items-center px-4 pt-6 pb-5">
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-[1100px] flex-col items-center px-[4vw] pt-[3vh] pb-[3vh]">
+      {attract && playlist && <AttractLoop playlist={playlist} onExit={exitAttract} />}
       {/* Mantener presionada la etiqueta 2 s abre el selector de voz (para el encargado, no para el cliente). */}
       <span
         onPointerDown={() => { voiceHold.current = setTimeout(() => setVoicePanel(true), 2000); }}
@@ -177,14 +233,14 @@ export default function TotemPage() {
       {/* Globo de dialogo: lo que dice Clover */}
       <div className="relative -mt-4 w-full rounded-[28px] bg-white px-6 py-5 text-center text-slate-900 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.6)]">
         <span className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 rounded-sm bg-white" />
-        <p className="relative text-[clamp(1.35rem,3.4vw,1.9rem)] font-semibold leading-snug">{answer}</p>
+        <p className="relative text-[clamp(1.35rem,3.8vw,3rem)] font-semibold leading-snug">{answer}</p>
         {sellerCalled && (
           <p className="relative mt-2 text-lg font-bold text-emerald-700">Un vendedor viene en camino.</p>
         )}
       </div>
 
       {live && (
-        <p className="mt-3 max-w-full truncate rounded-full bg-white/10 px-4 py-1.5 text-lg text-sky-100">
+        <p className="mt-3 max-w-full truncate rounded-full bg-white/10 px-4 py-1.5 text-[clamp(1.125rem,2.4vw,2rem)] text-sky-100">
           <span className="font-bold text-sky-300">{state === 'listening' ? 'Escuchando: ' : 'Tú: '}</span>
           “{live}”
         </p>
@@ -204,8 +260,8 @@ export default function TotemPage() {
                   : <ImageOff className="h-10 w-10 text-slate-300" />}
               </div>
               <div className="border-t border-slate-100 px-3 py-2">
-                <p className="line-clamp-2 text-[15px] font-semibold leading-tight">{c.name}</p>
-                <p className={`mt-1 text-2xl font-extrabold ${c.available ? 'text-emerald-700' : 'text-rose-600'}`}>
+                <p className="line-clamp-2 text-[clamp(15px,2vw,26px)] font-semibold leading-tight">{c.name}</p>
+                <p className={`mt-1 text-[clamp(1.5rem,3.4vw,2.8rem)] font-extrabold ${c.available ? 'text-emerald-700' : 'text-rose-600'}`}>
                   {c.available ? cardPrice(c.price) : 'Agotado'}
                 </p>
               </div>
@@ -224,14 +280,14 @@ export default function TotemPage() {
             onContextMenu={(e) => e.preventDefault()}
             style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
             disabled={state === 'thinking'}
-            className={`flex h-28 w-full touch-none select-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,3.6vw,2rem)] font-extrabold shadow-xl transition-all duration-150 ${
+            className={`flex h-[clamp(7rem,9dvh,11rem)] w-full touch-none select-none items-center justify-center gap-4 rounded-full text-[clamp(1.4rem,4vw,3.2rem)] font-extrabold shadow-xl transition-all duration-150 ${
               state === 'listening'
                 ? 'scale-[0.97] bg-emerald-400 text-emerald-950'
                 : state === 'thinking'
                   ? 'bg-emerald-800 text-white/70'
                   : 'bg-emerald-600 text-white active:scale-[0.97]'}`}
           >
-            <Mic className={`h-11 w-11 ${state === 'listening' ? 'animate-pulse' : ''}`} />
+            <Mic className={`h-[clamp(2.75rem,4vw,4.5rem)] w-[clamp(2.75rem,4vw,4.5rem)] ${state === 'listening' ? 'animate-pulse' : ''}`} />
             {state === 'listening' ? 'Te escucho… suelta al terminar'
               : state === 'thinking' ? 'Buscando…'
               : 'Mantén presionado para hablar'}
@@ -239,7 +295,7 @@ export default function TotemPage() {
         </div>
         <button
           onClick={callSeller}
-          className="flex items-center gap-2 rounded-full border-2 border-white/25 px-7 py-3 text-xl font-bold text-white/90 transition active:scale-95 active:bg-white/10"
+          className="flex items-center gap-2 rounded-full border-2 border-white/25 px-[3vw] py-[1.2dvh] text-[clamp(1.25rem,2.6vw,2.2rem)] font-bold text-white/90 transition active:scale-95 active:bg-white/10"
         >
           <UserRound className="h-6 w-6" /> Llamar a un vendedor
         </button>

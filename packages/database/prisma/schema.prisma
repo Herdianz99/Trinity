@@ -24,6 +24,7 @@ enum UserRole {
   SEGURIDAD
   EMPLOYEE
   CLIENT
+  TOTEM
 }
 
 enum IvaType {
@@ -261,79 +262,79 @@ enum CashMovementType {
 // ============================================
 
 model CompanyConfig {
-  id                      String   @id @default("singleton")
-  companyName             String   @default("Trinity")
-  rif                     String?
-  address                 String?
-  phone                   String?
-  email                   String?
-  bregaGlobalPct          Float    @default(0)
-  allowedIps              String   @default("")
-  defaultGananciaPct      Float    @default(0)
-  defaultGananciaMayorPct Float    @default(0)
-  defaultWarehouseId      String?
-  invoicePrefix           String   @default("FAC")
-  creditAuthPassword      String?
-  quotationValidityDays   Int      @default(30)
-  overdueWarningDays      Int      @default(3)
-  ivaRetentionPct         Float    @default(75)
-  islrRetentionPct        Float    @default(0)
-  isIGTFContributor       Boolean  @default(false)
-  igtfPct                 Float    @default(3)
-  fiscalCreditCode        String   @default("10")
-  allowNegativeStock      Boolean  @default(true)
+  id                             String   @id @default("singleton")
+  companyName                    String   @default("Trinity")
+  rif                            String?
+  address                        String?
+  phone                          String?
+  email                          String?
+  bregaGlobalPct                 Float    @default(0)
+  allowedIps                     String   @default("")
+  defaultGananciaPct             Float    @default(0)
+  defaultGananciaMayorPct        Float    @default(0)
+  defaultWarehouseId             String?
+  invoicePrefix                  String   @default("FAC")
+  creditAuthPassword             String?
+  quotationValidityDays          Int      @default(30)
+  overdueWarningDays             Int      @default(3)
+  ivaRetentionPct                Float    @default(75)
+  islrRetentionPct               Float    @default(0)
+  isIGTFContributor              Boolean  @default(false)
+  igtfPct                        Float    @default(3)
+  fiscalCreditCode               String   @default("10")
+  allowNegativeStock             Boolean  @default(true)
   // Si true, al elegir un cliente sin direccion en el POS se muestra un aviso (patron del telefono).
   // Opt-in por empresa (default false = sin cambios para las demas).
-  requireCustomerAddress  Boolean  @default(false)
+  requireCustomerAddress         Boolean  @default(false)
   // Boton "Tomar ubicacion" (GPS para despachos) en el formulario de cliente del POS. Opt-in (pensado para la mayor).
-  customerLocationInPos   Boolean  @default(false)
+  customerLocationInPos          Boolean  @default(false)
   // Portal de pedidos para clientes (rol CLIENT). Apagado = los CLIENT no pueden entrar.
-  clientPortalEnabled     Boolean  @default(false)
+  clientPortalEnabled            Boolean  @default(false)
   // Campana de WhatsApp (Ventas > Campana WhatsApp). Opt-in por empresa (solo la grande); ademas
   // requiere el modulo 'campana-whatsapp' asignado al usuario. Nombre de tienda y tope diario compartidos.
-  whatsappCampaignEnabled    Boolean  @default(false)
-  whatsappCampaignStoreName  String   @default("El Trébol")
-  whatsappCampaignDailyLimit Int      @default(50)
+  whatsappCampaignEnabled        Boolean  @default(false)
+  whatsappCampaignStoreName      String   @default("El Trébol")
+  whatsappCampaignDailyLimit     Int      @default(50)
   // Al cobrar una factura a un cliente "empresa del grupo" se genera un gasto de autoconsumo al costo.
   // Opt-in por empresa (solo la grande la usa).
-  groupAutoConsumptionExpense Boolean @default(false)
+  groupAutoConsumptionExpense    Boolean  @default(false)
   // No borrar las facturas en espera a medianoche (pedidos que duran varios dias).
-  keepPendingInvoices     Boolean  @default(false)
-  defaultCustomerId       String?
-  logo                    String?  @db.Text
-  stampImage              String?  @db.Text
-  retentionProvidencia    String   @default("SNAT/2025/000054")
-  retentionNextNumber     Int      @default(1)
-  islrRetentionNextNumber Int      @default(1)
-  unidadTributaria        Float    @default(43)
-  receivableNextNumber    Int      @default(1)
-  payableNextNumber       Int      @default(1)
-  lastCustomerNumber      Int      @default(0) // Correlativo de codigo de cliente (CLI-000001)
+  keepPendingInvoices            Boolean  @default(false)
+  defaultCustomerId              String?
+  logo                           String?  @db.Text
+  stampImage                     String?  @db.Text
+  retentionProvidencia           String   @default("SNAT/2025/000054")
+  retentionNextNumber            Int      @default(1)
+  islrRetentionNextNumber        Int      @default(1)
+  unidadTributaria               Float    @default(43)
+  receivableNextNumber           Int      @default(1)
+  payableNextNumber              Int      @default(1)
+  lastCustomerNumber             Int      @default(0) // Correlativo de codigo de cliente (CLI-000001)
   // Interruptor del libro mayor de caja: true = el arqueo lee del CashLedgerEntry (tabla madre);
   // false = método viejo (3 fuentes). Reversa instantánea sin redeploy si algo sale mal.
-  useCashLedger           Boolean  @default(false)
+  useCashLedger                  Boolean  @default(false)
   // Opt-in por empresa: habilita la pantalla nueva de "Despacho verificado por escaneo"
   // (/dispatch/scan). Default false = las demás empresas no la ven ni cambia nada.
-  useScanDispatch         Boolean  @default(false)
+  useScanDispatch                Boolean  @default(false)
   // Opt-in por empresa: habilita el Módulo de Almacén (Auditoría 5S + Reporte de daños).
   // Default false = solo aceros/acerosmayor lo encienden; las demás no ven nada.
-  useAlmacenOps           Boolean  @default(false)
+  useAlmacenOps                  Boolean  @default(false)
   // Traslados entre empresas socias (integration): si false, los traslados NO generan CxC
   // (empresa que envia) ni CxP (empresa que recibe) — solo mueven mercancia. Default true =
   // comportamiento actual. El cliente/proveedor de esas cuentas se elige aqui; si no se elige,
   // se cae al socio por nombre (busca/crea por partnerName, como antes).
-  partnerTransferCreatesAccounts Boolean @default(true)
+  partnerTransferCreatesAccounts Boolean  @default(true)
   partnerTransferCustomerId      String?
   partnerTransferSupplierId      String?
   // Opt-in por empresa del módulo de bancos: gatea los enganches automáticos al libro banco.
   // Default false = las demás empresas no ven efecto hasta encenderlo.
-  bancosEnabled           Boolean  @default(false)
+  bancosEnabled                  Boolean  @default(false)
   // Datos de Pago Movil que la tienda online muestra en el checkout (van en store/meta.json).
   // Se editan en Tienda > Personalizacion. Vacio = la tienda usa sus datos por defecto.
-  storePagoMovilBank      String?
-  storePagoMovilRif       String?
-  storePagoMovilPhone     String?
-  updatedAt               DateTime @updatedAt
+  storePagoMovilBank             String?
+  storePagoMovilRif              String?
+  storePagoMovilPhone            String?
+  updatedAt                      DateTime @updatedAt
 }
 
 // ============================================
@@ -359,71 +360,71 @@ enum ExchangeRateSource {
 // ============================================
 
 model User {
-  id                  String              @id @default(cuid())
-  name                String
-  email               String              @unique
-  password            String
-  role                UserRole
-  isActive            Boolean             @default(true)
-  mustChangePassword  Boolean             @default(true)
-  restrictToOnSiteIp  Boolean             @default(false)
+  id                      String                 @id @default(cuid())
+  name                    String
+  email                   String                 @unique
+  password                String
+  role                    UserRole
+  isActive                Boolean                @default(true)
+  mustChangePassword      Boolean                @default(true)
+  restrictToOnSiteIp      Boolean                @default(false)
   // Modulos extra SOLO para este usuario, ademas de los de su rol (ej. 'chatbot' a un vendedor)
-  extraModules        String[]            @default([])
-  employeeId          String?             @unique
-  employee            Employee?           @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
-  deactivatedProducts Product[]           @relation("ProductDeactivatedBy")
-  saleBlockedProducts Product[]           @relation("ProductSaleBlockedBy")
+  extraModules            String[]               @default([])
+  employeeId              String?                @unique
+  employee                Employee?              @relation("EmployeeUser", fields: [employeeId], references: [id], onDelete: SetNull)
+  deactivatedProducts     Product[]              @relation("ProductDeactivatedBy")
+  saleBlockedProducts     Product[]              @relation("ProductSaleBlockedBy")
   // Portal de pedidos (rol CLIENT): ficha de cliente vinculada a este usuario.
-  customerId          String?             @unique
-  customer            Customer?           @relation("CustomerPortalUser", fields: [customerId], references: [id], onDelete: SetNull)
-  lastLoginAt         DateTime?
-  permissions         UserPermission[]
-  sessionsOpened      CashSession[]       @relation("SessionOpenedBy")
-  sessionsClosed      CashSession[]       @relation("SessionClosedBy")
-  bankMovementsCreated    BankMovement[]  @relation("BankMovementCreator")
-  searchSynonymsCreated   SearchSynonym[] @relation("SearchSynonymCreatedBy")
-  chatbotConversations    ChatbotConversation[] @relation("ChatbotConversationCreatedBy")
-  bankMovementsReconciled BankMovement[]  @relation("BankMovementReconciler")
-  bankMovementsApproved   BankMovement[]  @relation("BankMovementApprover")
-  seller              Seller?
-  invoicesAsCashier   Invoice[]           @relation("InvoiceCashier")
-  expenses            Expense[]
-  cashMovements       CashMovement[]
-  paymentSchedules    PaymentSchedule[]
-  dynamicKeys         DynamicKey[]
-  purchaseBills       PurchaseOrder[]     @relation("PurchaseBillResponsible")
-  purchaseBookEntries PurchaseBookEntry[] @relation("PurchaseBookEntries")
-  salesBookEntries    SalesBookEntry[]    @relation("SalesBookEntries")
-  retentionVouchers       RetentionVoucher[]      @relation("RetentionVoucherCreator")
-  islrRetentionVouchers   IslrRetentionVoucher[]  @relation("IslrRetentionVoucherCreator")
-  customerAdvances    CustomerAdvance[]   @relation("AdvanceCreator")
-  supplierAdvances    SupplierAdvance[]   @relation("SupplierAdvanceCreator")
-  receivablesCreated  Receivable[]        @relation("ReceivableCreator")
-  payablesCreated     Payable[]           @relation("PayableCreator")
-  zReports            ZReport[]           @relation("ZReportCreator")
+  customerId              String?                @unique
+  customer                Customer?              @relation("CustomerPortalUser", fields: [customerId], references: [id], onDelete: SetNull)
+  lastLoginAt             DateTime?
+  permissions             UserPermission[]
+  sessionsOpened          CashSession[]          @relation("SessionOpenedBy")
+  sessionsClosed          CashSession[]          @relation("SessionClosedBy")
+  bankMovementsCreated    BankMovement[]         @relation("BankMovementCreator")
+  searchSynonymsCreated   SearchSynonym[]        @relation("SearchSynonymCreatedBy")
+  chatbotConversations    ChatbotConversation[]  @relation("ChatbotConversationCreatedBy")
+  bankMovementsReconciled BankMovement[]         @relation("BankMovementReconciler")
+  bankMovementsApproved   BankMovement[]         @relation("BankMovementApprover")
+  seller                  Seller?
+  invoicesAsCashier       Invoice[]              @relation("InvoiceCashier")
+  expenses                Expense[]
+  cashMovements           CashMovement[]
+  paymentSchedules        PaymentSchedule[]
+  dynamicKeys             DynamicKey[]
+  purchaseBills           PurchaseOrder[]        @relation("PurchaseBillResponsible")
+  purchaseBookEntries     PurchaseBookEntry[]    @relation("PurchaseBookEntries")
+  salesBookEntries        SalesBookEntry[]       @relation("SalesBookEntries")
+  retentionVouchers       RetentionVoucher[]     @relation("RetentionVoucherCreator")
+  islrRetentionVouchers   IslrRetentionVoucher[] @relation("IslrRetentionVoucherCreator")
+  customerAdvances        CustomerAdvance[]      @relation("AdvanceCreator")
+  supplierAdvances        SupplierAdvance[]      @relation("SupplierAdvanceCreator")
+  receivablesCreated      Receivable[]           @relation("ReceivableCreator")
+  payablesCreated         Payable[]              @relation("PayableCreator")
+  zReports                ZReport[]              @relation("ZReportCreator")
   customerIvaRetentions   CustomerIvaRetention[] @relation("CustomerIvaRetentionCreator")
-  lostSales           LostSale[]
-  dispatchesCreated   Dispatch[]          @relation("DispatchCreator")
-  dispatchDeliveries  DispatchDelivery[]  @relation("DispatchDeliverer")
-  incidentsCreated    Incident[]          @relation("IncidentCreator")
+  lostSales               LostSale[]
+  dispatchesCreated       Dispatch[]             @relation("DispatchCreator")
+  dispatchDeliveries      DispatchDelivery[]     @relation("DispatchDeliverer")
+  incidentsCreated        Incident[]             @relation("IncidentCreator")
   // Departamento de incidencias asignado a mano (ademas del que le toca por rol)
-  incidentDepartmentId String?
-  incidentDepartment   IncidentDepartment? @relation("IncidentDepartmentMember", fields: [incidentDepartmentId], references: [id], onDelete: SetNull)
-  purchaseAttachments PurchaseAttachment[] @relation("PurchaseAttachmentUploader")
-  treasuryMovements   TreasuryMovement[]  @relation("TreasuryMovementCreator")
-  treasuryBsMovements TreasuryBsMovement[] @relation("TreasuryBsMovementCreator")
-  supplierOrderItems  SupplierOrderItem[] @relation("SupplierOrderItemCreator")
-  audits5s            Audit5S[]           @relation("Audit5SCreator")
-  damageReportsCreated   DamageReport[]   @relation("DamageReportCreator")
-  damageReportsProcessed DamageReport[]   @relation("DamageReportProcessor")
-  goodsReceiptsCreated   GoodsReceipt[]   @relation("GoodsReceiptCreator")
-  exhibitionEntries   ExhibitionEntry[]
-  disciplinaryActions DisciplinaryAction[] @relation("DisciplinaryActionCreator")
-  customersCreated    Customer[]          @relation("CustomerCreator")
-  notificationsCreated Notification[]     @relation("NotificationCreator")
-  priceLogs           ProductPriceLog[]   @relation("ProductPriceLogUser")
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  incidentDepartmentId    String?
+  incidentDepartment      IncidentDepartment?    @relation("IncidentDepartmentMember", fields: [incidentDepartmentId], references: [id], onDelete: SetNull)
+  purchaseAttachments     PurchaseAttachment[]   @relation("PurchaseAttachmentUploader")
+  treasuryMovements       TreasuryMovement[]     @relation("TreasuryMovementCreator")
+  treasuryBsMovements     TreasuryBsMovement[]   @relation("TreasuryBsMovementCreator")
+  supplierOrderItems      SupplierOrderItem[]    @relation("SupplierOrderItemCreator")
+  audits5s                Audit5S[]              @relation("Audit5SCreator")
+  damageReportsCreated    DamageReport[]         @relation("DamageReportCreator")
+  damageReportsProcessed  DamageReport[]         @relation("DamageReportProcessor")
+  goodsReceiptsCreated    GoodsReceipt[]         @relation("GoodsReceiptCreator")
+  exhibitionEntries       ExhibitionEntry[]
+  disciplinaryActions     DisciplinaryAction[]   @relation("DisciplinaryActionCreator")
+  customersCreated        Customer[]             @relation("CustomerCreator")
+  notificationsCreated    Notification[]         @relation("NotificationCreator")
+  priceLogs               ProductPriceLog[]      @relation("ProductPriceLogUser")
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
 }
 
 model UserPermission {
@@ -485,20 +486,20 @@ model DynamicKeyLog {
 // ============================================
 
 model Seller {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  name            String
-  phone           String?
-  isActive        Boolean   @default(true)
-  monthlyGoalUsd  Float     @default(0)
-  userId          String?   @unique
-  user            User?     @relation(fields: [userId], references: [id])
-  invoices        Invoice[]
-  quotations      Quotation[]
-  receipts        Receipt[]
-  customers       Customer[] @relation("CustomerAssignedSeller")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String      @id @default(cuid())
+  code           String      @unique
+  name           String
+  phone          String?
+  isActive       Boolean     @default(true)
+  monthlyGoalUsd Float       @default(0)
+  userId         String?     @unique
+  user           User?       @relation(fields: [userId], references: [id])
+  invoices       Invoice[]
+  quotations     Quotation[]
+  receipts       Receipt[]
+  customers      Customer[]  @relation("CustomerAssignedSeller")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }
 
 // ============================================
@@ -527,9 +528,9 @@ model Category {
   code              String?    @unique
   lastProductNumber Int        @default(0)
   commissionPct     Float      @default(0)
-  bregaPct          Float      @default(0)   // brecha propia (solo categorías RAÍZ; 0 = usar la global)
-  sortOrder         Int        @default(0)   // orden manual de la familia en el catálogo con fotos (menor primero; 0 = alfabético)
-  icon              String?                  // emoji para la tienda online (se exporta al snapshot)
+  bregaPct          Float      @default(0) // brecha propia (solo categorías RAÍZ; 0 = usar la global)
+  sortOrder         Int        @default(0) // orden manual de la familia en el catálogo con fotos (menor primero; 0 = alfabético)
+  icon              String? // emoji para la tienda online (se exporta al snapshot)
   printAreaId       String?
   printArea         PrintArea? @relation(fields: [printAreaId], references: [id])
   parentId          String?
@@ -542,7 +543,7 @@ model Category {
 model Brand {
   id        String    @id @default(cuid())
   name      String
-  logoKey   String?   // key en Spaces del logo para la tienda online (se exporta al snapshot)
+  logoKey   String? // key en Spaces del logo para la tienda online (se exporta al snapshot)
   products  Product[]
   createdAt DateTime  @default(now())
 }
@@ -567,36 +568,36 @@ model StoreBanner {
 }
 
 model Supplier {
-  id                String             @id @default(cuid())
-  name              String
-  rif               String?
-  phone             String?
-  email             String?
-  address           String?
-  contactName       String?
+  id                    String                 @id @default(cuid())
+  name                  String
+  rif                   String?
+  phone                 String?
+  email                 String?
+  address               String?
+  contactName           String?
   // Texto libre: cómo se le paga a este proveedor (ej. "Zelle a X", "Pago móvil 0414...", "Efectivo").
-  paymentMethod     String?
-  bankAccount       String?            // cuenta bancaria de 20 digitos (pago por Bancaribe)
-  bankDocType       String?            // R = RIF, C = cedula, P = pasaporte (plantilla Bancaribe)
-  creditDays        Int                @default(0)
-  isRetentionAgent  Boolean            @default(false)
-  supplierType      SupplierType?
-  islrConceptId     String?
-  islrConcept       IslrRetentionType? @relation("SupplierIslrConcept", fields: [islrConceptId], references: [id])
-  isActive          Boolean            @default(true)
-  products          Product[]
-  purchaseOrders    PurchaseOrder[]
-  payables          Payable[]
-  receipts          Receipt[]
-  ivaRetentions     IvaRetention[]
-  retentionVouchers RetentionVoucher[]
+  paymentMethod         String?
+  bankAccount           String? // cuenta bancaria de 20 digitos (pago por Bancaribe)
+  bankDocType           String? // R = RIF, C = cedula, P = pasaporte (plantilla Bancaribe)
+  creditDays            Int                    @default(0)
+  isRetentionAgent      Boolean                @default(false)
+  supplierType          SupplierType?
+  islrConceptId         String?
+  islrConcept           IslrRetentionType?     @relation("SupplierIslrConcept", fields: [islrConceptId], references: [id])
+  isActive              Boolean                @default(true)
+  products              Product[]
+  purchaseOrders        PurchaseOrder[]
+  payables              Payable[]
+  receipts              Receipt[]
+  ivaRetentions         IvaRetention[]
+  retentionVouchers     RetentionVoucher[]
   islrRetentionVouchers IslrRetentionVoucher[]
   advances              SupplierAdvance[]
   inventoryAdjustments  InventoryAdjustment[]
   expenses              Expense[]
   goodsReceipts         GoodsReceipt[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 }
 
 // ============================================
@@ -604,83 +605,84 @@ model Supplier {
 // ============================================
 
 model Product {
-  id               String                   @id @default(cuid())
-  code             String                   @unique
-  barcode          String?                  @unique
-  supplierRef      String?
-  otherCode        String?                  // "Otro codigo" — codigo alterno, sin uso funcional aun
-  name             String
-  description      String?
-  categoryId       String?
-  category         Category?                @relation(fields: [categoryId], references: [id])
-  brandId          String?
-  brand            Brand?                   @relation(fields: [brandId], references: [id])
-  supplierId       String?
-  supplier         Supplier?                @relation(fields: [supplierId], references: [id])
-  isService        Boolean                  @default(false)
-  purchaseUnit     String                   @default("UNIT")
-  saleUnit         String                   @default("UNIT")
-  conversionFactor Float                    @default(1)
-  costUsd          Float                    @default(0)
-  manualCost       Boolean                  @default(false)
-  bregaApplies     Boolean                  @default(true)
-  manualPrice      Boolean                  @default(false)
-  gananciaPct      Float                    @default(0)
-  gananciaMayorPct Float                    @default(0)
-  ivaType          IvaType                  @default(GENERAL)
-  priceDetal       Float                    @default(0)
-  priceMayor       Float                    @default(0)
-  weight           Float                    @default(0) // peso unitario en kg (para guia de carga en el PDF de factura)
-  minStock         Float                    @default(0)
-  isActive         Boolean                  @default(true)
+  id                    String                     @id @default(cuid())
+  code                  String                     @unique
+  barcode               String?                    @unique
+  supplierRef           String?
+  otherCode             String? // "Otro codigo" — codigo alterno, sin uso funcional aun
+  name                  String
+  description           String?
+  categoryId            String?
+  category              Category?                  @relation(fields: [categoryId], references: [id])
+  brandId               String?
+  brand                 Brand?                     @relation(fields: [brandId], references: [id])
+  supplierId            String?
+  supplier              Supplier?                  @relation(fields: [supplierId], references: [id])
+  isService             Boolean                    @default(false)
+  purchaseUnit          String                     @default("UNIT")
+  saleUnit              String                     @default("UNIT")
+  conversionFactor      Float                      @default(1)
+  costUsd               Float                      @default(0)
+  manualCost            Boolean                    @default(false)
+  bregaApplies          Boolean                    @default(true)
+  manualPrice           Boolean                    @default(false)
+  gananciaPct           Float                      @default(0)
+  gananciaMayorPct      Float                      @default(0)
+  ivaType               IvaType                    @default(GENERAL)
+  priceDetal            Float                      @default(0)
+  priceMayor            Float                      @default(0)
+  weight                Float                      @default(0) // peso unitario en kg (para guia de carga en el PDF de factura)
+  minStock              Float                      @default(0)
+  isActive              Boolean                    @default(true)
   // Desactivacion (Session 180): la API exige el motivo al pasar de activo a inactivo; se limpian al reactivar.
   // Un cambio directo por BD no pasa por esa validacion (queda sin motivo).
-  deactivationReason String?
-  deactivatedAt      DateTime?
-  deactivatedById    String?
-  deactivatedBy      User?                  @relation("ProductDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
-  saleBlocked      Boolean                  @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
+  deactivationReason    String?
+  deactivatedAt         DateTime?
+  deactivatedById       String?
+  deactivatedBy         User?                      @relation("ProductDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  saleBlocked           Boolean                    @default(false) // Bloqueado para la venta: se muestra en POS pero no se puede facturar
   // Bloqueo para la venta (Session 180): motivo obligatorio por la API; se limpian al desbloquear.
   saleBlockReason       String?
   saleBlockedAt         DateTime?
   saleBlockedById       String?
-  saleBlockedBy         User?             @relation("ProductSaleBlockedBy", fields: [saleBlockedById], references: [id], onDelete: SetNull)
-  saleBlockAuthorizedBy String?           // nombre de la clave dinamica que lo autorizo (si aplica)
-  isOnSale         Boolean                  @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
-  applies5Pct      Boolean                  @default(false) // "Aplica 5%": por ahora solo marca y filtro del catalogo, sin efecto en calculos
-  showInStore      Boolean                  @default(false)
-  storeFeatured    Boolean                  @default(false)
-  isExhibited        Boolean                @default(false)
-  exhibitedQuantity  Int                    @default(0) // unidades en vitrina ahora (0 = no exhibido)
-  exhibitedSince     DateTime?
-  exhibitionLocation String?
-  searchVector     Unsupported("tsvector")?
-  searchKeywords   String                   @default("") // palabras de los sinonimos activos (las mantiene el trigger y SearchSynonymsService)
-  stock            Stock[]
-  movements        StockMovement[]
-  purchaseItems    PurchaseOrderItem[]
-  transferItems    TransferItem[]
-  countItems       InventoryCountItem[]
-  adjustmentItems  InventoryAdjustmentItem[]
-  replacementOutItems InventoryReplacementItem[] @relation("ReplacementOut")
-  replacementInItems  InventoryReplacementItem[] @relation("ReplacementIn")
-  damageReportItems   DamageReportItem[]
-  goodsReceiptItems   GoodsReceiptItem[]
-  exhibitionEntries   ExhibitionEntry[]
-  lostSales        LostSale[]
-  supplierOrderItems  SupplierOrderItem[]
+  saleBlockedBy         User?                      @relation("ProductSaleBlockedBy", fields: [saleBlockedById], references: [id], onDelete: SetNull)
+  saleBlockAuthorizedBy String? // nombre de la clave dinamica que lo autorizo (si aplica)
+  isOnSale              Boolean                    @default(false) // "Oferta": marcador visual; en el POS estos salen de primero y resaltados
+  applies5Pct           Boolean                    @default(false) // "Aplica 5%": por ahora solo marca y filtro del catalogo, sin efecto en calculos
+  showInStore           Boolean                    @default(false)
+  storeFeatured         Boolean                    @default(false)
+  isExhibited           Boolean                    @default(false)
+  exhibitedQuantity     Int                        @default(0) // unidades en vitrina ahora (0 = no exhibido)
+  exhibitedSince        DateTime?
+  exhibitionLocation    String?
+  searchVector          Unsupported("tsvector")?
+  searchKeywords        String                     @default("") // palabras de los sinonimos activos (las mantiene el trigger y SearchSynonymsService)
+  stock                 Stock[]
+  movements             StockMovement[]
+  purchaseItems         PurchaseOrderItem[]
+  transferItems         TransferItem[]
+  countItems            InventoryCountItem[]
+  adjustmentItems       InventoryAdjustmentItem[]
+  replacementOutItems   InventoryReplacementItem[] @relation("ReplacementOut")
+  replacementInItems    InventoryReplacementItem[] @relation("ReplacementIn")
+  damageReportItems     DamageReportItem[]
+  goodsReceiptItems     GoodsReceiptItem[]
+  exhibitionEntries     ExhibitionEntry[]
+  lostSales             LostSale[]
+  supplierOrderItems    SupplierOrderItem[]
   images                ProductImage[]
   primaryImageThumbUrl  String?
   primaryImageMediumUrl String?
   // Sello de atribucion para la bitacora de precios (lo llena priceAudit() en la API; lo lee el
   // trigger product_price_log_trg). No usar para otra cosa.
-  auditToken       String?
-  auditUserId      String?
-  auditSource      String?
-  auditRef         String?
-  priceLogs        ProductPriceLog[]
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  auditToken            String?
+  auditUserId           String?
+  auditSource           String?
+  auditRef              String?
+  priceLogs             ProductPriceLog[]
+  totemAds              TotemAd[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 }
 
 // Bitacora de costos y precios: la escribe el trigger product_price_log_trg (migracion
@@ -756,26 +758,26 @@ model ProductImage {
 // ============================================
 
 model Warehouse {
-  id              String           @id @default(cuid())
-  name            String
-  location        String?
-  isDefault       Boolean          @default(false)
-  isActive        Boolean          @default(true)
+  id                    String                 @id @default(cuid())
+  name                  String
+  location              String?
+  isDefault             Boolean                @default(false)
+  isActive              Boolean                @default(true)
   // Si es false, el stock de este almacen NO cuenta como disponible para la venta
   // (ej: "Articulos dañados", "Merma"). El POS lo excluye al mostrar existencia,
   // pero sigue contando en inventario fisico / kardex / reportes de existencia.
-  countsForSale   Boolean          @default(true)
-  stock           Stock[]
-  movements       StockMovement[]
-  transfersFrom   Transfer[]       @relation("TransferFrom")
-  transfersTo     Transfer[]       @relation("TransferTo")
-  inventoryCounts      InventoryCount[]
-  inventoryAdjustments InventoryAdjustment[]
+  countsForSale         Boolean                @default(true)
+  stock                 Stock[]
+  movements             StockMovement[]
+  transfersFrom         Transfer[]             @relation("TransferFrom")
+  transfersTo           Transfer[]             @relation("TransferTo")
+  inventoryCounts       InventoryCount[]
+  inventoryAdjustments  InventoryAdjustment[]
   inventoryReplacements InventoryReplacement[]
   damageReports         DamageReport[]
   goodsReceipts         GoodsReceipt[]
-  purchaseBills        PurchaseOrder[]  @relation("PurchaseBillWarehouse")
-  createdAt       DateTime         @default(now())
+  purchaseBills         PurchaseOrder[]        @relation("PurchaseBillWarehouse")
+  createdAt             DateTime               @default(now())
 }
 
 model Stock {
@@ -802,8 +804,8 @@ model StockMovement {
   stockAfter  Float        @default(0)
   reason      String?
   reference   String?
-  sourceType  String?      // SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT
-  sourceId    String?      // ID real del documento origen, para auditar (abrir el documento desde el movimiento)
+  sourceType  String? // SALE_INVOICE | PURCHASE_ORDER | INVENTORY_ADJUSTMENT | INVENTORY_COUNT | CREDIT_DEBIT_NOTE | TRANSFER | REPLACEMENT
+  sourceId    String? // ID real del documento origen, para auditar (abrir el documento desde el movimiento)
   // Serie del documento origen (factura de venta/compra o nota) — denormalizada al crear el
   // movimiento para poder filtrar por serie fiscal vs nota de entrega (isFiscal). Null si el
   // movimiento no viene de un documento con serie (ajustes, conteos, transferencias, reemplazos).
@@ -850,15 +852,15 @@ model TransferItem {
 model PartnerTransfer {
   id              String   @id @default(cuid())
   number          String   @unique // p.ej. TOT-PTR-00001 (prefijo SELF_CODE del que inicia)
-  kind            String   // SEND | REQUEST
-  direction       String   // OUTGOING | INCOMING (respecto a esta instancia)
-  status          String   // REQUESTED|APPROVED|SENT|PENDING_RECEIPT|RECEIVED|REJECTED|CANCELLED
+  kind            String // SEND | REQUEST
+  direction       String // OUTGOING | INCOMING (respecto a esta instancia)
+  status          String // REQUESTED|APPROVED|SENT|PENDING_RECEIPT|RECEIVED|REJECTED|CANCELLED
   partnerName     String
   notes           String?
-  sendNote        String?  // Nota del que ENVIA al aprobar (ej. "bajo stock, te mando 5"). Viaja al socio.
-  items           Json     // [{ code, name, requestedQuantity, quantity, unitCost }]
-  fromWarehouseId String?  // almacen origen (en el lado que envia)
-  toWarehouseId   String?  // almacen destino (elegido al recibir)
+  sendNote        String? // Nota del que ENVIA al aprobar (ej. "bajo stock, te mando 5"). Viaja al socio.
+  items           Json // [{ code, name, requestedQuantity, quantity, unitCost }]
+  fromWarehouseId String? // almacen origen (en el lado que envia)
+  toWarehouseId   String? // almacen destino (elegido al recibir)
   notified        Boolean  @default(false) // el push al socio ya se confirmo
   createdById     String?
   createdAt       DateTime @default(now())
@@ -875,7 +877,7 @@ model InventoryCount {
   warehouse    Warehouse            @relation(fields: [warehouseId], references: [id])
   status       CountStatus          @default(DRAFT)
   notes        String?
-  observations String?              // Observaciones que el usuario anota DURANTE el conteo (editable en borrador/en progreso)
+  observations String? // Observaciones que el usuario anota DURANTE el conteo (editable en borrador/en progreso)
   items        InventoryCountItem[]
   createdById  String
   approvedById String?
@@ -897,26 +899,26 @@ model InventoryCountItem {
 }
 
 model InventoryAdjustment {
-  id            String               @id @default(cuid())
-  number        String?              @unique // ADJ-0001 (correlativo visible; nullable para ajustes viejos)
+  id            String                    @id @default(cuid())
+  number        String?                   @unique // ADJ-0001 (correlativo visible; nullable para ajustes viejos)
   warehouseId   String
-  warehouse     Warehouse            @relation(fields: [warehouseId], references: [id])
+  warehouse     Warehouse                 @relation(fields: [warehouseId], references: [id])
   type          AdjustmentType
-  status        AdjustmentStatus     @default(DRAFT)
+  status        AdjustmentStatus          @default(DRAFT)
   description   String?
   // Costo usado en el REPORTE del ajuste: "COST" = costo puro, "BREGA" = costo + brecha global
   // (solo a productos con bregaApplies). Elegido al crear el ajuste; "BREGA" por defecto.
-  costMode      String               @default("BREGA")
+  costMode      String                    @default("BREGA")
   customerId    String?
-  customer      Customer?            @relation(fields: [customerId], references: [id])
+  customer      Customer?                 @relation(fields: [customerId], references: [id])
   supplierId    String?
-  supplier      Supplier?            @relation(fields: [supplierId], references: [id])
+  supplier      Supplier?                 @relation(fields: [supplierId], references: [id])
   items         InventoryAdjustmentItem[]
   createdById   String
   processedById String?
   processedAt   DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
 }
 
 model InventoryAdjustmentItem {
@@ -953,7 +955,7 @@ model InventoryReplacement {
   notes         String? // observacion
   status        ReplacementStatus          @default(DRAFT)
   items         InventoryReplacementItem[]
-  damageReport  DamageReport?              // si nacio de un reporte de daños
+  damageReport  DamageReport? // si nacio de un reporte de daños
   createdById   String
   processedById String?
   processedAt   DateTime?
@@ -988,10 +990,10 @@ model Audit5S {
   id               String   @id @default(cuid())
   number           String   @unique // AUD-0001
   date             DateTime // fecha-calendario (medianoche UTC, date-only)
-  zone             String   // zona del patio (texto libre / combobox)
-  scoreCleanliness Int      // 1-5
-  scoreOrder       Int      // 1-5
-  scoreSafety      Int      // 1-5
+  zone             String // zona del patio (texto libre / combobox)
+  scoreCleanliness Int // 1-5
+  scoreOrder       Int // 1-5
+  scoreSafety      Int // 1-5
   observations     String?
   createdById      String
   createdBy        User     @relation("Audit5SCreator", fields: [createdById], references: [id])
@@ -1005,25 +1007,25 @@ model Audit5S {
 // mismo: el kardex se mueve al "Procesar como merma" (ADJUSTMENT_OUT) o al "Generar reemplazo"
 // (InventoryReplacement enlazado). Estatus: PENDIENTE -> PROCESADO (terminal) | ANULADO.
 model DamageReport {
-  id            String             @id @default(cuid())
-  number        String             @unique // DMG-0001
+  id            String                @id @default(cuid())
+  number        String                @unique // DMG-0001
   date          DateTime // fecha-calendario (medianoche UTC, date-only)
   zone          String
   warehouseId   String // donde vive el stock (default = config.defaultWarehouseId)
-  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
   notes         String?
-  status        String             @default("PENDIENTE") // PENDIENTE | PROCESADO | ANULADO
+  status        String                @default("PENDIENTE") // PENDIENTE | PROCESADO | ANULADO
   resolution    String? // REEMPLAZO | MERMA (como lo resolvio el auditor)
-  replacementId String?            @unique // enlace cuando resolution=REEMPLAZO
+  replacementId String?               @unique // enlace cuando resolution=REEMPLAZO
   replacement   InventoryReplacement? @relation(fields: [replacementId], references: [id])
   items         DamageReportItem[]
   createdById   String
-  createdBy     User               @relation("DamageReportCreator", fields: [createdById], references: [id])
+  createdBy     User                  @relation("DamageReportCreator", fields: [createdById], references: [id])
   processedById String?
-  processedBy   User?              @relation("DamageReportProcessor", fields: [processedById], references: [id])
+  processedBy   User?                 @relation("DamageReportProcessor", fields: [processedById], references: [id])
   processedAt   DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@index([status])
   @@index([date])
@@ -1126,43 +1128,43 @@ model GoodsReceiptPhoto {
 // ============================================
 
 model PurchaseOrder {
-  id                    String                 @id @default(cuid())
-  number                String                 @unique
-  supplierId            String
-  supplier              Supplier               @relation(fields: [supplierId], references: [id])
-  status                PurchaseStatus         @default(PENDING)
-  returnStatus          String                 @default("NONE") // NONE | PARTIAL | TOTAL (devoluciones por NCC de mercancia)
-  invoiceDate           DateTime?
-  receivedDate          DateTime?
-  currency              String                 @default("USD")
-  totalUsd              Float                  @default(0)
-  totalBs               Float                  @default(0)
-  exchangeRate          Float                  @default(1)
-  surchargeUsd          Float                  @default(0)
-  surchargeDistribution String                 @default("PROPORTIONAL")
-  totalWithSurchargeUsd Float                  @default(0)
-  isFiscal              Boolean                @default(true)
-  serieId               String?
-  serie                 Serie?                 @relation(fields: [serieId], references: [id])
-  isCredit              Boolean                @default(false)
-  creditDays            Int                    @default(0)
-  supplierControlNumber String?
-  islrRetentionPct      Float?
-  islrRetentionUsd      Float?
-  islrRetentionBs       Float?
-  notes                 String?
-  receivedAt            DateTime?
-  items                 PurchaseOrderItem[]
-  payables              Payable[]
-  creditDebitNotes      CreditDebitNote[]
-  ivaRetentions         IvaRetention[]
+  id                        String                     @id @default(cuid())
+  number                    String                     @unique
+  supplierId                String
+  supplier                  Supplier                   @relation(fields: [supplierId], references: [id])
+  status                    PurchaseStatus             @default(PENDING)
+  returnStatus              String                     @default("NONE") // NONE | PARTIAL | TOTAL (devoluciones por NCC de mercancia)
+  invoiceDate               DateTime?
+  receivedDate              DateTime?
+  currency                  String                     @default("USD")
+  totalUsd                  Float                      @default(0)
+  totalBs                   Float                      @default(0)
+  exchangeRate              Float                      @default(1)
+  surchargeUsd              Float                      @default(0)
+  surchargeDistribution     String                     @default("PROPORTIONAL")
+  totalWithSurchargeUsd     Float                      @default(0)
+  isFiscal                  Boolean                    @default(true)
+  serieId                   String?
+  serie                     Serie?                     @relation(fields: [serieId], references: [id])
+  isCredit                  Boolean                    @default(false)
+  creditDays                Int                        @default(0)
+  supplierControlNumber     String?
+  islrRetentionPct          Float?
+  islrRetentionUsd          Float?
+  islrRetentionBs           Float?
+  notes                     String?
+  receivedAt                DateTime?
+  items                     PurchaseOrderItem[]
+  payables                  Payable[]
+  creditDebitNotes          CreditDebitNote[]
+  ivaRetentions             IvaRetention[]
   retentionVoucherLines     RetentionVoucherLine[]
   islrRetentionVoucherLines IslrRetentionVoucherLine[]
   purchaseBookEntries       PurchaseBookEntry[]
   attachments               PurchaseAttachment[]
-  createdById           String
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  createdById               String
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   // Purchase Bill fields
   purchaseNumber         Int        @default(0)
@@ -1218,8 +1220,8 @@ model PurchaseAttachment {
   id              String        @id @default(cuid())
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  thumbKey        String        // miniatura ~320px webp en Spaces (galería). En PDF = mismo key del PDF.
-  fullKey         String        // versión ~1600px webp en Spaces (lightbox/lectura). En PDF = key del PDF.
+  thumbKey        String // miniatura ~320px webp en Spaces (galería). En PDF = mismo key del PDF.
+  fullKey         String // versión ~1600px webp en Spaces (lightbox/lectura). En PDF = key del PDF.
   mimeType        String        @default("image/webp") // "image/webp" o "application/pdf"
   bytes           Int           @default(0) // tamaño de la versión grande
   uploadedById    String
@@ -1234,50 +1236,50 @@ model PurchaseAttachment {
 // ============================================
 
 model Customer {
-  id           String       @id @default(cuid())
-  code         String?      @unique // Codigo correlativo CLI-000001 (auto-generado; nullable para clientes previos al backfill)
-  name         String
-  documentType String       @default("V")
-  rif          String?
-  phone        String?
-  email        String?
-  address      String?
-  creditLimit  Float        @default(0)
-  creditDays   Int          @default(0)
-  isDefault    Boolean      @default(false)
-  isActive     Boolean      @default(true)
-  isSpecialTaxpayer Boolean @default(false)
-  isGroupCompany    Boolean @default(false) // Empresa del grupo: sus facturas no comisionan
-  isEmployee        Boolean  @default(false) // Cliente empleado (para reportes / cobro por sueldo)
-  creditAuthorizedBy String?                 // Quien aprobo la linea de credito (administracion)
-  creditReviewedAt   DateTime?               // Fecha del ultimo analisis de credito (auto-sellada)
+  id                   String                 @id @default(cuid())
+  code                 String?                @unique // Codigo correlativo CLI-000001 (auto-generado; nullable para clientes previos al backfill)
+  name                 String
+  documentType         String                 @default("V")
+  rif                  String?
+  phone                String?
+  email                String?
+  address              String?
+  creditLimit          Float                  @default(0)
+  creditDays           Int                    @default(0)
+  isDefault            Boolean                @default(false)
+  isActive             Boolean                @default(true)
+  isSpecialTaxpayer    Boolean                @default(false)
+  isGroupCompany       Boolean                @default(false) // Empresa del grupo: sus facturas no comisionan
+  isEmployee           Boolean                @default(false) // Cliente empleado (para reportes / cobro por sueldo)
+  creditAuthorizedBy   String? // Quien aprobo la linea de credito (administracion)
+  creditReviewedAt     DateTime? // Fecha del ultimo analisis de credito (auto-sellada)
   // Recordatorios de cobro por WhatsApp (/receivables/recordatorios):
-  lastReminderAt     DateTime?               // Fecha/hora del ultimo recordatorio marcado como enviado
-  reminderNote       String?                 // Observacion libre de cobranza (ej. "recordar manana AM")
+  lastReminderAt       DateTime? // Fecha/hora del ultimo recordatorio marcado como enviado
+  reminderNote         String? // Observacion libre de cobranza (ej. "recordar manana AM")
   // Monto minimo (USD, precio de lista) para que el cliente pueda guardar un pedido desde el portal. 0 = sin minimo.
-  minOrderUsd        Float     @default(0)
+  minOrderUsd          Float                  @default(0)
   // Ubicacion GPS para despachos (tomada con el boton "Tomar ubicacion" en la ficha del cliente).
-  latitude           Float?
-  longitude          Float?
-  locationAccuracyM  Float?                  // Precision reportada por el GPS al tomarla (metros)
-  locationUpdatedAt  DateTime?
-  invoices     Invoice[]
-  quotations   Quotation[]
-  receivables  Receivable[]
-  receipts     Receipt[]
-  advances              CustomerAdvance[]
-  inventoryAdjustments  InventoryAdjustment[]
-  ivaRetentions         CustomerIvaRetention[]
-  lostSales             LostSale[]
-  employee              Employee?
+  latitude             Float?
+  longitude            Float?
+  locationAccuracyM    Float? // Precision reportada por el GPS al tomarla (metros)
+  locationUpdatedAt    DateTime?
+  invoices             Invoice[]
+  quotations           Quotation[]
+  receivables          Receivable[]
+  receipts             Receipt[]
+  advances             CustomerAdvance[]
+  inventoryAdjustments InventoryAdjustment[]
+  ivaRetentions        CustomerIvaRetention[]
+  lostSales            LostSale[]
+  employee             Employee?
   // Vendedor asignado: los pedidos que el cliente monta en el portal llevan este vendedor.
-  sellerId              String?
-  seller                Seller?              @relation("CustomerAssignedSeller", fields: [sellerId], references: [id], onDelete: SetNull)
-  portalUser            User?                @relation("CustomerPortalUser")
-  createdById  String?                              // Usuario que registro el cliente (null en clientes previos al backfill)
-  createdBy    User?        @relation("CustomerCreator", fields: [createdById], references: [id])
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  sellerId             String?
+  seller               Seller?                @relation("CustomerAssignedSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  portalUser           User?                  @relation("CustomerPortalUser")
+  createdById          String? // Usuario que registro el cliente (null en clientes previos al backfill)
+  createdBy            User?                  @relation("CustomerCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([sellerId])
   @@index([createdAt])
@@ -1326,7 +1328,7 @@ model CustomerAdvance {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
-  documentDate  DateTime?             // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
+  documentDate  DateTime? // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   paidAmountUsd Float                 @default(0)
   paidAmountBs  Float                 @default(0)
   status        CustomerAdvanceStatus @default(AVAILABLE)
@@ -1349,7 +1351,7 @@ model SupplierAdvance {
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
-  documentDate  DateTime?             // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
+  documentDate  DateTime? // fecha del anticipo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   paidAmountUsd Float                 @default(0)
   paidAmountBs  Float                 @default(0)
   status        SupplierAdvanceStatus @default(AVAILABLE)
@@ -1407,32 +1409,32 @@ model PaymentMethod {
 // ============================================
 
 model Serie {
-  id                  String             @id @default(cuid())
-  name                String             @unique
-  prefix              String
-  type                SerieType          @default(SALES)
-  isFiscal            Boolean            @default(false)
-  isVatExempt         Boolean            @default(false)
-  lastNumber          Int                @default(0)  // DEPRECADO: contador compartido (reemplazado por contadores por tipo)
-  lastInvoiceNumber    Int               @default(0)  // correlativo de facturas
-  lastCreditNoteNumber Int               @default(0)  // correlativo de notas de credito (NCV/NCC)
-  lastDebitNoteNumber  Int               @default(0)  // correlativo de notas de debito (NDV/NDC)
-  lastReceivableNumber Int               @default(0)  // correlativo de CxC (documento de cuenta por cobrar)
-  isActive            Boolean            @default(true)
-  comPort             String?
-  fiscalMachineSerial String?
-  cashRegisterId      String?            @unique
-  cashRegister        CashRegister?      @relation(fields: [cashRegisterId], references: [id])
-  invoices            Invoice[]
-  purchaseOrders      PurchaseOrder[]
-  creditDebitNotes    CreditDebitNote[]
-  retentionVouchers       RetentionVoucher[]
-  islrRetentionVouchers   IslrRetentionVoucher[]
-  receivables         Receivable[]       @relation("ReceivableSerie")
-  payables            Payable[]          @relation("PayableSerie")
-  stockMovements      StockMovement[]    @relation("SerieStockMovements")
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                    String                 @id @default(cuid())
+  name                  String                 @unique
+  prefix                String
+  type                  SerieType              @default(SALES)
+  isFiscal              Boolean                @default(false)
+  isVatExempt           Boolean                @default(false)
+  lastNumber            Int                    @default(0) // DEPRECADO: contador compartido (reemplazado por contadores por tipo)
+  lastInvoiceNumber     Int                    @default(0) // correlativo de facturas
+  lastCreditNoteNumber  Int                    @default(0) // correlativo de notas de credito (NCV/NCC)
+  lastDebitNoteNumber   Int                    @default(0) // correlativo de notas de debito (NDV/NDC)
+  lastReceivableNumber  Int                    @default(0) // correlativo de CxC (documento de cuenta por cobrar)
+  isActive              Boolean                @default(true)
+  comPort               String?
+  fiscalMachineSerial   String?
+  cashRegisterId        String?                @unique
+  cashRegister          CashRegister?          @relation(fields: [cashRegisterId], references: [id])
+  invoices              Invoice[]
+  purchaseOrders        PurchaseOrder[]
+  creditDebitNotes      CreditDebitNote[]
+  retentionVouchers     RetentionVoucher[]
+  islrRetentionVouchers IslrRetentionVoucher[]
+  receivables           Receivable[]           @relation("ReceivableSerie")
+  payables              Payable[]              @relation("PayableSerie")
+  stockMovements        StockMovement[]        @relation("SerieStockMovements")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 }
 
 // ============================================
@@ -1440,50 +1442,50 @@ model Serie {
 // ============================================
 
 model CashRegister {
-  id               String            @id @default(cuid())
-  code             String            @unique
-  name             String
-  isShared         Boolean           @default(false)
+  id                 String            @id @default(cuid())
+  code               String            @unique
+  name               String
+  isShared           Boolean           @default(false)
   // Caja de administración (pagos de proveedores, gastos, etc.): con showInPos=false NO
   // aparece en el POS; se abre desde /cash y se usa en gastos/recibos de pago.
-  showInPos        Boolean           @default(true)
+  showInPos          Boolean           @default(true)
   // Contar los movimientos de esta caja en el "Resumen de Caja" del dashboard gerencial.
   // Las cajas de administración (gastos/CxP/caja chica) se marcan false para que la gerencia
   // vea solo la caja real de mostrador (efectivo/divisas que cobra a clientes).
-  includeInDashboard Boolean         @default(true)
-  isActive         Boolean           @default(true)
-  serie            Serie?
-  sessions         CashSession[]
-  invoices         Invoice[]
-  creditDebitNotes CreditDebitNote[]
-  zReports         ZReport[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  includeInDashboard Boolean           @default(true)
+  isActive           Boolean           @default(true)
+  serie              Serie?
+  sessions           CashSession[]
+  invoices           Invoice[]
+  creditDebitNotes   CreditDebitNote[]
+  zReports           ZReport[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 model CashSession {
-  id                String         @id @default(cuid())
+  id                String            @id @default(cuid())
   cashRegisterId    String
-  cashRegister      CashRegister   @relation(fields: [cashRegisterId], references: [id])
+  cashRegister      CashRegister      @relation(fields: [cashRegisterId], references: [id])
   openedById        String
-  openedBy          User           @relation("SessionOpenedBy", fields: [openedById], references: [id])
+  openedBy          User              @relation("SessionOpenedBy", fields: [openedById], references: [id])
   closedById        String?
-  closedBy          User?          @relation("SessionClosedBy", fields: [closedById], references: [id])
-  openingBalanceUsd Float          @default(0)
-  openingBalanceBs  Float          @default(0)
+  closedBy          User?             @relation("SessionClosedBy", fields: [closedById], references: [id])
+  openingBalanceUsd Float             @default(0)
+  openingBalanceBs  Float             @default(0)
   closingBalanceUsd Float?
   closingBalanceBs  Float?
   expectedUsd       Float?
   expectedBs        Float?
   differenceUsd     Float?
   differenceBs      Float?
-  status            SessionStatus  @default(OPEN)
+  status            SessionStatus     @default(OPEN)
   notes             String?
-  openedAt          DateTime       @default(now())
+  openedAt          DateTime          @default(now())
   closedAt          DateTime?
   cashMovements     CashMovement[]
   ledgerEntries     CashLedgerEntry[]
-  expenses          Expense[]      @relation("ExpenseSession")
+  expenses          Expense[]         @relation("ExpenseSession")
 }
 
 // ============================================
@@ -1553,65 +1555,65 @@ model CashMovement {
 // ============================================
 
 model Invoice {
-  id                  String             @id @default(cuid())
-  number              String?            @unique
-  fiscalNumber        String?
-  controlNumber       String?
-  fiscalMachineSerial String?
-  fiscalPrinted       Boolean            @default(false)
-  serieId             String?
-  serie               Serie?             @relation(fields: [serieId], references: [id])
-  cashRegisterId      String
-  cashRegister        CashRegister       @relation(fields: [cashRegisterId], references: [id])
-  customerId          String?
-  customer            Customer?          @relation(fields: [customerId], references: [id])
-  status              InvoiceStatus      @default(PENDING)
-  paymentType         InvoicePaymentType @default(CASH)
-  type                InvoiceType        @default(SALE)
-  subtotalUsd         Float              @default(0)
-  ivaUsd              Float              @default(0)
-  totalUsd            Float              @default(0)
-  totalBs             Float              @default(0)
-  exchangeRate        Float              @default(0)
-  igtfUsd             Float              @default(0)
-  igtfBs              Float              @default(0)
-  subtotalBs          Float              @default(0)
-  ivaBs               Float              @default(0)
-  totalPaidUsd        Float              @default(0)
-  changeBs            Float              @default(0)
-  isCredit            Boolean            @default(false)
-  creditDays          Int                @default(0)
-  dueDate             DateTime?
-  paidAt              DateTime?
-  notes               String?
-  items               InvoiceItem[]
-  payments            Payment[]
-  receivables         Receivable[]
-  printJobs           PrintJob[]
+  id                      String                 @id @default(cuid())
+  number                  String?                @unique
+  fiscalNumber            String?
+  controlNumber           String?
+  fiscalMachineSerial     String?
+  fiscalPrinted           Boolean                @default(false)
+  serieId                 String?
+  serie                   Serie?                 @relation(fields: [serieId], references: [id])
+  cashRegisterId          String
+  cashRegister            CashRegister           @relation(fields: [cashRegisterId], references: [id])
+  customerId              String?
+  customer                Customer?              @relation(fields: [customerId], references: [id])
+  status                  InvoiceStatus          @default(PENDING)
+  paymentType             InvoicePaymentType     @default(CASH)
+  type                    InvoiceType            @default(SALE)
+  subtotalUsd             Float                  @default(0)
+  ivaUsd                  Float                  @default(0)
+  totalUsd                Float                  @default(0)
+  totalBs                 Float                  @default(0)
+  exchangeRate            Float                  @default(0)
+  igtfUsd                 Float                  @default(0)
+  igtfBs                  Float                  @default(0)
+  subtotalBs              Float                  @default(0)
+  ivaBs                   Float                  @default(0)
+  totalPaidUsd            Float                  @default(0)
+  changeBs                Float                  @default(0)
+  isCredit                Boolean                @default(false)
+  creditDays              Int                    @default(0)
+  dueDate                 DateTime?
+  paidAt                  DateTime?
+  notes                   String?
+  items                   InvoiceItem[]
+  payments                Payment[]
+  receivables             Receivable[]
+  printJobs               PrintJob[]
   // Gasto(s) de autoconsumo generados al facturar a una empresa del grupo (isGroupCompany).
-  autoConsumoExpenses Expense[]          @relation("InvoiceAutoConsumo")
-  creditDebitNotes    CreditDebitNote[]
-  salesBookEntries    SalesBookEntry[]
-  customerIvaRetentions CustomerIvaRetention[]
-  dispatch            Dispatch?
-  createdById         String
-  sellerId            String?
-  seller              Seller?            @relation(fields: [sellerId], references: [id])
+  autoConsumoExpenses     Expense[]              @relation("InvoiceAutoConsumo")
+  creditDebitNotes        CreditDebitNote[]
+  salesBookEntries        SalesBookEntry[]
+  customerIvaRetentions   CustomerIvaRetention[]
+  dispatch                Dispatch?
+  createdById             String
+  sellerId                String?
+  seller                  Seller?                @relation(fields: [sellerId], references: [id])
   // Método de pago que el vendedor prevé que usará el cliente (Cashea/Crediagro). Solo un
   // aviso para el cajero al retomar la pre-factura; no obliga ni pre-cobra nada.
   intendedPaymentMethodId String?
-  intendedPaymentMethod   PaymentMethod? @relation("IntendedPayment", fields: [intendedPaymentMethodId], references: [id])
-  cashierId           String?
-  cashier             User?              @relation("InvoiceCashier", fields: [cashierId], references: [id])
-  lockedById          String?
-  lockedAt            DateTime?
+  intendedPaymentMethod   PaymentMethod?         @relation("IntendedPayment", fields: [intendedPaymentMethodId], references: [id])
+  cashierId               String?
+  cashier                 User?                  @relation("InvoiceCashier", fields: [cashierId], references: [id])
+  lockedById              String?
+  lockedAt                DateTime?
   // Portal de clientes: pedido montado por el propio cliente (rol CLIENT).
-  fromPortal          Boolean            @default(false)
-  portalNote          String?            // nota del cliente para identificar el pedido ("Obra Los Pinos")
-  clientUpdatedAt     DateTime?          // ultima modificacion hecha por el cliente
-  staffSeenAt         DateTime?          // ultima vez que alguien de la empresa lo vio
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  fromPortal              Boolean                @default(false)
+  portalNote              String? // nota del cliente para identificar el pedido ("Obra Los Pinos")
+  clientUpdatedAt         DateTime? // ultima modificacion hecha por el cliente
+  staffSeenAt             DateTime? // ultima vez que alguien de la empresa lo vio
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
 
   @@index([status])
   @@index([fromPortal, status])
@@ -1668,72 +1670,72 @@ model Payment {
 // ============================================
 
 model Receivable {
-  id               String              @id @default(cuid())
-  number           String?             @unique
-  type             ReceivableType
-  customerId       String?
-  customer         Customer?           @relation(fields: [customerId], references: [id])
-  platformName     String?
-  reference        String?
-  invoiceId        String?
-  invoice          Invoice?            @relation(fields: [invoiceId], references: [id])
-  documentNumber   String?
-  description      String?
-  amountUsd        Float
-  amountBs         Float
-  exchangeRate     Float
-  dueDate          DateTime?
-  status           ReceivableStatus    @default(PENDING)
-  paidAmountUsd    Float               @default(0)
-  paidAmountBs     Float               @default(0)
-  paidAt           DateTime?
-  notes            String?
+  id             String           @id @default(cuid())
+  number         String?          @unique
+  type           ReceivableType
+  customerId     String?
+  customer       Customer?        @relation(fields: [customerId], references: [id])
+  platformName   String?
+  reference      String?
+  invoiceId      String?
+  invoice        Invoice?         @relation(fields: [invoiceId], references: [id])
+  documentNumber String?
+  description    String?
+  amountUsd      Float
+  amountBs       Float
+  exchangeRate   Float
+  dueDate        DateTime?
+  status         ReceivableStatus @default(PENDING)
+  paidAmountUsd  Float            @default(0)
+  paidAmountBs   Float            @default(0)
+  paidAt         DateTime?
+  notes          String?
 
   // Fiscal fields
-  serieId          String?
-  serie            Serie?              @relation("ReceivableSerie", fields: [serieId], references: [id])
-  currency         String              @default("USD")
-  originalDate     DateTime?
-  receptionDate    DateTime?
-  paymentTerms     String?
+  serieId       String?
+  serie         Serie?    @relation("ReceivableSerie", fields: [serieId], references: [id])
+  currency      String    @default("USD")
+  originalDate  DateTime?
+  receptionDate DateTime?
+  paymentTerms  String?
 
   // Tax breakdown (USD + Bs)
-  exemptBaseUsd    Float               @default(0)
-  exemptBaseBs     Float               @default(0)
-  taxableBase8Usd  Float               @default(0)
-  taxableBase8Bs   Float               @default(0)
-  taxableBase16Usd Float               @default(0)
-  taxableBase16Bs  Float               @default(0)
-  taxableBase31Usd Float               @default(0)
-  taxableBase31Bs  Float               @default(0)
-  iva8Usd          Float               @default(0)
-  iva8Bs           Float               @default(0)
-  iva16Usd         Float               @default(0)
-  iva16Bs          Float               @default(0)
-  iva31Usd         Float               @default(0)
-  iva31Bs          Float               @default(0)
-  totalIvaUsd      Float               @default(0)
-  totalIvaBs       Float               @default(0)
-  igtfPct          Float               @default(0)
-  igtfUsd          Float               @default(0)
-  igtfBs           Float               @default(0)
+  exemptBaseUsd    Float @default(0)
+  exemptBaseBs     Float @default(0)
+  taxableBase8Usd  Float @default(0)
+  taxableBase8Bs   Float @default(0)
+  taxableBase16Usd Float @default(0)
+  taxableBase16Bs  Float @default(0)
+  taxableBase31Usd Float @default(0)
+  taxableBase31Bs  Float @default(0)
+  iva8Usd          Float @default(0)
+  iva8Bs           Float @default(0)
+  iva16Usd         Float @default(0)
+  iva16Bs          Float @default(0)
+  iva31Usd         Float @default(0)
+  iva31Bs          Float @default(0)
+  totalIvaUsd      Float @default(0)
+  totalIvaBs       Float @default(0)
+  igtfPct          Float @default(0)
+  igtfUsd          Float @default(0)
+  igtfBs           Float @default(0)
 
   createdById      String?
-  createdBy        User?               @relation("ReceivableCreator", fields: [createdById], references: [id])
+  createdBy        User?                  @relation("ReceivableCreator", fields: [createdById], references: [id])
   payments         ReceivablePayment[]
   receiptItems     ReceiptItem[]
   salesBookEntries SalesBookEntry[]
   ivaRetentions    CustomerIvaRetention[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 }
 
 model ReceivablePayment {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   receivableId  String
-  receivable    Receivable    @relation(fields: [receivableId], references: [id])
+  receivable    Receivable     @relation(fields: [receivableId], references: [id])
   receiptId     String?
-  receipt       Receipt?      @relation(fields: [receiptId], references: [id])
+  receipt       Receipt?       @relation(fields: [receiptId], references: [id])
   amountUsd     Float
   amountBs      Float
   exchangeRate  Float
@@ -1744,7 +1746,7 @@ model ReceivablePayment {
   cashSessionId String?
   notes         String?
   createdById   String
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime       @default(now())
 }
 
 // ============================================
@@ -1752,79 +1754,79 @@ model ReceivablePayment {
 // ============================================
 
 model Payable {
-  id                     String                @id @default(cuid())
-  number                 String?               @unique
-  supplierId             String
-  supplier               Supplier              @relation(fields: [supplierId], references: [id])
-  purchaseOrderId        String?
-  purchaseOrder          PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
-  expenseId              String?               @unique
-  expense                Expense?              @relation(fields: [expenseId], references: [id])
-  documentNumber         String?
-  description            String?
-  amountUsd              Float
-  amountBs               Float
-  exchangeRate           Float
-  retentionUsd           Float                 @default(0)
-  retentionBs            Float                 @default(0)
-  netPayableUsd          Float
-  netPayableBs           Float                 @default(0)
-  dueDate                DateTime?
-  status                 PayableStatus         @default(PENDING)
-  paidAmountUsd          Float                 @default(0)
-  paidAmountBs           Float                 @default(0)
-  paidAt                 DateTime?
-  notes                  String?
+  id              String         @id @default(cuid())
+  number          String?        @unique
+  supplierId      String
+  supplier        Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  expenseId       String?        @unique
+  expense         Expense?       @relation(fields: [expenseId], references: [id])
+  documentNumber  String?
+  description     String?
+  amountUsd       Float
+  amountBs        Float
+  exchangeRate    Float
+  retentionUsd    Float          @default(0)
+  retentionBs     Float          @default(0)
+  netPayableUsd   Float
+  netPayableBs    Float          @default(0)
+  dueDate         DateTime?
+  status          PayableStatus  @default(PENDING)
+  paidAmountUsd   Float          @default(0)
+  paidAmountBs    Float          @default(0)
+  paidAt          DateTime?
+  notes           String?
 
   // Fiscal fields
-  serieId                String?
-  serie                  Serie?                @relation("PayableSerie", fields: [serieId], references: [id])
-  serieProveedor         String?               // serie alfanumerica de la factura del proveedor (ej. "A")
-  controlFiscal          String?
-  currency               String                @default("USD")
-  originalDate           DateTime?
-  receptionDate          DateTime?
-  paymentTerms           String?
+  serieId        String?
+  serie          Serie?    @relation("PayableSerie", fields: [serieId], references: [id])
+  serieProveedor String? // serie alfanumerica de la factura del proveedor (ej. "A")
+  controlFiscal  String?
+  currency       String    @default("USD")
+  originalDate   DateTime?
+  receptionDate  DateTime?
+  paymentTerms   String?
 
   // Tax breakdown (USD + Bs)
-  exemptBaseUsd          Float                 @default(0)
-  exemptBaseBs           Float                 @default(0)
-  taxableBase8Usd        Float                 @default(0)
-  taxableBase8Bs         Float                 @default(0)
-  taxableBase16Usd       Float                 @default(0)
-  taxableBase16Bs        Float                 @default(0)
-  taxableBase31Usd       Float                 @default(0)
-  taxableBase31Bs        Float                 @default(0)
-  iva8Usd                Float                 @default(0)
-  iva8Bs                 Float                 @default(0)
-  iva16Usd               Float                 @default(0)
-  iva16Bs                Float                 @default(0)
-  iva31Usd               Float                 @default(0)
-  iva31Bs                Float                 @default(0)
-  totalIvaUsd            Float                 @default(0)
-  totalIvaBs             Float                 @default(0)
-  igtfPct                Float                 @default(0)
-  igtfUsd                Float                 @default(0)
-  igtfBs                 Float                 @default(0)
+  exemptBaseUsd    Float @default(0)
+  exemptBaseBs     Float @default(0)
+  taxableBase8Usd  Float @default(0)
+  taxableBase8Bs   Float @default(0)
+  taxableBase16Usd Float @default(0)
+  taxableBase16Bs  Float @default(0)
+  taxableBase31Usd Float @default(0)
+  taxableBase31Bs  Float @default(0)
+  iva8Usd          Float @default(0)
+  iva8Bs           Float @default(0)
+  iva16Usd         Float @default(0)
+  iva16Bs          Float @default(0)
+  iva31Usd         Float @default(0)
+  iva31Bs          Float @default(0)
+  totalIvaUsd      Float @default(0)
+  totalIvaBs       Float @default(0)
+  igtfPct          Float @default(0)
+  igtfUsd          Float @default(0)
+  igtfBs           Float @default(0)
 
-  createdById            String?
-  createdBy              User?                 @relation("PayableCreator", fields: [createdById], references: [id])
-  payments               PayablePayment[]
-  receiptItems           ReceiptItem[]
-  paymentScheduleItems   PaymentScheduleItem[]
-  purchaseBookEntries    PurchaseBookEntry[]
-  retentionVoucherLines  RetentionVoucherLine[]
+  createdById               String?
+  createdBy                 User?                      @relation("PayableCreator", fields: [createdById], references: [id])
+  payments                  PayablePayment[]
+  receiptItems              ReceiptItem[]
+  paymentScheduleItems      PaymentScheduleItem[]
+  purchaseBookEntries       PurchaseBookEntry[]
+  retentionVoucherLines     RetentionVoucherLine[]
   islrRetentionVoucherLines IslrRetentionVoucherLine[]
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 }
 
 model PayablePayment {
-  id           String        @id @default(cuid())
+  id           String         @id @default(cuid())
   payableId    String
-  payable      Payable       @relation(fields: [payableId], references: [id])
+  payable      Payable        @relation(fields: [payableId], references: [id])
   receiptId    String?
-  receipt      Receipt?      @relation(fields: [receiptId], references: [id])
+  receipt      Receipt?       @relation(fields: [receiptId], references: [id])
   amountUsd    Float
   amountBs     Float
   exchangeRate Float
@@ -1834,7 +1836,7 @@ model PayablePayment {
   reference    String?
   notes        String?
   createdById  String
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime       @default(now())
 }
 
 // ============================================
@@ -1849,7 +1851,7 @@ model Receipt {
   customer           Customer?           @relation(fields: [customerId], references: [id])
   supplierId         String?
   supplier           Supplier?           @relation(fields: [supplierId], references: [id])
-  sellerId           String?             // vendedor asociado al recibo (opcional, solo cobro)
+  sellerId           String? // vendedor asociado al recibo (opcional, solo cobro)
   seller             Seller?             @relation(fields: [sellerId], references: [id])
   status             ReceiptStatus       @default(DRAFT)
   totalUsd           Float               @default(0)
@@ -1859,7 +1861,7 @@ model Receipt {
   differentialBs     Float               @default(0)
   hasDifferential    Boolean             @default(false)
   notes              String?
-  documentDate       DateTime?           // fecha del recibo elegida por el usuario (medianoche UTC de la fecha-Caracas)
+  documentDate       DateTime? // fecha del recibo elegida por el usuario (medianoche UTC de la fecha-Caracas)
   items              ReceiptItem[]
   payments           ReceiptPayment[]
   receivablePayments ReceivablePayment[]
@@ -1871,34 +1873,34 @@ model Receipt {
 }
 
 model ReceiptItem {
-  id                String           @id @default(cuid())
-  receiptId         String
-  receipt           Receipt          @relation(fields: [receiptId], references: [id])
-  itemType          ReceiptItemType
-  receivableId      String?
-  receivable        Receivable?      @relation(fields: [receivableId], references: [id])
-  payableId         String?
-  payable           Payable?         @relation(fields: [payableId], references: [id])
-  creditDebitNoteId String?
-  creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
-  ivaRetentionId    String?
-  ivaRetention      IvaRetention?    @relation(fields: [ivaRetentionId], references: [id])
+  id                     String                @id @default(cuid())
+  receiptId              String
+  receipt                Receipt               @relation(fields: [receiptId], references: [id])
+  itemType               ReceiptItemType
+  receivableId           String?
+  receivable             Receivable?           @relation(fields: [receivableId], references: [id])
+  payableId              String?
+  payable                Payable?              @relation(fields: [payableId], references: [id])
+  creditDebitNoteId      String?
+  creditDebitNote        CreditDebitNote?      @relation(fields: [creditDebitNoteId], references: [id])
+  ivaRetentionId         String?
+  ivaRetention           IvaRetention?         @relation(fields: [ivaRetentionId], references: [id])
   customerIvaRetentionId String?
   customerIvaRetention   CustomerIvaRetention? @relation(fields: [customerIvaRetentionId], references: [id])
   retentionVoucherId     String?
   retentionVoucher       RetentionVoucher?     @relation(fields: [retentionVoucherId], references: [id])
   islrRetentionVoucherId String?
   islrRetentionVoucher   IslrRetentionVoucher? @relation(fields: [islrRetentionVoucherId], references: [id])
-  customerAdvanceId String?
-  customerAdvance   CustomerAdvance? @relation(fields: [customerAdvanceId], references: [id])
-  supplierAdvanceId String?
-  supplierAdvance   SupplierAdvance? @relation(fields: [supplierAdvanceId], references: [id])
-  description       String
-  amountUsd         Float            @default(0)
-  amountBsHistoric  Float            @default(0)
-  amountBsToday     Float            @default(0)
-  differentialBs    Float            @default(0)
-  sign              Int              @default(1)
+  customerAdvanceId      String?
+  customerAdvance        CustomerAdvance?      @relation(fields: [customerAdvanceId], references: [id])
+  supplierAdvanceId      String?
+  supplierAdvance        SupplierAdvance?      @relation(fields: [supplierAdvanceId], references: [id])
+  description            String
+  amountUsd              Float                 @default(0)
+  amountBsHistoric       Float                 @default(0)
+  amountBsToday          Float                 @default(0)
+  differentialBs         Float                 @default(0)
+  sign                   Int                   @default(1)
 }
 
 model IvaRetention {
@@ -2006,7 +2008,7 @@ model Quotation {
   convertedToInvoiceId String?
   items                QuotationItem[]
   createdById          String
-  sellerId             String?         // vendedor de la cotizacion (se copia a la factura al convertir)
+  sellerId             String? // vendedor de la cotizacion (se copia a la factura al convertir)
   seller               Seller?         @relation(fields: [sellerId], references: [id])
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
@@ -2036,48 +2038,48 @@ model QuotationItem {
 // ============================================
 
 model CreditDebitNote {
-  id                   String                @id @default(cuid())
-  number               String                @unique
-  type                 NoteType
-  origin               NoteOrigin
-  status               NoteStatus            @default(DRAFT)
-  invoiceId            String?
-  invoice              Invoice?              @relation(fields: [invoiceId], references: [id])
-  serieId              String?
-  serie                Serie?                @relation(fields: [serieId], references: [id])
-  cashRegisterId       String?
-  cashRegister         CashRegister?         @relation(fields: [cashRegisterId], references: [id])
-  fiscalNumber         String?
-  machineSerial        String?
-  fiscalPrinted        Boolean               @default(false)
-  purchaseOrderId      String?
-  purchaseOrder        PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
-  subtotalUsd          Float                 @default(0)
-  ivaUsd               Float                 @default(0)
-  igtfUsd              Float                 @default(0)
-  igtfBs               Float                 @default(0)
-  totalUsd             Float                 @default(0)
-  subtotalBs           Float                 @default(0)
-  ivaBs                Float                 @default(0)
-  totalBs              Float                 @default(0)
-  exchangeRate         Float                 @default(0)
-  manualAmountUsd      Float?
-  manualPct            Float?
-  documentDate         DateTime?
-  supplierDocNumber    String?   // N° de la nota que da el proveedor (NCC/NDC de compra, para el libro)
-  motivo               SalesReturnReason?   // motivo de la devolución de ventas (solo NCV)
-  notes                String?
-  paidAmountUsd        Float                 @default(0)
-  appliedAt            DateTime?
-  items                CreditDebitNoteItem[]
+  id                    String                @id @default(cuid())
+  number                String                @unique
+  type                  NoteType
+  origin                NoteOrigin
+  status                NoteStatus            @default(DRAFT)
+  invoiceId             String?
+  invoice               Invoice?              @relation(fields: [invoiceId], references: [id])
+  serieId               String?
+  serie                 Serie?                @relation(fields: [serieId], references: [id])
+  cashRegisterId        String?
+  cashRegister          CashRegister?         @relation(fields: [cashRegisterId], references: [id])
+  fiscalNumber          String?
+  machineSerial         String?
+  fiscalPrinted         Boolean               @default(false)
+  purchaseOrderId       String?
+  purchaseOrder         PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  subtotalUsd           Float                 @default(0)
+  ivaUsd                Float                 @default(0)
+  igtfUsd               Float                 @default(0)
+  igtfBs                Float                 @default(0)
+  totalUsd              Float                 @default(0)
+  subtotalBs            Float                 @default(0)
+  ivaBs                 Float                 @default(0)
+  totalBs               Float                 @default(0)
+  exchangeRate          Float                 @default(0)
+  manualAmountUsd       Float?
+  manualPct             Float?
+  documentDate          DateTime?
+  supplierDocNumber     String? // N° de la nota que da el proveedor (NCC/NDC de compra, para el libro)
+  motivo                SalesReturnReason? // motivo de la devolución de ventas (solo NCV)
+  notes                 String?
+  paidAmountUsd         Float                 @default(0)
+  appliedAt             DateTime?
+  items                 CreditDebitNoteItem[]
   comandasProcessedAt   DateTime?
   comandasProcessedById String?
-  printJobs            PrintJob[]
-  receiptItems         ReceiptItem[]
-  paymentScheduleItems PaymentScheduleItem[]
-  createdById          String
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  printJobs             PrintJob[]
+  receiptItems          ReceiptItem[]
+  paymentScheduleItems  PaymentScheduleItem[]
+  createdById           String
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 }
 
 model CreditDebitNoteItem {
@@ -2103,23 +2105,23 @@ model CreditDebitNoteItem {
 // ============================================
 
 model PaymentSchedule {
-  id             String                @id @default(cuid())
-  number         String                @unique
-  title          String
-  status         PaymentScheduleStatus @default(DRAFT)
-  budgetUsd      Float?
-  budgetBs       Float?
-  budgetCurrency String? // "USD" o "Bs" — moneda elegida por el usuario
-  totalUsd       Float                 @default(0)
-  totalBs        Float                 @default(0)
-  exchangeRate   Float                 @default(0)
-  notes          String?
-  items          PaymentScheduleItem[]
+  id                String                            @id @default(cuid())
+  number            String                            @unique
+  title             String
+  status            PaymentScheduleStatus             @default(DRAFT)
+  budgetUsd         Float?
+  budgetBs          Float?
+  budgetCurrency    String? // "USD" o "Bs" — moneda elegida por el usuario
+  totalUsd          Float                             @default(0)
+  totalBs           Float                             @default(0)
+  exchangeRate      Float                             @default(0)
+  notes             String?
+  items             PaymentScheduleItem[]
   supplierDiscounts PaymentScheduleSupplierDiscount[]
-  createdById    String
-  createdBy      User                  @relation(fields: [createdById], references: [id])
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdById       String
+  createdBy         User                              @relation(fields: [createdById], references: [id])
+  createdAt         DateTime                          @default(now())
+  updatedAt         DateTime                          @updatedAt
 }
 
 // Descuento por proveedor dentro de una programacion de pago. El % se aplica al total
@@ -2138,27 +2140,27 @@ model PaymentScheduleSupplierDiscount {
 }
 
 model PaymentScheduleItem {
-  id                String           @id @default(cuid())
-  scheduleId        String
-  schedule          PaymentSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  payableId         String?
-  payable           Payable?         @relation(fields: [payableId], references: [id])
-  creditDebitNoteId String?
-  creditDebitNote   CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
-  supplierName      String
-  description       String
-  totalAmountUsd    Float
-  totalAmountBs     Float
-  plannedAmountUsd  Float
-  plannedAmountBs   Float
+  id                 String           @id @default(cuid())
+  scheduleId         String
+  schedule           PaymentSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  payableId          String?
+  payable            Payable?         @relation(fields: [payableId], references: [id])
+  creditDebitNoteId  String?
+  creditDebitNote    CreditDebitNote? @relation(fields: [creditDebitNoteId], references: [id])
+  supplierName       String
+  description        String
+  totalAmountUsd     Float
+  totalAmountBs      Float
+  plannedAmountUsd   Float
+  plannedAmountBs    Float
   // Descuento % propio del documento (override). null = hereda el descuento del proveedor
   // (PaymentScheduleSupplierDiscount); un valor (incluso 0) = override explícito para este documento.
-  discountPct       Float?
-  isPaid            Boolean          @default(false)
-  bankExportedAt     DateTime?        // ultima vez que se exporto al Excel de Bancaribe
-  bankExportRate     Float?           // tasa BCV usada en esa exportacion
-  bankExportAmountBs Float?           // Bs exportados (neto USD x tasa del dia)
-  createdAt         DateTime         @default(now())
+  discountPct        Float?
+  isPaid             Boolean          @default(false)
+  bankExportedAt     DateTime? // ultima vez que se exporto al Excel de Bancaribe
+  bankExportRate     Float? // tasa BCV usada en esa exportacion
+  bankExportAmountBs Float? // Bs exportados (neto USD x tasa del dia)
+  createdAt          DateTime         @default(now())
 }
 
 // ============================================
@@ -2228,8 +2230,8 @@ model IncidentDepartment {
   id                  String         @id @default(cuid())
   name                String         @unique
   isActive            Boolean        @default(true)
-  roles               String[]       @default([])   // roles cuyos usuarios son miembros (ej. SEGURIDAD)
-  viewerDepartmentIds String[]       @default([])   // departamentos que TAMBIEN ven estas incidencias
+  roles               String[]       @default([]) // roles cuyos usuarios son miembros (ej. SEGURIDAD)
+  viewerDepartmentIds String[]       @default([]) // departamentos que TAMBIEN ven estas incidencias
   members             User[]         @relation("IncidentDepartmentMember")
   types               IncidentType[]
   incidents           Incident[]
@@ -2251,25 +2253,25 @@ model IncidentType {
 }
 
 model Incident {
-  id           String       @id @default(cuid())
-  number       String       @unique              // correlativo INC-XXXX
-  typeId       String
-  type         IncidentType @relation(fields: [typeId], references: [id])
-  departmentId String                              // departamento dueño (el del creador)
-  department   IncidentDepartment @relation(fields: [departmentId], references: [id])
-  description  String                              // la observación (qué pasó)
-  involvedName String?                             // persona involucrada (opcional)
-  severity     String       @default("MEDIUM")     // LOW | MEDIUM | HIGH
-  occurredAt   DateTime                            // fecha+hora del suceso (default hoy Caracas)
+  id             String               @id @default(cuid())
+  number         String               @unique // correlativo INC-XXXX
+  typeId         String
+  type           IncidentType         @relation(fields: [typeId], references: [id])
+  departmentId   String // departamento dueño (el del creador)
+  department     IncidentDepartment   @relation(fields: [departmentId], references: [id])
+  description    String // la observación (qué pasó)
+  involvedName   String? // persona involucrada (opcional)
+  severity       String               @default("MEDIUM") // LOW | MEDIUM | HIGH
+  occurredAt     DateTime // fecha+hora del suceso (default hoy Caracas)
   // LEGACY: foto única (se conserva por compatibilidad). Las fotos nuevas van en
   // `attachments`; las viejas se migraron a esa tabla. Ya no se escriben.
-  photoThumbKey  String?                           // foto (opcional) en Spaces: miniatura 150px webp
-  photoMediumKey String?                           // foto (opcional) en Spaces: 800px webp (lightbox)
-  attachments  IncidentAttachment[]                // varias fotos por incidencia
-  createdById  String
-  createdBy    User         @relation("IncidentCreator", fields: [createdById], references: [id])
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  photoThumbKey  String? // foto (opcional) en Spaces: miniatura 150px webp
+  photoMediumKey String? // foto (opcional) en Spaces: 800px webp (lightbox)
+  attachments    IncidentAttachment[] // varias fotos por incidencia
+  createdById    String
+  createdBy      User                 @relation("IncidentCreator", fields: [createdById], references: [id])
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@index([typeId])
   @@index([departmentId])
@@ -2282,8 +2284,8 @@ model IncidentAttachment {
   id         String   @id @default(cuid())
   incidentId String
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  thumbKey   String   // miniatura 150px webp en Spaces
-  mediumKey  String   // versión 800px webp en Spaces (lightbox)
+  thumbKey   String // miniatura 150px webp en Spaces
+  mediumKey  String // versión 800px webp en Spaces (lightbox)
   createdAt  DateTime @default(now())
 
   @@index([incidentId])
@@ -2294,41 +2296,41 @@ model IncidentAttachment {
 // ============================================
 
 model PurchaseBookEntry {
-  id                     String            @id @default(cuid())
-  purchaseOrderId        String?
-  purchaseOrder          PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
-  payableId              String?
-  payable                Payable?          @relation(fields: [payableId], references: [id])
-  entryDate              DateTime          // periodo: cuando se declara/aparece en el libro (filtro). En CxP = fecha recepcion
-  documentDate           DateTime?         // fecha que se MUESTRA en el reporte (fecha original del proveedor). Si null, se usa entryDate
-  supplierControlNumber  String?
-  supplierInvoiceNumber  String?
-  supplierSerie          String?   // serie alfanumerica de la factura del proveedor (ej. "A")
-  supplierName           String
-  supplierRif            String
-  exemptAmountBs         Float             @default(0)
-  taxableBaseBs          Float             @default(0)
-  ivaAmountBs            Float             @default(0)
-  retentionVoucherNumber String?
-  retentionAmountBs      Float             @default(0)
-  totalBs                Float             @default(0)
-  isManual               Boolean           @default(false)
-  documentType           String            @default("FACTURA")
-  affectedDocNumber      String?
-  creditDebitNoteId      String?           // nota (NCC/NDC) que genero esta linea, para poder editarla luego
-  isRetentionLine            Boolean                @default(false)
+  id                         String                @id @default(cuid())
+  purchaseOrderId            String?
+  purchaseOrder              PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  payableId                  String?
+  payable                    Payable?              @relation(fields: [payableId], references: [id])
+  entryDate                  DateTime // periodo: cuando se declara/aparece en el libro (filtro). En CxP = fecha recepcion
+  documentDate               DateTime? // fecha que se MUESTRA en el reporte (fecha original del proveedor). Si null, se usa entryDate
+  supplierControlNumber      String?
+  supplierInvoiceNumber      String?
+  supplierSerie              String? // serie alfanumerica de la factura del proveedor (ej. "A")
+  supplierName               String
+  supplierRif                String
+  exemptAmountBs             Float                 @default(0)
+  taxableBaseBs              Float                 @default(0)
+  ivaAmountBs                Float                 @default(0)
+  retentionVoucherNumber     String?
+  retentionAmountBs          Float                 @default(0)
+  totalBs                    Float                 @default(0)
+  isManual                   Boolean               @default(false)
+  documentType               String                @default("FACTURA")
+  affectedDocNumber          String?
+  creditDebitNoteId          String? // nota (NCC/NDC) que genero esta linea, para poder editarla luego
+  isRetentionLine            Boolean               @default(false)
   retentionVoucherId         String?
-  retentionVoucher           RetentionVoucher?      @relation(fields: [retentionVoucherId], references: [id])
-  isIslrRetentionLine        Boolean                @default(false)
-  islrRetentionAmountBs      Float                  @default(0)
+  retentionVoucher           RetentionVoucher?     @relation(fields: [retentionVoucherId], references: [id])
+  isIslrRetentionLine        Boolean               @default(false)
+  islrRetentionAmountBs      Float                 @default(0)
   islrRetentionVoucherId     String?
-  islrRetentionVoucher       IslrRetentionVoucher?  @relation(fields: [islrRetentionVoucherId], references: [id])
+  islrRetentionVoucher       IslrRetentionVoucher? @relation(fields: [islrRetentionVoucherId], references: [id])
   islrRetentionVoucherNumber String?
   notes                      String?
   createdById                String
-  createdBy                  User              @relation("PurchaseBookEntries", fields: [createdById], references: [id])
-  createdAt                  DateTime          @default(now())
-  updatedAt                  DateTime          @updatedAt
+  createdBy                  User                  @relation("PurchaseBookEntries", fields: [createdById], references: [id])
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
 }
 
 // ============================================
@@ -2336,33 +2338,33 @@ model PurchaseBookEntry {
 // ============================================
 
 model SalesBookEntry {
-  id              String      @id @default(cuid())
-  invoiceId       String?
-  invoice         Invoice?    @relation(fields: [invoiceId], references: [id])
-  receivableId    String?
-  receivable      Receivable? @relation(fields: [receivableId], references: [id])
-  entryDate       DateTime
-  invoiceNumber   String
-  controlNumber   String?
-  customerName    String
-  customerRif     String?
-  exemptAmountBs  Float       @default(0)
-  taxableBaseBs   Float       @default(0)
-  ivaAmountBs     Float       @default(0)
-  igtfAmountBs    Float       @default(0)
-  totalBs         Float       @default(0)
-  isManual        Boolean     @default(false)
-  isRetentionLine Boolean     @default(false)
-  documentType         String @default("FACTURA")
-  affectedDocNumber    String?
-  retentionAmountBs    Float  @default(0)
+  id                     String                @id @default(cuid())
+  invoiceId              String?
+  invoice                Invoice?              @relation(fields: [invoiceId], references: [id])
+  receivableId           String?
+  receivable             Receivable?           @relation(fields: [receivableId], references: [id])
+  entryDate              DateTime
+  invoiceNumber          String
+  controlNumber          String?
+  customerName           String
+  customerRif            String?
+  exemptAmountBs         Float                 @default(0)
+  taxableBaseBs          Float                 @default(0)
+  ivaAmountBs            Float                 @default(0)
+  igtfAmountBs           Float                 @default(0)
+  totalBs                Float                 @default(0)
+  isManual               Boolean               @default(false)
+  isRetentionLine        Boolean               @default(false)
+  documentType           String                @default("FACTURA")
+  affectedDocNumber      String?
+  retentionAmountBs      Float                 @default(0)
   retentionVoucherNumber String?
-  customerIvaRetention CustomerIvaRetention?
-  notes           String?
-  createdById     String
-  createdBy       User        @relation("SalesBookEntries", fields: [createdById], references: [id])
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  customerIvaRetention   CustomerIvaRetention?
+  notes                  String?
+  createdById            String
+  createdBy              User                  @relation("SalesBookEntries", fields: [createdById], references: [id])
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 }
 
 // ============================================
@@ -2460,72 +2462,72 @@ model CustomerIvaRetention {
 // ============================================
 
 model ZReport {
-  id                    String        @id @default(cuid())
-  zNumber               Int
-  reportDate            DateTime
-  machineSerial         String
+  id            String   @id @default(cuid())
+  zNumber       Int
+  reportDate    DateTime
+  machineSerial String
 
-  cashRegisterId        String?
-  cashRegister          CashRegister? @relation(fields: [cashRegisterId], references: [id])
+  cashRegisterId String?
+  cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id])
 
   // Ventas
-  salesExemptBs         Float         @default(0)
-  salesTaxBase1Bs       Float         @default(0)
-  salesTax1Bs           Float         @default(0)
-  salesTaxBase2Bs       Float         @default(0)
-  salesTax2Bs           Float         @default(0)
-  salesTaxBase3Bs       Float         @default(0)
-  salesTax3Bs           Float         @default(0)
+  salesExemptBs   Float @default(0)
+  salesTaxBase1Bs Float @default(0)
+  salesTax1Bs     Float @default(0)
+  salesTaxBase2Bs Float @default(0)
+  salesTax2Bs     Float @default(0)
+  salesTaxBase3Bs Float @default(0)
+  salesTax3Bs     Float @default(0)
 
   // Notas de Crédito
-  ncExemptBs            Float         @default(0)
-  ncTaxBase1Bs          Float         @default(0)
-  ncTax1Bs              Float         @default(0)
-  ncTaxBase2Bs          Float         @default(0)
-  ncTax2Bs              Float         @default(0)
-  ncTaxBase3Bs          Float         @default(0)
-  ncTax3Bs              Float         @default(0)
+  ncExemptBs   Float @default(0)
+  ncTaxBase1Bs Float @default(0)
+  ncTax1Bs     Float @default(0)
+  ncTaxBase2Bs Float @default(0)
+  ncTax2Bs     Float @default(0)
+  ncTaxBase3Bs Float @default(0)
+  ncTax3Bs     Float @default(0)
 
   // Notas de Débito (solo Family A)
-  ndExemptBs            Float         @default(0)
-  ndTaxBase1Bs          Float         @default(0)
-  ndTax1Bs              Float         @default(0)
-  ndTaxBase2Bs          Float         @default(0)
-  ndTax2Bs              Float         @default(0)
-  ndTaxBase3Bs          Float         @default(0)
-  ndTax3Bs              Float         @default(0)
+  ndExemptBs   Float @default(0)
+  ndTaxBase1Bs Float @default(0)
+  ndTax1Bs     Float @default(0)
+  ndTaxBase2Bs Float @default(0)
+  ndTax2Bs     Float @default(0)
+  ndTaxBase3Bs Float @default(0)
+  ndTax3Bs     Float @default(0)
 
   // IGTF Ventas
-  igtfSalesBaseBs       Float         @default(0)
-  igtfSalesTaxBs        Float         @default(0)
+  igtfSalesBaseBs Float @default(0)
+  igtfSalesTaxBs  Float @default(0)
   // IGTF NC
-  igtfNcBaseBs          Float         @default(0)
-  igtfNcTaxBs           Float         @default(0)
+  igtfNcBaseBs    Float @default(0)
+  igtfNcTaxBs     Float @default(0)
   // IGTF ND
-  igtfNdBaseBs          Float         @default(0)
-  igtfNdTaxBs           Float         @default(0)
+  igtfNdBaseBs    Float @default(0)
+  igtfNdTaxBs     Float @default(0)
 
   // Rangos de documentos
   lastInvoiceNumber     String?
   firstInvoiceNumber    String?
-  invoiceCount          Int           @default(0)
+  invoiceCount          Int     @default(0)
   lastCreditNoteNumber  String?
   firstCreditNoteNumber String?
-  creditNoteCount       Int           @default(0)
+  creditNoteCount       Int     @default(0)
   lastDebitNoteNumber   String?
   firstDebitNoteNumber  String?
-  debitNoteCount        Int           @default(0)
+  debitNoteCount        Int     @default(0)
 
   // Metadata
-  isManual              Boolean       @default(false)
-  printerFamily         String?
-  rawResponse           String?       @db.Text
-  notes                 String?
+  isManual      Boolean @default(false)
+  printerFamily String?
+  rawResponse   String? @db.Text
+  notes         String?
 
-  createdById           String
-  createdBy             User          @relation("ZReportCreator", fields: [createdById], references: [id])
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  createdById String
+  createdBy   User     @relation("ZReportCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([zNumber, machineSerial])
 }
@@ -2535,19 +2537,19 @@ model ZReport {
 // ============================================
 
 model IslrRetentionType {
-  id                  String                    @id @default(cuid())
-  codigo              Int                       @unique
+  id                  String                     @id @default(cuid())
+  codigo              Int                        @unique
   descripcion         String
-  baseImponiblePct    Float                     @default(100)
+  baseImponiblePct    Float                      @default(100)
   retentionPct        Float
-  sustraendoUt        Float                     @default(0)
-  forPersonaJuridica  Boolean                   @default(false)
-  forPersonaResidente Boolean                   @default(false)
-  isActive            Boolean                   @default(true)
+  sustraendoUt        Float                      @default(0)
+  forPersonaJuridica  Boolean                    @default(false)
+  forPersonaResidente Boolean                    @default(false)
+  isActive            Boolean                    @default(true)
   voucherLines        IslrRetentionVoucherLine[]
-  suppliers           Supplier[]                @relation("SupplierIslrConcept")
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
+  suppliers           Supplier[]                 @relation("SupplierIslrConcept")
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 }
 
 // ============================================
@@ -2555,57 +2557,57 @@ model IslrRetentionType {
 // ============================================
 
 model IslrRetentionVoucher {
-  id                 String                       @id @default(cuid())
-  number             String                       @unique
+  id                 String                     @id @default(cuid())
+  number             String                     @unique
   supplierId         String
-  supplier           Supplier                     @relation(fields: [supplierId], references: [id])
+  supplier           Supplier                   @relation(fields: [supplierId], references: [id])
   serieId            String?
-  serie              Serie?                       @relation(fields: [serieId], references: [id])
-  status             RetentionStatus              @default(PENDING)
+  serie              Serie?                     @relation(fields: [serieId], references: [id])
+  status             RetentionStatus            @default(PENDING)
   issueDate          DateTime?
-  retentionAmountUsd Float                        @default(0)
-  retentionAmountBs  Float                        @default(0)
-  exchangeRate       Float                        @default(0)
-  unidadTributaria   Float                        @default(43)
+  retentionAmountUsd Float                      @default(0)
+  retentionAmountBs  Float                      @default(0)
+  exchangeRate       Float                      @default(0)
+  unidadTributaria   Float                      @default(43)
   notes              String?
   lines              IslrRetentionVoucherLine[]
   bookEntries        PurchaseBookEntry[]
   appliedAt          DateTime?
   receiptItems       ReceiptItem[]
   createdById        String
-  createdBy          User                         @relation("IslrRetentionVoucherCreator", fields: [createdById], references: [id])
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
+  createdBy          User                       @relation("IslrRetentionVoucherCreator", fields: [createdById], references: [id])
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 }
 
 model IslrRetentionVoucherLine {
-  id                       String               @id @default(cuid())
-  islrRetentionVoucherId   String
-  islrRetentionVoucher     IslrRetentionVoucher  @relation(fields: [islrRetentionVoucherId], references: [id], onDelete: Cascade)
-  purchaseOrderId          String?
-  purchaseOrder            PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
-  payableId                String?
-  payable                  Payable?              @relation(fields: [payableId], references: [id])
-  islrRetentionTypeId      String
-  islrRetentionType        IslrRetentionType     @relation(fields: [islrRetentionTypeId], references: [id])
-  supplierInvoiceNumber    String?
-  supplierControlNumber    String?
-  invoiceDate              DateTime?
-  invoiceTotalUsd          Float                 @default(0)
-  invoiceTotalBs           Float                 @default(0)
-  taxableBaseUsd           Float                 @default(0)
-  taxableBaseBs            Float                 @default(0)
-  baseImponiblePct         Float                 @default(100)
-  retentionPct             Float                 @default(0)
-  sustraendoUt             Float                 @default(0)
-  sustraendoBs             Float                 @default(0)
-  retentionAmountUsd       Float                 @default(0)
-  retentionAmountBs        Float                 @default(0)
-  exchangeRate             Float                 @default(0)
-  isManual                 Boolean               @default(false)
+  id                     String               @id @default(cuid())
+  islrRetentionVoucherId String
+  islrRetentionVoucher   IslrRetentionVoucher @relation(fields: [islrRetentionVoucherId], references: [id], onDelete: Cascade)
+  purchaseOrderId        String?
+  purchaseOrder          PurchaseOrder?       @relation(fields: [purchaseOrderId], references: [id])
+  payableId              String?
+  payable                Payable?             @relation(fields: [payableId], references: [id])
+  islrRetentionTypeId    String
+  islrRetentionType      IslrRetentionType    @relation(fields: [islrRetentionTypeId], references: [id])
+  supplierInvoiceNumber  String?
+  supplierControlNumber  String?
+  invoiceDate            DateTime?
+  invoiceTotalUsd        Float                @default(0)
+  invoiceTotalBs         Float                @default(0)
+  taxableBaseUsd         Float                @default(0)
+  taxableBaseBs          Float                @default(0)
+  baseImponiblePct       Float                @default(100)
+  retentionPct           Float                @default(0)
+  sustraendoUt           Float                @default(0)
+  sustraendoBs           Float                @default(0)
+  retentionAmountUsd     Float                @default(0)
+  retentionAmountBs      Float                @default(0)
+  exchangeRate           Float                @default(0)
+  isManual               Boolean              @default(false)
   // Concepto adicional sobre la misma factura: base imponible escrita a mano en Bs (sin datos de factura en el PDF)
-  isExtraConcept           Boolean               @default(false)
-  createdAt                DateTime              @default(now())
+  isExtraConcept         Boolean              @default(false)
+  createdAt              DateTime             @default(now())
 }
 
 // ============================================
@@ -2621,40 +2623,40 @@ enum OnlineOrderStatus {
 }
 
 model OnlineOrder {
-  id             String            @id @default(cuid())
-  number         String            @unique // WEB-0001
-  customerName   String
-  phone          String
-  cedula         String?
-  deliveryMethod String            @default("PICKUP") // PICKUP | DELIVERY
-  address        String?
-  paymentRef     String? // referencia de Pago Movil que dice el cliente
+  id              String            @id @default(cuid())
+  number          String            @unique // WEB-0001
+  customerName    String
+  phone           String
+  cedula          String?
+  deliveryMethod  String            @default("PICKUP") // PICKUP | DELIVERY
+  address         String?
+  paymentRef      String? // referencia de Pago Movil que dice el cliente
   paymentProofUrl String? // URL en Spaces de la captura del pago que sube el cliente
-  notes          String?
-  email          String?
-  totalUsd       Float             @default(0)
-  totalBs        Float             @default(0)
-  exchangeRate   Float             @default(0)
-  status         OnlineOrderStatus @default(POR_VERIFICAR)
-  verifiedById   String?
-  verifiedAt     DateTime?
-  invoiceId      String? // se llena cuando se factura (Fase 2)
-  deliveredAt    DateTime? // cuando se marco ENTREGADO
-  deliveredById  String?
-  items          OnlineOrderItem[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  notes           String?
+  email           String?
+  totalUsd        Float             @default(0)
+  totalBs         Float             @default(0)
+  exchangeRate    Float             @default(0)
+  status          OnlineOrderStatus @default(POR_VERIFICAR)
+  verifiedById    String?
+  verifiedAt      DateTime?
+  invoiceId       String? // se llena cuando se factura (Fase 2)
+  deliveredAt     DateTime? // cuando se marco ENTREGADO
+  deliveredById   String?
+  items           OnlineOrderItem[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 }
 
 model OnlineOrderItem {
-  id        String      @id @default(cuid())
-  orderId   String
-  order     OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  code      String // Product.code
-  name      String // snapshot del nombre
-  quantity  Float
-  priceUsd  Float // precio recalculado por Trinity
-  priceBs   Float
+  id       String      @id @default(cuid())
+  orderId  String
+  order    OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  code     String // Product.code
+  name     String // snapshot del nombre
+  quantity Float
+  priceUsd Float // precio recalculado por Trinity
+  priceBs  Float
 
   @@index([orderId])
 }
@@ -2673,22 +2675,22 @@ enum DispatchStatus {
 }
 
 model Dispatch {
-  id            String         @id @default(cuid())
-  number        String         @unique // DSP-0001
-  invoiceId     String         @unique // una comanda de retiro por factura
-  invoice       Invoice        @relation(fields: [invoiceId], references: [id])
-  status        DispatchStatus @default(PENDIENTE)
+  id            String             @id @default(cuid())
+  number        String             @unique // DSP-0001
+  invoiceId     String             @unique // una comanda de retiro por factura
+  invoice       Invoice            @relation(fields: [invoiceId], references: [id])
+  status        DispatchStatus     @default(PENDIENTE)
   scheduledDate DateTime? // "fecha de despacho" que indica el cliente (ej. "vengo el sabado")
   contactName   String? // snapshot/editable (Cliente Final puede no tener datos)
   contactPhone  String?
   notes         String?
   createdById   String
-  createdBy     User           @relation("DispatchCreator", fields: [createdById], references: [id])
+  createdBy     User               @relation("DispatchCreator", fields: [createdById], references: [id])
   completedAt   DateTime?
   items         DispatchItem[]
   deliveries    DispatchDelivery[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([status])
 }
@@ -2729,7 +2731,7 @@ model DispatchDelivery {
 // Maestro de departamentos de nómina (se carga una vez y se referencia).
 model Department {
   id        String     @id @default(cuid())
-  name      String     @unique          // "ADMINISTRACION", "CAJA", "VENTAS", ...
+  name      String     @unique // "ADMINISTRACION", "CAJA", "VENTAS", ...
   isActive  Boolean    @default(true)
   employees Employee[]
   createdAt DateTime   @default(now())
@@ -2750,63 +2752,63 @@ model Position {
 }
 
 model Employee {
-  id            String   @id @default(cuid())
-  code          String?  @unique          // EMP-0001 (opcional)
-  customerId    String   @unique          // ficha compartida: identidad + CxC
-  customer      Customer @relation(fields: [customerId], references: [id])
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id])
-  positionId    String?
-  position      Position?   @relation(fields: [positionId], references: [id])
-  bank          String?
-  salaryBaseUsd Float    @default(0)       // sueldo base del período, en USD (autollenado del cargo, editable)
-  bonusUsd      Float    @default(0)       // bonificación del período, en USD (autollenado del cargo, editable)
-  frequency     String   @default("WEEKLY") // WEEKLY | BIWEEKLY
+  id                     String                  @id @default(cuid())
+  code                   String?                 @unique // EMP-0001 (opcional)
+  customerId             String                  @unique // ficha compartida: identidad + CxC
+  customer               Customer                @relation(fields: [customerId], references: [id])
+  departmentId           String?
+  department             Department?             @relation(fields: [departmentId], references: [id])
+  positionId             String?
+  position               Position?               @relation(fields: [positionId], references: [id])
+  bank                   String?
+  salaryBaseUsd          Float                   @default(0) // sueldo base del período, en USD (autollenado del cargo, editable)
+  bonusUsd               Float                   @default(0) // bonificación del período, en USD (autollenado del cargo, editable)
+  frequency              String                  @default("WEEKLY") // WEEKLY | BIWEEKLY
   // ACTIVE | VACATION | MEDICAL_LEAVE | SPECIAL_LEAVE | INACTIVE | VOLUNTARY_RESIGNATION | JUSTIFIED_DISMISSAL
   // (ver apps/api/src/modules/payroll/employee-status.ts). isActive se deriva del estado = entra en nomina.
-  status        String   @default("ACTIVE")
-  statusFrom    DateTime?                  // fecha-calendario (medianoche UTC), opcional
-  statusTo      DateTime?                  // fecha-calendario (medianoche UTC), opcional
-  statusNote    String?
-  isActive      Boolean  @default(true)
-  lines         PayrollRunLine[]
-  disciplinaryActions DisciplinaryAction[]
-  user          User?    @relation("EmployeeUser")
+  status                 String                  @default("ACTIVE")
+  statusFrom             DateTime? // fecha-calendario (medianoche UTC), opcional
+  statusTo               DateTime? // fecha-calendario (medianoche UTC), opcional
+  statusNote             String?
+  isActive               Boolean                 @default(true)
+  lines                  PayrollRunLine[]
+  disciplinaryActions    DisciplinaryAction[]
+  user                   User?                   @relation("EmployeeUser")
   notificationRecipients NotificationRecipient[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model PayrollParam {
   id            String   @id @default("singleton")
-  ivssBs        Float    @default(0)       // monto fijo IVSS por período
-  faovBs        Float    @default(0)       // monto fijo FAOV por período
-  incesBs       Float    @default(0)       // monto fijo INCES (0 por ahora)
-  otDayFactor   Float    @default(1.5)     // recargo hora extra diurna
-  otNightFactor Float    @default(1.3)     // recargo adicional nocturna sobre la diurna
-  monthDays     Int      @default(30)      // base días/mes
-  weeklyHours   Int      @default(40)      // horas por semana
+  ivssBs        Float    @default(0) // monto fijo IVSS por período
+  faovBs        Float    @default(0) // monto fijo FAOV por período
+  incesBs       Float    @default(0) // monto fijo INCES (0 por ahora)
+  otDayFactor   Float    @default(1.5) // recargo hora extra diurna
+  otNightFactor Float    @default(1.3) // recargo adicional nocturna sobre la diurna
+  monthDays     Int      @default(30) // base días/mes
+  weeklyHours   Int      @default(40) // horas por semana
   updatedAt     DateTime @updatedAt
 }
 
 model PayrollRun {
-  id                String   @id @default(cuid())
-  number            String?  @unique       // NOM-0001
-  type              String                 // WEEKLY | BIWEEKLY
+  id                String           @id @default(cuid())
+  number            String?          @unique // NOM-0001
+  type              String // WEEKLY | BIWEEKLY
   periodFrom        DateTime
   periodTo          DateTime
-  exchangeRate      Float                  // tasa BCV usada (snapshot)
-  rateDate          DateTime?              // fecha-Caracas de la tasa (editable; a veces la tasa se registra al dia siguiente)
-  status            String   @default("DRAFT") // DRAFT | CLOSED
-  totalGrossBs      Float    @default(0)
-  totalDeductionsBs Float    @default(0)
-  totalNetBs        Float    @default(0)
+  exchangeRate      Float // tasa BCV usada (snapshot)
+  rateDate          DateTime? // fecha-Caracas de la tasa (editable; a veces la tasa se registra al dia siguiente)
+  status            String           @default("DRAFT") // DRAFT | CLOSED
+  totalGrossBs      Float            @default(0)
+  totalDeductionsBs Float            @default(0)
+  totalNetBs        Float            @default(0)
   lines             PayrollRunLine[]
   expense           Expense?
   createdById       String
   closedAt          DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 model PayrollRunLine {
@@ -2821,20 +2823,20 @@ model PayrollRunLine {
   daysRest           Float      @default(0)
   overtimeDayHours   Float      @default(0)
   overtimeNightHours Float      @default(0)
-  bonusUsd           Float      @default(0)   // bonificación del período, en USD (snapshot del empleado, editable)
+  bonusUsd           Float      @default(0) // bonificación del período, en USD (snapshot del empleado, editable)
   manualDeductionUsd Float      @default(0)
   creditDeductionBs  Float      @default(0)
   // Calculados
   salaryBs           Float      @default(0)
   overtimeBs         Float      @default(0)
-  bonusBs            Float      @default(0)   // bonificación convertida a Bs con la tasa de la corrida
+  bonusBs            Float      @default(0) // bonificación convertida a Bs con la tasa de la corrida
   grossBs            Float      @default(0)
   ivssBs             Float      @default(0)
   faovBs             Float      @default(0)
   totalDeductionsBs  Float      @default(0)
   netBs              Float      @default(0)
   netUsd             Float      @default(0)
-  receiptSentAt      DateTime?              // último envío del recibo por correo (para mostrar estado)
+  receiptSentAt      DateTime? // último envío del recibo por correo (para mostrar estado)
 
   @@unique([payrollRunId, employeeId])
 }
@@ -2856,22 +2858,22 @@ model FaultType {
 }
 
 model DisciplinaryAction {
-  id          String                   @id @default(cuid())
-  number      String                   @unique // correlativo LA-0001
-  employeeId  String
-  employee    Employee                 @relation(fields: [employeeId], references: [id])
-  faultTypeId String
-  faultType   FaultType                @relation(fields: [faultTypeId], references: [id])
-  sequence    Int // ordinal dentro del hilo (empleado+falta): 1,2,3,4...
-  level       String // LLAMADO | NOTIFICACION | AMONESTACION (se calcula del sequence y se persiste)
-  occurredAt  DateTime // fecha del suceso
-  reason      String // motivo / descripción
-  attachments DisciplinaryAttachment[]
-  createdById String
-  createdBy   User                     @relation("DisciplinaryActionCreator", fields: [createdById], references: [id])
+  id           String                   @id @default(cuid())
+  number       String                   @unique // correlativo LA-0001
+  employeeId   String
+  employee     Employee                 @relation(fields: [employeeId], references: [id])
+  faultTypeId  String
+  faultType    FaultType                @relation(fields: [faultTypeId], references: [id])
+  sequence     Int // ordinal dentro del hilo (empleado+falta): 1,2,3,4...
+  level        String // LLAMADO | NOTIFICACION | AMONESTACION (se calcula del sequence y se persiste)
+  occurredAt   DateTime // fecha del suceso
+  reason       String // motivo / descripción
+  attachments  DisciplinaryAttachment[]
+  createdById  String
+  createdBy    User                     @relation("DisciplinaryActionCreator", fields: [createdById], references: [id])
   notification Notification?
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
 
   @@index([employeeId, faultTypeId])
   @@index([occurredAt])
@@ -2896,14 +2898,14 @@ model DisciplinaryAttachment {
 // ============================================
 
 model TreasuryCompany {
-  id        String             @id @default(cuid())
-  name      String             @unique
-  isActive  Boolean            @default(true)
-  movements TreasuryMovement[]
-  bsLoads   TreasuryBsLoad[]
+  id          String               @id @default(cuid())
+  name        String               @unique
+  isActive    Boolean              @default(true)
+  movements   TreasuryMovement[]
+  bsLoads     TreasuryBsLoad[]
   bsMovements TreasuryBsMovement[]
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 }
 
 model TreasuryBank {
@@ -2943,29 +2945,29 @@ model TreasuryBsLoad {
 }
 
 model TreasuryMovement {
-  id           String          @id @default(cuid())
-  date         DateTime                              // fecha del movimiento
-  companyId    String
-  company      TreasuryCompany @relation(fields: [companyId], references: [id])
-  bankId       String?                               // (obsoleto) dimension banco retirada del modulo
-  bank         TreasuryBank?   @relation(fields: [bankId], references: [id])
-  originBankId String?                               // banco de origen de los Bs (opcional)
-  originBank   TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
-  kind         String          @default("MOVIMIENTO") // 'MOVIMIENTO' (transferencia USD) | 'COMPRA' (compra de divisas con Bs)
-  type         String                                // 'ENTRADA' | 'SALIDA'
-  amountUsd    Float                                 // monto en USD
-  amountBs     Float?                                // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa. Solo en COMPRA
-  exchangeRate Float?                                // tasa Bs/USD usada (4 decimales); auto de la tasa del dia, editable
-  commissionPct Float?                               // % de comision (0.5 por defecto); auto, editable
-  modalidad    String?                               // 'ELECTRONICO' | 'EFECTIVO'
-  counterparty String?                               // de quien / a quien (ENVIADO A)
-  reference    String?                               // referencia libre
-  description  String?                               // observaciones
-  status       String          @default("CONFIRMADO") // 'CONFIRMADO' | 'PENDIENTE'
-  createdById  String
-  createdBy    User            @relation("TreasuryMovementCreator", fields: [createdById], references: [id])
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id            String              @id @default(cuid())
+  date          DateTime // fecha del movimiento
+  companyId     String
+  company       TreasuryCompany     @relation(fields: [companyId], references: [id])
+  bankId        String? // (obsoleto) dimension banco retirada del modulo
+  bank          TreasuryBank?       @relation(fields: [bankId], references: [id])
+  originBankId  String? // banco de origen de los Bs (opcional)
+  originBank    TreasuryOriginBank? @relation(fields: [originBankId], references: [id])
+  kind          String              @default("MOVIMIENTO") // 'MOVIMIENTO' (transferencia USD) | 'COMPRA' (compra de divisas con Bs)
+  type          String // 'ENTRADA' | 'SALIDA'
+  amountUsd     Float // monto en USD
+  amountBs      Float? // Bs TOTAL (equivalente + comision); descuenta del saldo Bs de la empresa. Solo en COMPRA
+  exchangeRate  Float? // tasa Bs/USD usada (4 decimales); auto de la tasa del dia, editable
+  commissionPct Float? // % de comision (0.5 por defecto); auto, editable
+  modalidad     String? // 'ELECTRONICO' | 'EFECTIVO'
+  counterparty  String? // de quien / a quien (ENVIADO A)
+  reference     String? // referencia libre
+  description   String? // observaciones
+  status        String              @default("CONFIRMADO") // 'CONFIRMADO' | 'PENDIENTE'
+  createdById   String
+  createdBy     User                @relation("TreasuryMovementCreator", fields: [createdById], references: [id])
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
   @@index([companyId, date])
   @@index([bankId, date])
@@ -2977,14 +2979,14 @@ model TreasuryMovement {
 // (signo corregido). Ver spec: docs/superpowers/specs/2026-09-01-movimientos-bs-empresa-design.md
 model TreasuryBsMovement {
   id           String          @id @default(cuid())
-  date         DateTime                              // fecha del movimiento
+  date         DateTime // fecha del movimiento
   companyId    String
   company      TreasuryCompany @relation(fields: [companyId], references: [id])
-  type         String                                // 'ENTRADA' | 'SALIDA'
-  amountBs     Float                                 // monto en Bs
-  counterparty String?                               // de quien / a quien
-  reference    String?                               // referencia libre
-  description  String?                               // observaciones
+  type         String // 'ENTRADA' | 'SALIDA'
+  amountBs     Float // monto en Bs
+  counterparty String? // de quien / a quien
+  reference    String? // referencia libre
+  description  String? // observaciones
   status       String          @default("CONFIRMADO") // 'CONFIRMADO' | 'PENDIENTE'
   createdById  String
   createdBy    User            @relation("TreasuryBsMovementCreator", fields: [createdById], references: [id])
@@ -3002,26 +3004,26 @@ model TreasuryBsMovement {
 // Ver spec: docs/superpowers/specs/2026-09-06-lista-pedidos-proveedor-design.md
 // ============================================================================
 enum SupplierOrderStatus {
-  PENDING   // "en transito" / pedido
+  PENDING // "en transito" / pedido
   RECEIVED
 }
 
 model SupplierOrderItem {
   id                      String              @id @default(cuid())
-  supplierRef             String                                    // "CODIGO" del Excel = ref. proveedor
-  productId               String?                                   // enlace al producto si se encontro
+  supplierRef             String // "CODIGO" del Excel = ref. proveedor
+  productId               String? // enlace al producto si se encontro
   product                 Product?            @relation(fields: [productId], references: [id])
-  productCode             String?                                   // snapshot del codigo interno si matcheo
-  description             String                                    // "DESCRIPCION" del Excel o manual
-  quantityOrdered         Float                                     // "CANTIDAD"
-  unitCost                Float?                                    // "COSTO" (USD), opcional
-  supplierName            String?                                   // proveedor (texto libre; el Excel no lo trae)
-  observation             String?                                   // editable desde la lista
+  productCode             String? // snapshot del codigo interno si matcheo
+  description             String // "DESCRIPCION" del Excel o manual
+  quantityOrdered         Float // "CANTIDAD"
+  unitCost                Float? // "COSTO" (USD), opcional
+  supplierName            String? // proveedor (texto libre; el Excel no lo trae)
+  observation             String? // editable desde la lista
   status                  SupplierOrderStatus @default(PENDING)
-  orderedAt               DateTime            @default(now())        // fecha del pedido (dia de carga o manual)
-  receivedAt              DateTime?                                  // se llena al recibir
-  quantityReceived        Float?                                    // cantidad que llego
-  receivedPurchaseOrderId String?                                   // FC que lo surtio (si fue automatico)
+  orderedAt               DateTime            @default(now()) // fecha del pedido (dia de carga o manual)
+  receivedAt              DateTime? // se llena al recibir
+  quantityReceived        Float? // cantidad que llego
+  receivedPurchaseOrderId String? // FC que lo surtio (si fue automatico)
   createdById             String?
   createdBy               User?               @relation("SupplierOrderItemCreator", fields: [createdById], references: [id])
   createdAt               DateTime            @default(now())
@@ -3037,58 +3039,58 @@ model SupplierOrderItem {
 // ============================================
 
 model BankAccount {
-  id                String          @id @default(cuid())
-  name              String                                  // alias, ej "Banesco Corriente Principal"
-  bankName          String                                  // Banesco, Mercantil, BNC, Zelle...
-  accountNumber     String?                                 // nº de cuenta (opcional para Zelle)
-  accountType       String          @default("CORRIENTE")   // CORRIENTE | AHORRO | CUSTODIA | ZELLE | OTRO
-  currency          String          @default("VES")         // VES | USD
-  openingBalance    Float           @default(0)             // saldo inicial en la moneda de la cuenta
-  openingBalanceBs  Float           @default(0)             // equivalente Bs del saldo inicial
-  openingBalanceUsd Float           @default(0)             // equivalente USD del saldo inicial
-  openingDate       DateTime?                               // fecha de corte del saldo inicial
-  isActive          Boolean         @default(true)
-  requiresTransferApproval Boolean @default(false)          // los ingresos por TRASPASO a esta cuenta quedan PENDIENTES hasta aceptarlos con clave dinamica
-  sortOrder         Int             @default(0)
-  movements         BankMovement[]
-  paymentMethods    PaymentMethod[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id                       String          @id @default(cuid())
+  name                     String // alias, ej "Banesco Corriente Principal"
+  bankName                 String // Banesco, Mercantil, BNC, Zelle...
+  accountNumber            String? // nº de cuenta (opcional para Zelle)
+  accountType              String          @default("CORRIENTE") // CORRIENTE | AHORRO | CUSTODIA | ZELLE | OTRO
+  currency                 String          @default("VES") // VES | USD
+  openingBalance           Float           @default(0) // saldo inicial en la moneda de la cuenta
+  openingBalanceBs         Float           @default(0) // equivalente Bs del saldo inicial
+  openingBalanceUsd        Float           @default(0) // equivalente USD del saldo inicial
+  openingDate              DateTime? // fecha de corte del saldo inicial
+  isActive                 Boolean         @default(true)
+  requiresTransferApproval Boolean         @default(false) // los ingresos por TRASPASO a esta cuenta quedan PENDIENTES hasta aceptarlos con clave dinamica
+  sortOrder                Int             @default(0)
+  movements                BankMovement[]
+  paymentMethods           PaymentMethod[]
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
 }
 
 model BankMovement {
-  id              String       @id @default(cuid())
+  id              String      @id @default(cuid())
   bankAccountId   String
-  bankAccount     BankAccount  @relation(fields: [bankAccountId], references: [id])
-  date            DateTime                                  // fecha del movimiento
-  direction       String                                   // IN | OUT
-  amount          Float                                    // monto en la MONEDA DE LA CUENTA
-  amountBs        Float        @default(0)                 // equivalente Bs
-  amountUsd       Float        @default(0)                 // equivalente USD
-  exchangeRate    Float        @default(0)                 // tasa Bs/USD usada
-  type            String                                   // COBRO|PAGO|COMISION|IGTF|INTERES|NOTA_DEBITO|NOTA_CREDITO|TRASPASO|AJUSTE
-  reference       String?                                  // nº de referencia bancaria
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id])
+  date            DateTime // fecha del movimiento
+  direction       String // IN | OUT
+  amount          Float // monto en la MONEDA DE LA CUENTA
+  amountBs        Float       @default(0) // equivalente Bs
+  amountUsd       Float       @default(0) // equivalente USD
+  exchangeRate    Float       @default(0) // tasa Bs/USD usada
+  type            String // COBRO|PAGO|COMISION|IGTF|INTERES|NOTA_DEBITO|NOTA_CREDITO|TRASPASO|AJUSTE
+  reference       String? // nº de referencia bancaria
   description     String?
-  sourceType      String       @default("MANUAL")          // SALE_PAYMENT|RECEIPT_COLLECTION|RECEIPT_PAYMENT|EXPENSE|ADVANCE|MANUAL
-  sourceId        String?                                  // id del documento origen (null si MANUAL)
-  transferGroupId String?                                  // vincula las 2 patas de un TRASPASO
+  sourceType      String      @default("MANUAL") // SALE_PAYMENT|RECEIPT_COLLECTION|RECEIPT_PAYMENT|EXPENSE|ADVANCE|MANUAL
+  sourceId        String? // id del documento origen (null si MANUAL)
+  transferGroupId String? // vincula las 2 patas de un TRASPASO
   // Aprobacion de traspasos hacia cuentas con requiresTransferApproval. NONE = no aplica.
   // PENDING (solo la pata IN) y REJECTED (ambas patas) NO cuentan en el saldo.
-  approvalStatus  String       @default("NONE")            // NONE | PENDING | APPROVED | REJECTED
-  approvedAt      DateTime?                                // fecha de aceptacion/rechazo
+  approvalStatus  String      @default("NONE") // NONE | PENDING | APPROVED | REJECTED
+  approvedAt      DateTime? // fecha de aceptacion/rechazo
   approvedById    String?
-  approvedBy      User?        @relation("BankMovementApprover", fields: [approvedById], references: [id])
-  approvalKeyName String?                                  // nombre de la clave dinamica usada
-  approvalNote    String?                                  // motivo del rechazo
-  reconciled      Boolean      @default(false)
+  approvedBy      User?       @relation("BankMovementApprover", fields: [approvedById], references: [id])
+  approvalKeyName String? // nombre de la clave dinamica usada
+  approvalNote    String? // motivo del rechazo
+  reconciled      Boolean     @default(false)
   reconciledAt    DateTime?
   reconciledById  String?
-  reconciledBy    User?        @relation("BankMovementReconciler", fields: [reconciledById], references: [id])
-  statementDate   DateTime?                                // fecha en que apareció en el estado de cuenta
+  reconciledBy    User?       @relation("BankMovementReconciler", fields: [reconciledById], references: [id])
+  statementDate   DateTime? // fecha en que apareció en el estado de cuenta
   createdById     String
-  createdBy       User         @relation("BankMovementCreator", fields: [createdById], references: [id])
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdBy       User        @relation("BankMovementCreator", fields: [createdById], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@index([bankAccountId, date])
   @@index([sourceType, sourceId])
@@ -3149,32 +3151,32 @@ enum NotificationAckState {
 }
 
 model Notification {
-  id                    String                  @id @default(cuid())
-  title                 String
-  body                  String
-  type                  NotificationType        @default(INFORMATIVA)
-  disciplinaryActionId  String?                 @unique
-  disciplinaryAction    DisciplinaryAction?     @relation(fields: [disciplinaryActionId], references: [id], onDelete: Cascade)
-  createdById           String
-  createdBy             User                    @relation("NotificationCreator", fields: [createdById], references: [id])
-  recipients            NotificationRecipient[]
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  id                   String                  @id @default(cuid())
+  title                String
+  body                 String
+  type                 NotificationType        @default(INFORMATIVA)
+  disciplinaryActionId String?                 @unique
+  disciplinaryAction   DisciplinaryAction?     @relation(fields: [disciplinaryActionId], references: [id], onDelete: Cascade)
+  createdById          String
+  createdBy            User                    @relation("NotificationCreator", fields: [createdById], references: [id])
+  recipients           NotificationRecipient[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
   @@index([type])
   @@index([createdAt])
 }
 
 model NotificationRecipient {
-  id              String               @id @default(cuid())
-  notificationId  String
-  notification    Notification         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  employeeId      String
-  employee        Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  ackState        NotificationAckState @default(PENDIENTE)
-  comment         String?
-  ackAt           DateTime?
-  createdAt       DateTime             @default(now())
+  id             String               @id @default(cuid())
+  notificationId String
+  notification   Notification         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  ackState       NotificationAckState @default(PENDIENTE)
+  comment        String?
+  ackAt          DateTime?
+  createdAt      DateTime             @default(now())
 
   @@unique([notificationId, employeeId])
   @@index([employeeId, ackState])
@@ -3208,11 +3210,11 @@ enum ChatbotMessageRole {
 // Fila unica de configuracion del bot (textos editables, descuento, excepciones, tope de gasto).
 // La API key va en ANTHROPIC_API_KEY (.env), nunca aqui.
 model ChatbotConfig {
-  id                         String   @id @default("default")
-  enabled                    Boolean  @default(false)
-  model                      String   @default("claude-haiku-5-5")
-  effort                     String   @default("low")
-  botName                    String   @default("Asistente virtual")
+  id                         String    @id @default("default")
+  enabled                    Boolean   @default(false)
+  model                      String    @default("claude-haiku-5-5")
+  effort                     String    @default("low")
+  botName                    String    @default("Asistente virtual")
   greeting                   String?
   addressText                String?
   hoursText                  String?
@@ -3220,12 +3222,12 @@ model ChatbotConfig {
   paymentText                String?
   partnersText               String?
   extraInfo                  String?
-  divisaDiscountPct          Float    @default(10)
-  divisaExceptionCategoryIds String[] @default([])
-  divisaExceptionProductIds  String[] @default([])
-  monthlyBudgetUsd           Float    @default(20)
+  divisaDiscountPct          Float     @default(10)
+  divisaExceptionCategoryIds String[]  @default([])
+  divisaExceptionProductIds  String[]  @default([])
+  monthlyBudgetUsd           Float     @default(20)
   crossSellAnalyzedAt        DateTime? // ultimo analisis de venta cruzada (sugerencias)
-  updatedAt                  DateTime @updatedAt
+  updatedAt                  DateTime  @updatedAt
 }
 
 // Venta cruzada del chatbot: "si cotiza <trigger> -> ofrecer <offerTerms>". Por PALABRAS (mismo motor
@@ -3265,7 +3267,7 @@ model ChatbotCrossSellOffer {
   id             String   @id @default(cuid())
   conversationId String
   ruleId         String
-  term           String   // tipo ofrecido ("disco de corte"): se ofrece el tipo, no un producto
+  term           String // tipo ofrecido ("disco de corte"): se ofrece el tipo, no un producto
   createdAt      DateTime @default(now())
 
   @@unique([conversationId, ruleId])
@@ -3302,13 +3304,13 @@ model ChatbotMessage {
   role            ChatbotMessageRole
   text            String              @default("")
   imageUrls       String[]            @default([]) // fotos que mando el cliente
-  productImages   Json?               // fotos de producto que envio el bot [{code,name,url}]
-  toolCalls       Json?               // diagnostico: herramientas llamadas, entradas y resultados
-  apiContent      Json?               // bloques crudos (para reconstruir el historial con la IA, append-only)
+  productImages   Json? // fotos de producto que envio el bot [{code,name,url}]
+  toolCalls       Json? // diagnostico: herramientas llamadas, entradas y resultados
+  apiContent      Json? // bloques crudos (para reconstruir el historial con la IA, append-only)
   inputTokens     Int                 @default(0)
   outputTokens    Int                 @default(0)
   cacheReadTokens Int                 @default(0)
-  rating          Int?                // piloto: 1 = la uso tal cual, -1 = la corrigio
+  rating          Int? // piloto: 1 = la uso tal cual, -1 = la corrigio
   ratedAt         DateTime?
   costUsd         Float               @default(0)
   createdAt       DateTime            @default(now())
@@ -3361,4 +3363,77 @@ model WhatsappCampaignTemplate {
   text        String
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// TOTEM CLOVER: publicidad en espera (Sesion 189)
+// ============================================
+
+enum TotemMediaKind {
+  IMAGE
+  VIDEO
+}
+
+enum TotemMediaStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum TotemAdType {
+  IMAGE
+  VIDEO
+  PRODUCT
+}
+
+// Fila unica: ajustes del modo espera del totem.
+model TotemConfig {
+  id               String      @id @default("default")
+  idleSeconds      Int         @default(45)
+  showCallToAction Boolean     @default(true)
+  introMediaId     String?
+  introMedia       TotemMedia? @relation("TotemIntro", fields: [introMediaId], references: [id], onDelete: SetNull)
+  updatedAt        DateTime    @updatedAt
+}
+
+// Archivo subido para el totem (Spaces, carpeta totem/). Videos comprimidos con ffmpeg; imagenes en WebP.
+model TotemMedia {
+  id           String           @id @default(cuid())
+  kind         TotemMediaKind
+  status       TotemMediaStatus @default(PROCESSING)
+  error        String?
+  originalName String?
+  key          String?
+  url          String?
+  thumbKey     String?
+  thumbUrl     String?
+  bytes        Int              @default(0)
+  width        Int?
+  height       Int?
+  durationSec  Float?
+  createdById  String?
+  createdAt    DateTime         @default(now())
+  ads          TotemAd[]
+  introOf      TotemConfig[]    @relation("TotemIntro")
+}
+
+model TotemAd {
+  id          String      @id @default(cuid())
+  type        TotemAdType
+  title       String
+  mediaId     String?
+  media       TotemMedia? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  productId   String?
+  product     Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  isActive    Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  // Fechas elegidas por el usuario (medianoche UTC, date-only): se comparan con caracasDateKey().
+  startDate   DateTime?
+  endDate     DateTime?
+  durationSec Int         @default(8)
+  createdById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([sortOrder])
 }

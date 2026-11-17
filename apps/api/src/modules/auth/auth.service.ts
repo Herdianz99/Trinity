@@ -110,9 +110,15 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
         secret: this.configService.get('JWT_REFRESH_SECRET', 'default-refresh-secret'),
-        expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION', '7d'),
+        expiresIn: this.refreshExpiration(user.role),
       }),
     };
+  }
+
+  // El totem del piso de venta no debe cerrarse solo: 90 dias, y como se renueva en cada refresco
+  // (cada 45 min mientras la pantalla esta encendida) en la practica no vence nunca.
+  private refreshExpiration(role: string) {
+    return role === 'TOTEM' ? '90d' : this.configService.get('JWT_REFRESH_EXPIRATION', '7d');
   }
 
   async refreshToken(token: string) {
@@ -140,7 +146,7 @@ export class AuthService {
         accessToken: this.jwtService.sign(newPayload),
         refreshToken: this.jwtService.sign(newPayload, {
           secret: this.configService.get('JWT_REFRESH_SECRET', 'default-refresh-secret'),
-          expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION', '7d'),
+          expiresIn: this.refreshExpiration(user.role),
         }),
       };
     } catch {

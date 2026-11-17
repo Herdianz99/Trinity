@@ -48,6 +48,7 @@ const ROLE_COLORS: Record<string, string> = {
   AUDITOR: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
   RRHH: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
   SEGURIDAD: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+  TOTEM: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   EMPLOYEE: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
 };
 
@@ -64,9 +65,10 @@ const ROLE_LABELS: Record<string, string> = {
   SEGURIDAD: 'Seguridad',
   EMPLOYEE: 'Empleado (portal)',
   CLIENT: 'Cliente (portal)',
+  TOTEM: 'Tótem Clover (pantalla)',
 };
 
-const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD', 'EMPLOYEE'];
+const ROLES = ['ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER', 'WAREHOUSE', 'BUYER', 'ACCOUNTANT', 'AUDITOR', 'RRHH', 'SEGURIDAD', 'EMPLOYEE', 'TOTEM'];
 
 function formatDate(date: string | null) {
   if (!date) return 'Nunca';

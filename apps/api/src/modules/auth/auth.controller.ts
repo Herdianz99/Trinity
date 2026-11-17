@@ -7,10 +7,12 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PortalAllowed } from '../../common/decorators/portal-allowed.decorator';
+import { TotemAllowed } from '../../common/decorators/totem-allowed.decorator';
 
 @ApiTags('Auth')
 // El CLIENT (portal) puede usar login, refresh, me y cambio de clave.
 @PortalAllowed()
+@TotemAllowed() // la pantalla del totem tambien renueva su sesion
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}

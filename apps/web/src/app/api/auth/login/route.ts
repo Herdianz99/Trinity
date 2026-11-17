@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SERVER_API_URL, forwardClientIp } from '@/lib/server-api';
+import { refreshCookieMaxAge } from '@/lib/auth-cookies';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
       secure: isSecure,
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: refreshCookieMaxAge(data.refreshToken), // 7 dias (90 el totem)
     });
 
     return response;

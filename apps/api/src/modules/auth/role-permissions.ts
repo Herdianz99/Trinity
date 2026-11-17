@@ -13,4 +13,5 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   SEGURIDAD: ['incidents'],
   EMPLOYEE: ['mi-perfil'],
   CLIENT: ['portal'],
+  TOTEM: ['totem'], // pantalla Clover: solo /totem (TotemGuard limita el API)
 };

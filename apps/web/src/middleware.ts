@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh', '/manifest.webmanifest', '/sw.js', '/icons'];
+// /clover: imagen del avatar del totem; el optimizador de next/image la pide sin cookies.
+const publicPaths = ['/login', '/api/auth/login', '/api/auth/refresh', '/manifest.webmanifest', '/sw.js', '/icons', '/clover/'];
 
 // Map route prefixes to acceptable permission keys (ANY of them grants access)
 // More specific routes must come before less specific ones
@@ -10,8 +11,9 @@ const ROUTE_PERMISSION_MAP: [string, string[]][] = [
   ['/store', ['store']],
   ['/chatbot/config', ['chatbot-config']],
   ['/chatbot/cross-sell', ['chatbot-config']],
+  ['/chatbot/totem', ['chatbot-config']],
   ['/chatbot', ['chatbot']],
-  ['/totem', ['chatbot']],
+  ['/totem', ['chatbot', 'totem']],
   ['/catalog/suppliers', ['purchases']],
   // Sesiones de fotos / codigos de barras: tambien accesibles desde Inventario (incl. solo-consulta)
   ['/catalog/photo-session', ['catalog', 'inventory', 'inventory-consult']],
@@ -76,6 +78,11 @@ export function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
     }
+    // Totem (TV del piso de venta): si el token de acceso vencio pero queda el de refresco, renovar y
+    // volver a /totem en vez de pedir usuario y clave (la sesion del totem no debe cerrarse sola).
+    if (pathname.startsWith('/totem') && request.cookies.get('refreshToken')?.value) {
+      return NextResponse.redirect(new URL('/api/auth/refresh?next=/totem', request.url));
+    }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
@@ -100,6 +107,10 @@ export function middleware(request: NextRequest) {
     }
     if (!isClient && pathname.startsWith('/portal')) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    // Totem Clover: la pantalla del piso de venta solo ve /totem (sin menu ni otras pantallas).
+    if (payload.role === 'TOTEM' && !pathname.startsWith('/totem') && !pathname.startsWith('/change-password')) {
+      return NextResponse.redirect(new URL('/totem', request.url));
     }
   }
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ClientPortalGuard } from './common/guards/client-portal.guard';
+import { TotemGuard } from './common/guards/totem.guard';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
@@ -86,6 +87,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { ClientOrdersModule } from './modules/client-orders/client-orders.module';
 import { SearchSynonymsModule } from './modules/search-synonyms/search-synonyms.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { TotemModule } from './modules/totem/totem.module';
 
 @Module({
   imports: [
@@ -174,7 +176,11 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
     ClientOrdersModule,
     SearchSynonymsModule,
     ChatbotModule,
+    TotemModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ClientPortalGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ClientPortalGuard },
+    { provide: APP_GUARD, useClass: TotemGuard },
+  ],
 })
 export class AppModule {}

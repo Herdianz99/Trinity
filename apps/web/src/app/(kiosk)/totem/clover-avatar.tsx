@@ -15,7 +15,7 @@ const HALO: Record<CloverState, string> = {
 // compact: mas pequeno cuando hay tarjetas de producto en pantalla.
 export default function CloverAvatar({ state, compact = false }: { state: CloverState; compact?: boolean }) {
   return (
-    <div className={`relative mx-auto aspect-[1088/1456] transition-[width] duration-500 ${compact ? 'w-[min(40vw,24dvh,260px)]' : 'w-[min(62vw,40dvh,400px)]'}`}>
+    <div className={`relative mx-auto aspect-[1088/1456] transition-[width] duration-500 ${compact ? 'w-[min(40vw,24dvh,440px)]' : 'w-[min(62vw,40dvh,720px)]'}`}>
       <div className={`absolute -inset-[6%] rounded-full blur-3xl transition-all duration-700 ${HALO[state]}`} />
       <div className={`absolute inset-0 ${state === 'speaking' ? 'clover-sway' : state === 'idle' ? 'clover-breathe' : ''}`}>
         <Image
@@ -23,7 +23,7 @@ export default function CloverAvatar({ state, compact = false }: { state: Clover
           alt="Clover, asistente virtual"
           fill
           priority
-          sizes="400px"
+          sizes="720px"
           className="object-cover"
           style={{
             WebkitMaskImage: 'radial-gradient(closest-side at 50% 46%, #000 72%, transparent 100%)',
