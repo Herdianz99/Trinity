@@ -37,7 +37,7 @@ interface UploadMeta {
  * Archivos del totem. La subida va por pedazos en base64 (el proxy de Next reenvia el cuerpo como texto y el
  * API acepta JSON de 15 MB), se arma en una carpeta temporal y se procesa en segundo plano, de a uno:
  *  - imagen -> WebP de maximo 1080x1920 + miniatura;
- *  - video  -> ffmpeg con prioridad baja (nice 19, 2 hilos): H.264 CRF 26, maximo 1080x1920, AAC, +faststart.
+ *  - video  -> ffmpeg con prioridad baja (nice 19, 2 hilos): H.264 CRF 22, maximo 1080x1920, AAC, +faststart.
  * Se guarda en Spaces (carpeta totem/) con cache inmutable para que el TV no lo vuelva a descargar.
  */
 @Injectable()
@@ -187,7 +187,7 @@ export class TotemMediaService implements OnModuleInit {
       '-y', '-hide_banner', '-loglevel', 'error', '-i', src,
       '-map', '0:v:0', '-map', '0:a:0?',
       '-vf', `scale=w='min(${MAX_W},iw)':h='min(${MAX_H},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30`,
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
       '-movflags', '+faststart', '-threads', '2', out,
     ]);
