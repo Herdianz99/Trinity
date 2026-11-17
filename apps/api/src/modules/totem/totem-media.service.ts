@@ -37,7 +37,8 @@ interface UploadMeta {
  * Archivos del totem. La subida va por pedazos en base64 (el proxy de Next reenvia el cuerpo como texto y el
  * API acepta JSON de 15 MB), se arma en una carpeta temporal y se procesa en segundo plano, de a uno:
  *  - imagen -> WebP de maximo 1080x1920 + miniatura;
- *  - video  -> ffmpeg con prioridad baja (nice 19, 2 hilos): H.264 CRF 22, maximo 1080x1920, AAC, +faststart.
+ *  - video  -> ffmpeg con prioridad baja (nice 19, 2 hilos): H.264 Main 4.0 CRF 22 con tope 5 Mbps, cuadro clave
+ *    cada ~2 s, maximo 1080x1920 y 30 fps, AAC, +faststart.
  * Se guarda en Spaces (carpeta totem/) con cache inmutable para que el TV no lo vuelva a descargar.
  */
 @Injectable()
@@ -182,13 +183,20 @@ export class TotemMediaService implements OnModuleInit {
     if (!probe.duration) throw new Error('No se pudo leer la duración del video.');
     if (probe.duration > MAX_VIDEO_SECONDS) throw new Error(`El video dura ${Math.round(probe.duration)} s; el máximo es 2 minutos.`);
 
+    // Pensado para la placa Android del totem (cartelera vertical con poca potencia), no para un PC:
+    // - perfil Main nivel 4.0: lo decodifica por hardware cualquier placa de cartelera (High a veces no);
+    // - tope de bitrate (maxrate/bufsize): sin picos que atasquen el decodificador o el WiFi;
+    // - un cuadro clave cada ~2 s (-g 60): si se traba, se recupera rapido (el original traia 2 en 15 s);
+    // - -fpsmax 30 en vez de fps=30: no inventa cuadros a un video de 24 fps (solo baja los de 60).
     const out = path.join(dir, 'out.mp4');
     await this.run(this.ffmpegBin(), [
       '-y', '-hide_banner', '-loglevel', 'error', '-i', src,
       '-map', '0:v:0', '-map', '0:a:0?',
-      '-vf', `scale=w='min(${MAX_W},iw)':h='min(${MAX_H},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30`,
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+      '-vf', `scale=w='min(${MAX_W},iw)':h='min(${MAX_H},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
+      '-fpsmax', '30',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-maxrate', '5M', '-bufsize', '10M',
+      '-profile:v', 'main', '-level:v', '4.0', '-pix_fmt', 'yuv420p', '-g', '60', '-keyint_min', '24',
+      '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '48000',
       '-movflags', '+faststart', '-threads', '2', out,
     ]);
     const outProbe = await this.probe(out);

@@ -25,13 +25,37 @@ export function buildSequence(p: TotemPlaylist | null): TotemSlide[] {
   return [...intro, ...p.items];
 }
 
-const VIDEO_SAFETY_MS = 150_000; // un video que se queda trabado no detiene el bucle
+const VIDEO_SAFETY_MS = 150_000; // tope absoluto por video (el maximo admitido dura ~2 min)
+const STALL_MS = 10_000; // un video que no avanza en este tiempo (sin red o decodificador trabado) se salta
+
+const isVideoSlide = (s: TotemSlide | null | undefined) => s?.type === 'VIDEO' || s?.type === 'INTRO';
+
+// Suelta el decodificador: en las placas Android de cartelera hay muy pocos y, si no se liberan,
+// despues de varias vueltas del bucle el video se congela.
+function releaseVideo(v: HTMLVideoElement) {
+  v.pause();
+  if (v.hasAttribute('src')) { v.removeAttribute('src'); v.load(); }
+}
+
+// Descarga cada video una vez, en orden, para dejarlo en la cache HTTP del navegador (Spaces lo sirve con
+// cache de un año): las vueltas siguientes salen del disco y no del WiFi de la tienda. Es 'no-cors' porque
+// el CDN no manda CORS; la respuesta opaca igual queda en cache para el <video>. Si falla, el video baja normal.
+const warmed = new Set<string>();
+let warmChain: Promise<unknown> = Promise.resolve();
+function warmVideo(url: string) {
+  if (warmed.has(url)) return;
+  warmed.add(url);
+  warmChain = warmChain.then(() => fetch(url, { mode: 'no-cors', cache: 'force-cache' }).catch(() => { warmed.delete(url); }));
+}
 
 /**
  * Modo espera del totem: pantalla completa con la presentacion y la publicidad en bucle.
  * Cualquier toque la cierra (onExit) sin que el toque llegue al boton de hablar.
  * Sonido: Chrome solo deja reproducir con sonido si hubo un toque en la pagina; si lo bloquea (p. ej. la
  * pagina se recargo tras un corte de luz) el video sigue sin sonido y lo recupera con el siguiente toque.
+ *
+ * Videos: UN solo <video> para todo el bucle (crear uno por vuelta agotaba el decodificador de la placa),
+ * sin fondo desenfocado ni animaciones encima mientras corre, y con vigilancia: si no avanza, se salta.
  */
 export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlaylist; onExit: () => void }) {
   const sequence = useMemo(() => buildSequence(playlist), [playlist]);
@@ -39,35 +63,80 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   const videoRef = useRef<HTMLVideoElement>(null);
   const slide = sequence.length ? sequence[index % sequence.length] : null;
   const next = () => setIndex((i) => (sequence.length ? (i + 1) % sequence.length : 0));
-  const isVideo = slide?.type === 'VIDEO' || slide?.type === 'INTRO';
+  const isVideo = isVideoSlide(slide);
 
   // Si la lista cambia (llego publicidad nueva) y el indice ya no existe, volver al inicio.
   useEffect(() => { if (index >= sequence.length) setIndex(0); }, [sequence.length, index]);
+
+  useEffect(() => {
+    sequence.forEach((s) => { if (isVideoSlide(s) && s.url) warmVideo(s.url); });
+  }, [sequence]);
+
+  // Al salir del modo espera, soltar el video.
+  useEffect(() => {
+    const v = videoRef.current;
+    return () => { if (v) releaseVideo(v); };
+  }, []);
 
   // Imagenes y productos: tiempo fijo. Videos: hasta que terminan (con tope de seguridad).
   useEffect(() => {
     if (!slide) return;
     const ms = isVideo ? VIDEO_SAFETY_MS : Math.max(3, slide.durationSec) * 1000;
-    const t = setTimeout(next, ms);
+    const t = setTimeout(skip, ms);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide?.id, index, sequence.length]);
 
-  // Una sola diapositiva de video: hay que repetirla a mano (el indice no cambia).
-  const onEnded = () => {
-    if (sequence.length === 1 && videoRef.current) { videoRef.current.currentTime = 0; videoRef.current.play().catch(() => undefined); }
+  // Pasa a lo siguiente. Si la lista es un solo video el indice no cambia: se reinicia ese video desde cero
+  // (load() tambien rearma el decodificador si se habia trabado).
+  const skip = () => {
+    const v = videoRef.current;
+    if (sequence.length === 1 && v && isVideo) { v.load(); v.play().catch(() => undefined); }
     else next();
   };
 
+  const play = (v: HTMLVideoElement) => {
+    v.muted = false;
+    v.play().catch((err: DOMException) => {
+      if (err?.name === 'NotAllowedError') { v.muted = true; v.play().catch(() => skip()); }
+    });
+  };
+
+  // Una sola diapositiva de video: hay que repetirla a mano (el indice no cambia).
+  const onEnded = () => {
+    const v = videoRef.current;
+    if (sequence.length === 1 && v) { v.currentTime = 0; play(v); }
+    else next();
+  };
+
+  // Carga el video de la diapositiva en el reproductor unico; en imagenes y productos lo suelta.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!isVideo || !slide?.url) { releaseVideo(v); return; }
+    if (v.getAttribute('src') !== slide.url) v.src = slide.url;
+    else v.currentTime = 0;
+    play(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slide?.id, index]);
+
+  // Vigilancia: si el video no avanza en STALL_MS (sin red, sin datos o decodificador colgado), se salta.
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !isVideo) return;
-    v.muted = false;
-    v.play().catch((err: DOMException) => {
-      if (err?.name === 'NotAllowedError') { v.muted = true; v.play().catch(() => next()); }
-    });
+    let lastTime = -1;
+    let lastMove = Date.now();
+    const id = setInterval(() => {
+      if (v.ended) return;
+      if (v.currentTime !== lastTime) { lastTime = v.currentTime; lastMove = Date.now(); return; }
+      if (Date.now() - lastMove > STALL_MS) { lastMove = Date.now(); skip(); }
+    }, 1000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slide?.id, index]);
+  }, [slide?.id, index, sequence.length]);
+
+  // Un error del reproductor solo cuenta si estaba mostrando un video (al soltarlo queda sin src).
+  const onVideoError = () => { if (isVideo && videoRef.current?.hasAttribute('src')) skip(); };
 
   // Precargar la siguiente imagen para que no aparezca a medias.
   useEffect(() => {
@@ -85,36 +154,33 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
     onExit();
   };
 
-  const bg = isVideo ? slide.thumbUrl : slide.url;
-
   return (
     <div data-totem-attract className="fixed inset-0 z-[60] overflow-hidden bg-[#06132b]" onPointerDown={exit} onContextMenu={(e) => e.preventDefault()}>
       {slide.type === 'PRODUCT' ? (
         <ProductSlide key={`${slide.id}-${index}`} slide={slide} />
-      ) : (
+      ) : !isVideo && (
         <div key={`${slide.id}-${index}`} className="absolute inset-0 animate-[totem-fade_.6s_ease-out_both]">
-          {/* Fondo desenfocado para lo que no es vertical (no deja barras negras) */}
-          {bg && <img src={bg} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />}
-          {isVideo ? (
-            <video
-              ref={videoRef}
-              src={slide.url ?? undefined}
-              playsInline
-              autoPlay
-              preload="auto"
-              onEnded={onEnded}
-              onError={next}
-              className="absolute inset-0 h-full w-full object-contain"
-            />
-          ) : (
-            <img src={slide.url ?? ''} alt="" onError={next} className="absolute inset-0 h-full w-full object-contain" />
-          )}
+          {/* Fondo desenfocado para lo que no es vertical (no deja barras negras). Solo en imagenes: detras de
+              un video obligaba a la placa a recomponer el desenfoque en cada cuadro. */}
+          {slide.url && <img src={slide.url} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />}
+          <img src={slide.url ?? ''} alt="" onError={next} className="absolute inset-0 h-full w-full object-contain" />
         </div>
       )}
 
+      {/* Reproductor unico (siempre montado): ver releaseVideo. */}
+      <video
+        ref={videoRef}
+        playsInline
+        preload="auto"
+        poster={isVideo ? slide.thumbUrl ?? undefined : undefined}
+        onEnded={onEnded}
+        onError={onVideoError}
+        className={isVideo ? 'absolute inset-0 h-full w-full object-contain' : 'hidden'}
+      />
+
       {playlist.showCallToAction && slide.type !== 'INTRO' && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[3vh] flex justify-center px-[4vw]">
-          <div className="flex items-center gap-[2vw] rounded-full bg-emerald-600/95 py-[1.2vh] pl-[1.2vh] pr-[4vw] text-white shadow-2xl ring-4 ring-white/20 animate-[totem-cta_2.4s_ease-in-out_infinite]">
+          <div className={`flex items-center gap-[2vw] rounded-full bg-emerald-600/95 py-[1.2vh] pl-[1.2vh] pr-[4vw] text-white shadow-2xl ring-4 ring-white/20 ${isVideo ? '' : 'animate-[totem-cta_2.4s_ease-in-out_infinite]'}`}>
             <img src="/_next/image?url=%2Fclover%2Fclover.png&w=256&q=75" alt="" className="h-[7vh] w-[7vh] rounded-full bg-white/90 object-cover object-top" />
             <span className="text-[clamp(1.2rem,4.2vw,3rem)] font-extrabold leading-tight">¡Toca la pantalla y pregúntale a Clover!</span>
           </div>
