@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { UserRole } from '@prisma/client';
@@ -8,12 +8,16 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { AckNotificationDto } from './dto/ack-notification.dto';
+import { NotificationAttachmentsService } from './notification-attachments.service';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private service: NotificationsService) {}
+  constructor(
+    private service: NotificationsService,
+    private attachments: NotificationAttachmentsService,
+  ) {}
 
   // ---- Emisor (RRHH / ADMIN / SUPERVISOR) ----
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -62,5 +66,25 @@ export class NotificationsController {
   @Get(':id')
   detail(@Param('id') id: string) {
     return this.service.detailForSender(id);
+  }
+
+  // ---- Adjuntos (fotos / PDF: invitaciones, afiches) ----
+  // `file` = data URI base64 (imagen comprimida en el navegador o PDF tal cual).
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.RRHH, UserRole.SUPERVISOR)
+  @Post(':id/attachments')
+  addAttachment(
+    @Param('id') id: string,
+    @Body('file') file: string,
+    @Body('fileName') fileName?: string,
+  ) {
+    return this.attachments.add(id, file, fileName);
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.RRHH, UserRole.SUPERVISOR)
+  @Delete(':id/attachments/:attId')
+  removeAttachment(@Param('id') id: string, @Param('attId') attId: string) {
+    return this.attachments.remove(id, attId);
   }
 }

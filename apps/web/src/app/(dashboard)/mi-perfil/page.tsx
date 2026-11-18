@@ -5,6 +5,7 @@ import {
   Building2, Briefcase, CalendarClock, Check, X, BadgeCheck, FileText, Landmark, Loader2,
   KeyRound, Lock, Eye, EyeOff, CheckCircle,
 } from 'lucide-react';
+import { NotificationAttachmentsView, type NotificationAttachment } from '@/components/notification-attachments';
 
 /* ---------- helpers ---------- */
 const fmt = (n: number) => (n ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -42,7 +43,7 @@ interface Cxc { id: string; number: string; documentNumber: string | null; amoun
 interface Factura { id: string; number: string; fiscalNumber: string | null; status: string; totalUsd: number; totalPaidUsd: number; saldoUsd: number; createdAt: string; }
 interface Recibo { id: string; grossBs: number; totalDeductionsBs: number; netBs: number; creditDeductionBs: number; payrollRun: { number: string; periodFrom: string; periodTo: string; type: string }; }
 interface Amonestacion { id: string; number: string; level: string; occurredAt: string; reason: string; faultType: { name: string }; }
-interface Notif { id: string; ackState: 'PENDIENTE' | 'RECIBIDO' | 'RECHAZADO'; comment: string | null; ackAt: string | null; notification: { title: string; body: string; type: string; createdAt: string; createdBy: { name: string } }; }
+interface Notif { id: string; ackState: 'PENDIENTE' | 'RECIBIDO' | 'RECHAZADO'; comment: string | null; ackAt: string | null; notification: { title: string; body: string; type: string; createdAt: string; createdBy: { name: string }; attachments?: NotificationAttachment[] }; }
 
 async function getJson(url: string) {
   const r = await fetch(url);
@@ -277,6 +278,11 @@ export default function MiPerfilPage() {
                       </div>
                       <div className="text-[11px] text-slate-500 mt-1">{it.notification.createdBy?.name} · {fmtDateTime(it.notification.createdAt)}</div>
                       <p className="text-sm text-slate-300 mt-2 whitespace-pre-wrap">{it.notification.body}</p>
+                      {!!it.notification.attachments?.length && (
+                        <div className="mt-3">
+                          <NotificationAttachmentsView items={it.notification.attachments} />
+                        </div>
+                      )}
                       {it.ackState === 'PENDIENTE' ? (
                         <div className="mt-3">
                           <textarea value={comments[it.id] || ''} onChange={(e) => setComments({ ...comments, [it.id]: e.target.value })}

@@ -1,12 +1,19 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X, Loader2, MessageSquare, CheckCircle2, XCircle, Clock, Search, Check, Send } from 'lucide-react';
+import { Plus, X, Loader2, MessageSquare, CheckCircle2, XCircle, Clock, Search, Check, Send, Paperclip, FileText } from 'lucide-react';
+import {
+  NotificationAttachmentsView, uploadNotificationAttachment, validateAttachmentFile,
+  type NotificationAttachment,
+} from '@/components/notification-attachments';
+
+// Máximo de archivos por notificación (igual que el API)
+const MAX_FILES = 10;
 
 const fmtDate = (s: string) => new Date(s).toLocaleString('es-VE');
 // Para buscar sin importar tildes ni mayúsculas ("jose" encuentra "José")
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-interface Sent { id: string; title: string; type: string; createdAt: string; total: number; recibido: number; rechazado: number; pendiente: number; }
+interface Sent { id: string; title: string; type: string; createdAt: string; total: number; recibido: number; rechazado: number; pendiente: number; attachmentCount?: number; }
 interface EmployeeOption { id: string; code: string | null; departmentId: string | null; customer: { name: string }; }
 interface Department { id: string; name: string; }
 interface RecipientDetail {
@@ -19,7 +26,36 @@ interface RecipientDetail {
 interface NotifDetail {
   id: string; title: string; body: string; type: string; createdAt: string;
   createdBy: { name: string } | null;
+  attachments: NotificationAttachment[];
   recipients: RecipientDetail[];
+}
+
+// Archivos elegidos en el formulario (aún no subidos). Las fotos llevan vista previa local.
+interface PendingFile { key: string; file: File; preview: string | null; }
+
+function PendingFiles({ files, onRemove }: { files: PendingFile[]; onRemove: (key: string) => void }) {
+  if (!files.length) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {files.map((f) => (
+        <div key={f.key} className="relative h-20 w-20 overflow-hidden rounded-lg border border-slate-700 bg-slate-900/60">
+          {f.preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={f.preview} alt={f.file.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1.5 text-center">
+              <FileText size={22} className="text-red-400" />
+              <span className="w-full truncate text-[10px] text-slate-400">{f.file.name}</span>
+            </div>
+          )}
+          <button type="button" onClick={() => onRemove(f.key)} aria-label={`Quitar ${f.file.name}`}
+            className="absolute top-1 right-1 rounded-md bg-black/70 p-0.5 text-slate-200 hover:bg-red-600 hover:text-white">
+            <X size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Selector de empleados: buscador + filtro por departamento + lista tocable; los elegidos
@@ -179,18 +215,88 @@ export default function EmisorNotificacionesPage() {
     { title: '', body: '', type: 'INFORMATIVA', mode: 'INDIVIDUAL', employeeIds: [], departmentId: '' },
   );
 
+  const [files, setFiles] = useState<PendingFile[]>([]);
+
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<NotifDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailUploading, setDetailUploading] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   useEffect(() => { document.title = 'Notificaciones | Trinity ERP'; }, []);
+
+  function clearFiles() {
+    setFiles((prev) => { prev.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)); return []; });
+  }
+  function closeForm() { setOpen(false); clearFiles(); setError(''); }
+
+  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!picked.length) return;
+    const errors: string[] = [];
+    const ok: PendingFile[] = [];
+    for (const file of picked) {
+      const msg = validateAttachmentFile(file);
+      if (msg) { errors.push(msg); continue; }
+      ok.push({
+        key: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      });
+    }
+    const room = MAX_FILES - files.length;
+    if (ok.length > room) {
+      errors.push(`Máximo ${MAX_FILES} archivos por notificación`);
+      ok.slice(room).forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
+    }
+    setFiles((prev) => [...prev, ...ok.slice(0, Math.max(room, 0))]);
+    setError(errors.join(' · '));
+  }
+
+  function removeFile(key: string) {
+    setFiles((prev) => {
+      const f = prev.find((x) => x.key === key);
+      if (f?.preview) URL.revokeObjectURL(f.preview);
+      return prev.filter((x) => x.key !== key);
+    });
+  }
+
+  async function addDetailFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!detail || !picked.length) return;
+    const room = MAX_FILES - detail.attachments.length;
+    const errors: string[] = [];
+    if (picked.length > room) errors.push(`Máximo ${MAX_FILES} archivos por notificación`);
+    setDetailUploading(true); setDetailError('');
+    for (const file of picked.slice(0, Math.max(room, 0))) {
+      const msg = validateAttachmentFile(file);
+      if (msg) { errors.push(msg); continue; }
+      try {
+        const att = await uploadNotificationAttachment(detail.id, file);
+        setDetail((d) => (d ? { ...d, attachments: [...d.attachments, att] } : d));
+      } catch (err: any) { errors.push(err.message); }
+    }
+    setDetailUploading(false);
+    setDetailError(errors.join(' · '));
+    loadSent();
+  }
+
+  async function deleteDetailFile(attId: string) {
+    if (!detail || !confirm('¿Eliminar este archivo de la notificación? Los empleados dejarán de verlo.')) return;
+    const r = await fetch(`/api/proxy/notifications/${detail.id}/attachments/${attId}`, { method: 'DELETE' });
+    if (!r.ok) { setDetailError('No se pudo eliminar el archivo'); return; }
+    setDetail((d) => (d ? { ...d, attachments: d.attachments.filter((a) => a.id !== attId) } : d));
+    loadSent();
+  }
   async function loadSent() {
     const r = await fetch('/api/proxy/notifications');
     if (r.ok) setSent(await r.json());
   }
 
   async function openDetail(id: string) {
-    setDetailOpen(true); setDetail(null); setDetailLoading(true);
+    setDetailOpen(true); setDetail(null); setDetailLoading(true); setDetailError('');
     try {
       const r = await fetch(`/api/proxy/notifications/${id}`);
       if (r.ok) setDetail(await r.json());
@@ -220,9 +326,20 @@ export default function EmisorNotificacionesPage() {
         body: JSON.stringify({ title: form.title.trim(), body: form.body.trim(), type: form.type, target }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'Error al enviar');
-      setOpen(false);
+      const created = await r.json();
+      // La notificación ya existe: los archivos se suben uno a uno. Si alguno falla se avisa,
+      // y se puede volver a agregar desde el detalle de la notificación.
+      const failed: string[] = [];
+      for (const f of files) {
+        try { await uploadNotificationAttachment(created.id, f.file); }
+        catch (err: any) { failed.push(err.message || f.file.name); }
+      }
+      closeForm();
       setForm({ title: '', body: '', type: 'INFORMATIVA', mode: 'INDIVIDUAL', employeeIds: [], departmentId: '' });
       loadSent();
+      if (failed.length) {
+        alert(`La notificación se envió, pero ${failed.length === 1 ? 'un archivo no se pudo subir' : `${failed.length} archivos no se pudieron subir`}:\n\n${failed.join('\n')}\n\nPuedes agregarlos desde el detalle de la notificación.`);
+      }
     } catch (e: any) { setError(e.message); } finally { setSaving(false); }
   }
 
@@ -256,6 +373,11 @@ export default function EmisorNotificacionesPage() {
                   <span className="inline-flex items-center gap-2">
                     <MessageSquare size={14} className="text-slate-500" />
                     {n.title}
+                    {!!n.attachmentCount && (
+                      <span className="inline-flex items-center gap-0.5 text-xs text-slate-500" title={`${n.attachmentCount} archivo(s) adjunto(s)`}>
+                        <Paperclip size={12} />{n.attachmentCount}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center text-slate-400">{n.type}</td>
@@ -279,7 +401,12 @@ export default function EmisorNotificacionesPage() {
             >
               <div className="flex items-start gap-2">
                 <MessageSquare size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-slate-200 font-medium flex-1 min-w-0 break-words">{n.title}</span>
+                <span className="text-sm text-slate-200 font-medium flex-1 min-w-0 break-words">
+                  {n.title}
+                  {!!n.attachmentCount && (
+                    <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-normal text-slate-500"><Paperclip size={11} />{n.attachmentCount}</span>
+                  )}
+                </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-300 flex-shrink-0">{n.type}</span>
               </div>
               <p className="text-xs text-slate-500 mt-1 pl-6">{fmtDate(n.createdAt)}</p>
@@ -300,13 +427,22 @@ export default function EmisorNotificacionesPage() {
           <div className="bg-slate-900 sm:border sm:border-slate-700 sm:rounded-xl w-full h-[100dvh] sm:h-auto sm:max-w-lg sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-700/50 flex-shrink-0">
               <h2 className="text-lg font-bold text-white">Nueva notificación</h2>
-              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-white p-1 -mr-1" aria-label="Cerrar"><X size={20} /></button>
+              <button onClick={closeForm} disabled={saving} className="text-slate-400 hover:text-white p-1 -mr-1 disabled:opacity-50" aria-label="Cerrar"><X size={20} /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
             {error && <div className="mb-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
             <div className="space-y-3">
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Título" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
               <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Mensaje" rows={4} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200" />
+              <div className="space-y-2">
+                <label className={`inline-flex items-center gap-2 rounded-lg border border-dashed border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-green-500/50 hover:text-green-300 cursor-pointer transition-colors ${files.length >= MAX_FILES || saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Paperclip size={15} />
+                  Adjuntar fotos o PDF
+                  <span className="text-xs text-slate-500">(opcional)</span>
+                  <input type="file" accept="image/*,application/pdf" multiple onChange={pickFiles} className="hidden" />
+                </label>
+                <PendingFiles files={files} onRemove={removeFile} />
+              </div>
               <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
                 <option value="INFORMATIVA">Informativa</option>
                 <option value="REUNION">Reunión</option>
@@ -336,10 +472,12 @@ export default function EmisorNotificacionesPage() {
             </div>
             </div>
             <div className="flex gap-2 sm:justify-end px-4 sm:px-6 py-3 border-t border-slate-700/50 flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <button onClick={() => setOpen(false)} className="btn-secondary flex-1 sm:flex-none">Cancelar</button>
+              <button onClick={closeForm} disabled={saving} className="btn-secondary flex-1 sm:flex-none disabled:opacity-50">Cancelar</button>
               <button onClick={submit} disabled={saving} className="btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-                {form.mode === 'MULTIPLE' && form.employeeIds.length > 0 ? `Enviar a ${form.employeeIds.length}` : 'Enviar'}
+                {saving && files.length > 0
+                  ? 'Enviando archivos…'
+                  : form.mode === 'MULTIPLE' && form.employeeIds.length > 0 ? `Enviar a ${form.employeeIds.length}` : 'Enviar'}
               </button>
             </div>
           </div>
@@ -363,6 +501,23 @@ export default function EmisorNotificacionesPage() {
                     {detail.type} · {detail.createdBy?.name} · {fmtDate(detail.createdAt)}
                   </div>
                   <p className="text-sm text-slate-300 whitespace-pre-wrap break-words">{detail.body}</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                      <Paperclip size={14} className="text-slate-400" /> Archivos ({detail.attachments.length})
+                    </h3>
+                    <label className={`inline-flex items-center gap-1.5 text-xs font-medium text-green-400 hover:text-green-300 cursor-pointer ${detailUploading || detail.attachments.length >= MAX_FILES ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {detailUploading ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                      {detailUploading ? 'Subiendo…' : 'Agregar'}
+                      <input type="file" accept="image/*,application/pdf" multiple onChange={addDetailFiles} className="hidden" />
+                    </label>
+                  </div>
+                  {detailError && <div className="mb-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">{detailError}</div>}
+                  {detail.attachments.length > 0
+                    ? <NotificationAttachmentsView items={detail.attachments} onDelete={deleteDetailFile} />
+                    : <p className="text-xs text-slate-500">Sin archivos adjuntos.</p>}
                 </div>
 
                 <div>

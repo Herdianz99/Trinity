@@ -3160,11 +3160,29 @@ model Notification {
   createdById          String
   createdBy            User                    @relation("NotificationCreator", fields: [createdById], references: [id])
   recipients           NotificationRecipient[]
+  attachments          NotificationAttachment[]
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
   @@index([type])
   @@index([createdAt])
+}
+
+// Adjuntos de una notificación de RRHH (invitaciones, afiches, PDF de eventos).
+// Se guardan UNA vez por notificación (no por destinatario). Son URLs públicas de Spaces:
+// no usar para documentos privados (recibos de pago, etc.).
+model NotificationAttachment {
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  thumbKey       String // miniatura webp en Spaces. En PDF = mismo key del PDF.
+  fullKey        String // versión grande webp en Spaces. En PDF = key del PDF.
+  mimeType       String       @default("image/webp") // "image/webp" o "application/pdf"
+  fileName       String? // nombre original (se muestra en los PDF)
+  bytes          Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([notificationId])
 }
 
 model NotificationRecipient {

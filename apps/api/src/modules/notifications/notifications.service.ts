@@ -2,10 +2,19 @@ import { Injectable, BadRequestException, ForbiddenException, NotFoundException 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { AckNotificationDto } from './dto/ack-notification.dto';
+import { NotificationAttachmentsService } from './notification-attachments.service';
+
+const ATTACHMENT_SELECT = {
+  select: { id: true, thumbKey: true, fullKey: true, mimeType: true, fileName: true, bytes: true, createdAt: true },
+  orderBy: { createdAt: 'asc' as const },
+};
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private attachments: NotificationAttachmentsService,
+  ) {}
 
   /** Expande el target a una lista de employeeIds (solo empleados activos). */
   private async resolveTargetEmployeeIds(target: CreateNotificationDto['target']): Promise<string[]> {
@@ -68,6 +77,7 @@ export class NotificationsService {
         id: true, title: true, type: true, createdAt: true,
         createdBy: { select: { name: true } },
         recipients: { select: { ackState: true } },
+        _count: { select: { attachments: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -76,8 +86,8 @@ export class NotificationsService {
       const recibido = n.recipients.filter((r) => r.ackState === 'RECIBIDO').length;
       const rechazado = n.recipients.filter((r) => r.ackState === 'RECHAZADO').length;
       const pendiente = n.recipients.filter((r) => r.ackState === 'PENDIENTE').length;
-      const { recipients, ...rest } = n;
-      return { ...rest, total: n.recipients.length, recibido, rechazado, pendiente };
+      const { recipients, _count, ...rest } = n;
+      return { ...rest, attachmentCount: _count.attachments, total: n.recipients.length, recibido, rechazado, pendiente };
     });
   }
 
@@ -86,6 +96,7 @@ export class NotificationsService {
       where: { id },
       include: {
         createdBy: { select: { name: true } },
+        attachments: ATTACHMENT_SELECT,
         recipients: {
           select: {
             id: true, ackState: true, comment: true, ackAt: true,
@@ -96,7 +107,7 @@ export class NotificationsService {
       },
     });
     if (!n) throw new NotFoundException('Notificación no encontrada');
-    return n;
+    return { ...n, attachments: n.attachments.map((a) => this.attachments.withUrls(a)) };
   }
 
   private async employeeIdOf(userId: string): Promise<string> {
@@ -107,7 +118,7 @@ export class NotificationsService {
 
   async inbox(userId: string, ackState?: string) {
     const employeeId = await this.employeeIdOf(userId);
-    return this.prisma.notificationRecipient.findMany({
+    const rows = await this.prisma.notificationRecipient.findMany({
       where: { employeeId, ...(ackState ? { ackState: ackState as any } : {}) },
       select: {
         id: true, ackState: true, comment: true, ackAt: true,
@@ -115,11 +126,19 @@ export class NotificationsService {
           select: {
             id: true, title: true, body: true, type: true, createdAt: true,
             createdBy: { select: { name: true } },
+            attachments: ATTACHMENT_SELECT,
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
+    return rows.map((r) => ({
+      ...r,
+      notification: {
+        ...r.notification,
+        attachments: r.notification.attachments.map((a) => this.attachments.withUrls(a)),
+      },
+    }));
   }
 
   async ack(userId: string, recipientId: string, dto: AckNotificationDto) {

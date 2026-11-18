@@ -1111,6 +1111,12 @@ model QuotationItem {
   - El botón dice "Enviar a N".
   - "A un empleado" usa el mismo selector con selección única.
   - `onChange` recibe un updater para que varios toques rápidos no se pisen.
+- Ses.191: las notificaciones de RRHH aceptan **adjuntos (fotos y PDF)** en la tabla `NotificationAttachment`:
+  - Son públicos en Spaces, bajo `notifications/<id>/`, como los adjuntos de compras. Sirven para invitaciones y afiches, no para documentos privados.
+  - API: `NotificationAttachmentsService` con `POST/DELETE /notifications/:id/attachments`. Máximo 10 por notificación. Fotos → WebP; PDF tal cual, hasta 10 MB.
+  - El detalle del emisor y `me/inbox` devuelven los adjuntos con `thumbUrl/fullUrl`.
+  - Web: el formulario sube los archivos después de crear la notificación. En el detalle se pueden agregar y eliminar.
+  - Mi Perfil los muestra con `NotificationAttachmentsView` (`components/notification-attachments.tsx`).
 
 ### FASE 6 — Integraciones de Hardware y POS Avanzado
 - **POS Electron + Máquina Fiscal:** Migrar el POS a Electron para acceso nativo a puertos COM. El agente Electron se comunica con la máquina fiscal por puerto COM, recibe el número fiscal y lo guarda en Invoice.fiscalNumber. También habilita modo offline con sincronización posterior
