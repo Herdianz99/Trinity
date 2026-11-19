@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Logger, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -8,7 +8,7 @@ import { ModuleGuard } from '../../common/guards/module.guard';
 import { TotemService } from './totem.service';
 import { TotemMediaService } from './totem-media.service';
 import {
-  CreateTotemAdDto, DeleteTotemMediaDto, ReorderTotemAdsDto, StartTotemUploadDto, TotemSendMessageDto,
+  CreateTotemAdDto, DeleteTotemMediaDto, ReorderTotemAdsDto, StartTotemUploadDto, TotemDiagnosticDto, TotemSendMessageDto,
   TotemUploadChunkDto, UpdateTotemAdDto, UpdateTotemConfigDto,
 } from './dto/totem.dto';
 
@@ -40,6 +40,22 @@ export class TotemController {
   @Post('conversations/:id/call-seller')
   callSeller(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.service.callSeller(id, userId);
+  }
+
+  // Diagnóstico invisible de la reproducción de video (Sesión 192): la pantalla manda capacidades del
+  // decodificador, cuadros perdidos y trabas; aquí solo se escribe una línea JSON en el log del API
+  // (buscar "TotemDiag" en los logs de PM2). No guarda nada en la BD.
+  private readonly diagLogger = new Logger('TotemDiag');
+
+  // Responde 200 con cuerpo (no 204): el proxy de Next no admite 204 con cuerpo vacío.
+  @Post('diagnostics')
+  @HttpCode(200)
+  diagnostics(@Body() dto: TotemDiagnosticDto, @CurrentUser('id') userId: string) {
+    let data = '';
+    try { data = JSON.stringify(dto.data ?? {}); } catch { data = '"<no serializable>"'; }
+    if (data.length > 4000) data = data.slice(0, 4000) + '…';
+    this.diagLogger.log(`${dto.event} user=${userId} ${data}`);
+    return { ok: true };
   }
 }
 

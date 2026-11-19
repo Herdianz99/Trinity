@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,4 +52,10 @@ export class DeleteTotemMediaDto {
 
 export class TotemSendMessageDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) text?: string;
+}
+
+// Diagnóstico invisible del totem (reproducción de video). Solo se registra en el log del API.
+export class TotemDiagnosticDto {
+  @ApiProperty() @IsString() @MaxLength(40) event!: string;
+  @ApiPropertyOptional() @IsOptional() @IsObject() data?: Record<string, unknown>;
 }

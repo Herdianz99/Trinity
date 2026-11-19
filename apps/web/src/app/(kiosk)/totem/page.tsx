@@ -5,6 +5,7 @@ import CloverAvatar, { CloverState } from './clover-avatar';
 import { useVoice } from './use-voice';
 import { textForSpeech } from '@/lib/kiosk-speech';
 import AttractLoop, { TotemPlaylist, buildSequence } from './attract-loop';
+import { jsHeapMb, reportBoot, reportDiag } from './totem-diagnostics';
 
 interface Card { code: string; name: string; price: string; available: boolean; imageUrl: string | null }
 
@@ -62,6 +63,14 @@ export default function TotemPage() {
     idleTimer.current = setTimeout(reset, IDLE_RESET_MS);
   }, [reset]);
   useEffect(() => () => clearTimeout(idleTimer.current), []);
+
+  // Diagnóstico invisible (Sesión 192): datos del equipo al cargar y memoria cada 10 min.
+  // Una recarga de la página (p. ej. Chrome que se cayó) se ve como un "boot" nuevo en el log.
+  useEffect(() => {
+    reportBoot();
+    const t = setInterval(() => reportDiag('heartbeat', { heapMb: jsHeapMb() }), 10 * 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Publicidad del modo espera. Si la respuesta no cambia, no se toca el estado (no reinicia el bucle).
   useEffect(() => {

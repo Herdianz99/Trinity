@@ -1,6 +1,26 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
+import { jsHeapMb, reportDecoderCaps, reportDiag } from './totem-diagnostics';
+
+// Seguimiento invisible de cada reproducción (diagnóstico, Sesión 192).
+interface PlayTrack {
+  file: string;
+  type: string;
+  start: number; // performance.now() al empezar
+  dropped0: number;
+  total0: number;
+  waiting: number; // veces que el video se quedó esperando datos
+}
+const quality = (v: HTMLVideoElement) => {
+  try {
+    const q = v.getVideoPlaybackQuality();
+    return { dropped: q.droppedVideoFrames, total: q.totalVideoFrames };
+  } catch { return { dropped: 0, total: 0 }; }
+};
+const bufferedEnd = (v: HTMLVideoElement) => {
+  try { return v.buffered.length ? Math.round(v.buffered.end(v.buffered.length - 1) * 10) / 10 : 0; } catch { return 0; }
+};
 
 // Lo que devuelve GET /totem/playlist.
 export interface TotemSlide {
@@ -65,6 +85,36 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   const next = () => setIndex((i) => (sequence.length ? (i + 1) % sequence.length : 0));
   const isVideo = isVideoSlide(slide);
 
+  // ---- Diagnóstico invisible: una línea por reproducción (cuadros perdidos, esperas, cómo terminó) ----
+  const track = useRef<PlayTrack | null>(null);
+  const startTrack = (v: HTMLVideoElement, s: TotemSlide) => {
+    const q = quality(v);
+    track.current = {
+      file: (s.url ?? '').split('/').pop() ?? '', type: s.type, start: performance.now(),
+      dropped0: q.dropped, total0: q.total, waiting: 0,
+    };
+  };
+  // `el`: al desmontar, React ya soltó videoRef; se pasa el elemento guardado al montar.
+  const finishTrack = (reason: string, el?: HTMLVideoElement | null) => {
+    const t = track.current;
+    const v = videoRef.current ?? el;
+    if (!t || !v) return;
+    track.current = null;
+    const q = quality(v);
+    const frames = q.total - t.total0;
+    const dropped = q.dropped - t.dropped0;
+    const wallMs = performance.now() - t.start;
+    if (frames === 0 && wallMs < 1000 && reason === 'exit') return; // montaje doble de React en desarrollo
+    reportDiag('play', {
+      reason, file: t.file, type: t.type,
+      durSec: Number.isFinite(v.duration) ? Math.round(v.duration * 10) / 10 : null,
+      atSec: Math.round(v.currentTime * 10) / 10,
+      wallSec: Math.round((performance.now() - t.start) / 100) / 10,
+      frames, dropped, dropPct: frames > 0 ? Math.round((dropped / frames) * 1000) / 10 : null,
+      waiting: t.waiting, heapMb: jsHeapMb(),
+    });
+  };
+
   // Si la lista cambia (llego publicidad nueva) y el indice ya no existe, volver al inicio.
   useEffect(() => { if (index >= sequence.length) setIndex(0); }, [sequence.length, index]);
 
@@ -75,14 +125,15 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   // Al salir del modo espera, soltar el video.
   useEffect(() => {
     const v = videoRef.current;
-    return () => { if (v) releaseVideo(v); };
+    return () => { finishTrack('exit', v); if (v) releaseVideo(v); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Imagenes y productos: tiempo fijo. Videos: hasta que terminan (con tope de seguridad).
   useEffect(() => {
     if (!slide) return;
     const ms = isVideo ? VIDEO_SAFETY_MS : Math.max(3, slide.durationSec) * 1000;
-    const t = setTimeout(skip, ms);
+    const t = setTimeout(() => { if (isVideo) finishTrack('timeout'); skip(); }, ms);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide?.id, index, sequence.length]);
@@ -91,7 +142,7 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   // (load() tambien rearma el decodificador si se habia trabado).
   const skip = () => {
     const v = videoRef.current;
-    if (sequence.length === 1 && v && isVideo) { v.load(); v.play().catch(() => undefined); }
+    if (sequence.length === 1 && v && isVideo && slide) { v.load(); startTrack(v, slide); v.play().catch(() => undefined); }
     else next();
   };
 
@@ -105,7 +156,8 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   // Una sola diapositiva de video: hay que repetirla a mano (el indice no cambia).
   const onEnded = () => {
     const v = videoRef.current;
-    if (sequence.length === 1 && v) { v.currentTime = 0; play(v); }
+    finishTrack('ended');
+    if (sequence.length === 1 && v && slide) { v.currentTime = 0; startTrack(v, slide); play(v); }
     else next();
   };
 
@@ -113,9 +165,11 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    finishTrack('switch'); // por si la anterior no terminó por sus medios (no manda nada si ya terminó)
     if (!isVideo || !slide?.url) { releaseVideo(v); return; }
     if (v.getAttribute('src') !== slide.url) v.src = slide.url;
     else v.currentTime = 0;
+    startTrack(v, slide);
     play(v);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide?.id, index]);
@@ -126,17 +180,50 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
     if (!v || !isVideo) return;
     let lastTime = -1;
     let lastMove = Date.now();
+    // Diagnóstico: imagen congelada con el tiempo avanzando (el audio sigue, el decodificador no saca cuadros).
+    // Solo se reporta (una vez por reproducción); no cambia el comportamiento.
+    let frameRef = { frames: -1, at: 0 };
+    let frozenReported = false;
     const id = setInterval(() => {
       if (v.ended) return;
+      const { total } = quality(v);
+      if (total !== frameRef.frames) frameRef = { frames: total, at: v.currentTime };
+      else if (!frozenReported && !v.paused && v.currentTime - frameRef.at > 3) {
+        frozenReported = true;
+        reportDiag('frozen', {
+          file: (slide?.url ?? '').split('/').pop(), atSec: Math.round(v.currentTime * 10) / 10,
+          sinceSec: Math.round((v.currentTime - frameRef.at) * 10) / 10, readyState: v.readyState, ...quality(v),
+        });
+      }
       if (v.currentTime !== lastTime) { lastTime = v.currentTime; lastMove = Date.now(); return; }
-      if (Date.now() - lastMove > STALL_MS) { lastMove = Date.now(); skip(); }
+      if (Date.now() - lastMove > STALL_MS) {
+        lastMove = Date.now();
+        reportDiag('stall', {
+          file: (slide?.url ?? '').split('/').pop(), atSec: Math.round(v.currentTime * 10) / 10,
+          bufferedEnd: bufferedEnd(v), readyState: v.readyState, networkState: v.networkState,
+          paused: v.paused, muted: v.muted, ...quality(v),
+        });
+        finishTrack('stall');
+        skip();
+      }
     }, 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide?.id, index, sequence.length]);
 
   // Un error del reproductor solo cuenta si estaba mostrando un video (al soltarlo queda sin src).
-  const onVideoError = () => { if (isVideo && videoRef.current?.hasAttribute('src')) skip(); };
+  const onVideoError = () => {
+    const v = videoRef.current;
+    if (!isVideo || !v?.hasAttribute('src')) return;
+    reportDiag('error', { file: (slide?.url ?? '').split('/').pop(), code: v.error?.code ?? null, msg: v.error?.message ?? null, atSec: v.currentTime });
+    finishTrack('error');
+    skip();
+  };
+  const onWaiting = () => { if (track.current) track.current.waiting++; };
+  const onMetadata = () => {
+    const v = videoRef.current;
+    if (v && slide?.url) reportDecoderCaps(slide.url, v.videoWidth, v.videoHeight);
+  };
 
   // Precargar la siguiente imagen para que no aparezca a medias.
   useEffect(() => {
@@ -150,6 +237,7 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   const exit = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    finishTrack('touch'); // antes de pausar: así queda dónde iba y cuántos cuadros salieron
     videoRef.current?.pause();
     onExit();
   };
@@ -175,6 +263,8 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
         poster={isVideo ? slide.thumbUrl ?? undefined : undefined}
         onEnded={onEnded}
         onError={onVideoError}
+        onWaiting={onWaiting}
+        onLoadedMetadata={onMetadata}
         className={isVideo ? 'absolute inset-0 h-full w-full object-contain' : 'hidden'}
       />
 
