@@ -3408,3 +3408,20 @@ ALTER TABLE "CompanyConfig" ADD COLUMN IF NOT EXISTS "storePagoMovilPhone" TEXT;
 
 -- ===== Conceptos adicionales ISLR (20261113120000_islr_extra_concept) =====
 ALTER TABLE "IslrRetentionVoucherLine" ADD COLUMN IF NOT EXISTS "isExtraConcept" BOOLEAN NOT NULL DEFAULT false;
+
+-- ===== Avisos del totem: push + "Voy yo" (20261120120000_push_totem_calls) =====
+CREATE TABLE IF NOT EXISTS "PushSubscription" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "endpoint" TEXT NOT NULL,
+    "p256dh" TEXT NOT NULL,
+    "auth" TEXT NOT NULL,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastUsedAt" TIMESTAMP(3),
+    CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
+CREATE INDEX IF NOT EXISTS "PushSubscription_userId_idx" ON "PushSubscription"("userId");
+ALTER TABLE "ChatbotConversation" ADD COLUMN IF NOT EXISTS "attendedById" TEXT;
+ALTER TABLE "ChatbotConversation" ADD COLUMN IF NOT EXISTS "attendedAt" TIMESTAMP(3);

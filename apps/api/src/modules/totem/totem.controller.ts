@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Logger, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Logger, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -7,9 +8,10 @@ import { TotemAllowed } from '../../common/decorators/totem-allowed.decorator';
 import { ModuleGuard } from '../../common/guards/module.guard';
 import { TotemService } from './totem.service';
 import { TotemMediaService } from './totem-media.service';
+import { TotemTtsService } from './totem-tts.service';
 import {
   CreateTotemAdDto, DeleteTotemMediaDto, ReorderTotemAdsDto, StartTotemUploadDto, TotemDiagnosticDto, TotemSendMessageDto,
-  TotemUploadChunkDto, UpdateTotemAdDto, UpdateTotemConfigDto,
+  TotemTtsDto, TotemUploadChunkDto, UpdateTotemAdDto, UpdateTotemConfigDto,
 } from './dto/totem.dto';
 
 // Lo que usa la pantalla del totem (rol TOTEM o personal con el modulo chatbot).
@@ -20,7 +22,7 @@ import {
 @TotemAllowed()
 @Controller('totem')
 export class TotemController {
-  constructor(private service: TotemService) {}
+  constructor(private service: TotemService, private tts: TotemTtsService) {}
 
   @Get('playlist')
   playlist() {
@@ -37,9 +39,29 @@ export class TotemController {
     return this.service.reply(id, userId, dto.text ?? '');
   }
 
+  // Despues de llamar al vendedor: la pantalla pregunta cada pocos segundos si alguien toco "Voy yo".
+  @Get('conversations/:id/status')
+  status(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.service.callStatus(id, userId);
+  }
+
   @Post('conversations/:id/call-seller')
   callSeller(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.service.callSeller(id, userId);
+  }
+
+  @Get('tts/voices')
+  ttsVoices() {
+    return this.tts.voicesInfo();
+  }
+
+  @Post('tts')
+  @HttpCode(200)
+  async synthesize(@Body() dto: TotemTtsDto, @Res() res: Response) {
+    const wav = await this.tts.synthesize(dto.text, dto.voice);
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(wav);
   }
 
   // Diagnóstico invisible de la reproducción de video (Sesión 192): la pantalla manda capacidades del

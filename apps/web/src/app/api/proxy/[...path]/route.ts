@@ -54,7 +54,8 @@ async function handler(request: NextRequest, { params }: { params: { path: strin
       resContentType.includes('text/plain') ||
       resContentType.includes('spreadsheet') ||
       resContentType.includes('application/vnd') ||
-      resContentType.includes('image/')
+      resContentType.includes('image/') ||
+      resContentType.includes('audio/')
     ) {
       const buffer = await res.arrayBuffer();
       const responseHeaders: Record<string, string> = { 'Content-Type': resContentType };

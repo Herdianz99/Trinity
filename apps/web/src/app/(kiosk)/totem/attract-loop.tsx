@@ -81,6 +81,9 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   const sequence = useMemo(() => buildSequence(playlist), [playlist]);
   const [index, setIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const intentionalPause = useRef(false); // distingue nuestras pausas (salir/cambiar) de pausas externas de Android/Chrome
+  const pauseRetries = useRef(0);
+  const pauseTimer = useRef<ReturnType<typeof setTimeout>>();
   const slide = sequence.length ? sequence[index % sequence.length] : null;
   const next = () => setIndex((i) => (sequence.length ? (i + 1) % sequence.length : 0));
   const isVideo = isVideoSlide(slide);
@@ -125,7 +128,12 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   // Al salir del modo espera, soltar el video.
   useEffect(() => {
     const v = videoRef.current;
-    return () => { finishTrack('exit', v); if (v) releaseVideo(v); };
+    return () => {
+      clearTimeout(pauseTimer.current);
+      intentionalPause.current = true;
+      finishTrack('exit', v);
+      if (v) releaseVideo(v);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -165,14 +173,34 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    clearTimeout(pauseTimer.current);
+    pauseRetries.current = 0;
     finishTrack('switch'); // por si la anterior no terminó por sus medios (no manda nada si ya terminó)
-    if (!isVideo || !slide?.url) { releaseVideo(v); return; }
+    if (!isVideo || !slide?.url) {
+      intentionalPause.current = true;
+      releaseVideo(v);
+      return;
+    }
+    intentionalPause.current = false;
     if (v.getAttribute('src') !== slide.url) v.src = slide.url;
     else v.currentTime = 0;
     startTrack(v, slide);
     play(v);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slide?.id, index]);
+
+  // Si Chrome/Android vuelve a primer plano tras una interrupcion, reanudar el video solo.
+  useEffect(() => {
+    const onVisible = () => {
+      const v = videoRef.current;
+      if (document.visibilityState === 'visible' && isVideo && v && v.paused && !v.ended && !intentionalPause.current) {
+        play(v);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVideo]);
 
   // Vigilancia: si el video no avanza en STALL_MS (sin red, sin datos o decodificador colgado), se salta.
   useEffect(() => {
@@ -220,6 +248,30 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
     skip();
   };
   const onWaiting = () => { if (track.current) track.current.waiting++; };
+  // Pausa externa (Android Audio Focus / Chrome 158 / aviso del sistema): se reanuda solo sin congelar 10 s.
+  const onVideoPause = () => {
+    const v = videoRef.current;
+    if (!isVideo || !v || intentionalPause.current || v.ended || !v.hasAttribute('src')) return;
+    const retry = ++pauseRetries.current;
+    reportDiag('unexpected_pause', {
+      file: (slide?.url ?? '').split('/').pop(),
+      atSec: Math.round(v.currentTime * 10) / 10,
+      readyState: v.readyState,
+      muted: v.muted,
+      visibility: document.visibilityState,
+      focused: document.hasFocus(),
+      retry,
+    });
+    if (retry > 3) return; // el watchdog de stall lo saltara si Android bloquea por completo
+    clearTimeout(pauseTimer.current);
+    pauseTimer.current = setTimeout(() => {
+      const cur = videoRef.current;
+      if (!cur || intentionalPause.current || cur.ended || !cur.paused) return;
+      // En el 1er intento mantiene sonido; si vuelve a pausarse (ej. Audio Focus), continua sin sonido para no trabarse.
+      if (retry >= 2) cur.muted = true;
+      cur.play().catch(() => { cur.muted = true; cur.play().catch(() => undefined); });
+    }, 200);
+  };
   const onMetadata = () => {
     const v = videoRef.current;
     if (v && slide?.url) reportDecoderCaps(slide.url, v.videoWidth, v.videoHeight);
@@ -237,6 +289,8 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
   const exit = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    clearTimeout(pauseTimer.current);
+    intentionalPause.current = true;
     finishTrack('touch'); // antes de pausar: así queda dónde iba y cuántos cuadros salieron
     videoRef.current?.pause();
     onExit();
@@ -264,6 +318,7 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
         onEnded={onEnded}
         onError={onVideoError}
         onWaiting={onWaiting}
+        onPause={onVideoPause}
         onLoadedMetadata={onMetadata}
         className={isVideo ? 'absolute inset-0 h-full w-full object-contain' : 'hidden'}
       />

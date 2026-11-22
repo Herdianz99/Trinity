@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { caracasDateKey } from '../../common/timezone';
+import { PushService } from '../push/push.service';
 
 // La captura del pago se comprime en el navegador antes de subir; este tope es
 // una red de seguridad para la superficie publica (sin auth).
@@ -19,6 +20,7 @@ export class PublicService {
   constructor(
     private prisma: PrismaService,
     private spaces: SpacesService,
+    private push: PushService,
   ) {}
 
   /** Decodifica un data URL base64 de imagen. Devuelve null si no viene captura. */
@@ -116,8 +118,9 @@ export class PublicService {
       paymentProofUrl = await this.spaces.uploadPublic(proofKey, proof.buffer, proof.contentType);
     }
 
+    let created: { id: string; number: string | null; customerName: string };
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      created = await this.prisma.$transaction(async (tx) => {
         // Correlativo WEB-0001 con SELECT FOR UPDATE (regla de correlativos del proyecto).
         const res = await tx.$queryRaw<{ max: number | null }[]>`
           SELECT MAX(CAST(SPLIT_PART("number", '-', 2) AS INTEGER)) as max FROM (
@@ -145,12 +148,32 @@ export class PublicService {
             items: { create: items },
           },
         });
-        return { number: order.number, totalUsd, totalBs };
+        return { id: order.id, number: order.number, customerName: order.customerName };
       });
     } catch (err) {
       // Compensacion: si la BD fallo tras subir la captura, borra el objeto huerfano.
       if (proofKey) await this.spaces.delete(proofKey);
       throw err;
+    }
+
+    // Aviso push a quien atiende la tienda (modulo store). Sin await: el cliente no espera.
+    void this.notifyNewOrder(created, totalUsd);
+    return { number: created.number, totalUsd, totalBs };
+  }
+
+  private async notifyNewOrder(o: { id: string; number: string | null; customerName: string }, totalUsd: number) {
+    try {
+      const ids = await this.push.usersWithModule('store');
+      await this.push.sendToUsers(ids, {
+        title: `🛒 Nuevo pedido online ${o.number ?? ''}`.trim(),
+        body: `${o.customerName} · $${totalUsd.toFixed(2)}`,
+        tag: `online-order-${o.id}`,
+        url: `/store/orders/${o.id}`,
+        renotify: true,
+        data: { kind: 'online-order', orderId: o.id },
+      });
+    } catch {
+      // Si falla el push, el aviso dentro de Trinity (consulta cada 30 s) sigue funcionando.
     }
   }
 }

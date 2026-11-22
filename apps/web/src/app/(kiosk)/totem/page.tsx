@@ -14,6 +14,8 @@ const ERROR_TEXT = 'Ahora no puedo responder. Pregúntale a un vendedor, por fav
 const NOT_HEARD = 'No te escuché bien. Mantén presionado el botón mientras hablas, y suéltalo al terminar.';
 const IDLE_RESET_MS = 60_000;
 const PLAYLIST_REFRESH_MS = 3 * 60_000; // la publicidad nueva llega sola, sin recargar (recargar quita el permiso de sonido)
+const CALL_POLL_MS = 4_000;             // tras llamar al vendedor: ¿ya tocó "Voy yo" alguien?
+const CALL_WAIT_MAX_MS = 5 * 60_000;    // si nadie contesta en 5 min, se deja de preguntar y la pantalla vuelve a su ciclo normal
 
 // Precio para la tarjeta: "12.50$ bcv" -> "$12.50"
 const cardPrice = (p: string) => {
@@ -22,15 +24,18 @@ const cardPrice = (p: string) => {
 };
 
 export default function TotemPage() {
-  const { supported, interim, startListening, stopListening, speak, unlockSpeech, voices, voice, setVoiceURI } = useVoice();
+  const {
+    supported, interim, startListening, stopListening, speak, stopSpeaking, unlockSpeech,
+    voices, voice, setVoiceURI, aiEnabled, aiVoices, activeAiVoice, previewAiVoice,
+  } = useVoice();
   const [voicePanel, setVoicePanel] = useState(false);
   const voicePanelRef = useRef(false);
   voicePanelRef.current = voicePanel;
   const voiceHold = useRef<ReturnType<typeof setTimeout>>();
-  // Prueba de una voz del selector (sin esperar a que se guarde la eleccion).
+  // Prueba de una voz local del selector (sin esperar a que se guarde la eleccion).
   const speakWith = (v: SpeechSynthesisVoice, text: string) => {
+    stopSpeaking();
     const synth = window.speechSynthesis;
-    synth.cancel();
     const u = new SpeechSynthesisUtterance(textForSpeech(text));
     u.voice = v;
     u.lang = v.lang;
@@ -41,6 +46,7 @@ export default function TotemPage() {
   const [answer, setAnswer] = useState(GREETING);
   const [cards, setCards] = useState<Card[]>([]);
   const [sellerCalled, setSellerCalled] = useState(false);
+  const [sellerName, setSellerName] = useState<string | null>(null); // primer nombre del vendedor que tocó "Voy yo"
   const stateRef = useRef<CloverState>('idle');
   const convId = useRef<string | null>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -54,10 +60,10 @@ export default function TotemPage() {
 
   // Sin uso por un minuto: el siguiente cliente empieza de cero.
   const reset = useCallback(() => {
-    window.speechSynthesis?.cancel();
+    stopSpeaking();
     convId.current = null;
-    setHeard(''); setAnswer(GREETING); setCards([]); setSellerCalled(false); go('idle');
-  }, []);
+    setHeard(''); setAnswer(GREETING); setCards([]); setSellerCalled(false); setSellerName(null); go('idle');
+  }, [stopSpeaking]);
   const touch = useCallback(() => {
     clearTimeout(idleTimer.current);
     idleTimer.current = setTimeout(reset, IDLE_RESET_MS);
@@ -125,6 +131,36 @@ export default function TotemPage() {
     go('speaking');
     speak(text, () => { if (stateRef.current === 'speaking') go('idle'); });
   };
+  const sayRef = useRef(say);
+  sayRef.current = say;
+
+  // Después de llamar al vendedor: se pregunta al API cada pocos segundos si alguien tocó "Voy yo".
+  // Mientras se espera, la pantalla no se reinicia ni pasa a la publicidad (se cuenta como uso).
+  // Si Clover está escuchando o pensando, el aviso espera al siguiente intento para no pisar al cliente.
+  useEffect(() => {
+    const id = convId.current;
+    if (!sellerCalled || sellerName || !id) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+    const timer = setInterval(async () => {
+      if (Date.now() - startedAt > CALL_WAIT_MAX_MS) { clearInterval(timer); return; }
+      lastActivity.current = Date.now();
+      touch();
+      try {
+        const res = await fetch(`/api/proxy/totem/conversations/${id}/status`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const name: string | null = data?.attendedByName ?? null;
+        if (!name || cancelled) return;
+        if (stateRef.current === 'listening' || stateRef.current === 'thinking') return; // reintenta en el siguiente ciclo
+        clearInterval(timer);
+        setSellerName(name);
+        sayRef.current(`${name} ya va para allá. Un momento, por favor.`);
+        touch();
+      } catch { /* sin red: se reintenta */ }
+    }, CALL_POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [sellerCalled, sellerName, touch]);
 
   const newConversation = async () => {
     const res = await fetch('/api/proxy/totem/conversations', {
@@ -144,6 +180,7 @@ export default function TotemPage() {
     // hablando: se abre una conversacion nueva y se reintenta una vez.
     if (res.status === 409) {
       setSellerCalled(false);
+      setSellerName(null);
       res = await post(await newConversation());
     }
     if (!res.ok) throw new Error(String(res.status));
@@ -215,15 +252,38 @@ export default function TotemPage() {
           <div className="max-h-[80dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 text-slate-900" onClick={(e) => e.stopPropagation()}>
             <p className="text-2xl font-extrabold">Voz de Clover</p>
             <p className="mb-3 text-sm text-slate-500">
-              Toca una voz para escucharla. Se guarda en este equipo. Las que dicen “Natural”, “Online” o “Google” suenan mejor.
+              Toca una voz para escucharla. Se guarda en este equipo.
             </p>
+            {aiEnabled && aiVoices.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-700">Voces naturales (Google IA)</p>
+                {aiVoices.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      setVoiceURI(`ai:${v.id}`);
+                      previewAiVoice(v.id, '¡Hola! Soy Clover. El cemento gris de 21 kilos está en 10.80$ bcv. ¿Te ayudo con algo más?');
+                    }}
+                    className={`mb-2 flex w-full items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left ${
+                      activeAiVoice === v.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}
+                  >
+                    <div>
+                      <p className="font-bold leading-tight">{v.name}</p>
+                      <p className="text-xs text-slate-500">{v.description}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">IA</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Voces del navegador (respaldo)</p>
             {voices.length === 0 && <p className="text-slate-500">Este navegador no trae voces en español.</p>}
             {voices.map((v) => (
               <button
                 key={v.voiceURI}
                 onClick={() => { setVoiceURI(v.voiceURI); speakWith(v, '¡Hola! Soy Clover. El cemento gris de 21 kilos está en 10.80$ bcv. ¿Te ayudo con algo más?'); }}
                 className={`mb-2 flex w-full items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left ${
-                  voice?.voiceURI === v.voiceURI ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}
+                  !activeAiVoice && voice?.voiceURI === v.voiceURI ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'}`}
               >
                 <span className="font-semibold leading-tight">{v.name}</span>
                 <span className="shrink-0 text-sm text-slate-500">{v.lang}</span>
@@ -244,7 +304,9 @@ export default function TotemPage() {
         <span className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rotate-45 rounded-sm bg-white" />
         <p className="relative text-[clamp(1.35rem,3.8vw,3rem)] font-semibold leading-snug">{answer}</p>
         {sellerCalled && (
-          <p className="relative mt-2 text-lg font-bold text-emerald-700">Un vendedor viene en camino.</p>
+          <p className="relative mt-2 text-lg font-bold text-emerald-700">
+            {sellerName ? `${sellerName} va para allá.` : 'Un vendedor viene en camino.'}
+          </p>
         )}
       </div>
 

@@ -384,6 +384,8 @@ model User {
   bankMovementsCreated    BankMovement[]         @relation("BankMovementCreator")
   searchSynonymsCreated   SearchSynonym[]        @relation("SearchSynonymCreatedBy")
   chatbotConversations    ChatbotConversation[]  @relation("ChatbotConversationCreatedBy")
+  chatbotAttended         ChatbotConversation[]  @relation("ChatbotConversationAttendedBy")
+  pushSubscriptions       PushSubscription[]
   bankMovementsReconciled BankMovement[]         @relation("BankMovementReconciler")
   bankMovementsApproved   BankMovement[]         @relation("BankMovementApprover")
   seller                  Seller?
@@ -3301,6 +3303,10 @@ model ChatbotConversation {
   escalationReason  String?
   escalationSummary String?
   escalatedAt       DateTime?
+  // Totem: vendedor que toco "Voy yo" en el aviso del llamado (el primero gana).
+  attendedById      String?
+  attendedBy        User?                     @relation("ChatbotConversationAttendedBy", fields: [attendedById], references: [id], onDelete: SetNull)
+  attendedAt        DateTime?
   costUsd           Float                     @default(0)
   inputTokens       Int                       @default(0)
   outputTokens      Int                       @default(0)
@@ -3313,6 +3319,22 @@ model ChatbotConversation {
 
   @@index([status, updatedAt])
   @@index([channel, externalId])
+}
+
+// Notificaciones push (Web Push / VAPID): un registro por navegador/tablet donde el usuario toco
+// "Activar avisos". El endpoint lo da el navegador; si el servicio responde 404/410 se borra.
+model PushSubscription {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  @@index([userId])
 }
 
 model ChatbotMessage {

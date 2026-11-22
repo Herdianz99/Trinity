@@ -67,9 +67,11 @@ import {
   Barcode,
   ScanLine,
   Bell,
+  BellRing,
 } from 'lucide-react';
 import CompanySwitcher from '@/components/company-switcher';
 import OnlineOrdersAlert from '@/components/online-orders-alert';
+import TotemCallsAlert from '@/components/totem-calls-alert';
 
 interface MenuItem {
   label: string;
@@ -437,6 +439,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
   const [clientOrdersUnseen, setClientOrdersUnseen] = useState(0);
   // Pedidos de la tienda online "Por verificar" (lo cuenta OnlineOrdersAlert, que además avisa).
   const [onlineOrdersPending, setOnlineOrdersPending] = useState(0);
+  // Llamados del totem Clover (lo reporta TotemCallsAlert): si el usuario los puede ver y cuantos esperan.
+  const [totemCalls, setTotemCalls] = useState({ enabled: false, open: 0 });
   const [companyName, setCompanyName] = useState('');
   // Pendientes en "Mi Perfil" (notificaciones sin acuse, incl. amonestaciones que generan notif).
   const [miPerfilPending, setMiPerfilPending] = useState(0);
@@ -645,6 +649,39 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
           </Link>
         </div>
 
+        {/* Llamados del totem Clover: solo vendedores (y ADMIN); no depende de un modulo de permisos */}
+        {totemCalls.enabled && (
+          <div className="mx-2 mb-1">
+            <Link
+              href="/llamados"
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                transition-all duration-150
+                ${pathname.startsWith('/llamados')
+                  ? 'bg-amber-400/10 text-amber-300 border border-amber-400/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent'
+                }
+                ${collapsed ? 'justify-center' : ''}
+              `}
+              title={collapsed ? 'Llamados del tótem' : undefined}
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="relative flex-shrink-0">
+                <BellRing size={20} />
+                {collapsed && totemCalls.open > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-slate-900" />
+                )}
+              </span>
+              {!collapsed && <span className="flex-1">Llamados del tótem</span>}
+              {!collapsed && totemCalls.open > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                  {totemCalls.open > 9 ? '9+' : totemCalls.open}
+                </span>
+              )}
+            </Link>
+          </div>
+        )}
+
         {/* Accordion sections */}
         {filteredSections.map((section) => {
           const isOpen = openSections[section.key] ?? false;
@@ -829,6 +866,8 @@ export default function Sidebar({ user, permissions }: SidebarProps) {
 
       {/* Aviso de pedido nuevo de la tienda online (timbre + notificación + tarjeta) */}
       <OnlineOrdersAlert enabled={hasPermission(permissions, 'store')} onCount={setOnlineOrdersPending} />
+      {/* Llamados del tótem Clover a los vendedores (timbre + tarjeta con Voy yo); solo vendedores */}
+      <TotemCallsAlert onState={setTotemCalls} />
     </>
   );
 }

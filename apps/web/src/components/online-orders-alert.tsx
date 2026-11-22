@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, X } from 'lucide-react';
+import { localNotify } from '@/lib/push';
 
 const SEEN_KEY = 'trinity-online-orders-notified';
 const POLL_MS = 30_000;
@@ -35,7 +36,7 @@ function writeSeen(ids: string[]) {
 
 // Timbre de dos notas con Web Audio (sin archivo de sonido). Si el navegador aún no permite
 // audio (nadie ha hecho clic en la página), simplemente no suena.
-function chime() {
+export function chime() {
   try {
     const Ctx = window.AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return;
@@ -58,18 +59,14 @@ function chime() {
   } catch {}
 }
 
-function desktopNotify(o: PendingOrder, onClick: () => void) {
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  try {
-    const n = new Notification(`Nuevo pedido online ${o.number}`, {
-      body: `${o.customerName} · ${money(o.totalUsd)}`,
-      tag: `online-order-${o.id}`,
-      icon: '/icons/icon-192.png',
-    });
-    n.onclick = () => { window.focus(); onClick(); n.close(); };
-  } catch {
-    // En Android Chrome el constructor no existe fuera de un service worker: queda la tarjeta.
-  }
+// Via service worker (sirve tambien en Android, donde `new Notification()` no existe). Mismo tag que
+// el push del API: si llegan los dos, queda una sola notificacion. Al tocarla, el SW abre el pedido.
+function desktopNotify(o: PendingOrder) {
+  localNotify(`Nuevo pedido online ${o.number}`, {
+    body: `${o.customerName} · ${money(o.totalUsd)}`,
+    tag: `online-order-${o.id}`,
+    data: { url: `/store/orders/${o.id}` },
+  });
 }
 
 export default function OnlineOrdersAlert({ enabled, onCount }: { enabled: boolean; onCount: (n: number) => void }) {
@@ -108,7 +105,7 @@ export default function OnlineOrdersAlert({ enabled, onCount }: { enabled: boole
         writeSeen([...seen, ...fresh.map((o) => o.id)]);
 
         chime();
-        fresh.forEach((o) => desktopNotify(o, () => router.push(`/store/orders/${o.id}`)));
+        fresh.forEach((o) => desktopNotify(o));
         setToasts((prev) => [...fresh.filter((f) => !prev.some((p) => p.id === f.id)), ...prev].slice(0, 3));
       } catch {}
     };

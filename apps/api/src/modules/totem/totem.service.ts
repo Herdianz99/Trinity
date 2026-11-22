@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { caracasDateKey } from '../../common/timezone';
 import { InvoicesService } from '../invoices/invoices.service';
 import { ChatbotService } from '../chatbot/chatbot.service';
+import { TotemCallsService } from '../chatbot/totem-calls.service';
 import { TotemMediaService } from './totem-media.service';
 import { CreateTotemAdDto, UpdateTotemAdDto, UpdateTotemConfigDto } from './dto/totem.dto';
 
@@ -32,6 +33,7 @@ export class TotemService {
     private prisma: PrismaService,
     private invoices: InvoicesService,
     private chatbot: ChatbotService,
+    private totemCalls: TotemCallsService,
     private media: TotemMediaService,
   ) {}
 
@@ -55,6 +57,11 @@ export class TotemService {
   async callSeller(id: string, userId: string) {
     await this.assertOwnKiosk(id, userId);
     return this.chatbot.callSeller(id);
+  }
+
+  async callStatus(id: string, userId: string) {
+    await this.assertOwnKiosk(id, userId);
+    return this.totemCalls.statusForTotem(id);
   }
 
   // ---------- Configuracion ----------

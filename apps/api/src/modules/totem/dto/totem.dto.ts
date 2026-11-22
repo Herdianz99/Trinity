@@ -59,3 +59,9 @@ export class TotemDiagnosticDto {
   @ApiProperty() @IsString() @MaxLength(40) event!: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() data?: Record<string, unknown>;
 }
+
+// Síntesis de voz natural (Gemini TTS) para las respuestas de Clover.
+export class TotemTtsDto {
+  @ApiProperty() @IsString() @MaxLength(800) text!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) voice?: string;
+}

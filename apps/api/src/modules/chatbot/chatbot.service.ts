@@ -14,6 +14,7 @@ import { numbersIn, unverifiedPrices } from './price-guard';
 import { isLongList, listLines } from './list-guard';
 import { KioskToolCall, pickMentionedProducts } from './kiosk';
 import { chatbotCostUsd } from './chatbot-pricing';
+import { TotemCallsService } from './totem-calls.service';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
 
 const sharp = require('sharp') as typeof import('sharp').default;
@@ -102,6 +103,7 @@ export class ChatbotService {
     private tools: ChatbotToolsService,
     private spaces: SpacesService,
     private crossSell: ChatbotCrossSellService,
+    private totemCalls: TotemCallsService,
   ) {}
 
   private apiKey(): string {
@@ -276,6 +278,8 @@ export class ChatbotService {
       where: { id: conversationId },
       data: { status: 'ESCALATED', escalationReason: reason.slice(0, 200), escalationSummary: summary.slice(0, 2000), escalatedAt: new Date() },
     });
+    // Totem: avisar a los vendedores (push). Sin await: el cliente no espera por el envio.
+    void this.totemCalls.notifyNew(conversationId);
   }
 
   // Fotos del cliente: se normalizan (JPEG <= 1200px) y se suben a Spaces; la IA las lee por URL.
