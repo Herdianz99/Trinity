@@ -44,6 +44,18 @@
 5. **Fase 3 → ver `docs/CHATBOT-FASE3-PLAN.md` (reemplaza este punto; el servidor quedó en USD 12 / 2 GB).** Original: iniciar ya la **verificación de Meta Business** (lo que más tarda); crear servidor DigitalOcean para Chatwoot (~$24/mes, 4 GB, aparte de Trinity); instalar Chatwoot; webhook Chatwoot ↔ Trinity (canal ya previsto en `ChatbotConversation.channel`); conectar WhatsApp por coexistencia (verificar que Venezuela y Chatwoot la soporten); luego Instagram/Facebook.
 6. Al pasar a WhatsApp real: subir el tope mensual del bot si hace falta (hoy $20) y poner límite de gasto en la consola de Anthropic. La clave local `trinity-local-pruebas` vence a los 90 días (~2027-01-09).
 
+## 🍀 Chatbot y Tótem: nuevo avatar oficial de Clover (2026-11-24, Sesión 194) — ⏳ SIN DESPLEGAR
+- **Assets:** extraído fotograma de alta resolución del video oficial de Clover (gorra verde con trébol blanco, polo verde con `CLOVER` e `INVERSIONES EL TREBOL`, cinturón de herramientas), recortado con canal alfa sin logos de marcas de fondo y compuesto sobre el degradado azul marino del tótem (`#1e4b8f` → `#0d2550` → `#06132b`).
+  - `apps/web/public/clover/clover-v2.webp` (1088×1456, 153 KB — retrato principal con cache-busting para `/totem`)
+  - `apps/web/public/clover/clover-avatar.webp` (512×512, 29 KB — encuadre rostro/hombros para avatares circulares)
+  - `apps/web/public/clover/clover.png` (reemplazado por la nueva versión, 476 KB vs 1,9 MB anterior)
+- **Web:**
+  - `/totem` (`clover-avatar.tsx`): ahora carga `/clover/clover-v2.webp`.
+  - `/totem` modo espera (`attract-loop.tsx`): CTA circular ahora usa `/clover/clover-avatar.webp`.
+  - `/chatbot` ("Probar bot", `chatbot/page.tsx`): nuevo avatar de Clover en encabezado, estado vacío inicial, junto a cada respuesta del bot y en el indicador de escritura.
+  - `/chatbot/conversations` (`chatbot/conversations/page.tsx`): avatar de Clover junto a los mensajes del bot en el panel lateral de detalle.
+- **Verificado:** `tsc --noEmit` en `apps/web` con 0 errores. Puro frontend, sin cambios en API ni BD.
+
 ## 🔔 Tótem: llamados push a vendedores + auto-reanudación de video + voz natural IA (2026-11-22, Sesión 193) — ✅ DESPLEGADO EN LA GRANDE (2026-11-22 18:21 Caracas, `7656bdbf`; falta en las otras 6)
 - **Llamados del tótem + Web Push (VAPID):**
   - Nuevo módulo global `apps/api/src/modules/push/` (`web-push`, tabla `PushSubscription`) y `TotemCallsController` / `TotemCallsService` (`/totem-calls/pending`, `/totem-calls/:id/attend`, `GET /totem/conversations/:id/status`). Migración `20261120120000_push_totem_calls` (con `IF NOT EXISTS`, espejada en `deploy/fix-schema.sql`).

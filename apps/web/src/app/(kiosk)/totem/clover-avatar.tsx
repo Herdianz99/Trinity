@@ -19,7 +19,7 @@ export default function CloverAvatar({ state, compact = false }: { state: Clover
       <div className={`absolute -inset-[6%] rounded-full blur-3xl transition-all duration-700 ${HALO[state]}`} />
       <div className={`absolute inset-0 ${state === 'speaking' ? 'clover-sway' : state === 'idle' ? 'clover-breathe' : ''}`}>
         <Image
-          src="/clover/clover.png"
+          src="/clover/clover-v2.webp"
           alt="Clover, asistente virtual"
           fill
           priority

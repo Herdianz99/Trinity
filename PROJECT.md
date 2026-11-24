@@ -99,6 +99,10 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 194 (2026-11-24) — Chatbot y Tótem: nuevo avatar oficial de Clover
+- Reemplazado el avatar de Clover por el diseño oficial del video (gorra verde con trébol, polo verde `CLOVER` / `INVERSIONES EL TREBOL`, cinturón de herramientas) sobre el degradado azul marino del tótem: `apps/web/public/clover/clover-v2.webp` (1088×1456), `clover-avatar.webp` (512×512) y `clover.png` actualizado.
+- Integrado en `/totem` (`clover-avatar.tsx`, `attract-loop.tsx`), `/chatbot` (`chatbot/page.tsx`) y `/chatbot/conversations` (`chatbot/conversations/page.tsx`). Puro frontend, sin migraciones.
+
 #### Sesión 167 (2026-10-20) — Reporte de ventas por vendedor (movimientos de stock)
 - `GET stock-movements/report/by-seller` (`detail=1` opcional): `StockMovementsService.getGroupedBySeller` (solo `SALE`, vendedor vía `sourceId` → `Invoice.seller`, luego categoría) + `StockMovementsPdfService.generateBySeller`. Botones en /inventory/movements → Reportes. El reporte por categoría no se tocó.
 

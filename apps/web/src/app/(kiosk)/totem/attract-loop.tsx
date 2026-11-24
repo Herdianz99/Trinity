@@ -326,7 +326,7 @@ export default function AttractLoop({ playlist, onExit }: { playlist: TotemPlayl
       {playlist.showCallToAction && slide.type !== 'INTRO' && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[3vh] flex justify-center px-[4vw]">
           <div className={`flex items-center gap-[2vw] rounded-full bg-emerald-600/95 py-[1.2vh] pl-[1.2vh] pr-[4vw] text-white shadow-2xl ring-4 ring-white/20 ${isVideo ? '' : 'animate-[totem-cta_2.4s_ease-in-out_infinite]'}`}>
-            <img src="/_next/image?url=%2Fclover%2Fclover.png&w=256&q=75" alt="" className="h-[7vh] w-[7vh] rounded-full bg-white/90 object-cover object-top" />
+            <img src="/clover/clover-avatar.webp" alt="Clover" className="h-[7vh] w-[7vh] rounded-full bg-[#0d2550] object-cover ring-2 ring-white/30" />
             <span className="text-[clamp(1.2rem,4.2vw,3rem)] font-extrabold leading-tight">¡Toca la pantalla y pregúntale a Clover!</span>
           </div>
         </div>

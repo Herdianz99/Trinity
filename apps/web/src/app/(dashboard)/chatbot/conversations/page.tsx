@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessagesSquare, Loader2, UserRound, Bot, X, MessageCircle } from 'lucide-react';
+import { MessagesSquare, Loader2, UserRound, X, MessageCircle } from 'lucide-react';
 
 // Misma clave que usa Probar bot (/chatbot) para recordar la conversacion abierta.
 const TEST_CONVERSATION_KEY = 'chatbot-test-conversation';
@@ -169,7 +169,14 @@ export default function ChatbotConversationsPage() {
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {detail.messages.map((m) => (
                 <div key={m.id} className={`flex gap-2 ${m.role === 'USER' ? 'justify-end' : ''}`}>
-                  {m.role !== 'USER' && <Bot size={16} className="text-emerald-400 mt-2 shrink-0" />}
+                  {m.role !== 'USER' && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/clover/clover-avatar.webp"
+                      alt="Clover"
+                      className="h-7 w-7 rounded-full object-cover ring-1 ring-emerald-400/35 bg-[#0d2550] mt-1 shrink-0"
+                    />
+                  )}
                   <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${m.role === 'USER' ? 'bg-emerald-700/60 text-white' : 'bg-slate-800 text-slate-100'}`}>
                     {m.imageUrls?.map((u) => (
                       // eslint-disable-next-line @next/next/no-img-element

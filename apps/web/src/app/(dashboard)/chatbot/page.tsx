@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Bot, Send, Loader2, Plus, ImagePlus, X, Search, AlertTriangle, UserRound, RotateCcw, Wrench, Copy, Check, ThumbsUp, ThumbsDown, Image as ImageIcon } from 'lucide-react';
+import { Send, Loader2, Plus, ImagePlus, X, Search, AlertTriangle, UserRound, RotateCcw, Wrench, Copy, Check, ThumbsUp, ThumbsDown, Image as ImageIcon } from 'lucide-react';
 
 interface ToolCall { name: string; input: any; result: any }
 interface ProductImage { code: string; name: string; url: string }
@@ -164,9 +164,12 @@ export default function ChatbotTestPage() {
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       <div className="mb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <Bot className="text-emerald-400" size={22} />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/clover/clover-avatar.webp"
+            alt={config?.botName || 'Clover'}
+            className="h-11 w-11 rounded-full object-cover ring-2 ring-emerald-400/40 bg-[#0d2550] shrink-0"
+          />
           <div>
             <h1 className="text-2xl font-bold text-white">Probar bot</h1>
             <p className="text-slate-400 text-sm">
@@ -196,48 +199,77 @@ export default function ChatbotTestPage() {
         <div className="card flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.06)_1px,transparent_0)] [background-size:18px_18px]">
             {conv?.messages.length === 0 && (
-              <p className="text-center text-slate-500 text-sm mt-10">Prueba con: &quot;buenas, precio del cemento&quot; o &quot;tienen cabilla de 3/8?&quot;</p>
+              <div className="flex flex-col items-center text-center mt-10 gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/clover/clover-avatar.webp"
+                  alt={config?.botName || 'Clover'}
+                  className="h-20 w-20 rounded-full object-cover ring-2 ring-emerald-400/40 shadow-lg bg-[#0d2550]"
+                />
+                <div>
+                  <p className="text-slate-200 font-semibold text-sm">{config?.botName || 'Clover'}</p>
+                  <p className="text-slate-500 text-sm mt-0.5">Prueba con: &quot;buenas, precio del cemento&quot; o &quot;tienen cabilla de 3/8?&quot;</p>
+                </div>
+              </div>
             )}
             {conv?.messages.map((m) => (
               <div key={m.id} className={`flex flex-col ${m.role === 'USER' ? 'items-end' : 'items-start'}`}>
-                <button
-                  type="button"
-                  onClick={() => m.role === 'BOT' && setSelected(m)}
-                  className={`max-w-[78%] text-left rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap shadow ${m.role === 'USER'
-                    ? 'bg-emerald-700/70 text-white rounded-br-sm'
-                    : `bg-slate-800 text-slate-100 rounded-bl-sm border ${selected?.id === m.id ? 'border-emerald-500/60' : 'border-slate-700/60'} hover:border-emerald-500/40`}`}
-                >
-                  {m.imageUrls && m.imageUrls.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-1.5">
-                      {m.imageUrls.map((u) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img key={u} src={u} alt="" className="h-28 rounded-lg object-cover" />
-                      ))}
-                    </div>
+                <div className={`flex items-end gap-2 max-w-[82%] ${m.role === 'USER' ? 'flex-row-reverse' : ''}`}>
+                  {m.role !== 'USER' && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/clover/clover-avatar.webp"
+                      alt={config?.botName || 'Clover'}
+                      className="h-7 w-7 rounded-full object-cover ring-1 ring-emerald-400/35 bg-[#0d2550] shrink-0 mb-0.5"
+                    />
                   )}
-                  {m.text}
-                  {m.productImages && m.productImages.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {m.productImages.map((p) => (
-                        <figure key={p.code} className="w-36">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.url} alt={p.name} className="w-36 h-36 rounded-lg object-contain bg-white" />
-                          <figcaption className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{p.name}</figcaption>
-                        </figure>
-                      ))}
-                    </div>
-                  )}
-                  {m.role === 'BOT' && (m.costUsd ?? 0) > 0 && (
-                    <span className="block text-[10px] text-slate-500 mt-1 text-right">{money(m.costUsd)}</span>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => m.role === 'BOT' && setSelected(m)}
+                    className={`text-left rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap shadow ${m.role === 'USER'
+                      ? 'bg-emerald-700/70 text-white rounded-br-sm'
+                      : `bg-slate-800 text-slate-100 rounded-bl-sm border ${selected?.id === m.id ? 'border-emerald-500/60' : 'border-slate-700/60'} hover:border-emerald-500/40`}`}
+                  >
+                    {m.imageUrls && m.imageUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+                        {m.imageUrls.map((u) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={u} src={u} alt="" className="h-28 rounded-lg object-cover" />
+                        ))}
+                      </div>
+                    )}
+                    {m.text}
+                    {m.productImages && m.productImages.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {m.productImages.map((p) => (
+                          <figure key={p.code} className="w-36">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.url} alt={p.name} className="w-36 h-36 rounded-lg object-contain bg-white" />
+                            <figcaption className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{p.name}</figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+                    {m.role === 'BOT' && (m.costUsd ?? 0) > 0 && (
+                      <span className="block text-[10px] text-slate-500 mt-1 text-right">{money(m.costUsd)}</span>
+                    )}
+                  </button>
+                </div>
                 {m.role === 'BOT' && !m.id.startsWith('tmp-') && (
-                  <BotActions msg={m} onRated={(rating) => setConv((c) => c && { ...c, messages: c.messages.map((x) => (x.id === m.id ? { ...x, rating } : x)) })} />
+                  <div className="pl-9">
+                    <BotActions msg={m} onRated={(rating) => setConv((c) => c && { ...c, messages: c.messages.map((x) => (x.id === m.id ? { ...x, rating } : x)) })} />
+                  </div>
                 )}
               </div>
             ))}
             {sending && (
-              <div className="flex justify-start">
+              <div className="flex items-end gap-2 justify-start">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/clover/clover-avatar.webp"
+                  alt={config?.botName || 'Clover'}
+                  className="h-7 w-7 rounded-full object-cover ring-1 ring-emerald-400/35 bg-[#0d2550] shrink-0 mb-0.5"
+                />
                 <div className="bg-slate-800 border border-slate-700/60 rounded-2xl rounded-bl-sm px-4 py-2.5">
                   <Loader2 className="animate-spin text-emerald-400" size={16} />
                 </div>
