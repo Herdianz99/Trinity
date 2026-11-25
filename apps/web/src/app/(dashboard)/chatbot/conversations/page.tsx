@@ -36,6 +36,15 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CLOSED: { label: 'Cerrada', cls: 'bg-slate-500/10 border-slate-500/30 text-slate-400' },
 };
 
+const CHANNEL_LABEL: Record<string, string> = {
+  TEST: 'Prueba',
+  WEB: 'Tienda web',
+  WHATSAPP: 'WhatsApp',
+  INSTAGRAM: 'Instagram',
+  FACEBOOK: 'Facebook',
+  KIOSK: 'Tótem',
+};
+
 const fmtDate = (s: string) => new Date(s).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 export default function ChatbotConversationsPage() {
@@ -119,7 +128,11 @@ export default function ChatbotConversationsPage() {
             ) : rows.map((r) => (
               <tr key={r.id} onClick={() => open(r.id)} className="border-b border-slate-700/30 hover:bg-slate-800/40 cursor-pointer">
                 <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{fmtDate(r.updatedAt)}</td>
-                <td className="px-4 py-3 text-slate-400">{r.channel === 'TEST' ? `Prueba${r.createdBy ? ` · ${r.createdBy.name}` : ''}` : r.channel}</td>
+                <td className="px-4 py-3 text-slate-400">
+                  {r.channel === 'TEST'
+                    ? `Prueba${r.createdBy ? ` · ${r.createdBy.name}` : ''}`
+                    : `${CHANNEL_LABEL[r.channel] ?? r.channel}${r.contactName && r.contactName !== 'Tótem' ? ` · ${r.contactName}` : ''}`}
+                </td>
                 <td className="px-4 py-3 text-white max-w-[16rem] truncate">{r.firstMessage || '—'}</td>
                 <td className="px-4 py-3 text-center text-slate-400">{r.messageCount}</td>
                 <td className="px-4 py-3">

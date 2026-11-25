@@ -1,8 +1,7 @@
 # Chatbot — Fase 3: bot automático en la tienda online, Instagram y WhatsApp
 
 > Plan acordado con el usuario el **2026-10-19** (Sesión 165). Antecedentes: `docs/CHATBOT-WHATSAPP-FACTIBILIDAD.md`
-> (factibilidad) y el bloque del chatbot en `PROGRESS.md`. **Estado: esperando al usuario** (servidor y acceso a Meta,
-> que espera conseguir en el transcurso de la semana del 19-10).
+> (factibilidad) y el bloque del chatbot en `PROGRESS.md`. **Actualizado 2026-11-25 (Sesión 195):** Chatwoot CE `4.20.1` ya está instalado en **`https://chat.ferreteriaeltrebol.com`** (`159.203.109.57`, 4 GB RAM), Agent Bot `Clover` + Account Webhook creados y vinculados a la bandeja `Tienda online`, `ferreteriaeltrebol.com` conectado en Vercel y verificado en Meta, verificación empresarial de Meta **en revisión**, conector Chatwoot ↔ Trinity programado (con cola antiráfagas) y `.env` pre-cargado en la grande. **Pendiente:** deploy en la grande (cuando no estén trabajando) y pegar el widget + `/privacidad` en `trebol-shop`.
 
 ## 1. Decisiones tomadas
 
