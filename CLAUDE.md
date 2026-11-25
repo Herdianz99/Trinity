@@ -77,6 +77,12 @@ ya es medianoche UTC, asi que todo lo de la noche cae en el dia siguiente (venta
 - Deploy propio (NO el deploy.sh del repo, ese reinicia la grande):
   `ssh root@134.209.164.59 "bash /opt/deploy-trinity-mayor.sh"`
 
+### Servidor Chatwoot (Chatbot / canales Web, Instagram y WhatsApp)
+- Servidor dedicado: `159.203.109.57` (`root`, DigitalOcean NYC3, 4 GB RAM / 2 vCPU, Ubuntu 24.04)
+- URL: `https://chat.ferreteriaeltrebol.com` (Caddy HTTPS automático)
+- Ruta: `/opt/chatwoot` (Docker Compose: `chatwoot/chatwoot:latest-ce`, `pgvector:pg16`, `redis:7-alpine`, `caddy:2-alpine`)
+- Respaldos diarios: `/root/backups/chatwoot/` (cron `/etc/cron.d/backup-chatwoot`, retención 14 días)
+
 ### Pre-deploy checklist — CRITICO
 ANTES de hacer deploy o decirle al usuario que haga deploy, ejecutar SIEMPRE:
 1. `git status` — verificar que NO haya archivos modificados (`M`) o sin trackear (`??`) que sean necesarios para el código desplegado
