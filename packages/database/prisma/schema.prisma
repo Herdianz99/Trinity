@@ -546,6 +546,7 @@ model Brand {
   id        String    @id @default(cuid())
   name      String
   logoKey   String? // key en Spaces del logo para la tienda online (se exporta al snapshot)
+  bannerKey String? // key en Spaces del banner panorámico para /marcas/[slug] en la tienda online
   products  Product[]
   createdAt DateTime  @default(now())
 }

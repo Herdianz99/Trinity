@@ -68,7 +68,7 @@ export interface SnapshotBuild {
     generatedAt: string;
     rate: number;
     categories: { slug: string; name: string; productCount: number; icon: string | null }[];
-    brands: { slug: string; name: string; productCount: number; logo: string | null }[];
+    brands: { slug: string; name: string; productCount: number; logo: string | null; banner: string | null }[];
     banners: ExportBanner[];
     // Datos de Pago Movil para el checkout (null = la tienda usa los suyos por defecto).
     payment?: StorePayment | null;
@@ -99,6 +99,7 @@ export function buildSnapshotData(
   catIcons: Record<string, string | null> = {}, // nombre de categoría → emoji
   brandLogos: Record<string, string | null> = {}, // nombre de marca → URL de CDN
   complementRules: ComplementRule[] = [], // reglas ACTIVAS de venta cruzada ya resueltas a codigos
+  brandBanners: Record<string, string | null> = {}, // nombre de marca → URL de CDN del banner
 ): SnapshotBuild {
   // Slugs de categoría/marca con dedupe determinista.
   const catSlugs = new Map<string, string>(); // name -> slug
@@ -177,6 +178,7 @@ export function buildSnapshotData(
     name,
     productCount: brandCount.get(slug) || 0,
     logo: brandLogos[name] ?? null,
+    banner: brandBanners[name] ?? null,
   }));
 
   return {

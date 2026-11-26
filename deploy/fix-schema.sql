@@ -3425,3 +3425,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscr
 CREATE INDEX IF NOT EXISTS "PushSubscription_userId_idx" ON "PushSubscription"("userId");
 ALTER TABLE "ChatbotConversation" ADD COLUMN IF NOT EXISTS "attendedById" TEXT;
 ALTER TABLE "ChatbotConversation" ADD COLUMN IF NOT EXISTS "attendedAt" TIMESTAMP(3);
+
+-- ===== Banner de marca en la tienda online (20261126120000_brand_banner_key) =====
+ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "bannerKey" TEXT;

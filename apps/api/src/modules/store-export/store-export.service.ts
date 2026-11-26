@@ -33,20 +33,25 @@ export class StoreExportService {
     this.exportTimer.unref?.(); // no mantener vivo el proceso por este timer
   }
 
-  /** Lee el "chrome" administrable: iconos de categoría (emoji) y logos de marca (URL). */
+  /** Lee el "chrome" administrable: iconos de categoría (emoji), logos y banners de marca (URL). */
   private async fetchChrome(): Promise<{
     catIcons: Record<string, string | null>;
     brandLogos: Record<string, string | null>;
+    brandBanners: Record<string, string | null>;
   }> {
     const [cats, brands] = await Promise.all([
       this.prisma.category.findMany({ select: { name: true, icon: true } }),
-      this.prisma.brand.findMany({ select: { name: true, logoKey: true } }),
+      this.prisma.brand.findMany({ select: { name: true, logoKey: true, bannerKey: true } }),
     ]);
     const catIcons: Record<string, string | null> = {};
     for (const c of cats) if (c.icon) catIcons[c.name] = c.icon;
     const brandLogos: Record<string, string | null> = {};
-    for (const b of brands) if (b.logoKey) brandLogos[b.name] = this.spaces.cdnUrl(b.logoKey);
-    return { catIcons, brandLogos };
+    const brandBanners: Record<string, string | null> = {};
+    for (const b of brands) {
+      if (b.logoKey) brandLogos[b.name] = this.spaces.cdnUrl(b.logoKey);
+      if (b.bannerKey) brandBanners[b.name] = this.spaces.cdnUrl(b.bannerKey);
+    }
+    return { catIcons, brandLogos, brandBanners };
   }
 
   /** Datos de Pago Movil (Tienda > Personalizacion). Solo se publican si estan los tres. */
@@ -218,6 +223,7 @@ export class StoreExportService {
       chrome.catIcons,
       chrome.brandLogos,
       complementRules,
+      chrome.brandBanners,
     );
     meta.payment = payment;
 

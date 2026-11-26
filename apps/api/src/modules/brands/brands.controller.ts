@@ -47,4 +47,14 @@ export class BrandsController {
   removeLogo(@Param('id') id: string) {
     return this.brandsService.removeLogo(id);
   }
+
+  @Post(':id/banner')
+  uploadBanner(@Param('id') id: string, @Body() dto: UploadLogoDto) {
+    return this.brandsService.uploadBanner(id, dto.image);
+  }
+
+  @Delete(':id/banner')
+  removeBanner(@Param('id') id: string) {
+    return this.brandsService.removeBanner(id);
+  }
 }

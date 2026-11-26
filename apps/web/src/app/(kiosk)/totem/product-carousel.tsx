@@ -277,33 +277,35 @@ export default function ProductCarousel({ cards, onInteract, onModalChange }: Pr
               type="button"
               onClick={() => handleCardClick(c)}
               style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
-              className="group relative flex w-[clamp(172px,29vw,285px)] shrink-0 animate-[card-in_.4s_ease-out_both] flex-col overflow-hidden rounded-2xl bg-white text-left text-slate-900 shadow-[0_14px_34px_-12px_rgba(0,0,0,0.65)] ring-1 ring-white/30 transition-transform duration-150 active:scale-[0.97]"
+              className="group relative flex w-[clamp(168px,27vw,250px)] shrink-0 animate-[card-in_.4s_ease-out_both] flex-col overflow-hidden rounded-2xl bg-white text-left text-slate-900 shadow-[0_14px_34px_-12px_rgba(0,0,0,0.65)] ring-1 ring-white/30 transition-transform duration-150 active:scale-[0.97]"
             >
-              <div className="relative flex aspect-square w-full items-center justify-center bg-slate-50 p-2.5">
+              <div className="relative h-[clamp(118px,16dvh,210px)] w-full shrink-0 overflow-hidden bg-slate-50">
                 {c.imageUrl ? (
                   <img
                     src={c.imageUrl}
                     alt={c.name}
                     draggable={false}
                     loading={i < 4 ? 'eager' : 'lazy'}
-                    className="h-full w-full object-contain"
+                    className="absolute inset-0 m-auto h-full w-full object-contain p-2.5"
                   />
                 ) : (
-                  <ImageOff className="h-12 w-12 text-slate-300" />
+                  <div className="flex h-full w-full items-center justify-center">
+                    <ImageOff className="h-11 w-11 text-slate-300" />
+                  </div>
                 )}
                 <span
                   aria-hidden="true"
-                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/55 text-white shadow-sm backdrop-blur-sm"
+                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900/55 text-white shadow-sm backdrop-blur-sm"
                 >
-                  <ZoomIn className="h-4 w-4" />
+                  <ZoomIn className="h-3.5 w-3.5" />
                 </span>
               </div>
-              <div className="flex flex-1 flex-col justify-between border-t border-slate-100 px-3 py-2.5">
-                <p className="line-clamp-2 text-[clamp(15px,2vw,24px)] font-bold leading-tight text-slate-900">
+              <div className="flex flex-1 flex-col justify-between border-t border-slate-100 px-3 py-2">
+                <p className="line-clamp-2 text-[clamp(14px,1.8vw,22px)] font-bold leading-tight text-slate-900">
                   {c.name}
                 </p>
                 <p
-                  className={`mt-1.5 text-[clamp(1.45rem,3.2vw,2.6rem)] font-extrabold leading-none ${
+                  className={`mt-1.5 text-[clamp(1.3rem,2.8vw,2.3rem)] font-extrabold leading-none ${
                     c.available ? 'text-emerald-700' : 'text-rose-600'
                   }`}
                 >
@@ -346,16 +348,16 @@ export default function ProductCarousel({ cards, onInteract, onModalChange }: Pr
             className="relative flex w-full max-w-[min(92vw,760px)] animate-[card-in_.22s_ease-out_both] flex-col overflow-hidden rounded-[32px] bg-white text-slate-900 shadow-[0_30px_90px_-20px_rgba(0,0,0,0.85)]"
           >
             {/* Zona de imagen grande */}
-            <div className="relative flex h-[min(45dvh,540px)] w-full items-center justify-center bg-slate-50 p-6">
+            <div className="relative h-[min(44dvh,500px)] w-full shrink-0 overflow-hidden bg-slate-50">
               {selected.imageUrl ? (
                 <img
                   src={selected.imageUrl}
                   alt={selected.name}
                   draggable={false}
-                  className="h-full w-full object-contain"
+                  className="absolute inset-0 m-auto h-full w-full object-contain p-6"
                 />
               ) : (
-                <div className="flex flex-col items-center gap-3 text-slate-400">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400">
                   <ImageOff className="h-20 w-20" />
                   <span className="text-xl font-semibold">Sin foto registrada</span>
                 </div>

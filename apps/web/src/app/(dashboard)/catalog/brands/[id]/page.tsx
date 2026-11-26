@@ -13,10 +13,12 @@ interface Brand {
   name: string;
   logoKey?: string | null;
   logoUrl?: string | null;
+  bannerKey?: string | null;
+  bannerUrl?: string | null;
 }
 
 // Reduce la imagen en el navegador antes de subirla y la devuelve como data URI.
-function downscaleToDataUri(file: File, maxSize = 1024, quality = 0.9): Promise<string> {
+function downscaleToDataUri(file: File, maxSize = 1024, mime = 'image/png', quality = 0.9): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -31,8 +33,7 @@ function downscaleToDataUri(file: File, maxSize = 1024, quality = 0.9): Promise<
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject(new Error('No canvas context'));
       ctx.drawImage(img, 0, 0, w, h);
-      // PNG para conservar transparencia de los logos
-      resolve(canvas.toDataURL('image/png'));
+      resolve(canvas.toDataURL(mime, quality));
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
     img.src = url;
@@ -65,6 +66,10 @@ export default function BrandDetailPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   const [activeTab, setActiveTab] = useState('info');
 
   // Products
@@ -83,6 +88,7 @@ export default function BrandDetailPage() {
       setBrand(data);
       setForm({ name: data.name });
       setLogoUrl(data.logoUrl || null);
+      setBannerUrl(data.bannerUrl || null);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   }, [id]);
 
@@ -117,6 +123,39 @@ export default function BrandDetailPage() {
     } catch (err: any) {
       setSaveMsg({ type: 'error', text: err.message });
     } finally { setUploadingLogo(false); }
+  }
+
+  async function handleBannerFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingBanner(true); setSaveMsg(null);
+    try {
+      const dataUri = await downscaleToDataUri(file, 1600, 'image/webp', 0.9);
+      const res = await fetch(`/api/proxy/brands/${id}/banner`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUri }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'No se pudo subir el banner'); }
+      const updated = await res.json();
+      setBannerUrl(updated.bannerUrl || null);
+      setSaveMsg({ type: 'success', text: 'Banner actualizado' });
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: err.message });
+    } finally { setUploadingBanner(false); }
+  }
+
+  async function handleRemoveBanner() {
+    if (!confirm('¿Quitar el banner de esta marca?')) return;
+    setUploadingBanner(true); setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/proxy/brands/${id}/banner`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('No se pudo quitar el banner');
+      setBannerUrl(null);
+      setSaveMsg({ type: 'success', text: 'Banner eliminado' });
+    } catch (err: any) {
+      setSaveMsg({ type: 'error', text: err.message });
+    } finally { setUploadingBanner(false); }
   }
 
   const fetchProducts = useCallback(async () => {
@@ -250,6 +289,46 @@ export default function BrandDetailPage() {
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">PNG con fondo transparente recomendado. Al tener logo, la marca deja de mostrarse como recuadro con el nombre.</p>
+            </div>
+
+            {/* Banner panorámico para la página de la marca en la tienda online */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Banner de la tienda online (página de marca)</label>
+              <div className="space-y-3">
+                <div className="w-full max-w-2xl aspect-[1440/224] min-h-[76px] rounded-lg bg-slate-800 border border-slate-700/50 flex items-center justify-center overflow-hidden">
+                  {bannerUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={bannerUrl} alt={`Banner ${brand.name}`} className="w-full h-full object-cover object-right" />
+                  ) : (
+                    <div className="flex items-center gap-2 text-slate-500 text-xs">
+                      <ImageIcon size={18} /> Sin banner (usa fondo por defecto)
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input ref={bannerInputRef} type="file" accept="image/*" onChange={handleBannerFile} className="hidden" />
+                  <button
+                    type="button"
+                    onClick={() => bannerInputRef.current?.click()}
+                    disabled={uploadingBanner}
+                    className="btn-secondary !py-2 text-sm flex items-center gap-2"
+                  >
+                    {uploadingBanner ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                    {bannerUrl ? 'Cambiar banner' : 'Subir banner'}
+                  </button>
+                  {bannerUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveBanner}
+                      disabled={uploadingBanner}
+                      className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                    >
+                      <Trash2 size={12} /> Quitar banner
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">Recomendado: 1440 × 224 px (lado izquierdo oscuro para el logo/título y productos a la derecha).</p>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-700/50">
