@@ -225,7 +225,7 @@ export class ChatwootService implements OnModuleDestroy {
       }
       try {
         const res = await fetch(url, {
-          headers: token ? { api_access_token: token } : undefined,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           signal: AbortSignal.timeout(15_000),
         });
         if (!res.ok) continue;
@@ -354,7 +354,7 @@ export class ChatwootService implements OnModuleDestroy {
     const url = `${base}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', api_access_token: token },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ content, message_type: 'outgoing', private: isPrivate }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -385,7 +385,7 @@ export class ChatwootService implements OnModuleDestroy {
       const url = `${base}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { api_access_token: token },
+        headers: { Authorization: `Bearer ${token}` },
         body: form,
         signal: AbortSignal.timeout(20_000),
       });
@@ -407,7 +407,7 @@ export class ChatwootService implements OnModuleDestroy {
     const url = `${base}/api/v1/accounts/${accountId}/conversations/${conversationId}/toggle_status`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', api_access_token: token },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
       signal: AbortSignal.timeout(15_000),
     });
