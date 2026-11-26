@@ -1,7 +1,11 @@
 // Verificacion sin jest: node apps/api/src/modules/chatbot/chatwoot.check.ts
 import assert from 'node:assert/strict';
 import {
-  appendWebProductLink,
+  appendWebProductLinks,
+  buildChatwootProductCards,
+  buildStoreProductSlug,
+  buildStoreProductUrl,
+  collectWebCandidateProducts,
   isSafeAttachmentUrl,
   isWithinHourRange,
   mapChatwootChannel,
@@ -86,9 +90,82 @@ assert.equal(isWithinHourRange(7, '8-17'), false);
 assert.equal(isWithinHourRange(22, '20-7'), true);
 assert.equal(isWithinHourRange(10, ''), false);
 
-// 6. Enlace en web chat
-const withLink = appendWebProductLink('Cemento 10$ bcv', [{ code: 'CON001', name: 'Cemento' }], 'https://ferreteriaeltrebol.com/');
-assert.ok(withLink.includes('https://ferreteriaeltrebol.com/productos?q=CON001'));
+// 6. Slugs, URLs directas y tarjetas interactivas para web chat
+assert.equal(
+  buildStoreProductSlug('Cemento Gris (42.5KG) Sellado', 'CON001'),
+  'cemento-gris-42-5kg-sellado-con001',
+);
+assert.equal(
+  buildStoreProductUrl('https://ferreteriaeltrebol.com/', 'Tubería PVC 1/2" 6m', 'PLM-012'),
+  'https://ferreteriaeltrebol.com/productos/tuberia-pvc-1-2-6m-plm-012',
+);
+
+const candidates = collectWebCandidateProducts(
+  [{ code: 'CON001', name: 'Cemento Gris' }],
+  [
+    { codigo: 'CON001', disponible: true },
+    { codigo: 'CON002', disponible: true },
+    { codigo: 'CON003', disponible: false },
+    { codigo: 'CON004', disponible: true },
+    { codigo: 'CON005', disponible: true },
+  ],
+);
+assert.deepEqual(candidates, [
+  { code: 'CON001', available: true },
+  { code: 'CON002', available: true },
+  { code: 'CON003', available: false },
+  { code: 'CON004', available: true },
+]);
+
+const built = buildChatwootProductCards(
+  [
+    {
+      code: 'CON001',
+      name: 'Cemento Gris 42.5kg',
+      priceUsd: 9.8,
+      imageUrl: 'https://cdn.example/cemento.webp',
+      available: true,
+    },
+    {
+      code: 'CON002',
+      name: 'Cemento Blanco 1kg',
+      priceUsd: 2.1,
+      imageUrl: null,
+      available: false,
+    },
+  ],
+  'https://ferreteriaeltrebol.com/',
+);
+assert.equal(built.items.length, 1);
+assert.deepEqual(built.cardCodes, ['CON001']);
+assert.equal(built.items[0].media_url, 'https://cdn.example/cemento.webp');
+assert.equal(built.items[0].title, 'Cemento Gris 42.5kg');
+assert.equal(built.items[0].description, '9.80$ bcv · Disponible');
+assert.deepEqual(built.items[0].actions, [
+  {
+    type: 'link',
+    text: 'Ver en la tienda',
+    uri: 'https://ferreteriaeltrebol.com/productos/cemento-gris-42-5kg-con001',
+  },
+]);
+assert.ok(built.fallbackText.includes('https://ferreteriaeltrebol.com/productos/cemento-gris-42-5kg-con001'));
+assert.equal(built.linkOnlyProducts.length, 1);
+assert.equal(built.linkOnlyProducts[0].url, 'https://ferreteriaeltrebol.com/productos/cemento-blanco-1kg-con002');
+
+const withLinks = appendWebProductLinks('Cemento blanco 2.10$ bcv', built.linkOnlyProducts);
+assert.ok(withLinks.includes('Ver en la tienda: https://ferreteriaeltrebol.com/productos/cemento-blanco-1kg-con002'));
+assert.equal(appendWebProductLinks(withLinks, built.linkOnlyProducts), withLinks);
+
+const multi = buildChatwootProductCards(
+  [
+    { code: 'A1', name: 'Taladro 1/2"', priceUsd: 45, imageUrl: 'https://cdn.example/a1.webp', available: true },
+    { code: 'A2', name: 'Esmeril 4-1/2"', priceUsd: 38.5, imageUrl: 'https://cdn.example/a2.webp' },
+  ],
+  'https://ferreteriaeltrebol.com',
+);
+assert.equal(multi.items.length, 2);
+assert.equal(multi.items[1].description, '38.50$ bcv');
+assert.ok(multi.fallbackText.startsWith('Productos en la tienda:'));
 
 // 7. Cola antirafagas: 3 mensajes seguidos -> 1 sola llamada agrupada
 async function testQueue() {

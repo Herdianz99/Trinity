@@ -3,6 +3,40 @@ import type { ChatbotChannel } from '@prisma/client';
 export const INSTAGRAM_MAX_CHARS = 980;
 export const DEFAULT_WEB_DEBOUNCE_MS = 4_500;
 export const DEFAULT_SOCIAL_DEBOUNCE_MS = 8_000;
+export const MAX_WEB_CARDS = 4;
+
+export interface ChatwootCardAction {
+  type: 'link';
+  text: string;
+  uri: string;
+}
+
+export interface ChatwootCardItem {
+  media_url: string;
+  title: string;
+  description: string;
+  actions: ChatwootCardAction[];
+}
+
+export interface WebStoreProduct {
+  code: string;
+  name: string;
+  priceUsd: number;
+  imageUrl: string | null;
+  available?: boolean;
+}
+
+export interface WebProductCandidate {
+  code: string;
+  available?: boolean;
+}
+
+export interface BuiltWebCards {
+  items: ChatwootCardItem[];
+  cardCodes: string[];
+  fallbackText: string;
+  linkOnlyProducts: { code: string; name: string; url: string }[];
+}
 
 export interface ParsedChatwootAttachment {
   fileType: string;
@@ -182,11 +216,132 @@ export function isWithinHourRange(hour: number, spec?: string | null): boolean {
   return start < end ? hour >= start && hour < end : hour >= start || hour < end;
 }
 
-/** En el chat de la tienda web agrega enlace al producto cotizado si viene configurado STORE_URL. */
-export function appendWebProductLink(text: string, images: { code: string; name: string }[], storeUrl?: string | null): string {
+/**
+ * Slug de producto identico al de `store-export.builder.ts` (`${slugify(name)}-${code.toLowerCase()}`).
+ * Se mantiene puro aqui para que `chatwoot.check.ts` corra con Node sin dependencias externas.
+ */
+export function buildStoreProductSlug(name: string, code: string): string {
+  const base = (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  const cleanCode = (code || '').trim().toLowerCase();
+  return cleanCode ? `${base}-${cleanCode}` : base;
+}
+
+/** URL directa a la ficha del producto en la tienda online (`/productos/<slug>`). */
+export function buildStoreProductUrl(storeUrl: string | null | undefined, name: string, code: string): string | null {
   const base = (storeUrl || '').trim().replace(/\/+$/, '');
-  if (!base || images.length !== 1) return text;
-  const code = images[0].code;
-  if (!code || text.includes(base)) return text;
-  return `${text}\n\nVer en la tienda: ${base}/productos?q=${encodeURIComponent(code)}`;
+  const cleanCode = (code || '').trim();
+  if (!base || !cleanCode) return null;
+  const slug = buildStoreProductSlug(name, cleanCode);
+  return `${base}/productos/${encodeURIComponent(slug)}`;
+}
+
+/**
+ * Une y deduplica los productos cotizados en el turno (fotos enviadas por `enviar_foto` + productos de
+ * `buscar_productos` cuyo precio salio en la respuesta), preservando orden y tope de tarjetas.
+ */
+export function collectWebCandidateProducts(
+  productImages: { code: string; name?: string }[],
+  mentioned: { codigo: string; disponible?: boolean }[],
+  maxCards = MAX_WEB_CARDS,
+): WebProductCandidate[] {
+  const availabilityByCode = new Map<string, boolean | undefined>();
+  for (const m of mentioned) {
+    const code = (m.codigo || '').trim();
+    if (code && !availabilityByCode.has(code)) availabilityByCode.set(code, m.disponible);
+  }
+
+  const seen = new Set<string>();
+  const out: WebProductCandidate[] = [];
+  const push = (rawCode: string, available?: boolean) => {
+    const code = (rawCode || '').trim();
+    if (!code || seen.has(code) || out.length >= maxCards) return;
+    seen.add(code);
+    out.push({ code, available });
+  };
+
+  for (const img of productImages) {
+    const code = (img.code || '').trim();
+    push(code, availabilityByCode.get(code));
+  }
+  for (const m of mentioned) {
+    push(m.codigo, m.disponible);
+  }
+  return out;
+}
+
+function isHttpUrl(raw?: string | null): raw is string {
+  if (!raw) return false;
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Construye tarjetas interactivas (`content_type: 'cards'`) para el widget web de Chatwoot.
+ * - Productos publicados CON foto -> tarjeta visual (foto + nombre + precio + boton "Ver en la tienda").
+ * - Productos publicados SIN foto -> `linkOnlyProducts` para anexar enlace directo sin imagen rota.
+ */
+export function buildChatwootProductCards(
+  products: WebStoreProduct[],
+  storeUrl?: string | null,
+  maxCards = MAX_WEB_CARDS,
+): BuiltWebCards {
+  const items: ChatwootCardItem[] = [];
+  const cardCodes: string[] = [];
+  const linkOnlyProducts: { code: string; name: string; url: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const p of products) {
+    const code = (p.code || '').trim();
+    if (!code || seen.has(code)) continue;
+    if (items.length + linkOnlyProducts.length >= maxCards) break;
+    seen.add(code);
+
+    const uri = buildStoreProductUrl(storeUrl, p.name, code);
+    if (!uri) continue;
+
+    const title = (p.name || code).trim().slice(0, 120);
+    if (isHttpUrl(p.imageUrl)) {
+      const priceLabel = `${(Math.round(Number(p.priceUsd) * 100) / 100).toFixed(2)}$ bcv`;
+      const availLabel = p.available === true ? ' · Disponible' : p.available === false ? ' · Agotado' : '';
+      items.push({
+        media_url: p.imageUrl.trim(),
+        title,
+        description: `${priceLabel}${availLabel}`,
+        actions: [{ type: 'link', text: 'Ver en la tienda', uri }],
+      });
+      cardCodes.push(code);
+    } else {
+      linkOnlyProducts.push({ code, name: title, url: uri });
+    }
+  }
+
+  const fallbackText =
+    items.length === 1
+      ? `Ver en la tienda: ${items[0].title} (${items[0].actions[0].uri})`
+      : items.length > 1
+        ? `Productos en la tienda:\n${items.map((it) => `- ${it.title}: ${it.actions[0].uri}`).join('\n')}`
+        : '';
+
+  return { items, cardCodes, fallbackText, linkOnlyProducts };
+}
+
+/** En el chat web agrega enlace(s) directo(s) al texto para productos publicados sin foto (o respaldo). */
+export function appendWebProductLinks(text: string, links: { name: string; url: string }[]): string {
+  const pending = links.filter((l) => l.url && !text.includes(l.url));
+  if (!pending.length) return text;
+  if (pending.length === 1) {
+    return `${text}\n\nVer en la tienda: ${pending[0].url}`;
+  }
+  const block = pending.map((l) => `- ${l.name}: ${l.url}`).join('\n');
+  return `${text}\n\nVer en la tienda:\n${block}`;
 }

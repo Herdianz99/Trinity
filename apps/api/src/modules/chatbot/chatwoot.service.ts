@@ -7,15 +7,22 @@ import { caracasParts } from '../../common/timezone';
 import { SpacesService } from '../product-images/spaces.service';
 import { ChatbotService } from './chatbot.service';
 import {
+  BuiltWebCards,
+  ChatwootCardItem,
   DEFAULT_SOCIAL_DEBOUNCE_MS,
   DEFAULT_WEB_DEBOUNCE_MS,
   IncomingChatwootMessage,
-  appendWebProductLink,
+  WebProductCandidate,
+  WebStoreProduct,
+  appendWebProductLinks,
+  buildChatwootProductCards,
+  collectWebCandidateProducts,
   isSafeAttachmentUrl,
   isWithinHourRange,
   parseChatwootPayload,
   splitForChannel,
 } from './chatwoot-helpers';
+import { KioskToolCall, pickMentionedProducts } from './kiosk';
 import { ChatwootBurstQueue } from './chatwoot-queue';
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -305,26 +312,45 @@ export class ChatwootService implements OnModuleDestroy {
     }
 
     const productImages = Array.isArray(result.message.productImages) ? result.message.productImages : [];
+    const toolCalls = Array.isArray(result.message.toolCalls) ? (result.message.toolCalls as KioskToolCall[]) : [];
     let replyText = result.message.text || '';
-    if (channel === 'WEB' && productImages.length === 1) {
-      replyText = appendWebProductLink(replyText, productImages, this.storeUrl());
+
+    let webCards: BuiltWebCards = { items: [], cardCodes: [], fallbackText: '', linkOnlyProducts: [] };
+    if (channel === 'WEB') {
+      const mentioned = pickMentionedProducts(toolCalls, replyText);
+      const candidates = collectWebCandidateProducts(productImages, mentioned);
+      if (candidates.length > 0) {
+        webCards = await this.resolveWebProductCards(candidates);
+      }
+      if (webCards.linkOnlyProducts.length > 0) {
+        replyText = appendWebProductLinks(replyText, webCards.linkOnlyProducts);
+      }
     }
+
+    // En el widget web, si el producto ya sale en una tarjeta interactiva (que incluye su foto y boton
+    // directo a la tienda), no duplicar esa misma foto como adjunto aparte.
+    const cardCodeSet = new Set(webCards.cardCodes);
+    const remainingImages = productImages.filter((img) => !cardCodeSet.has(img.code));
 
     const chunks = splitForChannel(replyText, channel);
 
-    if (productImages.length > 0 && chunks.length > 0) {
+    if (remainingImages.length > 0 && chunks.length > 0) {
       // Foto + texto juntos como pie de foto (en WhatsApp cuenta como 1 solo mensaje entregado).
-      await this.sendImageWithCaption(accountId, conversationId, productImages[0].url, chunks[0]);
+      await this.sendImageWithCaption(accountId, conversationId, remainingImages[0].url, chunks[0]);
       for (const extraChunk of chunks.slice(1)) {
         await this.sendText(accountId, conversationId, extraChunk, false);
       }
-      for (const extraImg of productImages.slice(1)) {
+      for (const extraImg of remainingImages.slice(1)) {
         await this.sendImageWithCaption(accountId, conversationId, extraImg.url, extraImg.name);
       }
     } else {
       for (const chunk of chunks) {
         await this.sendText(accountId, conversationId, chunk, false);
       }
+    }
+
+    if (channel === 'WEB' && webCards.items.length > 0) {
+      await this.sendProductCards(accountId, conversationId, webCards.items, webCards.fallbackText);
     }
 
     if (result.status === 'ESCALATED') {
@@ -334,6 +360,64 @@ export class ChatwootService implements OnModuleDestroy {
         result.escalationSummary ? `Resumen: ${result.escalationSummary}` : null,
       ].filter(Boolean).join('\n');
       await this.handoffToHuman(accountId, conversationId, note);
+    }
+  }
+
+  /**
+   * Filtra los productos cotizados que realmente estan publicados en la tienda online (`showInStore: true`,
+   * activos y sin bloqueo) y arma sus tarjetas interactivas para el widget web de Chatwoot.
+   */
+  private async resolveWebProductCards(candidates: WebProductCandidate[]): Promise<BuiltWebCards> {
+    const empty: BuiltWebCards = { items: [], cardCodes: [], fallbackText: '', linkOnlyProducts: [] };
+    const storeUrl = this.storeUrl();
+    if (!storeUrl || !candidates.length) return empty;
+
+    try {
+      const codes = candidates.map((c) => c.code);
+      const rows = await this.prisma.product.findMany({
+        where: {
+          code: { in: codes },
+          isActive: true,
+          showInStore: true,
+          saleBlocked: false,
+          priceDetal: { gt: 0 },
+        },
+        select: {
+          code: true,
+          name: true,
+          priceDetal: true,
+          primaryImageMediumUrl: true,
+          primaryImageThumbUrl: true,
+          images: {
+            select: { mediumKey: true },
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+            take: 1,
+          },
+        },
+      });
+      if (!rows.length) return empty;
+
+      const byCode = new Map(rows.map((r) => [r.code, r]));
+      const ordered: WebStoreProduct[] = [];
+      for (const c of candidates) {
+        const r = byCode.get(c.code);
+        if (!r) continue;
+        const imageUrl =
+          r.primaryImageMediumUrl ||
+          r.primaryImageThumbUrl ||
+          (r.images[0]?.mediumKey ? this.spaces.cdnUrl(r.images[0].mediumKey) : null);
+        ordered.push({
+          code: r.code,
+          name: r.name,
+          priceUsd: Number(r.priceDetal),
+          imageUrl,
+          available: c.available,
+        });
+      }
+      return buildChatwootProductCards(ordered, storeUrl);
+    } catch (e) {
+      this.logger.warn(`No se pudieron armar tarjetas web de productos: ${(e as Error).message}`);
+      return empty;
     }
   }
 
@@ -396,6 +480,42 @@ export class ChatwootService implements OnModuleDestroy {
     } catch (e) {
       this.logger.warn(`No se pudo enviar foto a Chatwoot (${(e as Error).message}); enviando solo texto`);
       await this.sendText(accountId, conversationId, caption, false);
+    }
+  }
+
+  private async sendProductCards(
+    accountId: number,
+    conversationId: number,
+    items: ChatwootCardItem[],
+    fallbackText: string,
+  ): Promise<void> {
+    const base = this.chatwootUrl();
+    const token = this.botToken();
+    if (!base || !token || !items.length) return;
+
+    try {
+      const url = `${base}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          content: fallbackText || 'Productos en la tienda',
+          content_type: 'cards',
+          content_attributes: { items },
+          message_type: 'outgoing',
+          private: false,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Chatwoot ${res.status}: ${body.slice(0, 200)}`);
+      }
+    } catch (e) {
+      this.logger.warn(`No se pudieron enviar tarjetas a Chatwoot (${(e as Error).message}); enviando enlace en texto`);
+      if (fallbackText) {
+        await this.sendText(accountId, conversationId, fallbackText, false);
+      }
     }
   }
 
