@@ -5,6 +5,7 @@ export interface KioskToolCall { name: string; input: unknown; result: unknown }
 export interface KioskProduct { codigo: string; nombre: string; precio_bcv: string; disponible: boolean; tiene_foto: boolean }
 
 const MAX_CARDS = 4;
+export const MAX_KIOSK_CARDS = 12;
 
 // Se agrega al system prompt cuando el canal es KIOSK. Los precios se siguen escribiendo con numero y "$"
 // (los verifica price-guard); la pantalla los convierte a palabras solo para la voz.
@@ -13,7 +14,7 @@ export const KIOSK_VOICE_RULES = `
 MODO TÓTEM DE VOZ (esta conversación es en la tienda, no por WhatsApp; estas reglas mandan sobre las anteriores)
 - Te llamas Clover. Estás en una pantalla en el piso de venta: el cliente te HABLA y tu respuesta se lee en voz alta y se muestra en pantalla.
 - Responde en 1 a 3 frases cortas. Nada de listas, viñetas, emojis ni saltos de línea.
-- Si hay varias opciones, nombra máximo 3 en una sola frase con su precio y pregunta cuál le interesa (la pantalla muestra las fotos).
+- Si hay varias opciones, nombra máximo 3 en una sola frase con su precio, comenta brevemente que puede ver más opciones en pantalla y pregunta cuál le interesa.
 - Escribe los precios como siempre (número con "$" y "bcv"); no los escribas en letras.
 - Lo que te dicen viene de un reconocimiento de voz y puede venir mal escrito: si no tiene sentido, pide amablemente que lo repita.
 - El cliente YA está en la tienda: no ofrezcas delivery ni pidas teléfono o datos de contacto.
@@ -71,6 +72,38 @@ export function pickMentionedProducts(toolLog: KioskToolCall[], text: string): K
     if (!candidates.length) continue;
     picked.push(candidates.sort((a, b) => score(b) - score(a))[0]);
     if (picked.length >= MAX_CARDS) break;
+  }
+  return picked;
+}
+
+// Tarjetas para el totem (carrusel horizontal): primero los productos que Clover nombro en voz alta
+// (en el mismo orden), y luego el resto de los productos DISPONIBLES que devolvieron esas mismas
+// busquedas (hasta maxCards) para que el cliente vea toda la variedad en pantalla sin alargar la voz.
+export function pickKioskProducts(
+  toolLog: KioskToolCall[],
+  text: string,
+  maxCards = MAX_KIOSK_CARDS,
+): KioskProduct[] {
+  const mentioned = pickMentionedProducts(toolLog, text);
+  if (!mentioned.length) return [];
+
+  const picked: KioskProduct[] = mentioned.slice(0, maxCards);
+  const seen = new Set(picked.map((p) => p.codigo));
+  if (picked.length >= maxCards) return picked;
+
+  const mentionedCodes = new Set(mentioned.map((p) => p.codigo));
+  const searchLists = toolLog
+    .filter((t) => t.name === 'buscar_productos')
+    .map((t) => (t.result as { productos?: KioskProduct[] } | null)?.productos ?? [])
+    .filter((list) => list.some((p) => mentionedCodes.has(p.codigo)));
+
+  for (const list of searchLists) {
+    for (const p of list) {
+      if (picked.length >= maxCards) return picked;
+      if (!p.disponible || seen.has(p.codigo)) continue;
+      seen.add(p.codigo);
+      picked.push(p);
+    }
   }
   return picked;
 }

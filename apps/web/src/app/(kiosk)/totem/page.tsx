@@ -1,13 +1,12 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, UserRound, ImageOff } from 'lucide-react';
+import { Mic, UserRound } from 'lucide-react';
 import CloverAvatar, { CloverState } from './clover-avatar';
+import ProductCarousel, { TotemCard } from './product-carousel';
 import { useVoice } from './use-voice';
 import { textForSpeech } from '@/lib/kiosk-speech';
 import AttractLoop, { TotemPlaylist, buildSequence } from './attract-loop';
 import { jsHeapMb, reportBoot, reportDiag } from './totem-diagnostics';
-
-interface Card { code: string; name: string; price: string; available: boolean; imageUrl: string | null }
 
 const GREETING = '¡Hola! Soy Clover. Mantén presionado el botón verde y dime qué estás buscando.';
 const ERROR_TEXT = 'Ahora no puedo responder. Pregúntale a un vendedor, por favor.';
@@ -16,12 +15,6 @@ const IDLE_RESET_MS = 60_000;
 const PLAYLIST_REFRESH_MS = 3 * 60_000; // la publicidad nueva llega sola, sin recargar (recargar quita el permiso de sonido)
 const CALL_POLL_MS = 4_000;             // tras llamar al vendedor: ¿ya tocó "Voy yo" alguien?
 const CALL_WAIT_MAX_MS = 5 * 60_000;    // si nadie contesta en 5 min, se deja de preguntar y la pantalla vuelve a su ciclo normal
-
-// Precio para la tarjeta: "12.50$ bcv" -> "$12.50"
-const cardPrice = (p: string) => {
-  const m = p.match(/(\d+(?:[.,]\d+)?)\s*\$/);
-  return m ? `$${m[1]}` : p;
-};
 
 export default function TotemPage() {
   const {
@@ -44,7 +37,8 @@ export default function TotemPage() {
   const [state, setState] = useState<CloverState>('idle');
   const [heard, setHeard] = useState('');
   const [answer, setAnswer] = useState(GREETING);
-  const [cards, setCards] = useState<Card[]>([]);
+  const [cards, setCards] = useState<TotemCard[]>([]);
+  const productModalRef = useRef(false);
   const [sellerCalled, setSellerCalled] = useState(false);
   const [sellerName, setSellerName] = useState<string | null>(null); // primer nombre del vendedor que tocó "Voy yo"
   const stateRef = useRef<CloverState>('idle');
@@ -101,11 +95,25 @@ export default function TotemPage() {
   useEffect(() => {
     if (attract || !playlist || buildSequence(playlist).length === 0) return;
     const t = setInterval(() => {
-      if (stateRef.current !== 'idle' || voicePanelRef.current) { lastActivity.current = Date.now(); return; }
+      if (stateRef.current !== 'idle' || voicePanelRef.current || productModalRef.current) {
+        lastActivity.current = Date.now();
+        return;
+      }
       if (Date.now() - lastActivity.current >= playlist.idleSeconds * 1000) { reset(); setAttract(true); }
     }, 1000);
     return () => clearInterval(t);
   }, [attract, playlist, reset]);
+
+  const handleCarouselInteract = useCallback(() => {
+    lastActivity.current = Date.now();
+    touch();
+  }, [touch]);
+
+  const handleProductModalChange = useCallback((open: boolean) => {
+    productModalRef.current = open;
+    lastActivity.current = Date.now();
+    if (open) touch();
+  }, [touch]);
 
   const exitAttract = () => {
     unlockSpeech(); // es un toque: deja lista la voz de Clover
@@ -317,29 +325,11 @@ export default function TotemPage() {
         </p>
       )}
 
-      {cards.length > 0 && (
-        <div className="mt-4 flex w-full flex-wrap justify-center gap-3">
-          {cards.map((c, i) => (
-            <div
-              key={c.code}
-              className="w-[calc(50%-0.375rem)] animate-[card-in_.4s_ease-out_both] overflow-hidden rounded-2xl bg-white text-slate-900 shadow-lg sm:w-[calc(25%-0.5625rem)]"
-              style={{ animationDelay: `${i * 90}ms` }}
-            >
-              <div className="flex aspect-square items-center justify-center bg-slate-50 p-2">
-                {c.imageUrl
-                  ? <img src={c.imageUrl} alt={c.name} className="h-full w-full object-contain" />
-                  : <ImageOff className="h-10 w-10 text-slate-300" />}
-              </div>
-              <div className="border-t border-slate-100 px-3 py-2">
-                <p className="line-clamp-2 text-[clamp(15px,2vw,26px)] font-semibold leading-tight">{c.name}</p>
-                <p className={`mt-1 text-[clamp(1.5rem,3.4vw,2.8rem)] font-extrabold ${c.available ? 'text-emerald-700' : 'text-rose-600'}`}>
-                  {c.available ? cardPrice(c.price) : 'Agotado'}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ProductCarousel
+        cards={cards}
+        onInteract={handleCarouselInteract}
+        onModalChange={handleProductModalChange}
+      />
 
       <div className="mt-auto flex w-full flex-col items-center gap-4 pt-5">
         {/* Boton principal con borde de cinta de seguridad (amarillo/negro), como el chaleco de Clover */}

@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
-import { ChatbotConfig, ChatbotConversationStatus, Prisma } from '@prisma/client';
+import { ChatbotChannel, ChatbotConfig, ChatbotConversationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacesService } from '../product-images/spaces.service';
 import { parseDataUri } from '../product-images/image-processing';
@@ -12,7 +12,7 @@ import { ChatbotCrossSellService } from './chatbot-cross-sell.service';
 import { buildChatbotSystemPrompt } from './chatbot-prompt';
 import { numbersIn, unverifiedPrices } from './price-guard';
 import { isLongList, listLines } from './list-guard';
-import { KioskToolCall, pickMentionedProducts } from './kiosk';
+import { KioskToolCall, MAX_KIOSK_CARDS, pickKioskProducts } from './kiosk';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { TotemCallsService } from './totem-calls.service';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
@@ -153,16 +153,21 @@ export class ChatbotService {
     return { ok: true };
   }
 
-  // Tarjetas del totem: productos cotizados en la respuesta, con foto (si tiene).
+  // Tarjetas del totem: primero los productos cotizados en voz alta y luego el resto de disponibles
+  // de las mismas busquedas (hasta 12), con todas las URLs de foto resueltas en un solo query.
   private async kioskCards(toolLog: ToolCallLog[], text: string) {
-    const picked = pickMentionedProducts(toolLog as KioskToolCall[], text);
-    return Promise.all(picked.map(async (p) => ({
+    const picked = pickKioskProducts(toolLog as KioskToolCall[], text);
+    if (!picked.length) return [];
+    const imageMap = await this.tools.productImageUrls(
+      picked.filter((p) => p.tiene_foto).map((p) => p.codigo),
+    );
+    return picked.map((p) => ({
       code: p.codigo,
       name: p.nombre,
       price: p.precio_bcv,
       available: p.disponible,
-      imageUrl: p.tiene_foto ? (await this.tools.productImage(p.codigo))?.url ?? null : null,
-    })));
+      imageUrl: p.tiene_foto ? imageMap.get(p.codigo) ?? null : null,
+    }));
   }
 
   async listConversations(status?: string) {
@@ -310,6 +315,7 @@ export class ChatbotService {
   private async runTool(
     cfg: ChatbotConfig,
     conversationId: string,
+    channel: ChatbotChannel,
     block: Anthropic.ToolUseBlock,
     out: { images: ProductImageOut[]; escalated: boolean },
   ): Promise<unknown> {
@@ -317,8 +323,11 @@ export class ChatbotService {
     switch (block.name) {
       case 'buscar_productos':
         return this.tools.searchProducts(
-          cfg, conversationId, String(input.consulta ?? ''),
+          cfg,
+          conversationId,
+          String(input.consulta ?? ''),
           input.cantidad !== undefined ? Number(input.cantidad) : undefined,
+          channel === 'KIOSK' ? MAX_KIOSK_CARDS : undefined,
         );
       case 'enviar_foto': {
         const img = await this.tools.productImage(String(input.codigo ?? ''));
@@ -436,7 +445,7 @@ export class ChatbotService {
               if (block.name === 'escalar_a_asesor' && toolBlocks.length > 1) {
                 result = { ignorado: true, nota: 'No se escaló: escalar debe ser la única acción del turno. Si de verdad corresponde, hazlo solo.' };
               } else {
-                result = await this.runTool(cfg, conversationId, block, out);
+                result = await this.runTool(cfg, conversationId, conv.channel, block, out);
               }
             } catch (e) {
               this.logger.error(`Herramienta ${block.name} falló: ${(e as Error).message}`);

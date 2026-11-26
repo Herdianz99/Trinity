@@ -162,7 +162,14 @@ export class ChatbotToolsService {
   // de cemento gris), disponible, relevancia y oferta.
   // (Un producto principal AGOTADO no debe quedar fuera: el bot tiene que poder decir que esta agotado.)
   // conversationId null = prueba desde la pantalla (no se registra en el reporte de "sin resultado").
-  async searchProducts(cfg: ChatbotConfig, conversationId: string | null, consulta: string, cantidad?: number) {
+  async searchProducts(
+    cfg: ChatbotConfig,
+    conversationId: string | null,
+    consulta: string,
+    cantidad?: number,
+    maxResults = MAX_RESULTS,
+  ) {
+    const limit = Math.max(1, Math.min(20, Math.floor(maxResults || MAX_RESULTS)));
     const qty = cantidad && Number.isFinite(cantidad) && cantidad > 0 ? cantidad : undefined;
     const parsed = parseBotQuery(consulta || '');
     const q = parsed.q.slice(0, 120);
@@ -219,7 +226,7 @@ export class ChatbotToolsService {
         || Number(b.r.rank) - Number(a.r.rank)
         || Number(b.r.isOnSale) - Number(a.r.isOnSale)
         || a.r.name.localeCompare(b.r.name))
-      .slice(0, MAX_RESULTS);
+      .slice(0, limit);
 
     if (conversationId) {
       await this.prisma.chatbotSearchLog.create({
@@ -300,6 +307,22 @@ export class ChatbotToolsService {
     });
     const url = p?.primaryImageMediumUrl || p?.primaryImageThumbUrl;
     return p && url ? { code: p.code, name: p.name, url } : null;
+  }
+
+  /** Consulta en un solo query las URLs de foto principal para varios codigos (ej. tarjetas del totem). */
+  async productImageUrls(codigos: string[]): Promise<Map<string, string>> {
+    const clean = [...new Set(codigos.map((c) => (c || '').trim()).filter(Boolean))];
+    if (!clean.length) return new Map();
+    const rows = await this.prisma.product.findMany({
+      where: { code: { in: clean }, isActive: true },
+      select: { code: true, primaryImageMediumUrl: true, primaryImageThumbUrl: true },
+    });
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const url = r.primaryImageMediumUrl || r.primaryImageThumbUrl;
+      if (url) map.set(r.code, url);
+    }
+    return map;
   }
 
   // Bs con la tasa BCV GUARDADA del dia (regla del proyecto: nunca calcular la tasa en el momento).
