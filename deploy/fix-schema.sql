@@ -3428,3 +3428,6 @@ ALTER TABLE "ChatbotConversation" ADD COLUMN IF NOT EXISTS "attendedAt" TIMESTAM
 
 -- ===== Banner de marca en la tienda online (20261126120000_brand_banner_key) =====
 ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "bannerKey" TEXT;
+
+-- ===== Horario de asesores del chatbot (20261127160000_chatbot_advisor_schedule) =====
+ALTER TABLE "ChatbotConfig" ADD COLUMN IF NOT EXISTS "advisorSchedule" JSONB;

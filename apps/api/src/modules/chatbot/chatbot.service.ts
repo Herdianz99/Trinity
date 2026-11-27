@@ -16,6 +16,11 @@ import { KioskToolCall, MAX_KIOSK_CARDS, pickKioskProducts } from './kiosk';
 import { chatbotCostUsd } from './chatbot-pricing';
 import { TotemCallsService } from './totem-calls.service';
 import { UpdateChatbotConfigDto } from './dto/chatbot.dto';
+import {
+  buildOutOfHoursEscalationText,
+  evaluateAdvisorAvailability,
+  validateAdvisorSchedule,
+} from './advisor-schedule';
 
 const sharp = require('sharp') as typeof import('sharp').default;
 
@@ -130,9 +135,26 @@ export class ChatbotService {
 
   async updateConfig(dto: UpdateChatbotConfigDto) {
     await this.getConfig();
-    const data: Prisma.ChatbotConfigUpdateInput = { ...dto };
+    const { advisorSchedule, ...rest } = dto;
+    const data: Prisma.ChatbotConfigUpdateInput = { ...rest };
+    if (advisorSchedule !== undefined) {
+      try {
+        const validated = validateAdvisorSchedule(advisorSchedule);
+        data.advisorSchedule = validated === null ? Prisma.DbNull : (validated as unknown as Prisma.InputJsonValue);
+      } catch (e) {
+        throw new BadRequestException((e as Error).message);
+      }
+    }
     await this.prisma.chatbotConfig.update({ where: { id: 'default' }, data });
     return this.getConfigView();
+  }
+
+  private nonAiEscalationText(cfg: ChatbotConfig, channel: ChatbotChannel, kind: 'fallback' | 'long_list'): string {
+    if (channel !== 'KIOSK') {
+      const avail = evaluateAdvisorAvailability(cfg.advisorSchedule);
+      if (!avail.open) return buildOutOfHoursEscalationText(avail, kind);
+    }
+    return kind === 'long_list' ? LONG_LIST_TEXT : FALLBACK_TEXT;
   }
 
   // ---------- Conversaciones ----------
@@ -355,7 +377,28 @@ export class ChatbotService {
         const summary = String(input.resumen ?? '');
         await this.escalate(conversationId, String(input.motivo ?? 'sin motivo'), note ? `${summary}\n${note}` : summary);
         out.escalated = true;
-        return { ok: true, nota: 'Conversación pasada a un asesor. Despídete brevemente.' };
+        if (channel !== 'KIOSK') {
+          const avail = evaluateAdvisorAvailability(cfg.advisorSchedule);
+          if (!avail.open) {
+            return {
+              ok: true,
+              asesores_disponibles: false,
+              horario_asesores: avail.scheduleSummary,
+              proxima_atencion: avail.nextOpenLabel,
+              ...(avail.customMessage ? { mensaje_personalizado: avail.customMessage } : {}),
+              nota:
+                'En este momento NO hay asesores conectados (fuera de horario). NO digas "en breve". ' +
+                (avail.customMessage
+                  ? `Usa esta idea para despedirte: "${avail.customMessage}".`
+                  : `Avisa amablemente que están fuera de horario de asesores${avail.scheduleSummary ? ` (${avail.scheduleSummary})` : ''}, indica que un asesor le contactará ${avail.nextOpenLabel || 'al abrir'} y confirma que dejaste su solicitud registrada.`),
+            };
+          }
+        }
+        return {
+          ok: true,
+          asesores_disponibles: true,
+          nota: 'Conversación pasada a un asesor. Despídete brevemente diciendo que un asesor le atenderá en breve.',
+        };
       }
       default:
         return { error: `Herramienta desconocida: ${block.name}` };
@@ -385,14 +428,14 @@ export class ChatbotService {
     // Tope de gasto mensual: no se llama a la IA.
     if ((await this.monthCostUsd()) >= cfg.monthlyBudgetUsd) {
       await this.escalate(conversationId, 'tope_gasto', 'Se alcanzó el tope de gasto mensual del bot');
-      return this.saveBotMessage(conversationId, FALLBACK_TEXT, { escalated: true });
+      return this.saveBotMessage(conversationId, this.nonAiEscalationText(cfg, conv.channel, 'fallback'), { escalated: true });
     }
 
     // Lista de materiales muy larga: el bot se corta (ver list-guard.ts). Pasa directo a un asesor, sin IA.
     if (isLongList(text)) {
       await this.escalate(conversationId, 'lista de materiales',
         `El cliente envió una lista de ${listLines(text)} renglones para presupuesto (muy larga para el bot). La lista completa está en la conversación.`);
-      return this.saveBotMessage(conversationId, LONG_LIST_TEXT, { escalated: true });
+      return this.saveBotMessage(conversationId, this.nonAiEscalationText(cfg, conv.channel, 'long_list'), { escalated: true });
     }
 
     const company = await this.prisma.companyConfig.findFirst({ select: { companyName: true } });
@@ -514,7 +557,7 @@ export class ChatbotService {
     if (failure || !finalText) {
       if (!out.escalated) await this.escalate(conversationId, failure ?? 'respuesta_vacia', 'El bot no pudo responder; revisar la conversación');
       // Si fallo a mitad del bucle no se guardan los turnos parciales (el historial debe quedar valido).
-      return this.saveBotMessage(conversationId, FALLBACK_TEXT, {
+      return this.saveBotMessage(conversationId, this.nonAiEscalationText(cfg, conv.channel, 'fallback'), {
         escalated: true, toolLog, usage, images: out.images, apiTurns: failure ? null : newTurns,
       });
     }

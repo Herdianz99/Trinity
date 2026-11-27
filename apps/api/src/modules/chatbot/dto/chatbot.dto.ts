@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString, MaxLength, Max, Min, ValidateIf } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { CHATBOT_MODELS } from '../chatbot-pricing';
 
@@ -18,6 +18,7 @@ export class UpdateChatbotConfigDto {
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) divisaExceptionCategoryIds?: string[];
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) divisaExceptionProductIds?: string[];
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Max(10000) monthlyBudgetUsd?: number;
+  @ApiPropertyOptional() @IsOptional() @ValidateIf((_, v) => v !== null) @IsObject() advisorSchedule?: Record<string, any> | null;
 }
 
 export class CreateChatbotConversationDto {

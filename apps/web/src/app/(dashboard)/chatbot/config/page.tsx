@@ -1,7 +1,62 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Settings, Loader2, Save, AlertTriangle, Search, X } from 'lucide-react';
+import { Settings, Loader2, Save, AlertTriangle, Search, X, Clock } from 'lucide-react';
+
+type AdvisorDayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+interface AdvisorDaySlot { enabled: boolean; start: string; end: string }
+interface AdvisorSchedule {
+  enabled: boolean;
+  days: Record<AdvisorDayKey, AdvisorDaySlot>;
+  outOfHoursMessage?: string | null;
+}
+
+const ADVISOR_DAYS: { key: AdvisorDayKey; label: string }[] = [
+  { key: 'mon', label: 'Lunes' },
+  { key: 'tue', label: 'Martes' },
+  { key: 'wed', label: 'Miércoles' },
+  { key: 'thu', label: 'Jueves' },
+  { key: 'fri', label: 'Viernes' },
+  { key: 'sat', label: 'Sábado' },
+  { key: 'sun', label: 'Domingo' },
+];
+
+function createDefaultSchedule(enabled = false): AdvisorSchedule {
+  return {
+    enabled,
+    days: {
+      mon: { enabled: true, start: '08:00', end: '17:00' },
+      tue: { enabled: true, start: '08:00', end: '17:00' },
+      wed: { enabled: true, start: '08:00', end: '17:00' },
+      thu: { enabled: true, start: '08:00', end: '17:00' },
+      fri: { enabled: true, start: '08:00', end: '17:00' },
+      sat: { enabled: true, start: '08:00', end: '17:00' },
+      sun: { enabled: false, start: '09:00', end: '17:00' },
+    },
+    outOfHoursMessage: '',
+  };
+}
+
+function normalizeSchedule(raw: AdvisorSchedule | null | undefined): AdvisorSchedule {
+  const def = createDefaultSchedule(false);
+  if (!raw || typeof raw !== 'object') return def;
+  const days = { ...def.days };
+  for (const { key } of ADVISOR_DAYS) {
+    const slot = raw.days?.[key];
+    if (slot) {
+      days[key] = {
+        enabled: Boolean(slot.enabled),
+        start: slot.start || def.days[key].start,
+        end: slot.end || def.days[key].end,
+      };
+    }
+  }
+  return {
+    enabled: Boolean(raw.enabled),
+    days,
+    outOfHoursMessage: raw.outOfHoursMessage ?? '',
+  };
+}
 
 interface Config {
   enabled: boolean;
@@ -20,6 +75,7 @@ interface Config {
   divisaExceptionCategoryIds: string[];
   divisaExceptionProductIds: string[];
   monthlyBudgetUsd: number;
+  advisorSchedule?: AdvisorSchedule | null;
 }
 interface CategoryNode { id: string; name: string; children?: CategoryNode[] }
 interface ProductHit { id: string; code: string; name: string }
@@ -91,6 +147,19 @@ export default function ChatbotConfigPage() {
     setCfg((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
+  const schedule = useMemo(() => normalizeSchedule(cfg?.advisorSchedule), [cfg?.advisorSchedule]);
+
+  function updateSchedule(updater: (cur: AdvisorSchedule) => AdvisorSchedule) {
+    setCfg((prev) => (prev ? { ...prev, advisorSchedule: updater(normalizeSchedule(prev.advisorSchedule)) } : prev));
+  }
+
+  function updateDay(day: AdvisorDayKey, patch: Partial<AdvisorDaySlot>) {
+    updateSchedule((cur) => ({
+      ...cur,
+      days: { ...cur.days, [day]: { ...cur.days[day], ...patch } },
+    }));
+  }
+
   function toggleCategory(id: string) {
     if (!cfg) return;
     const has = cfg.divisaExceptionCategoryIds.includes(id);
@@ -110,7 +179,7 @@ export default function ChatbotConfigPage() {
     setSaving(true);
     setMessage(null);
     const { apiKeyConfigured, ...rest } = cfg;
-    const body: Record<string, unknown> = { ...rest };
+    const body: Record<string, unknown> = { ...rest, advisorSchedule: schedule };
     for (const f of TEXT_FIELDS) body[f.key] = (cfg[f.key] as string | null) ?? '';
     delete body.id;
     delete body.updatedAt;
@@ -258,6 +327,93 @@ export default function ChatbotConfigPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Clock size={15} className="text-emerald-400" />
+              Horario de asesores (escalado en chat)
+            </h2>
+            {schedule.enabled && (
+              <button
+                type="button"
+                onClick={() => updateSchedule((cur) => ({ ...createDefaultSchedule(true), outOfHoursMessage: cur.outOfHoursMessage }))}
+                className="text-xs px-2.5 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Aplicar Lun–Sáb 8:00 am – 5:00 pm
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            Define cuándo hay asesores respondiendo chats (hora Caracas). Fuera de horario el bot sigue cotizando 24/7, pero al escalar deja la consulta registrada y avisa al cliente cuándo volverá un asesor en lugar de decir &laquo;en breve&raquo;.
+          </p>
+
+          <label className="flex items-center gap-3 cursor-pointer mb-4">
+            <input
+              type="checkbox"
+              checked={schedule.enabled}
+              onChange={(e) => updateSchedule((cur) => ({ ...cur, enabled: e.target.checked }))}
+              className="accent-green-500 w-4 h-4"
+            />
+            <span className="text-white font-medium text-sm">Activar control de horario de asesores</span>
+          </label>
+
+          {schedule.enabled && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-700/60 divide-y divide-slate-800 overflow-hidden">
+                {ADVISOR_DAYS.map(({ key, label }) => {
+                  const slot = schedule.days[key];
+                  return (
+                    <div key={key} className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-slate-900/30">
+                      <label className="flex items-center gap-2.5 cursor-pointer min-w-[120px]">
+                        <input
+                          type="checkbox"
+                          checked={slot.enabled}
+                          onChange={(e) => updateDay(key, { enabled: e.target.checked })}
+                          className="accent-green-500 w-4 h-4"
+                        />
+                        <span className={`text-sm font-medium ${slot.enabled ? 'text-slate-200' : 'text-slate-500'}`}>{label}</span>
+                      </label>
+                      {slot.enabled ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={slot.start}
+                            onChange={(e) => updateDay(key, { start: e.target.value })}
+                            className="input-field !py-1 !px-2.5 text-sm !w-auto"
+                          />
+                          <span className="text-xs text-slate-500">a</span>
+                          <input
+                            type="time"
+                            value={slot.end}
+                            onChange={(e) => updateDay(key, { end: e.target.value })}
+                            className="input-field !py-1 !px-2.5 text-sm !w-auto"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500 italic">Sin asesor</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Mensaje fuera de horario <span className="text-slate-500">(opcional)</span>
+                </label>
+                <textarea
+                  value={schedule.outOfHoursMessage ?? ''}
+                  onChange={(e) => updateSchedule((cur) => ({ ...cur, outOfHoursMessage: e.target.value }))}
+                  placeholder="Si lo dejas vacío, el bot arma el aviso automáticamente con el horario de arriba y cuándo vuelve un asesor."
+                  rows={2}
+                  maxLength={600}
+                  className="input-field !py-2 text-sm"
+                />
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>

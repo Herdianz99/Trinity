@@ -3247,6 +3247,7 @@ model ChatbotConfig {
   divisaExceptionCategoryIds String[]  @default([])
   divisaExceptionProductIds  String[]  @default([])
   monthlyBudgetUsd           Float     @default(20)
+  advisorSchedule            Json?     // horario de asesores: { enabled, days: { mon..sun: { enabled, start, end } }, outOfHoursMessage? }
   crossSellAnalyzedAt        DateTime? // ultimo analisis de venta cruzada (sugerencias)
   updatedAt                  DateTime  @updatedAt
 }

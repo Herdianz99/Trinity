@@ -24,6 +24,7 @@ import {
 } from './chatwoot-helpers';
 import { KioskToolCall, pickMentionedProducts } from './kiosk';
 import { ChatwootBurstQueue } from './chatwoot-queue';
+import { buildOutOfHoursEscalationText, evaluateAdvisorAvailability } from './advisor-schedule';
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_INCOMING_IMAGES = 4;
@@ -272,6 +273,7 @@ export class ChatwootService implements OnModuleDestroy {
     const hasUnsupportedOnly = !combinedText && imageUrls.length === 0 && allAttachments.length > 0;
 
     if (hasUnsupportedOnly) {
+      const avail = evaluateAdvisorAvailability(cfg.advisorSchedule);
       await this.prisma.chatbotConversation.update({
         where: { id: conv.id },
         data: {
@@ -281,11 +283,14 @@ export class ChatwootService implements OnModuleDestroy {
           escalatedAt: new Date(),
         },
       });
-      await this.sendText(accountId, conversationId, UNSUPPORTED_ATTACHMENT_REPLY, false);
+      const replyForAttachment = avail.open
+        ? UNSUPPORTED_ATTACHMENT_REPLY
+        : buildOutOfHoursEscalationText(avail, 'attachment');
+      await this.sendText(accountId, conversationId, replyForAttachment, false);
       await this.handoffToHuman(
         accountId,
         conversationId,
-        '🤖 Escalado por el bot\nMotivo: audio o archivo adjunto\nResumen: El cliente envió una nota de voz o archivo.',
+        `${avail.open ? '🤖 Escalado por el bot' : '🤖 Escalado por el bot (fuera de horario)'}\nMotivo: audio o archivo adjunto\nResumen: El cliente envió una nota de voz o archivo.`,
       );
       return;
     }
@@ -354,8 +359,9 @@ export class ChatwootService implements OnModuleDestroy {
     }
 
     if (result.status === 'ESCALATED') {
+      const avail = evaluateAdvisorAvailability(cfg.advisorSchedule);
       const note = [
-        '🤖 Escalado por el bot',
+        avail.open ? '🤖 Escalado por el bot' : '🤖 Escalado por el bot (fuera de horario)',
         `Motivo: ${result.escalationReason || 'sin especificar'}`,
         result.escalationSummary ? `Resumen: ${result.escalationSummary}` : null,
       ].filter(Boolean).join('\n');
