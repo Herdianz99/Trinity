@@ -116,6 +116,11 @@ export function middleware(request: NextRequest) {
 
   // Check route permissions (skip for API routes, dashboard, change-password, and 403)
   if (!pathname.startsWith('/api/') && !pathname.startsWith('/dashboard') && !pathname.startsWith('/change-password') && pathname !== '/403') {
+    // Personalización de tienda online (banners + Pago Móvil) es solo ADMIN, aunque el usuario tenga permiso 'store' para ver /store/orders.
+    if (pathname.startsWith('/store/personalizacion') && payload.role !== 'ADMIN') {
+      return NextResponse.redirect(new URL('/403', request.url));
+    }
+
     const permissions: string[] = payload.permissions || [];
 
     // Find the matching route permission (any of the acceptable keys grants access)

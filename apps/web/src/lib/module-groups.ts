@@ -5,6 +5,7 @@ export const MODULE_GROUPS: { group: string; items: { key: string; label: string
     items: [
       { key: 'dashboard', label: 'Dashboard' },
       { key: 'sales', label: 'Ventas y POS' },
+      { key: 'store', label: 'Tienda online (pedidos online)' },
       { key: 'pedidos-clientes', label: 'Pedidos de clientes (portal)' },
       { key: 'commands', label: 'Control de Comandas' },
       { key: 'quotations', label: 'Cotizaciones' },
