@@ -1512,3 +1512,9 @@ Los siguientes documentos fiscales necesitan PDF de reporte. Requieren aprobaci�
 - **Banners panorámicos por marca (Sesión 196):** `Brand.bannerKey` (migración `20261126120000_brand_banner_key`, espejada en `deploy/fix-schema.sql`), `POST/DELETE /brands/:id/banner` (`processBannerImage` WebP en Spaces), exportado como `banner` en `meta.json` (`store-export.service.ts` / `store-export.builder.ts`) y administrable en `/catalog/brands/[id]`. En `trebol-shop`, `/marcas/[slug]` lo muestra como fondo del hero (`object-left sm:object-right`, texto blanco automático) y `/ofertas` usa el banner estático `public/images/ofertas-banner.webp`.
 - **Variables `.env` del API (empresa grande):** `CHATWOOT_URL`, `CHATWOOT_BOT_TOKEN`, `CHATWOOT_WEBHOOK_SECRET`, `STORE_URL` (`https://ferreteriaeltrebol.com`), opcionales `CHATWOOT_ENABLED_CHANNELS`, `CHATWOOT_DEBOUNCE_MS`, `CHATWOOT_WA_HUMAN_HOURS`.
 
+## Conciliación de Cashea — script unificado (Sesión 197)
+- **Script:** `scripts/conciliar-cashea.cjs` (Node + `xlsx` de `apps/api`, conecta vía SSH + `PrismaClient` de cada empresa en `/opt/<empresa>/apps/api` o `--local`).
+- **Modos:** (1) `--cashea` + `--banco` (cruza por `Referencia`, `Monto Bs` y `Fecha` exacta; toda diferencia va a incidencias) y (2) solo `--cashea` (archivo ya validado).
+- **Reglas:** filtra por `Sucursal` (`Total Acarigua` → `total`, `Total Turen` → `totalturen`), consolida pagos de la misma `Orden` en el mismo día en 1 sola línea, usa la tasa del día guardada en `ExchangeRate` de Trinity, controla saldo acumulado entre múltiples fechas + borradores abiertos (`DRAFT`), crea 1 recibo de cobro `DRAFT` por fecha (solo con `--apply`, con `pg_advisory_xact_lock` y `createdAt` escalonado) y genera el Excel de reporte/incidencias en `reportes-cashea/` (ignorado en `.gitignore`) con 4 hojas (`Resumen`, `Incidencias`, `Cruzados OK`, `Solo en Banco`).
+
+

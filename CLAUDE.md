@@ -128,3 +128,20 @@ Este flujo evita importar datos incorrectos y asegura que stocks, costos y preci
 - Si una migración falla en deploy, NO marcarla como aplicada — revisar el error real y corregirlo
 - Si es necesario resolver manualmente: primero ejecutar el SQL, LUEGO usar resolve --applied
 - El script `deploy/fix-schema.sql` se ejecuta automáticamente en cada deploy como red de seguridad
+
+## Conciliación de Cashea (Excels → Recibos en Borrador) — PROCEDIMIENTO RECURRENTE
+Proceso periódico donde el usuario pasa 1 o 2 archivos Excel/CSV y dice en qué empresa correrlo. **Script único y permanente:** `scripts/conciliar-cashea.cjs` (soporta `.xlsx`, `.xls` y `.csv`).
+
+- **Dos modos en el mismo script:**
+  - **Modo 1 (2 Excels: Cashea + Banco):** `node scripts/conciliar-cashea.cjs --empresa <empresa> --cashea "<cashea>" --banco "<banco>" --out "reportes-cashea/incidencias-cashea-<empresa>-<rango>.xlsx"`
+    1. Cruza por `Referencia`, `Monto en Bs` (`Monto pagado en VES` vs `Haber`, tol. 0,01) y **Fecha exacta**.
+    2. Cualquier diferencia en referencia, monto o fecha (`NO_ENCONTRADO_EN_BANCO`, `MONTO_DIFERENTE_BANCO`, `FECHA_DIFERENTE_BANCO`) **no** entra a recibo y va al Excel de incidencias para revisión del encargado.
+  - **Modo 2 (1 Excel ya validado por el usuario):** omitir `--banco`; salta el cruce bancario y cruza directo contra Trinity por `Orden`.
+- **Reglas de negocio obligatorias:**
+  1. **Siempre crear recibos en BORRADOR (`DRAFT`)**, nunca contabilizar (`POSTED`), para que el usuario pueda editarlos/procesarlos en Trinity.
+  2. **1 recibo de cobro por fecha** (agrupa todas las CxC Cashea válidas pagadas ese día).
+  3. **Misma `Orden` pagada varias veces el mismo día:** sumar los USD y ponerla en **1 sola línea** dentro del recibo de esa fecha.
+  4. **Columna `Sucursal`:** separa empresas cuando comparten cuenta bancaria (`Total Acarigua` → `total` en `161.35.52.221:/opt/total`; `Total Turen` → `totalturen` en `161.35.52.221:/opt/totalturen`). El script filtra automáticamente por empresa (o `--sucursal "<texto>"` / `--todas-sucursales`) y excluye ambas sucursales de la hoja `Solo en Banco`.
+  5. **Tasa de cambio:** usar siempre la **tasa del día guardada en Trinity** (`ExchangeRate` para esa `documentDate`).
+  6. **Siempre generar el Excel de incidencias** en `reportes-cashea/` (ignorado en `.gitignore`) con las 4 hojas (`Resumen`, `Incidencias` con columna `Tipo de Incidencia` + `Detalle`, `Cruzados OK` y `Solo en Banco`). Tipos Trinity: `NO_ENCONTRADO_EN_SISTEMA` (con pista por factura), `YA_PAGADO_EN_SISTEMA`, `YA_EN_BORRADOR`, `MONTO_SUPERA_SALDO` (tolerancia de redondeo \$0,01), `ORDEN_DUPLICADA_EN_SISTEMA`, `SIN_TASA_EN_SISTEMA`.
+  7. **Seguridad:** sin `--apply` el script corre en **simulación solo lectura**. Correr siempre primero la simulación para verificar cifras e incidencias y luego ejecutar con `--apply` cuando el usuario confirme crear los borradores.
