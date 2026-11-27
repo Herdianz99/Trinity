@@ -131,7 +131,7 @@ export default function BrandDetailPage() {
     if (!file) return;
     setUploadingBanner(true); setSaveMsg(null);
     try {
-      const dataUri = await downscaleToDataUri(file, 1600, 'image/webp', 0.9);
+      const dataUri = await downscaleToDataUri(file, 1600, 'image/png', 1);
       const res = await fetch(`/api/proxy/brands/${id}/banner`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUri }),
