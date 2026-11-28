@@ -16,7 +16,7 @@ import {
 
 // ───── types ─────
 interface AbcProduct {
-  productId: string; productCode: string; productName: string; category: string;
+  productId: string; productCode: string; supplierRef?: string; productName: string; category: string;
   classification: 'A' | 'B' | 'C'; totalSalesUsd: number; totalUnitsSold: number;
   salesPct: number; cumulativePct: number; currentStock: number; minStock: number;
   costUsd: number; priceDetal: number; grossMarginPct: number; inventoryValueUsd: number;
@@ -173,6 +173,7 @@ export default function InventoryAnalysisPage() {
       'Clase',
       'Urgencia',
       'Código',
+      'Ref. proveedor',
       'Producto',
       'Categoría',
       'Stock',
@@ -190,6 +191,7 @@ export default function InventoryAnalysisPage() {
       p.classification,
       p.urgency ? URGENCY_BADGES[p.urgency].label : '',
       p.productCode,
+      p.supplierRef || '',
       p.productName,
       p.category,
       p.currentStock,
@@ -209,6 +211,7 @@ export default function InventoryAnalysisPage() {
       { wch: 8 },  // Clase
       { wch: 11 }, // Urgencia
       { wch: 14 }, // Código
+      { wch: 18 }, // Ref. proveedor
       { wch: 44 }, // Producto
       { wch: 22 }, // Categoría
       { wch: 10 }, // Stock

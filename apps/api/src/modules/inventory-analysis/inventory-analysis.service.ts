@@ -146,6 +146,7 @@ export class InventoryAnalysisService {
       select: {
         id: true,
         code: true,
+        supplierRef: true,
         name: true,
         costUsd: true,
         priceDetal: true,
@@ -179,6 +180,7 @@ export class InventoryAnalysisService {
       return {
         productId: p.productId,
         productCode: detail?.code || '',
+        supplierRef: detail?.supplierRef || '',
         productName: detail?.name || p.productName,
         category: detail?.category?.name || '',
         classification,
