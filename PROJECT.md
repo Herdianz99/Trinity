@@ -99,6 +99,12 @@ Tienda online, Chatbot WhatsApp, POS offline, CRM.
 
 ---
 
+#### Sesión 198 (2026-11-27/28) — Chatbot horario de asesores + permiso `store` + Excel ABC Agotados
+- **Chatbot — horario de asesores (`ChatbotConfig.advisorSchedule`, migración `20261127160000_chatbot_advisor_schedule`):** horario configurable por día (Caracas) en `/chatbot/config`; fuera de horario (excepto `KIOSK`), `escalar_a_asesor` y los escalados sin IA avisan cuándo vuelven los asesores sin decir *"en breve"* y marcan la nota de Chatwoot `(fuera de horario)` dejando el chat abierto.
+- **Permiso `store` (Tienda online):** agregado en `module-groups.ts` para asignarlo en Permisos por rol y Módulos extra por usuario; `/store/personalizacion` restringido a `ADMIN` en sidebar y middleware.
+- **Análisis de inventario (`/purchases/analysis`):** botón **`Excel`** junto a `Agotados / por agotarse (N)` en pestaña ABC con autofiltro, columnas `Clase`, `Urgencia`, `Código`, `Ref. proveedor` (`supplierRef` agregado a `getAbcClassification`), stock, mínimo, cobertura, ventas y margen teórico.
+- **Deploy:** ✅ desplegado en las 7 empresas el 2026-11-28 (`96640598`).
+
 #### Sesión 194 (2026-11-24) — Chatbot y Tótem: nuevo avatar oficial de Clover
 - Reemplazado el avatar de Clover por el diseño oficial del video (gorra verde con trébol, polo verde `CLOVER` / `INVERSIONES EL TREBOL`, cinturón de herramientas) sobre el degradado azul marino del tótem: `apps/web/public/clover/clover-v2.webp` (1088×1456), `clover-avatar.webp` (512×512) y `clover.png` actualizado.
 - Integrado en `/totem` (`clover-avatar.tsx`, `attract-loop.tsx`), `/chatbot` (`chatbot/page.tsx`) y `/chatbot/conversations` (`chatbot/conversations/page.tsx`). Puro frontend, sin migraciones.
