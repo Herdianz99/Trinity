@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import {
   BarChart3, Loader2, Package, AlertTriangle, TrendingUp,
   ShoppingCart, Search, Filter, ArrowUpDown, FileText, FileSpreadsheet,
@@ -160,9 +161,74 @@ export default function InventoryAnalysisPage() {
   }
 
   // ── Filtered data ──
+  const abcUrgentItems = abcData.filter(p => p.urgency && (abcFilter === 'ALL' || p.classification === abcFilter));
   const filteredAbc = (abcFilter === 'ALL' ? abcData : abcData.filter(p => p.classification === abcFilter))
     .filter(p => !abcUrgentOnly || p.urgency);
-  const abcUrgentCount = abcData.filter(p => p.urgency && (abcFilter === 'ALL' || p.classification === abcFilter)).length;
+  const abcUrgentCount = abcUrgentItems.length;
+
+  function exportAbcUrgentExcel() {
+    if (abcUrgentItems.length === 0) return;
+    const { from, to } = getDateRange();
+    const headers = [
+      'Clase',
+      'Urgencia',
+      'Código',
+      'Producto',
+      'Categoría',
+      'Stock',
+      'Mínimo',
+      'Cobertura (días)',
+      'Venta diaria (uds)',
+      'Uds. vendidas',
+      'Ventas USD',
+      '% total',
+      'Costo USD',
+      'Precio detal USD',
+      'Margen teórico (%)',
+    ];
+    const rows = abcUrgentItems.map((p) => [
+      p.classification,
+      p.urgency ? URGENCY_BADGES[p.urgency].label : '',
+      p.productCode,
+      p.productName,
+      p.category,
+      p.currentStock,
+      p.minStock,
+      p.daysOfCoverage !== null ? p.daysOfCoverage : '',
+      Number(p.dailySalesAvg.toFixed(2)),
+      p.totalUnitsSold,
+      Number(p.totalSalesUsd.toFixed(2)),
+      Number(p.salesPct.toFixed(2)),
+      Number(p.costUsd.toFixed(4)),
+      Number(p.priceDetal.toFixed(2)),
+      Number(p.grossMarginPct.toFixed(1)),
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      { wch: 8 },  // Clase
+      { wch: 11 }, // Urgencia
+      { wch: 14 }, // Código
+      { wch: 44 }, // Producto
+      { wch: 22 }, // Categoría
+      { wch: 10 }, // Stock
+      { wch: 10 }, // Mínimo
+      { wch: 16 }, // Cobertura (días)
+      { wch: 17 }, // Venta diaria
+      { wch: 13 }, // Uds. vendidas
+      { wch: 13 }, // Ventas USD
+      { wch: 10 }, // % total
+      { wch: 12 }, // Costo USD
+      { wch: 15 }, // Precio detal USD
+      { wch: 17 }, // Margen teórico
+    ];
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Agotados y por agotarse');
+    const classTag = abcFilter === 'ALL' ? '' : `-clase-${abcFilter}`;
+    XLSX.writeFile(wb, `agotados-por-agotarse${classTag}-${from}_a_${to}.xlsx`, { compression: true });
+  }
 
   // Sugerencias filtradas por clase (totales recalculados)
   const sugGroups = (suggestions?.suppliers || []).map(g => {
@@ -371,7 +437,7 @@ export default function InventoryAnalysisPage() {
               </div>
 
               {/* ABC Filter */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <Filter size={14} className="text-slate-500" />
                 {(['ALL', 'A', 'B', 'C'] as const).map(f => (
                   <button
@@ -389,6 +455,15 @@ export default function InventoryAnalysisPage() {
                 >
                   <AlertTriangle size={12} className="inline -mt-0.5 mr-1" />
                   Agotados / por agotarse ({abcUrgentCount})
+                </button>
+                <button
+                  onClick={exportAbcUrgentExcel}
+                  disabled={abcUrgentCount === 0}
+                  className="px-2 py-1 rounded text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                  title="Exportar a Excel los artículos Agotados / por agotarse (incluye columna Clase y autofiltro)"
+                >
+                  <FileSpreadsheet size={12} />
+                  Excel
                 </button>
                 <span className="text-xs text-slate-500 ml-2">{filteredAbc.length} productos</span>
               </div>
