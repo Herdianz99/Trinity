@@ -71,6 +71,8 @@
   - **`total` (`total_db`):** **57 recibos `DRAFT`** creados (`RCB-0416` al `RCB-0472`, 116 CxC, **\$4.585,22**, incluye 50 ajustadas al saldo pendiente) + 21 `YA_PAGADO_EN_SISTEMA`.
   - **`totalturen` (`totalturen_db`):** **15 recibos `DRAFT`** creados (`RCB-0182` al `RCB-0196`, 18 CxC, **\$912,23**, incluye 5 ajustadas al saldo pendiente) · **0 incidencias**.
   - Sin empresa (`NO_ENCONTRADO_EN_SISTEMA`): 218 (217 pre-Trinity jun–ago 2026 + 1 de Trinity: `NE-26-00003644` con `ref="00003643 "` en vez de `226580663`). Reporte en `reportes-cashea/incidencias-cashea-total-totalturen-factoring-APLICADO-2026-06-05_a_2026-11-01.xlsx`.
+- **Corrida real Recompras y Factoring 04-09-2026 al 01-11-2026 en `chica` (`trebol_db`, Modo 2 con `--ajustar-al-saldo`, 2026-11-28):**
+  - **51 recibos `DRAFT`** creados (`RCB-0244` al `RCB-0294`, 149 CxC, **\$4.505,99**, creador Diego Hernandez; incluye 2 ajustadas al saldo pendiente por diferencia de \$0,02 y \$0,04) + 1 incidencia (`YA_PAGADO_EN_SISTEMA`: `VTA-26-00000778`). Reporte en `reportes-cashea/incidencias-cashea-chica-factoring-APLICADO-2026-09-04_a_2026-11-01.xlsx`.
 
 ## 🃏 Chatbot web (tarjetas) + Tótem (carrusel continuo hasta 12 productos y vista ampliada) + Banners de marcas y `/ofertas` (2026-11-26, Sesión 196) — ✅ DESPLEGADO EN LAS 7 EMPRESAS (grande 2026-11-26 `dae187cb`; las otras 6 el 2026-11-28 `96640598`)
 - **Chat web — tarjetas interactivas (`apps/api/src/modules/chatbot/`):**
