@@ -136,7 +136,9 @@ Proceso periódico donde el usuario pasa 1 o 2 archivos Excel/CSV y dice en qué
   - **Modo 1 (2 Excels: Cashea + Banco):** `node scripts/conciliar-cashea.cjs --empresa <empresa> --cashea "<cashea>" --banco "<banco>" --out "reportes-cashea/incidencias-cashea-<empresa>-<rango>.xlsx"`
     1. Cruza por `Referencia`, `Monto en Bs` (`Monto pagado en VES` vs `Haber`, tol. 0,01) y **Fecha exacta**.
     2. Cualquier diferencia en referencia, monto o fecha (`NO_ENCONTRADO_EN_BANCO`, `MONTO_DIFERENTE_BANCO`, `FECHA_DIFERENTE_BANCO`) **no** entra a recibo y va al Excel de incidencias para revisión del encargado.
-  - **Modo 2 (1 Excel ya validado por el usuario):** omitir `--banco`; salta el cruce bancario y cruza directo contra Trinity por `Orden`.
+  - **Modo 2 (1 Excel ya validado por el usuario):** omitir `--banco`; salta el cruce bancario y cruza directo contra Trinity por `Orden` (soporta formatos de pagos normales y **Recompras / Factoring** con columna `Total factoring`).
+  - **Multi-empresa sin columna `Sucursal`:** pasar varias empresas separadas por coma (`--empresa total,totalturen`); el script enruta cada `Orden` automáticamente a la empresa donde existe sin generar falsos `NO_ENCONTRADO_EN_SISTEMA`.
+  - **Ajuste al saldo pendiente (`--ajustar-al-saldo`):** opcional; solo cuando el usuario lo pida explícitamente, si el monto del Excel supera el saldo pendiente de la CxC en Trinity (ej. factoring con cuotas ya cobradas), aplica el saldo pendiente en vez de enviarla a incidencia y lo deja anotado en la columna `Observación` de `Cruzados OK`.
 - **Reglas de negocio obligatorias:**
   1. **Siempre crear recibos en BORRADOR (`DRAFT`)**, nunca contabilizar (`POSTED`), para que el usuario pueda editarlos/procesarlos en Trinity.
   2. **1 recibo de cobro por fecha** (agrupa todas las CxC Cashea válidas pagadas ese día).

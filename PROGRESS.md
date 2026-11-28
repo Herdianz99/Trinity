@@ -66,6 +66,11 @@
 - **Corrida real 01-11-2026 al 17-11-2026 (BNC ***8547 + Cashea Total Acarigua y Turén):**
   - **`total` (`total_db`):** **17 recibos `DRAFT`** creados (`RCB-0398` al `RCB-0414`, 232 CxC, **\$5.678,99**, creador Diego Hernandez) + **10 incidencias** (2 `FECHA_DIFERENTE_BANCO`, 1 `YA_PAGADO_EN_SISTEMA`, 7 `MONTO_SUPERA_SALDO`) + 27 movimientos solo en banco.
   - **`totalturen` (`totalturen_db`):** **17 recibos `DRAFT`** creados (`RCB-0165` al `RCB-0181`, 71 CxC, **\$1.651,75**, creador Diego Hernandez) · **0 incidencias**.
+- **Corrida real Recompras y Factoring 05-06-2026 al 01-11-2026 (Modo 2 multi-empresa sin `Sucursal`, con `--ajustar-al-saldo`, 2026-11-28):**
+  - Mejorado `scripts/conciliar-cashea.cjs` para soportar columna `Total factoring`, enrutamiento automático multi-empresa (`--empresa total,totalturen`), y opción `--ajustar-al-saldo` (con registro en columna `Observación` de `Cruzados OK`).
+  - **`total` (`total_db`):** **57 recibos `DRAFT`** creados (`RCB-0416` al `RCB-0472`, 116 CxC, **\$4.585,22**, incluye 50 ajustadas al saldo pendiente) + 21 `YA_PAGADO_EN_SISTEMA`.
+  - **`totalturen` (`totalturen_db`):** **15 recibos `DRAFT`** creados (`RCB-0182` al `RCB-0196`, 18 CxC, **\$912,23**, incluye 5 ajustadas al saldo pendiente) · **0 incidencias**.
+  - Sin empresa (`NO_ENCONTRADO_EN_SISTEMA`): 218 (217 pre-Trinity jun–ago 2026 + 1 de Trinity: `NE-26-00003644` con `ref="00003643 "` en vez de `226580663`). Reporte en `reportes-cashea/incidencias-cashea-total-totalturen-factoring-APLICADO-2026-06-05_a_2026-11-01.xlsx`.
 
 ## 🃏 Chatbot web (tarjetas) + Tótem (carrusel continuo hasta 12 productos y vista ampliada) + Banners de marcas y `/ofertas` (2026-11-26, Sesión 196) — ✅ DESPLEGADO EN LAS 7 EMPRESAS (grande 2026-11-26 `dae187cb`; las otras 6 el 2026-11-28 `96640598`)
 - **Chat web — tarjetas interactivas (`apps/api/src/modules/chatbot/`):**

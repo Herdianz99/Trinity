@@ -198,6 +198,7 @@ function parseArgs(argv) {
     todasSucursales: false,
     out: null,
     apply: false,
+    ajustarAlSaldo: false,
     soloBancoCruce: false,
     local: false,
     createdBy: null,
@@ -208,6 +209,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
     else if (a === '--apply') opts.apply = true;
+    else if (a === '--ajustar-al-saldo') opts.ajustarAlSaldo = true;
     else if (a === '--todas-sucursales') opts.todasSucursales = true;
     else if (a === '--solo-banco-cruce') opts.soloBancoCruce = true;
     else if (a === '--local') opts.local = true;
@@ -243,6 +245,7 @@ Opciones:
   --todas-sucursales        Procesa todas las filas sin filtrar por Sucursal
   --out,     -o <archivo>   Ruta del Excel de reporte/incidencias (.xlsx)
   --apply                   Crea los recibos en BORRADOR en Trinity (sin esto es solo simulación)
+  --ajustar-al-saldo        Si el monto del Excel supera el saldo pendiente en Trinity, aplica el saldo pendiente
   --solo-banco-cruce        Solo prueba el cruce Cashea vs Banco sin conectarse a Trinity
   --local                   Conecta a la BD local (apps/api/.env) en vez de SSH al servidor
   --created-by <email>      Email del usuario creador de los recibos (default: ADMIN activo)
@@ -258,6 +261,39 @@ function resolveEmpresa(name) {
     throw new Error(`Empresa desconocida: "${name}". Opciones: ${Object.keys(EMPRESAS).join(', ')}`);
   }
   return emp;
+}
+
+function parseEmpresas(name) {
+  if (!name) return [];
+  const parts = String(name)
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const list = [];
+  for (const p of parts) {
+    const emp = resolveEmpresa(p);
+    if (!seen.has(emp.key)) {
+      seen.add(emp.key);
+      list.push(emp);
+    }
+  }
+  return list;
+}
+
+function isUsdAmountHeader(h) {
+  if (!h) return false;
+  if (h.includes('fecha') || h.includes('ves') || h.includes('bolivar') || h === 'bs' || h.includes('monto bs')) {
+    return false;
+  }
+  return (
+    h.includes('monto asignado') ||
+    h.includes('usd') ||
+    h === 'monto' ||
+    h.includes('total factoring') ||
+    h.includes('factoring') ||
+    h === 'total'
+  );
 }
 
 // ── Lectura de Excel / CSV ───────────────────────────────────────────────────
@@ -323,12 +359,12 @@ function parseCasheaFile(filePath, hasBanco) {
   const headerIdx = rows.findIndex((r) => {
     const norm = r.map(normText);
     const hasOrden = norm.some((c) => c === 'orden' || c.includes('orden'));
-    const hasMonto = norm.some((c) => c.includes('monto asignado') || c.includes('usd') || c === 'monto');
+    const hasMonto = norm.some((c) => isUsdAmountHeader(c));
     return hasOrden && hasMonto;
   });
 
   if (headerIdx === -1) {
-    throw new Error(`No se encontró la fila de encabezados (Orden / Monto asignado) en el archivo de Cashea: ${filePath}`);
+    throw new Error(`No se encontró la fila de encabezados (Orden / Monto asignado o Total factoring) en el archivo de Cashea: ${filePath}`);
   }
 
   const headers = rows[headerIdx].map(normText);
@@ -339,7 +375,7 @@ function parseCasheaFile(filePath, hasBanco) {
   const idxSucursal = headers.findIndex((h) => h.includes('sucursal') || h.includes('tienda') || h.includes('sede'));
   const idxFactura = headers.findIndex((h) => h.includes('factura'));
   const idxOrden = headers.findIndex((h) => h === 'orden' || h.includes('orden'));
-  const idxUsd = headers.findIndex((h) => h.includes('monto asignado') || h.includes('usd') || h === 'monto');
+  const idxUsd = headers.findIndex((h) => isUsdAmountHeader(h));
 
   if (idxFecha === -1) {
     throw new Error(`Falta columna de Fecha en el archivo de Cashea: ${filePath}`);
@@ -648,7 +684,7 @@ async function main() {
           if (r.status === 'PAID') throw new Error('CxC ya pasó a PAID antes de crear recibo: ' + it.description);
           const alreadyReserved = batchReserved.get(it.receivableId) || 0;
           const bal = round2(r.amountUsd - r.paidAmountUsd - alreadyReserved);
-          if (it.amountUsd > bal + 0.01) {
+          if (round2(it.amountUsd - bal) > 0.01) {
             throw new Error('CxC ' + it.description + ' ya no tiene saldo suficiente (' + bal + ' vs ' + it.amountUsd + ')');
           }
           batchReserved.set(it.receivableId, round2(alreadyReserved + it.amountUsd));
@@ -758,7 +794,7 @@ function runPrismaBridge(empresa, isLocal, payload) {
 
 // ── Paso 2: Cruce contra Trinity ERP ─────────────────────────────────────────
 
-function crossCheckTrinity(groups, dbData) {
+function crossCheckTrinity(groups, dbData, { ajustarAlSaldo = false } = {}) {
   const { receivables, draftItems, rates } = dbData;
 
   const rateByDate = new Map(rates.map((r) => [r.date, r.rate]));
@@ -894,15 +930,19 @@ function crossCheckTrinity(groups, dbData) {
       continue;
     }
 
+    let wasCappedToBalance = false;
     if (round2(g.amountUsd - remainingBefore) > 0.01) {
-      const diff = round2(g.amountUsd - remainingBefore);
-      incidencias.push({
-        tipo: 'MONTO_SUPERA_SALDO',
-        detalle: `Monto Excel $${g.amountUsd.toFixed(2)} supera el saldo disponible $${remainingBefore.toFixed(2)} en $${diff.toFixed(2)} (saldo real BD: $${realBalance.toFixed(2)})`,
-        group: g,
-        receivable: rec,
-      });
-      continue;
+      if (!ajustarAlSaldo) {
+        const diff = round2(g.amountUsd - remainingBefore);
+        incidencias.push({
+          tipo: 'MONTO_SUPERA_SALDO',
+          detalle: `Monto Excel $${g.amountUsd.toFixed(2)} supera el saldo disponible $${remainingBefore.toFixed(2)} en $${diff.toFixed(2)} (saldo real BD: $${realBalance.toFixed(2)})`,
+          group: g,
+          receivable: rec,
+        });
+        continue;
+      }
+      wasCappedToBalance = true;
     }
 
     const rate = rateByDate.get(g.fecha);
@@ -916,7 +956,7 @@ function crossCheckTrinity(groups, dbData) {
       continue;
     }
 
-    // Igual que ReceiptsService.buildDraft(): limitar al saldo disponible si difiere por <= $0.01 de redondeo
+    // Igual que ReceiptsService.buildDraft(): limitar al saldo disponible si difiere por <= $0.01 de redondeo (o con --ajustar-al-saldo)
     const appliedUsd = round2(Math.min(g.amountUsd, remainingBefore));
     const proportion = rec.amountUsd > 0 ? appliedUsd / rec.amountUsd : 0;
     const amountBsHistoric = round2(rec.amountBs * proportion);
@@ -932,6 +972,7 @@ function crossCheckTrinity(groups, dbData) {
       description: rec.invoice?.number || rec.documentNumber || rec.number || `CxC-${rec.id.slice(-6)}`,
       exchangeRate: rate,
       appliedUsd,
+      wasCappedToBalance,
       amountBsHistoric,
       amountBsToday,
       saldoAntes: remainingBefore,
@@ -1018,9 +1059,91 @@ function autoFitColumns(ws, dataRows) {
   ws['!cols'] = cols;
 }
 
+function routeGroupsAcrossEmpresas(groups, empresaDataList) {
+  // Construir índices de referencia y pista por factura para cada empresa
+  const indexed = empresaDataList.map(({ empresa, dbData }) => {
+    const byRefExact = new Map();
+    const byRefClean = new Map();
+    const byInvoiceTail = new Map();
+    for (const r of dbData.receivables) {
+      const refTrim = normRef(r.reference);
+      if (refTrim) {
+        if (!byRefExact.has(refTrim)) byRefExact.set(refTrim, []);
+        byRefExact.get(refTrim).push(r);
+        const rc = cleanRef(refTrim);
+        if (!byRefClean.has(rc)) byRefClean.set(rc, []);
+        byRefClean.get(rc).push(r);
+      }
+      const invNum = r.invoice?.number || r.documentNumber || '';
+      const tailMatch = invNum.match(/(\d+)$/);
+      if (tailMatch) {
+        const key = stripLeadingZeros(tailMatch[1]);
+        if (!byInvoiceTail.has(key)) byInvoiceTail.set(key, []);
+        byInvoiceTail.get(key).push(r);
+      }
+    }
+    return { empresa, dbData, byRefExact, byRefClean, byInvoiceTail };
+  });
+
+  const groupsByEmpresa = new Map(empresaDataList.map(({ empresa }) => [empresa.key, []]));
+  const routingIncidencias = [];
+
+  for (const g of groups) {
+    const matched = [];
+    for (const entry of indexed) {
+      const hits = entry.byRefExact.get(g.orden) || entry.byRefClean.get(g.ordenClean) || [];
+      if (hits.length > 0) matched.push({ empresa: entry.empresa, hits });
+    }
+
+    if (matched.length === 1) {
+      groupsByEmpresa.get(matched[0].empresa.key).push(g);
+    } else if (matched.length > 1) {
+      const empNames = matched.map((m) => m.empresa.label).join(' y ');
+      routingIncidencias.push({
+        tipo: 'ORDEN_EN_MULTIPLES_EMPRESAS',
+        empresaLabel: empNames,
+        detalle: `La Orden "${g.orden}" existe en más de una empresa (${empNames}); requiere revisión manual`,
+        group: g,
+        receivable: matched[0].hits[0] || null,
+      });
+    } else {
+      // No existe en ninguna empresa — buscar pista por factura en todas
+      const hints = [];
+      for (const entry of indexed) {
+        for (const fac of g.facturas) {
+          const tailMatch = fac.match(/(\d+)$/);
+          if (!tailMatch) continue;
+          const hits = entry.byInvoiceTail.get(stripLeadingZeros(tailMatch[1])) || [];
+          if (hits.length > 0) {
+            const sample = hits
+              .slice(0, 2)
+              .map((h) => `[${entry.empresa.label}] ${h.invoice?.number || h.number} (ref="${h.reference || 'vacía'}", saldo $${round2(h.amountUsd - h.paidAmountUsd).toFixed(2)}, ${h.status})`)
+              .join('; ');
+            hints.push(sample);
+            break;
+          }
+        }
+      }
+      const empListLabel = empresaDataList.map((e) => e.empresa.label).join(' / ');
+      const hintStr = hints.length ? ` · Posible coincidencia por factura: ${hints.join(' | ')}` : '';
+      routingIncidencias.push({
+        tipo: 'NO_ENCONTRADO_EN_SISTEMA',
+        empresaLabel: `Ninguna (${empListLabel})`,
+        detalle: `Orden "${g.orden}" no existe en ninguna CxC de Cashea en ${empListLabel}${hintStr}`,
+        group: g,
+        receivable: null,
+      });
+    }
+  }
+
+  return { groupsByEmpresa, routingIncidencias };
+}
+
 function buildReportExcel({
   outPath,
   empresaLabel,
+  isMulti = false,
+  perEmpresaSummary = null,
   sucursalFilter,
   modeLabel,
   hasBanco,
@@ -1042,6 +1165,7 @@ function buildReportExcel({
     const c = inc.cashea;
     const b = inc.banco;
     allIncRows.push({
+      empresa: inc.empresaLabel || (isMulti ? '' : empresaLabel),
       tipo: inc.tipo,
       detalle: inc.detalle,
       fechaCashea: c?.fecha || c?.rawFecha || '',
@@ -1065,6 +1189,7 @@ function buildReportExcel({
     const g = inc.group;
     const rec = inc.receivable;
     allIncRows.push({
+      empresa: inc.empresaLabel || (isMulti ? '' : empresaLabel),
       tipo: inc.tipo,
       detalle: inc.detalle,
       fechaCashea: g.fecha,
@@ -1084,7 +1209,12 @@ function buildReportExcel({
     });
   }
 
-  allIncRows.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.fechaCashea.localeCompare(b.fechaCashea));
+  allIncRows.sort(
+    (a, b) =>
+      a.empresa.localeCompare(b.empresa) ||
+      a.tipo.localeCompare(b.tipo) ||
+      a.fechaCashea.localeCompare(b.fechaCashea),
+  );
 
   // Conteo por tipo de incidencia
   const countByTipo = {};
@@ -1096,30 +1226,48 @@ function buildReportExcel({
   const resumenAoa = [
     ['REPORTE DE CONCILIACIÓN CASHEA — TRINITY ERP'],
     [],
-    ['Empresa', empresaLabel],
-    ['Sucursal filtrada', sucursalFilter || '(Todas)'],
+    ['Empresa(s)', empresaLabel],
+    ['Sucursal filtrada', sucursalFilter || '(Todas — cruce automático por Orden)'],
     ['Modo', modeLabel],
     ['Estado ejecución', applied ? 'APLICADO (Recibos creados en BORRADOR)' : 'SIMULACIÓN (Solo lectura, nada escrito en BD)'],
     ['Generado el', new Date().toLocaleString('es-VE')],
     [],
     ['RESUMEN GENERAL', 'Cantidad'],
-    ['Filas Cashea evaluadas (sucursal)', casheaTargetCount],
+    ['Filas Cashea evaluadas', casheaTargetCount],
     ...(bankTotalCount !== null ? [['Movimientos totales en Banco', bankTotalCount]] : []),
     ['CxC válidas agrupadas (en recibos)', receiptPlans.reduce((s, p) => s + p.entries.length, 0)],
-    ['Recibos en borrador (1 por fecha)', receiptPlans.length],
+    ['Recibos en borrador (1 por fecha y empresa)', receiptPlans.length],
+    ['Total USD en recibos', round2(receiptPlans.reduce((s, p) => s + p.totalUsd, 0))],
     ['Total Incidencias', allIncRows.length],
     ...(soloEnBanco ? [['Movimientos solo en Banco (no en Cashea)', soloEnBanco.length]] : []),
+    ...(isMulti && perEmpresaSummary
+      ? [
+          [],
+          ['RESUMEN POR EMPRESA', 'Líneas asignadas', 'CxC en recibos', 'Recibos borrador', 'Total USD', 'Incidencias'],
+          ...perEmpresaSummary.map((s) => [
+            s.label,
+            s.assignedGroups,
+            s.matchedCxc,
+            s.receiptsCount,
+            s.totalUsd,
+            s.incidenciasCount,
+          ]),
+        ]
+      : []),
     [],
     ['DESGLOSE DE INCIDENCIAS', 'Cantidad'],
     ...(Object.keys(countByTipo).length
       ? Object.entries(countByTipo).map(([k, v]) => [k, v])
       : [['Sin incidencias', 0]]),
     [],
-    ['RECIBOS POR FECHA', 'N° Recibo', 'Tasa BCV', 'Cant. CxC', 'Cant. Pagos', 'Total USD', 'Total Bs Histórico', 'Total Bs Hoy', 'Diferencial Bs'],
+    isMulti
+      ? ['Empresa', 'Fecha Recibo', 'N° Recibo', 'Tasa BCV', 'Cant. CxC', 'Cant. Pagos', 'Total USD', 'Total Bs Histórico', 'Total Bs Hoy', 'Diferencial Bs']
+      : ['RECIBOS POR FECHA', 'N° Recibo', 'Tasa BCV', 'Cant. CxC', 'Cant. Pagos', 'Total USD', 'Total Bs Histórico', 'Total Bs Hoy', 'Diferencial Bs'],
     ...receiptPlans.map((p) => {
-      const created = createdMap.get(p.fecha);
+      const mapKey = p.empresaKey ? `${p.empresaKey}|${p.fecha}` : p.fecha;
+      const created = createdMap.get(mapKey) || createdMap.get(p.fecha);
       const pagosCount = p.entries.reduce((s, e) => s + e.group.rows.length, 0);
-      return [
+      const row = [
         p.fecha,
         created ? created.number : '[SIMULACIÓN]',
         p.exchangeRate,
@@ -1130,6 +1278,7 @@ function buildReportExcel({
         p.totalBsToday,
         p.differentialBs,
       ];
+      return isMulti ? [p.empresaLabel || '', ...row] : row;
     }),
   ];
 
@@ -1139,6 +1288,7 @@ function buildReportExcel({
 
   // 2) Hoja Incidencias
   const incHeader = [
+    ...(isMulti ? ['Empresa'] : []),
     'Tipo de Incidencia',
     'Detalle',
     'Fecha Cashea',
@@ -1159,6 +1309,7 @@ function buildReportExcel({
   const incAoa = [
     incHeader,
     ...allIncRows.map((r) => [
+      ...(isMulti ? [r.empresa] : []),
       r.tipo,
       r.detalle,
       r.fechaCashea,
@@ -1183,6 +1334,7 @@ function buildReportExcel({
 
   // 3) Hoja Cruzados OK
   const okHeader = [
+    ...(isMulti ? ['Empresa'] : []),
     'Fecha Recibo',
     'N° Recibo',
     'Sucursal',
@@ -1191,19 +1343,23 @@ function buildReportExcel({
     'Pagos Agrupados',
     'Referencia(s) Banco',
     'Cuota(s)',
+    'Monto USD Excel',
     'Monto USD Aplicado',
     'Saldo Antes USD',
     'Saldo Después USD',
     'Tasa BCV',
     'Bs Histórico',
     'Bs Hoy',
+    'Observación',
   ];
   const okAoa = [okHeader];
   for (const p of receiptPlans) {
-    const created = createdMap.get(p.fecha);
+    const mapKey = p.empresaKey ? `${p.empresaKey}|${p.fecha}` : p.fecha;
+    const created = createdMap.get(mapKey) || createdMap.get(p.fecha);
     const recNum = created ? created.number : '[SIMULACIÓN]';
     for (const e of p.entries) {
       okAoa.push([
+        ...(isMulti ? [p.empresaLabel || ''] : []),
         p.fecha,
         recNum,
         e.group.sucursal || '',
@@ -1212,12 +1368,16 @@ function buildReportExcel({
         e.group.rows.length,
         e.group.referencias.join(', '),
         e.group.cuotas.join(', '),
+        e.group.amountUsd,
         e.appliedUsd,
         e.saldoAntes,
         e.saldoDespues,
         e.exchangeRate,
         e.amountBsHistoric,
         e.amountBsToday,
+        e.wasCappedToBalance
+          ? `Ajustado al saldo pendiente (Excel $${e.group.amountUsd.toFixed(2)} → $${e.appliedUsd.toFixed(2)})`
+          : '',
       ]);
     }
   }
@@ -1243,6 +1403,45 @@ function buildReportExcel({
 
 // ── Flujo principal ──────────────────────────────────────────────────────────
 
+function applyPlansForEmpresa(empresa, dbData, receiptPlans, opts, createdMap) {
+  if (!opts.apply) return;
+  if (receiptPlans.length === 0) {
+    console.log(`\n⚠ [${empresa.label}] No hay recibos válidos para crear.`);
+    return;
+  }
+  const admins = dbData.admins || [];
+  let creator = null;
+  if (opts.createdBy) {
+    creator = admins.find((a) => a.email.toLowerCase() === opts.createdBy.toLowerCase());
+    if (!creator) throw new Error(`No se encontró usuario ADMIN activo con email "${opts.createdBy}" en ${empresa.label}`);
+  } else {
+    creator = admins.find((a) => /diego/i.test(a.name || a.email)) || admins[0];
+    if (!creator) throw new Error(`No se encontró ningún usuario ADMIN activo en ${empresa.label} para asignar como creador.`);
+  }
+
+  console.log(`\nCreando ${receiptPlans.length} recibos en BORRADOR en ${empresa.label} (creador: ${creator.name})...`);
+  const applyRes = runPrismaBridge(empresa, opts.local, {
+    action: 'apply',
+    createdById: creator.id,
+    receipts: receiptPlans.map((p) => ({
+      fecha: p.fecha,
+      exchangeRate: p.exchangeRate,
+      totalUsd: p.totalUsd,
+      totalBsHistoric: p.totalBsHistoric,
+      totalBsToday: p.totalBsToday,
+      differentialBs: p.differentialBs,
+      hasDifferential: p.hasDifferential,
+      notes: p.notes,
+      items: p.items,
+    })),
+  });
+
+  for (const c of applyRes.created) {
+    createdMap.set(`${empresa.key}|${c.fecha}`, c);
+    console.log(`  ✅ [${empresa.key}] ${c.number} | Fecha ${c.fecha} | ${c.itemCount} CxC | $${c.totalUsd.toFixed(2)} | Bs ${c.totalBsToday.toFixed(2)}`);
+  }
+}
+
 function main() {
   const opts = parseArgs(process.argv);
   if (opts.help || !opts.cashea) {
@@ -1250,16 +1449,23 @@ function main() {
     process.exit(opts.help ? 0 : 1);
   }
 
-  const empresa = resolveEmpresa(opts.empresa);
-  if (!opts.soloBancoCruce && !empresa) {
-    throw new Error('Debes indicar --empresa <nombre> (ej: --empresa total, --empresa totalturen, --empresa grande)');
+  const empresas = parseEmpresas(opts.empresa);
+  if (!opts.soloBancoCruce && empresas.length === 0) {
+    throw new Error('Debes indicar --empresa <nombre> (ej: --empresa total, --empresa totalturen, o varias separadas por coma: --empresa total,totalturen)');
   }
+  const isMulti = empresas.length > 1;
+  const empresa = empresas[0] || null;
+  const empresaLabel = empresas.length ? empresas.map((e) => e.label).join(' + ') : 'Solo cruce banco';
 
   const hasBanco = Boolean(opts.banco);
-  const modeLabel = hasBanco ? 'Modo 1: 2 Excels (Cashea + Banco -> Trinity)' : 'Modo 2: 1 Excel ya validado -> Trinity';
+  const modeLabel = hasBanco
+    ? 'Modo 1: 2 Excels (Cashea + Banco -> Trinity)'
+    : isMulti
+      ? 'Modo 2 Multi-Empresa: 1 Excel ya validado -> Cruce automático por Orden'
+      : 'Modo 2: 1 Excel ya validado -> Trinity';
 
   console.log(`\n════════════════════════════════════════════════════════════`);
-  console.log(`  CONCILIACIÓN CASHEA — ${empresa ? empresa.label : 'Solo cruce banco'}`);
+  console.log(`  CONCILIACIÓN CASHEA — ${empresaLabel}`);
   console.log(`  ${modeLabel}`);
   console.log(`  Ejecución: ${opts.apply ? 'APLICAR (creará borradores en BD)' : 'SIMULACIÓN (solo lectura)'}`);
   console.log(`════════════════════════════════════════════════════════════\n`);
@@ -1271,7 +1477,7 @@ function main() {
   // 2) Determinar filtro de Sucursal
   const sucursalesPresentes = [...new Set(casheaAll.map((r) => r.sucursal).filter(Boolean))];
   let sucursalFilter = null;
-  if (!opts.todasSucursales && hasSucursalCol && sucursalesPresentes.length > 0) {
+  if (!isMulti && !opts.todasSucursales && hasSucursalCol && sucursalesPresentes.length > 0) {
     if (opts.sucursal) {
       sucursalFilter = opts.sucursal;
     } else if (empresa?.defaultSucursal) {
@@ -1282,6 +1488,8 @@ function main() {
           `Indica --sucursal "<nombre>" o --todas-sucursales.`,
       );
     }
+  } else if (isMulti && opts.sucursal) {
+    sucursalFilter = opts.sucursal;
   }
 
   const targetCashea = sucursalFilter
@@ -1336,66 +1544,88 @@ function main() {
   // 5) Si --solo-banco-cruce, generar reporte y terminar
   let trinityIncidencias = [];
   let receiptPlans = [];
+  let perEmpresaSummary = null;
   const createdMap = new Map();
 
   if (!opts.soloBancoCruce) {
     const uniqueDates = [...new Set(groups.map((g) => g.fecha))].sort();
-    console.log(`\nConsultando Trinity (${opts.local ? 'LOCAL' : `${empresa.host}:${empresa.dir}`})...`);
-    const dbData = runPrismaBridge(empresa, opts.local, { action: 'fetch', dates: uniqueDates });
-    console.log(
-      `✔ Datos Trinity: ${dbData.receivables.length} CxC Cashea, ${dbData.draftItems.length} ítems en borradores abiertos, ${dbData.rates.length}/${uniqueDates.length} tasas BCV`,
-    );
 
-    const cross = crossCheckTrinity(groups, dbData);
-    trinityIncidencias = cross.incidencias;
-    receiptPlans = cross.receiptPlans;
+    if (!isMulti) {
+      console.log(`\nConsultando Trinity (${opts.local ? 'LOCAL' : `${empresa.host}:${empresa.dir}`})...`);
+      const dbData = runPrismaBridge(empresa, opts.local, { action: 'fetch', dates: uniqueDates });
+      console.log(
+        `✔ Datos Trinity: ${dbData.receivables.length} CxC Cashea, ${dbData.draftItems.length} ítems en borradores abiertos, ${dbData.rates.length}/${uniqueDates.length} tasas BCV`,
+      );
 
-    console.log(`  → Líneas cruzadas OK: ${cross.matchedGroups.length}`);
-    console.log(`  → Incidencias Trinity: ${trinityIncidencias.length}`);
-    console.log(`  → Recibos en borrador planificados: ${receiptPlans.length}`);
+      const cross = crossCheckTrinity(groups, dbData, { ajustarAlSaldo: opts.ajustarAlSaldo });
+      trinityIncidencias = cross.incidencias;
+      receiptPlans = cross.receiptPlans.map((p) => ({ ...p, empresaKey: empresa.key, empresaLabel: empresa.label }));
 
-    // 6) Crear recibos en BORRADOR solo si se pasó --apply
-    if (opts.apply && receiptPlans.length > 0) {
-      const admins = dbData.admins || [];
-      let creator = null;
-      if (opts.createdBy) {
-        creator = admins.find((a) => a.email.toLowerCase() === opts.createdBy.toLowerCase());
-        if (!creator) throw new Error(`No se encontró usuario ADMIN activo con email "${opts.createdBy}"`);
-      } else {
-        creator = admins.find((a) => /diego/i.test(a.name || a.email)) || admins[0];
-        if (!creator) throw new Error('No se encontró ningún usuario ADMIN activo en Trinity para asignar como creador.');
+      console.log(`  → Líneas cruzadas OK: ${cross.matchedGroups.length}`);
+      console.log(`  → Incidencias Trinity: ${trinityIncidencias.length}`);
+      console.log(`  → Recibos en borrador planificados: ${receiptPlans.length}`);
+
+      applyPlansForEmpresa(empresa, dbData, receiptPlans, opts, createdMap);
+    } else {
+      // Multi-empresa: consultar todas las empresas y enrutar cada Orden automáticamente
+      const empresaDataList = [];
+      for (const emp of empresas) {
+        console.log(`\nConsultando Trinity — ${emp.label} (${opts.local ? 'LOCAL' : `${emp.host}:${emp.dir}`})...`);
+        const dbData = runPrismaBridge(emp, opts.local, { action: 'fetch', dates: uniqueDates });
+        console.log(
+          `✔ [${emp.label}] ${dbData.receivables.length} CxC Cashea, ${dbData.draftItems.length} ítems en borradores abiertos, ${dbData.rates.length}/${uniqueDates.length} tasas BCV`,
+        );
+        empresaDataList.push({ empresa: emp, dbData });
       }
 
-      console.log(`\nCreando ${receiptPlans.length} recibos en BORRADOR (creador: ${creator.name})...`);
-      const applyRes = runPrismaBridge(empresa, opts.local, {
-        action: 'apply',
-        createdById: creator.id,
-        receipts: receiptPlans.map((p) => ({
-          fecha: p.fecha,
-          exchangeRate: p.exchangeRate,
-          totalUsd: p.totalUsd,
-          totalBsHistoric: p.totalBsHistoric,
-          totalBsToday: p.totalBsToday,
-          differentialBs: p.differentialBs,
-          hasDifferential: p.hasDifferential,
-          notes: p.notes,
-          items: p.items,
-        })),
-      });
+      const { groupsByEmpresa, routingIncidencias } = routeGroupsAcrossEmpresas(groups, empresaDataList);
+      trinityIncidencias.push(...routingIncidencias);
+      perEmpresaSummary = [];
 
-      for (const c of applyRes.created) {
-        createdMap.set(c.fecha, c);
-        console.log(`  ✅ ${c.number} | Fecha ${c.fecha} | ${c.itemCount} CxC | $${c.totalUsd.toFixed(2)} | Bs ${c.totalBsToday.toFixed(2)}`);
+      for (const { empresa: emp, dbData } of empresaDataList) {
+        const empGroups = groupsByEmpresa.get(emp.key) || [];
+        const cross = crossCheckTrinity(empGroups, dbData, { ajustarAlSaldo: opts.ajustarAlSaldo });
+        const empPlans = cross.receiptPlans.map((p) => ({
+          ...p,
+          empresaKey: emp.key,
+          empresaLabel: emp.label,
+        }));
+        const empInc = cross.incidencias.map((inc) => ({
+          ...inc,
+          empresaLabel: emp.label,
+        }));
+        const empTotalUsd = round2(empPlans.reduce((s, p) => s + p.totalUsd, 0));
+
+        console.log(`\n📊 [${emp.label}] Líneas asignadas: ${empGroups.length}`);
+        console.log(`  → Líneas cruzadas OK: ${cross.matchedGroups.length} ($${empTotalUsd.toFixed(2)})`);
+        console.log(`  → Incidencias: ${empInc.length}`);
+        console.log(`  → Recibos en borrador planificados: ${empPlans.length}`);
+
+        receiptPlans.push(...empPlans);
+        trinityIncidencias.push(...empInc);
+        perEmpresaSummary.push({
+          key: emp.key,
+          label: emp.label,
+          assignedGroups: empGroups.length,
+          matchedCxc: cross.matchedGroups.length,
+          receiptsCount: empPlans.length,
+          totalUsd: empTotalUsd,
+          incidenciasCount: empInc.length,
+        });
+
+        applyPlansForEmpresa(emp, dbData, empPlans, opts, createdMap);
       }
-    } else if (opts.apply && receiptPlans.length === 0) {
-      console.log(`\n⚠ No hay recibos válidos para crear.`);
+
+      if (routingIncidencias.length > 0) {
+        console.log(`\n⚠ Órdenes sin asignar a empresa (no encontradas o ambiguas): ${routingIncidencias.length}`);
+      }
     }
   }
 
   // 7) Escribir Excel de reporte e incidencias
   const allDates = [...new Set(targetCashea.map((r) => r.fecha).filter(Boolean))].sort();
   const rangeTag = allDates.length ? `${allDates[0]}_a_${allDates[allDates.length - 1]}` : new Date().toISOString().slice(0, 10);
-  const empTag = empresa ? empresa.key : 'cruce';
+  const empTag = empresas.length ? empresas.map((e) => e.key).join('-') : 'cruce';
   const defaultOut = path.join(
     path.dirname(path.resolve(opts.cashea)),
     `incidencias-cashea-${empTag}-${rangeTag}.xlsx`,
@@ -1404,7 +1634,9 @@ function main() {
 
   buildReportExcel({
     outPath,
-    empresaLabel: empresa ? empresa.label : 'Solo cruce banco',
+    empresaLabel,
+    isMulti,
+    perEmpresaSummary,
     sucursalFilter,
     modeLabel,
     hasBanco,
